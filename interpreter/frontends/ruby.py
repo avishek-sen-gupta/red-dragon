@@ -44,6 +44,7 @@ class RubyFrontend(BaseFrontend):
             "parenthesized_expression": self._lower_paren,
             "array": self._lower_list_literal,
             "hash": self._lower_ruby_hash,
+            "argument_list": self._lower_ruby_argument_list,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -64,6 +65,17 @@ class RubyFrontend(BaseFrontend):
             "do_block": self._lower_symbolic_block,
             "block": self._lower_symbolic_block,
         }
+
+    # -- Ruby: argument_list unwrap -------------------------------------------
+
+    def _lower_ruby_argument_list(self, node) -> str:
+        """Unwrap argument_list to its first named child (e.g. return value)."""
+        named = [c for c in node.children if c.is_named]
+        if named:
+            return self._lower_expr(named[0])
+        reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=reg, operands=[self.DEFAULT_RETURN_VALUE])
+        return reg
 
     # -- Ruby: call lowering ---------------------------------------------------
 

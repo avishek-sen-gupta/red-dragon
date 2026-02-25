@@ -53,6 +53,8 @@ class KotlinFrontend(BaseFrontend):
             "lambda_literal": self._lower_lambda_literal,
             "object_literal": self._lower_symbolic_node,
             "range_expression": self._lower_symbolic_node,
+            "statements": self._lower_statements_expr,
+            "jump_expression": self._lower_jump_as_expr,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "property_declaration": self._lower_property_decl,
@@ -385,6 +387,17 @@ class KotlinFrontend(BaseFrontend):
         """Lower if as a statement (discard result)."""
         self._lower_if_expr(node)
 
+    def _lower_statements_expr(self, node) -> str:
+        """Lower a ``statements`` node in expression context (last child is value)."""
+        children = [c for c in node.children if c.is_named]
+        if not children:
+            reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=reg, operands=[self.NONE_LITERAL])
+            return reg
+        for child in children[:-1]:
+            self._lower_stmt(child)
+        return self._lower_expr(children[-1])
+
     def _lower_control_body(self, body_node) -> str:
         """Lower control_structure_body or block, returning last expr reg."""
         if body_node is None:
@@ -603,6 +616,13 @@ class KotlinFrontend(BaseFrontend):
         return reg
 
     # -- jump expression (return, break, continue, throw) ------------------
+
+    def _lower_jump_as_expr(self, node) -> str:
+        """Lower jump_expression in expression context (emit + return reg)."""
+        self._lower_jump_expr(node)
+        reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=reg, operands=[self.NONE_LITERAL])
+        return reg
 
     def _lower_jump_expr(self, node):
         text = self._node_text(node)

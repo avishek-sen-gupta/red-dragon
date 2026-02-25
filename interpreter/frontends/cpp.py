@@ -33,6 +33,7 @@ class CppFrontend(CFrontend):
                 "scoped_identifier": self._lower_qualified_id,
                 "scope_resolution": self._lower_qualified_id,
                 "this": self._lower_identifier,
+                "condition_clause": self._lower_condition_clause,
                 "nullptr": self._lower_const_literal,
                 "user_defined_literal": self._lower_const_literal,
                 "raw_string_literal": self._lower_const_literal,

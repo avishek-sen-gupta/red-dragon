@@ -67,6 +67,8 @@ class RustFrontend(BaseFrontend):
             "array_expression": self._lower_list_literal,
             "index_expression": self._lower_index_expr,
             "tuple_expression": self._lower_tuple_expr,
+            "else_clause": self._lower_else_clause,
+            "expression_statement": self._lower_expr_stmt_as_expr,
             "range_expression": self._lower_symbolic_node,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
@@ -250,6 +252,24 @@ class RustFrontend(BaseFrontend):
     def _lower_if_stmt(self, node):
         """Lower if as a statement (discard result)."""
         self._lower_if_expr(node)
+
+    def _lower_expr_stmt_as_expr(self, node) -> str:
+        """Unwrap expression_statement to its inner expression."""
+        named = [c for c in node.children if c.is_named]
+        if named:
+            return self._lower_expr(named[0])
+        reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=reg, operands=[self.NONE_LITERAL])
+        return reg
+
+    def _lower_else_clause(self, node) -> str:
+        """Lower else_clause by extracting its inner block or expression."""
+        named = [c for c in node.children if c.is_named]
+        if named:
+            return self._lower_expr(named[0])
+        reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=reg, operands=[self.NONE_LITERAL])
+        return reg
 
     # -- while / loop / for ------------------------------------------------
 
