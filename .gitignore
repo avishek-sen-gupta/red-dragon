@@ -7,3 +7,4 @@ build/
 *.egg
 .mypy_cache/
 .pytest_cache/
+.idea/
