@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Black formatting check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: |
+          pip install poetry
+          poetry install --only dev
+      - name: Check formatting with Black
+        run: poetry run black --check interpreter/ tests/
+
+  test:
+    name: Non-deterministic tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: |
+          pip install poetry
+          poetry install
+      - name: Run tests
+        run: |
+          poetry run pytest \
+            tests/test_backend_refactor.py \
+            tests/test_closures.py \
+            tests/test_frontend_factory.py \
+            tests/test_llm_client.py \
+            tests/test_llm_frontend.py \
+            -v
