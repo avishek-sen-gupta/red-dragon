@@ -285,6 +285,27 @@ This means the interpreter can trace data flow through programs with incomplete 
 
 The LLM backend still exists but is now only invoked if the local executor encounters an opcode with no registered handler — which currently never happens since all opcodes are covered. The LLM can be used as an optional enhancement for richer symbolic reasoning (e.g., simplifying constraint expressions), but is not required for basic data flow tracking.
 
+## Pipeline statistics
+
+When run with `-v`, the interpreter reports per-stage timing and output statistics:
+
+```
+═══ Pipeline Statistics ═══
+  Source: 7 lines, 121 bytes (python, deterministic frontend)
+
+  Stage                      Time                          Output
+  ──────────────────── ──────────   ──────────────────────────────
+  Parse                    0.2ms
+  Lower (frontend)         0.1ms              22 IR instructions
+  Build CFG                0.0ms                 8 basic blocks
+  Build registry           0.0ms          2 functions, 0 classes
+  Execute (VM)             0.6ms           67 steps, 0 LLM calls
+  ──────────────────── ──────────   ──────────────────────────────
+  Total                   15.1ms
+
+  Final state: 0 heap objects, 0 symbolic values, 0 closures
+```
+
 ## Testing
 
 ```bash
