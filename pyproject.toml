@@ -1,7 +1,7 @@
 [project]
-name = "llm-symbolic-interpreter"
+name = "red-dragon"
 version = "0.1.0"
-description = "LLM-powered symbolic interpreter"
+description = "Multi-language LLM-assisted symbolic execution and dataflow analysis"
 authors = [
     {name = "asgupta"}
 ]
@@ -22,6 +22,9 @@ include = "interpreter"
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.poetry.group.dev.dependencies]
 black = "^26.1.0"
