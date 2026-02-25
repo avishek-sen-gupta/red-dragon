@@ -11,7 +11,8 @@ from .ir import Opcode
 from .parser import Parser
 from .frontend import get_frontend
 from .cfg import CFG, build_cfg
-from .registry import build_registry, _parse_class_ref, _try_execute_locally
+from .registry import build_registry, _parse_class_ref
+from .executor import _try_execute_locally
 from .vm import (
     VMState,
     SymbolicValue,
