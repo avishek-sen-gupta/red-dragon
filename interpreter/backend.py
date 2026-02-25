@@ -1,14 +1,18 @@
 """LLM Interpreter Backend."""
+
 from __future__ import annotations
 
 import json
 from abc import ABC, abstractmethod
+from typing import Any
 
 from .ir import IRInstruction
 from .vm import VMState, StateUpdate, _resolve_reg, _serialize_value
 
 
-SYSTEM_PROMPT = """\
+class LLMBackend(ABC):
+
+    SYSTEM_PROMPT = """\
 You are a symbolic interpreter executing IR instructions one at a time.
 
 You receive:
@@ -74,15 +78,12 @@ Instruction: branch_if sym_0 if_true_2,if_false_3  (where sym_0 has constraint "
 Respond with ONLY valid JSON. No markdown fences. No text outside the JSON object.
 """
 
-
-class LLMBackend(ABC):
     @abstractmethod
-    def interpret_instruction(self, instruction: IRInstruction,
-                              state: VMState) -> StateUpdate:
-        ...
+    def interpret_instruction(
+        self, instruction: IRInstruction, state: VMState
+    ) -> StateUpdate: ...
 
-    def _build_prompt(self, instruction: IRInstruction,
-                      state: VMState) -> str:
+    def _build_prompt(self, instruction: IRInstruction, state: VMState) -> str:
         """Build a user prompt with resolved operand values."""
         frame = state.current_frame
 
@@ -95,17 +96,15 @@ class LLMBackend(ABC):
                 resolved[str(op)] = _serialize_value(val)
 
         # Build a compact state snapshot (only what's relevant)
-        compact_state = {
-            "local_vars": {k: _serialize_value(v)
-                           for k, v in frame.local_vars.items()},
+        compact_state: dict[str, Any] = {
+            "local_vars": {k: _serialize_value(v) for k, v in frame.local_vars.items()},
         }
         if state.heap:
-            compact_state["heap"] = {k: v.to_dict()
-                                     for k, v in state.heap.items()}
+            compact_state["heap"] = {k: v.to_dict() for k, v in state.heap.items()}
         if state.path_conditions:
             compact_state["path_conditions"] = state.path_conditions
 
-        msg = {
+        msg: dict[str, Any] = {
             "instruction": str(instruction),
             "result_reg": instruction.result_reg,
             "opcode": instruction.opcode.value,
@@ -117,8 +116,7 @@ class LLMBackend(ABC):
 
         return json.dumps(msg, indent=2, default=str)
 
-    @staticmethod
-    def _parse_response(text: str) -> StateUpdate:
+    def _parse_response(self, text: str) -> StateUpdate:
         """Parse LLM response text into a StateUpdate."""
         text = text.strip()
         # Strip markdown fences if present
@@ -132,37 +130,55 @@ class LLMBackend(ABC):
 
 
 class ClaudeBackend(LLMBackend):
-    def __init__(self, model: str = "claude-sonnet-4-20250514"):
-        import anthropic
-        self._client = anthropic.Anthropic()
+
+    _LAZY_IMPORT = object()
+
+    def __init__(
+        self, model: str = "claude-sonnet-4-20250514", client: Any = _LAZY_IMPORT
+    ):
+        if client is ClaudeBackend._LAZY_IMPORT:
+            import anthropic
+
+            self._client = anthropic.Anthropic()
+        else:
+            self._client = client
         self._model = model
 
-    def interpret_instruction(self, instruction: IRInstruction,
-                              state: VMState) -> StateUpdate:
+    def interpret_instruction(
+        self, instruction: IRInstruction, state: VMState
+    ) -> StateUpdate:
         user_msg = self._build_prompt(instruction, state)
         response = self._client.messages.create(
             model=self._model,
             max_tokens=1024,
-            system=SYSTEM_PROMPT,
+            system=self.SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_msg}],
         )
         return self._parse_response(response.content[0].text)
 
 
 class OpenAIBackend(LLMBackend):
-    def __init__(self, model: str = "gpt-4o"):
-        import openai
-        self._client = openai.OpenAI()
+
+    _LAZY_IMPORT = object()
+
+    def __init__(self, model: str = "gpt-4o", client: Any = _LAZY_IMPORT):
+        if client is OpenAIBackend._LAZY_IMPORT:
+            import openai
+
+            self._client = openai.OpenAI()
+        else:
+            self._client = client
         self._model = model
 
-    def interpret_instruction(self, instruction: IRInstruction,
-                              state: VMState) -> StateUpdate:
+    def interpret_instruction(
+        self, instruction: IRInstruction, state: VMState
+    ) -> StateUpdate:
         user_msg = self._build_prompt(instruction, state)
         response = self._client.chat.completions.create(
             model=self._model,
             response_format={"type": "json_object"},
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": self.SYSTEM_PROMPT},
                 {"role": "user", "content": user_msg},
             ],
             max_tokens=1024,
