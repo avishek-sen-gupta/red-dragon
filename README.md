@@ -34,6 +34,7 @@ interpreter/
 │   └── pascal.py        # PascalFrontend
 ├── llm_client.py        # LLMClient ABC, Claude/OpenAI/Ollama/HuggingFace clients
 ├── llm_frontend.py      # LLMFrontend — LLM-based source-to-IR lowering
+├── chunked_llm_frontend.py  # ChunkedLLMFrontend — tree-sitter chunking + per-chunk LLM lowering
 ├── cfg.py               # BasicBlock, CFG, build_cfg()
 ├── dataflow.py          # Iterative dataflow analysis (reaching defs, def-use chains, dependency graphs)
 ├── registry.py          # FunctionRegistry, LocalExecutor (dispatch table), builtins
@@ -43,6 +44,7 @@ interpreter/
 tests/
 ├── test_llm_client.py           # LLMClient unit tests (DI with fake API clients)
 ├── test_llm_frontend.py         # LLM frontend parsing, validation, prompt tests
+├── test_chunked_llm_frontend.py # Chunked LLM frontend tests (extractor, renumberer, integration)
 ├── test_frontend_factory.py     # get_frontend() factory tests
 ├── test_backend_refactor.py     # Backend refactor + get_backend() factory tests
 ├── test_closures.py             # Closure capture and invocation tests
@@ -71,7 +73,10 @@ Source Code
     │
     ├──── deterministic path ──── tree-sitter ──── Language Frontend ──┐
     │                              (15 languages)                     │
-    └──── LLM path (--frontend llm) ──── LLMFrontend ────────────────┤
+    ├──── LLM path (--frontend llm) ──── LLMFrontend ────────────────┤
+    │                                                                 │
+    └──── chunked LLM (--frontend chunked_llm) ──── tree-sitter ─────┤
+                     chunk → LLM × N → renumber → reassemble         │
                                                                       ▼
                                                           Flattened High-Level TAC (IR)
                                                               │  CFG builder
@@ -85,8 +90,8 @@ Source Code
                                                           LLM Oracle (only when needed)
 ```
 
-1. **Parse** — Tree-sitter (via `tree-sitter-language-pack`) parses source into an AST (deterministic path), or the LLM lowers source directly to IR (LLM path)
-2. **Lower** — A language-specific frontend converts the AST into a flattened three-address code IR (~19 opcodes). Each of the 15 supported languages has a dedicated `BaseFrontend` subclass with dispatch tables mapping tree-sitter node types to IR opcodes. With `--frontend llm`, the LLM performs this lowering step directly from source code for languages without a deterministic frontend
+1. **Parse** — Tree-sitter (via `tree-sitter-language-pack`) parses source into an AST (deterministic path), or the LLM lowers source directly to IR (LLM path), or tree-sitter decomposes the file into top-level chunks for per-chunk LLM lowering (chunked LLM path)
+2. **Lower** — A language-specific frontend converts the AST into a flattened three-address code IR (~19 opcodes). Each of the 15 supported languages has a dedicated `BaseFrontend` subclass with dispatch tables mapping tree-sitter node types to IR opcodes. With `--frontend llm`, the LLM performs this lowering step directly from source code. With `--frontend chunked_llm`, tree-sitter extracts top-level functions/classes/statements, each chunk is lowered independently by the LLM, and results are reassembled with renumbered registers and labels
 3. **Build CFG** — IR instructions are partitioned into basic blocks with control flow edges
 4. **Dataflow analysis** (optional) — Iterative reaching definitions, def-use chains, and variable dependency graphs via classic worklist-based fixed-point computation
 5. **Build registry** — Function and class definitions are indexed from the IR, mapping names to CFG labels and extracting parameter lists
@@ -148,6 +153,9 @@ poetry run python interpreter.py example.js -l javascript -v
 
 # LLM frontend for unsupported languages
 poetry run python interpreter.py example.cob -l cobol -f llm -v
+
+# Chunked LLM frontend (decomposes large files into per-function/class chunks)
+poetry run python interpreter.py largefile.py -f chunked_llm -b claude -v
 ```
 
 ### CLI options
@@ -159,7 +167,7 @@ poetry run python interpreter.py example.cob -l cobol -f llm -v
 | `-e`, `--entry` | Entry point label or function name |
 | `-b`, `--backend` | LLM backend: `claude`, `openai`, `ollama`, or `huggingface` (default: `claude`) |
 | `-n`, `--max-steps` | Maximum interpretation steps (default: 100) |
-| `-f`, `--frontend` | Frontend type: `deterministic` (tree-sitter) or `llm` (default: `deterministic`) |
+| `-f`, `--frontend` | Frontend type: `deterministic`, `llm`, or `chunked_llm` (default: `deterministic`) |
 | `--ir-only` | Print the IR and exit |
 | `--cfg-only` | Print the CFG and exit |
 
@@ -335,6 +343,18 @@ The key insight: providing **concrete patterns with exact JSON** produces IR tha
 
 Smaller models (7B) may produce malformed JSON. The frontend includes a repair layer that strips `//` comments, fixes trailing commas, and handles truncated responses. For best results, use 32B+ parameter models (e.g., Qwen2.5-Coder-32B-Instruct via HuggingFace).
 
+### Chunked LLM frontend
+
+The chunked LLM frontend (`--frontend chunked_llm`) solves the context window limitation for large files. Instead of sending the entire file to the LLM in one call, it:
+
+1. **Extracts chunks** — tree-sitter identifies top-level functions, classes, and statement blocks
+2. **Groups adjacent top-level statements** — contiguous non-function/non-class statements are merged into a single chunk to minimise LLM calls
+3. **Lowers each chunk independently** — each chunk is sent to the wrapped `LLMFrontend` as a self-contained source snippet
+4. **Renumbers registers and labels** — a post-lowering pass offsets register numbers (`%0` → `%K`) and suffixes labels (`func_foo_0` → `func_foo_0_chunk0`) to avoid collisions across chunks
+5. **Reassembles** — chunk entry labels are stripped, a single `entry` label is prepended, and all chunks are concatenated
+
+Failed chunks produce a `SYMBOLIC "chunk_error:{name}"` placeholder and processing continues — partial results are always available.
+
 ## Deterministic symbolic data flow
 
 The VM handles **all** cases deterministically — including incomplete programs with missing imports, unknown externals, and symbolic values. No LLM fallback is needed:
@@ -410,19 +430,20 @@ When run with `-v`, the interpreter reports per-stage timing and output statisti
 poetry run pytest tests/ -v
 ```
 
-Tests use dependency injection with fake API clients — no real LLM calls are made. The test suite (507 tests) covers:
+Tests use dependency injection with fake API clients — no real LLM calls are made. The test suite (526 tests) covers:
 
 - **Deterministic frontends** — 15 language frontends with unit tests covering declarations, expressions, control flow, functions, classes, and language-specific constructs, plus non-trivial integration tests (8-12 per language) exercising multi-statement programs with nested control flow, functions calling functions, classes with methods, and combined features
 - **LLM client infrastructure** — client construction, DI, factory routing for all 4 providers
 - **LLM frontend** — markdown fence stripping, JSON parsing/repair, IR validation, prompt formatting
-- **Frontend factory** — `get_frontend()` routing for deterministic and LLM paths
+- **Chunked LLM frontend** — chunk extraction (functions, classes, top-level grouping), IR register/label renumbering, end-to-end chunked lowering with error resilience
+- **Frontend factory** — `get_frontend()` routing for deterministic, LLM, and chunked LLM paths
 - **Backend refactor** — backend construction and `get_backend()` factory
 - **Closures** — simple closures, multiple closures from same factory, multi-var capture, non-closure regression
 - **Dataflow analysis** — reaching definitions (linear, redefinition, branch merge, loops, empty), def-use chains (simple, redefinition shadowing, branch multi-chain, SYMBOLIC params), dependency graphs (direct, transitive, self-dependency via loops), integration (end-to-end Python→IR→CFG→dataflow), edge cases (SYMBOLIC passthrough)
 
 ## Presentation
 
-A Reveal.js slide deck is included in `presentation/index.html`. Open it in a browser to navigate the slides. It covers the full architecture: IR design, 15 language frontends, CFG building with CFG examples across all 15 supported languages, dataflow analysis with dependency graph visualizations, the symbolic VM, and design patterns.
+A Reveal.js slide deck is included in `presentation/index.html`. Open it in a browser to navigate the slides. It covers the full architecture: IR design, 15 language frontends, the LLM frontend (prompt engineering, resilience pipeline, novelty vs. traditional compilers), the chunked LLM frontend, CFG building with CFG examples across all 15 supported languages, dataflow analysis with dependency graph visualizations, the symbolic VM, and design patterns.
 
 ## Symbolic values
 

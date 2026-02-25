@@ -40,7 +40,7 @@ def get_frontend(
 
         return get_deterministic_frontend(language)
 
-    if frontend_type == constants.FRONTEND_LLM:
+    if frontend_type in (constants.FRONTEND_LLM, constants.FRONTEND_CHUNKED_LLM):
         from .llm_client import LLMClient, get_llm_client
         from .llm_frontend import LLMFrontend
 
@@ -50,6 +50,17 @@ def get_frontend(
             resolved_client = llm_client
         else:
             resolved_client = get_llm_client(provider=llm_provider, client=llm_client)
-        return LLMFrontend(resolved_client, language=language)
+
+        inner_frontend = LLMFrontend(resolved_client, language=language)
+
+        if frontend_type == constants.FRONTEND_CHUNKED_LLM:
+            from .chunked_llm_frontend import ChunkedLLMFrontend
+            from .parser import TreeSitterParserFactory
+
+            return ChunkedLLMFrontend(
+                inner_frontend, TreeSitterParserFactory(), language
+            )
+
+        return inner_frontend
 
     raise ValueError(f"Unknown frontend type: {frontend_type}")
