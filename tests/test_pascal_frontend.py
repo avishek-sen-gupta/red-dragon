@@ -195,3 +195,187 @@ class TestPascalFallback:
         # case/switch is not handled, so it should fall back to expression lowering
         # which produces SYMBOLIC for unsupported node types
         assert Opcode.SYMBOLIC in opcodes or Opcode.CALL_FUNCTION in opcodes
+
+
+def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
+    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+
+
+class TestNonTrivialPascal:
+    def test_procedure_with_if_else(self):
+        source = """\
+program M;
+procedure Classify(x: Integer);
+begin
+  if x > 100 then
+    WriteLn('high')
+  else
+    WriteLn('low');
+end;
+begin
+end.
+"""
+        instructions = _parse_pascal(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("WriteLn" in inst.operands for inst in calls)
+        assert len(calls) >= 2
+        # Pascal procedures are stored under an anonymous name
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("function:" in str(inst.operands) for inst in consts)
+        assert len(instructions) > 10
+
+    def test_function_with_for_loop(self):
+        source = """\
+program M;
+function Sum(n: Integer): Integer;
+var i, total: Integer;
+begin
+  total := 0;
+  i := 1;
+  while i <= n do
+  begin
+    total := total + i;
+    i := i + 1;
+  end;
+  Sum := total;
+end;
+begin
+end.
+"""
+        instructions = _parse_pascal(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.BRANCH in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("total" in inst.operands for inst in stores)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+        labels = _labels_in_order(instructions)
+        assert any("while" in lbl for lbl in labels)
+        assert len(instructions) > 15
+
+    def test_nested_begin_end_blocks(self):
+        source = """\
+program M;
+begin
+  x := 10;
+  begin
+    y := x + 5;
+    begin
+      z := y * 2;
+    end;
+  end;
+end.
+"""
+        instructions = _parse_pascal(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+        assert any("y" in inst.operands for inst in stores)
+        assert any("z" in inst.operands for inst in stores)
+        binops = _find_all(instructions, Opcode.BINOP)
+        operators = [inst.operands[0] for inst in binops if inst.operands]
+        assert "+" in operators
+        assert "*" in operators
+
+    def test_while_with_nested_if_else(self):
+        source = """\
+program M;
+begin
+  while x > 0 do
+  begin
+    if x > 50 then
+      total := total + x
+    else
+      total := total + 1;
+    x := x - 1;
+  end;
+end.
+"""
+        instructions = _parse_pascal(source)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        labels = _labels_in_order(instructions)
+        assert any("while" in lbl for lbl in labels)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("total" in inst.operands for inst in stores)
+        assert len(instructions) > 15
+
+    def test_nested_function(self):
+        source = """\
+program M;
+function Outer(x: Integer): Integer;
+  function Inner(y: Integer): Integer;
+  begin
+    Inner := y * 2;
+  end;
+begin
+  Outer := Inner(x) + 1;
+end;
+begin
+end.
+"""
+        instructions = _parse_pascal(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        # Outer's body references Inner via CALL_FUNCTION
+        assert any("Outer" in inst.operands for inst in stores)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("Inner" in inst.operands for inst in calls)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 1
+
+    def test_for_downto_loop(self):
+        source = """\
+program M;
+begin
+  for x := 10 downto 1 do
+    WriteLn(x);
+end.
+"""
+        instructions = _parse_pascal(source)
+        opcodes = _opcodes(instructions)
+        # for-downto falls back to for_incomplete symbolic, like for-to
+        assert Opcode.SYMBOLIC in opcodes
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert any("for_incomplete" in str(inst.operands) for inst in symbolics)
+
+    def test_procedure_calling_procedure(self):
+        source = """\
+program M;
+procedure Main;
+begin
+  WriteLn('Hello');
+  WriteLn('World');
+end;
+begin
+end.
+"""
+        instructions = _parse_pascal(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        writeln_calls = [c for c in calls if "WriteLn" in c.operands]
+        assert len(writeln_calls) >= 2
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("function:" in str(inst.operands) for inst in consts)
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 1
+
+    def test_function_result_assignment(self):
+        source = """\
+program M;
+function Double(x: Integer): Integer;
+begin
+  Double := x * 2;
+end;
+begin
+end.
+"""
+        instructions = _parse_pascal(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Double" in inst.operands for inst in stores)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("*" in inst.operands for inst in binops)
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 1

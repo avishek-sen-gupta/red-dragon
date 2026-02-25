@@ -231,3 +231,159 @@ class TestGoFrontendFallback:
         ir = _parse_and_lower(source)
         assert ir[0].opcode == Opcode.LABEL
         assert ir[0].label == "entry"
+
+
+def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
+    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+
+
+class TestNonTrivialGo:
+    def test_for_range_with_accumulator(self):
+        source = """\
+package main
+func main() {
+    items := []int{1, 2, 3, 4, 5}
+    total := 0
+    for i := 0; i < 5; i++ {
+        if items[i] > 2 {
+            total = total + items[i]
+        }
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.BRANCH_IF in opcodes
+        branches = _find_all(ir, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("total" in s.operands for s in stores)
+        assert len(ir) > 20
+
+    def test_struct_method_with_receiver(self):
+        source = """\
+package main
+type Counter struct {
+    count int
+}
+func (c Counter) Value() int {
+    return c.count
+}
+"""
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert any("struct:" in str(s.operands) for s in symbolics)
+        returns = _find_all(ir, Opcode.RETURN)
+        assert len(returns) >= 1
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("Counter" in s.operands for s in stores)
+        assert any("Value" in s.operands for s in stores)
+
+    def test_multiple_return_values(self):
+        source = """\
+package main
+func divide(a int, b int) (int, int) {
+    return a / b, a % b
+}
+"""
+        ir = _parse_and_lower(source)
+        returns = _find_all(ir, Opcode.RETURN)
+        assert len(returns) >= 2
+        binops = _find_all(ir, Opcode.BINOP)
+        operators = [inst.operands[0] for inst in binops if inst.operands]
+        assert "/" in operators
+        assert "%" in operators
+
+    def test_nested_for_with_field_access(self):
+        source = """\
+package main
+func main() {
+    total := 0
+    for i := 0; i < 10; i++ {
+        for j := 0; j < 10; j++ {
+            total = total + obj.value
+        }
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        branches = _find_all(ir, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        assert any("value" in inst.operands for inst in load_fields)
+        assert len(ir) > 25
+
+    def test_if_else_chain(self):
+        source = """\
+package main
+func classify(x int) string {
+    if x > 100 {
+        return "high"
+    } else if x > 50 {
+        return "medium"
+    } else {
+        return "low"
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        branches = _find_all(ir, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        returns = _find_all(ir, Opcode.RETURN)
+        assert len(returns) >= 3
+
+    def test_for_with_short_var_and_condition(self):
+        source = """\
+package main
+func main() {
+    sum := 0
+    for i := 1; i <= 100; i++ {
+        sum = sum + i
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.BRANCH in opcodes
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("sum" in s.operands for s in stores)
+        assert any("i" in s.operands for s in stores)
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+        labels = _labels_in_order(ir)
+        assert any("for_" in lbl for lbl in labels)
+
+    def test_function_calling_function(self):
+        source = """\
+package main
+func double(x int) int {
+    return x * 2
+}
+func quadruple(x int) int {
+    return double(double(x))
+}
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("double" in s.operands for s in stores)
+        assert any("quadruple" in s.operands for s in stores)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("double" in inst.operands for inst in calls)
+        returns = _find_all(ir, Opcode.RETURN)
+        assert len(returns) >= 2
+
+    def test_defer_produces_symbolic(self):
+        source = """\
+package main
+func main() {
+    x := open()
+    defer x.Close()
+    x.Read()
+}
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.SYMBOLIC in opcodes
+        calls = _find_all(ir, Opcode.CALL_METHOD)
+        assert any("Read" in inst.operands for inst in calls)

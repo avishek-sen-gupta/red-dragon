@@ -224,3 +224,170 @@ class TestPhpFrontendFallback:
         # Basic constructs should not produce SYMBOLIC
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert len(stores) >= 1
+
+
+def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
+    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+
+
+class TestNonTrivialPhp:
+    def test_foreach_with_method_calls(self):
+        source = """\
+<?php
+$items = [1, 2, 3];
+foreach ($items as $item) {
+    echo $item;
+    $result->add($item);
+}
+?>
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        # foreach is lowered as SYMBOLIC in current frontend
+        assert Opcode.SYMBOLIC in opcodes or Opcode.BRANCH_IF in opcodes
+        assert len(ir) > 1
+
+    def test_class_with_constructor_and_methods(self):
+        source = """\
+<?php
+class Counter {
+    private $count;
+    public function __construct($start) {
+        $this->count = $start;
+    }
+    public function increment() {
+        $this->count = $this->count + 1;
+    }
+    public function value() {
+        return $this->count;
+    }
+}
+?>
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("Counter" in s.operands for s in stores)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("class:" in str(inst.operands) for inst in consts)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        assert any("count" in inst.operands for inst in store_fields)
+        returns = _find_all(ir, Opcode.RETURN)
+        assert len(returns) >= 1
+        assert len(ir) > 20
+
+    def test_try_catch_with_throw(self):
+        source = """\
+<?php
+try {
+    $result = riskyOp();
+    echo $result;
+} catch (Exception $e) {
+    throw new RuntimeException("wrapped");
+}
+?>
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        # try/catch is lowered as SYMBOLIC block
+        assert Opcode.SYMBOLIC in opcodes or Opcode.THROW in opcodes
+        assert len(ir) > 1
+
+    def test_nested_if_elseif_else(self):
+        source = """\
+<?php
+if ($x > 100) {
+    $grade = "A";
+} elseif ($x > 50) {
+    $grade = "B";
+} elseif ($x > 25) {
+    $grade = "C";
+} else {
+    $grade = "F";
+}
+?>
+"""
+        ir = _parse_and_lower(source)
+        branches = _find_all(ir, Opcode.BRANCH_IF)
+        assert len(branches) >= 3
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("$grade" in inst.operands for inst in stores)
+        labels = _labels_in_order(ir)
+        assert len(labels) >= 4
+
+    def test_while_with_array_push(self):
+        source = """\
+<?php
+$i = 0;
+$items = [];
+while ($i < 10) {
+    array_push($items, $i * 2);
+    $i = $i + 1;
+}
+?>
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.BRANCH in opcodes
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("array_push" in inst.operands for inst in calls)
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any("*" in inst.operands for inst in binops)
+        labels = _labels_in_order(ir)
+        assert any("while" in lbl for lbl in labels)
+        assert len(ir) > 15
+
+    def test_function_with_conditional_return(self):
+        source = """\
+<?php
+function safe_divide($a, $b) {
+    if ($b == 0) {
+        return 0;
+    }
+    return $a / $b;
+}
+?>
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.BRANCH_IF in opcodes
+        returns = _find_all(ir, Opcode.RETURN)
+        assert len(returns) >= 2
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any("/" in inst.operands for inst in binops)
+
+    def test_object_creation_and_method_chain(self):
+        source = """\
+<?php
+$builder = new StringBuilder();
+$builder->append("hello");
+$builder->append(" world");
+$result = $builder->toString();
+?>
+"""
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_METHOD)
+        method_names = [inst.operands[1] for inst in calls if len(inst.operands) > 1]
+        assert method_names.count("append") >= 2
+        assert "toString" in method_names
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("$result" in inst.operands for inst in stores)
+
+    def test_for_loop_with_field_access(self):
+        source = """\
+<?php
+$total = 0;
+for ($i = 0; $i < 10; $i++) {
+    $total = $total + $obj->value;
+}
+?>
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.BRANCH in opcodes
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        assert any("value" in inst.operands for inst in load_fields)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("$total" in inst.operands for inst in stores)
+        assert len(ir) > 15

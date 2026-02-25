@@ -229,3 +229,138 @@ class TestCSharpFrontendFallback:
             s for s in symbolics if any("lambda:" in str(op) for op in s.operands)
         ]
         assert len(lambda_symbolics) >= 1
+
+
+def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
+    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+
+
+class TestNonTrivialCSharp:
+    def test_foreach_with_method_calls(self):
+        source = """\
+foreach (var item in items) {
+    Console.WriteLine(item);
+    result.Add(item);
+}
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.BRANCH_IF in opcodes
+        calls = _find_all(ir, Opcode.CALL_METHOD)
+        method_names = [inst.operands[1] for inst in calls if len(inst.operands) > 1]
+        assert "WriteLine" in method_names
+        assert "Add" in method_names
+        assert len(ir) > 10
+
+    def test_do_while_loop(self):
+        source = """\
+int x = 10;
+do {
+    x = x - 1;
+} while (x > 0);
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.BRANCH_IF in opcodes
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+        labels = _labels_in_order(ir)
+        assert any("do_" in lbl for lbl in labels)
+        assert len(ir) > 8
+
+    def test_class_with_constructor_and_property(self):
+        source = """\
+class Counter {
+    int count;
+    Counter(int start) {
+        this.count = start;
+    }
+    int Value() {
+        return this.count;
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("Counter" in s.operands for s in stores)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("class:" in str(inst.operands) for inst in consts)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        assert any("count" in inst.operands for inst in store_fields)
+        returns = _find_all(ir, Opcode.RETURN)
+        assert len(returns) >= 1
+        assert len(ir) > 15
+
+    def test_try_catch_with_throw(self):
+        source = """\
+try {
+    int result = RiskyOp();
+    Console.WriteLine(result);
+} catch (Exception e) {
+    throw new InvalidOperationException("failed");
+}
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        # try/catch is lowered as SYMBOLIC block
+        assert Opcode.SYMBOLIC in opcodes or Opcode.THROW in opcodes
+        assert len(ir) > 1
+
+    def test_nested_if_else_chain(self):
+        source = """\
+if (x > 100) {
+    grade = "A";
+} else if (x > 50) {
+    grade = "B";
+} else {
+    grade = "F";
+}
+"""
+        ir = _parse_and_lower(source)
+        branches = _find_all(ir, Opcode.BRANCH_IF)
+        assert len(branches) >= 1
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("grade" in inst.operands for inst in stores)
+        binops = _find_all(ir, Opcode.BINOP)
+        assert len(binops) >= 2
+        labels = _labels_in_order(ir)
+        assert len(labels) >= 3
+
+    def test_lambda_in_declaration(self):
+        source = "var square = (x) => x * x;"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("square" in inst.operands for inst in stores)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert any("lambda:" in str(inst.operands) for inst in symbolics)
+
+    def test_for_loop_with_nested_if(self):
+        source = """\
+int total = 0;
+for (int i = 0; i < 20; i++) {
+    if (i % 2 == 0) {
+        total = total + i;
+    }
+    Console.WriteLine(i);
+}
+"""
+        ir = _parse_and_lower(source)
+        branches = _find_all(ir, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("total" in inst.operands for inst in stores)
+        calls = _find_all(ir, Opcode.CALL_METHOD)
+        assert any("WriteLine" in inst.operands for inst in calls)
+        assert len(ir) > 20
+
+    def test_switch_produces_symbolic(self):
+        source = """\
+switch (x) {
+    case 1: y = 10; break;
+    case 2: y = 20; break;
+    default: y = 0; break;
+}
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.SYMBOLIC in opcodes
