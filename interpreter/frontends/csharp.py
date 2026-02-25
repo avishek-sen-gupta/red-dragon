@@ -771,22 +771,56 @@ class CSharpFrontend(BaseFrontend):
         self._break_target_stack.pop()
         self._emit(Opcode.LABEL, label=end_label)
 
-    # -- C#: try/catch (SYMBOLIC) --------------------------------------
+    # -- C#: try/catch/finally -----------------------------------------
 
     def _lower_try(self, node):
         body_node = node.child_by_field_name("body")
-        if body_node:
-            self._lower_block(body_node)
-        # Catch and finally clauses are lowered as SYMBOLIC
+        catch_clauses = []
+        finally_node = None
         for child in node.children:
-            if child.type in ("catch_clause", "finally_clause"):
-                reg = self._fresh_reg()
-                self._emit(
-                    Opcode.SYMBOLIC,
-                    result_reg=reg,
-                    operands=[f"{child.type}:{self._node_text(child)[:60]}"],
-                    source_location=self._source_loc(child),
+            if child.type == "catch_clause":
+                decl_node = next(
+                    (c for c in child.children if c.type == "catch_declaration"),
+                    None,
                 )
+                exc_var = None
+                exc_type = None
+                if decl_node:
+                    type_node = next(
+                        (
+                            c
+                            for c in decl_node.children
+                            if c.type == "identifier"
+                            or c.type == "qualified_name"
+                            or c.type == "generic_name"
+                        ),
+                        None,
+                    )
+                    name_node = next(
+                        (
+                            c
+                            for c in decl_node.children
+                            if c.type == "identifier" and c != type_node
+                        ),
+                        None,
+                    )
+                    if type_node:
+                        exc_type = self._node_text(type_node)
+                    if name_node:
+                        exc_var = self._node_text(name_node)
+                catch_body = child.child_by_field_name("body") or next(
+                    (c for c in child.children if c.type == "block"),
+                    None,
+                )
+                catch_clauses.append(
+                    {"body": catch_body, "variable": exc_var, "type": exc_type}
+                )
+            elif child.type == "finally_clause":
+                finally_node = next(
+                    (c for c in child.children if c.type == "block"),
+                    None,
+                )
+        self._lower_try_catch(node, body_node, catch_clauses, finally_node)
 
     # -- C#: store target override -------------------------------------
 

@@ -65,6 +65,7 @@ class ScalaFrontend(BaseFrontend):
             "new_expression": self._lower_new_expr,
             "generic_type": self._lower_symbolic_node,
             "type_identifier": self._lower_identifier,
+            "try_expression": self._lower_try_expr,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "val_definition": self._lower_val_def,
@@ -83,6 +84,7 @@ class ScalaFrontend(BaseFrontend):
             "package_clause": lambda _: None,
             "break_expression": self._lower_break,
             "continue_expression": self._lower_continue,
+            "try_expression": self._lower_try_stmt,
         }
 
     # -- val / var definition ----------------------------------------------
@@ -579,6 +581,79 @@ class ScalaFrontend(BaseFrontend):
                 operands=[self._node_text(target), val_reg],
                 source_location=self._source_loc(parent_node),
             )
+
+    # -- try/catch/finally -------------------------------------------------
+
+    def _extract_try_parts(self, node):
+        """Extract body, catch clauses, and finally from a try_expression."""
+        body_node = node.child_by_field_name("body")
+        catch_clauses = []
+        finally_node = None
+        for child in node.children:
+            if child.type == "catch_clause":
+                # Scala catch clause has a body with case_clause entries
+                catch_body_node = child.child_by_field_name("body")
+                if catch_body_node:
+                    # Each case_clause in the catch body is a separate handler
+                    cases = [
+                        c for c in catch_body_node.children if c.type == "case_clause"
+                    ]
+                    if cases:
+                        for case in cases:
+                            pattern = case.child_by_field_name("pattern")
+                            case_body = case.child_by_field_name("body")
+                            exc_var = None
+                            exc_type = None
+                            if pattern:
+                                # typed_pattern: identifier : Type
+                                id_node = next(
+                                    (
+                                        c
+                                        for c in pattern.children
+                                        if c.type == "identifier"
+                                    ),
+                                    None,
+                                )
+                                exc_var = self._node_text(id_node) if id_node else None
+                                type_node = next(
+                                    (
+                                        c
+                                        for c in pattern.children
+                                        if c.type == "type_identifier"
+                                    ),
+                                    None,
+                                )
+                                exc_type = (
+                                    self._node_text(type_node)
+                                    if type_node
+                                    else self._node_text(pattern)
+                                )
+                            catch_clauses.append(
+                                {
+                                    "body": case_body,
+                                    "variable": exc_var,
+                                    "type": exc_type,
+                                }
+                            )
+                    else:
+                        # Catch body without case clauses: lower entire body
+                        catch_clauses.append(
+                            {"body": catch_body_node, "variable": None, "type": None}
+                        )
+            elif child.type == "finally_clause":
+                finally_node = child.child_by_field_name("body")
+        return body_node, catch_clauses, finally_node
+
+    def _lower_try_stmt(self, node):
+        body_node, catch_clauses, finally_node = self._extract_try_parts(node)
+        self._lower_try_catch(node, body_node, catch_clauses, finally_node)
+
+    def _lower_try_expr(self, node) -> str:
+        """Lower try_expression in expression context (returns a register)."""
+        self._lower_try_stmt(node)
+        reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=reg, operands=[self.NONE_LITERAL])
+        return reg
 
     # -- generic symbolic fallback -----------------------------------------
 

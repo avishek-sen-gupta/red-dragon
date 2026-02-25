@@ -66,6 +66,7 @@ class RubyFrontend(BaseFrontend):
             "block": self._lower_symbolic_block,
             "break": self._lower_break,
             "next": self._lower_continue,
+            "begin": self._lower_begin,
         }
 
     # -- Ruby: argument_list unwrap -------------------------------------------
@@ -443,6 +444,137 @@ class RubyFrontend(BaseFrontend):
                     val_reg = self._lower_expr(val_node)
                     self._emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
         return obj_reg
+
+    # -- Ruby: begin/rescue/else/ensure ----------------------------------------
+
+    def _lower_begin(self, node):
+        """Lower begin...rescue...else...ensure...end."""
+        # The begin node's children are: "begin" keyword, body stmts, rescue, else, ensure, "end"
+        # OR it wraps a body_statement. Either way, collect from the node's children directly.
+        container = node
+        body_stmt = next(
+            (c for c in node.children if c.type == "body_statement"),
+            None,
+        )
+        if body_stmt is not None:
+            container = body_stmt
+
+        body_children = []
+        catch_clauses = []
+        finally_node = None
+        else_node = None
+
+        for child in container.children:
+            if child.type == "rescue":
+                exc_var = None
+                exc_type = None
+                exceptions_node = next(
+                    (c for c in child.children if c.type == "exceptions"),
+                    None,
+                )
+                if exceptions_node:
+                    exc_type = self._node_text(exceptions_node)
+                var_node = next(
+                    (c for c in child.children if c.type == "exception_variable"),
+                    None,
+                )
+                if var_node:
+                    # exception_variable contains => and identifier
+                    id_node = next(
+                        (c for c in var_node.children if c.type == "identifier"),
+                        None,
+                    )
+                    exc_var = self._node_text(id_node) if id_node else None
+                rescue_body = child.child_by_field_name("body") or next(
+                    (c for c in child.children if c.type == "then"),
+                    None,
+                )
+                catch_clauses.append(
+                    {"body": rescue_body, "variable": exc_var, "type": exc_type}
+                )
+            elif child.type == "ensure":
+                # ensure children: "ensure" keyword + body statements
+                finally_node = child
+            elif child.type == "else":
+                else_node = child
+            else:
+                body_children.append(child)
+
+        # We need a synthetic "body" to pass to _lower_try_catch.
+        # Use body_stmt as the body_node but only lower the body_children.
+        # Instead, lower body inline and pass None as body_node.
+        # Build catch clauses from rescue blocks.
+
+        # Use body_stmt for source location, but emit body children manually
+        self._lower_try_catch_ruby(
+            node, body_children, catch_clauses, finally_node, else_node
+        )
+
+    def _lower_try_catch_ruby(
+        self, node, body_children, catch_clauses, finally_node, else_node
+    ):
+        """Ruby-specific try/catch lowering (body is a list of children, not a single node)."""
+        from .. import constants
+
+        try_body_label = self._fresh_label("try_body")
+        catch_labels = [
+            self._fresh_label(f"catch_{i}") for i in range(len(catch_clauses))
+        ]
+        finally_label = self._fresh_label("try_finally") if finally_node else ""
+        else_label = self._fresh_label("try_else") if else_node else ""
+        end_label = self._fresh_label("try_end")
+
+        exit_target = finally_label or end_label
+
+        # try body
+        self._emit(Opcode.LABEL, label=try_body_label)
+        for child in body_children:
+            if (
+                child.is_named
+                and child.type not in self.COMMENT_TYPES
+                and child.type not in self.NOISE_TYPES
+            ):
+                self._lower_stmt(child)
+        if else_label:
+            self._emit(Opcode.BRANCH, label=else_label)
+        else:
+            self._emit(Opcode.BRANCH, label=exit_target)
+
+        # catch clauses
+        for i, clause in enumerate(catch_clauses):
+            self._emit(Opcode.LABEL, label=catch_labels[i])
+            exc_type = clause.get("type", "StandardError") or "StandardError"
+            exc_reg = self._fresh_reg()
+            self._emit(
+                Opcode.SYMBOLIC,
+                result_reg=exc_reg,
+                operands=[f"{constants.CAUGHT_EXCEPTION_PREFIX}:{exc_type}"],
+                source_location=self._source_loc(node),
+            )
+            exc_var = clause.get("variable")
+            if exc_var:
+                self._emit(
+                    Opcode.STORE_VAR,
+                    operands=[exc_var, exc_reg],
+                    source_location=self._source_loc(node),
+                )
+            catch_body = clause.get("body")
+            if catch_body:
+                self._lower_block(catch_body)
+            self._emit(Opcode.BRANCH, label=exit_target)
+
+        # else clause
+        if else_node:
+            self._emit(Opcode.LABEL, label=else_label)
+            self._lower_block(else_node)
+            self._emit(Opcode.BRANCH, label=finally_label or end_label)
+
+        # finally (ensure)
+        if finally_node:
+            self._emit(Opcode.LABEL, label=finally_label)
+            self._lower_block(finally_node)
+
+        self._emit(Opcode.LABEL, label=end_label)
 
     # -- Ruby: symbolic block (do_block, block) --------------------------------
 

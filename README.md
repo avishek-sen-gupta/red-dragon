@@ -79,7 +79,7 @@ poetry run python interpreter.py example.cob -l cobol -f llm  # unsupported lang
 
 Python, JavaScript, TypeScript, Java, Ruby, Go, PHP, C#, C, C++, Rust, Kotlin, Scala, Lua, Pascal
 
-Unsupported constructs emit `SYMBOLIC` with a descriptive hint rather than crashing. For unlisted languages, use `--frontend llm`.
+Control flow constructs (if/else, while, for, switch, break/continue, try/catch/finally) are lowered into real LABEL+BRANCH IR rather than `SYMBOLIC` placeholders. Unsupported constructs emit `SYMBOLIC` with a descriptive hint rather than crashing. For unlisted languages, use `--frontend llm`.
 
 ## Example: CFG
 
@@ -195,4 +195,4 @@ The **chunked LLM frontend** (`--frontend chunked_llm`) handles large files by d
 poetry run pytest tests/ -v
 ```
 
-569 tests using dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures, symbolic execution, and factory routing.
+610 tests using dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures, symbolic execution, and factory routing.

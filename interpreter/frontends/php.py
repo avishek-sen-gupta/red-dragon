@@ -70,6 +70,7 @@ class PhpFrontend(BaseFrontend):
             "program": self._lower_block,
             "break_statement": self._lower_break,
             "continue_statement": self._lower_continue,
+            "try_statement": self._lower_try,
         }
 
     # -- PHP: compound statement (block with braces) ---------------------------
@@ -588,6 +589,43 @@ class PhpFrontend(BaseFrontend):
                 operands=[self._node_text(target), val_reg],
                 source_location=self._source_loc(parent_node),
             )
+
+    # -- PHP: try/catch/finally ------------------------------------------------
+
+    def _lower_try(self, node):
+        body_node = node.child_by_field_name("body")
+        catch_clauses = []
+        finally_node = None
+        for child in node.children:
+            if child.type == "catch_clause":
+                # PHP catch_clause: type(s) and variable_name
+                type_node = next(
+                    (
+                        c
+                        for c in child.children
+                        if c.type in ("named_type", "name", "qualified_name")
+                    ),
+                    None,
+                )
+                var_node = next(
+                    (c for c in child.children if c.type == "variable_name"),
+                    None,
+                )
+                exc_type = self._node_text(type_node) if type_node else None
+                exc_var = self._node_text(var_node) if var_node else None
+                catch_body = child.child_by_field_name("body") or next(
+                    (c for c in child.children if c.type == "compound_statement"),
+                    None,
+                )
+                catch_clauses.append(
+                    {"body": catch_body, "variable": exc_var, "type": exc_type}
+                )
+            elif child.type == "finally_clause":
+                finally_node = next(
+                    (c for c in child.children if c.type == "compound_statement"),
+                    None,
+                )
+        self._lower_try_catch(node, body_node, catch_clauses, finally_node)
 
     # -- PHP: throw expression -------------------------------------------------
 
