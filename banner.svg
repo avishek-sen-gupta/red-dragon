@@ -3,11 +3,11 @@
   <rect width="900" height="200" rx="12" fill="#0f1923"/>
 
   <!-- Solid red triangle (logo turtle, pointing right) -->
-  <polygon points="335,78 355,100 335,122" fill="#e57373"/>
+  <polygon points="55,78 75,100 55,122" fill="#e57373"/>
 
   <!-- Title -->
-  <text x="375" y="115" fill="#ffffff" font-family="Helvetica, Arial, sans-serif" font-size="58" font-weight="bold">Red<tspan fill="#e57373">Dragon</tspan></text>
+  <text x="95" y="115" fill="#ffffff" font-family="Helvetica, Arial, sans-serif" font-size="58" font-weight="bold">Red<tspan fill="#e57373">Dragon</tspan></text>
 
   <!-- Tagline -->
-  <text x="450" y="155" text-anchor="middle" fill="#90a4ae" font-family="Helvetica, Arial, sans-serif" font-size="16">Multi-language symbolic code analysis</text>
+  <text x="95" y="155" fill="#90a4ae" font-family="Helvetica, Arial, sans-serif" font-size="16">Multi-language symbolic code analysis</text>
 </svg>
