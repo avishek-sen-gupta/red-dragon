@@ -1,6 +1,6 @@
 # RedDragon
 
-![CI](https://github.com/avishek-sen-gupta/red-dragon/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/avishek-sen-gupta/red-dragon/actions/workflows/ci.yml/badge.svg) | [Presentation](presentation/index.html)
 
 A multi-language source code analysis toolkit that:
 
@@ -435,10 +435,6 @@ Tests use dependency injection with fake API clients — no real LLM calls are m
 - **Backend refactor** — backend construction and `get_backend()` factory
 - **Closures** — simple closures, multiple closures from same factory, multi-var capture, non-closure regression
 - **Dataflow analysis** — reaching definitions (linear, redefinition, branch merge, loops, empty), def-use chains (simple, redefinition shadowing, branch multi-chain, SYMBOLIC params), dependency graphs (direct, transitive, self-dependency via loops), integration (end-to-end Python→IR→CFG→dataflow), edge cases (SYMBOLIC passthrough)
-
-## Presentation
-
-A Reveal.js slide deck is included in `presentation/index.html`. Open it in a browser to navigate the slides. It covers the full architecture: IR design, 15 language frontends, the LLM frontend (prompt engineering, resilience pipeline, novelty vs. traditional compilers), the chunked LLM frontend with a worked example showing chunk extraction, register/label renumbering, and reassembled IR output, CFG building with CFG examples across all 15 supported languages, dataflow analysis with dependency graph visualizations, the symbolic VM, and design patterns.
 
 ## Symbolic values
 
