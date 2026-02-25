@@ -497,8 +497,10 @@ class CFrontend(BaseFrontend):
         end_label = self._fresh_label("do_end")
 
         self._emit(Opcode.LABEL, label=body_label)
+        self._push_loop(cond_label, end_label)
         if body_node:
             self._lower_block(body_node)
+        self._pop_loop()
 
         self._emit(Opcode.LABEL, label=cond_label)
         if cond_node:
@@ -514,16 +516,61 @@ class CFrontend(BaseFrontend):
 
         self._emit(Opcode.LABEL, label=end_label)
 
-    # -- C: switch (SYMBOLIC) ------------------------------------------
+    # -- C: switch as if/else chain ------------------------------------
 
     def _lower_switch(self, node):
-        reg = self._fresh_reg()
-        self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=[f"switch:{self._node_text(node)[:80]}"],
-            source_location=self._source_loc(node),
+        """Lower switch(expr) { case ... } as an if/else chain."""
+        cond_node = node.child_by_field_name("condition")
+        body_node = node.child_by_field_name("body")
+
+        subject_reg = self._lower_expr(cond_node)
+        end_label = self._fresh_label("switch_end")
+
+        self._break_target_stack.append(end_label)
+
+        cases = (
+            [c for c in body_node.children if c.type == "case_statement"]
+            if body_node
+            else []
         )
+
+        for case in cases:
+            value_node = case.child_by_field_name("value")
+            body_stmts = [
+                c
+                for c in case.children
+                if c.is_named and c.type not in ("case", "default") and c != value_node
+            ]
+
+            arm_label = self._fresh_label("case_arm")
+            next_label = self._fresh_label("case_next")
+
+            if value_node:
+                case_reg = self._lower_expr(value_node)
+                cmp_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.BINOP,
+                    result_reg=cmp_reg,
+                    operands=["==", subject_reg, case_reg],
+                    source_location=self._source_loc(case),
+                )
+                self._emit(
+                    Opcode.BRANCH_IF,
+                    operands=[cmp_reg],
+                    label=f"{arm_label},{next_label}",
+                )
+            else:
+                # default case
+                self._emit(Opcode.BRANCH, label=arm_label)
+
+            self._emit(Opcode.LABEL, label=arm_label)
+            for stmt in body_stmts:
+                self._lower_stmt(stmt)
+            self._emit(Opcode.BRANCH, label=end_label)
+            self._emit(Opcode.LABEL, label=next_label)
+
+        self._break_target_stack.pop()
+        self._emit(Opcode.LABEL, label=end_label)
 
     # -- C: goto / labeled statement / break / continue ----------------
 
@@ -548,23 +595,8 @@ class CFrontend(BaseFrontend):
             if child.is_named and child.type != "statement_identifier":
                 self._lower_stmt(child)
 
-    def _lower_break(self, node):
-        reg = self._fresh_reg()
-        self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=["break"],
-            source_location=self._source_loc(node),
-        )
-
-    def _lower_continue(self, node):
-        reg = self._fresh_reg()
-        self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=["continue"],
-            source_location=self._source_loc(node),
-        )
+    # break_statement and continue_statement are handled by
+    # BaseFrontend._lower_break / _lower_continue via _STMT_DISPATCH
 
     # -- C: typedef (skip) ---------------------------------------------
 

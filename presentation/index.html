@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Codescry: LLM Symbolic Interpreter</title>
+  <title>RedDragon: LLM Symbolic Interpreter</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reveal.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/theme/moon.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/plugin/highlight/monokai.min.css">
@@ -296,12 +296,12 @@
 
 <!-- Slide 1: Title -->
 <section>
-  <h1>Codescry</h1>
+  <h1>RedDragon</h1>
   <h2 style="color: #81c784;">LLM Symbolic Interpreter</h2>
   <p class="tagline">"Deterministic where possible. Symbolic where necessary. LLM only as a last resort."</p>
   <p class="small dim" style="margin-top: 40px;">~12,500 LOC &middot; 20 opcodes &middot; 15 frontends &middot; 507 tests &middot; 4 LLM providers</p>
   <aside class="notes">
-    This is an end-to-end technical deep dive into Codescry's architecture.
+    This is an end-to-end technical deep dive into RedDragon's architecture.
     The key idea: avoid LLMs entirely for concrete programs, fall back gracefully
     to symbolic execution, and only call an LLM when genuinely stuck.
   </aside>
@@ -647,7 +647,7 @@ BINOP     t11, t9, "==", t10</code></pre>
     <tr>
       <th>Approach</th>
       <th>Traditional Compilers</th>
-      <th>Codescry LLM Frontend</th>
+      <th>RedDragon LLM Frontend</th>
     </tr>
     <tr class="fragment">
       <td><strong>Grammar</strong></td>
@@ -676,7 +676,7 @@ BINOP     t11, t9, "==", t10</code></pre>
     The VM then does the actual execution deterministically.
   </p>
   <aside class="notes">
-    This is what separates Codescry from "ask an LLM to explain code."
+    This is what separates RedDragon from "ask an LLM to explain code."
     The LLM is used as a compiler frontend — a structured transformation, not open-ended generation.
     The output is machine-consumed, validated, and executed by a deterministic VM.
     The LLM never sees program state or makes execution decisions — it only lowers syntax to IR.

@@ -71,6 +71,9 @@ class JavaFrontend(BaseFrontend):
             "import_declaration": lambda _: None,
             "package_declaration": lambda _: None,
             "program": self._lower_block,
+            "break_statement": self._lower_break,
+            "continue_statement": self._lower_continue,
+            "switch_expression": self._lower_java_switch,
         }
 
     # ── Java: local variable declaration ─────────────────────────
@@ -330,10 +333,14 @@ class JavaFrontend(BaseFrontend):
         self._emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
         self._emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
 
+        update_label = self._fresh_label("for_update")
+        self._push_loop(update_label, end_label)
         if body_node:
             self._lower_block(body_node)
+        self._pop_loop()
 
         # increment
+        self._emit(Opcode.LABEL, label=update_label)
         one_reg = self._fresh_reg()
         self._emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
         new_idx = self._fresh_reg()
@@ -341,6 +348,71 @@ class JavaFrontend(BaseFrontend):
         self._emit(Opcode.STORE_VAR, operands=["__for_idx", new_idx])
         self._emit(Opcode.BRANCH, label=loop_label)
 
+        self._emit(Opcode.LABEL, label=end_label)
+
+    # ── Java: switch expression ──────────────────────────────────
+
+    def _lower_java_switch(self, node):
+        """Lower switch(expr) { case ... } as an if/else chain."""
+        cond_node = node.child_by_field_name("condition")
+        body_node = node.child_by_field_name("body")
+
+        subject_reg = self._lower_expr(cond_node)
+        end_label = self._fresh_label("switch_end")
+
+        self._break_target_stack.append(end_label)
+
+        groups = (
+            [c for c in body_node.children if c.type == "switch_block_statement_group"]
+            if body_node
+            else []
+        )
+
+        for group in groups:
+            label_node = next(
+                (c for c in group.children if c.type == "switch_label"), None
+            )
+            body_stmts = [
+                c for c in group.children if c.is_named and c.type != "switch_label"
+            ]
+
+            arm_label = self._fresh_label("case_arm")
+            next_label = self._fresh_label("case_next")
+
+            is_default = label_node is not None and not any(
+                c.is_named for c in label_node.children
+            )
+
+            if label_node and not is_default:
+                # Extract case value from switch_label's first named child
+                case_value = next((c for c in label_node.children if c.is_named), None)
+                if case_value:
+                    case_reg = self._lower_expr(case_value)
+                    cmp_reg = self._fresh_reg()
+                    self._emit(
+                        Opcode.BINOP,
+                        result_reg=cmp_reg,
+                        operands=["==", subject_reg, case_reg],
+                        source_location=self._source_loc(group),
+                    )
+                    self._emit(
+                        Opcode.BRANCH_IF,
+                        operands=[cmp_reg],
+                        label=f"{arm_label},{next_label}",
+                    )
+                else:
+                    self._emit(Opcode.BRANCH, label=arm_label)
+            else:
+                # default case
+                self._emit(Opcode.BRANCH, label=arm_label)
+
+            self._emit(Opcode.LABEL, label=arm_label)
+            for stmt in body_stmts:
+                self._lower_stmt(stmt)
+            self._emit(Opcode.BRANCH, label=end_label)
+            self._emit(Opcode.LABEL, label=next_label)
+
+        self._break_target_stack.pop()
         self._emit(Opcode.LABEL, label=end_label)
 
     # ── Java: method declaration ─────────────────────────────────

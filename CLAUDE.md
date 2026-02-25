@@ -28,6 +28,7 @@
 - Do not patch with `unittest.mock.patch`. Use proper dependency injection, and then inject mock objects.
 - Use `tmp_path` fixture for filesystem tests
 - Tests requiring external repos (mojo-lsp, smojol) are integration tests
+- - When fixing tests, do not blindly change test assertions to make the test pass. Only modify assertions once you are sure that the actual code output is actually valid according to the context.
 
 ## Programming Patterns
 

@@ -72,6 +72,8 @@ class JavaScriptFrontend(BaseFrontend):
             "throw_statement": self._lower_throw,
             "statement_block": self._lower_block,
             "empty_statement": lambda _: None,
+            "break_statement": self._lower_break,
+            "continue_statement": self._lower_continue,
         }
 
     # ── JS attribute access ──────────────────────────────────────
@@ -363,8 +365,10 @@ class JavaScriptFrontend(BaseFrontend):
                 )
                 self._emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
 
+        self._push_loop(loop_label, end_label)
         if body_node:
             self._lower_block(body_node)
+        self._pop_loop()
 
         self._emit(Opcode.BRANCH, label=loop_label)
         self._emit(Opcode.LABEL, label=end_label)

@@ -195,4 +195,4 @@ The **chunked LLM frontend** (`--frontend chunked_llm`) handles large files by d
 poetry run pytest tests/ -v
 ```
 
-529 tests using dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures, symbolic execution, and factory routing.
+569 tests using dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures, symbolic execution, and factory routing.

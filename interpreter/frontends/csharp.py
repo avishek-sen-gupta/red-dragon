@@ -87,6 +87,8 @@ class CSharpFrontend(BaseFrontend):
             "constructor_declaration": self._lower_constructor_decl,
             "field_declaration": self._lower_field_decl,
             "property_declaration": self._lower_property_decl,
+            "break_statement": self._lower_break,
+            "continue_statement": self._lower_continue,
         }
 
     # -- C#: global_statement unwrapper --------------------------------
@@ -410,9 +412,13 @@ class CSharpFrontend(BaseFrontend):
         self._emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
         self._emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
 
+        update_label = self._fresh_label("foreach_update")
+        self._push_loop(update_label, end_label)
         if body_node:
             self._lower_block(body_node)
+        self._pop_loop()
 
+        self._emit(Opcode.LABEL, label=update_label)
         one_reg = self._fresh_reg()
         self._emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
         new_idx = self._fresh_reg()
@@ -678,8 +684,10 @@ class CSharpFrontend(BaseFrontend):
         end_label = self._fresh_label("do_end")
 
         self._emit(Opcode.LABEL, label=body_label)
+        self._push_loop(cond_label, end_label)
         if body_node:
             self._lower_block(body_node)
+        self._pop_loop()
 
         self._emit(Opcode.LABEL, label=cond_label)
         if cond_node:
@@ -698,13 +706,70 @@ class CSharpFrontend(BaseFrontend):
     # -- C#: switch (SYMBOLIC) -----------------------------------------
 
     def _lower_switch(self, node):
-        reg = self._fresh_reg()
-        self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=[f"switch:{self._node_text(node)[:80]}"],
-            source_location=self._source_loc(node),
+        """Lower switch as if/else chain.
+
+        C# tree-sitter: switch_statement has 'value' field (subject) and
+        'body' field (switch_body containing switch_section children).
+        Each switch_section has constant_pattern for case values (absent for default).
+        """
+        value_node = node.child_by_field_name("value")
+        body_node = node.child_by_field_name("body")
+
+        subject_reg = self._lower_expr(value_node) if value_node else self._fresh_reg()
+        end_label = self._fresh_label("switch_end")
+
+        self._break_target_stack.append(end_label)
+
+        sections = (
+            [c for c in body_node.children if c.type == "switch_section"]
+            if body_node
+            else []
         )
+
+        for section in sections:
+            pattern_node = next(
+                (c for c in section.children if c.type == "constant_pattern"), None
+            )
+            body_stmts = [
+                c
+                for c in section.children
+                if c.is_named and c.type != "constant_pattern"
+            ]
+
+            arm_label = self._fresh_label("case_arm")
+            next_label = self._fresh_label("case_next")
+
+            if pattern_node:
+                # Extract the literal from constant_pattern
+                inner = next((c for c in pattern_node.children if c.is_named), None)
+                if inner:
+                    case_reg = self._lower_expr(inner)
+                else:
+                    case_reg = self._lower_expr(pattern_node)
+                cmp_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.BINOP,
+                    result_reg=cmp_reg,
+                    operands=["==", subject_reg, case_reg],
+                    source_location=self._source_loc(section),
+                )
+                self._emit(
+                    Opcode.BRANCH_IF,
+                    operands=[cmp_reg],
+                    label=f"{arm_label},{next_label}",
+                )
+            else:
+                # default case
+                self._emit(Opcode.BRANCH, label=arm_label)
+
+            self._emit(Opcode.LABEL, label=arm_label)
+            for stmt in body_stmts:
+                self._lower_stmt(stmt)
+            self._emit(Opcode.BRANCH, label=end_label)
+            self._emit(Opcode.LABEL, label=next_label)
+
+        self._break_target_stack.pop()
+        self._emit(Opcode.LABEL, label=end_label)
 
     # -- C#: try/catch (SYMBOLIC) --------------------------------------
 
