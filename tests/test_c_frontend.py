@@ -292,3 +292,151 @@ class TestCFrontendFallback:
             s for s in symbolics if any("sizeof:" in str(op) for op in s.operands)
         ]
         assert len(sizeof_symbolics) >= 1
+
+
+def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
+    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+
+
+class TestNonTrivialC:
+    def test_nested_for_with_array_access(self):
+        source = """\
+void f() {
+    int sum = 0;
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            sum = sum + grid[i][j];
+        }
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        branches = _find_all(ir, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("sum" in s.operands for s in stores)
+        assert any("i" in s.operands for s in stores)
+        assert any("j" in s.operands for s in stores)
+        assert len(ir) > 25
+
+    def test_struct_field_access_and_mutation(self):
+        source = """\
+struct Point { int x; int y; };
+void f() {
+    struct Point p;
+    p.x = 10;
+    p.y = p.x + 5;
+}
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("Point" in s.operands for s in stores)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        assert any("x" in str(inst.operands) for inst in store_fields)
+        assert any("y" in str(inst.operands) for inst in store_fields)
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+    def test_pointer_dereference_and_address(self):
+        source = """\
+void f() {
+    int x = 42;
+    int *p = &x;
+    int y = *p;
+}
+"""
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        pointer_symbolics = [
+            s for s in symbolics if any("pointer:" in str(op) for op in s.operands)
+        ]
+        assert len(pointer_symbolics) >= 2
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in s.operands for s in stores)
+        assert any("p" in s.operands for s in stores)
+        assert any("y" in s.operands for s in stores)
+
+    def test_function_calling_function(self):
+        source = """\
+int double_val(int x) { return x * 2; }
+int quadruple(int x) { return double_val(double_val(x)); }
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("double_val" in s.operands for s in stores)
+        assert any("quadruple" in s.operands for s in stores)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("double_val" in inst.operands for inst in calls)
+        returns = _find_all(ir, Opcode.RETURN)
+        assert len(returns) >= 2
+
+    def test_while_with_nested_if_else(self):
+        source = """\
+void f() {
+    int count = 0;
+    int total = 0;
+    while (count < 20) {
+        if (count % 2 == 0) {
+            total = total + count;
+        } else {
+            total = total - 1;
+        }
+        count++;
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        branches = _find_all(ir, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        labels = _labels_in_order(ir)
+        assert any("while" in lbl for lbl in labels)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("total" in s.operands for s in stores)
+        assert any("count" in s.operands for s in stores)
+        assert len(ir) > 25
+
+    def test_switch_statement(self):
+        source = """\
+void f() {
+    switch (x) {
+        case 1: y = 10; break;
+        case 2: y = 20; break;
+        default: y = 0; break;
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.SYMBOLIC in opcodes or Opcode.BRANCH_IF in opcodes
+        assert len(ir) > 3
+
+    def test_do_while_loop(self):
+        source = """\
+void f() {
+    int x = 10;
+    do {
+        x = x - 1;
+    } while (x > 0);
+}
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.BRANCH in opcodes
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in s.operands for s in stores)
+        assert len(ir) > 10
+
+    def test_field_access_arrow_operator(self):
+        source = """\
+void f() {
+    int val = node->value;
+    node->next = other->next;
+}
+"""
+        ir = _parse_and_lower(source)
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        assert any("value" in inst.operands for inst in load_fields)
+        assert any("next" in inst.operands for inst in load_fields)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        assert any("next" in inst.operands for inst in store_fields)

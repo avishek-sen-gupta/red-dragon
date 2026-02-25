@@ -45,6 +45,7 @@ tests/
 ├── test_frontend_factory.py     # get_frontend() factory tests
 ├── test_backend_refactor.py     # Backend refactor + get_backend() factory tests
 ├── test_closures.py             # Closure capture and invocation tests
+├── test_python_frontend.py      # Python frontend tests
 ├── test_javascript_frontend.py  # JavaScript frontend tests
 ├── test_typescript_frontend.py  # TypeScript frontend tests
 ├── test_java_frontend.py        # Java frontend tests
@@ -375,9 +376,9 @@ When run with `-v`, the interpreter reports per-stage timing and output statisti
 poetry run pytest tests/ -v
 ```
 
-Tests use dependency injection with fake API clients — no real LLM calls are made. The test suite (346 tests) covers:
+Tests use dependency injection with fake API clients — no real LLM calls are made. The test suite (490 tests) covers:
 
-- **Deterministic frontends** — 15 language frontends with 15-25 tests each covering declarations, expressions, control flow, functions, classes, and language-specific constructs
+- **Deterministic frontends** — 15 language frontends with unit tests covering declarations, expressions, control flow, functions, classes, and language-specific constructs, plus non-trivial integration tests (8-12 per language) exercising multi-statement programs with nested control flow, functions calling functions, classes with methods, and combined features
 - **LLM client infrastructure** — client construction, DI, factory routing for all 4 providers
 - **LLM frontend** — markdown fence stripping, JSON parsing/repair, IR validation, prompt formatting
 - **Frontend factory** — `get_frontend()` routing for deterministic and LLM paths

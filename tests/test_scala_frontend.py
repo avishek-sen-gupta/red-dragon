@@ -199,3 +199,161 @@ class TestScalaSpecial:
         instructions = _parse_scala("object M { val n = null }")
         consts = _find_all(instructions, Opcode.CONST)
         assert any("null" in inst.operands for inst in consts)
+
+
+def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
+    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+
+
+class TestNonTrivialScala:
+    def test_match_with_cases(self):
+        source = """\
+object M {
+    val r = x match {
+        case 1 => 10
+        case 2 => 20
+        case 3 => 30
+        case _ => 0
+    }
+}
+"""
+        instructions = _parse_scala(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes or Opcode.BRANCH in opcodes
+        labels = _labels_in_order(instructions)
+        assert any("case" in lbl for lbl in labels)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("r" in inst.operands for inst in stores)
+        assert len(instructions) > 15
+
+    def test_object_with_method(self):
+        source = """\
+object Utils {
+    def double(x: Int): Int = x + x
+    def triple(x: Int): Int = x + x + x
+}
+"""
+        instructions = _parse_scala(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Utils" in inst.operands for inst in stores)
+        assert any("double" in inst.operands for inst in stores)
+        assert any("triple" in inst.operands for inst in stores)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 2
+
+    def test_class_with_constructor_and_method(self):
+        source = """\
+class Counter(start: Int) {
+    var count: Int = start
+    def increment(): Unit = {
+        count = count + 1
+    }
+    def value(): Int = count
+}
+"""
+        instructions = _parse_scala(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Counter" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("class:" in str(inst.operands) for inst in consts)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+        assert len(instructions) > 15
+
+    def test_while_with_var_mutation(self):
+        source = """\
+object M {
+    var i = 0
+    var total = 0
+    while (i < 10) {
+        total = total + i
+        i = i + 1
+    }
+}
+"""
+        instructions = _parse_scala(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.BRANCH in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("total" in inst.operands for inst in stores)
+        assert any("i" in inst.operands for inst in stores)
+        labels = _labels_in_order(instructions)
+        assert any("while" in lbl for lbl in labels)
+        assert len(instructions) > 15
+
+    def test_if_else_as_expression(self):
+        source = """\
+object M {
+    val grade = if (score > 90) "A"
+        else if (score > 70) "B"
+        else "C"
+}
+"""
+        instructions = _parse_scala(source)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("grade" in inst.operands for inst in stores)
+        labels = _labels_in_order(instructions)
+        assert any("if_true" in lbl for lbl in labels)
+
+    def test_block_expression_returning_value(self):
+        source = """\
+object M {
+    val result = {
+        val a = 10
+        val b = 20
+        a + b
+    }
+}
+"""
+        instructions = _parse_scala(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BINOP in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("result" in inst.operands for inst in stores)
+        assert any("a" in inst.operands for inst in stores)
+        assert any("b" in inst.operands for inst in stores)
+
+    def test_val_and_var_with_computation(self):
+        source = """\
+object M {
+    val x = 10
+    val y = 20
+    var z = x + y
+    z = z * 2
+}
+"""
+        instructions = _parse_scala(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+        assert any("y" in inst.operands for inst in stores)
+        assert any("z" in inst.operands for inst in stores)
+        binops = _find_all(instructions, Opcode.BINOP)
+        operators = [inst.operands[0] for inst in binops if inst.operands]
+        assert "+" in operators
+        assert "*" in operators
+
+    def test_function_calling_function(self):
+        source = """\
+object M {
+    def inc(x: Int): Int = x + 1
+    def double_inc(x: Int): Int = {
+        val a = inc(x)
+        inc(a)
+    }
+}
+"""
+        instructions = _parse_scala(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("inc" in inst.operands for inst in stores)
+        assert any("double_inc" in inst.operands for inst in stores)
+        all_calls = _find_all(instructions, Opcode.CALL_FUNCTION) + _find_all(
+            instructions, Opcode.CALL_UNKNOWN
+        )
+        assert len(all_calls) >= 2
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 2

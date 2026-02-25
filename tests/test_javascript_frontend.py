@@ -185,3 +185,165 @@ class TestJavaScriptSpecial:
         assert Opcode.SYMBOLIC in opcodes
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+
+def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
+    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+
+
+class TestNonTrivialJavaScript:
+    def test_arrow_function_in_method_call(self):
+        source = "const doubled = items.map((x) => x * 2);"
+        instructions = _parse_js(source)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("map" in inst.operands for inst in calls)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("*" in inst.operands for inst in binops)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("doubled" in inst.operands for inst in stores)
+
+    def test_for_of_loop_with_method_body(self):
+        source = """\
+for (const item of items) {
+    console.log(item);
+    result.push(item);
+}
+"""
+        instructions = _parse_js(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        method_names = [inst.operands[1] for inst in calls if len(inst.operands) > 1]
+        assert "log" in method_names
+        assert "push" in method_names
+        assert len(instructions) > 10
+
+    def test_nested_ternary(self):
+        source = 'const label = x > 100 ? "high" : x > 50 ? "mid" : "low";'
+        instructions = _parse_js(source)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("label" in inst.operands for inst in stores)
+
+    def test_class_with_constructor_and_methods(self):
+        source = """\
+class Counter {
+    constructor(start) {
+        this.count = start;
+    }
+    increment() {
+        this.count = this.count + 1;
+    }
+    get() {
+        return this.count;
+    }
+}
+"""
+        instructions = _parse_js(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Counter" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("class:" in str(inst.operands) for inst in consts)
+        store_fields = _find_all(instructions, Opcode.STORE_FIELD)
+        assert any("count" in inst.operands for inst in store_fields)
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 1
+        assert len(instructions) > 20
+
+    def test_for_loop_building_array(self):
+        source = """\
+const result = [];
+for (let i = 0; i < 10; i++) {
+    result.push(i * 2);
+}
+"""
+        instructions = _parse_js(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.NEW_ARRAY in opcodes
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("push" in inst.operands for inst in calls)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("*" in inst.operands for inst in binops)
+        assert len(instructions) > 15
+
+    def test_if_else_chain_with_early_return(self):
+        source = """\
+function classify(x) {
+    if (x > 100) {
+        return "high";
+    } else if (x > 50) {
+        return "medium";
+    } else {
+        return "low";
+    }
+}
+"""
+        instructions = _parse_js(source)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 3
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("classify" in inst.operands for inst in stores)
+
+    def test_template_literal_with_expressions(self):
+        source = """\
+const name = "world";
+const count = 5;
+const msg = `Hello ${name}, you have ${count} items`;
+"""
+        instructions = _parse_js(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("name" in inst.operands for inst in stores)
+        assert any("count" in inst.operands for inst in stores)
+        assert any("msg" in inst.operands for inst in stores)
+
+    def test_while_with_object_mutation(self):
+        source = """\
+let i = 0;
+while (i < 10) {
+    obj.value = obj.value + i;
+    i++;
+}
+"""
+        instructions = _parse_js(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.BRANCH in opcodes
+        store_fields = _find_all(instructions, Opcode.STORE_FIELD)
+        assert any("value" in inst.operands for inst in store_fields)
+        labels = _labels_in_order(instructions)
+        assert any("while" in lbl for lbl in labels)
+        assert len(instructions) > 15
+
+    def test_try_catch_with_throw(self):
+        source = """\
+try {
+    const result = riskyOp();
+    console.log(result);
+} catch (e) {
+    throw new Error("wrapped: " + e.message);
+}
+"""
+        instructions = _parse_js(source)
+        opcodes = _opcodes(instructions)
+        # try/catch is lowered as SYMBOLIC block
+        assert Opcode.SYMBOLIC in opcodes or Opcode.THROW in opcodes
+        assert len(instructions) > 1
+
+    def test_object_literal_with_method_calls(self):
+        source = """\
+const config = {name: "app", version: 1};
+const upper = config.name.toUpperCase();
+"""
+        instructions = _parse_js(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_OBJECT in opcodes
+        assert Opcode.STORE_INDEX in opcodes
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("toUpperCase" in inst.operands for inst in calls)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("config" in inst.operands for inst in stores)
+        assert any("upper" in inst.operands for inst in stores)

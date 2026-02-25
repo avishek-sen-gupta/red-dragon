@@ -174,3 +174,151 @@ class TestCppSpecial:
         instructions = _parse_cpp("int main() { int z = x + y; }")
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
+
+
+def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
+    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+
+
+class TestNonTrivialCpp:
+    def test_class_with_constructor_and_method(self):
+        source = """\
+class Counter {
+public:
+    int count;
+    Counter(int start) { this->count = start; }
+    int value() { return this->count; }
+    void increment() { this->count = this->count + 1; }
+};
+"""
+        instructions = _parse_cpp(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Counter" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("class:" in str(inst.operands) for inst in consts)
+        store_fields = _find_all(instructions, Opcode.STORE_FIELD)
+        assert any("count" in inst.operands for inst in store_fields)
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 1
+        assert len(instructions) > 20
+
+    def test_new_delete_with_method(self):
+        source = """\
+int main() {
+    Dog* d = new Dog("Rex");
+    d->bark();
+    delete d;
+}
+"""
+        instructions = _parse_cpp(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("Dog" in inst.operands for inst in calls)
+        method_calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("bark" in inst.operands for inst in method_calls)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert any("delete:" in str(inst.operands) for inst in symbolics)
+
+    def test_lambda_capture_and_call(self):
+        source = """\
+int main() {
+    int x = 10;
+    auto f = [](int a, int b) { return a + b; };
+    int result = f(x, 20);
+}
+"""
+        instructions = _parse_cpp(source)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("__lambda" in str(inst.operands) for inst in consts)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("result" in inst.operands for inst in stores)
+        assert any("f" in inst.operands for inst in stores)
+
+    def test_range_for_with_method(self):
+        source = """\
+int main() {
+    for (auto& item : items) {
+        item.process();
+        result.push_back(item.value());
+    }
+}
+"""
+        instructions = _parse_cpp(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        method_names = [inst.operands[1] for inst in calls if len(inst.operands) > 1]
+        assert "process" in method_names
+        assert "push_back" in method_names
+        assert len(instructions) > 10
+
+    def test_static_cast(self):
+        source = """\
+int main() {
+    double pi = 3.14;
+    int truncated = static_cast<int>(pi);
+}
+"""
+        instructions = _parse_cpp(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("pi" in inst.operands for inst in stores)
+        assert any("truncated" in inst.operands for inst in stores)
+
+    def test_try_catch_with_throw(self):
+        source = """\
+int main() {
+    try {
+        int result = riskyOp();
+        use(result);
+    } catch (const std::exception& e) {
+        throw std::runtime_error("wrapped");
+    }
+}
+"""
+        instructions = _parse_cpp(source)
+        opcodes = _opcodes(instructions)
+        # try/catch is lowered as a SYMBOLIC block
+        assert Opcode.SYMBOLIC in opcodes or Opcode.THROW in opcodes
+        assert len(instructions) > 3
+
+    def test_namespace_function_with_loop(self):
+        source = """\
+namespace math {
+    int sum(int n) {
+        int total = 0;
+        for (int i = 1; i <= n; i++) {
+            total = total + i;
+        }
+        return total;
+    }
+}
+"""
+        instructions = _parse_cpp(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.RETURN in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("total" in inst.operands for inst in stores)
+        assert any("sum" in inst.operands for inst in stores)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+        assert len(instructions) > 15
+
+    def test_template_function(self):
+        source = """\
+template <typename T>
+T max_val(T a, T b) {
+    if (a > b) {
+        return a;
+    }
+    return b;
+}
+"""
+        instructions = _parse_cpp(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 2
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("max_val" in inst.operands for inst in stores)

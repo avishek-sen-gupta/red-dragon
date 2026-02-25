@@ -198,3 +198,168 @@ class TestRustSpecial:
         assert Opcode.BINOP in opcodes
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("v" in inst.operands for inst in stores)
+
+
+def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
+    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+
+
+class TestNonTrivialRust:
+    def test_match_with_multiple_arms(self):
+        source = """\
+fn main() {
+    let r = match x {
+        1 => 10,
+        2 => 20,
+        3 => 30,
+        _ => 0,
+    };
+}
+"""
+        instructions = _parse_rust(source)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 3
+        labels = _labels_in_order(instructions)
+        assert any("match" in lbl for lbl in labels)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("r" in inst.operands for inst in stores)
+        assert len(instructions) > 20
+
+    def test_impl_with_constructor_and_method(self):
+        source = """\
+struct Counter { count: i32 }
+impl Counter {
+    fn new(start: i32) -> Counter {
+        Counter { count: start }
+    }
+    fn value(&self) -> i32 {
+        return self.count;
+    }
+}
+"""
+        instructions = _parse_rust(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Counter" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("class:" in str(inst.operands) for inst in consts)
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 1
+        assert len(instructions) > 15
+
+    def test_closure_in_method_call(self):
+        source = """\
+fn main() {
+    let doubled = items.iter().map(|x| x * 2);
+}
+"""
+        instructions = _parse_rust(source)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        method_names = [inst.operands[1] for inst in calls if len(inst.operands) > 1]
+        assert "iter" in method_names
+        assert "map" in method_names
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("__closure" in str(inst.operands) for inst in consts)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("doubled" in inst.operands for inst in stores)
+
+    def test_for_range_with_mutation(self):
+        source = """\
+fn main() {
+    let mut total = 0;
+    let mut i = 0;
+    while i < 10 {
+        if i % 2 == 0 {
+            total = total + i;
+        }
+        i = i + 1;
+    }
+}
+"""
+        instructions = _parse_rust(source)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("total" in inst.operands for inst in stores)
+        assert any("i" in inst.operands for inst in stores)
+        assert len(instructions) > 20
+
+    def test_nested_if_as_expression(self):
+        source = """\
+fn main() {
+    let grade = if score > 90 {
+        "A"
+    } else if score > 70 {
+        "B"
+    } else {
+        "C"
+    };
+}
+"""
+        instructions = _parse_rust(source)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("grade" in inst.operands for inst in stores)
+        labels = _labels_in_order(instructions)
+        assert any("if_true" in lbl for lbl in labels)
+
+    def test_reference_and_dereference(self):
+        source = """\
+fn main() {
+    let x = 42;
+    let r = &x;
+    let val = *r;
+    let y = val + 1;
+}
+"""
+        instructions = _parse_rust(source)
+        unops = _find_all(instructions, Opcode.UNOP)
+        operators = [inst.operands[0] for inst in unops if inst.operands]
+        assert "&" in operators
+        assert "*" in operators
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+        assert any("r" in inst.operands for inst in stores)
+        assert any("val" in inst.operands for inst in stores)
+        assert any("y" in inst.operands for inst in stores)
+
+    def test_while_loop_with_nested_if(self):
+        source = """\
+fn main() {
+    let mut count = 0;
+    let mut sum = 0;
+    while count < 100 {
+        if count > 50 {
+            sum = sum + count;
+        } else {
+            sum = sum + 1;
+        }
+        count = count + 1;
+    }
+}
+"""
+        instructions = _parse_rust(source)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("count" in inst.operands for inst in stores)
+        assert any("sum" in inst.operands for inst in stores)
+        assert len(instructions) > 25
+
+    def test_function_calling_function(self):
+        source = """\
+fn double(x: i32) -> i32 {
+    x * 2
+}
+fn quadruple(x: i32) -> i32 {
+    double(double(x))
+}
+"""
+        instructions = _parse_rust(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("double" in inst.operands for inst in stores)
+        assert any("quadruple" in inst.operands for inst in stores)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("double" in inst.operands for inst in calls)
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 2

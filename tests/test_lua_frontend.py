@@ -237,3 +237,145 @@ class TestLuaControlFlow:
         assert Opcode.SYMBOLIC in opcodes
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert any("generic_for_iteration" in str(inst.operands) for inst in symbolics)
+
+
+def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
+    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+
+
+class TestNonTrivialLua:
+    def test_table_with_dot_and_bracket_access(self):
+        source = """\
+local config = {name = "app", version = 2}
+local n = config.name
+local v = config["version"]
+"""
+        instructions = _parse_lua(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_OBJECT in opcodes
+        assert Opcode.STORE_INDEX in opcodes
+        assert Opcode.LOAD_FIELD in opcodes
+        assert Opcode.LOAD_INDEX in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("config" in inst.operands for inst in stores)
+        assert any("n" in inst.operands for inst in stores)
+        assert any("v" in inst.operands for inst in stores)
+
+    def test_repeat_until_loop(self):
+        source = """\
+local x = 10
+repeat
+    x = x - 1
+    print(x)
+until x == 0
+"""
+        instructions = _parse_lua(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.UNOP in opcodes
+        labels = _labels_in_order(instructions)
+        assert any("repeat" in lbl for lbl in labels)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("print" in inst.operands for inst in calls)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_generic_for_with_ipairs(self):
+        source = """\
+local t = {10, 20, 30}
+for i, v in ipairs(t) do
+    print(v)
+end
+"""
+        instructions = _parse_lua(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.SYMBOLIC in opcodes
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert any("generic_for_iteration" in str(inst.operands) for inst in symbolics)
+        # Lua table constructors use NEW_OBJECT
+        assert Opcode.NEW_OBJECT in opcodes
+
+    def test_local_function_with_nested_if(self):
+        source = """\
+local function classify(x)
+    if x > 100 then
+        return "high"
+    elseif x > 50 then
+        return "medium"
+    else
+        return "low"
+    end
+end
+"""
+        instructions = _parse_lua(source)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 3
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("classify" in inst.operands for inst in stores)
+
+    def test_nested_while_with_table_access(self):
+        source = """\
+local i = 0
+local total = 0
+while i < 10 do
+    local j = 0
+    while j < 5 do
+        total = total + data[j]
+        j = j + 1
+    end
+    i = i + 1
+end
+"""
+        instructions = _parse_lua(source)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        labels = _labels_in_order(instructions)
+        while_labels = [lbl for lbl in labels if "while" in lbl]
+        assert len(while_labels) >= 2
+        assert Opcode.LOAD_INDEX in _opcodes(instructions)
+        assert len(instructions) > 25
+
+    def test_method_call_colon_syntax(self):
+        source = """\
+local obj = {}
+obj:init("hello")
+local result = obj:process()
+"""
+        instructions = _parse_lua(source)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        method_names = [inst.operands[1] for inst in calls if len(inst.operands) > 1]
+        assert "init" in method_names
+        assert "process" in method_names
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("result" in inst.operands for inst in stores)
+
+    def test_numeric_for_with_step(self):
+        source = """\
+local total = 0
+for i = 1, 10, 2 do
+    total = total + i
+end
+"""
+        instructions = _parse_lua(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("total" in inst.operands for inst in stores)
+        assert any("i" in inst.operands for inst in stores)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+    def test_multi_assignment(self):
+        source = """\
+local a, b = 1, 2
+local c = a + b
+"""
+        instructions = _parse_lua(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("a" in inst.operands for inst in stores)
+        assert any("b" in inst.operands for inst in stores)
+        assert any("c" in inst.operands for inst in stores)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
