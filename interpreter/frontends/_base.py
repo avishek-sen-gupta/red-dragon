@@ -779,15 +779,19 @@ class BaseFrontend(Frontend):
         return result_reg
 
     def _lower_expression_statement(self, node):
-        """Lower an expression statement (unwrap and lower the inner expr)."""
+        """Lower an expression statement (unwrap and lower the inner expr).
+
+        If the inner node is a known statement (e.g. ``while_expression`` in
+        Rust), dispatch via ``_lower_stmt`` so statement-only handlers are
+        reachable.
+        """
         for child in node.children:
             if child.type not in (";",) and child.is_named:
-                self._lower_expr(child)
+                self._lower_stmt(child)
                 return
-        # Fallback: lower all children
         for child in node.children:
             if child.is_named:
-                self._lower_expr(child)
+                self._lower_stmt(child)
 
     def _lower_var_declaration(self, node):
         """Lower a variable declaration with name/value fields or declarators."""
