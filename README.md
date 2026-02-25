@@ -1,5 +1,7 @@
 # LLM Symbolic Interpreter
 
+![CI](https://github.com/avishek-sen-gupta/red-dragon/actions/workflows/ci.yml/badge.svg)
+
 A symbolic interpreter that parses source code, lowers it to a three-address code IR, builds a control flow graph, and executes it via a deterministic VM — falling back to an LLM only when the program references externals or operates on symbolic values.
 
 ## Project structure
