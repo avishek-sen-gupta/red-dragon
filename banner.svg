@@ -9,5 +9,5 @@
   <text x="95" y="115" fill="#ffffff" font-family="Helvetica, Arial, sans-serif" font-size="58" font-weight="bold">Red<tspan fill="#e57373">Dragon</tspan></text>
 
   <!-- Tagline -->
-  <text x="95" y="155" fill="#90a4ae" font-family="Helvetica, Arial, sans-serif" font-size="16">Multi-language symbolic code analysis</text>
+  <text x="95" y="155" fill="#90a4ae" font-family="Helvetica, Arial, sans-serif" font-size="16">Multi-language LLM-assisted symbolic execution and dataflow analysis</text>
 </svg>
