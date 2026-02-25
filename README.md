@@ -443,7 +443,7 @@ Tests use dependency injection with fake API clients — no real LLM calls are m
 
 ## Presentation
 
-A Reveal.js slide deck is included in `presentation/index.html`. Open it in a browser to navigate the slides. It covers the full architecture: IR design, 15 language frontends, the LLM frontend (prompt engineering, resilience pipeline, novelty vs. traditional compilers), the chunked LLM frontend, CFG building with CFG examples across all 15 supported languages, dataflow analysis with dependency graph visualizations, the symbolic VM, and design patterns.
+A Reveal.js slide deck is included in `presentation/index.html`. Open it in a browser to navigate the slides. It covers the full architecture: IR design, 15 language frontends, the LLM frontend (prompt engineering, resilience pipeline, novelty vs. traditional compilers), the chunked LLM frontend with a worked example showing chunk extraction, register/label renumbering, and reassembled IR output, CFG building with CFG examples across all 15 supported languages, dataflow analysis with dependency graph visualizations, the symbolic VM, and design patterns.
 
 ## Symbolic values
 
