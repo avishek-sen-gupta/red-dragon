@@ -129,7 +129,7 @@ result = factorial(5)
 Final state: result = 120  (67 steps, 0 LLM calls)
 ```
 
-The VM also handles classes with heap allocation, method dispatch, field access, closures with captured scopes, and builtins (`len`, `range`, `print`, `int`, `str`, etc.) — all deterministically.
+The VM also handles classes with heap allocation, method dispatch, field access, closures with captured scopes, and builtins (`len`, `range`, `print`, `int`, `str`, etc.) — all deterministically. The interpreter's execution engine is split into focused modules: `interpreter/registry.py` (function/class registry), `interpreter/builtins.py` (built-in function table), and `interpreter/executor.py` (opcode handlers and dispatch).
 
 ## Symbolic data flow
 
