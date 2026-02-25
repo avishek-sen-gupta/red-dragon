@@ -35,6 +35,7 @@ interpreter/
 ├── llm_client.py        # LLMClient ABC, Claude/OpenAI/Ollama/HuggingFace clients
 ├── llm_frontend.py      # LLMFrontend — LLM-based source-to-IR lowering
 ├── cfg.py               # BasicBlock, CFG, build_cfg()
+├── dataflow.py          # Iterative dataflow analysis (reaching defs, def-use chains, dependency graphs)
 ├── registry.py          # FunctionRegistry, LocalExecutor (dispatch table), builtins
 ├── vm.py                # SymbolicValue, VMState, StateUpdate, ExecutionResult, Operators
 ├── backend.py           # LLMBackend (DI for clients), Claude/OpenAI/Ollama/HuggingFace backends
@@ -45,6 +46,7 @@ tests/
 ├── test_frontend_factory.py     # get_frontend() factory tests
 ├── test_backend_refactor.py     # Backend refactor + get_backend() factory tests
 ├── test_closures.py             # Closure capture and invocation tests
+├── test_dataflow.py             # Dataflow analysis tests (reaching defs, def-use, dependency graph)
 ├── test_python_frontend.py      # Python frontend tests
 ├── test_javascript_frontend.py  # JavaScript frontend tests
 ├── test_typescript_frontend.py  # TypeScript frontend tests
@@ -86,7 +88,8 @@ Source Code
 1. **Parse** — Tree-sitter (via `tree-sitter-language-pack`) parses source into an AST (deterministic path), or the LLM lowers source directly to IR (LLM path)
 2. **Lower** — A language-specific frontend converts the AST into a flattened three-address code IR (~19 opcodes). Each of the 15 supported languages has a dedicated `BaseFrontend` subclass with dispatch tables mapping tree-sitter node types to IR opcodes. With `--frontend llm`, the LLM performs this lowering step directly from source code for languages without a deterministic frontend
 3. **Build CFG** — IR instructions are partitioned into basic blocks with control flow edges
-4. **Build registry** — Function and class definitions are indexed from the IR, mapping names to CFG labels and extracting parameter lists
+4. **Dataflow analysis** (optional) — Iterative reaching definitions, def-use chains, and variable dependency graphs via classic worklist-based fixed-point computation
+5. **Build registry** — Function and class definitions are indexed from the IR, mapping names to CFG labels and extracting parameter lists
 5. **Execute** — The VM walks the CFG deterministically:
    - **Local execution** handles constants, loads, stores, arithmetic, branches, function/method calls (by stepping into the body), closures (captured enclosing scope), constructor dispatch (`__init__`), heap field access, and builtins (`len`, `range`, `print`, `int`, `str`, etc.)
    - **LLM fallback** is used only for operations on symbolic values (symbolic arithmetic, symbolic branch conditions) or calls to unknown externals not defined in the source
@@ -345,6 +348,37 @@ The VM handles **all** cases deterministically — including incomplete programs
 
 This means the interpreter can trace data flow through programs with incomplete symbol definitions (missing imports, unavailable libraries) entirely deterministically with **0 LLM calls**.
 
+## Dataflow analysis
+
+The `interpreter.dataflow` module provides intraprocedural iterative dataflow analysis on the IR's control flow graph:
+
+```python
+from interpreter.cfg import build_cfg
+from interpreter.dataflow import analyze
+
+cfg = build_cfg(ir_instructions)
+result = analyze(cfg)
+
+# Reaching definitions per block
+for label, facts in result.block_facts.items():
+    print(f"{label}: {len(facts.reach_in)} defs reach entry")
+
+# Def-use chains
+for link in result.def_use_chains:
+    print(f"{link.definition.variable} @ {link.definition.block_label} → {link.use.variable} @ {link.use.block_label}")
+
+# Variable dependency graph (transitive)
+for var, deps in result.dependency_graph.items():
+    print(f"{var} depends on {deps}")
+```
+
+The analysis includes:
+- **Reaching definitions** — classic worklist-based fixed-point solver (bounded by `DATAFLOW_MAX_ITERATIONS`)
+- **Def-use chains** — links each use to the definition(s) that can reach it, handling both local and cross-block flows
+- **Variable dependency graph** — traces register chains backward to named variables with transitive closure
+
+All functions are pure (no mutation of inputs), calls are treated as opaque, and no type information is required.
+
 ## When the LLM is used
 
 The LLM backend still exists but is now only invoked if the local executor encounters an opcode with no registered handler — which currently never happens since all opcodes are covered. The LLM can be used as an optional enhancement for richer symbolic reasoning (e.g., simplifying constraint expressions), but is not required for basic data flow tracking.
@@ -376,7 +410,7 @@ When run with `-v`, the interpreter reports per-stage timing and output statisti
 poetry run pytest tests/ -v
 ```
 
-Tests use dependency injection with fake API clients — no real LLM calls are made. The test suite (490 tests) covers:
+Tests use dependency injection with fake API clients — no real LLM calls are made. The test suite (507 tests) covers:
 
 - **Deterministic frontends** — 15 language frontends with unit tests covering declarations, expressions, control flow, functions, classes, and language-specific constructs, plus non-trivial integration tests (8-12 per language) exercising multi-statement programs with nested control flow, functions calling functions, classes with methods, and combined features
 - **LLM client infrastructure** — client construction, DI, factory routing for all 4 providers
@@ -384,6 +418,7 @@ Tests use dependency injection with fake API clients — no real LLM calls are m
 - **Frontend factory** — `get_frontend()` routing for deterministic and LLM paths
 - **Backend refactor** — backend construction and `get_backend()` factory
 - **Closures** — simple closures, multiple closures from same factory, multi-var capture, non-closure regression
+- **Dataflow analysis** — reaching definitions (linear, redefinition, branch merge, loops, empty), def-use chains (simple, redefinition shadowing, branch multi-chain, SYMBOLIC params), dependency graphs (direct, transitive, self-dependency via loops), integration (end-to-end Python→IR→CFG→dataflow), edge cases (SYMBOLIC passthrough)
 
 ## Symbolic values
 
