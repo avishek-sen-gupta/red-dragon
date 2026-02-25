@@ -420,6 +420,10 @@ Tests use dependency injection with fake API clients — no real LLM calls are m
 - **Closures** — simple closures, multiple closures from same factory, multi-var capture, non-closure regression
 - **Dataflow analysis** — reaching definitions (linear, redefinition, branch merge, loops, empty), def-use chains (simple, redefinition shadowing, branch multi-chain, SYMBOLIC params), dependency graphs (direct, transitive, self-dependency via loops), integration (end-to-end Python→IR→CFG→dataflow), edge cases (SYMBOLIC passthrough)
 
+## Presentation
+
+A Reveal.js slide deck is included in `presentation/index.html`. Open it in a browser to navigate the slides. It covers the full architecture: IR design, 15 language frontends, CFG building with CFG examples across all 15 supported languages, dataflow analysis with dependency graph visualizations, the symbolic VM, and design patterns.
+
 ## Symbolic values
 
 When the interpreter encounters incomplete information, it creates symbolic values rather than erroring:
