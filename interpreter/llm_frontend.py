@@ -125,13 +125,61 @@ def _parse_single_instruction(raw: dict[str, Any]) -> IRInstruction:
     )
 
 
+def _repair_json(text: str) -> str:
+    """Attempt to repair common JSON issues from smaller LLMs.
+
+    Fixes: JS-style // comments, trailing commas before ] or },
+    and truncated responses (truncates to last complete JSON object).
+    """
+    import re
+
+    # Strip // line comments (common with smaller models)
+    text = re.sub(r"//[^\n]*", "", text)
+
+    # Remove trailing commas before } or ]
+    text = re.sub(r",\s*([}\]])", r"\1", text)
+
+    # If response was truncated (no closing ]), find last complete object
+    stripped = text.strip()
+    if not stripped.endswith("]"):
+        logger.warning("JSON appears truncated, finding last complete element")
+        last_brace = stripped.rfind("}")
+        if last_brace > 0:
+            text = stripped[: last_brace + 1] + "\n]"
+
+    # Try to find the outermost JSON array even if there's trailing garbage
+    bracket_depth = 0
+    last_valid_end = -1
+    for i, ch in enumerate(text):
+        if ch == "[":
+            bracket_depth += 1
+        elif ch == "]":
+            bracket_depth -= 1
+            if bracket_depth == 0:
+                last_valid_end = i + 1
+                break
+
+    if last_valid_end > 0:
+        text = text[:last_valid_end]
+
+    return text
+
+
 def _parse_ir_response(raw_text: str) -> list[IRInstruction]:
     """Parse the LLM's raw text response into a list of IRInstructions."""
     cleaned = _strip_markdown_fences(raw_text)
     try:
         data = json.loads(cleaned)
-    except json.JSONDecodeError as exc:
-        raise IRParsingError(f"Failed to parse LLM response as JSON: {exc}") from exc
+    except json.JSONDecodeError:
+        logger.warning("Initial JSON parse failed, attempting repair")
+        repaired = _repair_json(cleaned)
+        try:
+            data = json.loads(repaired)
+        except json.JSONDecodeError as exc:
+            logger.error("JSON repair also failed. Raw response:\n%s", raw_text[:2000])
+            raise IRParsingError(
+                f"Failed to parse LLM response as JSON: {exc}"
+            ) from exc
 
     if not isinstance(data, list):
         raise IRParsingError(f"Expected JSON array, got {type(data).__name__}")

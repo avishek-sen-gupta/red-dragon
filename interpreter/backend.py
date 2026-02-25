@@ -174,15 +174,63 @@ class OpenAIBackend(LLMBackend):
         return self._parse_response(raw)
 
 
+class OllamaBackend(LLMBackend):
+    """Backend that delegates LLM calls to a local Ollama instance."""
+
+    def __init__(self, model: str = "qwen2.5-coder:7b-instruct", client: Any = None):
+        self._llm_client = get_llm_client(
+            provider="ollama",
+            model=model,
+            client=client,
+        )
+
+    def interpret_instruction(
+        self, instruction: IRInstruction, state: VMState
+    ) -> StateUpdate:
+        user_msg = self._build_prompt(instruction, state)
+        raw = self._llm_client.complete(
+            system_prompt=self.SYSTEM_PROMPT,
+            user_message=user_msg,
+            max_tokens=1024,
+        )
+        return self._parse_response(raw)
+
+
+class HuggingFaceBackend(LLMBackend):
+    """Backend that delegates LLM calls to a HuggingFace Inference Endpoint."""
+
+    def __init__(self, model: str = "", client: Any = None):
+        self._llm_client = get_llm_client(
+            provider="huggingface",
+            model=model,
+            client=client,
+        )
+
+    def interpret_instruction(
+        self, instruction: IRInstruction, state: VMState
+    ) -> StateUpdate:
+        user_msg = self._build_prompt(instruction, state)
+        raw = self._llm_client.complete(
+            system_prompt=self.SYSTEM_PROMPT,
+            user_message=user_msg,
+            max_tokens=1024,
+        )
+        return self._parse_response(raw)
+
+
 def get_backend(name: str, client: Any = None) -> LLMBackend:
     """Factory for LLM interpreter backends.
 
     Args:
-        name: "claude" or "openai"
+        name: "claude", "openai", "ollama", or "huggingface"
         client: Optional pre-built API client for DI/testing.
     """
     if name == "claude":
         return ClaudeBackend(client=client)
     if name == "openai":
         return OpenAIBackend(client=client)
+    if name == "ollama":
+        return OllamaBackend(client=client)
+    if name == "huggingface":
+        return HuggingFaceBackend(client=client)
     raise ValueError(f"Unknown backend: {name}")

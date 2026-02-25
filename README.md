@@ -91,6 +91,12 @@ poetry run python interpreter.py myfile.py -n 50
 # Use LLM frontend (LLM lowers source to IR instead of tree-sitter)
 poetry run python interpreter.py myfile.py -f llm -v
 
+# LLM frontend with a HuggingFace Inference Endpoint
+poetry run python interpreter.py myfile.py -f llm -b huggingface -v
+
+# LLM frontend with local Ollama
+poetry run python interpreter.py myfile.py -f llm -b ollama -v
+
 # LLM frontend on non-Python source (multi-language support)
 poetry run python interpreter.py example.js -l javascript -f llm -v
 ```
@@ -102,7 +108,7 @@ poetry run python interpreter.py example.js -l javascript -f llm -v
 | `-v`, `--verbose` | Print IR, CFG, and step-by-step execution |
 | `-l`, `--language` | Source language (default: `python`) |
 | `-e`, `--entry` | Entry point label or function name |
-| `-b`, `--backend` | LLM backend: `claude` or `openai` (default: `claude`) |
+| `-b`, `--backend` | LLM backend: `claude`, `openai`, `ollama`, or `huggingface` (default: `claude`) |
 | `-n`, `--max-steps` | Maximum interpretation steps (default: 100) |
 | `-f`, `--frontend` | Frontend type: `deterministic` (tree-sitter) or `llm` (default: `deterministic`) |
 | `--ir-only` | Print the IR and exit |
