@@ -185,15 +185,22 @@ Variables:
 (115 steps, 0 LLM calls)
 ```
 
+## Deterministic symbolic data flow
+
+The VM handles **all** cases deterministically — including incomplete programs with missing imports, unknown externals, and symbolic values. No LLM fallback is needed:
+
+- **Unknown functions** — `process(items)` where `process` is an unresolved import → creates `sym_N [process(sym_M)]`
+- **Unknown methods** — `conn.fetch_all("users")` on a symbolic object → creates `sym_N [sym_M.fetch_all('users')]`
+- **Unknown fields** — `first.name` on a symbolic object → creates `sym_N` with hint `sym_M.name`
+- **Symbolic arithmetic** — `sym_0 + 1` → creates `sym_N [sym_0 + 1]` with the expression as a constraint
+- **Symbolic branch conditions** — `branch_if sym_0` → takes the true branch and records `assuming sym_0 is True` as a path condition
+- **Symbolic builtins** — `len(sym_0)` → creates `sym_N [len(sym_0)]`
+
+This means the interpreter can trace data flow through programs with incomplete symbol definitions (missing imports, unavailable libraries) entirely deterministically with **0 LLM calls**.
+
 ## When the LLM is used
 
-The LLM is only invoked as an oracle when the VM encounters something it cannot resolve mechanically:
-
-- **Symbolic arithmetic** — `sym_0 + 1` where `sym_0` is an unknown value
-- **Symbolic branch conditions** — `branch_if sym_0` requires the LLM to choose a path and record a path condition
-- **Unknown externals** — calls to functions not defined in the source (e.g., library functions beyond the builtin table)
-
-For fully concrete programs, the interpreter is a deterministic VM. The LLM extends it to handle incomplete information gracefully.
+The LLM backend still exists but is now only invoked if the local executor encounters an opcode with no registered handler — which currently never happens since all opcodes are covered. The LLM can be used as an optional enhancement for richer symbolic reasoning (e.g., simplifying constraint expressions), but is not required for basic data flow tracking.
 
 ## Symbolic values
 
@@ -201,5 +208,5 @@ When the interpreter encounters incomplete information, it creates symbolic valu
 
 - **Unknown variables** — accessing an undefined variable produces a symbolic value
 - **Unknown fields** — accessing a field on a heap object that doesn't have it creates a fresh symbolic value and adds the field
-- **Unknown calls** — calling an external function returns a symbolic value with constraints describing the call
-- **Symbolic branches** — the LLM chooses a path and records the assumption as a path condition
+- **Unknown calls** — calling an external function returns a symbolic value with constraints describing the call (e.g., `process(sym_3)`)
+- **Symbolic branches** — the VM takes the true branch and records the assumption as a path condition
