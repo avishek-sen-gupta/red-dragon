@@ -1,4 +1,5 @@
 """Symbolic VM — data types, state update application, and helpers."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -8,8 +9,8 @@ from pydantic import BaseModel
 
 from .ir import IRInstruction, Opcode
 
-
 # ── Data types ───────────────────────────────────────────────────
+
 
 @dataclass
 class SymbolicValue:
@@ -44,8 +45,8 @@ class StackFrame:
     registers: dict[str, Any] = field(default_factory=dict)
     local_vars: dict[str, Any] = field(default_factory=dict)
     return_label: str | None = None
-    return_ip: int | None = None       # ip to resume at in caller block
-    result_reg: str | None = None      # caller's register for return value
+    return_ip: int | None = None  # ip to resume at in caller block
+    result_reg: str | None = None  # caller's register for return value
 
     def to_dict(self) -> dict:
         return {
@@ -71,10 +72,10 @@ class VMState:
     path_conditions: list[str] = field(default_factory=list)
     symbolic_counter: int = 0
 
-    def fresh_symbolic(self, hint: str | None = None) -> SymbolicValue:
+    def fresh_symbolic(self, hint: str = "") -> SymbolicValue:
         name = f"sym_{self.symbolic_counter}"
         self.symbolic_counter += 1
-        return SymbolicValue(name=name, type_hint=hint)
+        return SymbolicValue(name=name, type_hint=hint or None)
 
     @property
     def current_frame(self) -> StackFrame:
@@ -91,18 +92,22 @@ class VMState:
 
 # ── StateUpdate schema (LLM output) ─────────────────────────────
 
+
 class HeapWrite(BaseModel):
     obj_addr: str
     field: str
     value: Any
 
+
 class NewObject(BaseModel):
     addr: str
     type_hint: str | None = None
 
+
 class StackFramePush(BaseModel):
     function_name: str
     return_label: str | None = None
+
 
 class StateUpdate(BaseModel):
     register_writes: dict[str, Any] = {}
@@ -115,6 +120,25 @@ class StateUpdate(BaseModel):
     return_value: Any | None = None
     path_condition: str | None = None
     reasoning: str = ""
+
+
+# ── ExecutionResult — replaces return None as "LLM needed" sentinel ──
+
+
+@dataclass
+class ExecutionResult:
+    """Result of attempting local instruction execution."""
+
+    handled: bool
+    update: StateUpdate = field(default_factory=lambda: StateUpdate(reasoning=""))
+
+    @classmethod
+    def not_handled(cls) -> ExecutionResult:
+        return cls(handled=False)
+
+    @classmethod
+    def success(cls, update: StateUpdate) -> ExecutionResult:
+        return cls(handled=True, update=update)
 
 
 def apply_update(vm: VMState, update: StateUpdate):
@@ -142,10 +166,12 @@ def apply_update(vm: VMState, update: StateUpdate):
     # Call push — push BEFORE var_writes so parameter bindings go to the
     # new frame when dispatching a function call
     if update.call_push:
-        vm.call_stack.append(StackFrame(
-            function_name=update.call_push.function_name,
-            return_label=update.call_push.return_label,
-        ))
+        vm.call_stack.append(
+            StackFrame(
+                function_name=update.call_push.function_name,
+                return_label=update.call_push.return_label,
+            )
+        )
 
     # Variable writes — go to the CURRENT frame (which is the new frame
     # if call_push just fired, i.e. parameter bindings)
@@ -171,23 +197,24 @@ def _deserialize_value(val: Any, vm: VMState) -> Any:
 
 # ── Helpers ──────────────────────────────────────────────────────
 
+
 def _is_symbolic(val: Any) -> bool:
     return isinstance(val, SymbolicValue)
 
 
-def _heap_addr(val: Any) -> str | None:
+def _heap_addr(val: Any) -> str:
     """Extract a heap address from a value.
 
     Values can be plain strings ("obj_Point_1") or dicts with an addr key
     ({"addr": "obj_Point_1", "type_hint": "Point"}) — the latter is what
-    the LLM returns for constructor calls.  Returns None if val doesn't
-    reference a heap address.
+    the LLM returns for constructor calls.  Returns empty string if val
+    doesn't reference a heap address.
     """
     if isinstance(val, str):
         return val
     if isinstance(val, dict) and "addr" in val:
         return val["addr"]
-    return None
+    return ""
 
 
 def _resolve_reg(vm: VMState, operand: str) -> Any:
@@ -220,51 +247,64 @@ def _parse_const(raw: str) -> Any:
     return raw
 
 
-_BINOP_TABLE: dict[str, Any] = {
-    "+": lambda a, b: a + b,
-    "-": lambda a, b: a - b,
-    "*": lambda a, b: a * b,
-    "/": lambda a, b: a / b if b != 0 else None,
-    "//": lambda a, b: a // b if b != 0 else None,
-    "%": lambda a, b: a % b if b != 0 else None,
-    "**": lambda a, b: a ** b,
-    "==": lambda a, b: a == b,
-    "!=": lambda a, b: a != b,
-    "<": lambda a, b: a < b,
-    ">": lambda a, b: a > b,
-    "<=": lambda a, b: a <= b,
-    ">=": lambda a, b: a >= b,
-    "and": lambda a, b: a and b,
-    "or": lambda a, b: a or b,
-    "in": lambda a, b: a in b if hasattr(b, "__contains__") else None,
-    "&": lambda a, b: a & b,
-    "|": lambda a, b: a | b,
-    "^": lambda a, b: a ^ b,
-    "<<": lambda a, b: a << b,
-    ">>": lambda a, b: a >> b,
-}
+class Operators:
+    """Binary and unary operator evaluation with an explicit UNCOMPUTABLE sentinel."""
 
+    class _Uncomputable:
+        """Sentinel value indicating an operation could not be computed."""
 
-def _eval_binop(op: str, lhs: Any, rhs: Any) -> Any:
-    fn = _BINOP_TABLE.get(op)
-    if fn is None:
-        return None
-    try:
-        return fn(lhs, rhs)
-    except Exception:
-        return None
+        def __repr__(self) -> str:
+            return "UNCOMPUTABLE"
 
+    UNCOMPUTABLE = _Uncomputable()
 
-def _eval_unop(op: str, operand: Any) -> Any:
-    try:
-        if op == "-":
-            return -operand
-        if op == "+":
-            return +operand
-        if op == "not":
-            return not operand
-        if op == "~":
-            return ~operand
-    except Exception:
-        pass
-    return None
+    BINOP_TABLE: dict[str, Any] = {
+        "+": lambda a, b: a + b,
+        "-": lambda a, b: a - b,
+        "*": lambda a, b: a * b,
+        "/": lambda a, b: a / b if b != 0 else Operators.UNCOMPUTABLE,
+        "//": lambda a, b: a // b if b != 0 else Operators.UNCOMPUTABLE,
+        "%": lambda a, b: a % b if b != 0 else Operators.UNCOMPUTABLE,
+        "**": lambda a, b: a**b,
+        "==": lambda a, b: a == b,
+        "!=": lambda a, b: a != b,
+        "<": lambda a, b: a < b,
+        ">": lambda a, b: a > b,
+        "<=": lambda a, b: a <= b,
+        ">=": lambda a, b: a >= b,
+        "and": lambda a, b: a and b,
+        "or": lambda a, b: a or b,
+        "in": lambda a, b: (
+            a in b if hasattr(b, "__contains__") else Operators.UNCOMPUTABLE
+        ),
+        "&": lambda a, b: a & b,
+        "|": lambda a, b: a | b,
+        "^": lambda a, b: a ^ b,
+        "<<": lambda a, b: a << b,
+        ">>": lambda a, b: a >> b,
+    }
+
+    @classmethod
+    def eval_binop(cls, op: str, lhs: Any, rhs: Any) -> Any:
+        fn = cls.BINOP_TABLE.get(op)
+        if fn is None:
+            return cls.UNCOMPUTABLE
+        try:
+            return fn(lhs, rhs)
+        except Exception:
+            return cls.UNCOMPUTABLE
+
+    @classmethod
+    def eval_unop(cls, op: str, operand: Any) -> Any:
+        try:
+            if op == "-":
+                return -operand
+            if op == "+":
+                return +operand
+            if op == "not":
+                return not operand
+            if op == "~":
+                return ~operand
+        except Exception:
+            pass
+        return cls.UNCOMPUTABLE

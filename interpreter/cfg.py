@@ -1,9 +1,11 @@
 """CFG Builder."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
 from .ir import IRInstruction, Opcode
+from . import constants
 
 
 @dataclass
@@ -17,7 +19,7 @@ class BasicBlock:
 @dataclass
 class CFG:
     blocks: dict[str, BasicBlock] = field(default_factory=dict)
-    entry: str = "entry"
+    entry: str = constants.CFG_ENTRY_LABEL
 
     def __str__(self) -> str:
         lines = []
@@ -43,8 +45,12 @@ def build_cfg(instructions: list[IRInstruction]) -> CFG:
         if inst.opcode == Opcode.LABEL:
             block_starts.add(i)
             label_to_idx[inst.label] = i
-        elif inst.opcode in (Opcode.BRANCH, Opcode.BRANCH_IF,
-                             Opcode.RETURN, Opcode.THROW):
+        elif inst.opcode in (
+            Opcode.BRANCH,
+            Opcode.BRANCH_IF,
+            Opcode.RETURN,
+            Opcode.THROW,
+        ):
             if i + 1 < len(instructions):
                 block_starts.add(i + 1)
 
@@ -52,7 +58,9 @@ def build_cfg(instructions: list[IRInstruction]) -> CFG:
 
     # Phase 2: create blocks
     for si, start in enumerate(sorted_starts):
-        end = sorted_starts[si + 1] if si + 1 < len(sorted_starts) else len(instructions)
+        end = (
+            sorted_starts[si + 1] if si + 1 < len(sorted_starts) else len(instructions)
+        )
         block_insts = instructions[start:end]
 
         # Determine label

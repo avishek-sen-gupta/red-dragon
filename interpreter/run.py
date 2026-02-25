@@ -1,28 +1,154 @@
 """Orchestrator — run() entry point."""
+
 from __future__ import annotations
 
+import logging
+from dataclasses import dataclass
 from typing import Any
 
 from .ir import Opcode
 from .parser import Parser
 from .frontend import get_frontend
-from .cfg import build_cfg
-from .registry import build_registry, _parse_class_ref
+from .cfg import CFG, build_cfg
+from .registry import build_registry, _parse_class_ref, _try_execute_locally
 from .vm import (
-    VMState, SymbolicValue, StackFrame,
-    StateUpdate, apply_update, _deserialize_value,
+    VMState,
+    SymbolicValue,
+    StackFrame,
+    StateUpdate,
+    ExecutionResult,
+    apply_update,
+    _deserialize_value,
     _serialize_value,
 )
 from .backend import get_backend
-from .registry import _try_execute_locally
+from . import constants
+
+logger = logging.getLogger(__name__)
 
 
-def run(source: str, language: str = "python",
-        entry_point: str | None = None, backend: str = "claude",
-        max_steps: int = 100, verbose: bool = False) -> VMState:
+class _StopExecution:
+    """Sentinel indicating the interpreter should halt."""
+
+    pass
+
+
+def _find_entry_point(cfg: CFG, entry_point: str) -> str:
+    """Resolve the entry point label in the CFG."""
+    entry = entry_point or cfg.entry
+    if entry in cfg.blocks:
+        return entry
+    # Try to find a function label matching the entry point
+    for label in cfg.blocks:
+        if entry in label:
+            return label
+    raise ValueError(
+        f"Entry point '{entry}' not found in CFG. "
+        f"Available: {list(cfg.blocks.keys())}"
+    )
+
+
+def _log_update(
+    step: int,
+    current_label: str,
+    ip: int,
+    instruction: Any,
+    update: StateUpdate,
+    used_llm: bool,
+):
+    """Print verbose step-by-step execution info."""
+    tag = "LLM" if used_llm else "local"
+    print(f"  [{tag}] {update.reasoning}")
+    for reg, val in update.register_writes.items():
+        print(f"    {reg} = {_format_val(val)}")
+    for var, val in update.var_writes.items():
+        print(f"    ${var} = {_format_val(val)}")
+    for hw in update.heap_writes:
+        print(f"    heap[{hw.obj_addr}].{hw.field} = {_format_val(hw.value)}")
+    for obj in update.new_objects:
+        print(f"    new {obj.type_hint} @ {obj.addr}")
+    if update.next_label:
+        print(f"    → {update.next_label}")
+    if update.path_condition:
+        print(f"    path: {update.path_condition}")
+    print()
+
+
+def _handle_call_dispatch_setup(
+    vm: VMState,
+    instruction: Any,
+    update: StateUpdate,
+    current_label: str,
+    ip: int,
+):
+    """Set up the new call frame's return info after call_push + dispatch."""
+    call_result_reg = instruction.result_reg
+    call_return_label = current_label
+    call_return_ip = ip + 1
+
+    apply_update(vm, update)
+
+    new_frame = vm.current_frame
+    new_frame.return_label = call_return_label
+    new_frame.return_ip = call_return_ip
+    new_frame.result_reg = call_result_reg
+
+    # For class constructors, the result_reg was already written
+    # (the object address), so we mark it to not overwrite on return
+    if instruction.opcode == Opcode.CALL_FUNCTION:
+        func_val = vm.call_stack[-2].local_vars.get(instruction.operands[0])
+        if func_val and _parse_class_ref(func_val).matched:
+            new_frame.result_reg = None  # don't overwrite on return
+
+
+def _handle_return_flow(
+    vm: VMState,
+    cfg: CFG,
+    return_frame: StackFrame,
+    update: StateUpdate,
+    verbose: bool,
+    step: int,
+) -> tuple[str, int] | _StopExecution:
+    """Handle RETURN/THROW control flow. Returns new (label, ip) or stop sentinel."""
+    if len(vm.call_stack) < 1:
+        if verbose:
+            print(f"[step {step}] Top-level return/throw. Stopping.")
+        return _StopExecution()
+
+    if return_frame.function_name == constants.MAIN_FRAME_NAME:
+        if verbose:
+            print(f"[step {step}] Top-level return/throw. Stopping.")
+        return _StopExecution()
+
+    # Return to caller — write return value to caller's result register
+    caller_frame = vm.current_frame
+    if return_frame.result_reg and update.return_value is not None:
+        caller_frame.registers[return_frame.result_reg] = _deserialize_value(
+            update.return_value, vm
+        )
+
+    if return_frame.return_label and return_frame.return_label in cfg.blocks:
+        new_ip = return_frame.return_ip if return_frame.return_ip is not None else 0
+        return (return_frame.return_label, new_ip)
+
+    if verbose:
+        print(f"[step {step}] No return label. Stopping.")
+    return _StopExecution()
+
+
+def run(
+    source: str,
+    language: str = "python",
+    entry_point: str = "",
+    backend: str = "claude",
+    max_steps: int = 100,
+    verbose: bool = False,
+) -> VMState:
     """End-to-end: parse → lower → CFG → LLM interpret."""
     # 1. Parse
-    tree = Parser().parse(source, language)
+    from .parser import TreeSitterParserFactory
+
+    tree = Parser(TreeSitterParserFactory()).parse(source, language)
 
     # 2. Lower to IR
     frontend = get_frontend(language)
@@ -42,86 +168,64 @@ def run(source: str, language: str = "python",
         print(cfg)
 
     # 4. Pick entry
-    entry = entry_point or cfg.entry
-    if entry not in cfg.blocks:
-        # Try to find a function label matching the entry point
-        for label in cfg.blocks:
-            if entry in label:
-                entry = label
-                break
-        else:
-            raise ValueError(f"Entry point '{entry}' not found in CFG. "
-                             f"Available: {list(cfg.blocks.keys())}")
+    entry = _find_entry_point(cfg, entry_point)
 
     # 4b. Build function registry
     registry = build_registry(instructions, cfg)
 
     # 5. Initialize VM
     vm = VMState()
-    vm.call_stack.append(StackFrame(function_name="<main>"))
+    vm.call_stack.append(StackFrame(function_name=constants.MAIN_FRAME_NAME))
 
     # 6. Execute
     llm = get_backend(backend)
     current_label = entry
-    ip = 0  # instruction pointer within current block
+    ip = 0
     llm_calls = 0
 
     for step in range(max_steps):
         block = cfg.blocks[current_label]
 
         if ip >= len(block.instructions):
-            # End of block — follow successor or stop
             if block.successors:
                 current_label = block.successors[0]
                 ip = 0
                 continue
-            else:
-                if verbose:
-                    print(f"[step {step}] End of '{current_label}', "
-                          "no successors. Stopping.")
-                break
+            if verbose:
+                print(
+                    f"[step {step}] End of '{current_label}', "
+                    "no successors. Stopping."
+                )
+            break
 
         instruction = block.instructions[ip]
 
         if verbose:
             print(f"[step {step}] {current_label}:{ip}  {instruction}")
 
-        # Skip pseudo-instructions
         if instruction.opcode == Opcode.LABEL:
             ip += 1
             continue
 
         # Try local execution first, fall back to LLM
-        update = _try_execute_locally(instruction, vm, cfg=cfg,
-                                       registry=registry,
-                                       current_label=current_label, ip=ip)
+        result = _try_execute_locally(
+            instruction,
+            vm,
+            cfg=cfg,
+            registry=registry,
+            current_label=current_label,
+            ip=ip,
+        )
         used_llm = False
-        if update is None:
+        if result.handled:
+            update = result.update
+        else:
             update = llm.interpret_instruction(instruction, vm)
             used_llm = True
             llm_calls += 1
 
         if verbose:
-            tag = "LLM" if used_llm else "local"
-            print(f"  [{tag}] {update.reasoning}")
-            if update.register_writes:
-                for reg, val in update.register_writes.items():
-                    print(f"    {reg} = {_format_val(val)}")
-            if update.var_writes:
-                for var, val in update.var_writes.items():
-                    print(f"    ${var} = {_format_val(val)}")
-            if update.heap_writes:
-                for hw in update.heap_writes:
-                    print(f"    heap[{hw.obj_addr}].{hw.field} = "
-                          f"{_format_val(hw.value)}")
-            if update.new_objects:
-                for obj in update.new_objects:
-                    print(f"    new {obj.type_hint} @ {obj.addr}")
-            if update.next_label:
-                print(f"    → {update.next_label}")
-            if update.path_condition:
-                print(f"    path: {update.path_condition}")
-            print()
+            _log_update(step, current_label, ip, instruction, update, used_llm)
 
         # For RETURN: save frame info BEFORE applying (which may pop it)
         is_return = instruction.opcode == Opcode.RETURN
@@ -129,56 +233,20 @@ def run(source: str, language: str = "python",
         return_frame = vm.current_frame if (is_return or is_throw) else None
 
         # For CALL with dispatch: set up the new frame's return info
-        is_call_dispatch = (update.call_push is not None and
-                            update.next_label is not None)
+        is_call_dispatch = (
+            update.call_push is not None and update.next_label is not None
+        )
         if is_call_dispatch:
-            # Save where to resume after the call returns
-            call_result_reg = instruction.result_reg
-            call_return_label = current_label
-            call_return_ip = ip + 1
-
-        apply_update(vm, update)
-
-        if is_call_dispatch:
-            # The new frame was just pushed — set its return info
-            new_frame = vm.current_frame
-            new_frame.return_label = call_return_label
-            new_frame.return_ip = call_return_ip
-            new_frame.result_reg = call_result_reg
-            # For class constructors, the result_reg was already written
-            # (the object address), so we mark it to not overwrite on return
-            if instruction.opcode == Opcode.CALL_FUNCTION:
-                func_val = vm.call_stack[-2].local_vars.get(instruction.operands[0])
-                if func_val and _parse_class_ref(func_val):
-                    new_frame.result_reg = None  # don't overwrite on return
+            _handle_call_dispatch_setup(vm, instruction, update, current_label, ip)
+        else:
+            apply_update(vm, update)
 
         # Handle control flow
         if is_return or is_throw:
-            if len(vm.call_stack) < 1:
-                if verbose:
-                    print(f"[step {step}] Top-level return/throw. Stopping.")
+            flow = _handle_return_flow(vm, cfg, return_frame, update, verbose, step)
+            if isinstance(flow, _StopExecution):
                 break
-
-            if return_frame and return_frame.function_name == "<main>":
-                # Top-level return
-                if verbose:
-                    print(f"[step {step}] Top-level return/throw. Stopping.")
-                break
-
-            # Return to caller — write return value to caller's result register
-            caller_frame = vm.current_frame
-            if return_frame and return_frame.result_reg and update.return_value is not None:
-                caller_frame.registers[return_frame.result_reg] = \
-                    _deserialize_value(update.return_value, vm)
-
-            if (return_frame and return_frame.return_label and
-                    return_frame.return_label in cfg.blocks):
-                current_label = return_frame.return_label
-                ip = return_frame.return_ip if return_frame.return_ip is not None else 0
-            else:
-                if verbose:
-                    print(f"[step {step}] No return label. Stopping.")
-                break
+            current_label, ip = flow
 
         elif update.next_label and update.next_label in cfg.blocks:
             current_label = update.next_label

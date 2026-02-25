@@ -1,16 +1,17 @@
 """Frontend / AST-to-IR Lowering."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Callable
 
 from .ir import IRInstruction, Opcode
+from . import constants
 
 
 class Frontend(ABC):
     @abstractmethod
-    def lower(self, tree, source: bytes) -> list[IRInstruction]:
-        ...
+    def lower(self, tree, source: bytes) -> list[IRInstruction]: ...
 
 
 class PythonFrontend(Frontend):
@@ -20,6 +21,30 @@ class PythonFrontend(Frontend):
         self._reg_counter = 0
         self._label_counter = 0
         self._instructions: list[IRInstruction] = []
+        self._source: bytes = b""
+        self._EXPR_DISPATCH: dict[str, Callable] = {
+            "identifier": self._lower_identifier,
+            "integer": self._lower_const_literal,
+            "float": self._lower_const_literal,
+            "string": self._lower_const_literal,
+            "concatenated_string": self._lower_const_literal,
+            "true": self._lower_const_literal,
+            "false": self._lower_const_literal,
+            "none": self._lower_const_literal,
+            "binary_operator": self._lower_binop,
+            "boolean_operator": self._lower_binop,
+            "comparison_operator": self._lower_comparison,
+            "unary_operator": self._lower_unop,
+            "not_operator": self._lower_unop,
+            "call": self._lower_call,
+            "attribute": self._lower_attribute,
+            "subscript": self._lower_subscript,
+            "parenthesized_expression": self._lower_paren,
+            "list": self._lower_list_literal,
+            "dictionary": self._lower_dict_literal,
+            "tuple": self._lower_tuple_literal,
+            "conditional_expression": self._lower_conditional_expr,
+        }
 
     def _fresh_reg(self) -> str:
         r = f"%{self._reg_counter}"
@@ -31,13 +56,21 @@ class PythonFrontend(Frontend):
         self._label_counter += 1
         return lbl
 
-    def _emit(self, opcode: Opcode, *, result_reg: str | None = None,
-              operands: list[Any] | None = None, label: str | None = None,
-              source_location: str | None = None):
+    def _emit(
+        self,
+        opcode: Opcode,
+        *,
+        result_reg: str = "",
+        operands: list[Any] = [],
+        label: str = "",
+        source_location: str = "",
+    ):
         inst = IRInstruction(
-            opcode=opcode, result_reg=result_reg,
-            operands=operands or [], label=label,
-            source_location=source_location,
+            opcode=opcode,
+            result_reg=result_reg or None,
+            operands=operands or [],
+            label=label or None,
+            source_location=source_location or None,
         )
         self._instructions.append(inst)
         return inst
@@ -48,12 +81,12 @@ class PythonFrontend(Frontend):
         self._instructions = []
         self._source = source
         root = tree.root_node
-        self._emit(Opcode.LABEL, label="entry")
+        self._emit(Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)
         self._lower_block(root)
         return self._instructions
 
     def _node_text(self, node) -> str:
-        return self._source[node.start_byte:node.end_byte].decode("utf-8")
+        return self._source[node.start_byte : node.end_byte].decode("utf-8")
 
     def _source_loc(self, node) -> str:
         return f"{node.start_point[0] + 1}:{node.start_point[1]}"
@@ -99,83 +132,43 @@ class PythonFrontend(Frontend):
 
     def _lower_expr(self, node) -> str:
         """Lower an expression, return the register holding its value."""
-        ntype = node.type
-
-        if ntype == "identifier":
-            reg = self._fresh_reg()
-            self._emit(Opcode.LOAD_VAR, result_reg=reg,
-                       operands=[self._node_text(node)],
-                       source_location=self._source_loc(node))
-            return reg
-
-        if ntype in ("integer", "float"):
-            reg = self._fresh_reg()
-            self._emit(Opcode.CONST, result_reg=reg,
-                       operands=[self._node_text(node)],
-                       source_location=self._source_loc(node))
-            return reg
-
-        if ntype == "string" or ntype == "concatenated_string":
-            reg = self._fresh_reg()
-            self._emit(Opcode.CONST, result_reg=reg,
-                       operands=[self._node_text(node)],
-                       source_location=self._source_loc(node))
-            return reg
-
-        if ntype in ("true", "false", "none"):
-            reg = self._fresh_reg()
-            self._emit(Opcode.CONST, result_reg=reg,
-                       operands=[self._node_text(node)],
-                       source_location=self._source_loc(node))
-            return reg
-
-        if ntype == "binary_operator":
-            return self._lower_binop(node)
-
-        if ntype == "boolean_operator":
-            return self._lower_binop(node)
-
-        if ntype == "comparison_operator":
-            return self._lower_comparison(node)
-
-        if ntype == "unary_operator":
-            return self._lower_unop(node)
-
-        if ntype == "not_operator":
-            return self._lower_unop(node)
-
-        if ntype == "call":
-            return self._lower_call(node)
-
-        if ntype == "attribute":
-            return self._lower_attribute(node)
-
-        if ntype == "subscript":
-            return self._lower_subscript(node)
-
-        if ntype == "parenthesized_expression":
-            # Unwrap parens
-            inner = node.children[1]  # skip '('
-            return self._lower_expr(inner)
-
-        if ntype == "list":
-            return self._lower_list_literal(node)
-
-        if ntype == "dictionary":
-            return self._lower_dict_literal(node)
-
-        if ntype == "tuple":
-            return self._lower_tuple_literal(node)
-
-        if ntype == "conditional_expression":
-            return self._lower_conditional_expr(node)
+        handler = self._EXPR_DISPATCH.get(node.type)
+        if handler:
+            return handler(node)
 
         # Fallback: symbolic
         reg = self._fresh_reg()
-        self._emit(Opcode.SYMBOLIC, result_reg=reg,
-                   operands=[f"unsupported:{ntype}"],
-                   source_location=self._source_loc(node))
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=reg,
+            operands=[f"unsupported:{node.type}"],
+            source_location=self._source_loc(node),
+        )
         return reg
+
+    def _lower_const_literal(self, node) -> str:
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=reg,
+            operands=[self._node_text(node)],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    def _lower_identifier(self, node) -> str:
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_VAR,
+            result_reg=reg,
+            operands=[self._node_text(node)],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    def _lower_paren(self, node) -> str:
+        inner = node.children[1]  # skip '('
+        return self._lower_expr(inner)
 
     # ── specific lowerings ───────────────────────────────────────
 
@@ -185,8 +178,12 @@ class PythonFrontend(Frontend):
         op = self._node_text(children[1])
         rhs_reg = self._lower_expr(children[2])
         reg = self._fresh_reg()
-        self._emit(Opcode.BINOP, result_reg=reg, operands=[op, lhs_reg, rhs_reg],
-                   source_location=self._source_loc(node))
+        self._emit(
+            Opcode.BINOP,
+            result_reg=reg,
+            operands=[op, lhs_reg, rhs_reg],
+            source_location=self._source_loc(node),
+        )
         return reg
 
     def _lower_comparison(self, node) -> str:
@@ -195,8 +192,12 @@ class PythonFrontend(Frontend):
         op = self._node_text(children[1])
         rhs_reg = self._lower_expr(children[2])
         reg = self._fresh_reg()
-        self._emit(Opcode.BINOP, result_reg=reg, operands=[op, lhs_reg, rhs_reg],
-                   source_location=self._source_loc(node))
+        self._emit(
+            Opcode.BINOP,
+            result_reg=reg,
+            operands=[op, lhs_reg, rhs_reg],
+            source_location=self._source_loc(node),
+        )
         return reg
 
     def _lower_unop(self, node) -> str:
@@ -204,20 +205,27 @@ class PythonFrontend(Frontend):
         op = self._node_text(children[0])
         operand_reg = self._lower_expr(children[1])
         reg = self._fresh_reg()
-        self._emit(Opcode.UNOP, result_reg=reg, operands=[op, operand_reg],
-                   source_location=self._source_loc(node))
+        self._emit(
+            Opcode.UNOP,
+            result_reg=reg,
+            operands=[op, operand_reg],
+            source_location=self._source_loc(node),
+        )
         return reg
 
     def _lower_call(self, node) -> str:
         func_node = node.child_by_field_name("function")
         args_node = node.child_by_field_name("arguments")
 
-        arg_regs = []
-        if args_node:
-            for child in args_node.children:
-                if child.type in ("(", ")", ","):
-                    continue
-                arg_regs.append(self._lower_expr(child))
+        arg_regs = (
+            [
+                self._lower_expr(c)
+                for c in args_node.children
+                if c.type not in ("(", ")", ",")
+            ]
+            if args_node
+            else []
+        )
 
         # Method call: obj.method(...)
         if func_node and func_node.type == "attribute":
@@ -226,26 +234,35 @@ class PythonFrontend(Frontend):
             obj_reg = self._lower_expr(obj_node)
             method_name = self._node_text(attr_node)
             reg = self._fresh_reg()
-            self._emit(Opcode.CALL_METHOD, result_reg=reg,
-                       operands=[obj_reg, method_name] + arg_regs,
-                       source_location=self._source_loc(node))
+            self._emit(
+                Opcode.CALL_METHOD,
+                result_reg=reg,
+                operands=[obj_reg, method_name] + arg_regs,
+                source_location=self._source_loc(node),
+            )
             return reg
 
         # Plain function call
         if func_node and func_node.type == "identifier":
             func_name = self._node_text(func_node)
             reg = self._fresh_reg()
-            self._emit(Opcode.CALL_FUNCTION, result_reg=reg,
-                       operands=[func_name] + arg_regs,
-                       source_location=self._source_loc(node))
+            self._emit(
+                Opcode.CALL_FUNCTION,
+                result_reg=reg,
+                operands=[func_name] + arg_regs,
+                source_location=self._source_loc(node),
+            )
             return reg
 
         # Dynamic / unknown call target
         target_reg = self._lower_expr(func_node)
         reg = self._fresh_reg()
-        self._emit(Opcode.CALL_UNKNOWN, result_reg=reg,
-                   operands=[target_reg] + arg_regs,
-                   source_location=self._source_loc(node))
+        self._emit(
+            Opcode.CALL_UNKNOWN,
+            result_reg=reg,
+            operands=[target_reg] + arg_regs,
+            source_location=self._source_loc(node),
+        )
         return reg
 
     def _lower_attribute(self, node) -> str:
@@ -254,9 +271,12 @@ class PythonFrontend(Frontend):
         obj_reg = self._lower_expr(obj_node)
         field_name = self._node_text(attr_node)
         reg = self._fresh_reg()
-        self._emit(Opcode.LOAD_FIELD, result_reg=reg,
-                   operands=[obj_reg, field_name],
-                   source_location=self._source_loc(node))
+        self._emit(
+            Opcode.LOAD_FIELD,
+            result_reg=reg,
+            operands=[obj_reg, field_name],
+            source_location=self._source_loc(node),
+        )
         return reg
 
     def _lower_subscript(self, node) -> str:
@@ -265,9 +285,12 @@ class PythonFrontend(Frontend):
         obj_reg = self._lower_expr(obj_node)
         idx_reg = self._lower_expr(idx_node)
         reg = self._fresh_reg()
-        self._emit(Opcode.LOAD_INDEX, result_reg=reg,
-                   operands=[obj_reg, idx_reg],
-                   source_location=self._source_loc(node))
+        self._emit(
+            Opcode.LOAD_INDEX,
+            result_reg=reg,
+            operands=[obj_reg, idx_reg],
+            source_location=self._source_loc(node),
+        )
         return reg
 
     def _lower_assignment(self, node):
@@ -279,49 +302,60 @@ class PythonFrontend(Frontend):
     def _lower_augmented_assignment(self, node):
         left = node.child_by_field_name("left")
         right = node.child_by_field_name("right")
-        op_node = [c for c in node.children if c.type not in (
-            left.type, right.type)][0]
+        op_node = [c for c in node.children if c.type not in (left.type, right.type)][0]
         op_text = self._node_text(op_node).rstrip("=")  # += → +
 
         # Load current value
         lhs_reg = self._lower_expr(left)
         rhs_reg = self._lower_expr(right)
         result = self._fresh_reg()
-        self._emit(Opcode.BINOP, result_reg=result,
-                   operands=[op_text, lhs_reg, rhs_reg],
-                   source_location=self._source_loc(node))
+        self._emit(
+            Opcode.BINOP,
+            result_reg=result,
+            operands=[op_text, lhs_reg, rhs_reg],
+            source_location=self._source_loc(node),
+        )
         self._lower_store_target(left, result, node)
 
     def _lower_store_target(self, target, val_reg: str, parent_node):
         if target.type == "identifier":
-            self._emit(Opcode.STORE_VAR, operands=[self._node_text(target), val_reg],
-                       source_location=self._source_loc(parent_node))
+            self._emit(
+                Opcode.STORE_VAR,
+                operands=[self._node_text(target), val_reg],
+                source_location=self._source_loc(parent_node),
+            )
         elif target.type == "attribute":
             obj_node = target.child_by_field_name("object")
             attr_node = target.child_by_field_name("attribute")
             obj_reg = self._lower_expr(obj_node)
-            self._emit(Opcode.STORE_FIELD,
-                       operands=[obj_reg, self._node_text(attr_node), val_reg],
-                       source_location=self._source_loc(parent_node))
+            self._emit(
+                Opcode.STORE_FIELD,
+                operands=[obj_reg, self._node_text(attr_node), val_reg],
+                source_location=self._source_loc(parent_node),
+            )
         elif target.type == "subscript":
             obj_node = target.child_by_field_name("value")
             idx_node = target.child_by_field_name("subscript")
             obj_reg = self._lower_expr(obj_node)
             idx_reg = self._lower_expr(idx_node)
-            self._emit(Opcode.STORE_INDEX,
-                       operands=[obj_reg, idx_reg, val_reg],
-                       source_location=self._source_loc(parent_node))
-        elif target.type == "pattern_list" or target.type == "tuple_pattern":
-            # Multi-assignment — emit symbolic unpack
-            for i, child in enumerate(target.children):
-                if child.type == ",":
-                    continue
-                idx_reg = self._fresh_reg()
-                self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
-                elem_reg = self._fresh_reg()
-                self._emit(Opcode.LOAD_INDEX, result_reg=elem_reg,
-                           operands=[val_reg, idx_reg])
-                self._lower_store_target(child, elem_reg, parent_node)
+            self._emit(
+                Opcode.STORE_INDEX,
+                operands=[obj_reg, idx_reg, val_reg],
+                source_location=self._source_loc(parent_node),
+            )
+        elif target.type in ("pattern_list", "tuple_pattern"):
+            self._lower_tuple_unpack(target, val_reg, parent_node)
+
+    def _lower_tuple_unpack(self, target, val_reg: str, parent_node):
+        """Emit symbolic unpack for multi-assignment targets."""
+        for i, child in enumerate(c for c in target.children if c.type != ","):
+            idx_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            elem_reg = self._fresh_reg()
+            self._emit(
+                Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[val_reg, idx_reg]
+            )
+            self._lower_store_target(child, elem_reg, parent_node)
 
     def _lower_return(self, node):
         children = [c for c in node.children if c.type != "return"]
@@ -330,8 +364,9 @@ class PythonFrontend(Frontend):
         else:
             val_reg = self._fresh_reg()
             self._emit(Opcode.CONST, result_reg=val_reg, operands=["None"])
-        self._emit(Opcode.RETURN, operands=[val_reg],
-                   source_location=self._source_loc(node))
+        self._emit(
+            Opcode.RETURN, operands=[val_reg], source_location=self._source_loc(node)
+        )
 
     def _lower_if(self, node):
         cond_node = node.child_by_field_name("condition")
@@ -344,13 +379,19 @@ class PythonFrontend(Frontend):
         end_label = self._fresh_label("if_end")
 
         if alt_node:
-            self._emit(Opcode.BRANCH_IF, operands=[cond_reg],
-                       label=f"{true_label},{false_label}",
-                       source_location=self._source_loc(node))
+            self._emit(
+                Opcode.BRANCH_IF,
+                operands=[cond_reg],
+                label=f"{true_label},{false_label}",
+                source_location=self._source_loc(node),
+            )
         else:
-            self._emit(Opcode.BRANCH_IF, operands=[cond_reg],
-                       label=f"{true_label},{end_label}",
-                       source_location=self._source_loc(node))
+            self._emit(
+                Opcode.BRANCH_IF,
+                operands=[cond_reg],
+                label=f"{true_label},{end_label}",
+                source_location=self._source_loc(node),
+            )
 
         # True branch
         self._emit(Opcode.LABEL, label=true_label)
@@ -386,9 +427,12 @@ class PythonFrontend(Frontend):
         true_label = self._fresh_label("elif_true")
         false_label = self._fresh_label("elif_false") if alt_node else end_label
 
-        self._emit(Opcode.BRANCH_IF, operands=[cond_reg],
-                   label=f"{true_label},{false_label}",
-                   source_location=self._source_loc(node))
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[cond_reg],
+            label=f"{true_label},{false_label}",
+            source_location=self._source_loc(node),
+        )
 
         self._emit(Opcode.LABEL, label=true_label)
         self._lower_block(body_node)
@@ -414,9 +458,12 @@ class PythonFrontend(Frontend):
 
         self._emit(Opcode.LABEL, label=loop_label)
         cond_reg = self._lower_expr(cond_node)
-        self._emit(Opcode.BRANCH_IF, operands=[cond_reg],
-                   label=f"{body_label},{end_label}",
-                   source_location=self._source_loc(node))
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[cond_reg],
+            label=f"{body_label},{end_label}",
+            source_location=self._source_loc(node),
+        )
 
         self._emit(Opcode.LABEL, label=body_label)
         self._lower_block(body_node)
@@ -434,8 +481,7 @@ class PythonFrontend(Frontend):
         idx_reg = self._fresh_reg()
         self._emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
         len_reg = self._fresh_reg()
-        self._emit(Opcode.CALL_FUNCTION, result_reg=len_reg,
-                   operands=["len", iter_reg])
+        self._emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
 
         loop_label = self._fresh_label("for_cond")
         body_label = self._fresh_label("for_body")
@@ -443,36 +489,36 @@ class PythonFrontend(Frontend):
 
         self._emit(Opcode.LABEL, label=loop_label)
         cond_reg = self._fresh_reg()
-        self._emit(Opcode.BINOP, result_reg=cond_reg,
-                   operands=["<", idx_reg, len_reg])
-        self._emit(Opcode.BRANCH_IF, operands=[cond_reg],
-                   label=f"{body_label},{end_label}")
+        self._emit(Opcode.BINOP, result_reg=cond_reg, operands=["<", idx_reg, len_reg])
+        self._emit(
+            Opcode.BRANCH_IF, operands=[cond_reg], label=f"{body_label},{end_label}"
+        )
 
         self._emit(Opcode.LABEL, label=body_label)
         elem_reg = self._fresh_reg()
-        self._emit(Opcode.LOAD_INDEX, result_reg=elem_reg,
-                   operands=[iter_reg, idx_reg])
+        self._emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
         self._lower_store_target(left, elem_reg, node)
 
         self._lower_block(body_node)
 
-        # idx += 1
+        self._emit_for_increment(idx_reg, loop_label)
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+    def _emit_for_increment(self, idx_reg: str, loop_label: str):
+        """Emit idx += 1 and branch back to loop condition."""
         one_reg = self._fresh_reg()
         self._emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
         new_idx = self._fresh_reg()
-        self._emit(Opcode.BINOP, result_reg=new_idx,
-                   operands=["+", idx_reg, one_reg])
+        self._emit(Opcode.BINOP, result_reg=new_idx, operands=["+", idx_reg, one_reg])
         # Update idx_reg by storing and reloading (since registers are SSA-like,
         # we use the new register going forward via a store to a temp var)
         self._emit(Opcode.STORE_VAR, operands=["__for_idx", new_idx])
         idx_reload = self._fresh_reg()
-        self._emit(Opcode.LOAD_VAR, result_reg=idx_reload,
-                   operands=["__for_idx"])
+        self._emit(Opcode.LOAD_VAR, result_reg=idx_reload, operands=["__for_idx"])
         # We can't retroactively change idx_reg, so this is approximate.
         # The LLM interpreter will handle the semantics correctly.
         self._emit(Opcode.BRANCH, label=loop_label)
-
-        self._emit(Opcode.LABEL, label=end_label)
 
     def _lower_function_def(self, node):
         name_node = node.child_by_field_name("name")
@@ -480,63 +526,20 @@ class PythonFrontend(Frontend):
         body_node = node.child_by_field_name("body")
 
         func_name = self._node_text(name_node)
-        func_label = self._fresh_label(f"func_{func_name}")
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
         # Skip the function body in linear flow
-        self._emit(Opcode.BRANCH, label=end_label,
-                   source_location=self._source_loc(node))
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
 
         self._emit(Opcode.LABEL, label=func_label)
 
         # Emit parameter loads
         if params_node:
-            param_idx = 0
             for child in params_node.children:
-                if child.type == "identifier":
-                    self._emit(Opcode.SYMBOLIC, result_reg=self._fresh_reg(),
-                               operands=[f"param:{self._node_text(child)}"],
-                               source_location=self._source_loc(child))
-                    self._emit(Opcode.STORE_VAR,
-                               operands=[self._node_text(child),
-                                         f"%{self._reg_counter - 1}"])
-                    param_idx += 1
-                elif child.type in ("(", ")", ",", ":"):
-                    continue
-                elif child.type == "default_parameter":
-                    pname_node = child.child_by_field_name("name")
-                    if pname_node:
-                        self._emit(Opcode.SYMBOLIC, result_reg=self._fresh_reg(),
-                                   operands=[f"param:{self._node_text(pname_node)}"],
-                                   source_location=self._source_loc(child))
-                        self._emit(Opcode.STORE_VAR,
-                                   operands=[self._node_text(pname_node),
-                                             f"%{self._reg_counter - 1}"])
-                    param_idx += 1
-                elif child.type == "typed_parameter":
-                    id_node = None
-                    for sub in child.children:
-                        if sub.type == "identifier":
-                            id_node = sub
-                            break
-                    if id_node:
-                        self._emit(Opcode.SYMBOLIC, result_reg=self._fresh_reg(),
-                                   operands=[f"param:{self._node_text(id_node)}"],
-                                   source_location=self._source_loc(child))
-                        self._emit(Opcode.STORE_VAR,
-                                   operands=[self._node_text(id_node),
-                                             f"%{self._reg_counter - 1}"])
-                    param_idx += 1
-                elif child.type == "typed_default_parameter":
-                    pname_node = child.child_by_field_name("name")
-                    if pname_node:
-                        self._emit(Opcode.SYMBOLIC, result_reg=self._fresh_reg(),
-                                   operands=[f"param:{self._node_text(pname_node)}"],
-                                   source_location=self._source_loc(child))
-                        self._emit(Opcode.STORE_VAR,
-                                   operands=[self._node_text(pname_node),
-                                             f"%{self._reg_counter - 1}"])
-                    param_idx += 1
+                self._lower_param(child)
 
         self._lower_block(body_node)
 
@@ -549,27 +552,77 @@ class PythonFrontend(Frontend):
 
         # Store the function as a named value
         func_reg = self._fresh_reg()
-        self._emit(Opcode.CONST, result_reg=func_reg,
-                   operands=[f"<function:{func_name}@{func_label}>"])
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
         self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+    def _lower_param(self, child):
+        """Lower a single function parameter node to SYMBOLIC + STORE_VAR."""
+        if child.type in ("(", ")", ",", ":"):
+            return
+
+        if child.type == "identifier":
+            pname = self._node_text(child)
+        elif child.type == "default_parameter":
+            pname_node = child.child_by_field_name("name")
+            if not pname_node:
+                return
+            pname = self._node_text(pname_node)
+        elif child.type == "typed_parameter":
+            id_node = next(
+                (sub for sub in child.children if sub.type == "identifier"),
+                None,
+            )
+            if not id_node:
+                return
+            pname = self._node_text(id_node)
+        elif child.type == "typed_default_parameter":
+            pname_node = child.child_by_field_name("name")
+            if not pname_node:
+                return
+            pname = self._node_text(pname_node)
+        else:
+            return
+
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=self._fresh_reg(),
+            operands=[f"{constants.PARAM_PREFIX}{pname}"],
+            source_location=self._source_loc(child),
+        )
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=[pname, f"%{self._reg_counter - 1}"],
+        )
 
     def _lower_class_def(self, node):
         name_node = node.child_by_field_name("name")
         body_node = node.child_by_field_name("body")
         class_name = self._node_text(name_node)
 
-        class_label = self._fresh_label(f"class_{class_name}")
-        end_label = self._fresh_label(f"end_class_{class_name}")
+        class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
+        end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
 
-        self._emit(Opcode.BRANCH, label=end_label,
-                   source_location=self._source_loc(node))
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
         self._emit(Opcode.LABEL, label=class_label)
         self._lower_block(body_node)
         self._emit(Opcode.LABEL, label=end_label)
 
         cls_reg = self._fresh_reg()
-        self._emit(Opcode.CONST, result_reg=cls_reg,
-                   operands=[f"<class:{class_name}@{class_label}>"])
+        self._emit(
+            Opcode.CONST,
+            result_reg=cls_reg,
+            operands=[
+                constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
+            ],
+        )
         self._emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
 
     def _lower_raise(self, node):
@@ -579,17 +632,21 @@ class PythonFrontend(Frontend):
         else:
             val_reg = self._fresh_reg()
             self._emit(Opcode.CONST, result_reg=val_reg, operands=["None"])
-        self._emit(Opcode.THROW, operands=[val_reg],
-                   source_location=self._source_loc(node))
+        self._emit(
+            Opcode.THROW, operands=[val_reg], source_location=self._source_loc(node)
+        )
 
     def _lower_list_literal(self, node) -> str:
         arr_reg = self._fresh_reg()
         elems = [c for c in node.children if c.type not in ("[", "]", ",")]
         size_reg = self._fresh_reg()
         self._emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
-        self._emit(Opcode.NEW_ARRAY, result_reg=arr_reg,
-                   operands=["list", size_reg],
-                   source_location=self._source_loc(node))
+        self._emit(
+            Opcode.NEW_ARRAY,
+            result_reg=arr_reg,
+            operands=["list", size_reg],
+            source_location=self._source_loc(node),
+        )
         for i, elem in enumerate(elems):
             val_reg = self._lower_expr(elem)
             idx_reg = self._fresh_reg()
@@ -599,16 +656,19 @@ class PythonFrontend(Frontend):
 
     def _lower_dict_literal(self, node) -> str:
         obj_reg = self._fresh_reg()
-        self._emit(Opcode.NEW_OBJECT, result_reg=obj_reg, operands=["dict"],
-                   source_location=self._source_loc(node))
+        self._emit(
+            Opcode.NEW_OBJECT,
+            result_reg=obj_reg,
+            operands=["dict"],
+            source_location=self._source_loc(node),
+        )
         for child in node.children:
             if child.type == "pair":
                 key_node = child.child_by_field_name("key")
                 val_node = child.child_by_field_name("value")
                 key_reg = self._lower_expr(key_node)
                 val_reg = self._lower_expr(val_node)
-                self._emit(Opcode.STORE_INDEX,
-                           operands=[obj_reg, key_reg, val_reg])
+                self._emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
         return obj_reg
 
     def _lower_tuple_literal(self, node) -> str:
@@ -616,9 +676,12 @@ class PythonFrontend(Frontend):
         arr_reg = self._fresh_reg()
         size_reg = self._fresh_reg()
         self._emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
-        self._emit(Opcode.NEW_ARRAY, result_reg=arr_reg,
-                   operands=["tuple", size_reg],
-                   source_location=self._source_loc(node))
+        self._emit(
+            Opcode.NEW_ARRAY,
+            result_reg=arr_reg,
+            operands=["tuple", size_reg],
+            source_location=self._source_loc(node),
+        )
         for i, elem in enumerate(elems):
             val_reg = self._lower_expr(elem)
             idx_reg = self._fresh_reg()
@@ -638,8 +701,9 @@ class PythonFrontend(Frontend):
         false_label = self._fresh_label("ternary_false")
         end_label = self._fresh_label("ternary_end")
 
-        self._emit(Opcode.BRANCH_IF, operands=[cond_reg],
-                   label=f"{true_label},{false_label}")
+        self._emit(
+            Opcode.BRANCH_IF, operands=[cond_reg], label=f"{true_label},{false_label}"
+        )
 
         self._emit(Opcode.LABEL, label=true_label)
         true_reg = self._lower_expr(true_expr)
@@ -654,8 +718,7 @@ class PythonFrontend(Frontend):
 
         self._emit(Opcode.LABEL, label=end_label)
         result_reg = self._fresh_reg()
-        self._emit(Opcode.LOAD_VAR, result_reg=result_reg,
-                   operands=[result_var])
+        self._emit(Opcode.LOAD_VAR, result_reg=result_reg, operands=[result_var])
         return result_reg
 
 
