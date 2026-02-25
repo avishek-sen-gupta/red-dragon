@@ -19,3 +19,6 @@ END_CLASS_LABEL_PREFIX = "end_class_"
 
 MAIN_FRAME_NAME = "<main>"
 CFG_ENTRY_LABEL = "entry"
+
+FRONTEND_DETERMINISTIC = "deterministic"
+FRONTEND_LLM = "llm"

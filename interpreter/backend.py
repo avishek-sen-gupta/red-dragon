@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from .ir import IRInstruction
+from .llm_client import LLMClient, get_llm_client
 from .vm import VMState, StateUpdate, _resolve_reg, _serialize_value
 
 
@@ -130,65 +131,58 @@ Respond with ONLY valid JSON. No markdown fences. No text outside the JSON objec
 
 
 class ClaudeBackend(LLMBackend):
+    """Backend that delegates LLM calls to a ClaudeLLMClient."""
 
-    _LAZY_IMPORT = object()
-
-    def __init__(
-        self, model: str = "claude-sonnet-4-20250514", client: Any = _LAZY_IMPORT
-    ):
-        if client is ClaudeBackend._LAZY_IMPORT:
-            import anthropic
-
-            self._client = anthropic.Anthropic()
-        else:
-            self._client = client
-        self._model = model
+    def __init__(self, model: str = "claude-sonnet-4-20250514", client: Any = None):
+        self._llm_client = get_llm_client(
+            provider="claude",
+            model=model,
+            client=client,
+        )
 
     def interpret_instruction(
         self, instruction: IRInstruction, state: VMState
     ) -> StateUpdate:
         user_msg = self._build_prompt(instruction, state)
-        response = self._client.messages.create(
-            model=self._model,
+        raw = self._llm_client.complete(
+            system_prompt=self.SYSTEM_PROMPT,
+            user_message=user_msg,
             max_tokens=1024,
-            system=self.SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_msg}],
         )
-        return self._parse_response(response.content[0].text)
+        return self._parse_response(raw)
 
 
 class OpenAIBackend(LLMBackend):
+    """Backend that delegates LLM calls to an OpenAILLMClient."""
 
-    _LAZY_IMPORT = object()
-
-    def __init__(self, model: str = "gpt-4o", client: Any = _LAZY_IMPORT):
-        if client is OpenAIBackend._LAZY_IMPORT:
-            import openai
-
-            self._client = openai.OpenAI()
-        else:
-            self._client = client
-        self._model = model
+    def __init__(self, model: str = "gpt-4o", client: Any = None):
+        self._llm_client = get_llm_client(
+            provider="openai",
+            model=model,
+            client=client,
+        )
 
     def interpret_instruction(
         self, instruction: IRInstruction, state: VMState
     ) -> StateUpdate:
         user_msg = self._build_prompt(instruction, state)
-        response = self._client.chat.completions.create(
-            model=self._model,
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": self.SYSTEM_PROMPT},
-                {"role": "user", "content": user_msg},
-            ],
+        raw = self._llm_client.complete(
+            system_prompt=self.SYSTEM_PROMPT,
+            user_message=user_msg,
             max_tokens=1024,
         )
-        return self._parse_response(response.choices[0].message.content)
+        return self._parse_response(raw)
 
 
-def get_backend(name: str) -> LLMBackend:
+def get_backend(name: str, client: Any = None) -> LLMBackend:
+    """Factory for LLM interpreter backends.
+
+    Args:
+        name: "claude" or "openai"
+        client: Optional pre-built API client for DI/testing.
+    """
     if name == "claude":
-        return ClaudeBackend()
+        return ClaudeBackend(client=client)
     if name == "openai":
-        return OpenAIBackend()
+        return OpenAIBackend(client=client)
     raise ValueError(f"Unknown backend: {name}")

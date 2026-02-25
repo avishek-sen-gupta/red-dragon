@@ -143,16 +143,38 @@ def run(
     backend: str = "claude",
     max_steps: int = 100,
     verbose: bool = False,
+    frontend_type: str = constants.FRONTEND_DETERMINISTIC,
+    llm_client: Any = None,
 ) -> VMState:
-    """End-to-end: parse → lower → CFG → LLM interpret."""
-    # 1. Parse
-    from .parser import TreeSitterParserFactory
+    """End-to-end: parse → lower → CFG → LLM interpret.
 
-    tree = Parser(TreeSitterParserFactory()).parse(source, language)
+    Args:
+        source: Raw source code string.
+        language: Source language name.
+        entry_point: Entry point label or function name.
+        backend: LLM backend for interpreter fallback ("claude" or "openai").
+        max_steps: Maximum interpretation steps.
+        verbose: Print IR, CFG, and step-by-step info.
+        frontend_type: "deterministic" (tree-sitter) or "llm".
+        llm_client: Pre-built LLMClient for DI/testing (used by LLM frontend).
+    """
+    # 1. Parse + Lower
+    if frontend_type == constants.FRONTEND_LLM:
+        # LLM frontend: skip tree-sitter, send source directly
+        frontend = get_frontend(
+            language,
+            frontend_type=frontend_type,
+            llm_provider=backend,
+            llm_client=llm_client,
+        )
+        instructions = frontend.lower(None, source.encode("utf-8"))
+    else:
+        # Deterministic frontend: parse with tree-sitter first
+        from .parser import TreeSitterParserFactory
 
-    # 2. Lower to IR
-    frontend = get_frontend(language)
-    instructions = frontend.lower(tree, source.encode("utf-8"))
+        tree = Parser(TreeSitterParserFactory()).parse(source, language)
+        frontend = get_frontend(language, frontend_type=frontend_type)
+        instructions = frontend.lower(tree, source.encode("utf-8"))
 
     if verbose:
         print("═══ IR ═══")

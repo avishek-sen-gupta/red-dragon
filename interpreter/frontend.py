@@ -722,7 +722,38 @@ class PythonFrontend(Frontend):
         return result_reg
 
 
-def get_frontend(language: str) -> Frontend:
-    if language == "python":
-        return PythonFrontend()
-    raise ValueError(f"Unsupported language: {language}")
+def get_frontend(
+    language: str,
+    frontend_type: str = constants.FRONTEND_DETERMINISTIC,
+    llm_provider: str = "claude",
+    llm_client: Any = None,
+) -> Frontend:
+    """Build a frontend for the given language.
+
+    Args:
+        language: Source language name (e.g. "python", "javascript").
+        frontend_type: "deterministic" (tree-sitter based) or "llm".
+        llm_provider: LLM provider name when frontend_type="llm".
+        llm_client: Pre-built LLMClient for DI/testing (skips factory).
+
+    Returns:
+        A Frontend instance.
+    """
+    if frontend_type == constants.FRONTEND_DETERMINISTIC:
+        if language == "python":
+            return PythonFrontend()
+        raise ValueError(f"Unsupported language for deterministic frontend: {language}")
+
+    if frontend_type == constants.FRONTEND_LLM:
+        from .llm_client import LLMClient, get_llm_client
+        from .llm_frontend import LLMFrontend
+
+        if llm_client is None:
+            resolved_client = get_llm_client(provider=llm_provider)
+        elif isinstance(llm_client, LLMClient):
+            resolved_client = llm_client
+        else:
+            resolved_client = get_llm_client(provider=llm_provider, client=llm_client)
+        return LLMFrontend(resolved_client, language=language)
+
+    raise ValueError(f"Unknown frontend type: {frontend_type}")
