@@ -1,12 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 200" width="900" height="200">
+  <defs>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
   <!-- Background -->
   <rect width="900" height="200" rx="12" fill="#0f1923"/>
 
   <!-- Solid red triangle (logo turtle, pointing right) -->
   <polygon points="55,78 75,100 55,122" fill="#e57373"/>
 
-  <!-- Title -->
-  <text x="95" y="115" fill="#ffffff" font-family="Helvetica, Arial, sans-serif" font-size="58" font-weight="bold">Red<tspan fill="#e57373">Dragon</tspan></text>
+  <!-- Title with glow -->
+  <text x="95" y="115" fill="#ffffff" font-family="Helvetica, Arial, sans-serif" font-size="58" font-weight="bold" filter="url(#glow)">Red<tspan fill="#e57373">Dragon</tspan></text>
 
   <!-- Tagline -->
   <text x="95" y="155" fill="#90a4ae" font-family="Helvetica, Arial, sans-serif" font-size="16">Multi-language LLM-assisted symbolic execution and dataflow analysis</text>
