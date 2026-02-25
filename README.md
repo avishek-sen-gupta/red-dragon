@@ -11,7 +11,25 @@ interpreter/
 ├── constants.py         # Named constants (eliminates magic strings)
 ├── ir.py                # Opcode, IRInstruction
 ├── parser.py            # ParserFactory (DI), TreeSitterParserFactory, Parser
-├── frontend.py          # Frontend ABC, PythonFrontend (dispatch table), get_frontend()
+├── frontend.py          # Frontend ABC, get_frontend() factory (delegates to frontends/)
+├── frontends/           # Deterministic tree-sitter frontends (15 languages)
+│   ├── __init__.py      # FRONTEND_REGISTRY, get_deterministic_frontend()
+│   ├── _base.py         # BaseFrontend — language-agnostic IR lowering infrastructure
+│   ├── python.py        # PythonFrontend
+│   ├── javascript.py    # JavaScriptFrontend
+│   ├── typescript.py    # TypeScriptFrontend (extends JavaScriptFrontend)
+│   ├── java.py          # JavaFrontend
+│   ├── ruby.py          # RubyFrontend
+│   ├── go.py            # GoFrontend
+│   ├── php.py           # PhpFrontend
+│   ├── csharp.py        # CSharpFrontend
+│   ├── c.py             # CFrontend
+│   ├── cpp.py           # CppFrontend (extends CFrontend)
+│   ├── rust.py          # RustFrontend
+│   ├── kotlin.py        # KotlinFrontend
+│   ├── scala.py         # ScalaFrontend
+│   ├── lua.py           # LuaFrontend
+│   └── pascal.py        # PascalFrontend
 ├── llm_client.py        # LLMClient ABC, Claude/OpenAI/Ollama/HuggingFace clients
 ├── llm_frontend.py      # LLMFrontend — LLM-based source-to-IR lowering
 ├── cfg.py               # BasicBlock, CFG, build_cfg()
@@ -20,11 +38,25 @@ interpreter/
 ├── backend.py           # LLMBackend (DI for clients), Claude/OpenAI/Ollama/HuggingFace backends
 └── run.py               # run() orchestrator (decomposed helpers)
 tests/
-├── test_llm_client.py       # LLMClient unit tests (DI with fake API clients)
-├── test_llm_frontend.py     # LLM frontend parsing, validation, prompt tests
-├── test_frontend_factory.py # get_frontend() factory tests
-├── test_backend_refactor.py # Backend refactor + get_backend() factory tests
-└── test_closures.py         # Closure capture and invocation tests
+├── test_llm_client.py           # LLMClient unit tests (DI with fake API clients)
+├── test_llm_frontend.py         # LLM frontend parsing, validation, prompt tests
+├── test_frontend_factory.py     # get_frontend() factory tests
+├── test_backend_refactor.py     # Backend refactor + get_backend() factory tests
+├── test_closures.py             # Closure capture and invocation tests
+├── test_javascript_frontend.py  # JavaScript frontend tests
+├── test_typescript_frontend.py  # TypeScript frontend tests
+├── test_java_frontend.py        # Java frontend tests
+├── test_ruby_frontend.py        # Ruby frontend tests
+├── test_go_frontend.py          # Go frontend tests
+├── test_php_frontend.py         # PHP frontend tests
+├── test_csharp_frontend.py      # C# frontend tests
+├── test_c_frontend.py           # C frontend tests
+├── test_cpp_frontend.py         # C++ frontend tests
+├── test_rust_frontend.py        # Rust frontend tests
+├── test_kotlin_frontend.py      # Kotlin frontend tests
+├── test_scala_frontend.py       # Scala frontend tests
+├── test_lua_frontend.py         # Lua frontend tests
+└── test_pascal_frontend.py      # Pascal frontend tests
 ```
 
 ## How it works
@@ -32,8 +64,8 @@ tests/
 ```
 Source Code
     │
-    ├──── deterministic path ──── tree-sitter ──── PythonFrontend ────┐
-    │                                                                 │
+    ├──── deterministic path ──── tree-sitter ──── Language Frontend ──┐
+    │                              (15 languages)                     │
     └──── LLM path (--frontend llm) ──── LLMFrontend ────────────────┤
                                                                       ▼
                                                           Flattened High-Level TAC (IR)
@@ -49,7 +81,7 @@ Source Code
 ```
 
 1. **Parse** — Tree-sitter (via `tree-sitter-language-pack`) parses source into an AST (deterministic path), or the LLM lowers source directly to IR (LLM path)
-2. **Lower** — A language-specific frontend converts the AST into a flattened three-address code IR (~19 opcodes). With `--frontend llm`, the LLM performs this lowering step directly from source code, enabling multi-language support without per-language frontends
+2. **Lower** — A language-specific frontend converts the AST into a flattened three-address code IR (~19 opcodes). Each of the 15 supported languages has a dedicated `BaseFrontend` subclass with dispatch tables mapping tree-sitter node types to IR opcodes. With `--frontend llm`, the LLM performs this lowering step directly from source code for languages without a deterministic frontend
 3. **Build CFG** — IR instructions are partitioned into basic blocks with control flow edges
 4. **Build registry** — Function and class definitions are indexed from the IR, mapping names to CFG labels and extracting parameter lists
 5. **Execute** — The VM walks the CFG deterministically:
@@ -105,8 +137,11 @@ poetry run python interpreter.py myfile.py -f llm -b huggingface -v
 # LLM frontend with local Ollama
 poetry run python interpreter.py myfile.py -f llm -b ollama -v
 
-# LLM frontend on non-Python source (multi-language support)
-poetry run python interpreter.py example.js -l javascript -f llm -v
+# Deterministic frontend on non-Python source (15 languages supported)
+poetry run python interpreter.py example.js -l javascript -v
+
+# LLM frontend for unsupported languages
+poetry run python interpreter.py example.cob -l cobol -f llm -v
 ```
 
 ### CLI options
@@ -121,6 +156,32 @@ poetry run python interpreter.py example.js -l javascript -f llm -v
 | `-f`, `--frontend` | Frontend type: `deterministic` (tree-sitter) or `llm` (default: `deterministic`) |
 | `--ir-only` | Print the IR and exit |
 | `--cfg-only` | Print the CFG and exit |
+
+## Supported languages (deterministic frontends)
+
+The deterministic frontend (`--frontend deterministic`, the default) supports 15 languages via tree-sitter. Each language has a dedicated frontend that maps tree-sitter AST node types to IR opcodes with 0 LLM calls and sub-millisecond latency.
+
+| Language | Frontend class | Key constructs |
+|----------|---------------|----------------|
+| Python | `PythonFrontend` | list/dict comprehensions, decorators, with-statement, tuple unpacking |
+| JavaScript | `JavaScriptFrontend` | arrow functions, template literals, destructuring, for-in/for-of |
+| TypeScript | `TypeScriptFrontend` | extends JS frontend, skips type annotations, enum/interface |
+| Java | `JavaFrontend` | method declarations, enhanced for, local variable declarations, interface/enum |
+| Ruby | `RubyFrontend` | unless/until (inverted conditions), blocks, instance variables |
+| Go | `GoFrontend` | short var declarations (:=), for-only loops, struct + methods via receiver |
+| PHP | `PhpFrontend` | $-prefixed variables, echo, namespace handling, arrow functions |
+| C# | `CSharpFrontend` | properties, using statements, LINQ as symbolic |
+| C | `CFrontend` | struct definitions, pointer expressions, preprocessor directives |
+| C++ | `CppFrontend` | extends C frontend, classes, namespaces, templates, lambdas |
+| Rust | `RustFrontend` | let/let mut, match expressions, impl blocks, closures, reference/deref |
+| Kotlin | `KotlinFrontend` | when expressions, data classes, null safety, property declarations |
+| Scala | `ScalaFrontend` | val/var, match expressions, object singletons, for-comprehensions |
+| Lua | `LuaFrontend` | tables, repeat-until, numeric/generic for, method calls via `:` |
+| Pascal | `PascalFrontend` | begin/end blocks, procedures/functions, record types, `:=` assignment |
+
+Unsupported language constructs emit a `SYMBOLIC` opcode with a descriptive hint rather than crashing, so partial lowering is always available.
+
+For languages not listed above, use the LLM frontend (`--frontend llm`) which supports any language.
 
 ## IR opcodes
 
@@ -312,8 +373,9 @@ When run with `-v`, the interpreter reports per-stage timing and output statisti
 poetry run pytest tests/ -v
 ```
 
-Tests use dependency injection with fake API clients — no real LLM calls are made. The test suite covers:
+Tests use dependency injection with fake API clients — no real LLM calls are made. The test suite (346 tests) covers:
 
+- **Deterministic frontends** — 15 language frontends with 15-25 tests each covering declarations, expressions, control flow, functions, classes, and language-specific constructs
 - **LLM client infrastructure** — client construction, DI, factory routing for all 4 providers
 - **LLM frontend** — markdown fence stripping, JSON parsing/repair, IR validation, prompt formatting
 - **Frontend factory** — `get_frontend()` routing for deterministic and LLM paths

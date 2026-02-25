@@ -22,3 +22,21 @@ CFG_ENTRY_LABEL = "entry"
 
 FRONTEND_DETERMINISTIC = "deterministic"
 FRONTEND_LLM = "llm"
+
+SUPPORTED_DETERMINISTIC_LANGUAGES: tuple[str, ...] = (
+    "python",
+    "javascript",
+    "typescript",
+    "java",
+    "ruby",
+    "go",
+    "php",
+    "csharp",
+    "c",
+    "cpp",
+    "rust",
+    "kotlin",
+    "scala",
+    "lua",
+    "pascal",
+)

@@ -1,0 +1,499 @@
+"""JavaScriptFrontend — tree-sitter JavaScript AST → IR lowering."""
+
+from __future__ import annotations
+
+from typing import Callable
+
+from ._base import BaseFrontend
+from ..ir import Opcode
+from .. import constants
+
+
+class JavaScriptFrontend(BaseFrontend):
+    """Lowers a JavaScript tree-sitter AST into flattened TAC IR."""
+
+    NONE_LITERAL = "undefined"
+    TRUE_LITERAL = "true"
+    FALSE_LITERAL = "false"
+    DEFAULT_RETURN_VALUE = "undefined"
+
+    ATTRIBUTE_NODE_TYPE = "member_expression"
+    ATTR_OBJECT_FIELD = "object"
+    ATTR_ATTRIBUTE_FIELD = "property"
+
+    SUBSCRIPT_VALUE_FIELD = "object"
+    SUBSCRIPT_INDEX_FIELD = "index"
+
+    IF_CONDITION_FIELD = "condition"
+    IF_CONSEQUENCE_FIELD = "consequence"
+    IF_ALTERNATIVE_FIELD = "alternative"
+
+    COMMENT_TYPES = frozenset({"comment"})
+    NOISE_TYPES = frozenset({"\n"})
+
+    def __init__(self):
+        super().__init__()
+        self._EXPR_DISPATCH: dict[str, Callable] = {
+            "identifier": self._lower_identifier,
+            "number": self._lower_const_literal,
+            "string": self._lower_const_literal,
+            "template_string": self._lower_const_literal,
+            "true": self._lower_const_literal,
+            "false": self._lower_const_literal,
+            "null": self._lower_const_literal,
+            "undefined": self._lower_const_literal,
+            "binary_expression": self._lower_binop,
+            "unary_expression": self._lower_unop,
+            "update_expression": self._lower_update_expr,
+            "call_expression": self._lower_call,
+            "member_expression": self._lower_attribute,
+            "subscript_expression": self._lower_js_subscript,
+            "parenthesized_expression": self._lower_paren,
+            "array": self._lower_list_literal,
+            "object": self._lower_js_object_literal,
+            "assignment_expression": self._lower_assignment_expr,
+            "arrow_function": self._lower_arrow_function,
+            "ternary_expression": self._lower_ternary,
+            "this": self._lower_identifier,
+            "property_identifier": self._lower_identifier,
+            "shorthand_property_identifier": self._lower_identifier,
+        }
+        self._STMT_DISPATCH: dict[str, Callable] = {
+            "expression_statement": self._lower_expression_statement,
+            "lexical_declaration": self._lower_var_declaration,
+            "variable_declaration": self._lower_var_declaration,
+            "return_statement": self._lower_return,
+            "if_statement": self._lower_if,
+            "while_statement": self._lower_while,
+            "for_statement": self._lower_c_style_for,
+            "for_in_statement": self._lower_for_in,
+            "function_declaration": self._lower_function_def,
+            "class_declaration": self._lower_class_def,
+            "throw_statement": self._lower_throw,
+            "statement_block": self._lower_block,
+            "empty_statement": lambda _: None,
+        }
+
+    # ── JS attribute access ──────────────────────────────────────
+
+    def _lower_attribute(self, node) -> str:
+        obj_node = node.child_by_field_name("object")
+        prop_node = node.child_by_field_name("property")
+        if obj_node is None or prop_node is None:
+            return self._lower_const_literal(node)
+        obj_reg = self._lower_expr(obj_node)
+        field_name = self._node_text(prop_node)
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_FIELD,
+            result_reg=reg,
+            operands=[obj_reg, field_name],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    def _lower_js_subscript(self, node) -> str:
+        obj_node = node.child_by_field_name("object")
+        idx_node = node.child_by_field_name("index")
+        if obj_node is None or idx_node is None:
+            return self._lower_const_literal(node)
+        obj_reg = self._lower_expr(obj_node)
+        idx_reg = self._lower_expr(idx_node)
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_INDEX,
+            result_reg=reg,
+            operands=[obj_reg, idx_reg],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # ── JS call ──────────────────────────────────────────────────
+
+    def _lower_call(self, node) -> str:
+        func_node = node.child_by_field_name("function")
+        args_node = node.child_by_field_name("arguments")
+        arg_regs = self._extract_call_args(args_node) if args_node else []
+
+        if func_node and func_node.type == "member_expression":
+            obj_node = func_node.child_by_field_name("object")
+            prop_node = func_node.child_by_field_name("property")
+            if obj_node and prop_node:
+                obj_reg = self._lower_expr(obj_node)
+                method_name = self._node_text(prop_node)
+                reg = self._fresh_reg()
+                self._emit(
+                    Opcode.CALL_METHOD,
+                    result_reg=reg,
+                    operands=[obj_reg, method_name] + arg_regs,
+                    source_location=self._source_loc(node),
+                )
+                return reg
+
+        if func_node and func_node.type == "identifier":
+            func_name = self._node_text(func_node)
+            reg = self._fresh_reg()
+            self._emit(
+                Opcode.CALL_FUNCTION,
+                result_reg=reg,
+                operands=[func_name] + arg_regs,
+                source_location=self._source_loc(node),
+            )
+            return reg
+
+        target_reg = self._lower_expr(func_node) if func_node else self._fresh_reg()
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_UNKNOWN,
+            result_reg=reg,
+            operands=[target_reg] + arg_regs,
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    def _extract_call_args(self, args_node) -> list[str]:
+        if args_node is None:
+            return []
+        return [
+            self._lower_expr(c)
+            for c in args_node.children
+            if c.type not in ("(", ")", ",") and c.is_named
+        ]
+
+    # ── JS store target ──────────────────────────────────────────
+
+    def _lower_store_target(self, target, val_reg: str, parent_node):
+        if target.type == "identifier":
+            self._emit(
+                Opcode.STORE_VAR,
+                operands=[self._node_text(target), val_reg],
+                source_location=self._source_loc(parent_node),
+            )
+        elif target.type == "member_expression":
+            obj_node = target.child_by_field_name("object")
+            prop_node = target.child_by_field_name("property")
+            if obj_node and prop_node:
+                obj_reg = self._lower_expr(obj_node)
+                self._emit(
+                    Opcode.STORE_FIELD,
+                    operands=[obj_reg, self._node_text(prop_node), val_reg],
+                    source_location=self._source_loc(parent_node),
+                )
+        elif target.type == "subscript_expression":
+            obj_node = target.child_by_field_name("object")
+            idx_node = target.child_by_field_name("index")
+            if obj_node and idx_node:
+                obj_reg = self._lower_expr(obj_node)
+                idx_reg = self._lower_expr(idx_node)
+                self._emit(
+                    Opcode.STORE_INDEX,
+                    operands=[obj_reg, idx_reg, val_reg],
+                    source_location=self._source_loc(parent_node),
+                )
+        else:
+            self._emit(
+                Opcode.STORE_VAR,
+                operands=[self._node_text(target), val_reg],
+                source_location=self._source_loc(parent_node),
+            )
+
+    # ── JS assignment expression ─────────────────────────────────
+
+    def _lower_assignment_expr(self, node) -> str:
+        left = node.child_by_field_name("left")
+        right = node.child_by_field_name("right")
+        val_reg = self._lower_expr(right)
+        self._lower_store_target(left, val_reg, node)
+        return val_reg
+
+    # ── JS object literal ────────────────────────────────────────
+
+    def _lower_js_object_literal(self, node) -> str:
+        obj_reg = self._fresh_reg()
+        self._emit(
+            Opcode.NEW_OBJECT,
+            result_reg=obj_reg,
+            operands=["object"],
+            source_location=self._source_loc(node),
+        )
+        for child in node.children:
+            if child.type == "pair":
+                key_node = child.child_by_field_name("key")
+                val_node = child.child_by_field_name("value")
+                if key_node and val_node:
+                    key_reg = self._lower_const_literal(key_node)
+                    val_reg = self._lower_expr(val_node)
+                    self._emit(
+                        Opcode.STORE_INDEX,
+                        operands=[obj_reg, key_reg, val_reg],
+                    )
+            elif child.type == "shorthand_property_identifier":
+                key_reg = self._lower_const_literal(child)
+                val_reg = self._lower_identifier(child)
+                self._emit(
+                    Opcode.STORE_INDEX,
+                    operands=[obj_reg, key_reg, val_reg],
+                )
+        return obj_reg
+
+    # ── JS arrow function ────────────────────────────────────────
+
+    def _lower_arrow_function(self, node) -> str:
+        params_node = node.child_by_field_name("parameters")
+        body_node = node.child_by_field_name("body")
+
+        func_name = f"__arrow_{self._label_counter}"
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        self._emit(Opcode.BRANCH, label=end_label)
+        self._emit(Opcode.LABEL, label=func_label)
+
+        if params_node:
+            if params_node.type == "identifier":
+                self._lower_param(params_node)
+            else:
+                self._lower_params(params_node)
+
+        if body_node:
+            if body_node.type == "statement_block":
+                self._lower_block(body_node)
+            else:
+                # Expression body: implicit return
+                val_reg = self._lower_expr(body_node)
+                self._emit(Opcode.RETURN, operands=[val_reg])
+
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[self.DEFAULT_RETURN_VALUE],
+        )
+        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        func_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        return func_reg
+
+    # ── JS ternary ───────────────────────────────────────────────
+
+    def _lower_ternary(self, node) -> str:
+        cond_node = node.child_by_field_name("condition")
+        true_node = node.child_by_field_name("consequence")
+        false_node = node.child_by_field_name("alternative")
+
+        cond_reg = self._lower_expr(cond_node)
+        true_label = self._fresh_label("ternary_true")
+        false_label = self._fresh_label("ternary_false")
+        end_label = self._fresh_label("ternary_end")
+
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[cond_reg],
+            label=f"{true_label},{false_label}",
+        )
+
+        self._emit(Opcode.LABEL, label=true_label)
+        true_reg = self._lower_expr(true_node)
+        result_var = f"__ternary_{self._label_counter}"
+        self._emit(Opcode.STORE_VAR, operands=[result_var, true_reg])
+        self._emit(Opcode.BRANCH, label=end_label)
+
+        self._emit(Opcode.LABEL, label=false_label)
+        false_reg = self._lower_expr(false_node)
+        self._emit(Opcode.STORE_VAR, operands=[result_var, false_reg])
+        self._emit(Opcode.BRANCH, label=end_label)
+
+        self._emit(Opcode.LABEL, label=end_label)
+        result_reg = self._fresh_reg()
+        self._emit(Opcode.LOAD_VAR, result_reg=result_reg, operands=[result_var])
+        return result_reg
+
+    # ── JS for-in / for-of ───────────────────────────────────────
+
+    def _lower_for_in(self, node):
+        # for (let x in/of obj) { body }
+        left = node.child_by_field_name("left")
+        right = node.child_by_field_name("right")
+        body_node = node.child_by_field_name("body")
+
+        iter_reg = self._lower_expr(right)
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=reg,
+            operands=[f"for_in_iter:{self._node_text(node)[:60]}"],
+            source_location=self._source_loc(node),
+        )
+
+        loop_label = self._fresh_label("for_in_cond")
+        body_label = self._fresh_label("for_in_body")
+        end_label = self._fresh_label("for_in_end")
+
+        self._emit(Opcode.LABEL, label=loop_label)
+        cond_reg = self._fresh_reg()
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=cond_reg,
+            operands=["for_in_has_next"],
+        )
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[cond_reg],
+            label=f"{body_label},{end_label}",
+        )
+
+        self._emit(Opcode.LABEL, label=body_label)
+        # Store the iteration variable
+        if left:
+            var_name = self._extract_var_name(left)
+            if var_name:
+                elem_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.SYMBOLIC,
+                    result_reg=elem_reg,
+                    operands=["for_in_element"],
+                )
+                self._emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+
+        if body_node:
+            self._lower_block(body_node)
+
+        self._emit(Opcode.BRANCH, label=loop_label)
+        self._emit(Opcode.LABEL, label=end_label)
+
+    def _extract_var_name(self, node) -> str | None:
+        """Extract variable name from a declaration or identifier."""
+        if node.type == "identifier":
+            return self._node_text(node)
+        if node.type in ("lexical_declaration", "variable_declaration"):
+            for child in node.children:
+                if child.type == "variable_declarator":
+                    name_node = child.child_by_field_name("name")
+                    if name_node:
+                        return self._node_text(name_node)
+        return None
+
+    # ── JS param handling ────────────────────────────────────────
+
+    def _lower_param(self, child):
+        if child.type in ("(", ")", ","):
+            return
+        if child.type == "identifier":
+            pname = self._node_text(child)
+        elif child.type in (
+            "assignment_pattern",
+            "object_pattern",
+            "array_pattern",
+        ):
+            pname = self._node_text(child)
+        else:
+            pname = self._extract_param_name(child)
+            if pname is None:
+                return
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=self._fresh_reg(),
+            operands=[f"{constants.PARAM_PREFIX}{pname}"],
+            source_location=self._source_loc(child),
+        )
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=[pname, f"%{self._reg_counter - 1}"],
+        )
+
+    # ── JS throw ─────────────────────────────────────────────────
+
+    def _lower_throw(self, node):
+        self._lower_raise_or_throw(node, keyword="throw")
+
+    # ── JS if alternative ────────────────────────────────────────
+
+    def _lower_alternative(self, alt_node, end_label: str):
+        alt_type = alt_node.type
+        if alt_type == "else_clause":
+            for child in alt_node.children:
+                if child.type not in ("else",):
+                    self._lower_stmt(child)
+        elif alt_type == "if_statement":
+            self._lower_if(alt_node)
+        else:
+            self._lower_block(alt_node)
+
+    # ── JS class body handling ───────────────────────────────────
+
+    def _lower_class_def(self, node):
+        name_node = node.child_by_field_name("name")
+        body_node = node.child_by_field_name("body")
+        class_name = self._node_text(name_node)
+
+        class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
+        end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=class_label)
+
+        if body_node:
+            for child in body_node.children:
+                if child.type == "method_definition":
+                    self._lower_method_def(child)
+                elif child.is_named:
+                    self._lower_stmt(child)
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+        cls_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=cls_reg,
+            operands=[
+                constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+
+    def _lower_method_def(self, node):
+        name_node = node.child_by_field_name("name")
+        params_node = node.child_by_field_name("parameters")
+        body_node = node.child_by_field_name("body")
+
+        func_name = self._node_text(name_node)
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        self._emit(Opcode.BRANCH, label=end_label)
+        self._emit(Opcode.LABEL, label=func_label)
+
+        if params_node:
+            self._lower_params(params_node)
+
+        if body_node:
+            self._lower_block(body_node)
+
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[self.DEFAULT_RETURN_VALUE],
+        )
+        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        func_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])

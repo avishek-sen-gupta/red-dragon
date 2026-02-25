@@ -1,0 +1,579 @@
+"""CFrontend — tree-sitter C AST -> IR lowering."""
+
+from __future__ import annotations
+
+import logging
+from typing import Callable
+
+from ._base import BaseFrontend
+from ..ir import Opcode
+from .. import constants
+
+logger = logging.getLogger(__name__)
+
+PREPROC_NOISE_TYPES = frozenset(
+    {
+        "preproc_include",
+        "preproc_define",
+        "preproc_ifdef",
+        "preproc_ifndef",
+        "preproc_if",
+        "preproc_else",
+        "preproc_elif",
+        "preproc_endif",
+        "preproc_call",
+        "preproc_def",
+    }
+)
+
+
+class CFrontend(BaseFrontend):
+    """Lowers a C tree-sitter AST into flattened TAC IR."""
+
+    NONE_LITERAL = "NULL"
+    TRUE_LITERAL = "true"
+    FALSE_LITERAL = "false"
+    DEFAULT_RETURN_VALUE = "0"
+
+    ATTR_OBJECT_FIELD = "argument"
+    ATTR_ATTRIBUTE_FIELD = "field"
+    ATTRIBUTE_NODE_TYPE = "field_expression"
+
+    SUBSCRIPT_VALUE_FIELD = "argument"
+    SUBSCRIPT_INDEX_FIELD = "index"
+
+    COMMENT_TYPES = frozenset({"comment"})
+    NOISE_TYPES = frozenset({"\n"}) | PREPROC_NOISE_TYPES
+
+    BLOCK_NODE_TYPES = frozenset({"compound_statement"})
+
+    def __init__(self):
+        super().__init__()
+        self._EXPR_DISPATCH: dict[str, Callable] = {
+            "identifier": self._lower_identifier,
+            "number_literal": self._lower_const_literal,
+            "string_literal": self._lower_const_literal,
+            "character_literal": self._lower_const_literal,
+            "true": self._lower_const_literal,
+            "false": self._lower_const_literal,
+            "null": self._lower_const_literal,
+            "binary_expression": self._lower_binop,
+            "unary_expression": self._lower_unop,
+            "update_expression": self._lower_update_expr,
+            "parenthesized_expression": self._lower_paren,
+            "call_expression": self._lower_call,
+            "field_expression": self._lower_field_expr,
+            "subscript_expression": self._lower_subscript_expr,
+            "assignment_expression": self._lower_assignment_expr,
+            "cast_expression": self._lower_cast_expr,
+            "pointer_expression": self._lower_pointer_expr,
+            "sizeof_expression": self._lower_sizeof,
+            "conditional_expression": self._lower_ternary,
+            "comma_expression": self._lower_comma_expr,
+            "concatenated_string": self._lower_const_literal,
+            "type_identifier": self._lower_identifier,
+            "compound_literal_expression": self._lower_compound_literal,
+        }
+        self._STMT_DISPATCH: dict[str, Callable] = {
+            "expression_statement": self._lower_expression_statement,
+            "declaration": self._lower_declaration,
+            "return_statement": self._lower_return,
+            "if_statement": self._lower_if,
+            "while_statement": self._lower_while,
+            "for_statement": self._lower_c_style_for,
+            "do_statement": self._lower_do_while,
+            "function_definition": self._lower_function_def_c,
+            "struct_specifier": self._lower_struct_def,
+            "compound_statement": self._lower_block,
+            "switch_statement": self._lower_switch,
+            "goto_statement": self._lower_goto,
+            "labeled_statement": self._lower_labeled_stmt,
+            "break_statement": self._lower_break,
+            "continue_statement": self._lower_continue,
+            "translation_unit": self._lower_block,
+            "type_definition": self._lower_typedef,
+        }
+
+    # -- C: declaration ------------------------------------------------
+
+    def _lower_declaration(self, node):
+        """Lower a C declaration: type declarator(s) with optional initializers."""
+        for child in node.children:
+            if child.type == "init_declarator":
+                self._lower_init_declarator(child)
+            elif child.type == "identifier":
+                # Declaration without initializer: int x;
+                var_name = self._node_text(child)
+                val_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.CONST,
+                    result_reg=val_reg,
+                    operands=[self.NONE_LITERAL],
+                )
+                self._emit(
+                    Opcode.STORE_VAR,
+                    operands=[var_name, val_reg],
+                    source_location=self._source_loc(node),
+                )
+
+    def _lower_init_declarator(self, node):
+        """Lower init_declarator (fields: declarator, value)."""
+        decl_node = node.child_by_field_name("declarator")
+        value_node = node.child_by_field_name("value")
+
+        var_name = self._extract_declarator_name(decl_node) if decl_node else "__anon"
+
+        if value_node:
+            val_reg = self._lower_expr(value_node)
+        else:
+            val_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=val_reg,
+                operands=[self.NONE_LITERAL],
+            )
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=[var_name, val_reg],
+            source_location=self._source_loc(node),
+        )
+
+    def _extract_declarator_name(self, decl_node) -> str:
+        """Extract the variable name from a declarator, handling pointer declarators."""
+        if decl_node.type == "identifier":
+            return self._node_text(decl_node)
+        # pointer_declarator, array_declarator, etc.
+        inner = decl_node.child_by_field_name("declarator")
+        if inner:
+            return self._extract_declarator_name(inner)
+        # Fallback: first identifier child
+        id_node = next((c for c in decl_node.children if c.type == "identifier"), None)
+        if id_node:
+            return self._node_text(id_node)
+        return self._node_text(decl_node)
+
+    # -- C: function definition ----------------------------------------
+
+    def _lower_function_def_c(self, node):
+        """Lower function_definition with nested function_declarator."""
+        declarator_node = node.child_by_field_name("declarator")
+        body_node = node.child_by_field_name("body")
+
+        func_name = "__anon"
+        params_node = None
+
+        if declarator_node:
+            # function_declarator has fields: declarator (name), parameters
+            if declarator_node.type == "function_declarator":
+                name_node = declarator_node.child_by_field_name("declarator")
+                params_node = declarator_node.child_by_field_name("parameters")
+                func_name = (
+                    self._extract_declarator_name(name_node) if name_node else "__anon"
+                )
+            else:
+                # Could be pointer_declarator wrapping function_declarator
+                func_decl = self._find_function_declarator(declarator_node)
+                if func_decl:
+                    name_node = func_decl.child_by_field_name("declarator")
+                    params_node = func_decl.child_by_field_name("parameters")
+                    func_name = (
+                        self._extract_declarator_name(name_node)
+                        if name_node
+                        else "__anon"
+                    )
+                else:
+                    func_name = self._extract_declarator_name(declarator_node)
+
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=func_label)
+
+        if params_node:
+            self._lower_c_params(params_node)
+
+        if body_node:
+            self._lower_block(body_node)
+
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST, result_reg=none_reg, operands=[self.DEFAULT_RETURN_VALUE]
+        )
+        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        func_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+    def _find_function_declarator(self, node):
+        """Recursively find function_declarator inside pointer/other declarators."""
+        if node.type == "function_declarator":
+            return node
+        for child in node.children:
+            result = self._find_function_declarator(child)
+            if result:
+                return result
+        return None
+
+    def _lower_c_params(self, params_node):
+        """Lower C function parameters (parameter_declaration nodes)."""
+        for child in params_node.children:
+            if child.type == "parameter_declaration":
+                decl_node = child.child_by_field_name("declarator")
+                if decl_node:
+                    pname = self._extract_declarator_name(decl_node)
+                    self._emit(
+                        Opcode.SYMBOLIC,
+                        result_reg=self._fresh_reg(),
+                        operands=[f"{constants.PARAM_PREFIX}{pname}"],
+                        source_location=self._source_loc(child),
+                    )
+                    self._emit(
+                        Opcode.STORE_VAR,
+                        operands=[pname, f"%{self._reg_counter - 1}"],
+                    )
+
+    # -- C: struct definition ------------------------------------------
+
+    def _lower_struct_def(self, node):
+        name_node = node.child_by_field_name("name")
+        body_node = node.child_by_field_name("body")
+
+        if name_node is None and body_node is None:
+            # Forward declaration or anonymous struct used as type
+            return
+
+        struct_name = self._node_text(name_node) if name_node else "__anon_struct"
+
+        class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{struct_name}")
+        end_label = self._fresh_label(
+            f"{constants.END_CLASS_LABEL_PREFIX}{struct_name}"
+        )
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=class_label)
+        if body_node:
+            self._lower_struct_body(body_node)
+        self._emit(Opcode.LABEL, label=end_label)
+
+        cls_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=cls_reg,
+            operands=[
+                constants.CLASS_REF_TEMPLATE.format(name=struct_name, label=class_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[struct_name, cls_reg])
+
+    def _lower_struct_body(self, node):
+        """Lower struct field_declaration_list."""
+        for child in node.children:
+            if child.type == "field_declaration":
+                self._lower_struct_field(child)
+            elif child.is_named and child.type not in ("{", "}"):
+                self._lower_stmt(child)
+
+    def _lower_struct_field(self, node):
+        """Lower a struct field declaration as SYMBOLIC."""
+        declarators = [
+            c for c in node.children if c.type in ("field_identifier", "identifier")
+        ]
+        for decl in declarators:
+            fname = self._node_text(decl)
+            reg = self._fresh_reg()
+            self._emit(
+                Opcode.SYMBOLIC,
+                result_reg=reg,
+                operands=[f"struct_field:{fname}"],
+                source_location=self._source_loc(node),
+            )
+
+    # -- C: field expression -------------------------------------------
+
+    def _lower_field_expr(self, node) -> str:
+        """Lower field_expression (e.g., obj.field or ptr->field)."""
+        obj_node = node.child_by_field_name("argument")
+        field_node = node.child_by_field_name("field")
+        if obj_node is None or field_node is None:
+            return self._lower_const_literal(node)
+        obj_reg = self._lower_expr(obj_node)
+        field_name = self._node_text(field_node)
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_FIELD,
+            result_reg=reg,
+            operands=[obj_reg, field_name],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- C: subscript expression ---------------------------------------
+
+    def _lower_subscript_expr(self, node) -> str:
+        """Lower subscript_expression (arr[idx])."""
+        arr_node = node.child_by_field_name("argument")
+        idx_node = node.child_by_field_name("index")
+        if arr_node is None or idx_node is None:
+            return self._lower_const_literal(node)
+        arr_reg = self._lower_expr(arr_node)
+        idx_reg = self._lower_expr(idx_node)
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_INDEX,
+            result_reg=reg,
+            operands=[arr_reg, idx_reg],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- C: assignment expression --------------------------------------
+
+    def _lower_assignment_expr(self, node) -> str:
+        left = node.child_by_field_name("left")
+        right = node.child_by_field_name("right")
+        val_reg = self._lower_expr(right)
+        self._lower_store_target(left, val_reg, node)
+        return val_reg
+
+    # -- C: store target override --------------------------------------
+
+    def _lower_store_target(self, target, val_reg: str, parent_node):
+        if target.type == "identifier":
+            self._emit(
+                Opcode.STORE_VAR,
+                operands=[self._node_text(target), val_reg],
+                source_location=self._source_loc(parent_node),
+            )
+        elif target.type == "field_expression":
+            obj_node = target.child_by_field_name("argument")
+            field_node = target.child_by_field_name("field")
+            if obj_node and field_node:
+                obj_reg = self._lower_expr(obj_node)
+                self._emit(
+                    Opcode.STORE_FIELD,
+                    operands=[obj_reg, self._node_text(field_node), val_reg],
+                    source_location=self._source_loc(parent_node),
+                )
+        elif target.type == "subscript_expression":
+            arr_node = target.child_by_field_name("argument")
+            idx_node = target.child_by_field_name("index")
+            if arr_node and idx_node:
+                arr_reg = self._lower_expr(arr_node)
+                idx_reg = self._lower_expr(idx_node)
+                self._emit(
+                    Opcode.STORE_INDEX,
+                    operands=[arr_reg, idx_reg, val_reg],
+                    source_location=self._source_loc(parent_node),
+                )
+        elif target.type == "pointer_expression":
+            # *ptr = val  ->  SYMBOLIC store through pointer
+            reg = self._fresh_reg()
+            self._emit(
+                Opcode.SYMBOLIC,
+                result_reg=reg,
+                operands=[f"pointer_store:{self._node_text(target)[:40]}"],
+                source_location=self._source_loc(parent_node),
+            )
+        else:
+            self._emit(
+                Opcode.STORE_VAR,
+                operands=[self._node_text(target), val_reg],
+                source_location=self._source_loc(parent_node),
+            )
+
+    # -- C: cast expression --------------------------------------------
+
+    def _lower_cast_expr(self, node) -> str:
+        value_node = node.child_by_field_name("value")
+        if value_node:
+            return self._lower_expr(value_node)
+        children = [c for c in node.children if c.is_named]
+        if len(children) >= 2:
+            return self._lower_expr(children[-1])
+        return self._lower_const_literal(node)
+
+    # -- C: pointer expression -----------------------------------------
+
+    def _lower_pointer_expr(self, node) -> str:
+        """Lower pointer dereference (*p) or address-of (&x) as SYMBOLIC."""
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=reg,
+            operands=[f"pointer:{self._node_text(node)[:40]}"],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- C: sizeof -----------------------------------------------------
+
+    def _lower_sizeof(self, node) -> str:
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=reg,
+            operands=[f"sizeof:{self._node_text(node)[:40]}"],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- C: ternary (conditional_expression) ---------------------------
+
+    def _lower_ternary(self, node) -> str:
+        cond_node = node.child_by_field_name("condition")
+        true_node = node.child_by_field_name("consequence")
+        false_node = node.child_by_field_name("alternative")
+
+        cond_reg = self._lower_expr(cond_node)
+        true_label = self._fresh_label("ternary_true")
+        false_label = self._fresh_label("ternary_false")
+        end_label = self._fresh_label("ternary_end")
+
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[cond_reg],
+            label=f"{true_label},{false_label}",
+        )
+        self._emit(Opcode.LABEL, label=true_label)
+        true_reg = self._lower_expr(true_node)
+        result_var = f"__ternary_{self._label_counter}"
+        self._emit(Opcode.STORE_VAR, operands=[result_var, true_reg])
+        self._emit(Opcode.BRANCH, label=end_label)
+
+        self._emit(Opcode.LABEL, label=false_label)
+        false_reg = self._lower_expr(false_node)
+        self._emit(Opcode.STORE_VAR, operands=[result_var, false_reg])
+        self._emit(Opcode.BRANCH, label=end_label)
+
+        self._emit(Opcode.LABEL, label=end_label)
+        result_reg = self._fresh_reg()
+        self._emit(Opcode.LOAD_VAR, result_reg=result_reg, operands=[result_var])
+        return result_reg
+
+    # -- C: comma expression -------------------------------------------
+
+    def _lower_comma_expr(self, node) -> str:
+        """Lower comma expression (a, b) -- evaluate both, return last."""
+        children = [c for c in node.children if c.is_named]
+        reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=reg, operands=[self.NONE_LITERAL])
+        for child in children:
+            reg = self._lower_expr(child)
+        return reg
+
+    # -- C: compound literal -------------------------------------------
+
+    def _lower_compound_literal(self, node) -> str:
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=reg,
+            operands=[f"compound_literal:{self._node_text(node)[:60]}"],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- C: do-while ---------------------------------------------------
+
+    def _lower_do_while(self, node):
+        body_node = node.child_by_field_name("body")
+        cond_node = node.child_by_field_name("condition")
+
+        body_label = self._fresh_label("do_body")
+        cond_label = self._fresh_label("do_cond")
+        end_label = self._fresh_label("do_end")
+
+        self._emit(Opcode.LABEL, label=body_label)
+        if body_node:
+            self._lower_block(body_node)
+
+        self._emit(Opcode.LABEL, label=cond_label)
+        if cond_node:
+            cond_reg = self._lower_expr(cond_node)
+            self._emit(
+                Opcode.BRANCH_IF,
+                operands=[cond_reg],
+                label=f"{body_label},{end_label}",
+                source_location=self._source_loc(node),
+            )
+        else:
+            self._emit(Opcode.BRANCH, label=body_label)
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+    # -- C: switch (SYMBOLIC) ------------------------------------------
+
+    def _lower_switch(self, node):
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=reg,
+            operands=[f"switch:{self._node_text(node)[:80]}"],
+            source_location=self._source_loc(node),
+        )
+
+    # -- C: goto / labeled statement / break / continue ----------------
+
+    def _lower_goto(self, node):
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=reg,
+            operands=[f"goto:{self._node_text(node)[:40]}"],
+            source_location=self._source_loc(node),
+        )
+
+    def _lower_labeled_stmt(self, node):
+        """Lower labeled_statement: emit label then lower the inner statement."""
+        label_node = next(
+            (c for c in node.children if c.type == "statement_identifier"), None
+        )
+        if label_node:
+            self._emit(Opcode.LABEL, label=f"user_{self._node_text(label_node)}")
+        # Lower the actual statement within the label
+        for child in node.children:
+            if child.is_named and child.type != "statement_identifier":
+                self._lower_stmt(child)
+
+    def _lower_break(self, node):
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=reg,
+            operands=["break"],
+            source_location=self._source_loc(node),
+        )
+
+    def _lower_continue(self, node):
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=reg,
+            operands=["continue"],
+            source_location=self._source_loc(node),
+        )
+
+    # -- C: typedef (skip) ---------------------------------------------
+
+    def _lower_typedef(self, node):
+        """Lower typedef as SYMBOLIC -- type system detail."""
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=reg,
+            operands=[f"typedef:{self._node_text(node)[:60]}"],
+            source_location=self._source_loc(node),
+        )

@@ -30,7 +30,24 @@ class TestGetFrontend:
 
     def test_deterministic_unsupported_language_raises(self):
         with pytest.raises(ValueError, match="Unsupported language"):
-            get_frontend("javascript", frontend_type=constants.FRONTEND_DETERMINISTIC)
+            get_frontend("cobol", frontend_type=constants.FRONTEND_DETERMINISTIC)
+
+    def test_deterministic_javascript(self):
+        from interpreter.frontends.javascript import JavaScriptFrontend
+
+        frontend = get_frontend(
+            "javascript", frontend_type=constants.FRONTEND_DETERMINISTIC
+        )
+        assert isinstance(frontend, JavaScriptFrontend)
+
+    def test_all_deterministic_languages(self):
+        from interpreter.frontends import SUPPORTED_DETERMINISTIC_LANGUAGES
+
+        for lang in SUPPORTED_DETERMINISTIC_LANGUAGES:
+            frontend = get_frontend(
+                lang, frontend_type=constants.FRONTEND_DETERMINISTIC
+            )
+            assert frontend is not None
 
     def test_llm_frontend_with_injected_client(self):
         fake = FakeLLMClient()

@@ -1,0 +1,294 @@
+"""Tests for CFrontend — tree-sitter C AST -> IR lowering."""
+
+from __future__ import annotations
+
+import tree_sitter_language_pack
+
+from interpreter.frontends.c import CFrontend
+from interpreter.ir import IRInstruction, Opcode
+
+
+def _parse_and_lower(source: str) -> list[IRInstruction]:
+    parser = tree_sitter_language_pack.get_parser("c")
+    source_bytes = source.encode("utf-8")
+    tree = parser.parse(source_bytes)
+    frontend = CFrontend()
+    return frontend.lower(tree, source_bytes)
+
+
+def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:
+    return [inst.opcode for inst in instructions]
+
+
+def _find_all(instructions: list[IRInstruction], opcode: Opcode) -> list[IRInstruction]:
+    return [inst for inst in instructions if inst.opcode == opcode]
+
+
+class TestCFrontendDeclaration:
+    def test_declaration_produces_const_and_store(self):
+        ir = _parse_and_lower("int x = 10;")
+        opcodes = _opcodes(ir)
+        assert Opcode.CONST in opcodes
+        assert Opcode.STORE_VAR in opcodes
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        x_stores = [s for s in stores if "x" in s.operands]
+        assert len(x_stores) >= 1
+
+    def test_declaration_without_initializer(self):
+        ir = _parse_and_lower("int x;")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        x_stores = [s for s in stores if "x" in s.operands]
+        assert len(x_stores) >= 1
+
+
+class TestCFrontendFunctionDefinition:
+    def test_function_def_produces_label_and_return(self):
+        source = "int add(int a, int b) { return a + b; }"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.LABEL in opcodes
+        assert Opcode.RETURN in opcodes
+
+    def test_function_params_lowered_as_symbolic(self):
+        source = "int add(int a, int b) { return a + b; }"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        param_symbolics = [
+            s for s in symbolics if any("param:" in str(op) for op in s.operands)
+        ]
+        assert len(param_symbolics) >= 2
+
+    def test_function_name_stored(self):
+        source = "int add(int a, int b) { return a + b; }"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        add_stores = [s for s in stores if "add" in s.operands]
+        assert len(add_stores) >= 1
+
+
+class TestCFrontendFunctionCall:
+    def test_function_call_produces_call_function(self):
+        source = "void f() { add(1, 2); }"
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        add_calls = [c for c in calls if "add" in c.operands]
+        assert len(add_calls) >= 1
+
+
+class TestCFrontendIfElse:
+    def test_if_else_produces_branch_if(self):
+        source = """
+void f() {
+    int x = 10;
+    if (x > 5) {
+        x = 1;
+    } else {
+        x = 2;
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.BRANCH_IF in opcodes
+
+    def test_if_else_produces_labels(self):
+        source = """
+void f() {
+    if (x > 5) {
+        y = 1;
+    } else {
+        y = 2;
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        labels = _find_all(ir, Opcode.LABEL)
+        assert len(labels) >= 3
+
+
+class TestCFrontendWhileLoop:
+    def test_while_loop_produces_branch_if_and_branch(self):
+        source = """
+void f() {
+    int x = 10;
+    while (x > 0) {
+        x = x - 1;
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.BRANCH in opcodes
+
+
+class TestCFrontendForLoop:
+    def test_c_style_for_loop(self):
+        source = """
+void f() {
+    for (int i = 0; i < 10; i++) {
+        int x = i;
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.BRANCH_IF in opcodes
+        labels = _find_all(ir, Opcode.LABEL)
+        label_names = [lbl.label for lbl in labels]
+        for_labels = [l for l in label_names if l and "for_" in l]
+        assert len(for_labels) >= 2
+
+
+class TestCFrontendStructDefinition:
+    def test_struct_definition_produces_class_label(self):
+        source = """
+struct Point {
+    int x;
+    int y;
+};
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        point_stores = [s for s in stores if "Point" in s.operands]
+        assert len(point_stores) >= 1
+        consts = _find_all(ir, Opcode.CONST)
+        class_refs = [
+            c for c in consts if any("class:" in str(op) for op in c.operands)
+        ]
+        assert len(class_refs) >= 1
+
+    def test_struct_fields_lowered_as_symbolic(self):
+        source = """
+struct Point {
+    int x;
+    int y;
+};
+"""
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        field_symbolics = [
+            s for s in symbolics if any("struct_field:" in str(op) for op in s.operands)
+        ]
+        assert len(field_symbolics) >= 2
+
+
+class TestCFrontendAssignmentExpression:
+    def test_assignment_expression(self):
+        source = "void f() { int x; x = 10; }"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        x_stores = [s for s in stores if "x" in s.operands]
+        assert len(x_stores) >= 2
+
+
+class TestCFrontendFieldAccess:
+    def test_dot_field_access_produces_load_field(self):
+        source = "void f() { int z = obj.field; }"
+        ir = _parse_and_lower(source)
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        assert len(load_fields) >= 1
+        assert "field" in load_fields[0].operands
+
+    def test_arrow_field_access_produces_load_field(self):
+        source = "void f() { int z = ptr->field; }"
+        ir = _parse_and_lower(source)
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        assert len(load_fields) >= 1
+        assert "field" in load_fields[0].operands
+
+
+class TestCFrontendReturn:
+    def test_return_with_value(self):
+        source = "int f() { return 42; }"
+        ir = _parse_and_lower(source)
+        returns = _find_all(ir, Opcode.RETURN)
+        assert len(returns) >= 1
+
+    def test_return_without_value(self):
+        source = "void f() { return; }"
+        ir = _parse_and_lower(source)
+        returns = _find_all(ir, Opcode.RETURN)
+        assert len(returns) >= 1
+
+
+class TestCFrontendUpdateExpression:
+    def test_increment_expression(self):
+        source = "void f() { int i = 0; i++; }"
+        ir = _parse_and_lower(source)
+        binops = _find_all(ir, Opcode.BINOP)
+        plus_ops = [b for b in binops if "+" in b.operands]
+        assert len(plus_ops) >= 1
+
+    def test_decrement_expression(self):
+        source = "void f() { int i = 10; i--; }"
+        ir = _parse_and_lower(source)
+        binops = _find_all(ir, Opcode.BINOP)
+        minus_ops = [b for b in binops if "-" in b.operands]
+        assert len(minus_ops) >= 1
+
+
+class TestCFrontendCastExpression:
+    def test_cast_expression_lowers_value(self):
+        source = "void f() { int y = (int)x; }"
+        ir = _parse_and_lower(source)
+        # The cast should transparently lower the inner value
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        y_stores = [s for s in stores if "y" in s.operands]
+        assert len(y_stores) >= 1
+
+
+class TestCFrontendPreprocessor:
+    def test_preprocessor_is_skipped(self):
+        source = """
+#include <stdio.h>
+#define MAX 100
+int x = 10;
+"""
+        ir = _parse_and_lower(source)
+        # Preprocessor directives should be noise and not produce meaningful IR
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        x_stores = [s for s in stores if "x" in s.operands]
+        assert len(x_stores) >= 1
+        # No SYMBOLIC for the preprocessor directives themselves
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        preproc_symbolics = [
+            s for s in symbolics if any("preproc" in str(op) for op in s.operands)
+        ]
+        assert len(preproc_symbolics) == 0
+
+
+class TestCFrontendPointerFallback:
+    def test_pointer_expression_produces_symbolic(self):
+        source = "void f() { int z = *ptr; }"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        pointer_symbolics = [
+            s for s in symbolics if any("pointer:" in str(op) for op in s.operands)
+        ]
+        assert len(pointer_symbolics) >= 1
+
+    def test_address_of_produces_symbolic(self):
+        source = "void f() { int *p = &x; }"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        pointer_symbolics = [
+            s for s in symbolics if any("pointer:" in str(op) for op in s.operands)
+        ]
+        assert len(pointer_symbolics) >= 1
+
+
+class TestCFrontendFallback:
+    def test_entry_label_always_present(self):
+        ir = _parse_and_lower("")
+        assert ir[0].opcode == Opcode.LABEL
+        assert ir[0].label == "entry"
+
+    def test_sizeof_produces_symbolic(self):
+        source = "void f() { int s = sizeof(int); }"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        sizeof_symbolics = [
+            s for s in symbolics if any("sizeof:" in str(op) for op in s.operands)
+        ]
+        assert len(sizeof_symbolics) >= 1
