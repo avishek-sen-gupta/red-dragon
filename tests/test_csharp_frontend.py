@@ -353,7 +353,7 @@ for (int i = 0; i < 20; i++) {
         assert any("WriteLine" in inst.operands for inst in calls)
         assert len(ir) > 20
 
-    def test_switch_produces_symbolic(self):
+    def test_switch_produces_if_else_chain(self):
         source = """\
 switch (x) {
     case 1: y = 10; break;
@@ -363,4 +363,8 @@ switch (x) {
 """
         ir = _parse_and_lower(source)
         opcodes = _opcodes(ir)
-        assert Opcode.SYMBOLIC in opcodes
+        # Switch is now lowered as if/else chain with BINOP ==
+        binops = _find_all(ir, Opcode.BINOP)
+        eq_ops = [b for b in binops if "==" in b.operands]
+        assert len(eq_ops) == 2
+        assert Opcode.BRANCH_IF in opcodes
