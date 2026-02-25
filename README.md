@@ -191,7 +191,7 @@ The VM handles **all** cases deterministically — including incomplete programs
 
 - **Unknown functions** — `process(items)` where `process` is an unresolved import → creates `sym_N [process(sym_M)]`
 - **Unknown methods** — `conn.fetch_all("users")` on a symbolic object → creates `sym_N [sym_M.fetch_all('users')]`
-- **Unknown fields** — `first.name` on a symbolic object → creates `sym_N` with hint `sym_M.name`
+- **Unknown fields** — `first.name` on a symbolic object → creates `sym_N` with hint `sym_M.name` (deduplicated: repeated access to the same field returns the same symbol)
 - **Symbolic arithmetic** — `sym_0 + 1` → creates `sym_N [sym_0 + 1]` with the expression as a constraint
 - **Symbolic branch conditions** — `branch_if sym_0` → takes the true branch and records `assuming sym_0 is True` as a path condition
 - **Symbolic builtins** — `len(sym_0)` → creates `sym_N [len(sym_0)]`
@@ -207,6 +207,6 @@ The LLM backend still exists but is now only invoked if the local executor encou
 When the interpreter encounters incomplete information, it creates symbolic values rather than erroring:
 
 - **Unknown variables** — accessing an undefined variable produces a symbolic value
-- **Unknown fields** — accessing a field on a heap object that doesn't have it creates a fresh symbolic value and adds the field
+- **Unknown fields** — accessing a field on a heap object that doesn't have it creates a fresh symbolic value and caches it on the heap. Symbolic objects are materialised as synthetic heap entries on first access, so repeated field access (e.g., `user.profile` accessed twice) returns the same symbol
 - **Unknown calls** — calling an external function returns a symbolic value with constraints describing the call (e.g., `process(sym_3)`)
 - **Symbolic branches** — the VM takes the true branch and records the assumption as a path condition
