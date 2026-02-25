@@ -2,69 +2,13 @@
 
 ![CI](https://github.com/avishek-sen-gupta/red-dragon/actions/workflows/ci.yml/badge.svg)
 
-A symbolic interpreter that parses source code, lowers it to a three-address code IR, builds a control flow graph, and executes it via a deterministic VM — falling back to an LLM only when the program references externals or operates on symbolic values.
+A multi-language source code analysis toolkit that:
 
-## Project structure
-
-```
-interpreter.py           # CLI entry point (argparse + main)
-interpreter/
-├── __init__.py          # re-exports run
-├── constants.py         # Named constants (eliminates magic strings)
-├── ir.py                # Opcode, IRInstruction
-├── parser.py            # ParserFactory (DI), TreeSitterParserFactory, Parser
-├── frontend.py          # Frontend ABC, get_frontend() factory (delegates to frontends/)
-├── frontends/           # Deterministic tree-sitter frontends (15 languages)
-│   ├── __init__.py      # FRONTEND_REGISTRY, get_deterministic_frontend()
-│   ├── _base.py         # BaseFrontend — language-agnostic IR lowering infrastructure
-│   ├── python.py        # PythonFrontend
-│   ├── javascript.py    # JavaScriptFrontend
-│   ├── typescript.py    # TypeScriptFrontend (extends JavaScriptFrontend)
-│   ├── java.py          # JavaFrontend
-│   ├── ruby.py          # RubyFrontend
-│   ├── go.py            # GoFrontend
-│   ├── php.py           # PhpFrontend
-│   ├── csharp.py        # CSharpFrontend
-│   ├── c.py             # CFrontend
-│   ├── cpp.py           # CppFrontend (extends CFrontend)
-│   ├── rust.py          # RustFrontend
-│   ├── kotlin.py        # KotlinFrontend
-│   ├── scala.py         # ScalaFrontend
-│   ├── lua.py           # LuaFrontend
-│   └── pascal.py        # PascalFrontend
-├── llm_client.py        # LLMClient ABC, Claude/OpenAI/Ollama/HuggingFace clients
-├── llm_frontend.py      # LLMFrontend — LLM-based source-to-IR lowering
-├── chunked_llm_frontend.py  # ChunkedLLMFrontend — tree-sitter chunking + per-chunk LLM lowering
-├── cfg.py               # BasicBlock, CFG, build_cfg()
-├── dataflow.py          # Iterative dataflow analysis (reaching defs, def-use chains, dependency graphs)
-├── registry.py          # FunctionRegistry, LocalExecutor (dispatch table), builtins
-├── vm.py                # SymbolicValue, VMState, StateUpdate, ExecutionResult, Operators
-├── backend.py           # LLMBackend (DI for clients), Claude/OpenAI/Ollama/HuggingFace backends
-└── run.py               # run() orchestrator (decomposed helpers)
-tests/
-├── test_llm_client.py           # LLMClient unit tests (DI with fake API clients)
-├── test_llm_frontend.py         # LLM frontend parsing, validation, prompt tests
-├── test_chunked_llm_frontend.py # Chunked LLM frontend tests (extractor, renumberer, integration)
-├── test_frontend_factory.py     # get_frontend() factory tests
-├── test_backend_refactor.py     # Backend refactor + get_backend() factory tests
-├── test_closures.py             # Closure capture and invocation tests
-├── test_dataflow.py             # Dataflow analysis tests (reaching defs, def-use, dependency graph)
-├── test_python_frontend.py      # Python frontend tests
-├── test_javascript_frontend.py  # JavaScript frontend tests
-├── test_typescript_frontend.py  # TypeScript frontend tests
-├── test_java_frontend.py        # Java frontend tests
-├── test_ruby_frontend.py        # Ruby frontend tests
-├── test_go_frontend.py          # Go frontend tests
-├── test_php_frontend.py         # PHP frontend tests
-├── test_csharp_frontend.py      # C# frontend tests
-├── test_c_frontend.py           # C frontend tests
-├── test_cpp_frontend.py         # C++ frontend tests
-├── test_rust_frontend.py        # Rust frontend tests
-├── test_kotlin_frontend.py      # Kotlin frontend tests
-├── test_scala_frontend.py       # Scala frontend tests
-├── test_lua_frontend.py         # Lua frontend tests
-└── test_pascal_frontend.py      # Pascal frontend tests
-```
+- **Parses** source in 15 languages via tree-sitter, or any language via LLM-based lowering (including chunked lowering for large files)
+- **Lowers** to a universal flattened three-address code IR (~19 opcodes) — the LLM frontend uses the LLM as a **compiler frontend**, not for reasoning or explanation, constrained by a formal IR schema with concrete patterns
+- **Builds** control flow graphs from IR instructions
+- **Analyses** data flow via iterative reaching definitions, def-use chains, and variable dependency graphs
+- **Executes** programs symbolically via a deterministic VM — tracking data flow through incomplete programs with missing imports or unknown externals entirely without LLM calls
 
 ## How it works
 
