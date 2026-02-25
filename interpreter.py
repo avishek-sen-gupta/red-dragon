@@ -856,6 +856,211 @@ def _add_edge(cfg: CFG, src: str, dst: str):
 
 
 # ════════════════════════════════════════════════════════════════════
+# 4b. Function & Class Registry
+# ════════════════════════════════════════════════════════════════════
+
+import re
+
+_FUNC_RE = re.compile(r"<function:(\w+)@(\w+)>")
+_CLASS_RE = re.compile(r"<class:(\w+)@(\w+)>")
+
+
+def _parse_func_ref(val: Any) -> tuple[str, str] | None:
+    """Parse '<function:name@label>' → (name, label) or None."""
+    if not isinstance(val, str):
+        return None
+    m = _FUNC_RE.search(val)
+    return (m.group(1), m.group(2)) if m else None
+
+
+def _parse_class_ref(val: Any) -> tuple[str, str] | None:
+    """Parse '<class:name@label>' → (name, label) or None."""
+    if not isinstance(val, str):
+        return None
+    m = _CLASS_RE.search(val)
+    return (m.group(1), m.group(2)) if m else None
+
+
+@dataclass
+class FunctionRegistry:
+    # func_label → ordered list of parameter names
+    func_params: dict[str, list[str]] = field(default_factory=dict)
+    # class_name → {method_name → func_label}
+    class_methods: dict[str, dict[str, str]] = field(default_factory=dict)
+    # class_name → class_body_label
+    classes: dict[str, str] = field(default_factory=dict)
+
+
+def build_registry(instructions: list[IRInstruction], cfg: CFG) -> FunctionRegistry:
+    """Scan IR and CFG to build a function/class registry."""
+    reg = FunctionRegistry()
+
+    # 1. Extract parameter names from func blocks
+    for label, block in cfg.blocks.items():
+        if not label.startswith("func_"):
+            continue
+        params = []
+        for inst in block.instructions:
+            if inst.opcode == Opcode.SYMBOLIC and inst.operands:
+                hint = str(inst.operands[0])
+                if hint.startswith("param:"):
+                    params.append(hint[6:])
+        reg.func_params[label] = params
+
+    # 2. Find classes and their methods by scanning the IR linearly
+    #    Methods are <function:NAME@LABEL> constants between class_X and
+    #    end_class_X labels.
+    current_class: str | None = None
+    for inst in instructions:
+        if inst.opcode == Opcode.LABEL and inst.label:
+            cm = _CLASS_RE.search(inst.label)
+            if inst.label.startswith("class_") and not inst.label.startswith("end_class_"):
+                # Entering a class body — extract class name from the
+                # next CONST <class:Name@...> or from the label itself.
+                # We'll set current_class when we see the class const.
+                pass
+            elif inst.label.startswith("end_class_"):
+                current_class = None
+
+        if inst.opcode == Opcode.CONST and inst.operands:
+            val = str(inst.operands[0])
+            cr = _parse_class_ref(val)
+            if cr:
+                class_name, class_label = cr
+                reg.classes[class_name] = class_label
+                # Now scan backwards: set current_class for the scope we
+                # just exited. Instead, we'll use a second pass below.
+
+    # Second pass: identify class scopes and their methods
+    in_class: str | None = None
+    for inst in instructions:
+        if inst.opcode == Opcode.LABEL and inst.label:
+            if inst.label.startswith("class_") and not inst.label.startswith("end_class_"):
+                # Try to find which class this label belongs to
+                for cname, clabel in reg.classes.items():
+                    if inst.label == clabel:
+                        in_class = cname
+                        if cname not in reg.class_methods:
+                            reg.class_methods[cname] = {}
+                        break
+            elif inst.label.startswith("end_class_"):
+                in_class = None
+
+        if in_class and inst.opcode == Opcode.CONST and inst.operands:
+            fr = _parse_func_ref(str(inst.operands[0]))
+            if fr:
+                method_name, func_label = fr
+                reg.class_methods[in_class][method_name] = func_label
+
+    return reg
+
+
+# ── Builtin function table ───────────────────────────────────────
+
+def _builtin_len(args: list[Any], vm: VMState) -> Any:
+    if not args:
+        return None
+    val = args[0]
+    # Heap array/object — count fields
+    addr = _heap_addr(val)
+    if addr and addr in vm.heap:
+        return len(vm.heap[addr].fields)
+    if isinstance(val, (list, tuple, str)):
+        return len(val)
+    return None
+
+
+def _builtin_range(args: list[Any], vm: VMState) -> Any:
+    concrete = []
+    for a in args:
+        if _is_symbolic(a):
+            return None
+        concrete.append(a)
+    if len(concrete) == 1:
+        return list(range(int(concrete[0])))
+    if len(concrete) == 2:
+        return list(range(int(concrete[0]), int(concrete[1])))
+    if len(concrete) == 3:
+        return list(range(int(concrete[0]), int(concrete[1]), int(concrete[2])))
+    return None
+
+
+def _builtin_print(args: list[Any], vm: VMState) -> Any:
+    return None  # print returns None
+
+
+def _builtin_int(args: list[Any], vm: VMState) -> Any:
+    if args and not _is_symbolic(args[0]):
+        try:
+            return int(args[0])
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
+def _builtin_float(args: list[Any], vm: VMState) -> Any:
+    if args and not _is_symbolic(args[0]):
+        try:
+            return float(args[0])
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
+def _builtin_str(args: list[Any], vm: VMState) -> Any:
+    if args and not _is_symbolic(args[0]):
+        return str(args[0])
+    return None
+
+
+def _builtin_bool(args: list[Any], vm: VMState) -> Any:
+    if args and not _is_symbolic(args[0]):
+        return bool(args[0])
+    return None
+
+
+def _builtin_abs(args: list[Any], vm: VMState) -> Any:
+    if args and not _is_symbolic(args[0]):
+        try:
+            return abs(args[0])
+        except TypeError:
+            pass
+    return None
+
+
+def _builtin_max(args: list[Any], vm: VMState) -> Any:
+    if all(not _is_symbolic(a) for a in args):
+        try:
+            return max(args)
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
+def _builtin_min(args: list[Any], vm: VMState) -> Any:
+    if all(not _is_symbolic(a) for a in args):
+        try:
+            return min(args)
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
+_BUILTINS: dict[str, Any] = {
+    "len": _builtin_len,
+    "range": _builtin_range,
+    "print": _builtin_print,
+    "int": _builtin_int,
+    "float": _builtin_float,
+    "str": _builtin_str,
+    "bool": _builtin_bool,
+    "abs": _builtin_abs,
+    "max": _builtin_max,
+    "min": _builtin_min,
+}
+
+
+# ════════════════════════════════════════════════════════════════════
 # 5. Symbolic VM
 # ════════════════════════════════════════════════════════════════════
 
@@ -892,6 +1097,8 @@ class StackFrame:
     registers: dict[str, Any] = field(default_factory=dict)
     local_vars: dict[str, Any] = field(default_factory=dict)
     return_label: str | None = None
+    return_ip: int | None = None       # ip to resume at in caller block
+    result_reg: str | None = None      # caller's register for return value
 
     def to_dict(self) -> dict:
         return {
@@ -971,13 +1178,9 @@ def apply_update(vm: VMState, update: StateUpdate):
     for obj in update.new_objects:
         vm.heap[obj.addr] = HeapObject(type_hint=obj.type_hint)
 
-    # Register writes
+    # Register writes — always to the CURRENT (caller's) frame
     for reg, val in update.register_writes.items():
         frame.registers[reg] = _deserialize_value(val, vm)
-
-    # Variable writes
-    for var, val in update.var_writes.items():
-        frame.local_vars[var] = _deserialize_value(val, vm)
 
     # Heap writes
     for hw in update.heap_writes:
@@ -989,12 +1192,19 @@ def apply_update(vm: VMState, update: StateUpdate):
     if update.path_condition:
         vm.path_conditions.append(update.path_condition)
 
-    # Call push
+    # Call push — push BEFORE var_writes so parameter bindings go to the
+    # new frame when dispatching a function call
     if update.call_push:
         vm.call_stack.append(StackFrame(
             function_name=update.call_push.function_name,
             return_label=update.call_push.return_label,
         ))
+
+    # Variable writes — go to the CURRENT frame (which is the new frame
+    # if call_push just fired, i.e. parameter bindings)
+    target_frame = vm.current_frame
+    for var, val in update.var_writes.items():
+        target_frame.local_vars[var] = _deserialize_value(val, vm)
 
     # Call pop
     if update.call_pop and len(vm.call_stack) > 1:
@@ -1016,6 +1226,21 @@ def _is_symbolic(val: Any) -> bool:
     return isinstance(val, SymbolicValue)
 
 
+def _heap_addr(val: Any) -> str | None:
+    """Extract a heap address from a value.
+
+    Values can be plain strings ("obj_Point_1") or dicts with an addr key
+    ({"addr": "obj_Point_1", "type_hint": "Point"}) — the latter is what
+    the LLM returns for constructor calls.  Returns None if val doesn't
+    reference a heap address.
+    """
+    if isinstance(val, str):
+        return val
+    if isinstance(val, dict) and "addr" in val:
+        return val["addr"]
+    return None
+
+
 def _resolve_reg(vm: VMState, operand: str) -> Any:
     """Resolve a register name to its value, or return the operand as-is."""
     if isinstance(operand, str) and operand.startswith("%"):
@@ -1024,7 +1249,11 @@ def _resolve_reg(vm: VMState, operand: str) -> Any:
     return operand
 
 
-def _try_execute_locally(inst: IRInstruction, vm: VMState) -> StateUpdate | None:
+def _try_execute_locally(inst: IRInstruction, vm: VMState,
+                         cfg: CFG | None = None,
+                         registry: FunctionRegistry | None = None,
+                         current_label: str = "",
+                         ip: int = 0) -> StateUpdate | None:
     """Try to execute an instruction without the LLM.
 
     Returns a StateUpdate if the instruction can be handled mechanically,
@@ -1045,12 +1274,14 @@ def _try_execute_locally(inst: IRInstruction, vm: VMState) -> StateUpdate | None
     if op == Opcode.LOAD_VAR:
         # %r = load_var <name>
         name = inst.operands[0]
-        if name in frame.local_vars:
-            val = frame.local_vars[name]
-            return StateUpdate(
-                register_writes={inst.result_reg: _serialize_value(val)},
-                reasoning=f"load {name} = {val!r} → {inst.result_reg}",
-            )
+        # Walk the call stack (current frame first, then outer scopes)
+        for f in reversed(vm.call_stack):
+            if name in f.local_vars:
+                val = f.local_vars[name]
+                return StateUpdate(
+                    register_writes={inst.result_reg: _serialize_value(val)},
+                    reasoning=f"load {name} = {val!r} → {inst.result_reg}",
+                )
         # Variable not found — create symbolic
         sym = vm.fresh_symbolic(hint=name)
         return StateUpdate(
@@ -1077,6 +1308,16 @@ def _try_execute_locally(inst: IRInstruction, vm: VMState) -> StateUpdate | None
     if op == Opcode.SYMBOLIC:
         # symbolic %r, <hint>
         hint = inst.operands[0] if inst.operands else None
+        # If this is a parameter and the value was pre-populated by a call,
+        # use the concrete value instead of creating a symbolic.
+        if isinstance(hint, str) and hint.startswith("param:"):
+            param_name = hint[6:]
+            if param_name in frame.local_vars:
+                val = frame.local_vars[param_name]
+                return StateUpdate(
+                    register_writes={inst.result_reg: _serialize_value(val)},
+                    reasoning=f"param {param_name} = {val!r} (bound by caller)",
+                )
         sym = vm.fresh_symbolic(hint=hint)
         return StateUpdate(
             register_writes={inst.result_reg: sym.to_dict()},
@@ -1110,11 +1351,12 @@ def _try_execute_locally(inst: IRInstruction, vm: VMState) -> StateUpdate | None
         obj_val = _resolve_reg(vm, inst.operands[0])
         field_name = inst.operands[1]
         val = _resolve_reg(vm, inst.operands[2])
-        if isinstance(obj_val, str) and obj_val in vm.heap:
+        addr = _heap_addr(obj_val)
+        if addr and addr in vm.heap:
             return StateUpdate(
-                heap_writes=[HeapWrite(obj_addr=obj_val, field=field_name,
+                heap_writes=[HeapWrite(obj_addr=addr, field=field_name,
                                        value=_serialize_value(val))],
-                reasoning=f"store {obj_val}.{field_name} = {val!r}",
+                reasoning=f"store {addr}.{field_name} = {val!r}",
             )
         # Object not on heap — need LLM
         return None
@@ -1123,20 +1365,21 @@ def _try_execute_locally(inst: IRInstruction, vm: VMState) -> StateUpdate | None
         # %r = load_field %obj, <field>
         obj_val = _resolve_reg(vm, inst.operands[0])
         field_name = inst.operands[1]
-        if isinstance(obj_val, str) and obj_val in vm.heap:
-            heap_obj = vm.heap[obj_val]
+        addr = _heap_addr(obj_val)
+        if addr and addr in vm.heap:
+            heap_obj = vm.heap[addr]
             if field_name in heap_obj.fields:
                 val = heap_obj.fields[field_name]
                 return StateUpdate(
                     register_writes={inst.result_reg: _serialize_value(val)},
-                    reasoning=f"load {obj_val}.{field_name} = {val!r}",
+                    reasoning=f"load {addr}.{field_name} = {val!r}",
                 )
             # Field not found — create symbolic
-            sym = vm.fresh_symbolic(hint=f"{obj_val}.{field_name}")
+            sym = vm.fresh_symbolic(hint=f"{addr}.{field_name}")
             heap_obj.fields[field_name] = sym
             return StateUpdate(
                 register_writes={inst.result_reg: sym.to_dict()},
-                reasoning=f"load {obj_val}.{field_name} (unknown) → {sym.name}",
+                reasoning=f"load {addr}.{field_name} (unknown) → {sym.name}",
             )
         return None
 
@@ -1145,11 +1388,12 @@ def _try_execute_locally(inst: IRInstruction, vm: VMState) -> StateUpdate | None
         arr_val = _resolve_reg(vm, inst.operands[0])
         idx_val = _resolve_reg(vm, inst.operands[1])
         val = _resolve_reg(vm, inst.operands[2])
-        if isinstance(arr_val, str) and arr_val in vm.heap:
+        addr = _heap_addr(arr_val)
+        if addr and addr in vm.heap:
             return StateUpdate(
-                heap_writes=[HeapWrite(obj_addr=arr_val, field=str(idx_val),
+                heap_writes=[HeapWrite(obj_addr=addr, field=str(idx_val),
                                        value=_serialize_value(val))],
-                reasoning=f"store {arr_val}[{idx_val}] = {val!r}",
+                reasoning=f"store {addr}[{idx_val}] = {val!r}",
             )
         return None
 
@@ -1157,19 +1401,20 @@ def _try_execute_locally(inst: IRInstruction, vm: VMState) -> StateUpdate | None
         # %r = load_index %arr, %idx
         arr_val = _resolve_reg(vm, inst.operands[0])
         idx_val = _resolve_reg(vm, inst.operands[1])
-        if isinstance(arr_val, str) and arr_val in vm.heap:
-            heap_obj = vm.heap[arr_val]
+        addr = _heap_addr(arr_val)
+        if addr and addr in vm.heap:
+            heap_obj = vm.heap[addr]
             key = str(idx_val)
             if key in heap_obj.fields:
                 val = heap_obj.fields[key]
                 return StateUpdate(
                     register_writes={inst.result_reg: _serialize_value(val)},
-                    reasoning=f"load {arr_val}[{idx_val}] = {val!r}",
+                    reasoning=f"load {addr}[{idx_val}] = {val!r}",
                 )
-            sym = vm.fresh_symbolic(hint=f"{arr_val}[{idx_val}]")
+            sym = vm.fresh_symbolic(hint=f"{addr}[{idx_val}]")
             return StateUpdate(
                 register_writes={inst.result_reg: sym.to_dict()},
-                reasoning=f"load {arr_val}[{idx_val}] (unknown) → {sym.name}",
+                reasoning=f"load {addr}[{idx_val}] (unknown) → {sym.name}",
             )
         return None
 
@@ -1236,7 +1481,125 @@ def _try_execute_locally(inst: IRInstruction, vm: VMState) -> StateUpdate | None
                 )
         return None
 
-    # CALL_FUNCTION, CALL_METHOD, CALL_UNKNOWN — always need LLM
+    # ── CALL_FUNCTION ─────────────────────────────────────────────
+    if op == Opcode.CALL_FUNCTION and cfg and registry:
+        func_name = inst.operands[0]
+        arg_regs = inst.operands[1:]
+        args = [_resolve_reg(vm, a) for a in arg_regs]
+
+        # 1. Try builtins
+        if func_name in _BUILTINS:
+            result = _BUILTINS[func_name](args, vm)
+            if result is not None or func_name in ("print",):
+                return StateUpdate(
+                    register_writes={inst.result_reg: _serialize_value(result)},
+                    reasoning=f"builtin {func_name}({', '.join(repr(a) for a in args)}) = {result!r}",
+                )
+
+        # 2. Look up the function/class via scope chain
+        func_val = None
+        for f in reversed(vm.call_stack):
+            if func_name in f.local_vars:
+                func_val = f.local_vars[func_name]
+                break
+        if func_val is None:
+            return None  # unknown — fall back to LLM
+
+        # 3. Class constructor: allocate object + dispatch to __init__
+        cr = _parse_class_ref(func_val)
+        if cr:
+            class_name, class_label = cr
+            methods = registry.class_methods.get(class_name, {})
+            init_label = methods.get("__init__")
+            # Allocate heap object
+            addr = f"obj_{vm.symbolic_counter}"
+            vm.symbolic_counter += 1
+            vm.heap[addr] = HeapObject(type_hint=class_name)
+            if init_label and init_label in cfg.blocks:
+                params = registry.func_params.get(init_label, [])
+                new_vars: dict[str, Any] = {}
+                # Bind self
+                if params:
+                    new_vars[params[0]] = addr
+                # Bind remaining args to params
+                for i, arg in enumerate(args):
+                    if i + 1 < len(params):
+                        new_vars[params[i + 1]] = _serialize_value(arg)
+                return StateUpdate(
+                    register_writes={inst.result_reg: addr},
+                    call_push=StackFramePush(function_name=f"{class_name}.__init__",
+                                             return_label=current_label),
+                    next_label=init_label,
+                    reasoning=f"new {class_name}({', '.join(repr(a) for a in args)}) → {addr}, dispatch __init__",
+                    # We'll pre-populate local_vars via a custom mechanism
+                    var_writes=new_vars,
+                )
+            else:
+                # No __init__ — just return the new object
+                return StateUpdate(
+                    register_writes={inst.result_reg: addr},
+                    new_objects=[NewObject(addr=addr, type_hint=class_name)],
+                    reasoning=f"new {class_name}() → {addr} (no __init__)",
+                )
+
+        # 4. User-defined function: dispatch
+        fr = _parse_func_ref(func_val)
+        if fr:
+            fname, flabel = fr
+            if flabel in cfg.blocks:
+                params = registry.func_params.get(flabel, [])
+                new_vars = {}
+                for i, arg in enumerate(args):
+                    if i < len(params):
+                        new_vars[params[i]] = _serialize_value(arg)
+                return StateUpdate(
+                    call_push=StackFramePush(function_name=fname,
+                                             return_label=current_label),
+                    next_label=flabel,
+                    reasoning=f"call {fname}({', '.join(repr(a) for a in args)}), dispatch to {flabel}",
+                    var_writes=new_vars,
+                )
+
+        return None  # unknown function — fall back to LLM
+
+    # ── CALL_METHOD ───────────────────────────────────────────────
+    if op == Opcode.CALL_METHOD and cfg and registry:
+        obj_val = _resolve_reg(vm, inst.operands[0])
+        method_name = inst.operands[1]
+        arg_regs = inst.operands[2:]
+        args = [_resolve_reg(vm, a) for a in arg_regs]
+
+        # Resolve object type
+        addr = _heap_addr(obj_val)
+        type_hint = None
+        if addr and addr in vm.heap:
+            type_hint = vm.heap[addr].type_hint
+
+        if type_hint and type_hint in registry.class_methods:
+            methods = registry.class_methods[type_hint]
+            func_label = methods.get(method_name)
+            if func_label and func_label in cfg.blocks:
+                params = registry.func_params.get(func_label, [])
+                new_vars: dict[str, Any] = {}
+                # Bind self
+                if params:
+                    new_vars[params[0]] = _serialize_value(obj_val)
+                # Bind remaining args
+                for i, arg in enumerate(args):
+                    if i + 1 < len(params):
+                        new_vars[params[i + 1]] = _serialize_value(arg)
+                return StateUpdate(
+                    call_push=StackFramePush(
+                        function_name=f"{type_hint}.{method_name}",
+                        return_label=current_label),
+                    next_label=func_label,
+                    reasoning=f"call {type_hint}.{method_name}({', '.join(repr(a) for a in args)}), dispatch to {func_label}",
+                    var_writes=new_vars,
+                )
+
+        return None  # unknown method — fall back to LLM
+
+    # Fallback — need LLM
     return None
 
 
@@ -1526,6 +1889,9 @@ def run(source: str, language: str = "python",
             raise ValueError(f"Entry point '{entry}' not found in CFG. "
                              f"Available: {list(cfg.blocks.keys())}")
 
+    # 4b. Build function registry
+    registry = build_registry(instructions, cfg)
+
     # 5. Initialize VM
     vm = VMState()
     vm.call_stack.append(StackFrame(function_name="<main>"))
@@ -1562,7 +1928,9 @@ def run(source: str, language: str = "python",
             continue
 
         # Try local execution first, fall back to LLM
-        update = _try_execute_locally(instruction, vm)
+        update = _try_execute_locally(instruction, vm, cfg=cfg,
+                                       registry=registry,
+                                       current_label=current_label, ip=ip)
         used_llm = False
         if update is None:
             update = llm.interpret_instruction(instruction, vm)
@@ -1591,24 +1959,66 @@ def run(source: str, language: str = "python",
                 print(f"    path: {update.path_condition}")
             print()
 
+        # For RETURN: save frame info BEFORE applying (which may pop it)
+        is_return = instruction.opcode == Opcode.RETURN
+        is_throw = instruction.opcode == Opcode.THROW
+        return_frame = vm.current_frame if (is_return or is_throw) else None
+
+        # For CALL with dispatch: set up the new frame's return info
+        is_call_dispatch = (update.call_push is not None and
+                            update.next_label is not None)
+        if is_call_dispatch:
+            # Save where to resume after the call returns
+            call_result_reg = instruction.result_reg
+            call_return_label = current_label
+            call_return_ip = ip + 1
+
         apply_update(vm, update)
 
+        if is_call_dispatch:
+            # The new frame was just pushed — set its return info
+            new_frame = vm.current_frame
+            new_frame.return_label = call_return_label
+            new_frame.return_ip = call_return_ip
+            new_frame.result_reg = call_result_reg
+            # For class constructors, the result_reg was already written
+            # (the object address), so we mark it to not overwrite on return
+            if instruction.opcode == Opcode.CALL_FUNCTION:
+                func_val = vm.call_stack[-2].local_vars.get(instruction.operands[0])
+                if func_val and _parse_class_ref(func_val):
+                    new_frame.result_reg = None  # don't overwrite on return
+
         # Handle control flow
-        if update.next_label and update.next_label in cfg.blocks:
-            current_label = update.next_label
-            ip = 0
-        elif instruction.opcode in (Opcode.RETURN, Opcode.THROW):
-            if len(vm.call_stack) <= 1:
+        if is_return or is_throw:
+            if len(vm.call_stack) < 1:
                 if verbose:
                     print(f"[step {step}] Top-level return/throw. Stopping.")
                 break
-            # Return to caller
-            frame = vm.call_stack[-1]
-            if frame.return_label and frame.return_label in cfg.blocks:
-                current_label = frame.return_label
-                ip = 0
-            else:
+
+            if return_frame and return_frame.function_name == "<main>":
+                # Top-level return
+                if verbose:
+                    print(f"[step {step}] Top-level return/throw. Stopping.")
                 break
+
+            # Return to caller — write return value to caller's result register
+            caller_frame = vm.current_frame
+            if return_frame and return_frame.result_reg and update.return_value is not None:
+                caller_frame.registers[return_frame.result_reg] = \
+                    _deserialize_value(update.return_value, vm)
+
+            if (return_frame and return_frame.return_label and
+                    return_frame.return_label in cfg.blocks):
+                current_label = return_frame.return_label
+                ip = return_frame.return_ip if return_frame.return_ip is not None else 0
+            else:
+                if verbose:
+                    print(f"[step {step}] No return label. Stopping.")
+                break
+
+        elif update.next_label and update.next_label in cfg.blocks:
+            current_label = update.next_label
+            ip = 0
         else:
             ip += 1
 
