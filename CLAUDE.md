@@ -1,4 +1,4 @@
-# Codescry - Claude Code Instructions
+# RedDragon - Claude Code Instructions
 
 ## Workflow Rules
 
@@ -28,7 +28,8 @@
 - Do not patch with `unittest.mock.patch`. Use proper dependency injection, and then inject mock objects.
 - Use `tmp_path` fixture for filesystem tests
 - Tests requiring external repos (mojo-lsp, smojol) are integration tests
-- - When fixing tests, do not blindly change test assertions to make the test pass. Only modify assertions once you are sure that the actual code output is actually valid according to the context.
+- When fixing tests, do not blindly change test assertions to make the test pass. Only modify assertions once you are sure that the actual code output is actually valid according to the context.
+- Always start from writing unit tests for the smallest feasible units of code. True unit tests (which do not exercise true I/O) should be in a `unit` directory under the test directory. Tests which exercise I/O (call LLMs, touch databases) should be in the `integration` directory under the test directory.
 
 ## Programming Patterns
 
