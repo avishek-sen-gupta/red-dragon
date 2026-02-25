@@ -56,6 +56,7 @@ class KotlinFrontend(BaseFrontend):
             "statements": self._lower_statements_expr,
             "jump_expression": self._lower_jump_as_expr,
             "assignment": self._lower_kotlin_assignment_expr,
+            "try_expression": self._lower_try_expr,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "property_declaration": self._lower_property_decl,
@@ -72,6 +73,7 @@ class KotlinFrontend(BaseFrontend):
             "import_list": lambda _: None,
             "import_header": lambda _: None,
             "package_header": lambda _: None,
+            "try_expression": self._lower_try_stmt,
         }
 
     # -- property declaration ----------------------------------------------
@@ -764,6 +766,60 @@ class KotlinFrontend(BaseFrontend):
                 operands=[self._node_text(target), val_reg],
                 source_location=self._source_loc(parent_node),
             )
+
+    # -- try/catch/finally -------------------------------------------------
+
+    def _extract_try_parts(self, node):
+        """Extract body, catch clauses, and finally from a try_expression."""
+        # First named child that's a statements block is the body
+        body_node = next(
+            (
+                c
+                for c in node.children
+                if c.type in ("statements", "control_structure_body")
+            ),
+            None,
+        )
+        catch_clauses = []
+        finally_node = None
+        for child in node.children:
+            if child.type == "catch_block":
+                # catch_block children: "catch", "(", annotation*, simple_identifier (type), simple_identifier (var), ")", statements
+                ids = [c for c in child.children if c.type == "simple_identifier"]
+                exc_type = self._node_text(ids[0]) if ids else None
+                exc_var = self._node_text(ids[1]) if len(ids) > 1 else None
+                catch_body = next(
+                    (
+                        c
+                        for c in child.children
+                        if c.type in ("statements", "control_structure_body")
+                    ),
+                    None,
+                )
+                catch_clauses.append(
+                    {"body": catch_body, "variable": exc_var, "type": exc_type}
+                )
+            elif child.type == "finally_block":
+                finally_node = next(
+                    (
+                        c
+                        for c in child.children
+                        if c.type in ("statements", "control_structure_body")
+                    ),
+                    None,
+                )
+        return body_node, catch_clauses, finally_node
+
+    def _lower_try_stmt(self, node):
+        body_node, catch_clauses, finally_node = self._extract_try_parts(node)
+        self._lower_try_catch(node, body_node, catch_clauses, finally_node)
+
+    def _lower_try_expr(self, node) -> str:
+        """Lower try_expression in expression context (returns a register)."""
+        self._lower_try_stmt(node)
+        reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=reg, operands=[self.NONE_LITERAL])
+        return reg
 
     # -- generic symbolic fallback -----------------------------------------
 

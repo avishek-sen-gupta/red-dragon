@@ -74,6 +74,8 @@ class JavaFrontend(BaseFrontend):
             "break_statement": self._lower_break,
             "continue_statement": self._lower_continue,
             "switch_expression": self._lower_java_switch,
+            "try_statement": self._lower_try,
+            "try_with_resources_statement": self._lower_try,
         }
 
     # ── Java: local variable declaration ─────────────────────────
@@ -603,6 +605,40 @@ class JavaFrontend(BaseFrontend):
                 source_location=self._source_loc(node),
             )
             self._emit(Opcode.STORE_VAR, operands=[enum_name, reg])
+
+    # ── Java: try/catch/finally ─────────────────────────────────
+
+    def _lower_try(self, node):
+        body_node = node.child_by_field_name("body")
+        catch_clauses = []
+        finally_node = None
+        for child in node.children:
+            if child.type == "catch_clause":
+                param_node = next(
+                    (c for c in child.children if c.type == "catch_formal_parameter"),
+                    None,
+                )
+                exc_var = None
+                exc_type = None
+                if param_node:
+                    name_node = param_node.child_by_field_name("name")
+                    exc_var = self._node_text(name_node) if name_node else None
+                    # catch_type is the first named child that isn't the name
+                    type_nodes = [
+                        c for c in param_node.children if c.is_named and c != name_node
+                    ]
+                    if type_nodes:
+                        exc_type = self._node_text(type_nodes[0])
+                catch_body = child.child_by_field_name("body")
+                catch_clauses.append(
+                    {"body": catch_body, "variable": exc_var, "type": exc_type}
+                )
+            elif child.type == "finally_clause":
+                finally_node = child.child_by_field_name("body") or next(
+                    (c for c in child.children if c.type == "block"),
+                    None,
+                )
+        self._lower_try_catch(node, body_node, catch_clauses, finally_node)
 
     # ── Java: throw ──────────────────────────────────────────────
 

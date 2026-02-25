@@ -278,8 +278,15 @@ int main() {
 """
         instructions = _parse_cpp(source)
         opcodes = _opcodes(instructions)
-        # try/catch is lowered as a SYMBOLIC block
-        assert Opcode.SYMBOLIC in opcodes or Opcode.THROW in opcodes
+        labels = [i.label for i in instructions if i.opcode == Opcode.LABEL]
+        # try/catch body and catch block are lowered with LABEL/BRANCH
+        assert any("try_body" in l for l in labels)
+        assert any("catch_0" in l for l in labels)
+        assert any("try_end" in l for l in labels)
+        assert Opcode.THROW in opcodes
+        # No catch_clause: SYMBOLIC placeholders
+        symbolics = [i for i in instructions if i.opcode == Opcode.SYMBOLIC]
+        assert not any("catch_clause:" in str(s.operands) for s in symbolics)
         assert len(instructions) > 3
 
     def test_namespace_function_with_loop(self):
