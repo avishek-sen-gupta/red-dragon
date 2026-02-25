@@ -62,6 +62,7 @@ class PythonFrontend(BaseFrontend):
             "function_definition": self._lower_function_def,
             "class_definition": self._lower_class_def,
             "raise_statement": self._lower_raise,
+            "try_statement": self._lower_try,
             "pass_statement": lambda _: None,
         }
 
@@ -210,6 +211,42 @@ class PythonFrontend(BaseFrontend):
 
     def _lower_raise(self, node):
         self._lower_raise_or_throw(node, keyword="raise")
+
+    # ── Python-specific: try/except/else/finally ──────────────────
+
+    def _lower_try(self, node):
+        body_node = node.child_by_field_name("body")
+        catch_clauses = []
+        finally_node = None
+        else_node = None
+        for child in node.children:
+            if child.type == "except_clause":
+                exc_var = None
+                exc_type = None
+                # except ExcType as var: ...
+                for sub in child.children:
+                    if sub.type == "as_pattern":
+                        # as_pattern children: type, "as", name
+                        parts = [c for c in sub.children if c.is_named]
+                        if parts:
+                            exc_type = self._node_text(parts[0])
+                        if len(parts) >= 2:
+                            exc_var = self._node_text(parts[-1])
+                    elif sub.type == "identifier" and exc_type is None:
+                        exc_type = self._node_text(sub)
+                exc_body = next((c for c in child.children if c.type == "block"), None)
+                catch_clauses.append(
+                    {"body": exc_body, "variable": exc_var, "type": exc_type}
+                )
+            elif child.type == "finally_clause":
+                finally_node = next(
+                    (c for c in child.children if c.type == "block"), None
+                )
+            elif child.type == "else_clause":
+                else_node = child.child_by_field_name("body") or next(
+                    (c for c in child.children if c.type == "block"), None
+                )
+        self._lower_try_catch(node, body_node, catch_clauses, finally_node, else_node)
 
     # ── Python-specific: tuple ───────────────────────────────────
 

@@ -20,6 +20,8 @@ END_CLASS_LABEL_PREFIX = "end_class_"
 MAIN_FRAME_NAME = "<main>"
 CFG_ENTRY_LABEL = "entry"
 
+CAUGHT_EXCEPTION_PREFIX = "caught_exception"
+
 DATAFLOW_MAX_ITERATIONS = 1000
 
 FRONTEND_DETERMINISTIC = "deterministic"

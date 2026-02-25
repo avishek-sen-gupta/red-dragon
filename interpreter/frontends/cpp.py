@@ -411,18 +411,33 @@ class CppFrontend(CFrontend):
     def _lower_throw(self, node):
         self._lower_raise_or_throw(node, keyword="throw")
 
-    # -- C++: try/catch (SYMBOLIC for catch/finally) -------------------
+    # -- C++: try/catch ------------------------------------------------
 
     def _lower_try(self, node):
         body_node = node.child_by_field_name("body")
-        if body_node:
-            self._lower_block(body_node)
+        catch_clauses = []
         for child in node.children:
             if child.type == "catch_clause":
-                reg = self._fresh_reg()
-                self._emit(
-                    Opcode.SYMBOLIC,
-                    result_reg=reg,
-                    operands=[f"catch_clause:{self._node_text(child)[:60]}"],
-                    source_location=self._source_loc(child),
+                param_node = next(
+                    (c for c in child.children if c.type == "catch_declarator"),
+                    None,
                 )
+                exc_var = None
+                exc_type = None
+                if param_node:
+                    # catch_declarator contains type and optional identifier
+                    id_node = next(
+                        (c for c in param_node.children if c.type == "identifier"),
+                        None,
+                    )
+                    exc_var = self._node_text(id_node) if id_node else None
+                    type_nodes = [
+                        c for c in param_node.children if c.is_named and c != id_node
+                    ]
+                    if type_nodes:
+                        exc_type = self._node_text(type_nodes[0])
+                catch_body = child.child_by_field_name("body")
+                catch_clauses.append(
+                    {"body": catch_body, "variable": exc_var, "type": exc_type}
+                )
+        self._lower_try_catch(node, body_node, catch_clauses)

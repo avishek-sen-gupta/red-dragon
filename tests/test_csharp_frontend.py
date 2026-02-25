@@ -302,8 +302,16 @@ try {
 """
         ir = _parse_and_lower(source)
         opcodes = _opcodes(ir)
-        # try/catch is lowered as SYMBOLIC block
-        assert Opcode.SYMBOLIC in opcodes or Opcode.THROW in opcodes
+        labels = [i.label for i in ir if i.opcode == Opcode.LABEL]
+        # try/catch body and catch block are lowered with LABEL/BRANCH
+        assert any("try_body" in l for l in labels)
+        assert any("catch_0" in l for l in labels)
+        assert any("try_end" in l for l in labels)
+        assert Opcode.THROW in opcodes
+        # No catch_clause: or finally_clause: SYMBOLIC placeholders
+        symbolics = [i for i in ir if i.opcode == Opcode.SYMBOLIC]
+        assert not any("catch_clause:" in str(s.operands) for s in symbolics)
+        assert not any("finally_clause:" in str(s.operands) for s in symbolics)
         assert len(ir) > 1
 
     def test_nested_if_else_chain(self):

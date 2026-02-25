@@ -834,6 +834,74 @@ class BaseFrontend(Frontend):
         self._lower_store_target(operand, result_reg, node)
         return result_reg
 
+    def _lower_try_catch(
+        self,
+        node,
+        body_node,
+        catch_clauses: list[dict],
+        finally_node=None,
+        else_node=None,
+    ):
+        """Lower try/catch/finally into labeled blocks connected by BRANCH.
+
+        Each catch dict: {"body": node, "variable": str|None, "type": str|None}
+        """
+        try_body_label = self._fresh_label("try_body")
+        catch_labels = [
+            self._fresh_label(f"catch_{i}") for i in range(len(catch_clauses))
+        ]
+        finally_label = self._fresh_label("try_finally") if finally_node else ""
+        else_label = self._fresh_label("try_else") if else_node else ""
+        end_label = self._fresh_label("try_end")
+
+        exit_target = finally_label or end_label
+
+        # ── try body ──
+        self._emit(Opcode.LABEL, label=try_body_label)
+        if body_node:
+            self._lower_block(body_node)
+        # After try body: jump to else (if present), then finally/end
+        if else_label:
+            self._emit(Opcode.BRANCH, label=else_label)
+        else:
+            self._emit(Opcode.BRANCH, label=exit_target)
+
+        # ── catch clauses ──
+        for i, clause in enumerate(catch_clauses):
+            self._emit(Opcode.LABEL, label=catch_labels[i])
+            exc_type = clause.get("type", "Exception") or "Exception"
+            exc_reg = self._fresh_reg()
+            self._emit(
+                Opcode.SYMBOLIC,
+                result_reg=exc_reg,
+                operands=[f"{constants.CAUGHT_EXCEPTION_PREFIX}:{exc_type}"],
+                source_location=self._source_loc(node),
+            )
+            exc_var = clause.get("variable")
+            if exc_var:
+                self._emit(
+                    Opcode.STORE_VAR,
+                    operands=[exc_var, exc_reg],
+                    source_location=self._source_loc(node),
+                )
+            catch_body = clause.get("body")
+            if catch_body:
+                self._lower_block(catch_body)
+            self._emit(Opcode.BRANCH, label=exit_target)
+
+        # ── else clause (Python/Ruby) ──
+        if else_node:
+            self._emit(Opcode.LABEL, label=else_label)
+            self._lower_block(else_node)
+            self._emit(Opcode.BRANCH, label=finally_label or end_label)
+
+        # ── finally clause ──
+        if finally_node:
+            self._emit(Opcode.LABEL, label=finally_label)
+            self._lower_block(finally_node)
+
+        self._emit(Opcode.LABEL, label=end_label)
+
     def _lower_expression_statement(self, node):
         """Lower an expression statement (unwrap and lower the inner expr).
 

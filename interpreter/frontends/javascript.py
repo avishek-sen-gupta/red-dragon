@@ -74,6 +74,7 @@ class JavaScriptFrontend(BaseFrontend):
             "empty_statement": lambda _: None,
             "break_statement": self._lower_break,
             "continue_statement": self._lower_continue,
+            "try_statement": self._lower_try,
         }
 
     # ── JS attribute access ──────────────────────────────────────
@@ -412,6 +413,24 @@ class JavaScriptFrontend(BaseFrontend):
             Opcode.STORE_VAR,
             operands=[pname, f"%{self._reg_counter - 1}"],
         )
+
+    # ── JS try/catch/finally ────────────────────────────────────
+
+    def _lower_try(self, node):
+        body_node = node.child_by_field_name("body")
+        handler = node.child_by_field_name("handler")
+        finalizer = node.child_by_field_name("finalizer")
+        catch_clauses = []
+        if handler:
+            # catch_clause: parameter field has the variable, body field has the block
+            param_node = handler.child_by_field_name("parameter")
+            exc_var = self._node_text(param_node) if param_node else None
+            catch_body = handler.child_by_field_name("body")
+            catch_clauses.append(
+                {"body": catch_body, "variable": exc_var, "type": None}
+            )
+        finally_node = finalizer.child_by_field_name("body") if finalizer else None
+        self._lower_try_catch(node, body_node, catch_clauses, finally_node)
 
     # ── JS throw ─────────────────────────────────────────────────
 
