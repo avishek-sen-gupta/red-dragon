@@ -580,7 +580,7 @@ BINOP     t11, t9, "==", t10</code></pre>
   </p>
 </section>
 
-<!-- Slide 11: LLM Frontend -->
+<!-- Slide 11: LLM Frontend — How It Works -->
 <section>
   <h2>LLM Frontend</h2>
   <p>Alternative path: <span class="accent3">raw source &rarr; LLM &rarr; IR JSON</span></p>
@@ -602,6 +602,131 @@ BINOP     t11, t9, "==", t10</code></pre>
   <aside class="notes">
     The LLM frontend is language-agnostic. It sends raw source plus the IR spec
     to an LLM and expects structured JSON back. The VM doesn't care how the IR was produced.
+  </aside>
+</section>
+
+<!-- Slide 11b: LLM Frontend — Deep Dive -->
+<section>
+  <h2>LLM Frontend: Deep Dive</h2>
+  <div class="two-col">
+    <div>
+      <h3>The Prompt Contract</h3>
+      <ul style="font-size: 0.75em;">
+        <li class="fragment">System prompt is a <strong>full IR specification</strong>: all 20 opcodes with their operand schemas</li>
+        <li class="fragment">Includes <strong>exact patterns</strong> for functions, classes, if/else, loops &mdash; not prose descriptions, but concrete JSON examples</li>
+        <li class="fragment">Full worked example: <code>fib(n)</code> &rarr; 30-instruction IR listing</li>
+        <li class="fragment">User prompt is just: <em>"Lower this {language} source into IR"</em></li>
+      </ul>
+    </div>
+    <div>
+      <h3>Resilience Pipeline</h3>
+      <div class="arch-flow-vertical fragment">
+        <div class="arch-box" style="width: 90%; font-size: 0.7em;">Strip markdown fences</div>
+        <div class="arrow-down">&darr;</div>
+        <div class="arch-box" style="width: 90%; font-size: 0.7em;">JSON parse (strict)</div>
+        <div class="arrow-down">&darr;</div>
+        <div class="arch-box orange" style="width: 90%; font-size: 0.7em;">Repair: strip comments, trailing commas, truncation recovery</div>
+        <div class="arrow-down">&darr;</div>
+        <div class="arch-box green" style="width: 90%; font-size: 0.7em;">Validate: non-empty, entry label present (auto-prepend if missing)</div>
+      </div>
+    </div>
+  </div>
+  <aside class="notes">
+    The key insight is that an LLM can act as a compiler frontend if given a sufficiently
+    precise output specification. The prompt isn't "explain this code" — it's "compile this
+    to our IR format." The resilience pipeline handles real-world LLM quirks: markdown fences,
+    JS-style comments from smaller models, truncated responses from hitting max_tokens.
+  </aside>
+</section>
+
+<!-- Slide 11c: LLM Frontend — What's Novel -->
+<section>
+  <h2>LLM Frontend: What&rsquo;s Novel</h2>
+  <table>
+    <tr>
+      <th>Approach</th>
+      <th>Traditional Compilers</th>
+      <th>Codescry LLM Frontend</th>
+    </tr>
+    <tr class="fragment">
+      <td><strong>Grammar</strong></td>
+      <td>Handwritten per language</td>
+      <td>LLM infers structure from any language &mdash; <em>zero grammar work</em></td>
+    </tr>
+    <tr class="fragment">
+      <td><strong>Output</strong></td>
+      <td>AST (language-specific)</td>
+      <td>Flat IR (universal) &mdash; skips AST entirely</td>
+    </tr>
+    <tr class="fragment">
+      <td><strong>Errors</strong></td>
+      <td>Syntax error &rarr; halt</td>
+      <td>Partial/broken code &rarr; <code class="accent3">SYMBOLIC</code> placeholders</td>
+    </tr>
+    <tr class="fragment">
+      <td><strong>Extensibility</strong></td>
+      <td>New language = new frontend (~400 LOC)</td>
+      <td>New language = <strong>zero code changes</strong></td>
+    </tr>
+  </table>
+  <p class="fragment" style="margin-top: 20px;">
+    <strong class="accent">Key insight:</strong> The LLM isn&rsquo;t interpreting or reasoning about code &mdash;
+    it&rsquo;s <em>compiling</em> to a fixed target IR, constrained by a formal schema.
+    The VM then does the actual execution deterministically.
+  </p>
+  <aside class="notes">
+    This is what separates Codescry from "ask an LLM to explain code."
+    The LLM is used as a compiler frontend — a structured transformation, not open-ended generation.
+    The output is machine-consumed, validated, and executed by a deterministic VM.
+    The LLM never sees program state or makes execution decisions — it only lowers syntax to IR.
+  </aside>
+</section>
+
+<!-- Slide 11d: Chunked LLM Frontend -->
+<section>
+  <h2>Chunked LLM Frontend</h2>
+  <p>Problem: large files exceed the LLM context window or produce truncated IR</p>
+  <div class="arch-flow" style="margin: 20px 0;">
+    <div class="arch-box">Source File</div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box green">tree-sitter<br><span class="small dim">chunk extraction</span></div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box orange">LLM &times; N<br><span class="small dim">per-chunk lowering</span></div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box green">Renumber<br><span class="small dim">registers + labels</span></div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box">Combined IR</div>
+  </div>
+  <div class="two-col fragment">
+    <div>
+      <h3>Chunk Extraction</h3>
+      <ul style="font-size: 0.7em;">
+        <li>tree-sitter identifies top-level <code>function</code>, <code>class</code>, and statement nodes</li>
+        <li>Adjacent top-level statements grouped into single chunks</li>
+        <li>Functions/classes lowered first, top-level last</li>
+      </ul>
+    </div>
+    <div>
+      <h3>IR Reassembly</h3>
+      <ul style="font-size: 0.7em;">
+        <li>Each chunk&rsquo;s <code>entry</code> label stripped; single <code>entry</code> prepended</li>
+        <li>Registers offset: <code>%0</code>&ndash;<code>%N</code> &rarr; <code>%K</code>&ndash;<code>%K+N</code></li>
+        <li>Labels suffixed: <code>func_foo_0</code> &rarr; <code>func_foo_0_chunk0</code></li>
+        <li>Failed chunks &rarr; <code class="accent3">SYMBOLIC</code> placeholder, continue</li>
+      </ul>
+    </div>
+  </div>
+  <p class="fragment small dim" style="margin-top: 15px;">
+    Decorator pattern: <code>ChunkedLLMFrontend</code> wraps <code>LLMFrontend</code> &mdash;
+    single-chunk lowering remains independently usable and testable.
+  </p>
+  <aside class="notes">
+    The chunked frontend solves a real scaling problem. A 500-line file with multiple functions
+    would overflow max_tokens or produce truncated JSON. By decomposing into chunks, each LLM
+    call handles a manageable scope. The renumbering pass ensures no register or label collisions
+    across chunks. Graceful degradation: if one chunk fails, the rest still produce valid IR.
+    This is analogous to how traditional compilers handle translation units — but here the
+    "compilation" is delegated to an LLM for each unit.
   </aside>
 </section>
 
@@ -1512,7 +1637,7 @@ def test_symbolic_execution(tmp_path):
       <div class="label">language frontends</div>
     </div>
     <div class="stat-card">
-      <div class="number">507</div>
+      <div class="number">526</div>
       <div class="label">tests</div>
     </div>
     <div class="stat-card">

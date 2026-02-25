@@ -52,8 +52,12 @@ def main():
         "--frontend",
         "-f",
         default=constants.FRONTEND_DETERMINISTIC,
-        choices=[constants.FRONTEND_DETERMINISTIC, constants.FRONTEND_LLM],
-        help="Frontend type: deterministic (tree-sitter) or llm (default: deterministic)",
+        choices=[
+            constants.FRONTEND_DETERMINISTIC,
+            constants.FRONTEND_LLM,
+            constants.FRONTEND_CHUNKED_LLM,
+        ],
+        help="Frontend type: deterministic, llm, or chunked_llm (default: deterministic)",
     )
 
     args = parser.parse_args()
@@ -76,10 +80,10 @@ result = factorial(5)
             source = f.read()
 
     # Parse & lower
-    if args.frontend == constants.FRONTEND_LLM:
+    if args.frontend in (constants.FRONTEND_LLM, constants.FRONTEND_CHUNKED_LLM):
         frontend = get_frontend(
             args.language,
-            frontend_type=constants.FRONTEND_LLM,
+            frontend_type=args.frontend,
             llm_provider=args.backend,
         )
         instructions = frontend.lower(None, source.encode("utf-8"))
