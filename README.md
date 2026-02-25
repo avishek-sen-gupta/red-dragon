@@ -12,26 +12,20 @@ A multi-language source code analysis toolkit that:
 
 ## How it works
 
-```
-Source Code
-    │
-    ├──── deterministic path ──── tree-sitter ──── Language Frontend ──┐
-    │                              (15 languages)                     │
-    ├──── LLM path (--frontend llm) ──── LLMFrontend ────────────────┤
-    │                                                                 │
-    └──── chunked LLM (--frontend chunked_llm) ──── tree-sitter ─────┤
-                     chunk → LLM × N → renumber → reassemble         │
-                                                                      ▼
-                                                          Flattened High-Level TAC (IR)
-                                                              │  CFG builder
-                                                              ▼
-                                                          Control Flow Graph
-                                                              │  VM + function registry
-                                                              ▼
-                                                          Deterministic Execution
-                                                              │  fallback on symbolic values
-                                                              ▼
-                                                          LLM Oracle (only when needed)
+```mermaid
+flowchart TD
+    SRC[Source Code] --> DET[tree-sitter\n15 languages]
+    SRC --> LLM[LLM Frontend\nany language]
+    SRC --> CHUNK[Chunked LLM\nchunk → LLM × N → renumber → reassemble]
+
+    DET --> IR[Flattened TAC IR]
+    LLM --> IR
+    CHUNK --> IR
+
+    IR --> CFG[Control Flow Graph]
+    CFG --> DF[Dataflow Analysis\nreaching defs · def-use chains · dependency graphs]
+    CFG --> VM[Deterministic VM Execution]
+    VM -->|symbolic values only| ORACLE[LLM Oracle]
 ```
 
 1. **Parse** — Tree-sitter (via `tree-sitter-language-pack`) parses source into an AST (deterministic path), or the LLM lowers source directly to IR (LLM path), or tree-sitter decomposes the file into top-level chunks for per-chunk LLM lowering (chunked LLM path)
