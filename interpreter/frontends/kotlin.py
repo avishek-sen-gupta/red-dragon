@@ -55,6 +55,7 @@ class KotlinFrontend(BaseFrontend):
             "range_expression": self._lower_symbolic_node,
             "statements": self._lower_statements_expr,
             "jump_expression": self._lower_jump_as_expr,
+            "assignment": self._lower_kotlin_assignment_expr,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "property_declaration": self._lower_property_decl,
@@ -616,6 +617,13 @@ class KotlinFrontend(BaseFrontend):
         return reg
 
     # -- jump expression (return, break, continue, throw) ------------------
+
+    def _lower_kotlin_assignment_expr(self, node) -> str:
+        """Lower assignment in expression context (e.g. last expr in block)."""
+        self._lower_kotlin_assignment(node)
+        reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=reg, operands=[self.NONE_LITERAL])
+        return reg
 
     def _lower_jump_as_expr(self, node) -> str:
         """Lower jump_expression in expression context (emit + return reg)."""
