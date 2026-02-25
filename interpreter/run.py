@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from typing import Any
 
 from .ir import Opcode
@@ -25,6 +26,79 @@ from .backend import get_backend
 from . import constants
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PipelineStats:
+    """Timing and size statistics for each pipeline stage."""
+
+    source_bytes: int = 0
+    source_lines: int = 0
+    language: str = ""
+    frontend_type: str = ""
+
+    # Stage timings (seconds)
+    parse_time: float = 0.0
+    lower_time: float = 0.0
+    cfg_time: float = 0.0
+    registry_time: float = 0.0
+    execution_time: float = 0.0
+    total_time: float = 0.0
+
+    # Output sizes
+    ir_instruction_count: int = 0
+    cfg_block_count: int = 0
+    registry_functions: int = 0
+    registry_classes: int = 0
+
+    # Execution stats
+    execution_steps: int = 0
+    llm_calls: int = 0
+    final_heap_objects: int = 0
+    final_symbolic_count: int = 0
+    closures_captured: int = 0
+
+    def report(self) -> str:
+        lines = [
+            "═══ Pipeline Statistics ═══",
+            f"  Source: {self.source_lines} lines, {self.source_bytes} bytes ({self.language}, {self.frontend_type} frontend)",
+            "",
+            f"  {'Stage':<20} {'Time':>10}  {'Output':>30}",
+            f"  {'─' * 20} {'─' * 10}  {'─' * 30}",
+        ]
+
+        stages = [
+            ("Parse", self.parse_time, ""),
+            (
+                "Lower (frontend)",
+                self.lower_time,
+                f"{self.ir_instruction_count} IR instructions",
+            ),
+            ("Build CFG", self.cfg_time, f"{self.cfg_block_count} basic blocks"),
+            (
+                "Build registry",
+                self.registry_time,
+                f"{self.registry_functions} functions, {self.registry_classes} classes",
+            ),
+            (
+                "Execute (VM)",
+                self.execution_time,
+                f"{self.execution_steps} steps, {self.llm_calls} LLM calls",
+            ),
+        ]
+        for name, t, output in stages:
+            time_str = f"{t * 1000:>8.1f}ms"
+            lines.append(f"  {name:<20} {time_str:>10}  {output:>30}")
+
+        lines.append(f"  {'─' * 20} {'─' * 10}  {'─' * 30}")
+        lines.append(f"  {'Total':<20} {self.total_time * 1000:>8.1f}ms")
+        lines.append("")
+        lines.append(
+            f"  Final state: {self.final_heap_objects} heap objects,"
+            f" {self.final_symbolic_count} symbolic values,"
+            f" {self.closures_captured} closures"
+        )
+        return "\n".join(lines)
 
 
 class _StopExecution:
@@ -158,7 +232,17 @@ def run(
         frontend_type: "deterministic" (tree-sitter) or "llm".
         llm_client: Pre-built LLMClient for DI/testing (used by LLM frontend).
     """
+    pipeline_start = time.perf_counter()
+    stats = PipelineStats(
+        source_bytes=len(source.encode("utf-8")),
+        source_lines=source.count("\n")
+        + (1 if source and not source.endswith("\n") else 0),
+        language=language,
+        frontend_type=frontend_type,
+    )
+
     # 1. Parse + Lower
+    t0 = time.perf_counter()
     if frontend_type == constants.FRONTEND_LLM:
         # LLM frontend: skip tree-sitter, send source directly
         frontend = get_frontend(
@@ -167,14 +251,27 @@ def run(
             llm_provider=backend,
             llm_client=llm_client,
         )
+        t1 = time.perf_counter()
+        stats.parse_time = t1 - t0  # no parse step for LLM frontend
         instructions = frontend.lower(None, source.encode("utf-8"))
+        stats.lower_time = time.perf_counter() - t1
     else:
         # Deterministic frontend: parse with tree-sitter first
         from .parser import TreeSitterParserFactory
 
         tree = Parser(TreeSitterParserFactory()).parse(source, language)
+        t1 = time.perf_counter()
+        stats.parse_time = t1 - t0
         frontend = get_frontend(language, frontend_type=frontend_type)
         instructions = frontend.lower(tree, source.encode("utf-8"))
+        stats.lower_time = time.perf_counter() - t1
+
+    stats.ir_instruction_count = len(instructions)
+    logger.info(
+        "Frontend produced %d IR instructions in %.1fms",
+        stats.ir_instruction_count,
+        (stats.parse_time + stats.lower_time) * 1000,
+    )
 
     if verbose:
         print("═══ IR ═══")
@@ -183,7 +280,10 @@ def run(
         print()
 
     # 3. Build CFG
+    t0 = time.perf_counter()
     cfg = build_cfg(instructions)
+    stats.cfg_time = time.perf_counter() - t0
+    stats.cfg_block_count = len(cfg.blocks)
 
     if verbose:
         print("═══ CFG ═══")
@@ -193,7 +293,11 @@ def run(
     entry = _find_entry_point(cfg, entry_point)
 
     # 4b. Build function registry
+    t0 = time.perf_counter()
     registry = build_registry(instructions, cfg)
+    stats.registry_time = time.perf_counter() - t0
+    stats.registry_functions = len(registry.func_params)
+    stats.registry_classes = len(registry.classes)
 
     # 5. Initialize VM
     vm = VMState()
@@ -204,6 +308,7 @@ def run(
     current_label = entry
     ip = 0
     llm_calls = 0
+    exec_start = time.perf_counter()
 
     for step in range(max_steps):
         block = cfg.blocks[current_label]
@@ -276,8 +381,18 @@ def run(
         else:
             ip += 1
 
+    stats.execution_time = time.perf_counter() - exec_start
+    stats.execution_steps = step + 1
+    stats.llm_calls = llm_calls
+    stats.final_heap_objects = len(vm.heap)
+    stats.final_symbolic_count = vm.symbolic_counter
+    stats.closures_captured = len(vm.closures)
+    stats.total_time = time.perf_counter() - pipeline_start
+
     if verbose:
-        print(f"\n({step + 1} steps, {llm_calls} LLM calls)")
+        print(f"\n({stats.execution_steps} steps, {llm_calls} LLM calls)")
+        print()
+        print(stats.report())
 
     return vm
 
