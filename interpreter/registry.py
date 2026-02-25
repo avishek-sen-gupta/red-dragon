@@ -382,8 +382,11 @@ def _handle_store_field(
     field_name = inst.operands[1]
     val = _resolve_reg(vm, inst.operands[2])
     addr = _heap_addr(obj_val)
+    if addr and addr not in vm.heap:
+        # Materialise a synthetic heap entry for symbolic objects so that
+        # field stores are persisted and subsequent loads return the value.
+        vm.heap[addr] = HeapObject(type_hint=_symbolic_type_hint(obj_val))
     if not addr or addr not in vm.heap:
-        # Object not on heap — store is a no-op but we track it symbolically
         obj_desc = _symbolic_name(obj_val)
         logger.debug("store_field on unknown object %s.%s", obj_desc, field_name)
         return ExecutionResult.success(
@@ -411,14 +414,17 @@ def _handle_load_field(
     obj_val = _resolve_reg(vm, inst.operands[0])
     field_name = inst.operands[1]
     addr = _heap_addr(obj_val)
+    if addr and addr not in vm.heap:
+        # Materialise a synthetic heap entry for symbolic objects so that
+        # repeated field accesses return the same symbolic value (deduplication).
+        vm.heap[addr] = HeapObject(type_hint=_symbolic_type_hint(obj_val))
     if not addr or addr not in vm.heap:
-        # Object not on heap — create symbolic representing the field access
         obj_desc = _symbolic_name(obj_val)
         sym = vm.fresh_symbolic(hint=f"{obj_desc}.{field_name}")
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={inst.result_reg: sym.to_dict()},
-                reasoning=f"load {obj_desc}.{field_name} (object not on heap) → {sym.name}",
+                reasoning=f"load {obj_desc}.{field_name} (not on heap) → {sym.name}",
             )
         )
     heap_obj = vm.heap[addr]
@@ -430,7 +436,7 @@ def _handle_load_field(
                 reasoning=f"load {addr}.{field_name} = {val!r}",
             )
         )
-    # Field not found — create symbolic
+    # Field not found — create symbolic and cache it
     sym = vm.fresh_symbolic(hint=f"{addr}.{field_name}")
     heap_obj.fields[field_name] = sym
     return ExecutionResult.success(
@@ -448,8 +454,11 @@ def _handle_store_index(
     idx_val = _resolve_reg(vm, inst.operands[1])
     val = _resolve_reg(vm, inst.operands[2])
     addr = _heap_addr(arr_val)
+    if addr and addr not in vm.heap:
+        # Materialise a synthetic heap entry for symbolic arrays so that
+        # repeated index stores persist and are visible to later loads.
+        vm.heap[addr] = HeapObject(type_hint=_symbolic_type_hint(arr_val))
     if not addr or addr not in vm.heap:
-        # Array not on heap — store is a no-op but we track it
         arr_desc = _symbolic_name(arr_val)
         logger.debug("store_index on unknown array %s[%s]", arr_desc, idx_val)
         return ExecutionResult.success(
@@ -477,14 +486,17 @@ def _handle_load_index(
     arr_val = _resolve_reg(vm, inst.operands[0])
     idx_val = _resolve_reg(vm, inst.operands[1])
     addr = _heap_addr(arr_val)
+    if addr and addr not in vm.heap:
+        # Materialise a synthetic heap entry for symbolic arrays so that
+        # repeated index accesses with the same key are deduplicated.
+        vm.heap[addr] = HeapObject(type_hint=_symbolic_type_hint(arr_val))
     if not addr or addr not in vm.heap:
-        # Array not on heap — create symbolic representing the index access
         arr_desc = _symbolic_name(arr_val)
         sym = vm.fresh_symbolic(hint=f"{arr_desc}[{idx_val}]")
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={inst.result_reg: sym.to_dict()},
-                reasoning=f"load {arr_desc}[{idx_val}] (array not on heap) → {sym.name}",
+                reasoning=f"load {arr_desc}[{idx_val}] (not on heap) → {sym.name}",
             )
         )
     heap_obj = vm.heap[addr]
@@ -626,6 +638,15 @@ def _symbolic_name(val: Any) -> str:
     if isinstance(val, dict) and val.get("__symbolic__"):
         return val.get("name", "?")
     return repr(val)
+
+
+def _symbolic_type_hint(val: Any) -> str:
+    """Extract a type hint from a symbolic value (SymbolicValue or dict)."""
+    if isinstance(val, SymbolicValue):
+        return val.type_hint or ""
+    if isinstance(val, dict) and val.get("__symbolic__"):
+        return val.get("type_hint", "")
+    return ""
 
 
 def _symbolic_call_result(
