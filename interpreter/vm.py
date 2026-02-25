@@ -71,6 +71,7 @@ class VMState:
     call_stack: list[StackFrame] = field(default_factory=list)
     path_conditions: list[str] = field(default_factory=list)
     symbolic_counter: int = 0
+    closures: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def fresh_symbolic(self, hint: str = "") -> SymbolicValue:
         name = f"sym_{self.symbolic_counter}"
@@ -82,12 +83,18 @@ class VMState:
         return self.call_stack[-1]
 
     def to_dict(self) -> dict:
-        return {
+        result: dict[str, Any] = {
             "heap": {k: v.to_dict() for k, v in self.heap.items()},
             "call_stack": [f.to_dict() for f in self.call_stack],
             "path_conditions": self.path_conditions,
             "symbolic_counter": self.symbolic_counter,
         }
+        if self.closures:
+            result["closures"] = {
+                label: {k: _serialize_value(v) for k, v in captured.items()}
+                for label, captured in self.closures.items()
+            }
+        return result
 
 
 # ── StateUpdate schema (LLM output) ─────────────────────────────
