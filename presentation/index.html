@@ -1,0 +1,1583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Codescry: LLM Symbolic Interpreter</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reveal.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/theme/moon.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/plugin/highlight/monokai.min.css">
+  <style>
+    :root {
+      --box-bg: rgba(34, 51, 68, 0.85);
+      --box-border: #4fc3f7;
+      --accent: #4fc3f7;
+      --accent2: #81c784;
+      --accent3: #ffb74d;
+      --accent4: #e57373;
+      --dim: #90a4ae;
+    }
+    .reveal { font-size: 32px; }
+    .reveal h1 { font-size: 1.8em; color: #4fc3f7; }
+    .reveal h2 { font-size: 1.4em; color: #4fc3f7; }
+    .reveal h3 { font-size: 1.1em; color: #81c784; }
+    .reveal code { font-size: 0.75em; }
+    .reveal pre { width: 100%; font-size: 0.55em; }
+    .reveal pre code { max-height: 500px; }
+    .reveal ul { font-size: 0.85em; }
+    .reveal li { margin-bottom: 0.3em; }
+    .reveal .small { font-size: 0.7em; }
+    .reveal .dim { color: var(--dim); }
+    .reveal .accent { color: var(--accent); }
+    .reveal .accent2 { color: var(--accent2); }
+    .reveal .accent3 { color: var(--accent3); }
+    .reveal .accent4 { color: var(--accent4); }
+
+    /* Architecture diagram boxes */
+    .arch-box {
+      display: inline-block;
+      padding: 12px 20px;
+      margin: 6px;
+      border: 2px solid var(--box-border);
+      border-radius: 8px;
+      background: var(--box-bg);
+      color: #fff;
+      font-weight: bold;
+      font-size: 0.8em;
+      text-align: center;
+      min-width: 100px;
+    }
+    .arch-box.green { border-color: var(--accent2); }
+    .arch-box.orange { border-color: var(--accent3); }
+    .arch-box.red { border-color: var(--accent4); }
+    .arch-arrow {
+      display: inline-block;
+      color: var(--accent);
+      font-size: 1.5em;
+      vertical-align: middle;
+      margin: 0 4px;
+    }
+    .arch-flow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 2px;
+    }
+    .arch-flow-vertical {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .arrow-down {
+      color: var(--accent);
+      font-size: 1.4em;
+    }
+
+    /* Grid for language frontends */
+    .lang-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin: 20px auto;
+      max-width: 800px;
+    }
+    .lang-cell {
+      padding: 10px;
+      border: 1px solid var(--box-border);
+      border-radius: 6px;
+      background: var(--box-bg);
+      font-size: 0.7em;
+      text-align: center;
+    }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin: 30px auto;
+      max-width: 750px;
+    }
+    .stat-card {
+      padding: 20px;
+      border: 2px solid var(--box-border);
+      border-radius: 10px;
+      background: var(--box-bg);
+      text-align: center;
+    }
+    .stat-card .number {
+      font-size: 2.2em;
+      font-weight: bold;
+      color: var(--accent);
+    }
+    .stat-card .label {
+      font-size: 0.7em;
+      color: var(--dim);
+      margin-top: 5px;
+    }
+
+    /* Table styling */
+    .reveal table {
+      border-collapse: collapse;
+      margin: 15px auto;
+      font-size: 0.65em;
+    }
+    .reveal table th {
+      background: rgba(79, 195, 247, 0.2);
+      color: var(--accent);
+      padding: 8px 14px;
+      border: 1px solid #37474f;
+    }
+    .reveal table td {
+      padding: 6px 14px;
+      border: 1px solid #37474f;
+    }
+
+    /* Two-column layout */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      align-items: start;
+    }
+
+    /* Tagline */
+    .tagline {
+      font-size: 0.9em;
+      color: var(--dim);
+      font-style: italic;
+      margin-top: 20px;
+    }
+
+    /* Opcode category */
+    .opcode-cat {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 0.65em;
+      margin: 2px;
+      font-family: monospace;
+    }
+    .opcode-cat.value { background: rgba(79, 195, 247, 0.25); color: var(--accent); }
+    .opcode-cat.control { background: rgba(129, 199, 132, 0.25); color: var(--accent2); }
+    .opcode-cat.special { background: rgba(255, 183, 77, 0.25); color: var(--accent3); }
+
+    .reveal .slide-number { font-size: 14px; }
+
+    /* CFG diagram nodes */
+    .cfg-node {
+      display: inline-block;
+      padding: 8px 16px;
+      border: 2px solid var(--accent);
+      border-radius: 12px;
+      background: var(--box-bg);
+      color: #fff;
+      font-family: monospace;
+      font-size: 0.65em;
+      text-align: center;
+      min-width: 140px;
+    }
+    .cfg-node.true-branch { border-color: var(--accent2); }
+    .cfg-node.false-branch { border-color: var(--accent4); }
+    .cfg-node.merge { border-color: var(--accent3); }
+    .cfg-edge {
+      color: var(--accent);
+      font-size: 1.2em;
+      line-height: 1;
+    }
+    .cfg-edge.true-label { color: var(--accent2); }
+    .cfg-edge.false-label { color: var(--accent4); }
+    .cfg-diagram {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .cfg-branch-row {
+      display: flex;
+      justify-content: center;
+      align-items: start;
+      gap: 40px;
+    }
+
+    /* Code snippet grid for multi-language */
+    .code-grid-5 {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin: 10px auto;
+    }
+    .code-grid-5 .code-cell {
+      border: 1px solid #37474f;
+      border-radius: 6px;
+      background: var(--box-bg);
+      padding: 6px;
+      font-size: 0.42em;
+      text-align: left;
+    }
+    .code-cell h4 {
+      margin: 0 0 4px 0;
+      font-size: 1.2em;
+      color: var(--accent);
+    }
+    .code-cell pre {
+      margin: 0 !important;
+      font-size: 1em !important;
+    }
+    .code-cell pre code {
+      padding: 4px !important;
+      max-height: 200px !important;
+    }
+
+    /* Dependency graph */
+    .dep-graph svg {
+      max-width: 100%;
+      height: auto;
+    }
+    .dep-graph .node-circle {
+      fill: var(--box-bg);
+      stroke-width: 2;
+    }
+    .dep-graph .node-label {
+      fill: #fff;
+      font-family: monospace;
+      font-size: 13px;
+      text-anchor: middle;
+      dominant-baseline: central;
+    }
+    .dep-graph .edge-direct {
+      stroke: var(--accent);
+      stroke-width: 2;
+      fill: none;
+      marker-end: url(#arrowDirect);
+    }
+    .dep-graph .edge-transitive {
+      stroke: var(--accent3);
+      stroke-width: 2;
+      stroke-dasharray: 6,4;
+      fill: none;
+      marker-end: url(#arrowTransitive);
+    }
+    .dep-graph .edge-merge {
+      stroke: var(--accent4);
+      stroke-width: 2;
+      fill: none;
+      marker-end: url(#arrowMerge);
+    }
+    .dep-legend {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      margin-top: 10px;
+      font-size: 0.65em;
+    }
+    .dep-legend span::before {
+      content: '';
+      display: inline-block;
+      width: 24px;
+      height: 3px;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    .dep-legend .leg-direct::before { background: var(--accent); }
+    .dep-legend .leg-transitive::before { background: var(--accent3); border-top: 2px dashed var(--accent3); height: 0; }
+    .dep-legend .leg-merge::before { background: var(--accent4); }
+  </style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ============================================================ -->
+<!-- ACT 1: THE PROBLEM & BIG IDEA                                -->
+<!-- ============================================================ -->
+
+<!-- Slide 1: Title -->
+<section>
+  <h1>Codescry</h1>
+  <h2 style="color: #81c784;">LLM Symbolic Interpreter</h2>
+  <p class="tagline">"Deterministic where possible. Symbolic where necessary. LLM only as a last resort."</p>
+  <p class="small dim" style="margin-top: 40px;">~12,500 LOC &middot; 20 opcodes &middot; 15 frontends &middot; 507 tests &middot; 4 LLM providers</p>
+  <aside class="notes">
+    This is an end-to-end technical deep dive into Codescry's architecture.
+    The key idea: avoid LLMs entirely for concrete programs, fall back gracefully
+    to symbolic execution, and only call an LLM when genuinely stuck.
+  </aside>
+</section>
+
+<!-- Slide 2: The Problem -->
+<section>
+  <h2>The Problem</h2>
+  <ul>
+    <li class="fragment">Interpret code across <span class="accent">15 languages</span> with unknown externals</li>
+    <li class="fragment">LLM calls are <span class="accent4">100&ndash;1000x slower</span> than local execution</li>
+    <li class="fragment">Most code paths are <span class="accent2">fully deterministic</span> &mdash; no LLM needed</li>
+    <li class="fragment">External values (API calls, user input) are genuinely unknown</li>
+  </ul>
+  <div class="fragment" style="margin-top: 30px; padding: 15px; border: 1px solid var(--accent3); border-radius: 8px;">
+    <strong class="accent3">Can we build an interpreter that avoids LLMs entirely for concrete programs, and degrades gracefully for the rest?</strong>
+  </div>
+  <aside class="notes">
+    The fundamental tension: LLMs are powerful but slow. Most code doesn't need them.
+    We want to pay the LLM cost only for genuinely unknown values.
+  </aside>
+</section>
+
+<!-- Slide 3: Key Insight -->
+<section>
+  <h2>Key Insight</h2>
+  <div class="two-col" style="margin-top: 30px;">
+    <div>
+      <h3>Concrete Inputs</h3>
+      <div class="arch-box green" style="width: 80%; margin: 15px auto; display: block;">
+        100% deterministic<br>
+        <span class="small">0 LLM calls</span>
+      </div>
+      <p class="small dim">factorial(5), sort([3,1,2]), string concat...</p>
+    </div>
+    <div>
+      <h3>Unknown Values</h3>
+      <div class="arch-box orange" style="width: 80%; margin: 15px auto; display: block;">
+        Symbolic execution<br>
+        <span class="small">LLM only at decision points</span>
+      </div>
+      <p class="small dim">API responses, DB queries, user input...</p>
+    </div>
+  </div>
+  <p class="fragment" style="margin-top: 25px;">
+    Strategy: <strong class="accent">lower everything to IR</strong> &rarr;
+    <strong class="accent2">execute deterministically</strong> &rarr;
+    <strong class="accent3">symbolic fallback</strong> for unknowns
+  </p>
+</section>
+
+<!-- Slide 4: Architecture Overview -->
+<section>
+  <h2>Architecture Overview</h2>
+  <div class="arch-flow" style="margin-top: 30px;">
+    <div class="arch-box fragment" data-fragment-index="1">Source<br><span class="small dim">15 languages</span></div>
+    <span class="arch-arrow fragment" data-fragment-index="2">&rarr;</span>
+    <div class="arch-box fragment" data-fragment-index="2">Parse<br><span class="small dim">tree-sitter</span></div>
+    <span class="arch-arrow fragment" data-fragment-index="3">&rarr;</span>
+    <div class="arch-box green fragment" data-fragment-index="3">Lower<br><span class="small dim">Frontend</span></div>
+    <span class="arch-arrow fragment" data-fragment-index="4">&rarr;</span>
+    <div class="arch-box green fragment" data-fragment-index="4">IR<br><span class="small dim">20 opcodes</span></div>
+    <span class="arch-arrow fragment" data-fragment-index="5">&rarr;</span>
+    <div class="arch-box fragment" data-fragment-index="5">CFG<br><span class="small dim">dataflow</span></div>
+    <span class="arch-arrow fragment" data-fragment-index="6">&rarr;</span>
+    <div class="arch-box green fragment" data-fragment-index="6">VM<br><span class="small dim">LocalExecutor</span></div>
+    <span class="arch-arrow fragment" data-fragment-index="7">&rarr;</span>
+    <div class="arch-box orange fragment" data-fragment-index="7">(LLM)<br><span class="small dim">fallback</span></div>
+  </div>
+  <p class="fragment dim small" data-fragment-index="8" style="margin-top: 30px;">
+    Every stage is deterministic except the final LLM fallback.
+    The VM executes as far as it can before asking an LLM for help.
+  </p>
+  <aside class="notes">
+    Walk through each stage. The key insight is that the LLM box at the end
+    is optional — for fully concrete programs it's never reached.
+  </aside>
+</section>
+
+<!-- ============================================================ -->
+<!-- ACT 2: THE IR                                                -->
+<!-- ============================================================ -->
+
+<!-- Slide 5: IR Design -->
+<section>
+  <h2>IR Design</h2>
+  <p>Flat <strong class="accent">3-address code</strong> with infinite virtual registers</p>
+  <div class="two-col" style="margin-top: 20px;">
+    <div>
+      <h3>Value Producers (11)</h3>
+      <span class="opcode-cat value">CONST</span>
+      <span class="opcode-cat value">LOAD_VAR</span>
+      <span class="opcode-cat value">LOAD_FIELD</span>
+      <span class="opcode-cat value">LOAD_INDEX</span>
+      <span class="opcode-cat value">NEW_OBJECT</span>
+      <span class="opcode-cat value">NEW_ARRAY</span>
+      <span class="opcode-cat value">BINOP</span>
+      <span class="opcode-cat value">UNOP</span>
+      <span class="opcode-cat value">CALL_FUNCTION</span>
+      <span class="opcode-cat value">CALL_METHOD</span>
+      <span class="opcode-cat value">CALL_UNKNOWN</span>
+    </div>
+    <div>
+      <h3>Control Flow (7)</h3>
+      <span class="opcode-cat control">STORE_VAR</span>
+      <span class="opcode-cat control">STORE_FIELD</span>
+      <span class="opcode-cat control">STORE_INDEX</span>
+      <span class="opcode-cat control">BRANCH_IF</span>
+      <span class="opcode-cat control">BRANCH</span>
+      <span class="opcode-cat control">RETURN</span>
+      <span class="opcode-cat control">THROW</span>
+      <h3 style="margin-top: 15px;">Special (2)</h3>
+      <span class="opcode-cat special">SYMBOLIC</span>
+      <span class="opcode-cat special">LABEL</span>
+    </div>
+  </div>
+  <p class="fragment small dim" style="margin-top: 15px;">
+    No expression trees. No register allocation. Each instruction has an explicit destination register.
+  </p>
+  <aside class="notes">
+    20 opcodes total. The IR is deliberately flat — no nested expressions.
+    Every value has a named register. This makes dataflow analysis trivial.
+  </aside>
+</section>
+
+<!-- Slide 6: IR Example -->
+<section>
+  <h2>IR Example</h2>
+  <div class="two-col">
+    <div>
+      <h3>Source (Python)</h3>
+      <pre><code class="language-python">y = x + 1</code></pre>
+    </div>
+    <div>
+      <h3>Lowered IR</h3>
+      <pre><code class="language-python">LOAD_VAR  t0, "x"
+CONST     t1, 1
+BINOP     t2, t0, "+", t1
+STORE_VAR "y", t2</code></pre>
+    </div>
+  </div>
+  <div class="fragment" style="margin-top: 25px;">
+    <h3>More Complex: <code>if x > 0: return x * 2</code></h3>
+    <pre><code class="language-python">LOAD_VAR    t0, "x"
+CONST       t1, 0
+BINOP       t2, t0, ">", t1     # t2 = x > 0
+BRANCH_IF   t2, "then", "end"
+LABEL       "then"
+LOAD_VAR    t3, "x"
+CONST       t4, 2
+BINOP       t5, t3, "*", t4     # t5 = x * 2
+RETURN      t5
+LABEL       "end"</code></pre>
+  </div>
+  <aside class="notes">
+    Key: every intermediate value gets its own register (t0, t1, ...).
+    Control flow is explicit with BRANCH_IF and LABEL.
+    No implicit fall-through — everything is named.
+  </aside>
+</section>
+
+<!-- Slide 7: The SYMBOLIC Opcode -->
+<section>
+  <h2>The SYMBOLIC Opcode</h2>
+  <p>Graceful degradation for <strong class="accent3">unknown constructs</strong></p>
+  <pre><code class="language-python"># When the frontend encounters something it can't lower:
+SYMBOLIC  t7, "await fetch('/api/data')"
+
+# The rest of the function still gets full IR:
+STORE_VAR "response", t7
+LOAD_VAR  t8, "response"
+LOAD_FIELD t9, t8, "status"
+CONST     t10, 200
+BINOP     t11, t9, "==", t10</code></pre>
+  <ul style="margin-top: 20px;">
+    <li class="fragment"><strong class="accent2">Partial lowering is always available</strong> &mdash; one unknown doesn't block the whole function</li>
+    <li class="fragment">The VM creates a <code>SymbolicValue</code> for <code>t7</code> and continues executing</li>
+    <li class="fragment">Field access on symbolic values <strong class="accent">materializes</strong> heap objects on demand</li>
+  </ul>
+</section>
+
+<!-- ============================================================ -->
+<!-- ACT 3: FRONTEND SYSTEM                                       -->
+<!-- ============================================================ -->
+
+<!-- Slide 8: 15 Language Frontends -->
+<section>
+  <h2>15 Language Frontends</h2>
+  <div class="lang-grid">
+    <div class="lang-cell"><strong>Python</strong></div>
+    <div class="lang-cell"><strong>JavaScript</strong></div>
+    <div class="lang-cell"><strong>TypeScript</strong></div>
+    <div class="lang-cell"><strong>Java</strong></div>
+    <div class="lang-cell"><strong>Ruby</strong></div>
+    <div class="lang-cell"><strong>Go</strong></div>
+    <div class="lang-cell"><strong>PHP</strong></div>
+    <div class="lang-cell"><strong>C#</strong></div>
+    <div class="lang-cell"><strong>C</strong></div>
+    <div class="lang-cell"><strong>C++</strong></div>
+    <div class="lang-cell"><strong>Rust</strong></div>
+    <div class="lang-cell"><strong>Kotlin</strong></div>
+    <div class="lang-cell"><strong>Scala</strong></div>
+    <div class="lang-cell"><strong>Lua</strong></div>
+    <div class="lang-cell"><strong>Pascal</strong></div>
+  </div>
+  <p class="fragment">All share the same <code class="accent">BaseFrontend</code> architecture</p>
+  <p class="fragment">All lower to the same <code class="accent2">20-opcode IR</code></p>
+  <p class="fragment small dim">+ <code>LLMFrontend</code>: language-agnostic, sends raw source to LLM &rarr; IR JSON</p>
+  <aside class="notes">
+    Every frontend produces identical IR. The VM doesn't know or care what
+    the source language was. This is the key abstraction.
+  </aside>
+</section>
+
+<!-- Slide 9: BaseFrontend Architecture -->
+<section>
+  <h2>BaseFrontend Architecture</h2>
+  <p>Dispatch table pattern: <code>tree-sitter node type &rarr; handler</code></p>
+  <pre><code class="language-python">class PythonFrontend(BaseFrontend):
+    def __init__(self, ...):
+        super().__init__(...)
+        self._EXPR_DISPATCH = {
+            "identifier":             self._lower_identifier,
+            "integer":                self._lower_const_literal,
+            "binary_operator":        self._lower_binop,
+            "comparison_operator":    self._lower_comparison,
+            "call":                   self._lower_call,
+            "attribute":              self._lower_attribute,
+            "subscript":              self._lower_subscript,
+            "list":                   self._lower_list_literal,
+            "conditional_expression": self._lower_conditional_expr,
+            ...
+        }
+        self._STMT_DISPATCH = {
+            "assignment":             self._lower_assignment,
+            "return_statement":       self._lower_return,
+            "if_statement":           self._lower_if,
+            "while_statement":        self._lower_while,
+            "for_statement":          self._lower_for,
+            "function_definition":    self._lower_function_def,
+            "class_definition":       self._lower_class_def,
+            ...
+        }</code></pre>
+  <p class="fragment small">Unrecognized nodes &rarr; <code class="accent3">SYMBOLIC</code> fallback. <strong>Never crashes.</strong></p>
+  <aside class="notes">
+    Each frontend subclass just populates these two dispatch tables.
+    BaseFrontend provides the lowering loop and register allocation.
+    Unknown node types emit SYMBOLIC — partial lowering is always safe.
+  </aside>
+</section>
+
+<!-- Slide 10: Adding a New Language -->
+<section>
+  <h2>Adding a New Language</h2>
+  <div class="arch-flow-vertical">
+    <div class="arch-box fragment" style="width: 70%;">
+      <strong>1.</strong> Subclass <code>BaseFrontend</code>
+    </div>
+    <div class="arrow-down fragment">&darr;</div>
+    <div class="arch-box fragment" style="width: 70%;">
+      <strong>2.</strong> Populate <code>_EXPR_DISPATCH</code> and <code>_STMT_DISPATCH</code>
+    </div>
+    <div class="arrow-down fragment">&darr;</div>
+    <div class="arch-box fragment" style="width: 70%;">
+      <strong>3.</strong> Override language-specific constants<br>
+      <span class="small dim">(true/false literals, comment syntax, etc.)</span>
+    </div>
+    <div class="arrow-down fragment">&darr;</div>
+    <div class="arch-box green fragment" style="width: 70%;">
+      <strong>~200&ndash;400 lines</strong> for a full frontend
+    </div>
+  </div>
+  <p class="fragment small dim" style="margin-top: 20px;">
+    Most handlers are inherited from <code>BaseFrontend</code> (821 LOC).
+    Language-specific frontends override only what differs.
+  </p>
+</section>
+
+<!-- Slide 11: LLM Frontend -->
+<section>
+  <h2>LLM Frontend</h2>
+  <p>Alternative path: <span class="accent3">raw source &rarr; LLM &rarr; IR JSON</span></p>
+  <div class="arch-flow" style="margin: 25px 0;">
+    <div class="arch-box">Source Code<br><span class="small dim">any language</span></div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box orange">LLM<br><span class="small dim">prompt + schema</span></div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box green">IR JSON<br><span class="small dim">validated</span></div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box">VM</div>
+  </div>
+  <ul>
+    <li class="fragment">Prompt engineered with <strong>concrete IR patterns</strong> as examples</li>
+    <li class="fragment">LLM output is <strong>schema-validated</strong> before execution</li>
+    <li class="fragment">Fallback for unsupported languages or complex constructs</li>
+    <li class="fragment">Same VM, same dataflow &mdash; only the lowering step differs</li>
+  </ul>
+  <aside class="notes">
+    The LLM frontend is language-agnostic. It sends raw source plus the IR spec
+    to an LLM and expects structured JSON back. The VM doesn't care how the IR was produced.
+  </aside>
+</section>
+
+<!-- ============================================================ -->
+<!-- ACT 4: CFG & DATAFLOW                                        -->
+<!-- ============================================================ -->
+
+<!-- Slide 12: CFG Builder -->
+<section>
+  <h2>CFG Builder</h2>
+  <p>3-phase algorithm &rarr; <code>build_cfg(instructions) &rarr; CFG</code></p>
+  <div class="two-col" style="margin-top: 20px;">
+    <div>
+      <div class="arch-box fragment" style="width: 90%; display: block; margin: 10px auto;">
+        <strong>Phase 1:</strong> Identify block starts<br>
+        <span class="small dim">LABEL targets, branch successors</span>
+      </div>
+      <div class="arch-box fragment" style="width: 90%; display: block; margin: 10px auto;">
+        <strong>Phase 2:</strong> Create BasicBlocks<br>
+        <span class="small dim">Partition instructions into blocks</span>
+      </div>
+      <div class="arch-box fragment" style="width: 90%; display: block; margin: 10px auto;">
+        <strong>Phase 3:</strong> Wire edges<br>
+        <span class="small dim">successors[] / predecessors[]</span>
+      </div>
+    </div>
+    <div class="fragment">
+      <pre><code class="language-python">@dataclass
+class BasicBlock:
+    label: str
+    instructions: list[IRInstruction]
+    successors: list[str]
+    predecessors: list[str]
+
+@dataclass
+class CFG:
+    blocks: dict[str, BasicBlock]
+    entry: str</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 13: CFG Across 15 Languages (vertical stack) -->
+<section>
+  <!-- Parent slide: common CFG diagram -->
+  <section>
+    <h2>CFG Across 15 Languages</h2>
+    <p class="small dim">Same function, same CFG shape &mdash; 15 different syntaxes</p>
+    <div class="two-col" style="margin-top: 15px;">
+      <div>
+        <h3>Common Logic</h3>
+        <pre><code class="language-python">def classify(x):
+    if x > 0:
+        label = "positive"
+    else:
+        label = "negative"
+    return label</code></pre>
+      </div>
+      <div>
+        <h3>Resulting CFG (4 blocks)</h3>
+        <svg viewBox="0 0 340 380" width="340" height="380" style="display: block; margin: 0 auto;">
+          <defs>
+            <marker id="cfgArrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#4fc3f7"/>
+            </marker>
+            <marker id="cfgArrowTrue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#81c784"/>
+            </marker>
+            <marker id="cfgArrowFalse" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+              <polygon points="0 0, 8 3, 0 6" fill="#e57373"/>
+            </marker>
+          </defs>
+          <!-- Entry block -->
+          <rect x="60" y="10" width="220" height="64" rx="10" fill="rgba(34,51,68,0.85)" stroke="#4fc3f7" stroke-width="2"/>
+          <text x="170" y="32" text-anchor="middle" fill="#4fc3f7" font-weight="bold" font-size="14" font-family="monospace">entry</text>
+          <text x="170" y="52" text-anchor="middle" fill="#ccc" font-size="11" font-family="monospace">LOAD x · CONST 0 · BINOP &gt;</text>
+          <text x="170" y="66" text-anchor="middle" fill="#ccc" font-size="11" font-family="monospace">BRANCH_IF</text>
+          <!-- Edge: entry → if_true (true branch) -->
+          <line x1="120" y1="74" x2="80" y2="148" stroke="#81c784" stroke-width="2" marker-end="url(#cfgArrowTrue)"/>
+          <text x="82" y="112" fill="#81c784" font-size="12" font-family="monospace" font-weight="bold">T</text>
+          <!-- Edge: entry → if_false (false branch) -->
+          <line x1="220" y1="74" x2="260" y2="148" stroke="#e57373" stroke-width="2" marker-end="url(#cfgArrowFalse)"/>
+          <text x="250" y="112" fill="#e57373" font-size="12" font-family="monospace" font-weight="bold">F</text>
+          <!-- if_true block -->
+          <rect x="5" y="152" width="150" height="58" rx="10" fill="rgba(34,51,68,0.85)" stroke="#81c784" stroke-width="2"/>
+          <text x="80" y="172" text-anchor="middle" fill="#81c784" font-weight="bold" font-size="13" font-family="monospace">if_true</text>
+          <text x="80" y="190" text-anchor="middle" fill="#ccc" font-size="10" font-family="monospace">CONST "positive"</text>
+          <text x="80" y="203" text-anchor="middle" fill="#ccc" font-size="10" font-family="monospace">STORE_VAR label</text>
+          <!-- if_false block -->
+          <rect x="185" y="152" width="150" height="58" rx="10" fill="rgba(34,51,68,0.85)" stroke="#e57373" stroke-width="2"/>
+          <text x="260" y="172" text-anchor="middle" fill="#e57373" font-weight="bold" font-size="13" font-family="monospace">if_false</text>
+          <text x="260" y="190" text-anchor="middle" fill="#ccc" font-size="10" font-family="monospace">CONST "negative"</text>
+          <text x="260" y="203" text-anchor="middle" fill="#ccc" font-size="10" font-family="monospace">STORE_VAR label</text>
+          <!-- Edge: if_true → merge -->
+          <line x1="80" y1="210" x2="140" y2="280" stroke="#4fc3f7" stroke-width="2" marker-end="url(#cfgArrow)"/>
+          <!-- Edge: if_false → merge -->
+          <line x1="260" y1="210" x2="200" y2="280" stroke="#4fc3f7" stroke-width="2" marker-end="url(#cfgArrow)"/>
+          <!-- Merge block -->
+          <rect x="70" y="284" width="200" height="58" rx="10" fill="rgba(34,51,68,0.85)" stroke="#ffb74d" stroke-width="2"/>
+          <text x="170" y="306" text-anchor="middle" fill="#ffb74d" font-weight="bold" font-size="13" font-family="monospace">merge</text>
+          <text x="170" y="322" text-anchor="middle" fill="#ccc" font-size="10" font-family="monospace">LOAD_VAR label</text>
+          <text x="170" y="335" text-anchor="middle" fill="#ccc" font-size="10" font-family="monospace">RETURN</text>
+        </svg>
+      </div>
+    </div>
+    <p class="fragment small" style="margin-top: 10px;">
+      <span class="accent">&darr;</span> Navigate down to see all 15 language implementations
+    </p>
+  </section>
+
+  <!-- Child slide 1: Python, JavaScript, TypeScript, Java, Ruby -->
+  <section>
+    <h3>CFG Examples: Group 1</h3>
+    <div class="code-grid-5">
+      <div class="code-cell">
+        <h4>Python</h4>
+        <pre><code class="language-python">def classify(x):
+    if x > 0:
+        label = "positive"
+    else:
+        label = "negative"
+    return label</code></pre>
+      </div>
+      <div class="code-cell">
+        <h4>JavaScript</h4>
+        <pre><code class="language-javascript">function classify(x) {
+  if (x > 0) {
+    let label = "positive";
+  } else {
+    let label = "negative";
+  }
+  return label;
+}</code></pre>
+      </div>
+      <div class="code-cell">
+        <h4>TypeScript</h4>
+        <pre><code class="language-typescript">function classify(x: number)
+    : string {
+  let label: string;
+  if (x > 0) {
+    label = "positive";
+  } else {
+    label = "negative";
+  }
+  return label;
+}</code></pre>
+      </div>
+      <div class="code-cell">
+        <h4>Java</h4>
+        <pre><code class="language-java">String classify(int x) {
+  String label;
+  if (x > 0) {
+    label = "positive";
+  } else {
+    label = "negative";
+  }
+  return label;
+}</code></pre>
+      </div>
+      <div class="code-cell">
+        <h4>Ruby</h4>
+        <pre><code class="language-ruby">def classify(x)
+  if x > 0
+    label = "positive"
+  else
+    label = "negative"
+  end
+  label
+end</code></pre>
+      </div>
+    </div>
+    <div style="margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 12px;">
+      <p class="small dim" style="margin: 0;">All 5 produce identical IR &rarr;</p>
+      <svg viewBox="0 0 260 56" width="260" height="56">
+        <rect x="2" y="12" width="52" height="28" rx="6" fill="rgba(34,51,68,0.85)" stroke="#4fc3f7" stroke-width="1.5"/>
+        <text x="28" y="30" text-anchor="middle" fill="#4fc3f7" font-size="10" font-family="monospace" font-weight="bold">entry</text>
+        <line x1="54" y1="20" x2="82" y2="14" stroke="#81c784" stroke-width="1.5"/>
+        <line x1="54" y1="32" x2="82" y2="38" stroke="#e57373" stroke-width="1.5"/>
+        <rect x="82" y="2" width="58" height="22" rx="6" fill="rgba(34,51,68,0.85)" stroke="#81c784" stroke-width="1.5"/>
+        <text x="111" y="17" text-anchor="middle" fill="#81c784" font-size="9" font-family="monospace">if_true</text>
+        <rect x="82" y="30" width="58" height="22" rx="6" fill="rgba(34,51,68,0.85)" stroke="#e57373" stroke-width="1.5"/>
+        <text x="111" y="45" text-anchor="middle" fill="#e57373" font-size="9" font-family="monospace">if_false</text>
+        <line x1="140" y1="13" x2="170" y2="20" stroke="#4fc3f7" stroke-width="1.5"/>
+        <line x1="140" y1="41" x2="170" y2="32" stroke="#4fc3f7" stroke-width="1.5"/>
+        <rect x="170" y="12" width="56" height="28" rx="6" fill="rgba(34,51,68,0.85)" stroke="#ffb74d" stroke-width="1.5"/>
+        <text x="198" y="30" text-anchor="middle" fill="#ffb74d" font-size="10" font-family="monospace" font-weight="bold">merge</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- Child slide 2: Go, PHP, C#, C, C++ -->
+  <section>
+    <h3>CFG Examples: Group 2</h3>
+    <div class="code-grid-5">
+      <div class="code-cell">
+        <h4>Go</h4>
+        <pre><code class="language-go">func classify(x int) string {
+  var label string
+  if x > 0 {
+    label = "positive"
+  } else {
+    label = "negative"
+  }
+  return label
+}</code></pre>
+      </div>
+      <div class="code-cell">
+        <h4>PHP</h4>
+        <pre><code class="language-php">function classify($x) {
+  if ($x > 0) {
+    $label = "positive";
+  } else {
+    $label = "negative";
+  }
+  return $label;
+}</code></pre>
+      </div>
+      <div class="code-cell">
+        <h4>C#</h4>
+        <pre><code class="language-csharp">string Classify(int x) {
+  string label;
+  if (x > 0) {
+    label = "positive";
+  } else {
+    label = "negative";
+  }
+  return label;
+}</code></pre>
+      </div>
+      <div class="code-cell">
+        <h4>C</h4>
+        <pre><code class="language-c">const char* classify(int x) {
+  const char* label;
+  if (x > 0) {
+    label = "positive";
+  } else {
+    label = "negative";
+  }
+  return label;
+}</code></pre>
+      </div>
+      <div class="code-cell">
+        <h4>C++</h4>
+        <pre><code class="language-cpp">std::string classify(int x) {
+  std::string label;
+  if (x > 0) {
+    label = "positive";
+  } else {
+    label = "negative";
+  }
+  return label;
+}</code></pre>
+      </div>
+    </div>
+    <div style="margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 12px;">
+      <p class="small dim" style="margin: 0;">All 5 produce identical IR &rarr;</p>
+      <svg viewBox="0 0 260 56" width="260" height="56">
+        <rect x="2" y="12" width="52" height="28" rx="6" fill="rgba(34,51,68,0.85)" stroke="#4fc3f7" stroke-width="1.5"/>
+        <text x="28" y="30" text-anchor="middle" fill="#4fc3f7" font-size="10" font-family="monospace" font-weight="bold">entry</text>
+        <line x1="54" y1="20" x2="82" y2="14" stroke="#81c784" stroke-width="1.5"/>
+        <line x1="54" y1="32" x2="82" y2="38" stroke="#e57373" stroke-width="1.5"/>
+        <rect x="82" y="2" width="58" height="22" rx="6" fill="rgba(34,51,68,0.85)" stroke="#81c784" stroke-width="1.5"/>
+        <text x="111" y="17" text-anchor="middle" fill="#81c784" font-size="9" font-family="monospace">if_true</text>
+        <rect x="82" y="30" width="58" height="22" rx="6" fill="rgba(34,51,68,0.85)" stroke="#e57373" stroke-width="1.5"/>
+        <text x="111" y="45" text-anchor="middle" fill="#e57373" font-size="9" font-family="monospace">if_false</text>
+        <line x1="140" y1="13" x2="170" y2="20" stroke="#4fc3f7" stroke-width="1.5"/>
+        <line x1="140" y1="41" x2="170" y2="32" stroke="#4fc3f7" stroke-width="1.5"/>
+        <rect x="170" y="12" width="56" height="28" rx="6" fill="rgba(34,51,68,0.85)" stroke="#ffb74d" stroke-width="1.5"/>
+        <text x="198" y="30" text-anchor="middle" fill="#ffb74d" font-size="10" font-family="monospace" font-weight="bold">merge</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- Child slide 3: Rust, Kotlin, Scala, Lua, Pascal -->
+  <section>
+    <h3>CFG Examples: Group 3</h3>
+    <div class="code-grid-5">
+      <div class="code-cell">
+        <h4>Rust</h4>
+        <pre><code class="language-rust">fn classify(x: i32) -> &str {
+  let label;
+  if x > 0 {
+    label = "positive";
+  } else {
+    label = "negative";
+  }
+  label
+}</code></pre>
+      </div>
+      <div class="code-cell">
+        <h4>Kotlin</h4>
+        <pre><code class="language-kotlin">fun classify(x: Int): String {
+  val label: String
+  if (x > 0) {
+    label = "positive"
+  } else {
+    label = "negative"
+  }
+  return label
+}</code></pre>
+      </div>
+      <div class="code-cell">
+        <h4>Scala</h4>
+        <pre><code class="language-scala">def classify(x: Int): String =
+  val label =
+    if x > 0 then
+      "positive"
+    else
+      "negative"
+  label</code></pre>
+      </div>
+      <div class="code-cell">
+        <h4>Lua</h4>
+        <pre><code class="language-lua">function classify(x)
+  local label
+  if x > 0 then
+    label = "positive"
+  else
+    label = "negative"
+  end
+  return label
+end</code></pre>
+      </div>
+      <div class="code-cell">
+        <h4>Pascal</h4>
+        <pre><code class="language-pascal">function classify(x: integer)
+    : string;
+begin
+  if x > 0 then
+    label := 'positive'
+  else
+    label := 'negative';
+  classify := label;
+end;</code></pre>
+      </div>
+    </div>
+    <div style="margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 12px;">
+      <p class="small dim" style="margin: 0;">All 5 produce identical IR &rarr;</p>
+      <svg viewBox="0 0 260 56" width="260" height="56">
+        <rect x="2" y="12" width="52" height="28" rx="6" fill="rgba(34,51,68,0.85)" stroke="#4fc3f7" stroke-width="1.5"/>
+        <text x="28" y="30" text-anchor="middle" fill="#4fc3f7" font-size="10" font-family="monospace" font-weight="bold">entry</text>
+        <line x1="54" y1="20" x2="82" y2="14" stroke="#81c784" stroke-width="1.5"/>
+        <line x1="54" y1="32" x2="82" y2="38" stroke="#e57373" stroke-width="1.5"/>
+        <rect x="82" y="2" width="58" height="22" rx="6" fill="rgba(34,51,68,0.85)" stroke="#81c784" stroke-width="1.5"/>
+        <text x="111" y="17" text-anchor="middle" fill="#81c784" font-size="9" font-family="monospace">if_true</text>
+        <rect x="82" y="30" width="58" height="22" rx="6" fill="rgba(34,51,68,0.85)" stroke="#e57373" stroke-width="1.5"/>
+        <text x="111" y="45" text-anchor="middle" fill="#e57373" font-size="9" font-family="monospace">if_false</text>
+        <line x1="140" y1="13" x2="170" y2="20" stroke="#4fc3f7" stroke-width="1.5"/>
+        <line x1="140" y1="41" x2="170" y2="32" stroke="#4fc3f7" stroke-width="1.5"/>
+        <rect x="170" y="12" width="56" height="28" rx="6" fill="rgba(34,51,68,0.85)" stroke="#ffb74d" stroke-width="1.5"/>
+        <text x="198" y="30" text-anchor="middle" fill="#ffb74d" font-size="10" font-family="monospace" font-weight="bold">merge</text>
+      </svg>
+    </div>
+  </section>
+</section>
+
+<!-- Slide 14: Reaching Definitions -->
+<section>
+  <h2>Reaching Definitions</h2>
+  <p>Worklist-based <strong class="accent">fixed-point solver</strong></p>
+  <div style="margin: 20px 0; padding: 15px; border: 1px solid var(--accent); border-radius: 8px; font-size: 0.8em;">
+    <p><strong>GEN[B]</strong> = definitions created in block B</p>
+    <p><strong>KILL[B]</strong> = definitions overwritten in block B</p>
+    <p style="margin-top: 15px;">
+      <strong class="accent">IN[B]</strong> = &cup; OUT[p] for all predecessors p of B
+    </p>
+    <p>
+      <strong class="accent2">OUT[B]</strong> = GEN[B] &cup; (IN[B] &minus; KILL[B])
+    </p>
+  </div>
+  <ul>
+    <li class="fragment">Iterate until no OUT set changes (fixed point)</li>
+    <li class="fragment">Worst case: O(n&sup2;) iterations, typically converges in 2&ndash;3 passes</li>
+    <li class="fragment">Result: for each use, the <strong class="accent">set of definitions that could reach it</strong></li>
+  </ul>
+  <aside class="notes">
+    Classic dataflow analysis. The flat IR makes this straightforward —
+    every STORE_VAR is a definition, every LOAD_VAR is a use.
+    No aliasing complications from nested expressions.
+  </aside>
+</section>
+
+<!-- Slide 15: Def-Use Chains & Dependency Graph -->
+<section>
+  <h2>Def-Use Chains &amp; Dependency Graph</h2>
+  <ul>
+    <li class="fragment">Link each <strong class="accent">use</strong> (LOAD_VAR) to its reaching <strong>definitions</strong> (STORE_VAR)</li>
+    <li class="fragment">Trace registers back to <strong class="accent2">named variables</strong> via the chain</li>
+    <li class="fragment">Build a <strong class="accent3">transitive dependency graph</strong> &mdash; "what does this value depend on?"</li>
+  </ul>
+  <div class="fragment" style="margin-top: 25px;">
+    <pre><code class="language-python"># result depends on...
+result = income * rate + bonus
+
+# Dependency graph:
+# result -> income   (direct)
+# result -> rate     (direct)
+# result -> bonus    (direct)
+# If bonus = base * 0.1:
+#   result -> base   (transitive)</code></pre>
+  </div>
+</section>
+
+<!-- Slide 16: Dataflow Example -->
+<section>
+  <h2>Dataflow Example</h2>
+  <pre><code class="language-python">def compute_tax(income, rate, has_bonus):
+    total = income * rate
+    if has_bonus:
+        bonus = income * 0.1
+        total = total + bonus       # total redefined
+    return total                    # 2 reaching defs!</code></pre>
+  <div class="fragment" style="margin-top: 20px;">
+    <table>
+      <tr>
+        <th>Variable</th>
+        <th>Reaching Defs at <code>return</code></th>
+        <th>Depends On</th>
+      </tr>
+      <tr>
+        <td><code>total</code></td>
+        <td class="accent3"><strong>2 defs</strong> (line 2 and line 5)</td>
+        <td><code>income</code>, <code>rate</code>, <code>bonus</code></td>
+      </tr>
+      <tr>
+        <td><code>bonus</code></td>
+        <td>1 def (line 4)</td>
+        <td><code>income</code></td>
+      </tr>
+    </table>
+  </div>
+  <p class="fragment small dim" style="margin-top: 15px;">
+    At the merge point, <code>total</code> has two reaching definitions.
+    The dependency graph captures the transitive closure: <code>total &rarr; income</code> via both paths.
+  </p>
+</section>
+
+<!-- Slide 17: Dependency Graph: Source → IR → Graph -->
+<section>
+  <h2>Dependency Graph: Source &rarr; Graph</h2>
+  <div class="two-col">
+    <div>
+      <h3>Source</h3>
+      <pre><code class="language-python">def process_order(price, quantity,
+                   tax_rate, has_discount):
+    subtotal = price * quantity
+    tax = subtotal * tax_rate
+    if has_discount:
+        discount = subtotal * 0.1
+        total = subtotal + tax - discount
+    else:
+        total = subtotal + tax
+    return total</code></pre>
+    </div>
+    <div class="dep-graph">
+      <h3>Dependency Graph</h3>
+      <svg viewBox="0 0 380 340" width="380" height="340">
+        <defs>
+          <marker id="arrowDirect" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#4fc3f7"/>
+          </marker>
+          <marker id="arrowMerge" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#e57373"/>
+          </marker>
+        </defs>
+        <!-- Parameter nodes (row 1) -->
+        <circle class="node-circle" cx="50" cy="30" r="24" stroke="#4fc3f7"/>
+        <text class="node-label" x="50" y="30">price</text>
+        <circle class="node-circle" cx="150" cy="30" r="24" stroke="#4fc3f7"/>
+        <text class="node-label" x="150" y="30">qty</text>
+        <circle class="node-circle" cx="250" cy="30" r="24" stroke="#4fc3f7"/>
+        <text class="node-label" x="250" y="30">tax_r</text>
+        <circle class="node-circle" cx="350" cy="30" r="24" stroke="#4fc3f7"/>
+        <text class="node-label" x="350" y="30">disc?</text>
+
+        <!-- subtotal (row 2) -->
+        <g class="fragment" data-fragment-index="1">
+          <circle class="node-circle" cx="100" cy="110" r="24" stroke="#4fc3f7"/>
+          <text class="node-label" x="100" y="110">sub</text>
+          <line class="edge-direct" x1="60" y1="52" x2="88" y2="88"/>
+          <line class="edge-direct" x1="140" y1="52" x2="112" y2="88"/>
+        </g>
+
+        <!-- tax (row 2) -->
+        <g class="fragment" data-fragment-index="2">
+          <circle class="node-circle" cx="230" cy="110" r="24" stroke="#4fc3f7"/>
+          <text class="node-label" x="230" y="110">tax</text>
+          <line class="edge-direct" x1="118" y1="126" x2="208" y2="108"/>
+          <line class="edge-direct" x1="242" y1="52" x2="234" y2="88"/>
+        </g>
+
+        <!-- discount (row 3, conditional) -->
+        <g class="fragment" data-fragment-index="3">
+          <circle class="node-circle" cx="100" cy="210" r="24" stroke="#81c784"/>
+          <text class="node-label" x="100" y="210">disc</text>
+          <line class="edge-direct" x1="100" y1="134" x2="100" y2="188"/>
+        </g>
+
+        <!-- total (row 4, merge point) -->
+        <g class="fragment" data-fragment-index="4">
+          <circle class="node-circle" cx="190" cy="310" r="28" stroke="#e57373" stroke-width="3"/>
+          <text class="node-label" x="190" y="310" style="font-size: 14px; font-weight: bold;">total</text>
+          <!-- from subtotal -->
+          <line class="edge-merge" x1="100" y1="134" x2="175" y2="285"/>
+          <!-- from tax -->
+          <line class="edge-merge" x1="230" y1="134" x2="200" y2="285"/>
+          <!-- from discount (conditional) -->
+          <line class="edge-merge" x1="110" y1="232" x2="175" y2="288"/>
+        </g>
+
+        <!-- has_discount → branch -->
+        <g class="fragment" data-fragment-index="3">
+          <line class="edge-direct" x1="340" y1="52" x2="115" y2="192" stroke-dasharray="6,4"/>
+        </g>
+      </svg>
+    </div>
+  </div>
+  <div class="dep-legend fragment" data-fragment-index="1">
+    <span class="leg-direct accent">Direct dependency</span>
+    <span class="leg-merge accent4">Merge-point edge</span>
+  </div>
+</section>
+
+<!-- Slide 18: Dependency Graph — Transitive Closure -->
+<section>
+  <h2>Dependency Graph: Transitive Closure</h2>
+  <p class="small">What does <code class="accent4">total</code> <em>ultimately</em> depend on?</p>
+  <div class="dep-graph" style="text-align: center; margin-top: 10px;">
+    <svg viewBox="0 0 520 360" width="520" height="360">
+      <defs>
+        <marker id="arrowDirect2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#4fc3f7"/>
+        </marker>
+        <marker id="arrowTransitive" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#ffb74d"/>
+        </marker>
+        <marker id="arrowMerge2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#e57373"/>
+        </marker>
+      </defs>
+      <!-- Parameters (row 1) -->
+      <circle class="node-circle" cx="80" cy="30" r="26" stroke="#4fc3f7"/>
+      <text class="node-label" x="80" y="30">price</text>
+      <circle class="node-circle" cx="200" cy="30" r="26" stroke="#4fc3f7"/>
+      <text class="node-label" x="200" y="30">quantity</text>
+      <circle class="node-circle" cx="330" cy="30" r="26" stroke="#4fc3f7"/>
+      <text class="node-label" x="330" y="30">tax_rate</text>
+      <circle class="node-circle" cx="460" cy="30" r="26" stroke="#4fc3f7"/>
+      <text class="node-label" x="460" y="26" style="font-size: 11px;">has_</text>
+      <text class="node-label" x="460" y="40" style="font-size: 11px;">discount</text>
+
+      <!-- subtotal (row 2) -->
+      <circle class="node-circle" cx="140" cy="120" r="26" stroke="#4fc3f7"/>
+      <text class="node-label" x="140" y="120" style="font-size: 11px;">subtotal</text>
+      <line class="edge-direct" x1="96" y1="52" x2="126" y2="98" marker-end="url(#arrowDirect2)"/>
+      <line class="edge-direct" x1="186" y1="52" x2="154" y2="98" marker-end="url(#arrowDirect2)"/>
+
+      <!-- tax (row 2) -->
+      <circle class="node-circle" cx="290" cy="120" r="26" stroke="#4fc3f7"/>
+      <text class="node-label" x="290" y="120">tax</text>
+      <line class="edge-direct" x1="164" y1="130" x2="266" y2="120" marker-end="url(#arrowDirect2)"/>
+      <line class="edge-direct" x1="318" y1="52" x2="300" y2="98" marker-end="url(#arrowDirect2)"/>
+
+      <!-- discount (row 3) -->
+      <circle class="node-circle" cx="140" cy="220" r="26" stroke="#81c784"/>
+      <text class="node-label" x="140" y="220" style="font-size: 11px;">discount</text>
+      <line class="edge-direct" x1="140" y1="146" x2="140" y2="196" marker-end="url(#arrowDirect2)"/>
+
+      <!-- total (row 4) -->
+      <circle class="node-circle" cx="260" cy="320" r="30" stroke="#e57373" stroke-width="3"/>
+      <text class="node-label" x="260" y="316" style="font-size: 12px; font-weight: bold;">total</text>
+      <text class="node-label" x="260" y="332" style="font-size: 10px; fill: #e57373;">(2 defs)</text>
+
+      <!-- Direct edges to total -->
+      <line class="edge-merge" x1="148" y1="144" x2="244" y2="294" marker-end="url(#arrowMerge2)"/>
+      <line class="edge-merge" x1="290" y1="146" x2="264" y2="292" marker-end="url(#arrowMerge2)"/>
+      <line class="edge-merge" x1="152" y1="244" x2="244" y2="298" marker-end="url(#arrowMerge2)"/>
+
+      <!-- Transitive edges (dashed orange) from params to total -->
+      <g class="fragment" data-fragment-index="1">
+        <line class="edge-transitive" x1="80" y1="56" x2="240" y2="296" marker-end="url(#arrowTransitive)"/>
+        <line class="edge-transitive" x1="200" y1="56" x2="250" y2="294" marker-end="url(#arrowTransitive)"/>
+        <line class="edge-transitive" x1="330" y1="56" x2="272" y2="294" marker-end="url(#arrowTransitive)"/>
+      </g>
+    </svg>
+  </div>
+  <div class="dep-legend">
+    <span class="leg-direct accent">Direct</span>
+    <span class="leg-transitive accent3">Transitive</span>
+    <span class="leg-merge accent4">Merge (2 reaching defs)</span>
+  </div>
+  <p class="fragment small" style="margin-top: 8px;">
+    <code class="accent4">total</code> has <strong>2 reaching definitions</strong> at the merge point.<br>
+    Transitive closure reveals: <code>total &rarr; subtotal &rarr; {price, quantity}</code> and <code>total &rarr; tax &rarr; {subtotal, tax_rate}</code>
+  </p>
+</section>
+
+<!-- ============================================================ -->
+<!-- ACT 5: THE SYMBOLIC VM                                       -->
+<!-- ============================================================ -->
+
+<!-- Slide 19: VM Architecture -->
+<section>
+  <h2>VM Architecture</h2>
+  <div class="two-col">
+    <div>
+      <h3>VMState</h3>
+      <pre><code class="language-python">@dataclass
+class VMState:
+    heap: dict[str, HeapObject]
+    call_stack: list[StackFrame]
+    path_conditions: list[str]
+    symbolic_counter: int
+    closures: dict[str, dict]</code></pre>
+    </div>
+    <div>
+      <h3>StackFrame</h3>
+      <pre><code class="language-python">@dataclass
+class StackFrame:
+    function_name: str
+    registers: dict[str, Any]
+    local_vars: dict[str, Any]
+    return_label: str | None
+    return_ip: int | None
+    result_reg: str | None</code></pre>
+    </div>
+  </div>
+  <div class="fragment" style="margin-top: 20px;">
+    <h3>SymbolicValue</h3>
+    <pre><code class="language-python">@dataclass
+class SymbolicValue:
+    name: str               # "sym_0", "sym_1", ...
+    type_hint: str | None
+    constraints: list[str]  # path conditions accumulated during execution</code></pre>
+  </div>
+  <aside class="notes">
+    The VM is a register machine with an explicit heap and call stack.
+    SymbolicValues are the null object pattern — they flow through all operations
+    without crashing, accumulating constraints as they go.
+  </aside>
+</section>
+
+<!-- Slide 20: LocalExecutor -->
+<section>
+  <h2>LocalExecutor</h2>
+  <p>Full dispatch table: <strong class="accent">19 opcode handlers + 10 builtins</strong></p>
+  <div class="two-col" style="font-size: 0.85em;">
+    <div>
+      <pre><code class="language-python">DISPATCH = {
+  CONST:         _handle_const,
+  LOAD_VAR:      _handle_load_var,
+  STORE_VAR:     _handle_store_var,
+  BINOP:         _handle_binop,
+  UNOP:          _handle_unop,
+  LOAD_FIELD:    _handle_load_field,
+  STORE_FIELD:   _handle_store_field,
+  LOAD_INDEX:    _handle_load_index,
+  STORE_INDEX:   _handle_store_index,
+  CALL_FUNCTION: _handle_call_function,
+  CALL_METHOD:   _handle_call_method,
+  CALL_UNKNOWN:  _handle_call_unknown,
+  NEW_OBJECT:    _handle_new_object,
+  NEW_ARRAY:     _handle_new_array,
+  BRANCH:        _handle_branch,
+  BRANCH_IF:     _handle_branch_if,
+  RETURN:        _handle_return,
+  THROW:         _handle_throw,
+  SYMBOLIC:      _handle_symbolic,
+}</code></pre>
+    </div>
+    <div>
+      <h3>10 Builtins</h3>
+      <pre><code class="language-python">Builtins.TABLE = {
+  "len":   _builtin_len,
+  "range": _builtin_range,
+  "print": _builtin_print,
+  "int":   _builtin_int,
+  "float": _builtin_float,
+  "str":   _builtin_str,
+  "bool":  _builtin_bool,
+  "abs":   _builtin_abs,
+  "max":   _builtin_max,
+  "min":   _builtin_min,
+}</code></pre>
+      <p class="fragment small dim" style="margin-top: 15px;">
+        Builtins with symbolic args &rarr; <code>UNCOMPUTABLE</code> sentinel &rarr; symbolic result
+      </p>
+    </div>
+  </div>
+  <p class="fragment"><strong class="accent2">0 LLM calls</strong> for fully concrete programs</p>
+</section>
+
+<!-- Slide 21: Deterministic Execution -->
+<section>
+  <h2>Deterministic Execution</h2>
+  <p>Factorial walkthrough: <code class="accent">factorial(5) &rarr; 120</code></p>
+  <pre><code class="language-python">def factorial(n):
+    if n <= 1:
+        return 1
+    return n * factorial(n - 1)</code></pre>
+  <div class="fragment" style="margin-top: 15px;">
+    <table>
+      <tr><th>Step</th><th>Call</th><th>Action</th><th>Stack Depth</th></tr>
+      <tr class="fragment"><td>1&ndash;8</td><td>factorial(5)</td><td>5 &gt; 1, recurse</td><td>1</td></tr>
+      <tr class="fragment"><td>9&ndash;16</td><td>factorial(4)</td><td>4 &gt; 1, recurse</td><td>2</td></tr>
+      <tr class="fragment"><td>17&ndash;24</td><td>factorial(3)</td><td>3 &gt; 1, recurse</td><td>3</td></tr>
+      <tr class="fragment"><td>25&ndash;32</td><td>factorial(2)</td><td>2 &gt; 1, recurse</td><td>4</td></tr>
+      <tr class="fragment"><td>33&ndash;40</td><td>factorial(1)</td><td>1 &le; 1, return 1</td><td>5</td></tr>
+      <tr class="fragment"><td>41&ndash;67</td><td colspan="2">Unwind: 1&times;2&times;3&times;4&times;5 = <strong class="accent2">120</strong></td><td>5&rarr;0</td></tr>
+    </table>
+  </div>
+  <p class="fragment small dim" style="margin-top: 10px;">67 steps, 5 recursive calls, full stack unwinding. Zero LLM involvement.</p>
+</section>
+
+<!-- Slide 22: Symbolic Execution -->
+<section>
+  <h2>Symbolic Execution</h2>
+  <p>Unknown values &rarr; <code class="accent3">SymbolicValue</code></p>
+  <pre><code class="language-python">response = fetch("/api/user")   # unknown!
+name = response.name            # symbolic field access
+greeting = "Hello, " + name     # symbolic propagation</code></pre>
+  <div class="fragment" style="margin-top: 15px;">
+    <table>
+      <tr><th>Register</th><th>Value</th><th>Mechanism</th></tr>
+      <tr><td><code>t0</code></td><td><code>sym_0</code></td><td>SYMBOLIC opcode</td></tr>
+      <tr><td><code>t1</code></td><td><code>sym_1</code></td><td>LOAD_FIELD on symbolic &rarr; materializes HeapObject</td></tr>
+      <tr><td><code>t2</code></td><td><code>sym_2</code></td><td>BINOP with symbolic operand</td></tr>
+    </table>
+  </div>
+  <ul style="margin-top: 15px;">
+    <li class="fragment"><strong class="accent">Materialization on demand:</strong> field access on <code>sym_0</code> creates a HeapObject with a <code>.name</code> field</li>
+    <li class="fragment"><strong class="accent2">Deduplication:</strong> repeated access to <code>response.name</code> returns the same symbolic value</li>
+    <li class="fragment"><strong class="accent3">Path conditions:</strong> <code>BRANCH_IF</code> on symbolic &rarr; records constraint (e.g., <code>"sym_0 > 0"</code>)</li>
+  </ul>
+</section>
+
+<!-- Slide 23: Closures & Heap -->
+<section>
+  <h2>Closures &amp; Heap</h2>
+  <div class="two-col">
+    <div>
+      <h3>Closure Capture</h3>
+      <pre><code class="language-python">def make_adder(x):
+    def add(y):
+        return x + y
+    return add
+
+add5 = make_adder(5)
+result = add5(3)  # => 8</code></pre>
+      <ul class="small" style="margin-top: 10px;">
+        <li class="fragment">Each closure gets a <strong class="accent">unique ID</strong></li>
+        <li class="fragment">Captured variables stored in <code>VMState.closures</code></li>
+        <li class="fragment">Invocation restores captured scope</li>
+      </ul>
+    </div>
+    <div class="fragment">
+      <h3>Heap Objects</h3>
+      <pre><code class="language-python">class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+p = Point(3, 4)
+# Heap:
+# "obj_0" -> HeapObject {
+#   class: "Point",
+#   fields: {x: 3, y: 4}
+# }</code></pre>
+      <p class="small dim" style="margin-top: 10px;">
+        Constructor dispatch: <code>NEW_OBJECT</code> &rarr; allocate &rarr; call <code>__init__</code> &rarr; <code>STORE_FIELD</code>
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- ACT 6: DESIGN & ENGINEERING                                  -->
+<!-- ============================================================ -->
+
+<!-- Slide 24: Why Flat IR? -->
+<section>
+  <h2>Why Flat IR?</h2>
+  <div style="margin-top: 20px;">
+    <div class="arch-box fragment" style="width: 80%; display: block; margin: 15px auto; text-align: left; padding: 15px 25px;">
+      <strong class="accent">No expression trees</strong><br>
+      <span class="small dim">Every intermediate value is named &rarr; trivial def-use analysis</span>
+    </div>
+    <div class="arch-box fragment" style="width: 80%; display: block; margin: 15px auto; text-align: left; padding: 15px 25px;">
+      <strong class="accent2">No register allocation</strong><br>
+      <span class="small dim">Infinite virtual registers &rarr; no spilling, no phi nodes</span>
+    </div>
+    <div class="arch-box fragment" style="width: 80%; display: block; margin: 15px auto; text-align: left; padding: 15px 25px;">
+      <strong class="accent3">Preserves high-level semantics</strong><br>
+      <span class="small dim">Variable names survive lowering &rarr; LLM can reason about original code</span>
+    </div>
+    <div class="arch-box fragment" style="width: 80%; display: block; margin: 15px auto; text-align: left; padding: 15px 25px;">
+      <strong class="accent4">Language-agnostic</strong><br>
+      <span class="small dim">Same 20 opcodes for all 15 languages &rarr; one VM, one analysis framework</span>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 25: Why Deterministic-First? -->
+<section>
+  <h2>Why Deterministic-First?</h2>
+  <div style="margin-top: 20px;">
+    <table>
+      <tr>
+        <th>Operation</th>
+        <th>Latency</th>
+        <th>Cost</th>
+      </tr>
+      <tr>
+        <td>Local VM step</td>
+        <td class="accent2"><strong>&lt; 1 &mu;s</strong></td>
+        <td class="accent2">$0</td>
+      </tr>
+      <tr>
+        <td>LLM API call</td>
+        <td class="accent4"><strong>100ms &ndash; 2s</strong></td>
+        <td class="accent4">$0.001 &ndash; $0.05</td>
+      </tr>
+    </table>
+  </div>
+  <div class="fragment" style="margin-top: 25px; padding: 15px; border: 1px solid var(--accent3); border-radius: 8px;">
+    <p><strong class="accent3">factorial(5)</strong>: 67 VM steps &times; ~1&mu;s = <strong>~67&mu;s total</strong></p>
+    <p>vs. 67 LLM calls &times; ~500ms = <strong>~33 seconds</strong></p>
+    <p class="small dim" style="margin-top: 8px;">That's a <strong>500,000x</strong> difference.</p>
+  </div>
+  <ul style="margin-top: 20px;">
+    <li class="fragment">Most real-world code is <strong class="accent2">fully concrete</strong> at any given call site</li>
+    <li class="fragment">Only genuinely external values (API responses, user input) need symbolic treatment</li>
+    <li class="fragment">The LLM is a <strong>scalpel</strong>, not a <strong>sledgehammer</strong></li>
+  </ul>
+</section>
+
+<!-- Slide 26: Design Patterns -->
+<section>
+  <h2>Design Patterns</h2>
+  <div class="two-col" style="font-size: 0.85em;">
+    <div>
+      <h3>Dispatch Tables</h3>
+      <p class="small">Frontend, VM, builtins &mdash; all use <code>dict[str, Callable]</code> dispatch. No inheritance hierarchies, no visitor pattern.</p>
+      <h3 style="margin-top: 20px;">Null Object</h3>
+      <p class="small"><code>SymbolicValue</code> flows through all operations without exceptions. No null checks &mdash; the value itself carries the "unknown" semantics.</p>
+    </div>
+    <div>
+      <h3>Materialization on Demand</h3>
+      <p class="small">Field access on symbolic values creates <code>HeapObject</code>s lazily. Only materialized fields exist &mdash; no speculative allocation.</p>
+      <h3 style="margin-top: 20px;">Dependency Injection</h3>
+      <p class="small">LLM clients, file I/O, all externals injected via constructor. Tests use fake clients &mdash; 0 real API calls, 0 <code>mock.patch</code>.</p>
+    </div>
+  </div>
+  <aside class="notes">
+    These patterns were chosen deliberately. Dispatch tables over visitors
+    because the IR is flat. Null object because symbolic values must propagate
+    without crashing. DI because we need fast, deterministic tests.
+  </aside>
+</section>
+
+<!-- Slide 27: Testing -->
+<section>
+  <h2>Testing</h2>
+  <div class="stats-grid" style="grid-template-columns: repeat(2, 1fr);">
+    <div class="stat-card">
+      <div class="number">507</div>
+      <div class="label">test functions</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">0</div>
+      <div class="label">real LLM calls in tests</div>
+    </div>
+  </div>
+  <ul style="margin-top: 20px;">
+    <li class="fragment"><strong class="accent">pytest + fixtures</strong> for setup, <code>tmp_path</code> for filesystem tests</li>
+    <li class="fragment"><strong class="accent2">Dependency injection</strong> with fake API clients &mdash; no <code>unittest.mock.patch</code></li>
+    <li class="fragment">Each language frontend has a <strong>dedicated test file</strong> (22 test files total)</li>
+    <li class="fragment">Integration tests use local repos (<code>~/code/mojo-lsp</code>, <code>~/code/smojol</code>)</li>
+  </ul>
+  <div class="fragment" style="margin-top: 20px;">
+    <pre><code class="language-python"># Example: testing with injected fake client
+def test_symbolic_execution(tmp_path):
+    client = FakeLLMClient(responses={"sym_0": "42"})
+    backend = ClaudeBackend(client=client)
+    result = run_program(source, backend=backend)
+    assert result["x"] == 42</code></pre>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- CLOSING                                                      -->
+<!-- ============================================================ -->
+
+<!-- Slide 28: By The Numbers -->
+<section>
+  <h2>By The Numbers</h2>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="number">~12.5K</div>
+      <div class="label">lines of code</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">20</div>
+      <div class="label">IR opcodes</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">15</div>
+      <div class="label">language frontends</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">507</div>
+      <div class="label">tests</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">4</div>
+      <div class="label">LLM providers</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">10</div>
+      <div class="label">builtins</div>
+    </div>
+  </div>
+  <div class="fragment" style="margin-top: 20px;">
+    <table>
+      <tr><th>Provider</th><th>Default Model</th></tr>
+      <tr><td>Claude</td><td><code>claude-sonnet-4-20250514</code></td></tr>
+      <tr><td>OpenAI</td><td><code>gpt-4o</code></td></tr>
+      <tr><td>Ollama</td><td><code>qwen2.5-coder:7b-instruct</code></td></tr>
+      <tr><td>HuggingFace</td><td><code>qwen2.5-coder-32b</code></td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- Slide 29: Q&A -->
+<section>
+  <h2>Q&amp;A</h2>
+  <div class="arch-flow" style="margin: 30px 0;">
+    <div class="arch-box">Source</div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box">Parse</div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box green">Lower</div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box green">IR</div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box">CFG</div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box green">VM</div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box orange">(LLM)</div>
+  </div>
+  <p class="tagline">"Deterministic where possible. Symbolic where necessary. LLM only as a last resort."</p>
+  <div style="margin-top: 30px;">
+    <p class="small dim">
+      github.com &middot; Python 3.13+ &middot; Poetry &middot; tree-sitter &middot; Neo4j (optional)
+    </p>
+  </div>
+  <aside class="notes">
+    Recap the architecture one more time. Key takeaway: the LLM is optional.
+    Most programs never need it. Questions?
+  </aside>
+</section>
+
+</div><!-- /.slides -->
+</div><!-- /.reveal -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reveal.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/plugin/highlight/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/plugin/notes/notes.min.js"></script>
+<script>
+  Reveal.initialize({
+    hash: true,
+    slideNumber: true,
+    transition: 'slide',
+    plugins: [RevealHighlight, RevealNotes]
+  });
+</script>
+</body>
+</html>
