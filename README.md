@@ -2,6 +2,22 @@
 
 A symbolic interpreter that parses source code, lowers it to a three-address code IR, builds a control flow graph, and executes it via a deterministic VM — falling back to an LLM only when the program references externals or operates on symbolic values.
 
+## Project structure
+
+```
+interpreter.py           # CLI entry point (argparse + main)
+interpreter/
+├── __init__.py          # re-exports run
+├── ir.py                # Opcode, IRInstruction
+├── parser.py            # Tree-sitter parsing layer
+├── frontend.py          # Frontend ABC, PythonFrontend, get_frontend()
+├── cfg.py               # BasicBlock, CFG, build_cfg()
+├── registry.py          # FunctionRegistry, build_registry(), builtins, local execution
+├── vm.py                # SymbolicValue, HeapObject, StackFrame, VMState, StateUpdate
+├── backend.py           # LLM backends (Claude, OpenAI)
+└── run.py               # run() orchestrator
+```
+
 ## How it works
 
 ```
