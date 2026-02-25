@@ -1,4 +1,4 @@
-# LLM Symbolic Interpreter
+# RedDragon
 
 ![CI](https://github.com/avishek-sen-gupta/red-dragon/actions/workflows/ci.yml/badge.svg)
 
