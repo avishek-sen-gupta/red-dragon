@@ -19,6 +19,18 @@
     }
     .reveal { font-size: 32px; }
     .reveal h1 { font-size: 1.8em; color: #4fc3f7; }
+    .reveal h1.banner-title {
+      text-transform: none;
+      color: #ffffff;
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 2.4em;
+      font-weight: bold;
+      text-shadow: 0 0 12px rgba(255, 255, 255, 0.4), 0 0 24px rgba(255, 255, 255, 0.2);
+    }
+    .banner-logo {
+      vertical-align: middle;
+      margin-right: 8px;
+    }
     .reveal h2 { font-size: 1.4em; color: #4fc3f7; }
     .reveal h3 { font-size: 1.1em; color: #81c784; }
     .reveal code { font-size: 0.75em; }
@@ -296,8 +308,8 @@
 
 <!-- Slide 1: Title -->
 <section>
-  <h1>RedDragon</h1>
-  <h2 style="color: #81c784;">LLM Symbolic Interpreter</h2>
+  <h1 class="banner-title"><svg class="banner-logo" viewBox="0 0 30 50" width="30" height="50"><polygon points="5,10 25,25 5,40" fill="#e57373"/></svg>Red<span style="color: #e57373;">Dragon</span></h1>
+  <h2 style="color: #90a4ae;">Multi-language LLM-assisted symbolic execution and dataflow analysis</h2>
   <p class="tagline">"Deterministic where possible. Symbolic where necessary. LLM only as a last resort."</p>
   <p class="small dim" style="margin-top: 40px;">~12,500 LOC &middot; 20 opcodes &middot; 15 frontends &middot; 507 tests &middot; 4 LLM providers</p>
   <aside class="notes">
