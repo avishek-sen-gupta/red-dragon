@@ -69,6 +69,8 @@ class BaseFrontend(Frontend):
         self._label_counter: int = 0
         self._instructions: list[IRInstruction] = []
         self._source: bytes = b""
+        self._loop_stack: list[dict[str, str]] = []
+        self._break_target_stack: list[str] = []
         self._STMT_DISPATCH: dict[str, Callable] = {}
         self._EXPR_DISPATCH: dict[str, Callable] = {}
 
@@ -116,6 +118,8 @@ class BaseFrontend(Frontend):
         self._label_counter = 0
         self._instructions = []
         self._source = source
+        self._loop_stack = []
+        self._break_target_stack = []
         root = tree.root_node
         self._emit(Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)
         self._lower_block(root)
@@ -542,6 +546,52 @@ class BaseFrontend(Frontend):
             self._lower_alternative(alt_node, end_label)
             self._emit(Opcode.BRANCH, label=end_label)
 
+    def _lower_break(self, node):
+        """Lower break statement as BRANCH to innermost break target."""
+        if self._break_target_stack:
+            self._emit(
+                Opcode.BRANCH,
+                label=self._break_target_stack[-1],
+                source_location=self._source_loc(node),
+            )
+        else:
+            reg = self._fresh_reg()
+            self._emit(
+                Opcode.SYMBOLIC,
+                result_reg=reg,
+                operands=["break_outside_loop_or_switch"],
+                source_location=self._source_loc(node),
+            )
+
+    def _lower_continue(self, node):
+        """Lower continue statement as BRANCH to innermost loop continue label."""
+        if self._loop_stack:
+            self._emit(
+                Opcode.BRANCH,
+                label=self._loop_stack[-1]["continue_label"],
+                source_location=self._source_loc(node),
+            )
+        else:
+            reg = self._fresh_reg()
+            self._emit(
+                Opcode.SYMBOLIC,
+                result_reg=reg,
+                operands=["continue_outside_loop"],
+                source_location=self._source_loc(node),
+            )
+
+    def _push_loop(self, continue_label: str, end_label: str):
+        """Push a loop context onto both the loop stack and break target stack."""
+        self._loop_stack.append(
+            {"continue_label": continue_label, "end_label": end_label}
+        )
+        self._break_target_stack.append(end_label)
+
+    def _pop_loop(self):
+        """Pop a loop context from both stacks."""
+        self._loop_stack.pop()
+        self._break_target_stack.pop()
+
     def _lower_while(self, node):
         cond_node = node.child_by_field_name(self.WHILE_CONDITION_FIELD)
         body_node = node.child_by_field_name(self.WHILE_BODY_FIELD)
@@ -560,7 +610,9 @@ class BaseFrontend(Frontend):
         )
 
         self._emit(Opcode.LABEL, label=body_label)
+        self._push_loop(loop_label, end_label)
         self._lower_block(body_node)
+        self._pop_loop()
         self._emit(Opcode.BRANCH, label=loop_label)
 
         self._emit(Opcode.LABEL, label=end_label)
@@ -591,9 +643,13 @@ class BaseFrontend(Frontend):
             self._emit(Opcode.BRANCH, label=body_label)
 
         self._emit(Opcode.LABEL, label=body_label)
+        update_label = self._fresh_label("for_update") if update_node else loop_label
+        self._push_loop(update_label, end_label)
         if body_node:
             self._lower_block(body_node)
+        self._pop_loop()
         if update_node:
+            self._emit(Opcode.LABEL, label=update_label)
             self._lower_expr(update_node)
         self._emit(Opcode.BRANCH, label=loop_label)
 

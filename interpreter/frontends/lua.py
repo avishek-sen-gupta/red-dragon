@@ -73,6 +73,7 @@ class LuaFrontend(BaseFrontend):
             "return_statement": self._lower_lua_return,
             "do_statement": self._lower_lua_do,
             "expression_statement": self._lower_expression_statement,
+            "break_statement": self._lower_break,
         }
 
     # -- Lua: entry point override --------------------------------------------------
@@ -83,6 +84,8 @@ class LuaFrontend(BaseFrontend):
         self._label_counter = 0
         self._instructions = []
         self._source = source
+        self._loop_stack = []
+        self._break_target_stack = []
         root = tree.root_node
         self._emit(Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)
         self._lower_block(root)
@@ -476,8 +479,10 @@ class LuaFrontend(BaseFrontend):
         )
 
         self._emit(Opcode.LABEL, label=body_label)
+        self._push_loop(loop_label, end_label)
         if body_node:
             self._lower_block(body_node)
+        self._pop_loop()
         self._emit(Opcode.BRANCH, label=loop_label)
 
         self._emit(Opcode.LABEL, label=end_label)
@@ -547,9 +552,13 @@ class LuaFrontend(BaseFrontend):
         )
 
         self._emit(Opcode.LABEL, label=body_label)
+        update_label = self._fresh_label("for_update")
+        self._push_loop(update_label, end_label)
         if body_node:
             self._lower_block(body_node)
+        self._pop_loop()
 
+        self._emit(Opcode.LABEL, label=update_label)
         next_reg = self._fresh_reg()
         cur_reg = self._fresh_reg()
         self._emit(Opcode.LOAD_VAR, result_reg=cur_reg, operands=[var_name])
@@ -564,7 +573,7 @@ class LuaFrontend(BaseFrontend):
         self._emit(Opcode.LABEL, label=end_label)
 
     def _lower_lua_for_generic(self, clause, body_node, for_node):
-        """Lower for k, v in pairs(t) do ... end — emit as SYMBOLIC iteration."""
+        """Lower for k, v in pairs(t) do ... end — SYMBOLIC iterator with loop structure."""
         reg = self._fresh_reg()
         self._emit(
             Opcode.SYMBOLIC,
@@ -572,8 +581,32 @@ class LuaFrontend(BaseFrontend):
             operands=["generic_for_iteration"],
             source_location=self._source_loc(for_node),
         )
+
+        loop_label = self._fresh_label("generic_for_cond")
+        body_label = self._fresh_label("generic_for_body")
+        end_label = self._fresh_label("generic_for_end")
+
+        self._emit(Opcode.LABEL, label=loop_label)
+        cond_reg = self._fresh_reg()
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=cond_reg,
+            operands=["generic_for_has_next"],
+        )
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[cond_reg],
+            label=f"{body_label},{end_label}",
+        )
+
+        self._emit(Opcode.LABEL, label=body_label)
+        self._push_loop(loop_label, end_label)
         if body_node:
             self._lower_block(body_node)
+        self._pop_loop()
+        self._emit(Opcode.BRANCH, label=loop_label)
+
+        self._emit(Opcode.LABEL, label=end_label)
 
     # -- Lua: repeat-until (do-while) ----------------------------------------------
 
@@ -586,8 +619,10 @@ class LuaFrontend(BaseFrontend):
         end_label = self._fresh_label("repeat_end")
 
         self._emit(Opcode.LABEL, label=body_label)
+        self._push_loop(body_label, end_label)
         if body_node:
             self._lower_block(body_node)
+        self._pop_loop()
 
         cond_reg = self._lower_expr(cond_node)
         # repeat-until: loop continues while condition is FALSE

@@ -450,8 +450,10 @@ class KotlinFrontend(BaseFrontend):
         )
 
         self._emit(Opcode.LABEL, label=body_label)
+        self._push_loop(loop_label, end_label)
         if body_node:
             self._lower_block(body_node)
+        self._pop_loop()
         self._emit(Opcode.BRANCH, label=loop_label)
 
         self._emit(Opcode.LABEL, label=end_label)
@@ -504,9 +506,13 @@ class KotlinFrontend(BaseFrontend):
         self._emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
         self._emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
 
+        update_label = self._fresh_label("for_update")
+        self._push_loop(update_label, end_label)
         if body_node:
             self._lower_block(body_node)
+        self._pop_loop()
 
+        self._emit(Opcode.LABEL, label=update_label)
         one_reg = self._fresh_reg()
         self._emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
         new_idx = self._fresh_reg()
@@ -652,6 +658,10 @@ class KotlinFrontend(BaseFrontend):
             )
         elif text.startswith("throw"):
             self._lower_raise_or_throw(node, keyword="throw")
+        elif text.startswith("break"):
+            self._lower_break(node)
+        elif text.startswith("continue"):
+            self._lower_continue(node)
         else:
             reg = self._fresh_reg()
             self._emit(

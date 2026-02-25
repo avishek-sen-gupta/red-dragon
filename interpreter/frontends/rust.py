@@ -87,6 +87,8 @@ class RustFrontend(BaseFrontend):
             "use_declaration": lambda _: None,
             "attribute_item": lambda _: None,
             "macro_invocation": self._lower_macro_stmt,
+            "break_expression": self._lower_break,
+            "continue_expression": self._lower_continue,
         }
 
     # -- let declaration ---------------------------------------------------
@@ -280,8 +282,10 @@ class RustFrontend(BaseFrontend):
         end_label = self._fresh_label("loop_end")
 
         self._emit(Opcode.LABEL, label=loop_label)
+        self._push_loop(loop_label, end_label)
         if body_node:
             self._lower_block(body_node)
+        self._pop_loop()
         self._emit(Opcode.BRANCH, label=loop_label)
         self._emit(Opcode.LABEL, label=end_label)
 
@@ -317,9 +321,13 @@ class RustFrontend(BaseFrontend):
         self._emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
         self._emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
 
+        update_label = self._fresh_label("for_update")
+        self._push_loop(update_label, end_label)
         if body_node:
             self._lower_block(body_node)
+        self._pop_loop()
 
+        self._emit(Opcode.LABEL, label=update_label)
         one_reg = self._fresh_reg()
         self._emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
         new_idx = self._fresh_reg()

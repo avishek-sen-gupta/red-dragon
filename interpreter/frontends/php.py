@@ -68,6 +68,8 @@ class PhpFrontend(BaseFrontend):
             "throw_expression": self._lower_php_throw,
             "compound_statement": self._lower_php_compound,
             "program": self._lower_block,
+            "break_statement": self._lower_break,
+            "continue_statement": self._lower_continue,
         }
 
     # -- PHP: compound statement (block with braces) ---------------------------
@@ -309,13 +311,43 @@ class PhpFrontend(BaseFrontend):
     # -- PHP: foreach statement ------------------------------------------------
 
     def _lower_php_foreach(self, node):
-        reg = self._fresh_reg()
+        """Lower foreach ($arr as $k => $v) { body } with SYMBOLIC iterator."""
+        body_node = node.child_by_field_name("body")
+
+        # Emit SYMBOLIC for the iterator (PHP array iteration is not deterministic)
+        iter_reg = self._fresh_reg()
         self._emit(
             Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=[f"foreach:{self._node_text(node)[:60]}"],
+            result_reg=iter_reg,
+            operands=[f"foreach_iter:{self._node_text(node)[:60]}"],
             source_location=self._source_loc(node),
         )
+
+        loop_label = self._fresh_label("foreach_cond")
+        body_label = self._fresh_label("foreach_body")
+        end_label = self._fresh_label("foreach_end")
+
+        self._emit(Opcode.LABEL, label=loop_label)
+        cond_reg = self._fresh_reg()
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=cond_reg,
+            operands=["foreach_has_next"],
+        )
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[cond_reg],
+            label=f"{body_label},{end_label}",
+        )
+
+        self._emit(Opcode.LABEL, label=body_label)
+        self._push_loop(loop_label, end_label)
+        if body_node:
+            self._lower_block(body_node)
+        self._pop_loop()
+
+        self._emit(Opcode.BRANCH, label=loop_label)
+        self._emit(Opcode.LABEL, label=end_label)
 
     # -- PHP: function definition ----------------------------------------------
 

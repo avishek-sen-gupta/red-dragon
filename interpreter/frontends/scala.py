@@ -81,6 +81,8 @@ class ScalaFrontend(BaseFrontend):
             "compilation_unit": self._lower_block,
             "import_declaration": lambda _: None,
             "package_clause": lambda _: None,
+            "break_expression": self._lower_break,
+            "continue_expression": self._lower_continue,
         }
 
     # -- val / var definition ----------------------------------------------

@@ -64,6 +64,8 @@ class GoFrontend(BaseFrontend):
             "statement_list": self._lower_block,
             "source_file": self._lower_block,
             "var_declaration": self._lower_go_var_decl,
+            "break_statement": self._lower_break,
+            "continue_statement": self._lower_continue,
         }
 
     # -- Go: block (iterate named children, skip braces) -----------------------
@@ -330,9 +332,13 @@ class GoFrontend(BaseFrontend):
             self._emit(Opcode.BRANCH, label=body_label)
 
         self._emit(Opcode.LABEL, label=body_label)
+        update_label = self._fresh_label("for_update") if update_node else loop_label
+        self._push_loop(update_label, end_label)
         if body_node:
             self._lower_go_block(body_node)
+        self._pop_loop()
         if update_node:
+            self._emit(Opcode.LABEL, label=update_label)
             self._lower_stmt(update_node)
         self._emit(Opcode.BRANCH, label=loop_label)
 
@@ -378,9 +384,13 @@ class GoFrontend(BaseFrontend):
             )
             self._emit(Opcode.STORE_VAR, operands=[var_names[1], elem_reg])
 
+        update_label = self._fresh_label("range_update")
+        self._push_loop(update_label, end_label)
         if body_node:
             self._lower_go_block(body_node)
+        self._pop_loop()
 
+        self._emit(Opcode.LABEL, label=update_label)
         one_reg = self._fresh_reg()
         self._emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
         new_idx = self._fresh_reg()
@@ -419,8 +429,10 @@ class GoFrontend(BaseFrontend):
             self._emit(Opcode.BRANCH, label=body_label)
 
         self._emit(Opcode.LABEL, label=body_label)
+        self._push_loop(loop_label, end_label)
         if body_node:
             self._lower_go_block(body_node)
+        self._pop_loop()
         self._emit(Opcode.BRANCH, label=loop_label)
 
         self._emit(Opcode.LABEL, label=end_label)
