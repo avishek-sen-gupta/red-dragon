@@ -175,3 +175,150 @@ class TestKotlinSpecial:
         )
         consts = _find_all(instructions, Opcode.CONST)
         assert any("__lambda" in str(inst.operands) for inst in consts)
+
+
+def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
+    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+
+
+class TestNonTrivialKotlin:
+    def test_when_with_multiple_branches(self):
+        source = """\
+fun main() {
+    val r = when (x) {
+        1 -> 10
+        2 -> 20
+        3 -> 30
+        4 -> 40
+        else -> 0
+    }
+}
+"""
+        instructions = _parse_kotlin(source)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 4
+        labels = _labels_in_order(instructions)
+        assert any("when" in lbl for lbl in labels)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("r" in inst.operands for inst in stores)
+        assert len(instructions) > 20
+
+    def test_lambda_in_method_call(self):
+        source = """\
+fun main() {
+    val doubled = items.map { it * 2 }
+}
+"""
+        instructions = _parse_kotlin(source)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("map" in str(inst.operands) for inst in calls)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("doubled" in inst.operands for inst in stores)
+
+    def test_class_with_method_and_property(self):
+        source = """\
+class Counter {
+    var count: Int = 0
+    fun increment() {
+        count = count + 1
+    }
+    fun value(): Int {
+        return count
+    }
+}
+"""
+        instructions = _parse_kotlin(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Counter" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("class:" in str(inst.operands) for inst in consts)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 1
+        assert len(instructions) > 15
+
+    def test_for_loop_with_conditional(self):
+        source = """\
+fun main() {
+    var total = 0
+    for (item in items) {
+        if (item > 10) {
+            total = total + item
+        }
+    }
+}
+"""
+        instructions = _parse_kotlin(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("total" in inst.operands for inst in stores)
+        assert len(instructions) > 15
+
+    def test_if_expression_as_value(self):
+        source = """\
+fun main() {
+    val grade = if (score > 90) "A"
+        else if (score > 70) "B"
+        else if (score > 50) "C"
+        else "F"
+}
+"""
+        instructions = _parse_kotlin(source)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 3
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("grade" in inst.operands for inst in stores)
+        labels = _labels_in_order(instructions)
+        assert any("if_true" in lbl for lbl in labels)
+
+    def test_while_with_when_inside(self):
+        source = """\
+fun main() {
+    var i = 0
+    while (i < 10) {
+        val label = when {
+            i > 5 -> "high"
+            else -> "low"
+        }
+        i = i + 1
+    }
+}
+"""
+        instructions = _parse_kotlin(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.BRANCH in opcodes
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        labels = _labels_in_order(instructions)
+        assert any("while" in lbl for lbl in labels)
+        assert len(instructions) > 15
+
+    def test_extension_function(self):
+        source = """\
+fun Int.double(): Int {
+    return this * 2
+}
+"""
+        instructions = _parse_kotlin(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.RETURN in opcodes
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("*" in inst.operands for inst in binops)
+
+    def test_null_safety_navigation(self):
+        source = """\
+fun main() {
+    val name = user?.name
+    val upper = name?.toUpperCase()
+}
+"""
+        instructions = _parse_kotlin(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("name" in inst.operands for inst in stores)
+        assert any("upper" in inst.operands for inst in stores)
+        assert len(instructions) > 3

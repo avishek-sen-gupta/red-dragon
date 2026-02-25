@@ -195,3 +195,179 @@ class TestJavaSpecial:
         instructions = _parse_java("class M { void m() { synchronized(this) { } } }")
         opcodes = _opcodes(instructions)
         assert Opcode.SYMBOLIC in opcodes
+
+
+def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
+    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+
+
+class TestNonTrivialJava:
+    def test_enhanced_for_with_conditional_accumulator(self):
+        source = """\
+class M {
+    void m() {
+        int[] nums = {1, 2, 3, 4, 5};
+        int total = 0;
+        for (int n : nums) {
+            if (n > 2) {
+                total = total + n;
+            }
+        }
+    }
+}
+"""
+        instructions = _parse_java(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.LOAD_INDEX in opcodes
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("total" in inst.operands for inst in stores)
+        assert len(instructions) > 20
+
+    def test_method_chaining(self):
+        source = """\
+class M {
+    void m() {
+        String result = new StringBuilder()
+            .append("hello")
+            .append(" ")
+            .append("world")
+            .toString();
+    }
+}
+"""
+        instructions = _parse_java(source)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        method_names = [inst.operands[1] for inst in calls if len(inst.operands) > 1]
+        assert method_names.count("append") >= 3
+        assert "toString" in method_names
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("result" in inst.operands for inst in stores)
+
+    def test_interface_and_instanceof(self):
+        source = """\
+interface Shape {}
+class Circle implements Shape {
+    double radius;
+    Circle(double r) { this.radius = r; }
+}
+"""
+        instructions = _parse_java(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert any("interface:Shape" in str(inst.operands) for inst in symbolics)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Circle" in inst.operands for inst in stores)
+        store_fields = _find_all(instructions, Opcode.STORE_FIELD)
+        assert any("radius" in inst.operands for inst in store_fields)
+
+    def test_try_catch_with_throw(self):
+        source = """\
+class M {
+    void m() {
+        try {
+            int result = riskyOp();
+            System.out.println(result);
+        } catch (Exception e) {
+            throw new RuntimeException("failed: " + e.getMessage());
+        }
+    }
+}
+"""
+        instructions = _parse_java(source)
+        opcodes = _opcodes(instructions)
+        # try/catch is lowered as SYMBOLIC block
+        assert Opcode.SYMBOLIC in opcodes or Opcode.THROW in opcodes
+        assert len(instructions) > 3
+
+    def test_constructor_with_field_init(self):
+        source = """\
+class Dog {
+    String name;
+    int age;
+    Dog(String n, int a) {
+        this.name = n;
+        this.age = a;
+    }
+    String describe() {
+        return name + " is " + age;
+    }
+}
+"""
+        instructions = _parse_java(source)
+        store_fields = _find_all(instructions, Opcode.STORE_FIELD)
+        assert any("name" in str(inst.operands) for inst in store_fields)
+        assert any("age" in str(inst.operands) for inst in store_fields)
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 1
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+        assert len(instructions) > 20
+
+    def test_nested_for_loops_with_array(self):
+        source = """\
+class M {
+    void m() {
+        int[][] grid = {{1,2},{3,4}};
+        int sum = 0;
+        for (int i = 0; i < 2; i++) {
+            for (int j = 0; j < 2; j++) {
+                sum = sum + grid[i][j];
+            }
+        }
+    }
+}
+"""
+        instructions = _parse_java(source)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("sum" in inst.operands for inst in stores)
+        assert any("i" in inst.operands for inst in stores)
+        assert any("j" in inst.operands for inst in stores)
+        assert len(instructions) > 25
+
+    def test_enum_usage(self):
+        source = """\
+enum Color { RED, GREEN, BLUE }
+class M {
+    void m() {
+        if (c == Color.RED) {
+            x = 1;
+        } else {
+            x = 0;
+        }
+    }
+}
+"""
+        instructions = _parse_java(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert any("enum:Color" in str(inst.operands) for inst in symbolics)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+
+    def test_while_with_method_calls(self):
+        source = """\
+class M {
+    void m() {
+        int count = 0;
+        while (count < 10) {
+            System.out.println(count);
+            list.add(count);
+            count = count + 1;
+        }
+    }
+}
+"""
+        instructions = _parse_java(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.BRANCH in opcodes
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        method_names = [inst.operands[1] for inst in calls if len(inst.operands) > 1]
+        assert "println" in method_names
+        assert "add" in method_names
+        labels = _labels_in_order(instructions)
+        assert any("while" in lbl for lbl in labels)
+        assert len(instructions) > 20

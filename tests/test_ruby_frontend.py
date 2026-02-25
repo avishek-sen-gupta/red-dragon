@@ -229,3 +229,150 @@ class TestRubySpecial:
         instructions = _parse_ruby("BEGIN { puts 'start' }")
         opcodes = _opcodes(instructions)
         assert Opcode.SYMBOLIC in opcodes
+
+
+def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
+    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+
+
+class TestNonTrivialRuby:
+    def test_unless_with_early_return(self):
+        source = """\
+def validate(x)
+  unless x > 0
+    return -1
+  end
+  x * 2
+end
+"""
+        instructions = _parse_ruby(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.UNOP in opcodes
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.RETURN in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("validate" in inst.operands for inst in stores)
+
+    def test_until_loop_with_mutation(self):
+        source = """\
+x = 100
+total = 0
+until x <= 0
+  total += x
+  x -= 10
+end
+"""
+        instructions = _parse_ruby(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.UNOP in opcodes
+        assert Opcode.BRANCH_IF in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("total" in inst.operands for inst in stores)
+        assert any("x" in inst.operands for inst in stores)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+        assert any("-" in inst.operands for inst in binops)
+        assert len(instructions) > 15
+
+    def test_elsif_chain(self):
+        source = """\
+if score > 90
+  grade = 'A'
+elsif score > 80
+  grade = 'B'
+elsif score > 70
+  grade = 'C'
+else
+  grade = 'F'
+end
+"""
+        instructions = _parse_ruby(source)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 3
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("grade" in inst.operands for inst in stores)
+        labels = _labels_in_order(instructions)
+        assert len(labels) >= 4
+
+    def test_class_with_initialize_and_method(self):
+        source = """\
+class Counter
+  def initialize(start)
+    @count = start
+  end
+  def increment
+    @count = @count + 1
+  end
+  def value
+    @count
+  end
+end
+"""
+        instructions = _parse_ruby(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Counter" in inst.operands for inst in stores)
+        assert any("@count" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("class:" in str(inst.operands) for inst in consts)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+        assert len(instructions) > 20
+
+    def test_hash_with_symbol_keys(self):
+        source = """\
+config = {name: 'app', version: 2, debug: true}
+val = config[:name]
+"""
+        instructions = _parse_ruby(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_OBJECT in opcodes
+        assert Opcode.STORE_INDEX in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("config" in inst.operands for inst in stores)
+        assert any("val" in inst.operands for inst in stores)
+
+    def test_while_with_nested_if_else(self):
+        source = """\
+count = 0
+sum = 0
+while count < 20
+  if count % 2 == 0
+    sum += count
+  else
+    sum -= 1
+  end
+  count += 1
+end
+"""
+        instructions = _parse_ruby(source)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        labels = _labels_in_order(instructions)
+        assert any("while" in lbl for lbl in labels)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("sum" in inst.operands for inst in stores)
+        assert any("count" in inst.operands for inst in stores)
+        assert len(instructions) > 20
+
+    def test_method_chaining_on_array(self):
+        source = """\
+result = items.select { |x| x > 0 }.map { |x| x * 2 }.first
+"""
+        instructions = _parse_ruby(source)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert len(calls) >= 1
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("result" in inst.operands for inst in stores)
+
+    def test_block_call_with_do_end(self):
+        source = """\
+items.each do |item|
+  puts item
+  total += item
+end
+"""
+        instructions = _parse_ruby(source)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("each" in inst.operands for inst in calls)
+        # Block body is not fully lowered; method call is captured
+        assert len(instructions) > 1

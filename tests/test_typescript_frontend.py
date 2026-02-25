@@ -175,3 +175,158 @@ class TestTypeScriptControlFlow:
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BRANCH in opcodes
+
+
+def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
+    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+
+
+class TestNonTrivialTypeScript:
+    def test_typed_function_with_interface_param(self):
+        source = """\
+interface User { name: string; age: number; }
+function greet(user: User): string {
+    return "Hello " + user.name;
+}
+"""
+        instructions = _parse_ts(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert any("interface:User" in str(inst.operands) for inst in symbolics)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("greet" in inst.operands for inst in stores)
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 1
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+    def test_enum_with_conditional_logic(self):
+        source = """\
+enum Status { Active, Inactive, Pending }
+const s: Status = Status.Active;
+if (s === Status.Active) {
+    x = 1;
+} else {
+    x = 0;
+}
+"""
+        instructions = _parse_ts(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_OBJECT in opcodes
+        assert Opcode.BRANCH_IF in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Status" in inst.operands for inst in stores)
+        assert any("s" in inst.operands for inst in stores)
+        assert len(instructions) > 15
+
+    def test_class_with_typed_methods(self):
+        source = """\
+class Stack {
+    items: number[];
+    constructor() {
+        this.items = [];
+    }
+    push(val: number): void {
+        this.items.push(val);
+    }
+    size(): number {
+        return this.items.length;
+    }
+}
+"""
+        instructions = _parse_ts(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Stack" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("class:" in str(inst.operands) for inst in consts)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("push" in inst.operands for inst in calls)
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 1
+        assert len(instructions) > 20
+
+    def test_arrow_with_type_annotations(self):
+        source = """\
+const add = (a: number, b: number): number => a + b;
+const result: number = add(1, 2);
+"""
+        instructions = _parse_ts(source)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("add" in inst.operands for inst in stores)
+        assert any("result" in inst.operands for inst in stores)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("add" in inst.operands for inst in calls)
+
+    def test_for_of_with_type_assertion(self):
+        source = """\
+const items: any[] = [1, 2, 3];
+let total: number = 0;
+for (const item of items) {
+    total = total + (item as number);
+}
+"""
+        instructions = _parse_ts(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.NEW_ARRAY in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("total" in inst.operands for inst in stores)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+    def test_export_function_with_logic(self):
+        source = """\
+export function clamp(val: number, min: number, max: number): number {
+    if (val < min) {
+        return min;
+    }
+    if (val > max) {
+        return max;
+    }
+    return val;
+}
+"""
+        instructions = _parse_ts(source)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 3
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("clamp" in inst.operands for inst in stores)
+
+    def test_non_null_assertion_chain(self):
+        source = """\
+const name: string = obj!.user!.name;
+const upper: string = name.toUpperCase();
+"""
+        instructions = _parse_ts(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("name" in inst.operands for inst in stores)
+        assert any("upper" in inst.operands for inst in stores)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("toUpperCase" in inst.operands for inst in calls)
+
+    def test_interface_and_implementing_class(self):
+        source = """\
+interface Shape { area(): number; }
+class Circle {
+    radius: number;
+    constructor(r: number) {
+        this.radius = r;
+    }
+    area(): number {
+        return 3.14 * this.radius * this.radius;
+    }
+}
+"""
+        instructions = _parse_ts(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert any("interface:Shape" in str(inst.operands) for inst in symbolics)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Circle" in inst.operands for inst in stores)
+        store_fields = _find_all(instructions, Opcode.STORE_FIELD)
+        assert any("radius" in inst.operands for inst in store_fields)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("*" in inst.operands for inst in binops)
+        assert len(instructions) > 20
