@@ -135,6 +135,34 @@ Unsupported language constructs emit a `SYMBOLIC` opcode with a descriptive hint
 
 For languages not listed above, use the LLM frontend (`--frontend llm`) which supports any language.
 
+## Example: CFG for an if/else function
+
+The `classify` function produces a 4-block CFG with a branch and merge point:
+
+```python
+def classify(x):
+    if x > 0:
+        label = "positive"
+    else:
+        label = "negative"
+    return label
+```
+
+```mermaid
+flowchart TD
+    entry["<b>entry</b><br>LOAD x · CONST 0 · BINOP ><br>BRANCH_IF"]
+    if_true["<b>if_true</b><br>CONST &quot;positive&quot;<br>STORE_VAR label"]
+    if_false["<b>if_false</b><br>CONST &quot;negative&quot;<br>STORE_VAR label"]
+    merge["<b>merge</b><br>LOAD_VAR label<br>RETURN"]
+
+    entry -- T --> if_true
+    entry -- F --> if_false
+    if_true --> merge
+    if_false --> merge
+```
+
+All 15 language frontends produce the same CFG shape for equivalent logic.
+
 ## IR opcodes
 
 | Category | Opcodes |
@@ -336,6 +364,35 @@ The analysis includes:
 - **Variable dependency graph** — traces register chains backward to named variables with transitive closure
 
 All functions are pure (no mutation of inputs), calls are treated as opaque, and no type information is required.
+
+### Example: dependency graph
+
+```python
+def process_order(price, quantity, tax_rate, has_discount):
+    subtotal = price * quantity
+    tax = subtotal * tax_rate
+    if has_discount:
+        discount = subtotal * 0.1
+        total = subtotal + tax - discount
+    else:
+        total = subtotal + tax
+    return total
+```
+
+```mermaid
+flowchart TD
+    price([price]) --> subtotal
+    quantity([quantity]) --> subtotal
+    subtotal([subtotal]) --> tax
+    tax_rate([tax_rate]) --> tax
+    subtotal --> discount
+    has_discount([has_discount]) -.-> discount([discount])
+    subtotal --> total
+    tax([tax]) --> total
+    discount --> total(["<b>total</b>"])
+```
+
+The graph shows that `total` transitively depends on all four parameters. The dashed edge from `has_discount` to `discount` represents a conditional dependency (the discount path is only taken when `has_discount` is truthy).
 
 ## When the LLM is used
 
