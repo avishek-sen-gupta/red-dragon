@@ -1,0 +1,649 @@
+"""PhpFrontend — tree-sitter PHP AST -> IR lowering."""
+
+from __future__ import annotations
+
+import logging
+from typing import Callable
+
+from ._base import BaseFrontend
+from ..ir import Opcode
+from .. import constants
+
+logger = logging.getLogger(__name__)
+
+
+class PhpFrontend(BaseFrontend):
+    """Lowers a PHP tree-sitter AST into flattened TAC IR."""
+
+    NONE_LITERAL = "null"
+    TRUE_LITERAL = "true"
+    FALSE_LITERAL = "false"
+    DEFAULT_RETURN_VALUE = "null"
+
+    ATTRIBUTE_NODE_TYPE = "member_access_expression"
+    ATTR_OBJECT_FIELD = "object"
+    ATTR_ATTRIBUTE_FIELD = "name"
+
+    COMMENT_TYPES = frozenset({"comment"})
+    NOISE_TYPES = frozenset({"php_tag", "text_interpolation", "php_end_tag", "\n"})
+
+    def __init__(self):
+        super().__init__()
+        self._EXPR_DISPATCH: dict[str, Callable] = {
+            "variable_name": self._lower_php_variable,
+            "name": self._lower_identifier,
+            "integer": self._lower_const_literal,
+            "float": self._lower_const_literal,
+            "string": self._lower_const_literal,
+            "encapsed_string": self._lower_const_literal,
+            "boolean": self._lower_const_literal,
+            "null": self._lower_const_literal,
+            "binary_expression": self._lower_binop,
+            "unary_op_expression": self._lower_unop,
+            "update_expression": self._lower_update_expr,
+            "function_call_expression": self._lower_php_func_call,
+            "member_call_expression": self._lower_php_method_call,
+            "member_access_expression": self._lower_php_member_access,
+            "subscript_expression": self._lower_php_subscript,
+            "parenthesized_expression": self._lower_paren,
+            "array_creation_expression": self._lower_php_array,
+            "assignment_expression": self._lower_php_assignment_expr,
+            "augmented_assignment_expression": self._lower_php_augmented_assignment_expr,
+            "cast_expression": self._lower_php_cast,
+            "conditional_expression": self._lower_php_ternary,
+            "throw_expression": self._lower_php_throw_expr,
+            "object_creation_expression": self._lower_php_object_creation,
+        }
+        self._STMT_DISPATCH: dict[str, Callable] = {
+            "expression_statement": self._lower_expression_statement,
+            "return_statement": self._lower_php_return,
+            "echo_statement": self._lower_php_echo,
+            "if_statement": self._lower_php_if,
+            "while_statement": self._lower_while,
+            "for_statement": self._lower_c_style_for,
+            "foreach_statement": self._lower_php_foreach,
+            "function_definition": self._lower_php_func_def,
+            "method_declaration": self._lower_php_method_decl,
+            "class_declaration": self._lower_php_class,
+            "throw_expression": self._lower_php_throw,
+            "compound_statement": self._lower_php_compound,
+            "program": self._lower_block,
+        }
+
+    # -- PHP: compound statement (block with braces) ---------------------------
+
+    def _lower_php_compound(self, node):
+        for child in node.children:
+            if child.type not in ("{", "}") and child.is_named:
+                self._lower_stmt(child)
+
+    # -- PHP: variable ($x) ---------------------------------------------------
+
+    def _lower_php_variable(self, node) -> str:
+        var_name = self._node_text(node)
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_VAR,
+            result_reg=reg,
+            operands=[var_name],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- PHP: function call expression -----------------------------------------
+
+    def _lower_php_func_call(self, node) -> str:
+        func_node = node.child_by_field_name("function")
+        args_node = node.child_by_field_name("arguments")
+        arg_regs = self._extract_call_args_unwrap(args_node) if args_node else []
+
+        if func_node and func_node.type in ("name", "qualified_name"):
+            func_name = self._node_text(func_node)
+            reg = self._fresh_reg()
+            self._emit(
+                Opcode.CALL_FUNCTION,
+                result_reg=reg,
+                operands=[func_name] + arg_regs,
+                source_location=self._source_loc(node),
+            )
+            return reg
+
+        # Dynamic call target
+        target_reg = self._lower_expr(func_node) if func_node else self._fresh_reg()
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_UNKNOWN,
+            result_reg=reg,
+            operands=[target_reg] + arg_regs,
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- PHP: method call expression ($obj->method(...)) -----------------------
+
+    def _lower_php_method_call(self, node) -> str:
+        obj_node = node.child_by_field_name("object")
+        name_node = node.child_by_field_name("name")
+        args_node = node.child_by_field_name("arguments")
+        arg_regs = self._extract_call_args_unwrap(args_node) if args_node else []
+
+        obj_reg = self._lower_expr(obj_node) if obj_node else self._fresh_reg()
+        method_name = self._node_text(name_node) if name_node else "unknown"
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_METHOD,
+            result_reg=reg,
+            operands=[obj_reg, method_name] + arg_regs,
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- PHP: member access ($obj->field) --------------------------------------
+
+    def _lower_php_member_access(self, node) -> str:
+        obj_node = node.child_by_field_name("object")
+        name_node = node.child_by_field_name("name")
+        if obj_node is None or name_node is None:
+            return self._lower_const_literal(node)
+        obj_reg = self._lower_expr(obj_node)
+        field_name = self._node_text(name_node)
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_FIELD,
+            result_reg=reg,
+            operands=[obj_reg, field_name],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- PHP: subscript ($arr[idx]) --------------------------------------------
+
+    def _lower_php_subscript(self, node) -> str:
+        children = [c for c in node.children if c.is_named]
+        if len(children) < 2:
+            return self._lower_const_literal(node)
+        obj_reg = self._lower_expr(children[0])
+        idx_reg = self._lower_expr(children[1])
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_INDEX,
+            result_reg=reg,
+            operands=[obj_reg, idx_reg],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- PHP: assignment expression --------------------------------------------
+
+    def _lower_php_assignment_expr(self, node) -> str:
+        left = node.child_by_field_name("left")
+        right = node.child_by_field_name("right")
+        val_reg = self._lower_expr(right)
+        self._lower_store_target(left, val_reg, node)
+        return val_reg
+
+    # -- PHP: augmented assignment expression ----------------------------------
+
+    def _lower_php_augmented_assignment_expr(self, node) -> str:
+        left = node.child_by_field_name("left")
+        right = node.child_by_field_name("right")
+        op_node = [c for c in node.children if c.type not in (left.type, right.type)][0]
+        op_text = self._node_text(op_node).rstrip("=")
+        lhs_reg = self._lower_expr(left)
+        rhs_reg = self._lower_expr(right)
+        result = self._fresh_reg()
+        self._emit(
+            Opcode.BINOP,
+            result_reg=result,
+            operands=[op_text, lhs_reg, rhs_reg],
+            source_location=self._source_loc(node),
+        )
+        self._lower_store_target(left, result, node)
+        return result
+
+    # -- PHP: return statement -------------------------------------------------
+
+    def _lower_php_return(self, node):
+        children = [c for c in node.children if c.type != "return" and c.is_named]
+        if children:
+            val_reg = self._lower_expr(children[0])
+        else:
+            val_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=val_reg,
+                operands=[self.DEFAULT_RETURN_VALUE],
+            )
+        self._emit(
+            Opcode.RETURN,
+            operands=[val_reg],
+            source_location=self._source_loc(node),
+        )
+
+    # -- PHP: echo statement ---------------------------------------------------
+
+    def _lower_php_echo(self, node):
+        children = [c for c in node.children if c.type != "echo" and c.is_named]
+        arg_regs = [self._lower_expr(c) for c in children]
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["echo"] + arg_regs,
+            source_location=self._source_loc(node),
+        )
+
+    # -- PHP: if statement -----------------------------------------------------
+
+    def _lower_php_if(self, node):
+        cond_node = node.child_by_field_name("condition")
+        body_node = node.child_by_field_name("body")
+
+        cond_reg = self._lower_expr(cond_node)
+        true_label = self._fresh_label("if_true")
+        end_label = self._fresh_label("if_end")
+
+        # Collect else_clause children
+        else_clauses = [
+            c for c in node.children if c.type in ("else_clause", "else_if_clause")
+        ]
+
+        if else_clauses:
+            false_label = self._fresh_label("if_false")
+            self._emit(
+                Opcode.BRANCH_IF,
+                operands=[cond_reg],
+                label=f"{true_label},{false_label}",
+                source_location=self._source_loc(node),
+            )
+        else:
+            self._emit(
+                Opcode.BRANCH_IF,
+                operands=[cond_reg],
+                label=f"{true_label},{end_label}",
+                source_location=self._source_loc(node),
+            )
+
+        self._emit(Opcode.LABEL, label=true_label)
+        if body_node:
+            self._lower_php_compound(body_node)
+        self._emit(Opcode.BRANCH, label=end_label)
+
+        if else_clauses:
+            self._emit(Opcode.LABEL, label=false_label)
+            for clause in else_clauses:
+                self._lower_php_else_clause(clause, end_label)
+            self._emit(Opcode.BRANCH, label=end_label)
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+    def _lower_php_else_clause(self, node, end_label: str):
+        if node.type == "else_if_clause":
+            cond_node = node.child_by_field_name("condition")
+            body_node = node.child_by_field_name("body")
+            cond_reg = self._lower_expr(cond_node)
+            true_label = self._fresh_label("elseif_true")
+            false_label = self._fresh_label("elseif_false")
+
+            self._emit(
+                Opcode.BRANCH_IF,
+                operands=[cond_reg],
+                label=f"{true_label},{false_label}",
+                source_location=self._source_loc(node),
+            )
+
+            self._emit(Opcode.LABEL, label=true_label)
+            if body_node:
+                self._lower_php_compound(body_node)
+            self._emit(Opcode.BRANCH, label=end_label)
+
+            self._emit(Opcode.LABEL, label=false_label)
+        elif node.type == "else_clause":
+            for child in node.children:
+                if child.type not in ("else", "{", "}") and child.is_named:
+                    if child.type == "compound_statement":
+                        self._lower_php_compound(child)
+                    else:
+                        self._lower_stmt(child)
+
+    # -- PHP: foreach statement ------------------------------------------------
+
+    def _lower_php_foreach(self, node):
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=reg,
+            operands=[f"foreach:{self._node_text(node)[:60]}"],
+            source_location=self._source_loc(node),
+        )
+
+    # -- PHP: function definition ----------------------------------------------
+
+    def _lower_php_func_def(self, node):
+        name_node = node.child_by_field_name("name")
+        params_node = node.child_by_field_name("parameters")
+        body_node = node.child_by_field_name("body")
+
+        func_name = self._node_text(name_node) if name_node else "__anon"
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=func_label)
+
+        if params_node:
+            self._lower_php_params(params_node)
+
+        if body_node:
+            self._lower_php_compound(body_node)
+
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST, result_reg=none_reg, operands=[self.DEFAULT_RETURN_VALUE]
+        )
+        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        func_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+    # -- PHP: method declaration -----------------------------------------------
+
+    def _lower_php_method_decl(self, node):
+        name_node = node.child_by_field_name("name")
+        params_node = node.child_by_field_name("parameters")
+        body_node = node.child_by_field_name("body")
+
+        func_name = self._node_text(name_node) if name_node else "__anon"
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=func_label)
+
+        if params_node:
+            self._lower_php_params(params_node)
+
+        if body_node:
+            self._lower_php_compound(body_node)
+
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST, result_reg=none_reg, operands=[self.DEFAULT_RETURN_VALUE]
+        )
+        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        func_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+    def _lower_php_params(self, params_node):
+        for child in params_node.children:
+            if child.type in ("(", ")", ","):
+                continue
+            if child.type == "simple_parameter":
+                name_node = child.child_by_field_name("name")
+                if name_node:
+                    pname = self._node_text(name_node)
+                    self._emit(
+                        Opcode.SYMBOLIC,
+                        result_reg=self._fresh_reg(),
+                        operands=[f"{constants.PARAM_PREFIX}{pname}"],
+                        source_location=self._source_loc(child),
+                    )
+                    self._emit(
+                        Opcode.STORE_VAR,
+                        operands=[pname, f"%{self._reg_counter - 1}"],
+                    )
+            elif child.type == "variadic_parameter":
+                name_node = child.child_by_field_name("name")
+                if name_node:
+                    pname = self._node_text(name_node)
+                    self._emit(
+                        Opcode.SYMBOLIC,
+                        result_reg=self._fresh_reg(),
+                        operands=[f"{constants.PARAM_PREFIX}{pname}"],
+                        source_location=self._source_loc(child),
+                    )
+                    self._emit(
+                        Opcode.STORE_VAR,
+                        operands=[pname, f"%{self._reg_counter - 1}"],
+                    )
+            elif child.type == "variable_name":
+                pname = self._node_text(child)
+                self._emit(
+                    Opcode.SYMBOLIC,
+                    result_reg=self._fresh_reg(),
+                    operands=[f"{constants.PARAM_PREFIX}{pname}"],
+                    source_location=self._source_loc(child),
+                )
+                self._emit(
+                    Opcode.STORE_VAR,
+                    operands=[pname, f"%{self._reg_counter - 1}"],
+                )
+
+    # -- PHP: class declaration ------------------------------------------------
+
+    def _lower_php_class(self, node):
+        name_node = node.child_by_field_name("name")
+        body_node = node.child_by_field_name("body")
+        class_name = self._node_text(name_node) if name_node else "__anon_class"
+
+        class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
+        end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=class_label)
+
+        if body_node:
+            self._lower_php_class_body(body_node)
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+        cls_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=cls_reg,
+            operands=[
+                constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+
+    def _lower_php_class_body(self, node):
+        """Lower declaration_list body of a PHP class."""
+        for child in node.children:
+            if child.type == "method_declaration":
+                self._lower_php_method_decl(child)
+            elif child.type == "property_declaration":
+                self._lower_php_property_decl(child)
+            elif child.is_named and child.type not in (
+                "visibility_modifier",
+                "static_modifier",
+                "abstract_modifier",
+                "final_modifier",
+                "{",
+                "}",
+            ):
+                self._lower_stmt(child)
+
+    def _lower_php_property_decl(self, node):
+        for child in node.children:
+            if child.type == "property_element":
+                name_node = next(
+                    (c for c in child.children if c.type == "variable_name"), None
+                )
+                value_node = next(
+                    (
+                        c
+                        for c in child.children
+                        if c.is_named and c.type != "variable_name"
+                    ),
+                    None,
+                )
+                if name_node and value_node:
+                    val_reg = self._lower_expr(value_node)
+                    self._emit(
+                        Opcode.STORE_VAR,
+                        operands=[self._node_text(name_node), val_reg],
+                        source_location=self._source_loc(node),
+                    )
+                elif name_node:
+                    val_reg = self._fresh_reg()
+                    self._emit(
+                        Opcode.CONST,
+                        result_reg=val_reg,
+                        operands=[self.NONE_LITERAL],
+                    )
+                    self._emit(
+                        Opcode.STORE_VAR,
+                        operands=[self._node_text(name_node), val_reg],
+                        source_location=self._source_loc(node),
+                    )
+
+    # -- PHP: store target with variable_name ----------------------------------
+
+    def _lower_store_target(self, target, val_reg: str, parent_node):
+        if target.type in ("variable_name", "name"):
+            self._emit(
+                Opcode.STORE_VAR,
+                operands=[self._node_text(target), val_reg],
+                source_location=self._source_loc(parent_node),
+            )
+        elif target.type == "member_access_expression":
+            obj_node = target.child_by_field_name("object")
+            name_node = target.child_by_field_name("name")
+            if obj_node and name_node:
+                obj_reg = self._lower_expr(obj_node)
+                self._emit(
+                    Opcode.STORE_FIELD,
+                    operands=[obj_reg, self._node_text(name_node), val_reg],
+                    source_location=self._source_loc(parent_node),
+                )
+        elif target.type == "subscript_expression":
+            children = [c for c in target.children if c.is_named]
+            if len(children) >= 2:
+                obj_reg = self._lower_expr(children[0])
+                idx_reg = self._lower_expr(children[1])
+                self._emit(
+                    Opcode.STORE_INDEX,
+                    operands=[obj_reg, idx_reg, val_reg],
+                    source_location=self._source_loc(parent_node),
+                )
+        else:
+            self._emit(
+                Opcode.STORE_VAR,
+                operands=[self._node_text(target), val_reg],
+                source_location=self._source_loc(parent_node),
+            )
+
+    # -- PHP: throw expression -------------------------------------------------
+
+    def _lower_php_throw(self, node):
+        self._lower_raise_or_throw(node, keyword="throw")
+
+    def _lower_php_throw_expr(self, node) -> str:
+        """Lower throw_expression when it appears in expression context."""
+        self._lower_raise_or_throw(node, keyword="throw")
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=reg,
+            operands=[self.NONE_LITERAL],
+        )
+        return reg
+
+    # -- PHP: object creation (new ClassName(...)) -----------------------------
+
+    def _lower_php_object_creation(self, node) -> str:
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            name_node = next((c for c in node.children if c.type == "name"), None)
+        args_node = next((c for c in node.children if c.type == "arguments"), None)
+        arg_regs = self._extract_call_args_unwrap(args_node) if args_node else []
+        type_name = self._node_text(name_node) if name_node else "Object"
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=[type_name] + arg_regs,
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- PHP: array creation ---------------------------------------------------
+
+    def _lower_php_array(self, node) -> str:
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=reg,
+            operands=[f"array_creation:{self._node_text(node)[:60]}"],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- PHP: cast expression --------------------------------------------------
+
+    def _lower_php_cast(self, node) -> str:
+        children = [c for c in node.children if c.is_named]
+        if children:
+            return self._lower_expr(children[-1])
+        return self._lower_const_literal(node)
+
+    # -- PHP: ternary / conditional expression ---------------------------------
+
+    def _lower_php_ternary(self, node) -> str:
+        cond_node = node.child_by_field_name("condition")
+        true_node = node.child_by_field_name("body")
+        false_node = node.child_by_field_name("alternative")
+
+        if cond_node is None:
+            return self._lower_const_literal(node)
+
+        cond_reg = self._lower_expr(cond_node)
+        true_label = self._fresh_label("ternary_true")
+        false_label = self._fresh_label("ternary_false")
+        end_label = self._fresh_label("ternary_end")
+
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[cond_reg],
+            label=f"{true_label},{false_label}",
+        )
+
+        self._emit(Opcode.LABEL, label=true_label)
+        true_reg = self._lower_expr(true_node) if true_node else cond_reg
+        result_var = f"__ternary_{self._label_counter}"
+        self._emit(Opcode.STORE_VAR, operands=[result_var, true_reg])
+        self._emit(Opcode.BRANCH, label=end_label)
+
+        self._emit(Opcode.LABEL, label=false_label)
+        false_reg = self._lower_expr(false_node) if false_node else self._fresh_reg()
+        self._emit(Opcode.STORE_VAR, operands=[result_var, false_reg])
+        self._emit(Opcode.BRANCH, label=end_label)
+
+        self._emit(Opcode.LABEL, label=end_label)
+        result_reg = self._fresh_reg()
+        self._emit(Opcode.LOAD_VAR, result_reg=result_reg, operands=[result_var])
+        return result_reg
