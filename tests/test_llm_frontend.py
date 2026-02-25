@@ -39,6 +39,29 @@ class FakeLLMClient(LLMClient):
         return self.response
 
 
+class FakeRetryLLMClient(LLMClient):
+    """Fake LLM client that returns different responses on successive calls."""
+
+    def __init__(self, responses: list[str]):
+        self._responses = responses
+        self._call_index = 0
+        self.calls: list[dict] = []
+
+    def complete(
+        self, system_prompt: str, user_message: str, max_tokens: int = 4096
+    ) -> str:
+        self.calls.append(
+            {
+                "system_prompt": system_prompt,
+                "user_message": user_message,
+                "max_tokens": max_tokens,
+            }
+        )
+        response = self._responses[self._call_index]
+        self._call_index += 1
+        return response
+
+
 SIMPLE_IR_JSON = json.dumps(
     [
         {
@@ -238,4 +261,35 @@ class TestLLMFrontend:
         frontend = LLMFrontend(fake, language="python")
         sentinel = object()
         result = frontend.lower(sentinel, b"x = 42")
+        assert len(result) == 3
+
+    def test_retry_succeeds_after_bad_json(self):
+        """LLM returns bad JSON twice, then valid JSON on 3rd attempt."""
+        fake = FakeRetryLLMClient(
+            responses=["not json", "still not json", SIMPLE_IR_JSON]
+        )
+        frontend = LLMFrontend(fake, language="python", max_retries=3)
+        result = frontend.lower(None, b"x = 42")
+
+        assert len(fake.calls) == 3
+        assert len(result) == 3
+        assert result[0].opcode == Opcode.LABEL
+
+    def test_retry_exhausted_raises(self):
+        """All retry attempts return bad JSON — raises IRParsingError."""
+        fake = FakeRetryLLMClient(responses=["bad1", "bad2", "bad3"])
+        frontend = LLMFrontend(fake, language="python", max_retries=3)
+
+        with pytest.raises(IRParsingError, match="Failed to parse"):
+            frontend.lower(None, b"x = 42")
+
+        assert len(fake.calls) == 3
+
+    def test_no_retry_on_first_success(self):
+        """Valid JSON on first attempt — no retries."""
+        fake = FakeRetryLLMClient(responses=[SIMPLE_IR_JSON, "should not be called"])
+        frontend = LLMFrontend(fake, language="python", max_retries=3)
+        result = frontend.lower(None, b"x = 42")
+
+        assert len(fake.calls) == 1
         assert len(result) == 3

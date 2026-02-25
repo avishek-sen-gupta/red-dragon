@@ -211,61 +211,14 @@ def _parse_single_instruction(raw: dict[str, Any]) -> IRInstruction:
     )
 
 
-def _repair_json(text: str) -> str:
-    """Attempt to repair common JSON issues from smaller LLMs.
-
-    Fixes: JS-style // comments, trailing commas before ] or },
-    and truncated responses (truncates to last complete JSON object).
-    """
-    import re
-
-    # Strip // line comments (common with smaller models)
-    text = re.sub(r"//[^\n]*", "", text)
-
-    # Remove trailing commas before } or ]
-    text = re.sub(r",\s*([}\]])", r"\1", text)
-
-    # If response was truncated (no closing ]), find last complete object
-    stripped = text.strip()
-    if not stripped.endswith("]"):
-        logger.warning("JSON appears truncated, finding last complete element")
-        last_brace = stripped.rfind("}")
-        if last_brace > 0:
-            text = stripped[: last_brace + 1] + "\n]"
-
-    # Try to find the outermost JSON array even if there's trailing garbage
-    bracket_depth = 0
-    last_valid_end = -1
-    for i, ch in enumerate(text):
-        if ch == "[":
-            bracket_depth += 1
-        elif ch == "]":
-            bracket_depth -= 1
-            if bracket_depth == 0:
-                last_valid_end = i + 1
-                break
-
-    if last_valid_end > 0:
-        text = text[:last_valid_end]
-
-    return text
-
-
 def _parse_ir_response(raw_text: str) -> list[IRInstruction]:
     """Parse the LLM's raw text response into a list of IRInstructions."""
     cleaned = _strip_markdown_fences(raw_text)
     try:
         data = json.loads(cleaned)
-    except json.JSONDecodeError:
-        logger.warning("Initial JSON parse failed, attempting repair")
-        repaired = _repair_json(cleaned)
-        try:
-            data = json.loads(repaired)
-        except json.JSONDecodeError as exc:
-            logger.error("JSON repair also failed. Raw response:\n%s", raw_text[:2000])
-            raise IRParsingError(
-                f"Failed to parse LLM response as JSON: {exc}"
-            ) from exc
+    except json.JSONDecodeError as exc:
+        logger.error("JSON parse failed. Raw response:\n%s", raw_text[:2000])
+        raise IRParsingError(f"Failed to parse LLM response as JSON: {exc}") from exc
 
     if not isinstance(data, list):
         raise IRParsingError(f"Expected JSON array, got {type(data).__name__}")
@@ -304,9 +257,20 @@ class LLMFrontend(Frontend):
     Ignores the tree-sitter AST (tree param) — works from raw source only.
     """
 
-    def __init__(self, llm_client: LLMClient, language: str = "python"):
+    DEFAULT_MAX_TOKENS = 4096
+    DEFAULT_MAX_RETRIES = 3
+
+    def __init__(
+        self,
+        llm_client: LLMClient,
+        language: str = "python",
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+    ):
         self._llm_client = llm_client
         self._language = language
+        self._max_tokens = max_tokens
+        self._max_retries = max_retries
 
     def lower(self, tree: Any, source: bytes) -> list[IRInstruction]:
         """Lower source code to IR via LLM.
@@ -330,16 +294,30 @@ class LLMFrontend(Frontend):
             source=source_text,
         )
 
-        raw_response = self._llm_client.complete(
-            system_prompt=LLMFrontendPrompts.SYSTEM_PROMPT,
-            user_message=user_message,
-            max_tokens=4096,
-        )
+        last_error: IRParsingError | None = None
+        for attempt in range(1, self._max_retries + 1):
+            raw_response = self._llm_client.complete(
+                system_prompt=LLMFrontendPrompts.SYSTEM_PROMPT,
+                user_message=user_message,
+                max_tokens=self._max_tokens,
+            )
 
-        logger.debug("LLM raw response length: %d chars", len(raw_response))
+            logger.debug("LLM raw response length: %d chars", len(raw_response))
 
-        instructions = _parse_ir_response(raw_response)
-        instructions = _validate_ir(instructions)
+            try:
+                instructions = _parse_ir_response(raw_response)
+            except IRParsingError as exc:
+                last_error = exc
+                logger.warning(
+                    "LLMFrontend: parse attempt %d/%d failed: %s",
+                    attempt,
+                    self._max_retries,
+                    exc,
+                )
+                continue
 
-        logger.info("LLMFrontend: produced %d IR instructions", len(instructions))
-        return instructions
+            instructions = _validate_ir(instructions)
+            logger.info("LLMFrontend: produced %d IR instructions", len(instructions))
+            return instructions
+
+        raise last_error  # type: ignore[misc]

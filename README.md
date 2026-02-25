@@ -341,7 +341,7 @@ The key insight: providing **concrete patterns with exact JSON** produces IR tha
 | HuggingFace | `-b huggingface` | auto-discovered | Inference Endpoints, requires `HUGGING_FACE_API_TOKEN` |
 | Ollama | `-b ollama` | qwen2.5-coder:7b-instruct | Local, no API key needed |
 
-Smaller models (7B) may produce malformed JSON. The frontend includes a repair layer that strips `//` comments, fixes trailing commas, and handles truncated responses. For best results, use 32B+ parameter models (e.g., Qwen2.5-Coder-32B-Instruct via HuggingFace).
+Smaller models (7B) may produce malformed JSON. The frontend retries the LLM call up to 3 times on JSON parse failure before raising `IRParsingError`. For best results, use 32B+ parameter models (e.g., Qwen2.5-Coder-32B-Instruct via HuggingFace).
 
 ### Chunked LLM frontend
 
@@ -430,11 +430,11 @@ When run with `-v`, the interpreter reports per-stage timing and output statisti
 poetry run pytest tests/ -v
 ```
 
-Tests use dependency injection with fake API clients — no real LLM calls are made. The test suite (526 tests) covers:
+Tests use dependency injection with fake API clients — no real LLM calls are made. The test suite (529 tests) covers:
 
 - **Deterministic frontends** — 15 language frontends with unit tests covering declarations, expressions, control flow, functions, classes, and language-specific constructs, plus non-trivial integration tests (8-12 per language) exercising multi-statement programs with nested control flow, functions calling functions, classes with methods, and combined features
 - **LLM client infrastructure** — client construction, DI, factory routing for all 4 providers
-- **LLM frontend** — markdown fence stripping, JSON parsing/repair, IR validation, prompt formatting
+- **LLM frontend** — markdown fence stripping, JSON parsing, IR validation, prompt formatting, retry on parse failure
 - **Chunked LLM frontend** — chunk extraction (functions, classes, top-level grouping), IR register/label renumbering, end-to-end chunked lowering with error resilience
 - **Frontend factory** — `get_frontend()` routing for deterministic, LLM, and chunked LLM paths
 - **Backend refactor** — backend construction and `get_backend()` factory

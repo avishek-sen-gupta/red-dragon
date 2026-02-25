@@ -51,7 +51,13 @@ def get_frontend(
         else:
             resolved_client = get_llm_client(provider=llm_provider, client=llm_client)
 
-        inner_frontend = LLMFrontend(resolved_client, language=language)
+        max_tokens = LLMFrontend.DEFAULT_MAX_TOKENS
+        if frontend_type == constants.FRONTEND_CHUNKED_LLM:
+            max_tokens = 8192
+
+        inner_frontend = LLMFrontend(
+            resolved_client, language=language, max_tokens=max_tokens
+        )
 
         if frontend_type == constants.FRONTEND_CHUNKED_LLM:
             from .chunked_llm_frontend import ChunkedLLMFrontend
