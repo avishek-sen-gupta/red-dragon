@@ -41,6 +41,7 @@ class RefParseResult:
     matched: bool
     name: str = ""
     label: str = ""
+    closure_id: str = ""
 
 
 class RefPatterns:
@@ -51,13 +52,18 @@ class RefPatterns:
 
 
 def _parse_func_ref(val: Any) -> RefParseResult:
-    """Parse '<function:name@label>' → RefParseResult."""
+    """Parse '<function:name@label>' or '<function:name@label#closure_id>'."""
     if not isinstance(val, str):
         return RefParseResult(matched=False)
     m = RefPatterns.FUNC_RE.search(val)
     if not m:
         return RefParseResult(matched=False)
-    return RefParseResult(matched=True, name=m.group(1), label=m.group(2))
+    return RefParseResult(
+        matched=True,
+        name=m.group(1),
+        label=m.group(2),
+        closure_id=m.group(3) or "",
+    )
 
 
 def _parse_class_ref(val: Any) -> RefParseResult:
@@ -266,6 +272,26 @@ class Builtins:
 def _handle_const(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
     raw = inst.operands[0] if inst.operands else "None"
     val = _parse_const(raw)
+
+    # Closure capture: when a function ref is created inside another function,
+    # snapshot the enclosing scope's variables so they're available at call time.
+    # Each closure instance gets a unique ID so multiple closures from the same
+    # factory (e.g., make_adder(2) and make_adder(3)) don't collide.
+    if len(vm.call_stack) > 1 and isinstance(val, str):
+        fr = _parse_func_ref(val)
+        if fr.matched:
+            closure_id = f"closure_{vm.symbolic_counter}"
+            vm.symbolic_counter += 1
+            captured = dict(vm.current_frame.local_vars)
+            vm.closures[closure_id] = captured
+            val = f"<function:{fr.name}@{fr.label}#{closure_id}>"
+            logger.debug(
+                "Captured closure %s for %s: %s",
+                closure_id,
+                fr.name,
+                list(captured.keys()),
+            )
+
     return ExecutionResult.success(
         StateUpdate(
             register_writes={inst.result_reg: val},
@@ -800,11 +826,19 @@ def _try_user_function_call(
         return ExecutionResult.not_handled()
 
     params = registry.func_params.get(flabel, [])
-    new_vars = {
+    param_vars = {
         params[i]: _serialize_value(arg)
         for i, arg in enumerate(args)
         if i < len(params)
     }
+
+    # Inject captured closure variables; parameter bindings take priority
+    captured = vm.closures.get(fr.closure_id, {}) if fr.closure_id else {}
+    new_vars = {k: _serialize_value(v) for k, v in captured.items()} if captured else {}
+    new_vars.update(param_vars)
+    if captured:
+        logger.debug("Injecting closure vars for %s: %s", fname, list(captured.keys()))
+
     return ExecutionResult.success(
         StateUpdate(
             call_push=StackFramePush(function_name=fname, return_label=current_label),

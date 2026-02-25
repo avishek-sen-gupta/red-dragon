@@ -12,13 +12,19 @@ interpreter/
 ├── ir.py                # Opcode, IRInstruction
 ├── parser.py            # ParserFactory (DI), TreeSitterParserFactory, Parser
 ├── frontend.py          # Frontend ABC, PythonFrontend (dispatch table), get_frontend()
-├── llm_client.py        # LLMClient ABC, ClaudeLLMClient, OpenAILLMClient (shared)
+├── llm_client.py        # LLMClient ABC, Claude/OpenAI/Ollama/HuggingFace clients
 ├── llm_frontend.py      # LLMFrontend — LLM-based source-to-IR lowering
 ├── cfg.py               # BasicBlock, CFG, build_cfg()
 ├── registry.py          # FunctionRegistry, LocalExecutor (dispatch table), builtins
 ├── vm.py                # SymbolicValue, VMState, StateUpdate, ExecutionResult, Operators
-├── backend.py           # LLMBackend (DI for clients), ClaudeBackend, OpenAIBackend
+├── backend.py           # LLMBackend (DI for clients), Claude/OpenAI/Ollama/HuggingFace backends
 └── run.py               # run() orchestrator (decomposed helpers)
+tests/
+├── test_llm_client.py       # LLMClient unit tests (DI with fake API clients)
+├── test_llm_frontend.py     # LLM frontend parsing, validation, prompt tests
+├── test_frontend_factory.py # get_frontend() factory tests
+├── test_backend_refactor.py # Backend refactor + get_backend() factory tests
+└── test_closures.py         # Closure capture and invocation tests
 ```
 
 ## How it works
@@ -47,7 +53,7 @@ Source Code
 3. **Build CFG** — IR instructions are partitioned into basic blocks with control flow edges
 4. **Build registry** — Function and class definitions are indexed from the IR, mapping names to CFG labels and extracting parameter lists
 5. **Execute** — The VM walks the CFG deterministically:
-   - **Local execution** handles constants, loads, stores, arithmetic, branches, function/method calls (by stepping into the body), constructor dispatch (`__init__`), heap field access, and builtins (`len`, `range`, `print`, `int`, `str`, etc.)
+   - **Local execution** handles constants, loads, stores, arithmetic, branches, function/method calls (by stepping into the body), closures (captured enclosing scope), constructor dispatch (`__init__`), heap field access, and builtins (`len`, `range`, `print`, `int`, `str`, etc.)
    - **LLM fallback** is used only for operations on symbolic values (symbolic arithmetic, symbolic branch conditions) or calls to unknown externals not defined in the source
 
 For programs with concrete inputs and no external dependencies, the entire execution is **deterministic with 0 LLM calls**.
@@ -60,11 +66,13 @@ Requires Python >= 3.10 and [Poetry](https://python-poetry.org/).
 poetry install
 ```
 
-Set your API key for the LLM fallback backend (only needed if execution encounters symbolic values):
+Set your API key for the LLM backend (only needed for `--frontend llm` or when execution encounters symbolic values):
 
 ```bash
-export ANTHROPIC_API_KEY=sk-...   # for Claude (default)
-export OPENAI_API_KEY=sk-...      # for OpenAI
+export ANTHROPIC_API_KEY=sk-...          # for Claude (default)
+export OPENAI_API_KEY=sk-...             # for OpenAI
+export HUGGING_FACE_API_TOKEN=hf_...     # for HuggingFace Inference Endpoints
+# Ollama requires no API key (runs locally at localhost:11434)
 ```
 
 ## Usage
@@ -200,6 +208,66 @@ Variables:
 (115 steps, 0 LLM calls)
 ```
 
+## Example: closures (0 LLM calls)
+
+```python
+def make_multiplier(factor):
+    def multiply(x):
+        return x * factor
+    return multiply
+
+double = make_multiplier(2)
+triple = make_multiplier(3)
+a = double(5)
+b = triple(5)
+total = a + b
+```
+
+The VM captures the enclosing scope's variables when a nested function is defined, and injects them when the closure is called. Each closure instance gets a unique capture — `double` carries `{factor: 2}` and `triple` carries `{factor: 3}`:
+
+```
+[step 8]  const <function:multiply@func_multiply_2#closure_0>
+            captured {factor: 2} from make_multiplier's scope
+
+[step 16] const <function:multiply@func_multiply_2#closure_1>
+            captured {factor: 3} from make_multiplier's scope
+
+[step 20] call multiply(5) with closure_0
+            injected factor=2, x=5 → return 10
+
+[step 26] call multiply(5) with closure_1
+            injected factor=3, x=5 → return 15
+
+Variables: a = 10, b = 15, total = 25
+
+(31 steps, 0 LLM calls)
+```
+
+## LLM frontend
+
+The LLM frontend (`--frontend llm`) sends raw source code to an LLM and receives back a JSON array of IR instructions. This enables multi-language support without writing per-language tree-sitter frontends.
+
+The prompt (`interpreter/llm_frontend.py:LLMFrontendPrompts.SYSTEM_PROMPT`) teaches the LLM to act as a compiler frontend by providing:
+
+1. **Instruction format** — JSON schema for each IR instruction (opcode, result_reg, operands, label)
+2. **Opcode reference** — all 19 opcodes grouped by category (value producers, control flow, special)
+3. **Critical patterns** — concrete IR patterns for function definitions (skip-over-body + `<function:name@label>` registration), class definitions, constructor calls, method calls, and if/elif/else
+4. **Full worked example** — a complete fibonacci program lowered to 32 exact JSON instructions
+5. **Rules** — sequential registers, entry label, implicit returns, literal encoding conventions
+
+The key insight: providing **concrete patterns with exact JSON** produces IR that matches the deterministic frontend's output, while abstract opcode descriptions alone lead to structural errors (e.g., branching into function bodies instead of skipping over them).
+
+### Supported LLM providers
+
+| Provider | Flag | Model | Notes |
+|----------|------|-------|-------|
+| Claude | `-b claude` | claude-sonnet-4-20250514 | Best quality, requires `ANTHROPIC_API_KEY` |
+| OpenAI | `-b openai` | gpt-4o | Requires `OPENAI_API_KEY` |
+| HuggingFace | `-b huggingface` | auto-discovered | Inference Endpoints, requires `HUGGING_FACE_API_TOKEN` |
+| Ollama | `-b ollama` | qwen2.5-coder:7b-instruct | Local, no API key needed |
+
+Smaller models (7B) may produce malformed JSON. The frontend includes a repair layer that strips `//` comments, fixes trailing commas, and handles truncated responses. For best results, use 32B+ parameter models (e.g., Qwen2.5-Coder-32B-Instruct via HuggingFace).
+
 ## Deterministic symbolic data flow
 
 The VM handles **all** cases deterministically — including incomplete programs with missing imports, unknown externals, and symbolic values. No LLM fallback is needed:
@@ -216,6 +284,20 @@ This means the interpreter can trace data flow through programs with incomplete 
 ## When the LLM is used
 
 The LLM backend still exists but is now only invoked if the local executor encounters an opcode with no registered handler — which currently never happens since all opcodes are covered. The LLM can be used as an optional enhancement for richer symbolic reasoning (e.g., simplifying constraint expressions), but is not required for basic data flow tracking.
+
+## Testing
+
+```bash
+poetry run pytest tests/ -v
+```
+
+Tests use dependency injection with fake API clients — no real LLM calls are made. The test suite covers:
+
+- **LLM client infrastructure** — client construction, DI, factory routing for all 4 providers
+- **LLM frontend** — markdown fence stripping, JSON parsing/repair, IR validation, prompt formatting
+- **Frontend factory** — `get_frontend()` routing for deterministic and LLM paths
+- **Backend refactor** — backend construction and `get_backend()` factory
+- **Closures** — simple closures, multiple closures from same factory, multi-var capture, non-closure regression
 
 ## Symbolic values
 

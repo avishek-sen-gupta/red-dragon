@@ -4,7 +4,7 @@ from __future__ import annotations
 
 PARAM_PREFIX = "param:"
 
-FUNC_REF_PATTERN = r"<function:(\w+)@(\w+)>"
+FUNC_REF_PATTERN = r"<function:(\w+)@(\w+)(?:#(\w+))?>"
 CLASS_REF_PATTERN = r"<class:(\w+)@(\w+)>"
 
 FUNC_REF_TEMPLATE = "<function:{name}@{label}>"
