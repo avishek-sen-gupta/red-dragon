@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="banner.svg" alt="RedDragon — Multi-language symbolic code analysis" width="900">
+</p>
+
 # RedDragon
 
 ![CI](https://github.com/avishek-sen-gupta/red-dragon/actions/workflows/ci.yml/badge.svg) | [Presentation](presentation/index.html)
