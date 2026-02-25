@@ -10,6 +10,7 @@ from interpreter.parser import Parser, TreeSitterParserFactory
 from interpreter.frontend import get_frontend
 from interpreter.cfg import build_cfg
 from interpreter.run import run
+from interpreter import constants
 
 
 def main():
@@ -47,6 +48,13 @@ def main():
     parser.add_argument(
         "--cfg-only", action="store_true", help="Only print the CFG (no LLM execution)"
     )
+    parser.add_argument(
+        "--frontend",
+        "-f",
+        default=constants.FRONTEND_DETERMINISTIC,
+        choices=[constants.FRONTEND_DETERMINISTIC, constants.FRONTEND_LLM],
+        help="Frontend type: deterministic (tree-sitter) or llm (default: deterministic)",
+    )
 
     args = parser.parse_args()
 
@@ -68,9 +76,17 @@ result = factorial(5)
             source = f.read()
 
     # Parse & lower
-    tree = Parser(TreeSitterParserFactory()).parse(source, args.language)
-    frontend = get_frontend(args.language)
-    instructions = frontend.lower(tree, source.encode("utf-8"))
+    if args.frontend == constants.FRONTEND_LLM:
+        frontend = get_frontend(
+            args.language,
+            frontend_type=constants.FRONTEND_LLM,
+            llm_provider=args.backend,
+        )
+        instructions = frontend.lower(None, source.encode("utf-8"))
+    else:
+        tree = Parser(TreeSitterParserFactory()).parse(source, args.language)
+        frontend = get_frontend(args.language)
+        instructions = frontend.lower(tree, source.encode("utf-8"))
 
     if args.ir_only:
         print("═══ IR ═══")
@@ -93,6 +109,7 @@ result = factorial(5)
         backend=args.backend,
         max_steps=args.max_steps,
         verbose=args.verbose,
+        frontend_type=args.frontend,
     )
 
     print("\n═══ Final VM State ═══")

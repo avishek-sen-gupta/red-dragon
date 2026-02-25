@@ -12,6 +12,8 @@ interpreter/
 ├── ir.py                # Opcode, IRInstruction
 ├── parser.py            # ParserFactory (DI), TreeSitterParserFactory, Parser
 ├── frontend.py          # Frontend ABC, PythonFrontend (dispatch table), get_frontend()
+├── llm_client.py        # LLMClient ABC, ClaudeLLMClient, OpenAILLMClient (shared)
+├── llm_frontend.py      # LLMFrontend — LLM-based source-to-IR lowering
 ├── cfg.py               # BasicBlock, CFG, build_cfg()
 ├── registry.py          # FunctionRegistry, LocalExecutor (dispatch table), builtins
 ├── vm.py                # SymbolicValue, VMState, StateUpdate, ExecutionResult, Operators
@@ -23,25 +25,25 @@ interpreter/
 
 ```
 Source Code
-    │  tree-sitter
-    ▼
-Language-Specific AST
-    │  Frontend (per language)
-    ▼
-Flattened High-Level TAC (IR)
-    │  CFG builder
-    ▼
-Control Flow Graph
-    │  VM + function registry
-    ▼
-Deterministic Execution (heap, call stack, registers)
-    │  fallback on symbolic values / unknown externals
-    ▼
-LLM Oracle (only when needed)
+    │
+    ├──── deterministic path ──── tree-sitter ──── PythonFrontend ────┐
+    │                                                                 │
+    └──── LLM path (--frontend llm) ──── LLMFrontend ────────────────┤
+                                                                      ▼
+                                                          Flattened High-Level TAC (IR)
+                                                              │  CFG builder
+                                                              ▼
+                                                          Control Flow Graph
+                                                              │  VM + function registry
+                                                              ▼
+                                                          Deterministic Execution
+                                                              │  fallback on symbolic values
+                                                              ▼
+                                                          LLM Oracle (only when needed)
 ```
 
-1. **Parse** — Tree-sitter (via `tree-sitter-language-pack`) parses source into an AST
-2. **Lower** — A language-specific frontend converts the AST into a flattened three-address code IR (~19 opcodes)
+1. **Parse** — Tree-sitter (via `tree-sitter-language-pack`) parses source into an AST (deterministic path), or the LLM lowers source directly to IR (LLM path)
+2. **Lower** — A language-specific frontend converts the AST into a flattened three-address code IR (~19 opcodes). With `--frontend llm`, the LLM performs this lowering step directly from source code, enabling multi-language support without per-language frontends
 3. **Build CFG** — IR instructions are partitioned into basic blocks with control flow edges
 4. **Build registry** — Function and class definitions are indexed from the IR, mapping names to CFG labels and extracting parameter lists
 5. **Execute** — The VM walks the CFG deterministically:
@@ -85,6 +87,12 @@ poetry run python interpreter.py myfile.py -b openai
 
 # Limit execution steps
 poetry run python interpreter.py myfile.py -n 50
+
+# Use LLM frontend (LLM lowers source to IR instead of tree-sitter)
+poetry run python interpreter.py myfile.py -f llm -v
+
+# LLM frontend on non-Python source (multi-language support)
+poetry run python interpreter.py example.js -l javascript -f llm -v
 ```
 
 ### CLI options
@@ -96,6 +104,7 @@ poetry run python interpreter.py myfile.py -n 50
 | `-e`, `--entry` | Entry point label or function name |
 | `-b`, `--backend` | LLM backend: `claude` or `openai` (default: `claude`) |
 | `-n`, `--max-steps` | Maximum interpretation steps (default: 100) |
+| `-f`, `--frontend` | Frontend type: `deterministic` (tree-sitter) or `llm` (default: `deterministic`) |
 | `--ir-only` | Print the IR and exit |
 | `--cfg-only` | Print the CFG and exit |
 
