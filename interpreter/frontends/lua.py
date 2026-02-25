@@ -58,6 +58,7 @@ class LuaFrontend(BaseFrontend):
             "dot_index_expression": self._lower_dot_index,
             "bracket_index_expression": self._lower_bracket_index,
             "table_constructor": self._lower_table_constructor,
+            "expression_list": self._lower_expression_list,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "chunk": self._lower_block,
@@ -624,6 +625,17 @@ class LuaFrontend(BaseFrontend):
             operands=[val_reg],
             source_location=self._source_loc(node),
         )
+
+    # -- Lua: expression_list unwrap -----------------------------------------------
+
+    def _lower_expression_list(self, node) -> str:
+        """Unwrap expression_list to its first named child."""
+        named = [c for c in node.children if c.is_named]
+        if named:
+            return self._lower_expr(named[0])
+        reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=reg, operands=[self.DEFAULT_RETURN_VALUE])
+        return reg
 
     # -- Lua: do ... end block -----------------------------------------------------
 
