@@ -383,7 +383,14 @@ def _handle_store_field(
     val = _resolve_reg(vm, inst.operands[2])
     addr = _heap_addr(obj_val)
     if not addr or addr not in vm.heap:
-        return ExecutionResult.not_handled()
+        # Object not on heap — store is a no-op but we track it symbolically
+        obj_desc = _symbolic_name(obj_val)
+        logger.debug("store_field on unknown object %s.%s", obj_desc, field_name)
+        return ExecutionResult.success(
+            StateUpdate(
+                reasoning=f"store {obj_desc}.{field_name} = {val!r} (object not on heap, no-op)",
+            )
+        )
     return ExecutionResult.success(
         StateUpdate(
             heap_writes=[
@@ -405,7 +412,15 @@ def _handle_load_field(
     field_name = inst.operands[1]
     addr = _heap_addr(obj_val)
     if not addr or addr not in vm.heap:
-        return ExecutionResult.not_handled()
+        # Object not on heap — create symbolic representing the field access
+        obj_desc = _symbolic_name(obj_val)
+        sym = vm.fresh_symbolic(hint=f"{obj_desc}.{field_name}")
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: sym.to_dict()},
+                reasoning=f"load {obj_desc}.{field_name} (object not on heap) → {sym.name}",
+            )
+        )
     heap_obj = vm.heap[addr]
     if field_name in heap_obj.fields:
         val = heap_obj.fields[field_name]
@@ -434,7 +449,14 @@ def _handle_store_index(
     val = _resolve_reg(vm, inst.operands[2])
     addr = _heap_addr(arr_val)
     if not addr or addr not in vm.heap:
-        return ExecutionResult.not_handled()
+        # Array not on heap — store is a no-op but we track it
+        arr_desc = _symbolic_name(arr_val)
+        logger.debug("store_index on unknown array %s[%s]", arr_desc, idx_val)
+        return ExecutionResult.success(
+            StateUpdate(
+                reasoning=f"store {arr_desc}[{idx_val}] = {val!r} (array not on heap, no-op)",
+            )
+        )
     return ExecutionResult.success(
         StateUpdate(
             heap_writes=[
@@ -456,7 +478,15 @@ def _handle_load_index(
     idx_val = _resolve_reg(vm, inst.operands[1])
     addr = _heap_addr(arr_val)
     if not addr or addr not in vm.heap:
-        return ExecutionResult.not_handled()
+        # Array not on heap — create symbolic representing the index access
+        arr_desc = _symbolic_name(arr_val)
+        sym = vm.fresh_symbolic(hint=f"{arr_desc}[{idx_val}]")
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: sym.to_dict()},
+                reasoning=f"load {arr_desc}[{idx_val}] (array not on heap) → {sym.name}",
+            )
+        )
     heap_obj = vm.heap[addr]
     key = str(idx_val)
     if key in heap_obj.fields:
@@ -501,7 +531,16 @@ def _handle_branch_if(
     false_label = targets[1].strip() if len(targets) > 1 else None
 
     if _is_symbolic(cond_val):
-        return ExecutionResult.not_handled()
+        # Symbolic condition — deterministically take the true branch
+        # and record the assumption as a path condition
+        sym_desc = _symbolic_name(cond_val)
+        return ExecutionResult.success(
+            StateUpdate(
+                next_label=true_label,
+                path_condition=f"assuming {sym_desc} is True",
+                reasoning=f"branch_if {sym_desc} (symbolic) → {true_label} (assumed true)",
+            )
+        )
 
     taken = bool(cond_val)
     chosen = true_label if taken else false_label
@@ -520,11 +559,27 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
     rhs = _resolve_reg(vm, inst.operands[2])
 
     if _is_symbolic(lhs) or _is_symbolic(rhs):
-        return ExecutionResult.not_handled()
+        lhs_desc = _symbolic_name(lhs)
+        rhs_desc = _symbolic_name(rhs)
+        sym = vm.fresh_symbolic(hint=f"{lhs_desc} {oper} {rhs_desc}")
+        sym.constraints = [f"{lhs_desc} {oper} {rhs_desc}"]
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: sym.to_dict()},
+                reasoning=f"binop {lhs_desc} {oper} {rhs_desc} → symbolic {sym.name}",
+            )
+        )
 
     result = Operators.eval_binop(oper, lhs, rhs)
     if result is Operators.UNCOMPUTABLE:
-        return ExecutionResult.not_handled()
+        sym = vm.fresh_symbolic(hint=f"{lhs!r} {oper} {rhs!r}")
+        sym.constraints = [f"{lhs!r} {oper} {rhs!r}"]
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: sym.to_dict()},
+                reasoning=f"binop {lhs!r} {oper} {rhs!r} → uncomputable, symbolic {sym.name}",
+            )
+        )
     return ExecutionResult.success(
         StateUpdate(
             register_writes={inst.result_reg: result},
@@ -537,14 +592,80 @@ def _handle_unop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionRe
     oper = inst.operands[0]
     operand = _resolve_reg(vm, inst.operands[1])
     if _is_symbolic(operand):
-        return ExecutionResult.not_handled()
+        op_desc = _symbolic_name(operand)
+        sym = vm.fresh_symbolic(hint=f"{oper}{op_desc}")
+        sym.constraints = [f"{oper}{op_desc}"]
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: sym.to_dict()},
+                reasoning=f"unop {oper}{op_desc} → symbolic {sym.name}",
+            )
+        )
     result = Operators.eval_unop(oper, operand)
     if result is Operators.UNCOMPUTABLE:
-        return ExecutionResult.not_handled()
+        sym = vm.fresh_symbolic(hint=f"{oper}{operand!r}")
+        sym.constraints = [f"{oper}{operand!r}"]
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: sym.to_dict()},
+                reasoning=f"unop {oper}{operand!r} → uncomputable, symbolic {sym.name}",
+            )
+        )
     return ExecutionResult.success(
         StateUpdate(
             register_writes={inst.result_reg: result},
             reasoning=f"unop {oper}{operand!r} = {result!r}",
+        )
+    )
+
+
+def _symbolic_name(val: Any) -> str:
+    """Get a human-readable name for a value, suitable for symbolic hints."""
+    if isinstance(val, SymbolicValue):
+        return val.name
+    if isinstance(val, dict) and val.get("__symbolic__"):
+        return val.get("name", "?")
+    return repr(val)
+
+
+def _symbolic_call_result(
+    func_name: str,
+    args: list[Any],
+    inst: IRInstruction,
+    vm: VMState,
+) -> ExecutionResult:
+    """Create a symbolic value representing the result of an unknown function call."""
+    args_desc = ", ".join(_symbolic_name(a) for a in args)
+    sym = vm.fresh_symbolic(hint=f"{func_name}({args_desc})")
+    sym.constraints = [f"{func_name}({args_desc})"]
+    logger.debug("Unknown function %s — creating symbolic %s", func_name, sym.name)
+    return ExecutionResult.success(
+        StateUpdate(
+            register_writes={inst.result_reg: sym.to_dict()},
+            reasoning=f"unknown function {func_name}({args_desc}) → symbolic {sym.name}",
+        )
+    )
+
+
+def _symbolic_method_result(
+    obj_desc: str,
+    method_name: str,
+    args: list[Any],
+    inst: IRInstruction,
+    vm: VMState,
+) -> ExecutionResult:
+    """Create a symbolic value representing the result of an unknown method call."""
+    args_desc = ", ".join(_symbolic_name(a) for a in args)
+    call_desc = f"{obj_desc}.{method_name}({args_desc})"
+    sym = vm.fresh_symbolic(hint=call_desc)
+    sym.constraints = [call_desc]
+    logger.debug(
+        "Unknown method %s.%s — creating symbolic %s", obj_desc, method_name, sym.name
+    )
+    return ExecutionResult.success(
+        StateUpdate(
+            register_writes={inst.result_reg: sym.to_dict()},
+            reasoning=f"unknown method {call_desc} → symbolic {sym.name}",
         )
     )
 
@@ -560,7 +681,16 @@ def _try_builtin_call(
         return ExecutionResult.not_handled()
     result = Builtins.TABLE[func_name](args, vm)
     if result is Operators.UNCOMPUTABLE:
-        return ExecutionResult.not_handled()
+        # Builtin couldn't compute (symbolic args) — create symbolic result
+        args_desc = ", ".join(_symbolic_name(a) for a in args)
+        sym = vm.fresh_symbolic(hint=f"{func_name}({args_desc})")
+        sym.constraints = [f"{func_name}({args_desc})"]
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: sym.to_dict()},
+                reasoning=f"builtin {func_name}({args_desc}) → symbolic {sym.name} (uncomputable)",
+            )
+        )
     return ExecutionResult.success(
         StateUpdate(
             register_writes={inst.result_reg: _serialize_value(result)},
@@ -692,7 +822,8 @@ def _handle_call_function(
             func_val = f.local_vars[func_name]
             break
     if not func_val:
-        return ExecutionResult.not_handled()
+        # Unknown function — create symbolic representing the call result
+        return _symbolic_call_result(func_name, args, inst, vm)
 
     # 3. Class constructor
     ctor_result = _try_class_constructor_call(
@@ -702,9 +833,14 @@ def _handle_call_function(
         return ctor_result
 
     # 4. User-defined function
-    return _try_user_function_call(
+    user_result = _try_user_function_call(
         func_val, args, inst, vm, cfg, registry, current_label
     )
+    if user_result.handled:
+        return user_result
+
+    # 5. Not a recognized function ref — create symbolic
+    return _symbolic_call_result(func_name, args, inst, vm)
 
 
 def _handle_call_method(
@@ -726,12 +862,15 @@ def _handle_call_method(
         type_hint = vm.heap[addr].type_hint or ""
 
     if not type_hint or type_hint not in registry.class_methods:
-        return ExecutionResult.not_handled()
+        # Unknown object type — create symbolic for method call result
+        obj_desc = _symbolic_name(obj_val)
+        return _symbolic_method_result(obj_desc, method_name, args, inst, vm)
 
     methods = registry.class_methods[type_hint]
     func_label = methods.get(method_name, "")
     if not func_label or func_label not in cfg.blocks:
-        return ExecutionResult.not_handled()
+        # Known type but unknown method — create symbolic
+        return _symbolic_method_result(type_hint, method_name, args, inst, vm)
 
     params = registry.func_params.get(func_label, [])
     new_vars: dict[str, Any] = {}
@@ -758,6 +897,27 @@ def _handle_call_method(
     )
 
 
+def _handle_call_unknown(
+    inst: IRInstruction, vm: VMState, **kwargs: Any
+) -> ExecutionResult:
+    """Handle CALL_UNKNOWN — dynamic call target, create symbolic result."""
+    target_val = _resolve_reg(vm, inst.operands[0])
+    arg_regs = inst.operands[1:]
+    args = [_resolve_reg(vm, a) for a in arg_regs]
+    target_desc = _symbolic_name(target_val)
+    args_desc = ", ".join(_symbolic_name(a) for a in args)
+    call_desc = f"{target_desc}({args_desc})"
+    sym = vm.fresh_symbolic(hint=call_desc)
+    sym.constraints = [call_desc]
+    logger.debug("Unknown call target %s — creating symbolic %s", target_desc, sym.name)
+    return ExecutionResult.success(
+        StateUpdate(
+            register_writes={inst.result_reg: sym.to_dict()},
+            reasoning=f"unknown call {call_desc} → symbolic {sym.name}",
+        )
+    )
+
+
 class LocalExecutor:
     """Dispatches IR instructions to handler functions for local execution."""
 
@@ -780,6 +940,7 @@ class LocalExecutor:
         Opcode.UNOP: _handle_unop,
         Opcode.CALL_FUNCTION: _handle_call_function,
         Opcode.CALL_METHOD: _handle_call_method,
+        Opcode.CALL_UNKNOWN: _handle_call_unknown,
     }
 
     @classmethod
