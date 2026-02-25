@@ -8,14 +8,15 @@ A symbolic interpreter that parses source code, lowers it to a three-address cod
 interpreter.py           # CLI entry point (argparse + main)
 interpreter/
 ├── __init__.py          # re-exports run
+├── constants.py         # Named constants (eliminates magic strings)
 ├── ir.py                # Opcode, IRInstruction
-├── parser.py            # Tree-sitter parsing layer
-├── frontend.py          # Frontend ABC, PythonFrontend, get_frontend()
+├── parser.py            # ParserFactory (DI), TreeSitterParserFactory, Parser
+├── frontend.py          # Frontend ABC, PythonFrontend (dispatch table), get_frontend()
 ├── cfg.py               # BasicBlock, CFG, build_cfg()
-├── registry.py          # FunctionRegistry, build_registry(), builtins, local execution
-├── vm.py                # SymbolicValue, HeapObject, StackFrame, VMState, StateUpdate
-├── backend.py           # LLM backends (Claude, OpenAI)
-└── run.py               # run() orchestrator
+├── registry.py          # FunctionRegistry, LocalExecutor (dispatch table), builtins
+├── vm.py                # SymbolicValue, VMState, StateUpdate, ExecutionResult, Operators
+├── backend.py           # LLMBackend (DI for clients), ClaudeBackend, OpenAIBackend
+└── run.py               # run() orchestrator (decomposed helpers)
 ```
 
 ## How it works
