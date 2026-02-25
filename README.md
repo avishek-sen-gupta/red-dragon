@@ -14,16 +14,16 @@ A multi-language source code analysis toolkit that:
 
 ```mermaid
 flowchart TD
-    SRC[Source Code] --> DET[tree-sitter\n15 languages]
-    SRC --> LLM[LLM Frontend\nany language]
-    SRC --> CHUNK[Chunked LLM\nchunk → LLM × N → renumber → reassemble]
+    SRC[Source Code] --> DET["tree-sitter<br>15 languages"]
+    SRC --> LLM["LLM Frontend<br>any language"]
+    SRC --> CHUNK["Chunked LLM<br>chunk → LLM × N → renumber → reassemble"]
 
     DET --> IR[Flattened TAC IR]
     LLM --> IR
     CHUNK --> IR
 
     IR --> CFG[Control Flow Graph]
-    CFG --> DF[Dataflow Analysis\nreaching defs · def-use chains · dependency graphs]
+    CFG --> DF["Dataflow Analysis<br>reaching defs · def-use chains · dependency graphs"]
     CFG --> VM[Deterministic VM Execution]
     VM -->|symbolic values only| ORACLE[LLM Oracle]
 ```
