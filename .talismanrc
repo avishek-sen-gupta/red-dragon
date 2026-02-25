@@ -1,6 +1,6 @@
 fileignoreconfig:
 - filename: poetry.lock
-  checksum: d93a1b8efed40d88ae743d20844d794f6bb9b2843d3fb5ab6b814ff81ec0a905
+  checksum: 6a981d6367c3a04c70f0adf7f8641f30d4ba67855236bdd2816179d2fc5e4552
 - filename: interpreter.py
   checksum: 5337b3918a4bbf320a088669079fbe7fe525cb45bf947a62ad3f5f15de093eec
 - filename: interpreter/registry.py
