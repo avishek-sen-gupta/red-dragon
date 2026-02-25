@@ -26,7 +26,7 @@ def main():
         "--backend",
         "-b",
         default="claude",
-        choices=["claude", "openai"],
+        choices=["claude", "openai", "ollama", "huggingface"],
         help="LLM backend (default: claude)",
     )
     parser.add_argument(
