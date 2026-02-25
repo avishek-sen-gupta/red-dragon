@@ -23,7 +23,7 @@ jobs:
         run: poetry run black --check interpreter/ tests/
 
   test:
-    name: Non-deterministic tests
+    name: Deterministic frontend tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,9 +37,19 @@ jobs:
       - name: Run tests
         run: |
           poetry run pytest \
-            tests/test_backend_refactor.py \
-            tests/test_closures.py \
+            tests/test_c_frontend.py \
+            tests/test_cpp_frontend.py \
+            tests/test_csharp_frontend.py \
+            tests/test_go_frontend.py \
+            tests/test_java_frontend.py \
+            tests/test_javascript_frontend.py \
+            tests/test_kotlin_frontend.py \
+            tests/test_lua_frontend.py \
+            tests/test_pascal_frontend.py \
+            tests/test_php_frontend.py \
+            tests/test_ruby_frontend.py \
+            tests/test_rust_frontend.py \
+            tests/test_scala_frontend.py \
+            tests/test_typescript_frontend.py \
             tests/test_frontend_factory.py \
-            tests/test_llm_client.py \
-            tests/test_llm_frontend.py \
             -v
