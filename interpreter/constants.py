@@ -24,6 +24,7 @@ DATAFLOW_MAX_ITERATIONS = 1000
 
 FRONTEND_DETERMINISTIC = "deterministic"
 FRONTEND_LLM = "llm"
+FRONTEND_CHUNKED_LLM = "chunked_llm"
 
 SUPPORTED_DETERMINISTIC_LANGUAGES: tuple[str, ...] = (
     "python",

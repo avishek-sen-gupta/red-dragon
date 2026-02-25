@@ -243,7 +243,7 @@ def run(
 
     # 1. Parse + Lower
     t0 = time.perf_counter()
-    if frontend_type == constants.FRONTEND_LLM:
+    if frontend_type in (constants.FRONTEND_LLM, constants.FRONTEND_CHUNKED_LLM):
         # LLM frontend: skip tree-sitter, send source directly
         frontend = get_frontend(
             language,
