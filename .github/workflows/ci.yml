@@ -35,21 +35,4 @@ jobs:
           pip install poetry
           poetry install
       - name: Run tests
-        run: |
-          poetry run pytest \
-            tests/test_c_frontend.py \
-            tests/test_cpp_frontend.py \
-            tests/test_csharp_frontend.py \
-            tests/test_go_frontend.py \
-            tests/test_java_frontend.py \
-            tests/test_javascript_frontend.py \
-            tests/test_kotlin_frontend.py \
-            tests/test_lua_frontend.py \
-            tests/test_pascal_frontend.py \
-            tests/test_php_frontend.py \
-            tests/test_ruby_frontend.py \
-            tests/test_rust_frontend.py \
-            tests/test_scala_frontend.py \
-            tests/test_typescript_frontend.py \
-            tests/test_frontend_factory.py \
-            -v
+        run: poetry run pytest tests/ -v
