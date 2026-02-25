@@ -731,13 +731,15 @@ BINOP     t11, t9, "==", t10</code></pre>
   </aside>
 </section>
 
-<!-- Slide 11e: Chunked LLM Frontend — Example Output -->
+<!-- Slide 11e: Chunked LLM Frontend — Example Output (vertical stack) -->
 <section>
-  <h2>Chunked Frontend: Example</h2>
-  <div class="two-col">
-    <div>
-      <h3>Source (3 chunks)</h3>
-      <pre><code class="language-python">class Account:
+  <!-- Parent slide: source + chunk extraction -->
+  <section>
+    <h2>Chunked Frontend: Example</h2>
+    <div class="two-col">
+      <div>
+        <h3>Source (3 chunks)</h3>
+        <pre><code class="language-python">class Account:
     def __init__(self, owner, bal):
         self.owner = owner
         self.balance = bal
@@ -752,27 +754,37 @@ def transfer(src, dest, amt):
 alice = Account("Alice", 1000)
 bob = Account("Bob", 500)
 transfer(alice, bob, 200)</code></pre>
-    </div>
-    <div>
-      <h3>Chunk Extraction</h3>
-      <pre><code class="nohighlight">[0] class     Account         7 lines  (line 1)
+      </div>
+      <div>
+        <h3>Chunk Extraction</h3>
+        <pre><code class="nohighlight">[0] class     Account         7 lines  (line 1)
 [1] function  transfer        3 lines  (line 9)
 [2] top_level __top_level__   3 lines  (line 12)</code></pre>
-      <div class="fragment" style="margin-top: 10px;">
-        <h3>IR Stats (after reassembly)</h3>
-        <pre><code class="nohighlight">Total IR instructions : 52
+        <div class="fragment" style="margin-top: 10px;">
+          <h3>IR Stats (after reassembly)</h3>
+          <pre><code class="nohighlight">Total IR instructions : 52
 Unique registers      : 21
 Labels                : 8
 SYMBOLIC params       : 7
 Chunk errors          : 0</code></pre>
+        </div>
       </div>
     </div>
-  </div>
+    <p class="fragment small" style="margin-top: 15px;">
+      <span class="accent">&darr;</span> Navigate down to see the reassembled IR output
+    </p>
+    <aside class="notes">
+      This shows the chunked pipeline's input side. The source is split into 3 chunks:
+      the Account class, the transfer function, and the top-level statements. Each chunk is
+      lowered independently by the LLM. Navigate down to see the reassembled IR.
+    </aside>
+  </section>
 
-  <div class="fragment" style="margin-top: 15px;">
-    <h3>Reassembled IR (excerpt)</h3>
-    <pre style="font-size: 0.45em;"><code class="nohighlight"><span class="accent">entry:</span>                                               &larr; single entry label
-  BRANCH           &rarr; end_class_Account_1<span class="accent3">_chunk0</span>       &larr; chunk0: class Account
+  <!-- Child slide: reassembled IR output -->
+  <section>
+    <h2>Reassembled IR (excerpt)</h2>
+    <pre style="font-size: 0.5em; text-align: left; font-family: monospace; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; overflow-x: auto;"><span class="accent">entry:</span>                                               <span class="dim">&larr; single entry label</span>
+  BRANCH           &rarr; end_class_Account_1<span class="accent3">_chunk0</span>       <span class="dim">&larr; chunk0: class Account</span>
   LABEL            func___init___0<span class="accent3">_chunk0</span>
   %0  = SYMBOLIC   "param:self"
   %1  = SYMBOLIC   "param:owner"
@@ -781,29 +793,32 @@ Chunk errors          : 0</code></pre>
   LABEL            end_class_Account_1<span class="accent3">_chunk0</span>
   %<span class="accent2">11</span> = CONST      "&lt;class:Account@class_Account_0<span class="accent3">_chunk0</span>&gt;"
   STORE_VAR        Account %<span class="accent2">11</span>
-  BRANCH           &rarr; end_transfer_1<span class="accent3">_chunk1</span>          &larr; chunk1: function transfer
+  BRANCH           &rarr; end_transfer_1<span class="accent3">_chunk1</span>          <span class="dim">&larr; chunk1: function transfer</span>
   LABEL            func_transfer_0<span class="accent3">_chunk1</span>
-  %<span class="accent2">12</span> = SYMBOLIC   "param:src"                     &larr; registers offset to <span class="accent2">12</span>
+  %<span class="accent2">12</span> = SYMBOLIC   "param:src"                     <span class="dim">&larr; registers offset to <span class="accent2">12</span></span>
   ...
   LABEL            end_transfer_1<span class="accent3">_chunk1</span>
   %<span class="accent2">20</span> = CONST      "&lt;function:transfer@func_transfer_0<span class="accent3">_chunk1</span>&gt;"
   STORE_VAR        transfer %<span class="accent2">20</span>
-  %<span class="accent2">21</span> = CONST      "Alice"                           &larr; chunk2: top-level statements
-  %<span class="accent2">22</span> = CONST      "1000"                            &larr; registers offset to <span class="accent2">21</span>
+  %<span class="accent2">21</span> = CONST      "Alice"                           <span class="dim">&larr; chunk2: top-level statements</span>
+  %<span class="accent2">22</span> = CONST      "1000"                            <span class="dim">&larr; registers offset to <span class="accent2">21</span></span>
   %<span class="accent2">23</span> = CALL_FUNCTION Account %<span class="accent2">21</span> %<span class="accent2">22</span>
   STORE_VAR        alice %<span class="accent2">23</span>
-  ...</code></pre>
-  </div>
-
-  <aside class="notes">
-    This shows the full chunked pipeline in action. The source is split into 3 chunks:
-    the Account class, the transfer function, and the top-level statements. Each chunk is
-    lowered independently by the LLM. The renumbering pass ensures no register collisions:
-    chunk0 uses %0–%11, chunk1 picks up at %12, and chunk2 at %21. Labels get chunk suffixes
-    to avoid collisions (func___init___0_chunk0 vs func_transfer_0_chunk1). The single entry
-    label is prepended during reassembly. If any chunk had failed, it would appear as a
-    SYMBOLIC "chunk_error:name" placeholder, and the rest of the IR would still be valid.
-  </aside>
+  ...</pre>
+    <ul style="font-size: 0.7em; margin-top: 15px;">
+      <li>Labels suffixed: <code>func___init___0</code> &rarr; <code>func___init___0<span class="accent3">_chunk0</span></code></li>
+      <li>Registers offset per chunk: <span class="accent2">%0&ndash;%11</span> (chunk0), <span class="accent2">%12&ndash;%20</span> (chunk1), <span class="accent2">%21+</span> (chunk2)</li>
+      <li>Function/class refs include chunk suffix: <code>&lt;class:Account@class_Account_0<span class="accent3">_chunk0</span>&gt;</code></li>
+      <li>Failed chunks &rarr; <code class="accent3">SYMBOLIC "chunk_error:name"</code> placeholder</li>
+    </ul>
+    <aside class="notes">
+      The renumbering pass ensures no register or label collisions across chunks.
+      chunk0 uses %0–%11, chunk1 picks up at %12, and chunk2 at %21. Labels get chunk suffixes
+      to avoid collisions (func___init___0_chunk0 vs func_transfer_0_chunk1). The single entry
+      label is prepended during reassembly. If any chunk had failed, it would appear as a
+      SYMBOLIC "chunk_error:name" placeholder, and the rest of the IR would still be valid.
+    </aside>
+  </section>
 </section>
 
 <!-- ============================================================ -->
