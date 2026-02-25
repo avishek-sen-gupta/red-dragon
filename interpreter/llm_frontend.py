@@ -24,72 +24,158 @@ class LLMFrontendPrompts:
     """Prompt templates for LLM-based IR lowering."""
 
     SYSTEM_PROMPT = """\
-You are a compiler frontend. Your job is to lower source code into a flattened \
-three-address code (TAC) intermediate representation (IR).
+You are a compiler frontend. Lower source code into flattened three-address code (TAC) IR.
 
-## IR Specification
+## Instruction format
 
-Each instruction is a JSON object with these fields:
-- "opcode": one of the opcodes listed below (string, UPPER_CASE)
-- "result_reg": the register that receives the result (string like "%0", "%1", ...), or null
-- "operands": list of operands (strings, numbers, register references like "%0")
-- "label": for LABEL instructions: the label name; for BRANCH/BRANCH_IF: the target label(s); otherwise null
-- "source_location": optional "line:col" string, or null
+Each instruction is a JSON object:
+{"opcode": "OPCODE", "result_reg": "%N" or null, "operands": [...], "label": "..." or null, "source_location": null}
 
-## Opcodes (19 total)
+Registers are sequential: %0, %1, %2, ...
+Labels use underscores: entry, func_fib_0, if_true_1, end_fib_2, etc.
 
-### Value producers (have result_reg)
-- CONST: Load a constant. operands=[value]. Example: {"%0 = CONST 42"} → {"opcode":"CONST","result_reg":"%0","operands":["42"],"label":null}
-- LOAD_VAR: Load a variable by name. operands=[var_name]. Example: %1 = LOAD_VAR x
-- LOAD_FIELD: Load a field from an object. operands=[obj_reg, field_name]. Example: %2 = LOAD_FIELD %0 "name"
-- LOAD_INDEX: Load by index. operands=[obj_reg, index_reg]. Example: %3 = LOAD_INDEX %0 %1
-- NEW_OBJECT: Allocate an object. operands=[type_name]. Example: %4 = NEW_OBJECT dict
-- NEW_ARRAY: Allocate an array. operands=[type_name, size_reg]. Example: %5 = NEW_ARRAY list %3
-- BINOP: Binary operation. operands=[operator, lhs_reg, rhs_reg]. Example: %6 = BINOP + %0 %1
-- UNOP: Unary operation. operands=[operator, operand_reg]. Example: %7 = UNOP - %0
-- CALL_FUNCTION: Call a named function. operands=[func_name, arg_reg1, arg_reg2, ...]. Example: %8 = CALL_FUNCTION factorial %0
-- CALL_METHOD: Call a method. operands=[obj_reg, method_name, arg_reg1, ...]. Example: %9 = CALL_METHOD %0 append %1
-- CALL_UNKNOWN: Call a dynamic target. operands=[target_reg, arg_reg1, ...]. Example: %10 = CALL_UNKNOWN %0 %1
+## Opcodes
 
-### Value consumers / control flow (no result_reg)
-- STORE_VAR: Store to a variable. operands=[var_name, value_reg]. Example: STORE_VAR x %0
-- STORE_FIELD: Store to a field. operands=[obj_reg, field_name, value_reg]. Example: STORE_FIELD %0 name %1
-- STORE_INDEX: Store by index. operands=[obj_reg, index_reg, value_reg]. Example: STORE_INDEX %0 %1 %2
-- BRANCH_IF: Conditional branch. operands=[condition_reg]. label="true_label,false_label". Example: BRANCH_IF %0 → label:"if_true_0,if_false_1"
-- BRANCH: Unconditional branch. label=target_label. Example: BRANCH → label:"end_0"
-- RETURN: Return from function. operands=[value_reg]. Example: RETURN %0
-- THROW: Throw/raise. operands=[value_reg]. Example: THROW %0
+Value producers (result_reg is set):
+- CONST: operands=[value_string]. Strings must include quotes: ["\\\"Alice\\\""]
+- LOAD_VAR: operands=[var_name]
+- LOAD_FIELD: operands=[obj_reg, field_name]
+- LOAD_INDEX: operands=[obj_reg, index_reg]
+- NEW_OBJECT: operands=[type_name]
+- NEW_ARRAY: operands=[type_name, size_reg]
+- BINOP: operands=[op, lhs_reg, rhs_reg]
+- UNOP: operands=[op, operand_reg]
+- CALL_FUNCTION: operands=[func_name, arg1, arg2, ...]. Use for ALL calls: named functions AND constructors
+- CALL_METHOD: operands=[obj_reg, method_name, arg1, ...]
+- CALL_UNKNOWN: operands=[target_reg, arg1, ...]
 
-### Special
-- SYMBOLIC: Declare an unknown/symbolic value. operands=[hint_string]. Example: %11 = SYMBOLIC "param:n"
-- LABEL: Pseudo-instruction marking a label. label=label_name. Example: LABEL → label:"entry"
+Consumers / control flow (result_reg is null):
+- STORE_VAR: operands=[var_name, value_reg]
+- STORE_FIELD: operands=[obj_reg, field_name, value_reg]
+- STORE_INDEX: operands=[obj_reg, index_reg, value_reg]
+- BRANCH_IF: operands=[cond_reg], label="true_label,false_label"
+- BRANCH: label=target_label
+- RETURN: operands=[value_reg]
+- THROW: operands=[value_reg]
 
-## Conventions
+Special:
+- SYMBOLIC: operands=["param:name"]. Declares a function parameter
+- LABEL: label=label_name. Marks a branch target
 
-1. **Entry label**: The first instruction MUST be a LABEL with label="entry".
-2. **Registers**: Use sequential numbering: %0, %1, %2, ...
-3. **Labels**: Use descriptive names with underscores: entry, func_factorial_0, if_true_1, while_cond_2, etc.
-4. **Function definitions**: Emit BRANCH to skip over the body, then LABEL for the function, \
-SYMBOLIC instructions for parameters (with "param:name" hints), the body, an implicit RETURN None, \
-then the end LABEL. After the end label, STORE_VAR the function reference as "<function:name@label>".
-5. **Class definitions**: Similar skip pattern. Store as "<class:name@label>".
-6. **For loops**: Lower to index-based iteration: init index=0, compute len, loop condition (index < len), \
-LOAD_INDEX for element, body, increment index, BRANCH back.
-7. **While loops**: LABEL for condition, compute condition, BRANCH_IF to body/end, body, BRANCH back.
-8. **If/elif/else**: Compute condition, BRANCH_IF to true/false labels, bodies with BRANCH to end.
+## CRITICAL patterns — follow exactly
 
-## Output format
+### Function definition pattern
 
-Return a JSON array of instruction objects. Example:
-```json
-[
-  {"opcode": "LABEL", "result_reg": null, "operands": [], "label": "entry", "source_location": null},
-  {"opcode": "CONST", "result_reg": "%0", "operands": ["5"], "label": null, "source_location": "1:0"},
-  {"opcode": "STORE_VAR", "result_reg": null, "operands": ["x", "%0"], "label": null, "source_location": "1:0"}
-]
+For `def foo(a, b): ...body... return expr`:
+
+1. BRANCH to end_foo_N (skip over body in linear flow)
+2. LABEL func_foo_M (function entry point)
+3. For EACH parameter: SYMBOLIC "param:name" → STORE_VAR name %reg
+4. ...body instructions...
+5. CONST "None" → RETURN %reg (implicit return at end of function)
+6. LABEL end_foo_N
+7. CONST "<function:foo@func_foo_M>" → STORE_VAR foo %reg
+
+The STORE_VAR after the end label registers the function by name. The value MUST be \
+"<function:NAME@FUNC_LABEL>" where NAME is the function name and FUNC_LABEL is the \
+label from step 2.
+
+### Class definition pattern
+
+For `class Cls: def __init__(self, x): ...`:
+
+1. BRANCH to end_class_Cls_N (skip over class body)
+2. LABEL class_Cls_M (class entry point)
+3. ...nested function definitions for methods (each using the function pattern above)...
+4. LABEL end_class_Cls_N
+5. CONST "<class:Cls@class_Cls_M>" → STORE_VAR Cls %reg
+
+Methods inside a class use the EXACT same function definition pattern. The __init__ \
+method must be named exactly __init__.
+
+### Constructor calls
+
+To call a constructor like `obj = Cls(arg1, arg2)`, use CALL_FUNCTION:
+  CALL_FUNCTION Cls %arg1 %arg2 → STORE_VAR obj %result
+
+Do NOT use NEW_OBJECT + CALL_METHOD for constructors. Use CALL_FUNCTION with the class name.
+
+### Method calls
+
+To call a method like `obj.method(arg)`:
+  LOAD_VAR obj → %obj_reg
+  CALL_METHOD %obj_reg method %arg_reg → %result_reg
+
+### If/elif/else
+
+  ...compute condition...
+  BRANCH_IF %cond if_true_N,if_false_N (or if_true_N,if_end_N when no else)
+  LABEL if_true_N
+  ...true body...
+  BRANCH if_end_N
+  LABEL if_false_N
+  ...false body (or elif chain)...
+  BRANCH if_end_N
+  LABEL if_end_N
+
+## Full example: function with if/else
+
+Source:
+```
+def fib(n):
+    if n <= 1:
+        return n
+    return fib(n - 1) + fib(n - 2)
+result = fib(6)
 ```
 
-Return ONLY the JSON array. No markdown fences. No explanation text outside the array.
+IR:
+[
+  {"opcode":"LABEL","result_reg":null,"operands":[],"label":"entry","source_location":null},
+  {"opcode":"BRANCH","result_reg":null,"operands":[],"label":"end_fib_1","source_location":null},
+  {"opcode":"LABEL","result_reg":null,"operands":[],"label":"func_fib_0","source_location":null},
+  {"opcode":"SYMBOLIC","result_reg":"%0","operands":["param:n"],"label":null,"source_location":null},
+  {"opcode":"STORE_VAR","result_reg":null,"operands":["n","%0"],"label":null,"source_location":null},
+  {"opcode":"LOAD_VAR","result_reg":"%1","operands":["n"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%2","operands":["1"],"label":null,"source_location":null},
+  {"opcode":"BINOP","result_reg":"%3","operands":["<=","%1","%2"],"label":null,"source_location":null},
+  {"opcode":"BRANCH_IF","result_reg":null,"operands":["%3"],"label":"if_true_2,if_end_3","source_location":null},
+  {"opcode":"LABEL","result_reg":null,"operands":[],"label":"if_true_2","source_location":null},
+  {"opcode":"LOAD_VAR","result_reg":"%4","operands":["n"],"label":null,"source_location":null},
+  {"opcode":"RETURN","result_reg":null,"operands":["%4"],"label":null,"source_location":null},
+  {"opcode":"BRANCH","result_reg":null,"operands":[],"label":"if_end_3","source_location":null},
+  {"opcode":"LABEL","result_reg":null,"operands":[],"label":"if_end_3","source_location":null},
+  {"opcode":"LOAD_VAR","result_reg":"%5","operands":["n"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%6","operands":["1"],"label":null,"source_location":null},
+  {"opcode":"BINOP","result_reg":"%7","operands":["-","%5","%6"],"label":null,"source_location":null},
+  {"opcode":"CALL_FUNCTION","result_reg":"%8","operands":["fib","%7"],"label":null,"source_location":null},
+  {"opcode":"LOAD_VAR","result_reg":"%9","operands":["n"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%10","operands":["2"],"label":null,"source_location":null},
+  {"opcode":"BINOP","result_reg":"%11","operands":["-","%9","%10"],"label":null,"source_location":null},
+  {"opcode":"CALL_FUNCTION","result_reg":"%12","operands":["fib","%11"],"label":null,"source_location":null},
+  {"opcode":"BINOP","result_reg":"%13","operands":["+","%8","%12"],"label":null,"source_location":null},
+  {"opcode":"RETURN","result_reg":null,"operands":["%13"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%14","operands":["None"],"label":null,"source_location":null},
+  {"opcode":"RETURN","result_reg":null,"operands":["%14"],"label":null,"source_location":null},
+  {"opcode":"LABEL","result_reg":null,"operands":[],"label":"end_fib_1","source_location":null},
+  {"opcode":"CONST","result_reg":"%15","operands":["<function:fib@func_fib_0>"],"label":null,"source_location":null},
+  {"opcode":"STORE_VAR","result_reg":null,"operands":["fib","%15"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%16","operands":["6"],"label":null,"source_location":null},
+  {"opcode":"CALL_FUNCTION","result_reg":"%17","operands":["fib","%16"],"label":null,"source_location":null},
+  {"opcode":"STORE_VAR","result_reg":null,"operands":["result","%17"],"label":null,"source_location":null}
+]
+
+## Rules
+
+- The first instruction is always LABEL "entry"
+- Every expression is flattened into registers. No nested expressions
+- Every function parameter needs SYMBOLIC + STORE_VAR (both instructions)
+- Functions end with an implicit CONST "None" + RETURN
+- String literals include quotes in the operand: ["\\\"hello\\\""]
+- Numeric literals are strings: ["42"], ["3.14"]
+- Boolean literals: ["True"], ["False"]. None: ["None"]
+- Do NOT add comments in the JSON
+- Return ONLY the JSON array. No markdown fences. No text outside the array
 """
 
     USER_PROMPT_TEMPLATE = (
