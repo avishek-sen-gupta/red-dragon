@@ -124,8 +124,23 @@ class BaseFrontend(Frontend):
     # ── dispatchers ──────────────────────────────────────────────
 
     def _lower_block(self, node):
-        """Lower a block of statements (module / suite / body)."""
+        """Lower a block of statements (module / suite / body).
+
+        If *node* is itself a known statement whose handler is **not**
+        ``_lower_block`` (e.g. a bare ``return_statement`` used as the
+        consequence of an ``if``), it is lowered directly rather than
+        iterating its children as sub-statements.
+        """
+        handler = self._STMT_DISPATCH.get(node.type)
+        if (
+            handler is not None
+            and getattr(handler, "__func__", None) is not BaseFrontend._lower_block
+        ):
+            handler(node)
+            return
         for child in node.children:
+            if not child.is_named:
+                continue
             self._lower_stmt(child)
 
     def _lower_stmt(self, node):
