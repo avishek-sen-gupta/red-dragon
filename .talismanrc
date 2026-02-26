@@ -5,3 +5,5 @@ fileignoreconfig:
   checksum: 5337b3918a4bbf320a088669079fbe7fe525cb45bf947a62ad3f5f15de093eec
 - filename: interpreter/registry.py
   checksum: 3bccb3c148fa72a3ddd4d191f1f11b1e82f23f94bebfdb5c2663aec3fb5ecabf
+- filename: notes-on-vm-design.md
+  checksum: a100eb0b5f8f99850b8675cdccb090fd9dc24b821f30f41314ddac35bb15f889
