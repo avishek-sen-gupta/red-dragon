@@ -107,7 +107,7 @@ flowchart TD
     if_false --> merge
 ```
 
-Function bodies appear as subgraphs with dashed call edges (`-.->|"call"|`) connecting `CALL_FUNCTION` sites to function entry blocks. All 15 frontends produce the same CFG shape for equivalent logic.
+Function bodies appear as subgraphs with dashed call edges (`-.->|"call"|`) connecting `CALL_FUNCTION` sites to function entry blocks. Blocks with more than 6 instructions are collapsed to show the first 4 lines, an `... (N more)` placeholder, and the terminator — keeping CFG diagrams readable without hiding critical branch/return instructions. All 15 frontends produce the same CFG shape for equivalent logic.
 
 ## Example: symbolic execution (0 LLM calls)
 

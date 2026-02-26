@@ -1,6 +1,12 @@
 """Tests for CFG builder and Mermaid export."""
 
-from interpreter.cfg import build_cfg, cfg_to_mermaid, CFG, BasicBlock
+from interpreter.cfg import (
+    build_cfg,
+    cfg_to_mermaid,
+    _collapse_inst_lines,
+    CFG,
+    BasicBlock,
+)
 from interpreter.ir import IRInstruction, Opcode
 
 
@@ -413,3 +419,42 @@ class TestCfgToMermaidCallEdges:
         mermaid = cfg_to_mermaid(cfg)
 
         assert "dead_block" not in mermaid
+
+
+class TestCollapseInstLines:
+    def test_short_list_unchanged(self):
+        lines = ["a", "b", "c", "d", "e", "f"]
+        assert _collapse_inst_lines(lines) == lines
+
+    def test_long_list_collapsed_preserves_terminator(self):
+        lines = ["i0", "i1", "i2", "i3", "i4", "i5", "i6", "BRANCH_IF t0"]
+        result = _collapse_inst_lines(lines)
+        assert result == ["i0", "i1", "i2", "i3", "... (3 more)", "BRANCH_IF t0"]
+
+    def test_exactly_at_limit_unchanged(self):
+        lines = ["a", "b", "c", "d", "e", "f"]
+        assert _collapse_inst_lines(lines, max_lines=6) == lines
+
+    def test_one_over_limit_collapsed(self):
+        lines = ["a", "b", "c", "d", "e", "f", "TERM"]
+        result = _collapse_inst_lines(lines, max_lines=6)
+        assert result == ["a", "b", "c", "d", "... (2 more)", "TERM"]
+
+    def test_render_node_collapses_in_mermaid(self):
+        """Long block in Mermaid output shows collapsed instructions."""
+        instructions = _make_instructions(
+            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
+            (Opcode.CONST, {"result_reg": "t1", "operands": [2]}),
+            (Opcode.CONST, {"result_reg": "t2", "operands": [3]}),
+            (Opcode.CONST, {"result_reg": "t3", "operands": [4]}),
+            (Opcode.CONST, {"result_reg": "t4", "operands": [5]}),
+            (Opcode.CONST, {"result_reg": "t5", "operands": [6]}),
+            (Opcode.CONST, {"result_reg": "t6", "operands": [7]}),
+            (Opcode.RETURN, {"operands": ["t6"]}),
+        )
+        cfg = build_cfg(instructions)
+        mermaid = cfg_to_mermaid(cfg)
+
+        assert "... (3 more)" in mermaid
+        assert "return t6" in mermaid
