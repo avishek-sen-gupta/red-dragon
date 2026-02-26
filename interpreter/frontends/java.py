@@ -54,6 +54,8 @@ class JavaFrontend(BaseFrontend):
             "instanceof_expression": self._lower_instanceof,
             "ternary_expression": self._lower_ternary,
             "type_identifier": self._lower_identifier,
+            "method_reference": self._lower_method_reference,
+            "lambda_expression": self._lower_lambda,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -169,6 +171,95 @@ class JavaFrontend(BaseFrontend):
             source_location=self._source_loc(node),
         )
         return reg
+
+    # ── Java: method reference ──────────────────────────────────
+
+    def _lower_method_reference(self, node) -> str:
+        """Lower method_reference: Type::method or obj::method or Type::new.
+
+        Children are positional: [object_or_type, ::, method_or_new].
+        Emits LOAD_FIELD to resolve the callable on the left-hand side.
+        """
+        obj_node = node.children[0]
+        method_node = node.children[-1]
+        obj_reg = self._lower_expr(obj_node)
+        method_name = self._node_text(method_node)
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_FIELD,
+            result_reg=reg,
+            operands=[obj_reg, method_name],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # ── Java: lambda expression ────────────────────────────────
+
+    def _lower_lambda(self, node) -> str:
+        """Lower lambda_expression: (params) -> expr or (params) -> { body }.
+
+        Parameters field is 'formal_parameters' (typed) or 'inferred_parameters' (untyped).
+        Body field is either a block or an expression.
+        """
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}__lambda")
+        end_label = self._fresh_label("lambda_end")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=func_label)
+
+        params_node = node.child_by_field_name("parameters")
+        if params_node:
+            self._lower_lambda_params(params_node)
+
+        body_node = node.child_by_field_name("body")
+        if body_node and body_node.type == "block":
+            self._lower_block(body_node)
+            none_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST, result_reg=none_reg, operands=[self.DEFAULT_RETURN_VALUE]
+            )
+            self._emit(Opcode.RETURN, operands=[none_reg])
+        elif body_node:
+            body_reg = self._lower_expr(body_node)
+            self._emit(Opcode.RETURN, operands=[body_reg])
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+        ref_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=ref_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name="__lambda", label=func_label)
+            ],
+            source_location=self._source_loc(node),
+        )
+        return ref_reg
+
+    def _lower_lambda_params(self, params_node):
+        """Lower parameters for lambda expressions.
+
+        Handles both formal_parameters (typed: (int a, int b))
+        and inferred_parameters (untyped: (a, b)).
+        """
+        if params_node.type == "formal_parameters":
+            self._lower_java_params(params_node)
+        else:
+            for child in params_node.children:
+                if child.type == "identifier":
+                    pname = self._node_text(child)
+                    self._emit(
+                        Opcode.SYMBOLIC,
+                        result_reg=self._fresh_reg(),
+                        operands=[f"{constants.PARAM_PREFIX}{pname}"],
+                        source_location=self._source_loc(child),
+                    )
+                    self._emit(
+                        Opcode.STORE_VAR,
+                        operands=[pname, f"%{self._reg_counter - 1}"],
+                    )
 
     # ── Java: array access ───────────────────────────────────────
 

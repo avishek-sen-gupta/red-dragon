@@ -422,6 +422,85 @@ class TestJavaArrayCreation:
         assert len(stores) >= 3
 
 
+class TestJavaMethodReference:
+    def test_type_method_reference(self):
+        instructions = _parse_java(
+            "class M { void m() { Function f = String::valueOf; } }"
+        )
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert any("valueOf" in inst.operands for inst in loads)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("method_reference" in str(inst.operands) for inst in symbolics)
+
+    def test_this_method_reference(self):
+        instructions = _parse_java(
+            "class M { void m() { Runnable r = this::doStuff; } }"
+        )
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert any("doStuff" in inst.operands for inst in loads)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("method_reference" in str(inst.operands) for inst in symbolics)
+
+    def test_constructor_reference(self):
+        instructions = _parse_java(
+            "class M { void m() { Supplier s = ArrayList::new; } }"
+        )
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert any("new" in inst.operands for inst in loads)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("method_reference" in str(inst.operands) for inst in symbolics)
+
+
+class TestJavaLambdaExpression:
+    def test_lambda_expression_body(self):
+        instructions = _parse_java(
+            'class M { void m() { Runnable r = () -> System.out.println("hi"); } }'
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("lambda_expression" in str(inst.operands) for inst in symbolics)
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 1
+
+    def test_lambda_with_params_and_block(self):
+        instructions = _parse_java(
+            "class M { void m() { Comparator c = (a, b) -> { return a - b; }; } }"
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        param_names = [
+            inst.operands[0]
+            for inst in symbolics
+            if inst.operands and str(inst.operands[0]).startswith("param:")
+        ]
+        assert any("a" in p for p in param_names)
+        assert any("b" in p for p in param_names)
+        assert not any("lambda_expression" in str(inst.operands) for inst in symbolics)
+        assert Opcode.BINOP in _opcodes(instructions)
+
+    def test_lambda_with_typed_params(self):
+        instructions = _parse_java(
+            "class M { void m() { BiFunction f = (int x, int y) -> x + y; } }"
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        param_names = [
+            inst.operands[0]
+            for inst in symbolics
+            if inst.operands and str(inst.operands[0]).startswith("param:")
+        ]
+        assert any("x" in p for p in param_names)
+        assert any("y" in p for p in param_names)
+        assert not any("lambda_expression" in str(inst.operands) for inst in symbolics)
+
+    def test_lambda_emits_func_ref(self):
+        instructions = _parse_java(
+            "class M { void m() { Runnable r = () -> doStuff(); } }"
+        )
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            "function:" in str(inst.operands) and "lambda" in str(inst.operands)
+            for inst in consts
+        )
+
+
 class TestJavaInstanceof:
     def test_instanceof_expression(self):
         instructions = _parse_java(
