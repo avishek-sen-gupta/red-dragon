@@ -501,6 +501,56 @@ object M {
         assert any("+" in inst.operands for inst in binops)
 
 
+class TestScalaThrowExpression:
+    def test_throw_emits_throw_opcode(self):
+        source = 'object M { throw new Exception("error") }'
+        instructions = _parse_scala(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.THROW in opcodes
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("throw_expression" in str(inst.operands) for inst in symbolics)
+
+    def test_throw_with_variable(self):
+        source = "object M { val e = new RuntimeException(); throw e }"
+        instructions = _parse_scala(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.THROW in opcodes
+
+    def test_throw_in_if_expression(self):
+        source = """\
+object M {
+    val x = if (cond) 42 else throw new IllegalStateException("bad")
+}
+"""
+        instructions = _parse_scala(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.THROW in opcodes
+        assert Opcode.BRANCH_IF in opcodes
+
+
+class TestScalaInstanceExpression:
+    def test_new_expression_no_symbolic(self):
+        source = 'object M { val x = new Exception("test") }'
+        instructions = _parse_scala(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any(
+            "instance_expression" in str(inst.operands) for inst in symbolics
+        )
+        assert not any("new_expression" in str(inst.operands) for inst in symbolics)
+
+    def test_new_expression_produces_call(self):
+        source = "object M { val dog = new Dog() }"
+        instructions = _parse_scala(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert len(calls) >= 1
+
+    def test_new_expression_stored(self):
+        source = 'object M { val msg = new String("hello") }'
+        instructions = _parse_scala(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("msg" in inst.operands for inst in stores)
+
+
 class TestScalaTypeDefinition:
     def test_type_alias_is_noop(self):
         source = "object M { type Alias = List[Int] }"

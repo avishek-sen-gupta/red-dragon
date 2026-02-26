@@ -609,6 +609,29 @@ union Value {
         assert "y" in field_names
 
 
+class TestCFrontendCharLiteral:
+    def test_char_literal_produces_const(self):
+        source = "void f() { char c = 'A'; }"
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("'A'" in str(inst.operands) for inst in consts)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("char_literal" in str(inst.operands) for inst in symbolics)
+
+    def test_char_literal_no_symbolic_fallback(self):
+        source = "void f() { char c = 'x'; }"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("char_literal" in str(inst.operands) for inst in symbolics)
+        assert not any("character_literal" in str(inst.operands) for inst in symbolics)
+
+    def test_char_literal_stored_to_variable(self):
+        source = "void f() { char c = 'Z'; }"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("c" in inst.operands for inst in stores)
+
+
 class TestCFrontendInitializerList:
     def test_initializer_list_produces_new_array(self):
         source = "void f() { int arr[] = {1, 2, 3}; }"

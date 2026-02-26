@@ -59,6 +59,17 @@ class PythonFrontend(BaseFrontend):
             "yield": self._lower_yield,
             "await": self._lower_await,
             "named_expression": self._lower_named_expression,
+            "slice": self._lower_slice,
+            "keyword_separator": self._lower_noop_expr,
+            "positional_separator": self._lower_noop_expr,
+            "list_pattern": self._lower_list_pattern,
+            "case_pattern": self._lower_case_pattern,
+            "interpolation": self._lower_interpolation,
+            "format_specifier": self._lower_const_literal,
+            "string_content": self._lower_const_literal,
+            "string_start": self._lower_const_literal,
+            "string_end": self._lower_const_literal,
+            "type_conversion": self._lower_const_literal,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -1010,3 +1021,123 @@ class PythonFrontend(BaseFrontend):
                 self._emit(Opcode.LABEL, label=case_next_label)
 
         self._emit(Opcode.LABEL, label=end_label)
+
+    # ── Python-specific: slice ───────────────────────────────────
+
+    def _lower_slice(self, node) -> str:
+        """Lower a[1:3] or a[1:3:2] → CALL_FUNCTION('slice', start, stop, step).
+
+        Missing components (e.g. a[:3]) get a CONST('None') placeholder.
+        """
+        all_children = list(node.children)
+        colons = [i for i, c in enumerate(all_children) if c.type == ":"]
+
+        start_reg = self._lower_slice_none()
+        stop_reg = self._lower_slice_none()
+        step_reg = self._lower_slice_none()
+
+        named_before_first_colon = (
+            [c for c in all_children[: colons[0]] if c.type != ":" and c.is_named]
+            if colons
+            else []
+        )
+        named_between = (
+            [
+                c
+                for c in all_children[colons[0] + 1 : colons[1]]
+                if c.type != ":" and c.is_named
+            ]
+            if len(colons) >= 2
+            else (
+                [
+                    c
+                    for c in all_children[colons[0] + 1 :]
+                    if c.type != ":" and c.is_named
+                ]
+                if colons
+                else []
+            )
+        )
+        named_after_second_colon = (
+            [c for c in all_children[colons[1] + 1 :] if c.type != ":" and c.is_named]
+            if len(colons) >= 2
+            else []
+        )
+
+        if named_before_first_colon:
+            start_reg = self._lower_expr(named_before_first_colon[0])
+        if named_between:
+            stop_reg = self._lower_expr(named_between[0])
+        if named_after_second_colon:
+            step_reg = self._lower_expr(named_after_second_colon[0])
+
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["slice", start_reg, stop_reg, step_reg],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    def _lower_slice_none(self) -> str:
+        """Emit a CONST('None') for a missing slice component."""
+        reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=reg, operands=[self.NONE_LITERAL])
+        return reg
+
+    # ── Python-specific: no-op expression ────────────────────────
+
+    def _lower_noop_expr(self, node) -> str:
+        """Lower a no-op expression node (e.g. keyword_separator, positional_separator)."""
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=reg,
+            operands=[self.NONE_LITERAL],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # ── Python-specific: list pattern ────────────────────────────
+
+    def _lower_list_pattern(self, node) -> str:
+        """Lower [p1, p2, ...] pattern in match/case like a list literal."""
+        elems = [c for c in node.children if c.type not in ("[", "]", ",")]
+        arr_reg = self._fresh_reg()
+        size_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
+        self._emit(
+            Opcode.NEW_ARRAY,
+            result_reg=arr_reg,
+            operands=["list", size_reg],
+            source_location=self._source_loc(node),
+        )
+        for i, elem in enumerate(elems):
+            val_reg = self._lower_expr(elem)
+            idx_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            self._emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+        return arr_reg
+
+    # ── Python-specific: case_pattern wrapper ──────────────────────
+
+    def _lower_case_pattern(self, node) -> str:
+        """Lower a case_pattern wrapper node by lowering its inner child."""
+        named_children = [c for c in node.children if c.is_named]
+        if not named_children:
+            return self._lower_noop_expr(node)
+        return self._lower_expr(named_children[0])
+
+    # ── Python-specific: f-string interpolation ──────────────────
+
+    def _lower_interpolation(self, node) -> str:
+        """Lower {expr} inside f-strings → lower the inner expression."""
+        named_children = [
+            c
+            for c in node.children
+            if c.is_named and c.type not in ("format_specifier", "type_conversion")
+        ]
+        if not named_children:
+            return self._lower_noop_expr(node)
+        return self._lower_expr(named_children[0])

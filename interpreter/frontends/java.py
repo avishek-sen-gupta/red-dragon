@@ -58,7 +58,7 @@ class JavaFrontend(BaseFrontend):
             "lambda_expression": self._lower_lambda,
             "class_literal": self._lower_class_literal,
             "super": self._lower_identifier,
-            "text_block": self._lower_const_literal,
+            "scoped_identifier": self._lower_scoped_identifier,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -199,6 +199,24 @@ class JavaFrontend(BaseFrontend):
             Opcode.LOAD_FIELD,
             result_reg=reg,
             operands=[obj_reg, method_name],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # ── Java: scoped identifier ──────────────────────────────
+
+    def _lower_scoped_identifier(self, node) -> str:
+        """Lower scoped_identifier (e.g., java.lang.System) as LOAD_VAR.
+
+        The tree-sitter grammar nests scoped_identifiers recursively, so we
+        use the full text of the node which already contains the dotted name.
+        """
+        qualified_name = self._node_text(node)
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_VAR,
+            result_reg=reg,
+            operands=[qualified_name],
             source_location=self._source_loc(node),
         )
         return reg

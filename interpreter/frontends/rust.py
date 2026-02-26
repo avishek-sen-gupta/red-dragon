@@ -74,6 +74,8 @@ class RustFrontend(BaseFrontend):
             "await_expression": self._lower_await_expr,
             "async_block": self._lower_block_expr,
             "unsafe_block": self._lower_block_expr,
+            "type_cast_expression": self._lower_type_cast_expr,
+            "scoped_identifier": self._lower_scoped_identifier,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -845,6 +847,40 @@ class RustFrontend(BaseFrontend):
         )
         if body_node:
             self._lower_block(body_node)
+
+    # -- type cast expression (as) -----------------------------------------
+
+    def _lower_type_cast_expr(self, node) -> str:
+        """Lower `expr as Type` as CALL_FUNCTION('as', expr, type_name)."""
+        named_children = [c for c in node.children if c.is_named]
+        if not named_children:
+            return self._lower_const_literal(node)
+        expr_reg = self._lower_expr(named_children[0])
+        type_name = self._node_text(named_children[-1])
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["as", expr_reg, type_name],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- scoped identifier (Path::Segment) ---------------------------------
+
+    def _lower_scoped_identifier(self, node) -> str:
+        """Lower `HashMap::new`, `Shape::Circle` as LOAD_VAR with qualified name."""
+        full_name = "::".join(
+            self._node_text(c) for c in node.children if c.type == "identifier"
+        )
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_VAR,
+            result_reg=reg,
+            operands=[full_name],
+            source_location=self._source_loc(node),
+        )
+        return reg
 
     # -- generic symbolic fallback -----------------------------------------
 
