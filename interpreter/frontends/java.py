@@ -103,7 +103,7 @@ class JavaFrontend(BaseFrontend):
                     self._emit(
                         Opcode.STORE_VAR,
                         operands=[self._node_text(name_node), val_reg],
-                        source_location=self._source_loc(node),
+                        node=node,
                     )
                 elif name_node:
                     val_reg = self._fresh_reg()
@@ -115,7 +115,7 @@ class JavaFrontend(BaseFrontend):
                     self._emit(
                         Opcode.STORE_VAR,
                         operands=[self._node_text(name_node), val_reg],
-                        source_location=self._source_loc(node),
+                        node=node,
                     )
 
     # ── Java: method invocation ──────────────────────────────────
@@ -134,7 +134,7 @@ class JavaFrontend(BaseFrontend):
                 Opcode.CALL_METHOD,
                 result_reg=reg,
                 operands=[obj_reg, method_name] + arg_regs,
-                source_location=self._source_loc(node),
+                node=node,
             )
             return reg
 
@@ -144,7 +144,7 @@ class JavaFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=[func_name] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -160,7 +160,7 @@ class JavaFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=[type_name] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -178,7 +178,7 @@ class JavaFrontend(BaseFrontend):
             Opcode.LOAD_FIELD,
             result_reg=reg,
             operands=[obj_reg, field_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -199,7 +199,7 @@ class JavaFrontend(BaseFrontend):
             Opcode.LOAD_FIELD,
             result_reg=reg,
             operands=[obj_reg, method_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -217,7 +217,7 @@ class JavaFrontend(BaseFrontend):
             Opcode.LOAD_VAR,
             result_reg=reg,
             operands=[qualified_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -235,7 +235,7 @@ class JavaFrontend(BaseFrontend):
             Opcode.LOAD_FIELD,
             result_reg=reg,
             operands=[type_reg, "class"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -250,9 +250,7 @@ class JavaFrontend(BaseFrontend):
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}__lambda")
         end_label = self._fresh_label("lambda_end")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
 
         params_node = node.child_by_field_name("parameters")
@@ -280,7 +278,7 @@ class JavaFrontend(BaseFrontend):
             operands=[
                 constants.FUNC_REF_TEMPLATE.format(name="__lambda", label=func_label)
             ],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return ref_reg
 
@@ -300,7 +298,7 @@ class JavaFrontend(BaseFrontend):
                         Opcode.SYMBOLIC,
                         result_reg=self._fresh_reg(),
                         operands=[f"{constants.PARAM_PREFIX}{pname}"],
-                        source_location=self._source_loc(child),
+                        node=child,
                     )
                     self._emit(
                         Opcode.STORE_VAR,
@@ -321,7 +319,7 @@ class JavaFrontend(BaseFrontend):
             Opcode.LOAD_INDEX,
             result_reg=reg,
             operands=[arr_reg, idx_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -343,7 +341,7 @@ class JavaFrontend(BaseFrontend):
                 Opcode.NEW_ARRAY,
                 result_reg=arr_reg,
                 operands=["array", size_reg],
-                source_location=self._source_loc(node),
+                node=node,
             )
             for i, elem in enumerate(elements):
                 idx_reg = self._fresh_reg()
@@ -366,7 +364,7 @@ class JavaFrontend(BaseFrontend):
                 Opcode.NEW_ARRAY,
                 result_reg=arr_reg,
                 operands=["array", size_reg],
-                source_location=self._source_loc(node),
+                node=node,
             )
             for i, elem in enumerate(elements):
                 idx_reg = self._fresh_reg()
@@ -393,7 +391,7 @@ class JavaFrontend(BaseFrontend):
             Opcode.NEW_ARRAY,
             result_reg=arr_reg,
             operands=["array", size_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return arr_reg
 
@@ -413,7 +411,7 @@ class JavaFrontend(BaseFrontend):
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
         elif target.type == "field_access":
             obj_node = target.child_by_field_name("object")
@@ -423,7 +421,7 @@ class JavaFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_FIELD,
                     operands=[obj_reg, self._node_text(field_node), val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         elif target.type == "array_access":
             arr_node = target.child_by_field_name("array")
@@ -434,13 +432,13 @@ class JavaFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_INDEX,
                     operands=[arr_reg, idx_reg, val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         else:
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
 
     # ── Java: cast expression ────────────────────────────────────
@@ -474,7 +472,7 @@ class JavaFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["instanceof", obj_reg, type_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -605,7 +603,7 @@ class JavaFrontend(BaseFrontend):
                         Opcode.BINOP,
                         result_reg=cmp_reg,
                         operands=["==", subject_reg, case_reg],
-                        source_location=self._source_loc(group),
+                        node=group,
                     )
                     self._emit(
                         Opcode.BRANCH_IF,
@@ -638,9 +636,7 @@ class JavaFrontend(BaseFrontend):
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
 
         if params_node:
@@ -676,7 +672,7 @@ class JavaFrontend(BaseFrontend):
                         Opcode.SYMBOLIC,
                         result_reg=self._fresh_reg(),
                         operands=[f"{constants.PARAM_PREFIX}{pname}"],
-                        source_location=self._source_loc(child),
+                        node=child,
                     )
                     self._emit(
                         Opcode.STORE_VAR,
@@ -690,7 +686,7 @@ class JavaFrontend(BaseFrontend):
                         Opcode.SYMBOLIC,
                         result_reg=self._fresh_reg(),
                         operands=[f"{constants.PARAM_PREFIX}{pname}"],
-                        source_location=self._source_loc(child),
+                        node=child,
                     )
                     self._emit(
                         Opcode.STORE_VAR,
@@ -707,9 +703,7 @@ class JavaFrontend(BaseFrontend):
         class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
         end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
         if body_node:
             self._lower_class_body(body_node)
@@ -738,9 +732,7 @@ class JavaFrontend(BaseFrontend):
             f"{constants.END_CLASS_LABEL_PREFIX}{record_name}"
         )
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
         if body_node:
             self._lower_class_body(body_node)
@@ -818,7 +810,7 @@ class JavaFrontend(BaseFrontend):
                     self._emit(
                         Opcode.STORE_VAR,
                         operands=[self._node_text(name_node), val_reg],
-                        source_location=self._source_loc(node),
+                        node=node,
                     )
 
     # ── Java: interface/enum ─────────────────────────────────────
@@ -834,7 +826,7 @@ class JavaFrontend(BaseFrontend):
             Opcode.NEW_OBJECT,
             result_reg=obj_reg,
             operands=[f"interface:{iface_name}"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         body_node = node.child_by_field_name("body")
         if body_node:
@@ -863,7 +855,7 @@ class JavaFrontend(BaseFrontend):
                 Opcode.NEW_OBJECT,
                 result_reg=obj_reg,
                 operands=[f"enum:{enum_name}"],
-                source_location=self._source_loc(node),
+                node=node,
             )
             if body_node:
                 for i, child in enumerate(
@@ -945,7 +937,7 @@ class JavaFrontend(BaseFrontend):
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{body_label},{end_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
         else:
             self._emit(Opcode.BRANCH, label=body_label)
@@ -970,7 +962,7 @@ class JavaFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=self._fresh_reg(),
             operands=["assert"] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # ── Java: labeled statement ─────────────────────────────────
@@ -1022,7 +1014,7 @@ class JavaFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=self._fresh_reg(),
             operands=[target_name] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # ── Java: annotation type declaration ───────────────────────
@@ -1038,7 +1030,7 @@ class JavaFrontend(BaseFrontend):
             Opcode.NEW_OBJECT,
             result_reg=obj_reg,
             operands=[f"annotation:{annot_name}"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         body_node = node.child_by_field_name("body")
         if body_node:
@@ -1074,14 +1066,14 @@ class JavaFrontend(BaseFrontend):
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{true_label},{false_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
         else:
             self._emit(
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{true_label},{end_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
 
         self._emit(Opcode.LABEL, label=true_label)

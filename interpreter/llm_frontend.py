@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from .frontend import Frontend
-from .ir import IRInstruction, Opcode
+from .ir import NO_SOURCE_LOCATION, IRInstruction, Opcode
 from .llm_client import LLMClient
 from . import constants
 
@@ -207,7 +207,7 @@ def _parse_single_instruction(raw: dict[str, Any]) -> IRInstruction:
         result_reg=raw.get("result_reg"),
         operands=raw.get("operands", []),
         label=raw.get("label"),
-        source_location=raw.get("source_location"),
+        source_location=NO_SOURCE_LOCATION,
     )
 
 

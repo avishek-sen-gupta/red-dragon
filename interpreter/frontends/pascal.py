@@ -183,7 +183,7 @@ class PascalFrontend(BaseFrontend):
         self._emit(
             Opcode.STORE_VAR,
             operands=[var_name, val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # -- Pascal: assignment (identifier := expression) -----------------------------
@@ -205,7 +205,7 @@ class PascalFrontend(BaseFrontend):
         self._emit(
             Opcode.STORE_VAR,
             operands=[self._node_text(target), val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # -- Pascal: binary expression -------------------------------------------------
@@ -238,7 +238,7 @@ class PascalFrontend(BaseFrontend):
             Opcode.BINOP,
             result_reg=reg,
             operands=[op_symbol, lhs_reg, rhs_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -257,7 +257,7 @@ class PascalFrontend(BaseFrontend):
                 Opcode.CALL_FUNCTION,
                 result_reg=reg,
                 operands=[func_name] + arg_regs,
-                source_location=self._source_loc(node),
+                node=node,
             )
             return reg
 
@@ -272,7 +272,7 @@ class PascalFrontend(BaseFrontend):
             Opcode.CALL_UNKNOWN,
             result_reg=reg,
             operands=[target_reg] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -314,14 +314,14 @@ class PascalFrontend(BaseFrontend):
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{true_label},{false_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
         else:
             self._emit(
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{true_label},{end_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
 
         self._emit(Opcode.LABEL, label=true_label)
@@ -362,7 +362,7 @@ class PascalFrontend(BaseFrontend):
             Opcode.BRANCH_IF,
             operands=[cond_reg],
             label=f"{body_label},{end_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         self._emit(Opcode.LABEL, label=body_label)
@@ -436,7 +436,7 @@ class PascalFrontend(BaseFrontend):
             Opcode.BRANCH_IF,
             operands=[cond_reg],
             label=f"{body_label},{end_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         self._emit(Opcode.LABEL, label=body_label)
@@ -470,9 +470,7 @@ class PascalFrontend(BaseFrontend):
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
 
         if args_node:
@@ -511,7 +509,7 @@ class PascalFrontend(BaseFrontend):
                     Opcode.SYMBOLIC,
                     result_reg=self._fresh_reg(),
                     operands=[f"{constants.PARAM_PREFIX}{pname}"],
-                    source_location=self._source_loc(child),
+                    node=child,
                 )
                 self._emit(
                     Opcode.STORE_VAR,
@@ -528,7 +526,7 @@ class PascalFrontend(BaseFrontend):
             Opcode.SYMBOLIC,
             result_reg=self._fresh_reg(),
             operands=[f"{constants.PARAM_PREFIX}{pname}"],
-            source_location=self._source_loc(child),
+            node=child,
         )
         self._emit(
             Opcode.STORE_VAR,
@@ -553,7 +551,7 @@ class PascalFrontend(BaseFrontend):
             Opcode.LOAD_FIELD,
             result_reg=reg,
             operands=[obj_reg, field_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -582,7 +580,7 @@ class PascalFrontend(BaseFrontend):
                     Opcode.LOAD_INDEX,
                     result_reg=reg,
                     operands=[obj_reg, idx_reg],
-                    source_location=self._source_loc(node),
+                    node=node,
                 )
                 return reg
         return obj_reg
@@ -614,7 +612,7 @@ class PascalFrontend(BaseFrontend):
             Opcode.UNOP,
             result_reg=reg,
             operands=[op_symbol, operand_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -681,7 +679,7 @@ class PascalFrontend(BaseFrontend):
                     Opcode.BINOP,
                     result_reg=cmp_reg,
                     operands=["==", selector_reg, first_val_reg],
-                    source_location=self._source_loc(case_node),
+                    node=case_node,
                 )
                 for extra_val in label_values[1:]:
                     extra_reg = self._lower_expr(extra_val)
@@ -703,7 +701,7 @@ class PascalFrontend(BaseFrontend):
                     Opcode.BRANCH_IF,
                     operands=[cmp_reg],
                     label=f"{true_label},{next_label}",
-                    source_location=self._source_loc(case_node),
+                    node=case_node,
                 )
 
         self._emit(Opcode.LABEL, label=true_label)
@@ -743,7 +741,7 @@ class PascalFrontend(BaseFrontend):
             Opcode.BRANCH_IF,
             operands=[cond_reg],
             label=f"{end_label},{body_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
         self._emit(Opcode.LABEL, label=end_label)
 
@@ -761,7 +759,7 @@ class PascalFrontend(BaseFrontend):
             Opcode.NEW_ARRAY,
             result_reg=arr_reg,
             operands=["set", size_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         for i, elem in enumerate(elems):
             val_reg = self._lower_expr(elem)
@@ -812,7 +810,7 @@ class PascalFrontend(BaseFrontend):
         self._emit(
             Opcode.STORE_VAR,
             operands=[var_name, val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # -- Pascal: type declarations (no-op) -----------------------------------------

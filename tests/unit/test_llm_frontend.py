@@ -76,14 +76,14 @@ SIMPLE_IR_JSON = json.dumps(
             "result_reg": "%0",
             "operands": ["42"],
             "label": None,
-            "source_location": "1:0",
+            "source_location": None,
         },
         {
             "opcode": "STORE_VAR",
             "result_reg": None,
             "operands": ["x", "%0"],
             "label": None,
-            "source_location": "1:0",
+            "source_location": None,
         },
     ]
 )

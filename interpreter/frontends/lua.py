@@ -117,7 +117,7 @@ class LuaFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_VAR,
                     operands=[self._node_text(child), val_reg],
-                    source_location=self._source_loc(node),
+                    node=node,
                 )
 
     # -- Lua: assignment (a, b = expr1, expr2) -------------------------------------
@@ -167,7 +167,7 @@ class LuaFrontend(BaseFrontend):
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
         elif target.type == "dot_index_expression":
             obj_node = target.child_by_field_name("table")
@@ -177,7 +177,7 @@ class LuaFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_FIELD,
                     operands=[obj_reg, self._node_text(field_node), val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         elif target.type == "bracket_index_expression":
             obj_node = target.child_by_field_name("table")
@@ -188,13 +188,13 @@ class LuaFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_INDEX,
                     operands=[obj_reg, idx_reg, val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         else:
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
 
     # -- Lua: function declaration -------------------------------------------------
@@ -209,9 +209,7 @@ class LuaFrontend(BaseFrontend):
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
 
         if params_node:
@@ -257,7 +255,7 @@ class LuaFrontend(BaseFrontend):
                 Opcode.CALL_UNKNOWN,
                 result_reg=reg,
                 operands=[target_reg] + arg_regs,
-                source_location=self._source_loc(node),
+                node=node,
             )
             return reg
 
@@ -273,7 +271,7 @@ class LuaFrontend(BaseFrontend):
                     Opcode.CALL_METHOD,
                     result_reg=reg,
                     operands=[obj_reg, method_name] + arg_regs,
-                    source_location=self._source_loc(node),
+                    node=node,
                 )
                 return reg
 
@@ -289,7 +287,7 @@ class LuaFrontend(BaseFrontend):
                     Opcode.CALL_METHOD,
                     result_reg=reg,
                     operands=[obj_reg, method_name] + arg_regs,
-                    source_location=self._source_loc(node),
+                    node=node,
                 )
                 return reg
 
@@ -301,7 +299,7 @@ class LuaFrontend(BaseFrontend):
                 Opcode.CALL_FUNCTION,
                 result_reg=reg,
                 operands=[func_name] + arg_regs,
-                source_location=self._source_loc(node),
+                node=node,
             )
             return reg
 
@@ -312,7 +310,7 @@ class LuaFrontend(BaseFrontend):
             Opcode.CALL_UNKNOWN,
             result_reg=reg,
             operands=[target_reg] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -330,7 +328,7 @@ class LuaFrontend(BaseFrontend):
             Opcode.LOAD_FIELD,
             result_reg=reg,
             operands=[obj_reg, field_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -348,7 +346,7 @@ class LuaFrontend(BaseFrontend):
             Opcode.LOAD_INDEX,
             result_reg=reg,
             operands=[obj_reg, key_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -360,7 +358,7 @@ class LuaFrontend(BaseFrontend):
             Opcode.NEW_OBJECT,
             result_reg=obj_reg,
             operands=["table"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         positional_idx = 1
         for child in node.children:
@@ -415,7 +413,7 @@ class LuaFrontend(BaseFrontend):
             Opcode.BRANCH_IF,
             operands=[cond_reg],
             label=f"{true_label},{false_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         self._emit(Opcode.LABEL, label=true_label)
@@ -453,7 +451,7 @@ class LuaFrontend(BaseFrontend):
             Opcode.BRANCH_IF,
             operands=[cond_reg],
             label=f"{true_label},{false_label}",
-            source_location=self._source_loc(current),
+            node=current,
         )
 
         self._emit(Opcode.LABEL, label=true_label)
@@ -481,7 +479,7 @@ class LuaFrontend(BaseFrontend):
             Opcode.BRANCH_IF,
             operands=[cond_reg],
             label=f"{body_label},{end_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         self._emit(Opcode.LABEL, label=body_label)
@@ -551,7 +549,7 @@ class LuaFrontend(BaseFrontend):
             Opcode.BRANCH_IF,
             operands=[cond_reg],
             label=f"{body_label},{end_label}",
-            source_location=self._source_loc(for_node),
+            node=for_node,
         )
 
         self._emit(Opcode.LABEL, label=body_label)
@@ -662,13 +660,13 @@ class LuaFrontend(BaseFrontend):
             Opcode.UNOP,
             result_reg=negated_reg,
             operands=["not", cond_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         self._emit(
             Opcode.BRANCH_IF,
             operands=[negated_reg],
             label=f"{body_label},{end_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         self._emit(Opcode.LABEL, label=end_label)
@@ -689,7 +687,7 @@ class LuaFrontend(BaseFrontend):
         self._emit(
             Opcode.RETURN,
             operands=[val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # -- Lua: expression_list unwrap -----------------------------------------------
@@ -730,9 +728,7 @@ class LuaFrontend(BaseFrontend):
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{anon_name}")
         end_label = self._fresh_label(f"end_{anon_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
 
         if params_node:
@@ -767,7 +763,7 @@ class LuaFrontend(BaseFrontend):
             Opcode.SYMBOLIC,
             result_reg=reg,
             operands=["varargs"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -781,7 +777,7 @@ class LuaFrontend(BaseFrontend):
         self._emit(
             Opcode.BRANCH,
             label=label_name,
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # -- Lua: label statement (::name::) -------------------------------------------

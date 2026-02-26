@@ -112,7 +112,7 @@ class ScalaFrontend(BaseFrontend):
         self._emit(
             Opcode.STORE_VAR,
             operands=[var_name, val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     def _lower_var_def(self, node):
@@ -131,7 +131,7 @@ class ScalaFrontend(BaseFrontend):
         self._emit(
             Opcode.STORE_VAR,
             operands=[var_name, val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     def _extract_pattern_name(self, pattern_node) -> str:
@@ -172,7 +172,7 @@ class ScalaFrontend(BaseFrontend):
             Opcode.LOAD_FIELD,
             result_reg=reg,
             operands=[obj_reg, field_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -194,14 +194,14 @@ class ScalaFrontend(BaseFrontend):
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{true_label},{false_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
         else:
             self._emit(
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{true_label},{end_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
 
         self._emit(Opcode.LABEL, label=true_label)
@@ -250,7 +250,7 @@ class ScalaFrontend(BaseFrontend):
             Opcode.BRANCH_IF,
             operands=[cond_reg],
             label=f"{body_label},{end_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         self._emit(Opcode.LABEL, label=body_label)
@@ -293,7 +293,7 @@ class ScalaFrontend(BaseFrontend):
                     Opcode.BINOP,
                     result_reg=cond_reg,
                     operands=["==", val_reg, pattern_reg],
-                    source_location=self._source_loc(clause),
+                    node=clause,
                 )
                 self._emit(
                     Opcode.BRANCH_IF,
@@ -357,9 +357,7 @@ class ScalaFrontend(BaseFrontend):
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
 
         if params_node:
@@ -395,7 +393,7 @@ class ScalaFrontend(BaseFrontend):
                         Opcode.SYMBOLIC,
                         result_reg=self._fresh_reg(),
                         operands=[f"{constants.PARAM_PREFIX}{pname}"],
-                        source_location=self._source_loc(child),
+                        node=child,
                     )
                     self._emit(
                         Opcode.STORE_VAR,
@@ -412,9 +410,7 @@ class ScalaFrontend(BaseFrontend):
         class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
         end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
         if body_node:
             self._lower_block(body_node)
@@ -440,9 +436,7 @@ class ScalaFrontend(BaseFrontend):
         class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{obj_name}")
         end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{obj_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
         if body_node:
             self._lower_block(body_node)
@@ -474,7 +468,7 @@ class ScalaFrontend(BaseFrontend):
         self._emit(
             Opcode.RETURN,
             operands=[val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return val_reg
 
@@ -486,7 +480,7 @@ class ScalaFrontend(BaseFrontend):
             Opcode.SYMBOLIC,
             result_reg=reg,
             operands=["wildcard:_"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -501,7 +495,7 @@ class ScalaFrontend(BaseFrontend):
             Opcode.NEW_ARRAY,
             result_reg=arr_reg,
             operands=["tuple", size_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         for i, elem in enumerate(elems):
             val_reg = self._lower_expr(elem)
@@ -559,7 +553,7 @@ class ScalaFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=[type_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -606,7 +600,7 @@ class ScalaFrontend(BaseFrontend):
                 Opcode.CALL_FUNCTION,
                 result_reg=iter_fn_reg,
                 operands=["iter", iter_reg],
-                source_location=self._source_loc(gen),
+                node=gen,
             )
 
         self._emit(Opcode.LABEL, label=loop_label)
@@ -620,12 +614,12 @@ class ScalaFrontend(BaseFrontend):
                 Opcode.CALL_FUNCTION,
                 result_reg=next_reg,
                 operands=["next"],
-                source_location=self._source_loc(gen),
+                node=gen,
             )
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[var_name, next_reg],
-                source_location=self._source_loc(gen),
+                node=gen,
             )
 
         # Lower guards as BRANCH_IF
@@ -658,9 +652,7 @@ class ScalaFrontend(BaseFrontend):
         class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{trait_name}")
         end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{trait_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
         if body_node:
             self._lower_block(body_node)
@@ -696,7 +688,7 @@ class ScalaFrontend(BaseFrontend):
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{body_label},{end_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
         else:
             self._emit(Opcode.BRANCH, label=body_label)
@@ -710,7 +702,7 @@ class ScalaFrontend(BaseFrontend):
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
         elif target.type == "field_expression":
             value_node = target.child_by_field_name("value")
@@ -720,13 +712,13 @@ class ScalaFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_FIELD,
                     operands=[obj_reg, self._node_text(field_node), val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         else:
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
 
     # -- try/catch/finally -------------------------------------------------
@@ -819,7 +811,7 @@ class ScalaFrontend(BaseFrontend):
         self._emit(
             Opcode.THROW,
             operands=[val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return val_reg
 
@@ -831,6 +823,6 @@ class ScalaFrontend(BaseFrontend):
             Opcode.SYMBOLIC,
             result_reg=reg,
             operands=[f"{node.type}:{self._node_text(node)[:60]}"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg

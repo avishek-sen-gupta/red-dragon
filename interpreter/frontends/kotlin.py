@@ -107,7 +107,7 @@ class KotlinFrontend(BaseFrontend):
         self._emit(
             Opcode.STORE_VAR,
             operands=[var_name, val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     def _extract_property_name(self, var_decl_node) -> str:
@@ -164,9 +164,7 @@ class KotlinFrontend(BaseFrontend):
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
 
         if params_node:
@@ -205,7 +203,7 @@ class KotlinFrontend(BaseFrontend):
                         Opcode.SYMBOLIC,
                         result_reg=self._fresh_reg(),
                         operands=[f"{constants.PARAM_PREFIX}{pname}"],
-                        source_location=self._source_loc(child),
+                        node=child,
                     )
                     self._emit(
                         Opcode.STORE_VAR,
@@ -236,9 +234,7 @@ class KotlinFrontend(BaseFrontend):
         class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
         end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
         if body_node:
             if body_node.type == "enum_class_body":
@@ -301,7 +297,7 @@ class KotlinFrontend(BaseFrontend):
                     Opcode.CALL_METHOD,
                     result_reg=reg,
                     operands=[obj_reg, method_name] + arg_regs,
-                    source_location=self._source_loc(node),
+                    node=node,
                 )
                 return reg
 
@@ -313,7 +309,7 @@ class KotlinFrontend(BaseFrontend):
                 Opcode.CALL_FUNCTION,
                 result_reg=reg,
                 operands=[func_name] + arg_regs,
-                source_location=self._source_loc(node),
+                node=node,
             )
             return reg
 
@@ -324,7 +320,7 @@ class KotlinFrontend(BaseFrontend):
             Opcode.CALL_UNKNOWN,
             result_reg=reg,
             operands=[target_reg] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -355,7 +351,7 @@ class KotlinFrontend(BaseFrontend):
             Opcode.LOAD_FIELD,
             result_reg=reg,
             operands=[obj_reg, field_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -380,14 +376,14 @@ class KotlinFrontend(BaseFrontend):
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{true_label},{false_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
         else:
             self._emit(
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{true_label},{end_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
 
         self._emit(Opcode.LABEL, label=true_label)
@@ -468,7 +464,7 @@ class KotlinFrontend(BaseFrontend):
             Opcode.BRANCH_IF,
             operands=[cond_reg],
             label=f"{body_label},{end_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         self._emit(Opcode.LABEL, label=body_label)
@@ -609,7 +605,7 @@ class KotlinFrontend(BaseFrontend):
                         Opcode.BINOP,
                         result_reg=eq_reg,
                         operands=["==", val_reg, pattern_reg],
-                        source_location=self._source_loc(entry),
+                        node=entry,
                     )
                     self._emit(
                         Opcode.BRANCH_IF,
@@ -676,7 +672,7 @@ class KotlinFrontend(BaseFrontend):
             self._emit(
                 Opcode.RETURN,
                 operands=[val_reg],
-                source_location=self._source_loc(node),
+                node=node,
             )
         elif text.startswith("throw"):
             self._lower_raise_or_throw(node, keyword="throw")
@@ -708,7 +704,7 @@ class KotlinFrontend(BaseFrontend):
             Opcode.UNOP,
             result_reg=reg,
             operands=["!!", expr_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -759,7 +755,7 @@ class KotlinFrontend(BaseFrontend):
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
         elif target.type == "navigation_expression":
             named_children = [c for c in target.children if c.is_named]
@@ -772,13 +768,13 @@ class KotlinFrontend(BaseFrontend):
                         self._node_text(named_children[-1]),
                         val_reg,
                     ],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
             else:
                 self._emit(
                     Opcode.STORE_VAR,
                     operands=[self._node_text(target), val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         elif target.type == "directly_assignable_expression":
             # Unwrap the inner node
@@ -789,13 +785,13 @@ class KotlinFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_VAR,
                     operands=[self._node_text(target), val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         else:
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
 
     # -- try/catch/finally -------------------------------------------------
@@ -866,7 +862,7 @@ class KotlinFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["is", expr_reg, type_text],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -904,7 +900,7 @@ class KotlinFrontend(BaseFrontend):
             Opcode.BRANCH_IF,
             operands=[cond_reg],
             label=f"{body_label},{end_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
         self._emit(Opcode.LABEL, label=end_label)
 
@@ -925,9 +921,7 @@ class KotlinFrontend(BaseFrontend):
         obj_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{obj_name}")
         end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{obj_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=obj_label)
         if body_node:
             self._lower_block(body_node)
@@ -938,7 +932,7 @@ class KotlinFrontend(BaseFrontend):
             Opcode.NEW_OBJECT,
             result_reg=inst_reg,
             operands=[obj_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         self._emit(Opcode.STORE_VAR, operands=[obj_name, inst_reg])
 
@@ -975,7 +969,7 @@ class KotlinFrontend(BaseFrontend):
             Opcode.NEW_OBJECT,
             result_reg=reg,
             operands=[f"enum:{entry_name}"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         self._emit(Opcode.STORE_VAR, operands=[entry_name, reg])
 
@@ -993,7 +987,7 @@ class KotlinFrontend(BaseFrontend):
             Opcode.BINOP,
             result_reg=reg,
             operands=["?:", left_reg, right_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -1012,7 +1006,7 @@ class KotlinFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=[func_name, left_reg, right_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -1040,7 +1034,7 @@ class KotlinFrontend(BaseFrontend):
             Opcode.LOAD_INDEX,
             result_reg=reg,
             operands=[obj_reg, idx_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -1058,7 +1052,7 @@ class KotlinFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["as", expr_reg, type_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -1070,6 +1064,6 @@ class KotlinFrontend(BaseFrontend):
             Opcode.SYMBOLIC,
             result_reg=reg,
             operands=[f"{node.type}:{self._node_text(node)[:60]}"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg

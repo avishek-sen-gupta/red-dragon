@@ -127,7 +127,7 @@ class RubyFrontend(BaseFrontend):
                 Opcode.CALL_METHOD,
                 result_reg=reg,
                 operands=[obj_reg, method_name] + arg_regs,
-                source_location=self._source_loc(node),
+                node=node,
             )
             return reg
 
@@ -139,7 +139,7 @@ class RubyFrontend(BaseFrontend):
                 Opcode.CALL_FUNCTION,
                 result_reg=reg,
                 operands=[func_name] + arg_regs,
-                source_location=self._source_loc(node),
+                node=node,
             )
             return reg
 
@@ -155,7 +155,7 @@ class RubyFrontend(BaseFrontend):
             Opcode.CALL_UNKNOWN,
             result_reg=reg,
             operands=[target_reg] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -177,7 +177,7 @@ class RubyFrontend(BaseFrontend):
         self._emit(
             Opcode.RETURN,
             operands=[val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # -- Ruby: unless (inverted if) --------------------------------------------
@@ -193,7 +193,7 @@ class RubyFrontend(BaseFrontend):
             Opcode.UNOP,
             result_reg=negated_reg,
             operands=["!", cond_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         true_label = self._fresh_label("unless_true")
@@ -205,14 +205,14 @@ class RubyFrontend(BaseFrontend):
                 Opcode.BRANCH_IF,
                 operands=[negated_reg],
                 label=f"{true_label},{false_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
         else:
             self._emit(
                 Opcode.BRANCH_IF,
                 operands=[negated_reg],
                 label=f"{true_label},{end_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
 
         self._emit(Opcode.LABEL, label=true_label)
@@ -243,13 +243,13 @@ class RubyFrontend(BaseFrontend):
             Opcode.UNOP,
             result_reg=negated_reg,
             operands=["!", cond_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         self._emit(
             Opcode.BRANCH_IF,
             operands=[negated_reg],
             label=f"{body_label},{end_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         self._emit(Opcode.LABEL, label=body_label)
@@ -320,9 +320,7 @@ class RubyFrontend(BaseFrontend):
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
 
         if params_node:
@@ -361,7 +359,7 @@ class RubyFrontend(BaseFrontend):
                 Opcode.SYMBOLIC,
                 result_reg=self._fresh_reg(),
                 operands=[f"{constants.PARAM_PREFIX}{pname}"],
-                source_location=self._source_loc(child),
+                node=child,
             )
             self._emit(
                 Opcode.STORE_VAR,
@@ -378,9 +376,7 @@ class RubyFrontend(BaseFrontend):
         class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
         end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
         if body_node:
             self._lower_block(body_node)
@@ -422,7 +418,7 @@ class RubyFrontend(BaseFrontend):
             Opcode.BRANCH_IF,
             operands=[cond_reg],
             label=f"{true_label},{false_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         self._emit(Opcode.LABEL, label=true_label)
@@ -456,7 +452,7 @@ class RubyFrontend(BaseFrontend):
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
         else:
             super()._lower_store_target(target, val_reg, parent_node)
@@ -469,7 +465,7 @@ class RubyFrontend(BaseFrontend):
             Opcode.NEW_OBJECT,
             result_reg=obj_reg,
             operands=["hash"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         for child in node.children:
             if child.type == "pair":
@@ -585,14 +581,14 @@ class RubyFrontend(BaseFrontend):
                 Opcode.SYMBOLIC,
                 result_reg=exc_reg,
                 operands=[f"{constants.CAUGHT_EXCEPTION_PREFIX}:{exc_type}"],
-                source_location=self._source_loc(node),
+                node=node,
             )
             exc_var = clause.get("variable")
             if exc_var:
                 self._emit(
                     Opcode.STORE_VAR,
                     operands=[exc_var, exc_reg],
-                    source_location=self._source_loc(node),
+                    node=node,
                 )
             catch_body = clause.get("body")
             if catch_body:
@@ -666,7 +662,7 @@ class RubyFrontend(BaseFrontend):
             Opcode.CONST,
             result_reg=ref_reg,
             operands=[f"func:{block_label}"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return ref_reg
 
@@ -686,7 +682,7 @@ class RubyFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["range", start_reg, end_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -755,7 +751,7 @@ class RubyFrontend(BaseFrontend):
             Opcode.NEW_ARRAY,
             result_reg=arr_reg,
             operands=["list", size_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         for i, elem in enumerate(elems):
             val_reg = self._fresh_reg()
@@ -820,7 +816,7 @@ class RubyFrontend(BaseFrontend):
                     Opcode.BINOP,
                     result_reg=cond_reg,
                     operands=["==", val_reg, pattern_reg],
-                    source_location=self._source_loc(when_node),
+                    node=when_node,
                 )
             else:
                 cond_reg = pattern_reg
@@ -829,7 +825,7 @@ class RubyFrontend(BaseFrontend):
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{when_label},{next_label}",
-                source_location=self._source_loc(when_node),
+                node=when_node,
             )
 
             self._emit(Opcode.LABEL, label=when_label)
@@ -856,9 +852,7 @@ class RubyFrontend(BaseFrontend):
             f"{constants.END_CLASS_LABEL_PREFIX}{module_name}"
         )
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
         if body_node:
             self._lower_block(body_node)
@@ -895,7 +889,7 @@ class RubyFrontend(BaseFrontend):
             Opcode.BRANCH_IF,
             operands=[cond_reg],
             label=f"{true_label},{end_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
         self._emit(Opcode.LABEL, label=true_label)
         self._lower_stmt(body_node)
@@ -922,7 +916,7 @@ class RubyFrontend(BaseFrontend):
             Opcode.UNOP,
             result_reg=negated_reg,
             operands=["!", cond_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         true_label = self._fresh_label("unlessmod_true")
         end_label = self._fresh_label("unlessmod_end")
@@ -931,7 +925,7 @@ class RubyFrontend(BaseFrontend):
             Opcode.BRANCH_IF,
             operands=[negated_reg],
             label=f"{true_label},{end_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
         self._emit(Opcode.LABEL, label=true_label)
         self._lower_stmt(body_node)
@@ -962,7 +956,7 @@ class RubyFrontend(BaseFrontend):
             Opcode.BRANCH_IF,
             operands=[cond_reg],
             label=f"{body_label},{end_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         self._emit(Opcode.LABEL, label=body_label)
@@ -998,13 +992,13 @@ class RubyFrontend(BaseFrontend):
             Opcode.UNOP,
             result_reg=negated_reg,
             operands=["!", cond_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         self._emit(
             Opcode.BRANCH_IF,
             operands=[negated_reg],
             label=f"{body_label},{end_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         self._emit(Opcode.LABEL, label=body_label)
@@ -1059,7 +1053,7 @@ class RubyFrontend(BaseFrontend):
             Opcode.LOAD_VAR,
             result_reg=reg,
             operands=["self"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -1073,9 +1067,7 @@ class RubyFrontend(BaseFrontend):
         class_label = self._fresh_label("singleton_class")
         end_label = self._fresh_label("singleton_class_end")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
 
         if value_node:
@@ -1101,9 +1093,7 @@ class RubyFrontend(BaseFrontend):
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
 
         if params_node:

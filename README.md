@@ -9,7 +9,7 @@
 A multi-language source code analysis toolkit that:
 
 - **Parses** source in 15 languages via tree-sitter, or any language via LLM-based lowering (including chunked lowering for large files)
-- **Lowers** to a universal flattened three-address code IR (~19 opcodes) — the LLM frontend uses the LLM as a **compiler frontend**, constrained by a formal IR schema with concrete patterns
+- **Lowers** to a universal flattened three-address code IR (~19 opcodes) with structured source location traceability (every IR instruction carries its originating AST span) — the LLM frontend uses the LLM as a **compiler frontend**, constrained by a formal IR schema with concrete patterns
 - **Builds** control flow graphs from IR instructions
 - **Analyses** data flow via iterative reaching definitions, def-use chains, and variable dependency graphs
 - **Executes** programs symbolically via a deterministic VM — tracking data flow through incomplete programs with missing imports or unknown externals entirely without LLM calls

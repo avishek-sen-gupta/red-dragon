@@ -90,14 +90,14 @@ class CppFrontend(CFrontend):
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{true_label},{false_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
         else:
             self._emit(
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{true_label},{end_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
 
         self._emit(Opcode.LABEL, label=true_label)
@@ -131,7 +131,7 @@ class CppFrontend(CFrontend):
             Opcode.BRANCH_IF,
             operands=[cond_reg],
             label=f"{body_label},{end_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         self._emit(Opcode.LABEL, label=body_label)
@@ -156,7 +156,7 @@ class CppFrontend(CFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=[type_name] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -175,7 +175,7 @@ class CppFrontend(CFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["delete", ptr_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -190,9 +190,7 @@ class CppFrontend(CFrontend):
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
 
         if params_node:
@@ -231,7 +229,7 @@ class CppFrontend(CFrontend):
             Opcode.LOAD_VAR,
             result_reg=reg,
             operands=[self._node_text(node)],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -252,7 +250,7 @@ class CppFrontend(CFrontend):
         self._emit(
             Opcode.THROW,
             operands=[val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return val_reg
 
@@ -280,9 +278,7 @@ class CppFrontend(CFrontend):
         class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
         end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
         if body_node:
             self._lower_cpp_class_body(body_node)
@@ -328,7 +324,7 @@ class CppFrontend(CFrontend):
             Opcode.LOAD_VAR,
             result_reg=this_reg,
             operands=["this"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         for child in node.children:
             if child.type == "field_initializer":
@@ -360,7 +356,7 @@ class CppFrontend(CFrontend):
                 self._emit(
                     Opcode.STORE_FIELD,
                     operands=[this_reg, field_name, val_reg],
-                    source_location=self._source_loc(child),
+                    node=child,
                 )
 
     # -- C++: override function_def to handle field_initializer_list -----
@@ -400,9 +396,7 @@ class CppFrontend(CFrontend):
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
 
         if params_node:
@@ -460,7 +454,7 @@ class CppFrontend(CFrontend):
                 Opcode.SYMBOLIC,
                 result_reg=reg,
                 operands=[f"template:{self._node_text(node)[:60]}"],
-                source_location=self._source_loc(node),
+                node=node,
             )
 
     # -- C++: range-based for ------------------------------------------
