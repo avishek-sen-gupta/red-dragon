@@ -14,6 +14,7 @@ from tree_sitter import Node
 from .cfg import CFG, build_cfg, cfg_to_mermaid, extract_function_instructions
 from .frontend import get_frontend
 from .ir import IRInstruction
+from .ir_stats import count_opcodes
 from .parser import Parser, TreeSitterParserFactory
 from . import constants
 
@@ -154,6 +155,27 @@ def dump_mermaid(
     """
     cfg = build_cfg_from_source(source, language, frontend_type, backend, function_name)
     return cfg_to_mermaid(cfg)
+
+
+def ir_stats(
+    source: str,
+    language: str = "python",
+    frontend_type: str = constants.FRONTEND_DETERMINISTIC,
+    backend: str = "claude",
+) -> dict[str, int]:
+    """Lower source to IR and return opcode frequency counts.
+
+    Args:
+        source: The source code text.
+        language: Source language name.
+        frontend_type: Frontend type.
+        backend: LLM provider name.
+
+    Returns:
+        A dict mapping opcode name strings to their occurrence counts.
+    """
+    instructions = lower_source(source, language, frontend_type, backend)
+    return count_opcodes(instructions)
 
 
 def _find_function_node(node: Node, name: str) -> Optional[Node]:
