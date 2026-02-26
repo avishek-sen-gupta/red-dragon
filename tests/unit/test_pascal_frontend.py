@@ -150,19 +150,17 @@ class TestPascalControlFlow:
         assert any("while" in (inst.label or "") for inst in labels)
 
     def test_for_loop(self):
-        # The Pascal grammar nests the for-loop variable initialisation inside
-        # an `assignment` node. The frontend's _lower_pascal_for expects 4
-        # named children (var, start, end, body) but the AST presents
-        # (assignment, literalNumber, statement) — only 3 named children after
-        # filtering keywords. This causes the for_incomplete fallback.
-        # This test documents the current behaviour.
         instructions = _parse_pascal(
             "program M; begin for x := 1 to 10 do WriteLn(x); end."
         )
         opcodes = _opcodes(instructions)
-        assert Opcode.SYMBOLIC in opcodes
-        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
-        assert any("for_incomplete" in str(inst.operands) for inst in symbolics)
+        assert Opcode.STORE_VAR in opcodes
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.BINOP in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+        labels = _find_all(instructions, Opcode.LABEL)
+        assert any("for_" in (inst.label or "") for inst in labels)
 
 
 class TestPascalVariableDeclarations:
@@ -337,10 +335,13 @@ end.
 """
         instructions = _parse_pascal(source)
         opcodes = _opcodes(instructions)
-        # for-downto falls back to for_incomplete symbolic, like for-to
-        assert Opcode.SYMBOLIC in opcodes
-        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
-        assert any("for_incomplete" in str(inst.operands) for inst in symbolics)
+        assert Opcode.STORE_VAR in opcodes
+        assert Opcode.BRANCH_IF in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+        binops = _find_all(instructions, Opcode.BINOP)
+        # downto uses >= comparison
+        assert any(">=" in inst.operands for inst in binops)
 
     def test_procedure_calling_procedure(self):
         source = """\
