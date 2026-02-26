@@ -94,7 +94,9 @@ class TestJavaScriptControlFlow:
     def test_for_in_loop(self):
         instructions = _parse_js("for (let k in obj) { x = k; }")
         opcodes = _opcodes(instructions)
-        assert Opcode.SYMBOLIC in opcodes
+        assert Opcode.CALL_FUNCTION in opcodes
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("keys" in inst.operands for inst in calls)
         assert Opcode.BRANCH_IF in opcodes
 
 
@@ -383,14 +385,31 @@ for (const x of items) {
         end_labels = [lbl for lbl in labels if "for_of_end" in lbl]
         assert any(b.label in end_labels for b in branches)
 
-    def test_for_in_stays_symbolic(self):
-        """for...in should still emit SYMBOLIC (key iteration)."""
+    def test_for_in_basic(self):
+        """for...in should emit CALL_FUNCTION keys + index-based loop."""
         source = "for (let k in obj) { x = k; }"
         instructions = _parse_js(source)
         opcodes = _opcodes(instructions)
-        assert Opcode.SYMBOLIC in opcodes
-        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
-        assert any("for_in" in str(inst.operands) for inst in symbolics)
+        assert Opcode.CALL_FUNCTION in opcodes
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("keys" in inst.operands for inst in calls)
+        assert Opcode.LOAD_INDEX in opcodes
+        labels = _labels_in_order(instructions)
+        assert any("for_in" in lbl for lbl in labels)
+
+    def test_for_in_with_body(self):
+        """for...in loop body is lowered."""
+        source = "for (let k in obj) { console.log(k); }"
+        instructions = _parse_js(source)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("log" in inst.operands for inst in calls)
+
+    def test_for_in_with_break(self):
+        """for...in supports break."""
+        source = "for (let k in obj) { if (k === 'x') break; }"
+        instructions = _parse_js(source)
+        labels = _labels_in_order(instructions)
+        assert any("for_in_end" in lbl for lbl in labels)
 
 
 class TestJavaScriptDestructuring:

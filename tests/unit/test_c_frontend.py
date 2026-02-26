@@ -258,24 +258,45 @@ int x = 10;
         assert len(preproc_symbolics) == 0
 
 
-class TestCFrontendPointerFallback:
-    def test_pointer_expression_produces_symbolic(self):
+class TestCFrontendPointerOps:
+    def test_pointer_dereference(self):
         source = "void f() { int z = *ptr; }"
         ir = _parse_and_lower(source)
-        symbolics = _find_all(ir, Opcode.SYMBOLIC)
-        pointer_symbolics = [
-            s for s in symbolics if any("pointer:" in str(op) for op in s.operands)
-        ]
-        assert len(pointer_symbolics) >= 1
+        opcodes = _opcodes(ir)
+        assert Opcode.LOAD_FIELD in opcodes
+        loads = _find_all(ir, Opcode.LOAD_FIELD)
+        assert any("*" in inst.operands for inst in loads)
 
-    def test_address_of_produces_symbolic(self):
+    def test_address_of(self):
         source = "void f() { int *p = &x; }"
         ir = _parse_and_lower(source)
-        symbolics = _find_all(ir, Opcode.SYMBOLIC)
-        pointer_symbolics = [
-            s for s in symbolics if any("pointer:" in str(op) for op in s.operands)
-        ]
-        assert len(pointer_symbolics) >= 1
+        opcodes = _opcodes(ir)
+        assert Opcode.UNOP in opcodes
+        unops = _find_all(ir, Opcode.UNOP)
+        assert any("&" in inst.operands for inst in unops)
+
+    def test_pointer_store(self):
+        source = "void f() { *ptr = 42; }"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.STORE_FIELD in opcodes
+        stores = _find_all(ir, Opcode.STORE_FIELD)
+        assert any("*" in inst.operands for inst in stores)
+
+    def test_sizeof_type(self):
+        source = "void f() { int s = sizeof(int); }"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.CALL_FUNCTION in opcodes
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("sizeof" in inst.operands for inst in calls)
+
+    def test_compound_literal(self):
+        source = "void f() { struct Point p = (struct Point){1, 2}; }"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.NEW_OBJECT in opcodes
+        assert Opcode.STORE_INDEX in opcodes
 
 
 class TestCFrontendFallback:
@@ -283,15 +304,6 @@ class TestCFrontendFallback:
         ir = _parse_and_lower("")
         assert ir[0].opcode == Opcode.LABEL
         assert ir[0].label == "entry"
-
-    def test_sizeof_produces_symbolic(self):
-        source = "void f() { int s = sizeof(int); }"
-        ir = _parse_and_lower(source)
-        symbolics = _find_all(ir, Opcode.SYMBOLIC)
-        sizeof_symbolics = [
-            s for s in symbolics if any("sizeof:" in str(op) for op in s.operands)
-        ]
-        assert len(sizeof_symbolics) >= 1
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
@@ -346,11 +358,15 @@ void f() {
 }
 """
         ir = _parse_and_lower(source)
-        symbolics = _find_all(ir, Opcode.SYMBOLIC)
-        pointer_symbolics = [
-            s for s in symbolics if any("pointer:" in str(op) for op in s.operands)
-        ]
-        assert len(pointer_symbolics) >= 2
+        opcodes = _opcodes(ir)
+        # Address-of produces UNOP with "&"
+        assert Opcode.UNOP in opcodes
+        unops = _find_all(ir, Opcode.UNOP)
+        assert any("&" in inst.operands for inst in unops)
+        # Pointer dereference produces LOAD_FIELD with "*"
+        assert Opcode.LOAD_FIELD in opcodes
+        loads = _find_all(ir, Opcode.LOAD_FIELD)
+        assert any("*" in inst.operands for inst in loads)
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("x" in s.operands for s in stores)
         assert any("p" in s.operands for s in stores)

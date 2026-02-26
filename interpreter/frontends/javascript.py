@@ -422,18 +422,29 @@ class JavaScriptFrontend(BaseFrontend):
             self._lower_for_of(node)
             return
 
-        # for...in — keep SYMBOLIC (key iteration over object properties)
+        # for...in — model as: keys(obj) → index-based loop over keys array
         left = node.child_by_field_name("left")
         right = node.child_by_field_name("right")
         body_node = node.child_by_field_name("body")
 
-        iter_reg = self._lower_expr(right)
-        reg = self._fresh_reg()
+        obj_reg = self._lower_expr(right)
+        keys_reg = self._fresh_reg()
         self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=[f"for_in_iter:{self._node_text(node)[:60]}"],
+            Opcode.CALL_FUNCTION,
+            result_reg=keys_reg,
+            operands=["keys", obj_reg],
             source_location=self._source_loc(node),
+        )
+
+        var_name = self._extract_var_name(left) if left else "__for_in_var"
+
+        idx_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
+        len_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=len_reg,
+            operands=["len", keys_reg],
         )
 
         loop_label = self._fresh_label("for_in_cond")
@@ -443,9 +454,9 @@ class JavaScriptFrontend(BaseFrontend):
         self._emit(Opcode.LABEL, label=loop_label)
         cond_reg = self._fresh_reg()
         self._emit(
-            Opcode.SYMBOLIC,
+            Opcode.BINOP,
             result_reg=cond_reg,
-            operands=["for_in_has_next"],
+            operands=["<", idx_reg, len_reg],
         )
         self._emit(
             Opcode.BRANCH_IF,
@@ -454,23 +465,33 @@ class JavaScriptFrontend(BaseFrontend):
         )
 
         self._emit(Opcode.LABEL, label=body_label)
-        if left:
-            var_name = self._extract_var_name(left)
-            if var_name:
-                elem_reg = self._fresh_reg()
-                self._emit(
-                    Opcode.SYMBOLIC,
-                    result_reg=elem_reg,
-                    operands=["for_in_element"],
-                )
-                self._emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+        elem_reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_INDEX,
+            result_reg=elem_reg,
+            operands=[keys_reg, idx_reg],
+        )
+        if var_name:
+            self._emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
 
-        self._push_loop(loop_label, end_label)
+        update_label = self._fresh_label("for_in_update")
+        self._push_loop(update_label, end_label)
         if body_node:
             self._lower_block(body_node)
         self._pop_loop()
 
+        self._emit(Opcode.LABEL, label=update_label)
+        one_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
+        new_idx = self._fresh_reg()
+        self._emit(
+            Opcode.BINOP,
+            result_reg=new_idx,
+            operands=["+", idx_reg, one_reg],
+        )
+        self._emit(Opcode.STORE_VAR, operands=["__for_idx", new_idx])
         self._emit(Opcode.BRANCH, label=loop_label)
+
         self._emit(Opcode.LABEL, label=end_label)
 
     def _lower_for_of(self, node):

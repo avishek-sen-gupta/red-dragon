@@ -177,10 +177,26 @@ class TestJavaClasses:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert any("interface:Runnable" in str(inst.operands) for inst in symbolics)
 
-    def test_enum_emits_symbolic(self):
+    def test_enum_declaration(self):
         instructions = _parse_java("enum Color { RED, GREEN, BLUE }")
-        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
-        assert any("enum:Color" in str(inst.operands) for inst in symbolics)
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_OBJECT in opcodes
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("enum:Color" in str(inst.operands) for inst in new_objs)
+        stores = _find_all(instructions, Opcode.STORE_INDEX)
+        assert len(stores) >= 3
+        consts = _find_all(instructions, Opcode.CONST)
+        const_vals = [inst.operands[0] for inst in consts if inst.operands]
+        assert "RED" in const_vals
+        assert "GREEN" in const_vals
+        assert "BLUE" in const_vals
+
+    def test_enum_single_member(self):
+        instructions = _parse_java("enum Status { ACTIVE }")
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("enum:Status" in str(inst.operands) for inst in new_objs)
+        stores = _find_all(instructions, Opcode.STORE_INDEX)
+        assert len(stores) >= 1
 
 
 class TestJavaSpecial:
@@ -350,8 +366,8 @@ class M {
 }
 """
         instructions = _parse_java(source)
-        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
-        assert any("enum:Color" in str(inst.operands) for inst in symbolics)
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("enum:Color" in str(inst.operands) for inst in new_objs)
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
 
@@ -379,3 +395,45 @@ class M {
         labels = _labels_in_order(instructions)
         assert any("while" in lbl for lbl in labels)
         assert len(instructions) > 20
+
+
+class TestJavaArrayCreation:
+    def test_array_creation_with_initializer(self):
+        instructions = _parse_java(
+            "class M { void m() { int[] a = new int[]{1, 2, 3}; } }"
+        )
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_ARRAY in opcodes
+        stores = _find_all(instructions, Opcode.STORE_INDEX)
+        assert len(stores) >= 3
+
+    def test_array_creation_sized(self):
+        instructions = _parse_java("class M { void m() { int[] a = new int[5]; } }")
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_ARRAY in opcodes
+
+    def test_array_initializer_bare(self):
+        instructions = _parse_java("class M { void m() { int[] a = {1, 2, 3}; } }")
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_ARRAY in opcodes
+        stores = _find_all(instructions, Opcode.STORE_INDEX)
+        assert len(stores) >= 3
+
+
+class TestJavaInstanceof:
+    def test_instanceof_expression(self):
+        instructions = _parse_java(
+            "class M { void m() { boolean b = obj instanceof String; } }"
+        )
+        opcodes = _opcodes(instructions)
+        assert Opcode.CALL_FUNCTION in opcodes
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("instanceof" in inst.operands for inst in calls)
+
+    def test_instanceof_in_condition(self):
+        instructions = _parse_java(
+            "class M { void m() { if (x instanceof Number) { y = 1; } } }"
+        )
+        opcodes = _opcodes(instructions)
+        assert Opcode.CALL_FUNCTION in opcodes
+        assert Opcode.BRANCH_IF in opcodes
