@@ -198,7 +198,7 @@ The **chunked LLM frontend** (`--frontend chunked_llm`) handles large files by d
 All CLI pipelines are available as composable functions — no argparse required:
 
 ```python
-from interpreter import lower_source, dump_ir, build_cfg_from_source, dump_cfg, dump_mermaid, extract_function_source
+from interpreter import lower_source, dump_ir, build_cfg_from_source, dump_cfg, dump_mermaid, extract_function_source, ir_stats
 
 # Parse and lower to IR
 instructions = lower_source(source, language="python")
@@ -215,6 +215,9 @@ mermaid = dump_mermaid(source, function_name="my_func")
 
 # Extract raw source text of a named function (recursive — finds methods and nested functions)
 fn_source = extract_function_source(source, "my_func", language="python")
+
+# Get opcode frequency counts
+stats = ir_stats(source, language="python")  # e.g. {"CONST": 3, "STORE_VAR": 2, "BINOP": 1}
 ```
 
 ### Standalone VM execution
@@ -241,6 +244,7 @@ vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
 | `build_cfg_from_source(source, language, frontend_type, backend, function_name)` | `CFG` | Parse → lower → optionally slice → build CFG |
 | `dump_cfg(source, language, frontend_type, backend, function_name)` | `str` | CFG text output |
 | `dump_mermaid(source, language, frontend_type, backend, function_name)` | `str` | Mermaid flowchart output |
+| `ir_stats(source, language, frontend_type, backend)` | `dict[str, int]` | Opcode frequency counts |
 | `extract_function_source(source, function_name, language)` | `str` | Raw source text of a named function (recursive AST walk) |
 | `execute_cfg(cfg, entry_point, registry, config)` | `(VMState, ExecutionStats)` | Execute a pre-built CFG from a given entry point |
 

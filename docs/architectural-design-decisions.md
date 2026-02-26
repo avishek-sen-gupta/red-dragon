@@ -201,3 +201,13 @@ This document captures key architectural decisions made during the development o
 **Decision:** Extract dataclasses into dedicated `*_types.py` files: `interpreter/vm_types.py`, `interpreter/cfg_types.py`, `interpreter/run_types.py`. Re-export from `__init__.py` so existing imports continue to work.
 
 **Consequences:** Type definitions are importable without side effects. Circular imports between modules that share types are eliminated. The re-export layer maintains backwards compatibility. The trade-off is an additional layer of indirection when navigating from usage to definition.
+
+---
+
+### ADR-021: Two-layer IR statistics — pure counter + API wrapper (2026-02-26)
+
+**Context:** There was no way to inspect the opcode distribution of lowered IR, useful for profiling frontend quality and comparing lowering across languages.
+
+**Decision:** Add `count_opcodes(instructions) -> dict[str, int]` as a pure function in `interpreter/ir_stats.py`, and `ir_stats(source, language, ...) -> dict[str, int]` as an API wrapper in `interpreter/api.py` that calls `lower_source` then `count_opcodes`.
+
+**Consequences:** The pure function is independently testable and usable by programmatic consumers who already have an instruction list. The API wrapper composes with the existing `lower_source` pipeline. No new dependencies introduced.

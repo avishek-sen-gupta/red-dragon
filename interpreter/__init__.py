@@ -8,4 +8,5 @@ from .api import (  # noqa: F401
     dump_cfg,
     dump_mermaid,
     extract_function_source,
+    ir_stats,
 )
