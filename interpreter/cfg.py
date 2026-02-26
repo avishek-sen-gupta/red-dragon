@@ -128,21 +128,86 @@ def _node_id(label: str) -> str:
     return label.replace(" ", "_").replace("-", "_")
 
 
+def _build_subgraph_ranges(
+    labels: list[str],
+) -> list[tuple[str, int, int]]:
+    """Identify function/class subgraph ranges from block label ordering.
+
+    Returns a list of (display_name, start_index, end_index) where
+    start_index is inclusive and end_index is exclusive.  The range
+    covers all blocks from the opening label (e.g. ``func_foo_0``)
+    up to *but not including* the closing label (``end_foo_0``).
+    """
+    import re
+
+    func_prefix = constants.FUNC_LABEL_PREFIX
+    class_prefix = constants.CLASS_LABEL_PREFIX
+    end_class_prefix = constants.END_CLASS_LABEL_PREFIX
+
+    # Map label -> index for fast lookup
+    idx_of = {lbl: i for i, lbl in enumerate(labels)}
+
+    ranges: list[tuple[str, int, int]] = []
+
+    for i, lbl in enumerate(labels):
+        if lbl.startswith(func_prefix):
+            # func_NAME_N  →  end_NAME_N
+            # Strip "func_" prefix, keep NAME_N suffix
+            suffix = lbl[len(func_prefix) :]
+            end_label = f"end_{suffix}"
+            if end_label in idx_of:
+                ranges.append((f"fn {suffix}", i, idx_of[end_label]))
+        elif lbl.startswith(class_prefix) and not lbl.startswith(end_class_prefix):
+            # class_NAME_N  →  end_class_NAME_N
+            suffix = lbl[len(class_prefix) :]
+            end_label = f"{end_class_prefix}{suffix}"
+            if end_label in idx_of:
+                ranges.append((f"class {suffix}", i, idx_of[end_label]))
+
+    return ranges
+
+
+def _render_node(label: str, block: BasicBlock, indent: str) -> str:
+    """Render a single Mermaid node definition."""
+    nid = _node_id(label)
+    inst_lines = [_instruction_summary(inst) for inst in block.instructions]
+    body = "<br/>".join(inst_lines) if inst_lines else "(empty)"
+    node_label = f"<b>{_escape_mermaid(label)}</b><br/>{body}"
+    return f'{indent}{nid}["{node_label}"]'
+
+
 def cfg_to_mermaid(cfg: CFG) -> str:
     """Convert a CFG to a Mermaid flowchart TD diagram."""
     lines: list[str] = ["flowchart TD"]
     entry_node_id = ""
+    block_labels = list(cfg.blocks.keys())
 
-    for label, block in cfg.blocks.items():
-        nid = _node_id(label)
+    # Detect function / class subgraph ranges
+    sg_ranges = _build_subgraph_ranges(block_labels)
+    # Set of indices that belong to a subgraph
+    in_subgraph: set[int] = set()
+    for _name, start, end in sg_ranges:
+        in_subgraph.update(range(start, end))
+
+    # Emit top-level (non-subgraph) nodes first
+    for i, label in enumerate(block_labels):
         if label == cfg.entry:
-            entry_node_id = nid
+            entry_node_id = _node_id(label)
+        if i not in in_subgraph:
+            lines.append(_render_node(label, cfg.blocks[label], "    "))
 
-        inst_lines = [_instruction_summary(inst) for inst in block.instructions]
-        body = "<br/>".join(inst_lines) if inst_lines else "(empty)"
-        node_label = f"<b>{_escape_mermaid(label)}</b><br/>{body}"
-        lines.append(f'    {nid}["{node_label}"]')
+    # Emit subgraphs
+    for sg_name, start, end in sg_ranges:
+        sg_id = _node_id(sg_name)
+        lines.append(f'    subgraph {sg_id}["{_escape_mermaid(sg_name)}"]')
+        for i in range(start, end):
+            label = block_labels[i]
+            if label == cfg.entry:
+                entry_node_id = _node_id(label)
+            lines.append(_render_node(label, cfg.blocks[label], "        "))
+        lines.append("    end")
 
+    # Emit edges
     for label, block in cfg.blocks.items():
         src = _node_id(label)
         last = block.instructions[-1] if block.instructions else None
