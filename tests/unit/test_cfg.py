@@ -124,10 +124,10 @@ class TestCfgToMermaidSubgraphs:
     def test_function_blocks_grouped_in_subgraph(self):
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": "entry"}),
-            (Opcode.BRANCH, {"label": "end_foo_0"}),
-            (Opcode.LABEL, {"label": "func_foo_0"}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
-            (Opcode.RETURN, {"operands": ["t0"]}),
+            (Opcode.LABEL, {"label": "func_foo_0"}),
+            (Opcode.CONST, {"result_reg": "t1", "operands": [2]}),
+            (Opcode.BRANCH, {"label": "end_foo_0"}),
             (Opcode.LABEL, {"label": "end_foo_0"}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
@@ -146,9 +146,9 @@ class TestCfgToMermaidSubgraphs:
     def test_class_blocks_grouped_in_subgraph(self):
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": "entry"}),
-            (Opcode.BRANCH, {"label": "end_class_Bar_0"}),
-            (Opcode.LABEL, {"label": "class_Bar_0"}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
+            (Opcode.LABEL, {"label": "class_Bar_0"}),
+            (Opcode.CONST, {"result_reg": "t1", "operands": [1]}),
             (Opcode.LABEL, {"label": "end_class_Bar_0"}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
@@ -160,9 +160,9 @@ class TestCfgToMermaidSubgraphs:
     def test_toplevel_blocks_outside_subgraph(self):
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": "entry"}),
-            (Opcode.BRANCH, {"label": "end_foo_0"}),
+            (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
             (Opcode.LABEL, {"label": "func_foo_0"}),
-            (Opcode.RETURN, {"operands": ["t0"]}),
+            (Opcode.BRANCH, {"label": "end_foo_0"}),
             (Opcode.LABEL, {"label": "end_foo_0"}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
@@ -170,8 +170,8 @@ class TestCfgToMermaidSubgraphs:
         mermaid = cfg_to_mermaid(cfg)
         mermaid_lines = mermaid.split("\n")
 
-        # entry and end_foo_0 should be top-level (indented 4 spaces, not 8)
-        entry_lines = [ln for ln in mermaid_lines if "entry" in ln and '["' in ln]
+        # entry should be top-level (indented 4 spaces, not 8); uses stadium shape
+        entry_lines = [ln for ln in mermaid_lines if "entry" in ln and "([" in ln]
         assert any(
             ln.startswith("    ") and not ln.startswith("        ")
             for ln in entry_lines
@@ -181,10 +181,10 @@ class TestCfgToMermaidSubgraphs:
         """func_foo_0 pairs with end_foo_1 (counters differ)."""
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": "entry"}),
-            (Opcode.BRANCH, {"label": "end_foo_1"}),
-            (Opcode.LABEL, {"label": "func_foo_0"}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
-            (Opcode.RETURN, {"operands": ["t0"]}),
+            (Opcode.LABEL, {"label": "func_foo_0"}),
+            (Opcode.CONST, {"result_reg": "t1", "operands": [2]}),
+            (Opcode.BRANCH, {"label": "end_foo_1"}),
             (Opcode.LABEL, {"label": "end_foo_1"}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
@@ -209,3 +209,128 @@ class TestCfgToMermaidSubgraphs:
         mermaid = cfg_to_mermaid(cfg)
 
         assert "subgraph" not in mermaid
+
+
+class TestCfgToMermaidPruning:
+    def test_unreachable_blocks_excluded(self):
+        """Blocks with no path from entry should not appear in output."""
+        instructions = _make_instructions(
+            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.RETURN, {"operands": ["t0"]}),
+            (Opcode.LABEL, {"label": "dead_block"}),
+            (Opcode.CONST, {"result_reg": "t1", "operands": [99]}),
+            (Opcode.RETURN, {"operands": ["t1"]}),
+        )
+        cfg = build_cfg(instructions)
+        mermaid = cfg_to_mermaid(cfg)
+
+        assert "entry" in mermaid
+        assert "dead_block" not in mermaid
+
+    def test_reachable_blocks_retained(self):
+        """All blocks reachable from entry should appear."""
+        instructions = _make_instructions(
+            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.BRANCH, {"label": "target"}),
+            (Opcode.LABEL, {"label": "target"}),
+            (Opcode.RETURN, {"operands": ["t0"]}),
+        )
+        cfg = build_cfg(instructions)
+        mermaid = cfg_to_mermaid(cfg)
+
+        assert "entry" in mermaid
+        assert "target" in mermaid
+
+
+def _node_def_lines(mermaid: str, node_id: str) -> list[str]:
+    """Extract node definition lines (not edges) for a given node ID."""
+    return [
+        ln
+        for ln in mermaid.split("\n")
+        if ln.strip().startswith(node_id) and "-->" not in ln and "style " not in ln
+    ]
+
+
+class TestCfgToMermaidShapes:
+    def test_entry_block_uses_stadium_shape(self):
+        instructions = _make_instructions(
+            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
+            (Opcode.LABEL, {"label": "next"}),
+            (Opcode.RETURN, {"operands": ["t0"]}),
+        )
+        cfg = build_cfg(instructions)
+        mermaid = cfg_to_mermaid(cfg)
+
+        entry_lines = _node_def_lines(mermaid, "entry")
+        assert len(entry_lines) == 1
+        assert '(["' in entry_lines[0] and '"])' in entry_lines[0]
+
+    def test_branch_if_block_uses_diamond_shape(self):
+        """Entry block ending with BRANCH_IF still gets stadium (entry wins)."""
+        instructions = _make_instructions(
+            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.CONST, {"result_reg": "t0", "operands": [True]}),
+            (Opcode.BRANCH_IF, {"operands": ["t0"], "label": "yes, no"}),
+            (Opcode.LABEL, {"label": "yes"}),
+            (Opcode.RETURN, {"operands": ["t0"]}),
+            (Opcode.LABEL, {"label": "no"}),
+            (Opcode.RETURN, {"operands": ["t0"]}),
+        )
+        cfg = build_cfg(instructions)
+        mermaid = cfg_to_mermaid(cfg)
+
+        entry_lines = _node_def_lines(mermaid, "entry")
+        assert len(entry_lines) == 1
+        assert '(["' in entry_lines[0]
+
+    def test_non_entry_branch_if_uses_diamond(self):
+        instructions = _make_instructions(
+            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.CONST, {"result_reg": "t0", "operands": [True]}),
+            (Opcode.LABEL, {"label": "check"}),
+            (Opcode.BRANCH_IF, {"operands": ["t0"], "label": "yes, no"}),
+            (Opcode.LABEL, {"label": "yes"}),
+            (Opcode.RETURN, {"operands": ["t0"]}),
+            (Opcode.LABEL, {"label": "no"}),
+            (Opcode.RETURN, {"operands": ["t0"]}),
+        )
+        cfg = build_cfg(instructions)
+        mermaid = cfg_to_mermaid(cfg)
+
+        check_lines = _node_def_lines(mermaid, "check")
+        assert len(check_lines) == 1
+        assert '{"' in check_lines[0] and '"}' in check_lines[0]
+
+    def test_return_block_uses_stadium_shape(self):
+        instructions = _make_instructions(
+            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
+            (Opcode.LABEL, {"label": "exit"}),
+            (Opcode.RETURN, {"operands": ["t0"]}),
+        )
+        cfg = build_cfg(instructions)
+        mermaid = cfg_to_mermaid(cfg)
+
+        exit_lines = _node_def_lines(mermaid, "exit")
+        assert len(exit_lines) == 1
+        assert '(["' in exit_lines[0] and '"])' in exit_lines[0]
+
+    def test_regular_block_uses_rectangle_shape(self):
+        instructions = _make_instructions(
+            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
+            (Opcode.LABEL, {"label": "middle"}),
+            (Opcode.CONST, {"result_reg": "t1", "operands": [2]}),
+            (Opcode.LABEL, {"label": "end"}),
+            (Opcode.RETURN, {"operands": ["t0"]}),
+        )
+        cfg = build_cfg(instructions)
+        mermaid = cfg_to_mermaid(cfg)
+
+        middle_lines = _node_def_lines(mermaid, "middle")
+        assert len(middle_lines) == 1
+        assert '["' in middle_lines[0]
+        # Should NOT be stadium or diamond
+        assert '(["' not in middle_lines[0]
+        assert '{"' not in middle_lines[0]

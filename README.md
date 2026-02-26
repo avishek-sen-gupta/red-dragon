@@ -96,10 +96,10 @@ def classify(x):
 
 ```mermaid
 flowchart TD
-    entry["<b>entry</b><br>LOAD x · CONST 0 · BINOP ><br>BRANCH_IF"]
+    entry(["<b>entry</b><br>LOAD x · CONST 0 · BINOP ><br>BRANCH_IF"])
     if_true["<b>if_true</b><br>CONST &quot;positive&quot;<br>STORE_VAR label"]
     if_false["<b>if_false</b><br>CONST &quot;negative&quot;<br>STORE_VAR label"]
-    merge["<b>merge</b><br>LOAD_VAR label<br>RETURN"]
+    merge(["<b>merge</b><br>LOAD_VAR label<br>RETURN"])
 
     entry -- T --> if_true
     entry -- F --> if_false
@@ -199,4 +199,4 @@ poetry run pytest tests/unit/ -v     # unit tests only
 poetry run pytest tests/integration/ -v  # integration tests only
 ```
 
-Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Currently 703 unit tests using dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures, symbolic execution, and factory routing.
+Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Currently 710 unit tests using dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures, symbolic execution, and factory routing.
