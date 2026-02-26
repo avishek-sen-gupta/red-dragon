@@ -6,6 +6,7 @@
 - When brainstorming / planning, consider the follow parameters:
   - Whether there are any open source projects which perform similar functionality, so that you don't have to write new code for the task
   - The complexity of the implementation matters. Think of a good balance between absolute correctness and "good enough". If in doubt, prompt me for guidance.
+- Once a design is finalised, document salient architectural decisions as a timestamped Architectural Decision Record in `docs/architectural-design-decisions.md`.
 - After completing implementation tasks, always run the full test suite before committing. Do not commit code that hasn't passed all tests.
 - When implementing plans that span many files, complete each logical unit fully before moving to the next. Do not start a new task until the current one is committed. If the session may end, prefer a committed partial result over an uncommitted complete attempt.
 ## Project Context
