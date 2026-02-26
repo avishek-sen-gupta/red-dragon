@@ -11,7 +11,7 @@ from .ir import Opcode
 from .parser import Parser
 from .frontend import get_frontend
 from .cfg import CFG, build_cfg
-from .registry import build_registry, _parse_class_ref
+from .registry import build_registry, _parse_class_ref, FunctionRegistry
 from .executor import _try_execute_locally
 from .vm import (
     VMState,
@@ -27,6 +27,26 @@ from .backend import get_backend
 from . import constants
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class VMConfig:
+    """Groups VM execution configuration."""
+
+    backend: str = "claude"
+    max_steps: int = 100
+    verbose: bool = False
+
+
+@dataclass
+class ExecutionStats:
+    """Returned execution metrics from execute_cfg."""
+
+    steps: int = 0
+    llm_calls: int = 0
+    final_heap_objects: int = 0
+    final_symbolic_count: int = 0
+    closures_captured: int = 0
 
 
 @dataclass
@@ -211,6 +231,120 @@ def _handle_return_flow(
     return _StopExecution()
 
 
+def execute_cfg(
+    cfg: CFG,
+    entry_point: str,
+    registry: FunctionRegistry,
+    config: VMConfig = VMConfig(),
+) -> tuple[VMState, ExecutionStats]:
+    """Execute a pre-built CFG from the given entry point.
+
+    Initializes a VM, runs the step loop (local execution + LLM fallback),
+    and returns the final VM state plus execution metrics.
+
+    Args:
+        cfg: Pre-built control flow graph.
+        entry_point: Label of the block to start execution from.
+        registry: Pre-built function/class registry.
+        config: Execution configuration (backend, max_steps, verbose).
+
+    Returns:
+        Tuple of (final VMState, ExecutionStats).
+    """
+    entry = _find_entry_point(cfg, entry_point)
+
+    vm = VMState()
+    vm.call_stack.append(StackFrame(function_name=constants.MAIN_FRAME_NAME))
+
+    llm = get_backend(config.backend)
+    current_label = entry
+    ip = 0
+    llm_calls = 0
+    step = 0
+
+    for step in range(config.max_steps):
+        block = cfg.blocks[current_label]
+
+        if ip >= len(block.instructions):
+            if block.successors:
+                current_label = block.successors[0]
+                ip = 0
+                continue
+            if config.verbose:
+                print(
+                    f"[step {step}] End of '{current_label}', "
+                    "no successors. Stopping."
+                )
+            break
+
+        instruction = block.instructions[ip]
+
+        if config.verbose:
+            print(f"[step {step}] {current_label}:{ip}  {instruction}")
+
+        if instruction.opcode == Opcode.LABEL:
+            ip += 1
+            continue
+
+        result = _try_execute_locally(
+            instruction,
+            vm,
+            cfg=cfg,
+            registry=registry,
+            current_label=current_label,
+            ip=ip,
+        )
+        used_llm = False
+        if result.handled:
+            update = result.update
+        else:
+            update = llm.interpret_instruction(instruction, vm)
+            used_llm = True
+            llm_calls += 1
+
+        if config.verbose:
+            _log_update(step, current_label, ip, instruction, update, used_llm)
+
+        is_return = instruction.opcode == Opcode.RETURN
+        is_throw = instruction.opcode == Opcode.THROW
+        return_frame = vm.current_frame if (is_return or is_throw) else None
+
+        is_call_dispatch = (
+            update.call_push is not None and update.next_label is not None
+        )
+        if is_call_dispatch:
+            _handle_call_dispatch_setup(vm, instruction, update, current_label, ip)
+        else:
+            apply_update(vm, update)
+
+        if is_return or is_throw:
+            flow = _handle_return_flow(
+                vm, cfg, return_frame, update, config.verbose, step
+            )
+            if isinstance(flow, _StopExecution):
+                break
+            current_label, ip = flow
+
+        elif update.next_label and update.next_label in cfg.blocks:
+            current_label = update.next_label
+            ip = 0
+        else:
+            ip += 1
+
+    stats = ExecutionStats(
+        steps=step + 1,
+        llm_calls=llm_calls,
+        final_heap_objects=len(vm.heap),
+        final_symbolic_count=vm.symbolic_counter,
+        closures_captured=len(vm.closures),
+    )
+
+    if config.verbose:
+        print(f"\n({stats.steps} steps, {stats.llm_calls} LLM calls)")
+
+    return (vm, stats)
+
+
 def run(
     source: str,
     language: str = "python",
@@ -300,98 +434,20 @@ def run(
     stats.registry_functions = len(registry.func_params)
     stats.registry_classes = len(registry.classes)
 
-    # 5. Initialize VM
-    vm = VMState()
-    vm.call_stack.append(StackFrame(function_name=constants.MAIN_FRAME_NAME))
-
-    # 6. Execute
-    llm = get_backend(backend)
-    current_label = entry
-    ip = 0
-    llm_calls = 0
+    # 5. Execute via extract
+    vm_config = VMConfig(backend=backend, max_steps=max_steps, verbose=verbose)
     exec_start = time.perf_counter()
-
-    for step in range(max_steps):
-        block = cfg.blocks[current_label]
-
-        if ip >= len(block.instructions):
-            if block.successors:
-                current_label = block.successors[0]
-                ip = 0
-                continue
-            if verbose:
-                print(
-                    f"[step {step}] End of '{current_label}', "
-                    "no successors. Stopping."
-                )
-            break
-
-        instruction = block.instructions[ip]
-
-        if verbose:
-            print(f"[step {step}] {current_label}:{ip}  {instruction}")
-
-        if instruction.opcode == Opcode.LABEL:
-            ip += 1
-            continue
-
-        # Try local execution first, fall back to LLM
-        result = _try_execute_locally(
-            instruction,
-            vm,
-            cfg=cfg,
-            registry=registry,
-            current_label=current_label,
-            ip=ip,
-        )
-        used_llm = False
-        if result.handled:
-            update = result.update
-        else:
-            update = llm.interpret_instruction(instruction, vm)
-            used_llm = True
-            llm_calls += 1
-
-        if verbose:
-            _log_update(step, current_label, ip, instruction, update, used_llm)
-
-        # For RETURN: save frame info BEFORE applying (which may pop it)
-        is_return = instruction.opcode == Opcode.RETURN
-        is_throw = instruction.opcode == Opcode.THROW
-        return_frame = vm.current_frame if (is_return or is_throw) else None
-
-        # For CALL with dispatch: set up the new frame's return info
-        is_call_dispatch = (
-            update.call_push is not None and update.next_label is not None
-        )
-        if is_call_dispatch:
-            _handle_call_dispatch_setup(vm, instruction, update, current_label, ip)
-        else:
-            apply_update(vm, update)
-
-        # Handle control flow
-        if is_return or is_throw:
-            flow = _handle_return_flow(vm, cfg, return_frame, update, verbose, step)
-            if isinstance(flow, _StopExecution):
-                break
-            current_label, ip = flow
-
-        elif update.next_label and update.next_label in cfg.blocks:
-            current_label = update.next_label
-            ip = 0
-        else:
-            ip += 1
-
+    vm, exec_stats = execute_cfg(cfg, entry, registry, vm_config)
     stats.execution_time = time.perf_counter() - exec_start
-    stats.execution_steps = step + 1
-    stats.llm_calls = llm_calls
-    stats.final_heap_objects = len(vm.heap)
-    stats.final_symbolic_count = vm.symbolic_counter
-    stats.closures_captured = len(vm.closures)
+
+    stats.execution_steps = exec_stats.steps
+    stats.llm_calls = exec_stats.llm_calls
+    stats.final_heap_objects = exec_stats.final_heap_objects
+    stats.final_symbolic_count = exec_stats.final_symbolic_count
+    stats.closures_captured = exec_stats.closures_captured
     stats.total_time = time.perf_counter() - pipeline_start
 
     if verbose:
-        print(f"\n({stats.execution_steps} steps, {llm_calls} LLM calls)")
         print()
         print(stats.report())
 
