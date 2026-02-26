@@ -337,24 +337,14 @@ class PythonFrontend(BaseFrontend):
     # ── Python-specific: list comprehension ──────────────────────
 
     def _lower_list_comprehension(self, node) -> str:
-        """Desugar [expr for var in iterable if cond] into index-based loop."""
-        children = [c for c in node.children if c.is_named]
-        # children: body_expr, for_in_clause, optional if_clause(s)
-        body_expr = children[0] if children else None
-        for_clause = next((c for c in children if c.type == "for_in_clause"), None)
-        if_clauses = [c for c in children if c.type == "if_clause"]
+        """Desugar [expr for var in iterable if cond] into index-based loop.
 
-        # Check for nested comprehension — emit SYMBOLIC
-        nested_fors = [c for c in children if c.type == "for_in_clause"]
-        if len(nested_fors) > 1:
-            reg = self._fresh_reg()
-            self._emit(
-                Opcode.SYMBOLIC,
-                result_reg=reg,
-                operands=[f"nested_comprehension:{self._node_text(node)[:60]}"],
-                source_location=self._source_loc(node),
-            )
-            return reg
+        Supports nested comprehensions via recursive helper.
+        """
+        children = [c for c in node.children if c.is_named]
+        body_expr = children[0] if children else None
+        for_clauses = [c for c in children if c.type == "for_in_clause"]
+        if_clauses = [c for c in children if c.type == "if_clause"]
 
         # Create result array
         result_arr = self._fresh_reg()
@@ -371,7 +361,32 @@ class PythonFrontend(BaseFrontend):
         result_idx = self._fresh_reg()
         self._emit(Opcode.CONST, result_reg=result_idx, operands=["0"])
 
-        # Extract loop var and iterable from for_in_clause
+        end_label = self._fresh_label("comp_end")
+
+        self._lower_comprehension_loop(
+            for_clauses, if_clauses, body_expr, result_arr, result_idx, node, end_label
+        )
+
+        self._emit(Opcode.LABEL, label=end_label)
+        return result_arr
+
+    def _lower_comprehension_loop(
+        self,
+        for_clauses,
+        if_clauses,
+        body_expr,
+        result_arr,
+        result_idx,
+        node,
+        end_label,
+    ):
+        """Recursive helper: emit one level of comprehension loop."""
+        if not for_clauses:
+            return
+
+        for_clause = for_clauses[0]
+        remaining_fors = for_clauses[1:]
+
         clause_named = [c for c in for_clause.children if c.is_named]
         loop_var = clause_named[0] if clause_named else None
         iterable_node = clause_named[1] if len(clause_named) > 1 else None
@@ -386,7 +401,7 @@ class PythonFrontend(BaseFrontend):
 
         loop_label = self._fresh_label("comp_cond")
         body_label = self._fresh_label("comp_body")
-        end_label = self._fresh_label("comp_end")
+        loop_end_label = self._fresh_label("comp_loop_end")
 
         self._emit(Opcode.LABEL, label=loop_label)
         cond_reg = self._fresh_reg()
@@ -394,7 +409,7 @@ class PythonFrontend(BaseFrontend):
         self._emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{body_label},{end_label}",
+            label=f"{body_label},{loop_end_label}",
         )
 
         self._emit(Opcode.LABEL, label=body_label)
@@ -402,41 +417,52 @@ class PythonFrontend(BaseFrontend):
         self._emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
         self._lower_store_target(loop_var, elem_reg, node)
 
-        # Handle if clause (filter)
-        store_label = self._fresh_label("comp_store")
-        skip_label = self._fresh_label("comp_skip") if if_clauses else None
-        if if_clauses:
-            filter_expr = next((c for c in if_clauses[0].children if c.is_named), None)
-            filter_reg = self._lower_expr(filter_expr)
-            self._emit(
-                Opcode.BRANCH_IF,
-                operands=[filter_reg],
-                label=f"{store_label},{skip_label}",
+        if remaining_fors:
+            # Recurse for nested for-clauses (filters apply at innermost level)
+            self._lower_comprehension_loop(
+                remaining_fors,
+                if_clauses,
+                body_expr,
+                result_arr,
+                result_idx,
+                node,
+                end_label,
             )
+        else:
+            # Innermost loop: apply filters and store body
+            store_label = self._fresh_label("comp_store")
+            skip_label = self._fresh_label("comp_skip") if if_clauses else None
+            if if_clauses:
+                filter_expr = next(
+                    (c for c in if_clauses[0].children if c.is_named), None
+                )
+                filter_reg = self._lower_expr(filter_expr)
+                self._emit(
+                    Opcode.BRANCH_IF,
+                    operands=[filter_reg],
+                    label=f"{store_label},{skip_label}",
+                )
 
-        self._emit(Opcode.LABEL, label=store_label)
-        # Evaluate body expression and store in result array
-        val_reg = self._lower_expr(body_expr)
-        self._emit(Opcode.STORE_INDEX, operands=[result_arr, result_idx, val_reg])
-        # Increment result index
-        one_reg = self._fresh_reg()
-        self._emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
-        new_result_idx = self._fresh_reg()
-        self._emit(
-            Opcode.BINOP,
-            result_reg=new_result_idx,
-            operands=["+", result_idx, one_reg],
-        )
-        self._emit(Opcode.STORE_VAR, operands=["__comp_result_idx", new_result_idx])
+            self._emit(Opcode.LABEL, label=store_label)
+            val_reg = self._lower_expr(body_expr)
+            self._emit(Opcode.STORE_INDEX, operands=[result_arr, result_idx, val_reg])
+            one_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
+            new_result_idx = self._fresh_reg()
+            self._emit(
+                Opcode.BINOP,
+                result_reg=new_result_idx,
+                operands=["+", result_idx, one_reg],
+            )
+            self._emit(Opcode.STORE_VAR, operands=["__comp_result_idx", new_result_idx])
 
-        if skip_label:
-            self._emit(Opcode.LABEL, label=skip_label)
+            if skip_label:
+                self._emit(Opcode.LABEL, label=skip_label)
 
         # Increment source index
         self._emit_for_increment(idx_reg, loop_label)
 
-        self._emit(Opcode.LABEL, label=end_label)
-        return result_arr
+        self._emit(Opcode.LABEL, label=loop_end_label)
 
     # ── Python-specific: dict comprehension ──────────────────────
 

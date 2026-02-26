@@ -368,11 +368,53 @@ result = items.select { |x| x > 0 }.map { |x| x * 2 }.first
         source = """\
 items.each do |item|
   puts item
-  total += item
 end
 """
         instructions = _parse_ruby(source)
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("each" in inst.operands for inst in calls)
-        # Block body is not fully lowered; method call is captured
-        assert len(instructions) > 1
+        # Block is lowered as inline closure — expect RETURN and func: CONST
+        opcodes = _opcodes(instructions)
+        assert Opcode.RETURN in opcodes
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("func:" in str(inst.operands) for inst in consts)
+
+    def test_block_curly_brace(self):
+        source = "items.map { |x| x * 2 }"
+        instructions = _parse_ruby(source)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("map" in inst.operands for inst in calls)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("func:" in str(inst.operands) for inst in consts)
+
+    def test_do_block(self):
+        source = """\
+numbers.select do |n|
+  n > 0
+end
+"""
+        instructions = _parse_ruby(source)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("select" in inst.operands for inst in calls)
+        opcodes = _opcodes(instructions)
+        assert Opcode.RETURN in opcodes
+
+    def test_block_no_params(self):
+        source = "3.times { puts 'hello' }"
+        instructions = _parse_ruby(source)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("times" in inst.operands for inst in calls)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("func:" in str(inst.operands) for inst in consts)
+
+    def test_block_body_lowered(self):
+        source = """\
+items.each do |item|
+  result = item + 1
+end
+"""
+        instructions = _parse_ruby(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BINOP in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("result" in inst.operands for inst in stores)

@@ -402,14 +402,59 @@ class CSharpFrontend(BaseFrontend):
     # -- C#: array creation --------------------------------------------
 
     def _lower_array_creation(self, node) -> str:
-        reg = self._fresh_reg()
+        """Lower array_creation_expression / implicit_array_creation_expression.
+
+        With initializer: NEW_ARRAY + STORE_INDEX per element.
+        Without initializer (sized): just NEW_ARRAY with size.
+        """
+        # Find initializer: initializer_expression for both explicit and implicit
+        init_node = node.child_by_field_name("initializer")
+        if init_node is None:
+            init_node = next(
+                (c for c in node.children if c.type == "initializer_expression"),
+                None,
+            )
+
+        if init_node is not None:
+            elements = [c for c in init_node.children if c.is_named]
+            size_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elements))])
+            arr_reg = self._fresh_reg()
+            self._emit(
+                Opcode.NEW_ARRAY,
+                result_reg=arr_reg,
+                operands=["array", size_reg],
+                source_location=self._source_loc(node),
+            )
+            for i, elem in enumerate(elements):
+                idx_reg = self._fresh_reg()
+                self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+                val_reg = self._lower_expr(elem)
+                self._emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+            return arr_reg
+
+        # Sized array without initializer: new int[5]
+        # Extract the size from rank_specifier or bracketed children
+        size_children = [
+            c
+            for c in node.children
+            if c.is_named
+            and c.type not in ("predefined_type", "type_identifier", "array_type")
+        ]
+        size_node = size_children[0] if size_children else None
+        if size_node and size_node.type not in ("initializer_expression",):
+            size_reg = self._lower_expr(size_node)
+        else:
+            size_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=size_reg, operands=["0"])
+        arr_reg = self._fresh_reg()
         self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=[f"new_array:{self._node_text(node)[:60]}"],
+            Opcode.NEW_ARRAY,
+            result_reg=arr_reg,
+            operands=["array", size_reg],
             source_location=self._source_loc(node),
         )
-        return reg
+        return arr_reg
 
     # -- C#: foreach ---------------------------------------------------
 
@@ -636,17 +681,37 @@ class CSharpFrontend(BaseFrontend):
             self._emit(Opcode.STORE_VAR, operands=[iface_name, reg])
 
     def _lower_enum_decl(self, node):
+        """Lower enum_declaration as NEW_OBJECT with STORE_INDEX per member."""
         name_node = node.child_by_field_name("name")
+        body_node = next(
+            (c for c in node.children if c.type == "enum_member_declaration_list"),
+            None,
+        )
         if name_node:
             enum_name = self._node_text(name_node)
-            reg = self._fresh_reg()
+            obj_reg = self._fresh_reg()
             self._emit(
-                Opcode.SYMBOLIC,
-                result_reg=reg,
+                Opcode.NEW_OBJECT,
+                result_reg=obj_reg,
                 operands=[f"enum:{enum_name}"],
                 source_location=self._source_loc(node),
             )
-            self._emit(Opcode.STORE_VAR, operands=[enum_name, reg])
+            if body_node:
+                for i, child in enumerate(
+                    c for c in body_node.children if c.type == "enum_member_declaration"
+                ):
+                    member_name_node = child.child_by_field_name("name")
+                    member_name = (
+                        self._node_text(member_name_node)
+                        if member_name_node
+                        else self._node_text(child)
+                    )
+                    key_reg = self._fresh_reg()
+                    self._emit(Opcode.CONST, result_reg=key_reg, operands=[member_name])
+                    val_reg = self._fresh_reg()
+                    self._emit(Opcode.CONST, result_reg=val_reg, operands=[str(i)])
+                    self._emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
+            self._emit(Opcode.STORE_VAR, operands=[enum_name, obj_reg])
 
     # -- C#: namespace -------------------------------------------------
 

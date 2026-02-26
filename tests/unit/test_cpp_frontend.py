@@ -329,3 +329,37 @@ T max_val(T a, T b) {
         assert len(returns) >= 2
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("max_val" in inst.operands for inst in stores)
+
+
+class TestCppFieldInitializerList:
+    def test_field_initializer_list(self):
+        source = """\
+class Point {
+    int x, y;
+    Point(int a, int b) : x(a), y(b) {}
+};
+"""
+        instructions = _parse_cpp(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.LOAD_VAR in opcodes
+        assert Opcode.STORE_FIELD in opcodes
+        store_fields = _find_all(instructions, Opcode.STORE_FIELD)
+        field_names = [
+            inst.operands[1] for inst in store_fields if len(inst.operands) > 1
+        ]
+        assert "x" in field_names
+        assert "y" in field_names
+
+    def test_field_initializer_single(self):
+        source = """\
+class Counter {
+    int count;
+    Counter(int c) : count(c) {}
+};
+"""
+        instructions = _parse_cpp(source)
+        store_fields = _find_all(instructions, Opcode.STORE_FIELD)
+        field_names = [
+            inst.operands[1] for inst in store_fields if len(inst.operands) > 1
+        ]
+        assert "count" in field_names
