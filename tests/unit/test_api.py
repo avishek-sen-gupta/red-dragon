@@ -22,6 +22,25 @@ def greet(name):
 greet("world")
 """
 
+CLASS_WITH_METHOD_SOURCE = """\
+class Greeter:
+    def hello(self, name):
+        return f"Hello, {name}"
+"""
+
+NESTED_FUNCTION_SOURCE = """\
+def outer():
+    def inner():
+        return 42
+    return inner()
+"""
+
+JS_FUNCTION_SOURCE = """\
+function add(a, b) {
+    return a + b;
+}
+"""
+
 
 class TestLowerSource:
     def test_returns_list_of_ir_instructions(self):
@@ -121,26 +140,6 @@ class TestDumpMermaid:
         result = dump_mermaid(FUNCTION_SOURCE, function_name="greet")
         assert "flowchart TD" in result
         assert "greet" in result
-
-
-CLASS_WITH_METHOD_SOURCE = """\
-class Greeter:
-    def hello(self, name):
-        return f"Hello, {name}"
-"""
-
-NESTED_FUNCTION_SOURCE = """\
-def outer():
-    def inner():
-        return 42
-    return inner()
-"""
-
-JS_FUNCTION_SOURCE = """\
-function add(a, b) {
-    return a + b;
-}
-"""
 
 
 class TestExtractFunctionSource:
