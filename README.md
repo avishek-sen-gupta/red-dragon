@@ -6,7 +6,7 @@
 
 ![CI](https://github.com/avishek-sen-gupta/red-dragon/actions/workflows/ci.yml/badge.svg) [![Presentation](https://img.shields.io/badge/Presentation-slides-blue)](presentation/index.html) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE.md)
 
-A multi-language source code analysis toolkit that:
+**RedDragon** is a multi-language source code analysis toolkit that:
 
 - **Parses** source in 15 languages via tree-sitter, or any language via LLM-based lowering (including chunked lowering for large files)
 - **Lowers** to a universal flattened three-address code IR (~19 opcodes) with structured source location traceability (every IR instruction from deterministic frontends carries its originating AST span; LLM frontends lack AST nodes and produce `NO_SOURCE_LOCATION`) — the LLM frontend uses the LLM as a **compiler frontend**, constrained by a formal IR schema with concrete patterns
@@ -259,6 +259,8 @@ Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integrati
 ## Documentation
 
 - **[VM Design Document](docs/notes-on-vm-design.md)** — Comprehensive technical deep-dive into the VM architecture: IR design, CFG construction, state model, execution engine, call dispatch, symbolic execution, closures, LLM fallback, dataflow analysis, and end-to-end worked examples with code references
+- **[Frontend Design Document](docs/notes-on-frontend-design.md)** — Frontend subsystem architecture: Frontend ABC contract, tree-sitter parser layer, BaseFrontend dispatch table engine, all 15 language-specific frontends, LLM frontend with prompt engineering, chunked LLM frontend with register renumbering, factory routing, and lowering patterns reference
+- **[Dataflow Design Document](docs/notes-on-dataflow-design.md)** — Dataflow analysis architecture: reaching definitions via GEN/KILL worklist fixpoint, def-use chain extraction, variable dependency graph construction with transitive closure, integration with IR/CFG, worked examples, and complexity analysis
 
 ## See Also
 
