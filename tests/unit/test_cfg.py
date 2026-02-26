@@ -1,8 +1,11 @@
 """Tests for CFG builder and Mermaid export."""
 
+import pytest
+
 from interpreter.cfg import (
     build_cfg,
     cfg_to_mermaid,
+    extract_function_instructions,
     _collapse_inst_lines,
     CFG,
     BasicBlock,
@@ -458,3 +461,54 @@ class TestCollapseInstLines:
 
         assert "... (3 more)" in mermaid
         assert "return t6" in mermaid
+
+
+class TestExtractFunctionInstructions:
+    def _full_program_instructions(self):
+        return _make_instructions(
+            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
+            (Opcode.BRANCH, {"label": "end_foo_1"}),
+            (Opcode.LABEL, {"label": "func_foo_0"}),
+            (Opcode.CONST, {"result_reg": "t1", "operands": [10]}),
+            (Opcode.CONST, {"result_reg": "t2", "operands": [20]}),
+            (Opcode.RETURN, {"operands": ["t2"]}),
+            (Opcode.LABEL, {"label": "end_foo_1"}),
+            (Opcode.LABEL, {"label": "func_bar_2"}),
+            (Opcode.RETURN, {"operands": ["t0"]}),
+            (Opcode.LABEL, {"label": "end_bar_3"}),
+            (Opcode.RETURN, {"operands": ["t0"]}),
+        )
+
+    def test_extracts_correct_slice(self):
+        instructions = self._full_program_instructions()
+        result = extract_function_instructions(instructions, "foo")
+
+        labels = [i.label for i in result if i.opcode == Opcode.LABEL]
+        assert labels == ["func_foo_0", "end_foo_1"]
+        assert len(result) == 5  # func_foo_0, 2 consts, return, end_foo_1
+
+    def test_unknown_function_raises_value_error(self):
+        instructions = self._full_program_instructions()
+        with pytest.raises(ValueError, match="Function 'nonexistent' not found"):
+            extract_function_instructions(instructions, "nonexistent")
+
+    def test_extracted_slice_builds_valid_cfg(self):
+        instructions = self._full_program_instructions()
+        sliced = extract_function_instructions(instructions, "foo")
+        cfg = build_cfg(sliced)
+
+        assert "func_foo_0" in cfg.blocks
+        assert "end_foo_1" in cfg.blocks
+        assert "entry" not in cfg.blocks
+
+    def test_extracted_slice_mermaid_scoped(self):
+        instructions = self._full_program_instructions()
+        sliced = extract_function_instructions(instructions, "foo")
+        cfg = build_cfg(sliced)
+        mermaid = cfg_to_mermaid(cfg)
+
+        assert "func_foo_0" in mermaid
+        assert "t1 = const 10" in mermaid
+        assert "entry" not in mermaid
+        assert "func_bar" not in mermaid

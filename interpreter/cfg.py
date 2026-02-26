@@ -347,6 +347,48 @@ def cfg_to_mermaid(cfg: CFG) -> str:
     return "\n".join(lines)
 
 
+def extract_function_instructions(
+    instructions: list[IRInstruction], func_name: str
+) -> list[IRInstruction]:
+    """Extract the IR instruction slice for a single named function.
+
+    Scans for ``LABEL func_<name>_N`` … ``LABEL end_<name>_M`` and
+    returns the instructions in that range (inclusive of both labels).
+    Raises ``ValueError`` if the function is not found.
+    """
+    func_prefix = constants.FUNC_LABEL_PREFIX
+    end_prefix = f"end_{func_name}_"
+
+    start_idx = next(
+        (
+            i
+            for i, inst in enumerate(instructions)
+            if inst.opcode == Opcode.LABEL
+            and inst.label.startswith(func_prefix)
+            and _extract_name(inst.label, func_prefix) == func_name
+        ),
+        -1,
+    )
+    if start_idx < 0:
+        raise ValueError(f"Function '{func_name}' not found in IR instructions")
+
+    end_idx = next(
+        (
+            i
+            for i in range(start_idx + 1, len(instructions))
+            if instructions[i].opcode == Opcode.LABEL
+            and instructions[i].label.startswith(end_prefix)
+        ),
+        -1,
+    )
+    if end_idx < 0:
+        raise ValueError(
+            f"End label for function '{func_name}' not found in IR instructions"
+        )
+
+    return instructions[start_idx : end_idx + 1]
+
+
 def _add_edge(cfg: CFG, src: str, dst: str):
     if dst not in cfg.blocks[src].successors:
         cfg.blocks[src].successors.append(dst)
