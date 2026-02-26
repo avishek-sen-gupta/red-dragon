@@ -243,12 +243,30 @@ def _node_shape(block: BasicBlock, is_entry: bool) -> tuple[str, str]:
     return '["', '"]'
 
 
+def _collapse_inst_lines(
+    lines: list[str], max_lines: int = constants.MERMAID_MAX_NODE_LINES
+) -> list[str]:
+    """Collapse long instruction lists, preserving the terminator (last line).
+
+    If *lines* has more than *max_lines* entries, return the first
+    ``max_lines - 2`` lines, an ``... (N more)`` placeholder, and the
+    last line.  Otherwise return *lines* unchanged.
+    """
+    if len(lines) <= max_lines:
+        return lines
+    head_count = max_lines - 2
+    hidden = len(lines) - head_count - 1
+    return lines[:head_count] + [f"... ({hidden} more)"] + [lines[-1]]
+
+
 def _render_node(
     label: str, block: BasicBlock, indent: str, is_entry: bool = False
 ) -> str:
     """Render a single Mermaid node definition."""
     nid = _node_id(label)
-    inst_lines = [_instruction_summary(inst) for inst in block.instructions]
+    inst_lines = _collapse_inst_lines(
+        [_instruction_summary(inst) for inst in block.instructions]
+    )
     body = "<br/>".join(inst_lines) if inst_lines else "(empty)"
     node_label = f"<b>{_escape_mermaid(label)}</b><br/>{body}"
     open_delim, close_delim = _node_shape(block, is_entry)
