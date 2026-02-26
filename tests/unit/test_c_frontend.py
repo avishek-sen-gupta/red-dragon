@@ -158,7 +158,7 @@ struct Point {
         ]
         assert len(class_refs) >= 1
 
-    def test_struct_fields_lowered_as_symbolic(self):
+    def test_struct_fields_lowered_as_store_field(self):
         source = """
 struct Point {
     int x;
@@ -166,11 +166,14 @@ struct Point {
 };
 """
         ir = _parse_and_lower(source)
-        symbolics = _find_all(ir, Opcode.SYMBOLIC)
-        field_symbolics = [
-            s for s in symbolics if any("struct_field:" in str(op) for op in s.operands)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        field_names = [
+            inst.operands[1] for inst in store_fields if len(inst.operands) > 1
         ]
-        assert len(field_symbolics) >= 2
+        assert "x" in field_names
+        assert "y" in field_names
+        load_vars = _find_all(ir, Opcode.LOAD_VAR)
+        assert any("this" in inst.operands for inst in load_vars)
 
 
 class TestCFrontendAssignmentExpression:
@@ -456,3 +459,34 @@ void f() {
         assert any("next" in inst.operands for inst in load_fields)
         store_fields = _find_all(ir, Opcode.STORE_FIELD)
         assert any("next" in inst.operands for inst in store_fields)
+
+
+class TestCFrontendStructFieldDeclaration:
+    def test_struct_field_with_default(self):
+        source = """
+struct Vec3 {
+    float x;
+    float y;
+    float z;
+};
+"""
+        ir = _parse_and_lower(source)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        field_names = [
+            inst.operands[1] for inst in store_fields if len(inst.operands) > 1
+        ]
+        assert "x" in field_names
+        assert "y" in field_names
+        assert "z" in field_names
+
+    def test_struct_field_loads_this(self):
+        source = """
+struct Pair {
+    int first;
+    int second;
+};
+"""
+        ir = _parse_and_lower(source)
+        load_vars = _find_all(ir, Opcode.LOAD_VAR)
+        this_loads = [v for v in load_vars if "this" in v.operands]
+        assert len(this_loads) >= 2

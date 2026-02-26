@@ -79,7 +79,7 @@ poetry run python interpreter.py example.cob -l cobol -f llm  # unsupported lang
 
 Python, JavaScript, TypeScript, Java, Ruby, Go, PHP, C#, C, C++, Rust, Kotlin, Scala, Lua, Pascal
 
-Control flow constructs (if/else, while, for, for-of/foreach, switch, break/continue, try/catch/finally) are lowered into real LABEL+BRANCH IR rather than `SYMBOLIC` placeholders. Language-specific features — Python list/dict comprehensions (including nested), with statements, decorators, lambdas; JS/TS destructuring, for-of loops, and for-in loops; Ruby blocks (curly brace and do/end); PHP foreach and array creation; Java/C# array creation and enum declarations; Java instanceof; C pointer dereference/address-of, sizeof, compound literals; C++ field initializer lists; Lua generic for; Go composite literals; C# lambdas — all produce real IR for proper data-flow analysis. Unsupported constructs emit `SYMBOLIC` with a descriptive hint rather than crashing. For unlisted languages, use `--frontend llm`.
+Control flow constructs (if/else, while, for, for-of/foreach, switch, break/continue, try/catch/finally) are lowered into real LABEL+BRANCH IR rather than `SYMBOLIC` placeholders. Language-specific features — Python list/dict comprehensions (including nested), with statements, decorators, lambdas; JS/TS destructuring, for-of loops, and for-in loops; Ruby blocks (curly brace and do/end); PHP foreach and array creation; Java/C#/TS interface declarations; Java/C# array creation and enum declarations; Java instanceof; C# typeof and is-check; C pointer dereference/address-of, sizeof, compound literals, struct field declarations; C++ field initializer lists, delete expressions; Lua generic for; Go composite literals; C# lambdas — all produce real IR for proper data-flow analysis. Unsupported constructs emit `SYMBOLIC` with a descriptive hint rather than crashing. For unlisted languages, use `--frontend llm`.
 
 ## Example: CFG
 
@@ -197,4 +197,4 @@ poetry run pytest tests/unit/ -v     # unit tests only
 poetry run pytest tests/integration/ -v  # integration tests only
 ```
 
-Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Currently 672 unit tests using dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures, symbolic execution, and factory routing.
+Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Currently 682 unit tests using dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures, symbolic execution, and factory routing.

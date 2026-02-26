@@ -328,21 +328,45 @@ class CSharpFrontend(BaseFrontend):
     # -- C#: typeof / is / as ------------------------------------------
 
     def _lower_typeof(self, node) -> str:
+        """Lower typeof_expression: typeof(Type).
+
+        Emits: CONST type_name -> CALL_FUNCTION typeof(type_reg)
+        """
+        named_children = [c for c in node.children if c.is_named]
+        type_node = next(
+            (c for c in named_children if c.type != "typeof"),
+            named_children[0] if named_children else None,
+        )
+        type_name = self._node_text(type_node) if type_node else "Object"
+        type_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=type_reg, operands=[type_name])
         reg = self._fresh_reg()
         self._emit(
-            Opcode.SYMBOLIC,
+            Opcode.CALL_FUNCTION,
             result_reg=reg,
-            operands=[f"typeof:{self._node_text(node)[:60]}"],
+            operands=["typeof", type_reg],
             source_location=self._source_loc(node),
         )
         return reg
 
     def _lower_is_expr(self, node) -> str:
+        """Lower is_expression: operand is Type.
+
+        Emits: lower_expr(operand) -> CONST type_name -> CALL_FUNCTION is_check(obj, type)
+        """
+        named_children = [c for c in node.children if c.is_named]
+        operand_node = named_children[0] if named_children else None
+        type_node = named_children[1] if len(named_children) > 1 else None
+
+        obj_reg = self._lower_expr(operand_node) if operand_node else self._fresh_reg()
+        type_reg = self._fresh_reg()
+        type_name = self._node_text(type_node) if type_node else "Object"
+        self._emit(Opcode.CONST, result_reg=type_reg, operands=[type_name])
         reg = self._fresh_reg()
         self._emit(
-            Opcode.SYMBOLIC,
+            Opcode.CALL_FUNCTION,
             result_reg=reg,
-            operands=[f"is_check:{self._node_text(node)[:60]}"],
+            operands=["is_check", obj_reg, type_reg],
             source_location=self._source_loc(node),
         )
         return reg
@@ -668,17 +692,33 @@ class CSharpFrontend(BaseFrontend):
             self._emit(Opcode.STORE_VAR, operands=[prop_name, reg])
 
     def _lower_interface_decl(self, node):
+        """Lower interface_declaration as NEW_OBJECT with STORE_INDEX per member."""
         name_node = node.child_by_field_name("name")
-        if name_node:
-            iface_name = self._node_text(name_node)
-            reg = self._fresh_reg()
-            self._emit(
-                Opcode.SYMBOLIC,
-                result_reg=reg,
-                operands=[f"interface:{iface_name}"],
-                source_location=self._source_loc(node),
-            )
-            self._emit(Opcode.STORE_VAR, operands=[iface_name, reg])
+        if not name_node:
+            return
+        iface_name = self._node_text(name_node)
+        obj_reg = self._fresh_reg()
+        self._emit(
+            Opcode.NEW_OBJECT,
+            result_reg=obj_reg,
+            operands=[f"interface:{iface_name}"],
+            source_location=self._source_loc(node),
+        )
+        body_node = node.child_by_field_name("body")
+        if body_node:
+            for i, child in enumerate(c for c in body_node.children if c.is_named):
+                member_name_node = child.child_by_field_name("name")
+                member_name = (
+                    self._node_text(member_name_node)
+                    if member_name_node
+                    else self._node_text(child)[:40]
+                )
+                key_reg = self._fresh_reg()
+                self._emit(Opcode.CONST, result_reg=key_reg, operands=[member_name])
+                val_reg = self._fresh_reg()
+                self._emit(Opcode.CONST, result_reg=val_reg, operands=[str(i)])
+                self._emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
+        self._emit(Opcode.STORE_VAR, operands=[iface_name, obj_reg])
 
     def _lower_enum_decl(self, node):
         """Lower enum_declaration as NEW_OBJECT with STORE_INDEX per member."""

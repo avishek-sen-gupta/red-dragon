@@ -440,3 +440,63 @@ class TestCSharpEnumDeclaration:
         assert "Low" in const_vals
         assert "Medium" in const_vals
         assert "High" in const_vals
+
+
+class TestCSharpTypeofAndIsCheck:
+    def test_typeof_expression(self):
+        source = "class C { void M() { var t = typeof(int); } }"
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("typeof" in inst.operands for inst in calls)
+        consts = _find_all(ir, Opcode.CONST)
+        const_vals = [inst.operands[0] for inst in consts if inst.operands]
+        assert "int" in const_vals
+
+    def test_typeof_with_class_type(self):
+        source = "class C { void M() { var t = typeof(string); } }"
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("typeof" in inst.operands for inst in calls)
+
+    def test_is_check_expression(self):
+        source = "class C { void M(object x) { bool b = x is string; } }"
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("is_check" in inst.operands for inst in calls)
+        consts = _find_all(ir, Opcode.CONST)
+        const_vals = [inst.operands[0] for inst in consts if inst.operands]
+        assert "string" in const_vals
+
+    def test_is_check_in_condition(self):
+        source = """\
+class C {
+    void M(object x) {
+        if (x is int) {
+            int y = 1;
+        }
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("is_check" in inst.operands for inst in calls)
+        opcodes = _opcodes(ir)
+        assert Opcode.BRANCH_IF in opcodes
+
+
+class TestCSharpInterfaceDeclaration:
+    def test_interface_emits_new_object(self):
+        source = "interface IShape { void Draw(); }"
+        ir = _parse_and_lower(source)
+        new_objs = _find_all(ir, Opcode.NEW_OBJECT)
+        assert any("interface:IShape" in str(inst.operands) for inst in new_objs)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("IShape" in inst.operands for inst in stores)
+
+    def test_interface_with_multiple_members(self):
+        source = "interface IAnimal { void Speak(); string Name(); }"
+        ir = _parse_and_lower(source)
+        new_objs = _find_all(ir, Opcode.NEW_OBJECT)
+        assert any("interface:IAnimal" in str(inst.operands) for inst in new_objs)
+        store_indexes = _find_all(ir, Opcode.STORE_INDEX)
+        assert len(store_indexes) >= 2

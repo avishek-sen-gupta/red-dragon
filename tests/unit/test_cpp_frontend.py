@@ -129,10 +129,8 @@ class TestCppExpressions:
 
     def test_delete_expression(self):
         instructions = _parse_cpp("int main() { delete ptr; }")
-        opcodes = _opcodes(instructions)
-        assert Opcode.SYMBOLIC in opcodes
-        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
-        assert any("delete:" in str(inst.operands) for inst in symbolics)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("delete" in inst.operands for inst in calls)
 
     def test_lambda_expression(self):
         instructions = _parse_cpp(
@@ -215,8 +213,12 @@ int main() {
         assert any("Dog" in inst.operands for inst in calls)
         method_calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("bark" in inst.operands for inst in method_calls)
-        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
-        assert any("delete:" in str(inst.operands) for inst in symbolics)
+        delete_calls = [
+            c
+            for c in _find_all(instructions, Opcode.CALL_FUNCTION)
+            if "delete" in c.operands
+        ]
+        assert len(delete_calls) >= 1
 
     def test_lambda_capture_and_call(self):
         source = """\
@@ -363,3 +365,15 @@ class Counter {
             inst.operands[1] for inst in store_fields if len(inst.operands) > 1
         ]
         assert "count" in field_names
+
+
+class TestCppDeleteExpression:
+    def test_delete_calls_function(self):
+        instructions = _parse_cpp("int main() { int* p = new int(5); delete p; }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("delete" in inst.operands for inst in calls)
+
+    def test_delete_array(self):
+        instructions = _parse_cpp("int main() { int* arr = new int[10]; delete arr; }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("delete" in inst.operands for inst in calls)
