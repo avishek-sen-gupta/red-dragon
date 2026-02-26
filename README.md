@@ -62,6 +62,7 @@ poetry run python interpreter.py myfile.py -f llm -v       # LLM frontend
 poetry run python interpreter.py myfile.py -f chunked_llm  # chunked LLM frontend
 poetry run python interpreter.py example.cob -l cobol -f llm  # unsupported language via LLM
 poetry run python interpreter.py myfile.py --mermaid        # output CFG as Mermaid flowchart
+poetry run python interpreter.py myfile.py --mermaid --function foo  # CFG for a single function
 ```
 
 | Flag | Description |
@@ -74,6 +75,7 @@ poetry run python interpreter.py myfile.py --mermaid        # output CFG as Merm
 | `--ir-only` | Print the IR and exit |
 | `--cfg-only` | Print the CFG and exit |
 | `--mermaid` | Output CFG as a Mermaid flowchart diagram and exit |
+| `--function` | Extract CFG for a single function (use with `--mermaid` or `--cfg-only`) |
 
 ## Supported languages
 
@@ -191,6 +193,37 @@ The **chunked LLM frontend** (`--frontend chunked_llm`) handles large files by d
 | HuggingFace | `-b huggingface` | Inference Endpoints, requires `HUGGING_FACE_API_TOKEN` |
 | Ollama | `-b ollama` | Local, no API key needed |
 
+## Programmatic API
+
+All CLI pipelines are available as composable functions — no argparse required:
+
+```python
+from interpreter import lower_source, dump_ir, build_cfg_from_source, dump_cfg, dump_mermaid
+
+# Parse and lower to IR
+instructions = lower_source(source, language="python")
+
+# Get IR as text
+ir_text = dump_ir(source, language="python")
+
+# Build a CFG (optionally scoped to a single function)
+cfg = build_cfg_from_source(source, function_name="my_func")
+
+# Get CFG or Mermaid text
+cfg_text = dump_cfg(source)
+mermaid = dump_mermaid(source, function_name="my_func")
+```
+
+| Function | Returns | Purpose |
+|---|---|---|
+| `lower_source(source, language, frontend_type, backend)` | `list[IRInstruction]` | Parse + lower source to IR |
+| `dump_ir(source, language, frontend_type, backend)` | `str` | IR text output |
+| `build_cfg_from_source(source, language, frontend_type, backend, function_name)` | `CFG` | Parse → lower → optionally slice → build CFG |
+| `dump_cfg(source, language, frontend_type, backend, function_name)` | `str` | CFG text output |
+| `dump_mermaid(source, language, frontend_type, backend, function_name)` | `str` | Mermaid flowchart output |
+
+Functions compose hierarchically: `dump_ir` calls `lower_source`; `dump_cfg` and `dump_mermaid` call `build_cfg_from_source`, which calls `lower_source`. Full execution is available via `interpreter.run()`.
+
 ## Testing
 
 ```bash
@@ -199,4 +232,4 @@ poetry run pytest tests/unit/ -v     # unit tests only
 poetry run pytest tests/integration/ -v  # integration tests only
 ```
 
-Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures, symbolic execution, and factory routing.
+Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures, symbolic execution, factory routing, and the composable API layer.

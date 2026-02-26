@@ -6,9 +6,13 @@ from __future__ import annotations
 import argparse
 import json
 
-from interpreter.parser import Parser, TreeSitterParserFactory
-from interpreter.frontend import get_frontend
-from interpreter.cfg import build_cfg
+from interpreter.api import (
+    lower_source,
+    dump_ir,
+    build_cfg_from_source,
+    dump_cfg,
+    dump_mermaid,
+)
 from interpreter.run import run
 from interpreter import constants
 
@@ -54,6 +58,11 @@ def main():
         help="Output CFG as a Mermaid flowchart diagram",
     )
     parser.add_argument(
+        "--function",
+        default="",
+        help="Extract CFG for a single function (use with --mermaid or --cfg-only)",
+    )
+    parser.add_argument(
         "--frontend",
         "-f",
         default=constants.FRONTEND_DETERMINISTIC,
@@ -68,7 +77,6 @@ def main():
     args = parser.parse_args()
 
     if not args.file:
-        # Demo mode: use a built-in example
         source = """\
 def factorial(n):
     if n <= 1:
@@ -84,36 +92,24 @@ result = factorial(5)
         with open(args.file) as f:
             source = f.read()
 
-    # Parse & lower
-    if args.frontend in (constants.FRONTEND_LLM, constants.FRONTEND_CHUNKED_LLM):
-        frontend = get_frontend(
-            args.language,
-            frontend_type=args.frontend,
-            llm_provider=args.backend,
-        )
-        instructions = frontend.lower(None, source.encode("utf-8"))
-    else:
-        tree = Parser(TreeSitterParserFactory()).parse(source, args.language)
-        frontend = get_frontend(args.language)
-        instructions = frontend.lower(tree, source.encode("utf-8"))
-
     if args.ir_only:
         print("═══ IR ═══")
-        for inst in instructions:
-            print(f"  {inst}")
+        print(dump_ir(source, args.language, args.frontend, args.backend))
         return
 
-    cfg = build_cfg(instructions)
-
     if args.mermaid:
-        from interpreter.cfg import cfg_to_mermaid
-
-        print(cfg_to_mermaid(cfg))
+        print(
+            dump_mermaid(
+                source, args.language, args.frontend, args.backend, args.function
+            )
+        )
         return
 
     if args.cfg_only:
         print("═══ CFG ═══")
-        print(cfg)
+        print(
+            dump_cfg(source, args.language, args.frontend, args.backend, args.function)
+        )
         return
 
     # Full run
