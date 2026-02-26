@@ -193,20 +193,51 @@ def _build_subgraph_ranges(
     return ranges
 
 
-def _render_node(label: str, block: BasicBlock, indent: str) -> str:
+def _reachable_blocks(cfg: CFG) -> set[str]:
+    """Return the set of block labels reachable from the entry via BFS."""
+    visited: set[str] = set()
+    queue = [cfg.entry]
+    while queue:
+        label = queue.pop(0)
+        if label in visited:
+            continue
+        visited.add(label)
+        if label in cfg.blocks:
+            queue.extend(cfg.blocks[label].successors)
+    return visited
+
+
+def _node_shape(block: BasicBlock, is_entry: bool) -> tuple[str, str]:
+    """Return (open_delim, close_delim) for the Mermaid node shape."""
+    if is_entry:
+        return '(["', '"])'
+    last = block.instructions[-1] if block.instructions else None
+    if last and last.opcode == Opcode.BRANCH_IF:
+        return '{"', '"}'
+    if last and last.opcode in (Opcode.RETURN, Opcode.THROW):
+        return '(["', '"])'
+    return '["', '"]'
+
+
+def _render_node(
+    label: str, block: BasicBlock, indent: str, is_entry: bool = False
+) -> str:
     """Render a single Mermaid node definition."""
     nid = _node_id(label)
     inst_lines = [_instruction_summary(inst) for inst in block.instructions]
     body = "<br/>".join(inst_lines) if inst_lines else "(empty)"
     node_label = f"<b>{_escape_mermaid(label)}</b><br/>{body}"
-    return f'{indent}{nid}["{node_label}"]'
+    open_delim, close_delim = _node_shape(block, is_entry)
+    return f"{indent}{nid}{open_delim}{node_label}{close_delim}"
 
 
 def cfg_to_mermaid(cfg: CFG) -> str:
     """Convert a CFG to a Mermaid flowchart TD diagram."""
     lines: list[str] = ["flowchart TD"]
     entry_node_id = ""
-    block_labels = list(cfg.blocks.keys())
+
+    reachable = _reachable_blocks(cfg)
+    block_labels = [lbl for lbl in cfg.blocks if lbl in reachable]
 
     # Detect function / class subgraph ranges
     sg_ranges = _build_subgraph_ranges(block_labels)
@@ -217,10 +248,13 @@ def cfg_to_mermaid(cfg: CFG) -> str:
 
     # Emit top-level (non-subgraph) nodes first
     for i, label in enumerate(block_labels):
-        if label == cfg.entry:
+        is_entry = label == cfg.entry
+        if is_entry:
             entry_node_id = _node_id(label)
         if i not in in_subgraph:
-            lines.append(_render_node(label, cfg.blocks[label], "    "))
+            lines.append(
+                _render_node(label, cfg.blocks[label], "    ", is_entry=is_entry)
+            )
 
     # Emit subgraphs
     for sg_name, start, end in sg_ranges:
@@ -228,13 +262,17 @@ def cfg_to_mermaid(cfg: CFG) -> str:
         lines.append(f'    subgraph {sg_id}["{_escape_mermaid(sg_name)}"]')
         for i in range(start, end):
             label = block_labels[i]
-            if label == cfg.entry:
+            is_entry = label == cfg.entry
+            if is_entry:
                 entry_node_id = _node_id(label)
-            lines.append(_render_node(label, cfg.blocks[label], "        "))
+            lines.append(
+                _render_node(label, cfg.blocks[label], "        ", is_entry=is_entry)
+            )
         lines.append("    end")
 
-    # Emit edges
-    for label, block in cfg.blocks.items():
+    # Emit edges (only for reachable blocks)
+    for label in block_labels:
+        block = cfg.blocks[label]
         src = _node_id(label)
         last = block.instructions[-1] if block.instructions else None
         is_branch_if = last is not None and last.opcode == Opcode.BRANCH_IF
