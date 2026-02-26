@@ -108,17 +108,33 @@ class TypeScriptFrontend(JavaScriptFrontend):
     # ── TS: interface → symbolic class ───────────────────────────
 
     def _lower_interface_decl(self, node):
+        """Lower interface_declaration as NEW_OBJECT with STORE_INDEX per member."""
         name_node = node.child_by_field_name("name")
-        if name_node:
-            iface_name = self._node_text(name_node)
-            reg = self._fresh_reg()
-            self._emit(
-                Opcode.SYMBOLIC,
-                result_reg=reg,
-                operands=[f"interface:{iface_name}"],
-                source_location=self._source_loc(node),
-            )
-            self._emit(Opcode.STORE_VAR, operands=[iface_name, reg])
+        if not name_node:
+            return
+        iface_name = self._node_text(name_node)
+        obj_reg = self._fresh_reg()
+        self._emit(
+            Opcode.NEW_OBJECT,
+            result_reg=obj_reg,
+            operands=[f"interface:{iface_name}"],
+            source_location=self._source_loc(node),
+        )
+        body_node = node.child_by_field_name("body")
+        if body_node:
+            for i, child in enumerate(c for c in body_node.children if c.is_named):
+                member_name_node = child.child_by_field_name("name")
+                member_name = (
+                    self._node_text(member_name_node)
+                    if member_name_node
+                    else self._node_text(child).split(":")[0].strip()
+                )
+                key_reg = self._fresh_reg()
+                self._emit(Opcode.CONST, result_reg=key_reg, operands=[member_name])
+                val_reg = self._fresh_reg()
+                self._emit(Opcode.CONST, result_reg=val_reg, operands=[str(i)])
+                self._emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
+        self._emit(Opcode.STORE_VAR, operands=[iface_name, obj_reg])
 
     # ── TS: enum → symbolic values ───────────────────────────────
 

@@ -287,17 +287,27 @@ class CFrontend(BaseFrontend):
                 self._lower_stmt(child)
 
     def _lower_struct_field(self, node):
-        """Lower a struct field declaration as SYMBOLIC."""
+        """Lower a struct field declaration as STORE_FIELD on this.
+
+        Emits: LOAD_VAR this -> CONST default -> STORE_FIELD this, field_name, default
+        """
         declarators = [
             c for c in node.children if c.type in ("field_identifier", "identifier")
         ]
         for decl in declarators:
             fname = self._node_text(decl)
-            reg = self._fresh_reg()
+            this_reg = self._fresh_reg()
+            self._emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+            default_reg = self._fresh_reg()
             self._emit(
-                Opcode.SYMBOLIC,
-                result_reg=reg,
-                operands=[f"struct_field:{fname}"],
+                Opcode.CONST,
+                result_reg=default_reg,
+                operands=["0"],
+                source_location=self._source_loc(node),
+            )
+            self._emit(
+                Opcode.STORE_FIELD,
+                operands=[this_reg, fname, default_reg],
                 source_location=self._source_loc(node),
             )
 
