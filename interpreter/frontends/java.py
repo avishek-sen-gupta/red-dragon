@@ -56,6 +56,7 @@ class JavaFrontend(BaseFrontend):
             "type_identifier": self._lower_identifier,
             "method_reference": self._lower_method_reference,
             "lambda_expression": self._lower_lambda,
+            "class_literal": self._lower_class_literal,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -189,6 +190,24 @@ class JavaFrontend(BaseFrontend):
             Opcode.LOAD_FIELD,
             result_reg=reg,
             operands=[obj_reg, method_name],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # ── Java: class literal ───────────────────────────────────
+
+    def _lower_class_literal(self, node) -> str:
+        """Lower class_literal: Type.class → LOAD_FIELD(type_reg, 'class').
+
+        Children are positional: [type_identifier, ., class].
+        """
+        type_node = node.children[0]
+        type_reg = self._lower_expr(type_node)
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_FIELD,
+            result_reg=reg,
+            operands=[type_reg, "class"],
             source_location=self._source_loc(node),
         )
         return reg

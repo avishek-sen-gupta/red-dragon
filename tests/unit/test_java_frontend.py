@@ -451,6 +451,24 @@ class TestJavaMethodReference:
         assert not any("method_reference" in str(inst.operands) for inst in symbolics)
 
 
+class TestJavaClassLiteral:
+    def test_class_literal(self):
+        instructions = _parse_java("class M { void m() { Class c = String.class; } }")
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert any("class" in inst.operands for inst in loads)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("class_literal" in str(inst.operands) for inst in symbolics)
+
+    def test_class_literal_in_expression(self):
+        instructions = _parse_java(
+            "class M { void m() { boolean b = Integer.class.equals(x.getClass()); } }"
+        )
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert any("class" in inst.operands for inst in loads)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("class_literal" in str(inst.operands) for inst in symbolics)
+
+
 class TestJavaLambdaExpression:
     def test_lambda_expression_body(self):
         instructions = _parse_java(
