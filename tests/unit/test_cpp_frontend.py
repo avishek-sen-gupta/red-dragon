@@ -379,6 +379,21 @@ class TestCppDeleteExpression:
         assert any("delete" in inst.operands for inst in calls)
 
 
+class TestCppCharLiteral:
+    def test_char_literal_produces_const(self):
+        instructions = _parse_cpp("int main() { char c = 'A'; }")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("'A'" in str(inst.operands) for inst in consts)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("char_literal" in str(inst.operands) for inst in symbolics)
+
+    def test_char_literal_no_symbolic_fallback(self):
+        instructions = _parse_cpp("int main() { char c = 'x'; }")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("char_literal" in str(inst.operands) for inst in symbolics)
+        assert not any("character_literal" in str(inst.operands) for inst in symbolics)
+
+
 class TestCppEnumSpecifier:
     def test_c_style_enum(self):
         instructions = _parse_cpp("enum Color { Red, Green, Blue };")

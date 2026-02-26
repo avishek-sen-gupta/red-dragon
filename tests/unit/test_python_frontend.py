@@ -853,3 +853,175 @@ class TestPythonTypeAlias:
         # Only entry label should exist, no variable stores
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert len(stores) == 0
+
+
+class TestPythonSlice:
+    def test_slice_basic(self):
+        """a[1:3] should lower slice with start=1, stop=3."""
+        instructions = _parse_python("a[1:3]")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        slice_calls = [c for c in calls if "slice" in c.operands]
+        assert len(slice_calls) == 1
+        assert Opcode.LOAD_INDEX in _opcodes(instructions)
+
+    def test_slice_with_step(self):
+        """a[1:3:2] should lower slice with start=1, stop=3, step=2."""
+        instructions = _parse_python("a[1:3:2]")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        slice_calls = [c for c in calls if "slice" in c.operands]
+        assert len(slice_calls) == 1
+        # Should have 4 operands: 'slice', start_reg, stop_reg, step_reg
+        assert len(slice_calls[0].operands) == 4
+
+    def test_slice_no_start(self):
+        """a[:3] should lower slice with start=None, stop=3."""
+        instructions = _parse_python("a[:3]")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        slice_calls = [c for c in calls if "slice" in c.operands]
+        assert len(slice_calls) == 1
+        # No SYMBOLIC should be emitted for slice
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        unsupported_slices = [
+            s for s in symbolics if any("slice" in str(op) for op in s.operands)
+        ]
+        assert len(unsupported_slices) == 0
+
+    def test_slice_no_stop(self):
+        """a[1:] should lower slice with start=1, stop=None."""
+        instructions = _parse_python("a[1:]")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        slice_calls = [c for c in calls if "slice" in c.operands]
+        assert len(slice_calls) == 1
+
+    def test_slice_assignment(self):
+        """result = a[::2] should store to result."""
+        instructions = _parse_python("result = a[::2]")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        slice_calls = [c for c in calls if "slice" in c.operands]
+        assert len(slice_calls) == 1
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("result" in inst.operands for inst in stores)
+
+
+class TestPythonParamSeparators:
+    def test_keyword_separator_no_op(self):
+        """def f(a, *, b): ... should not emit SYMBOLIC for *."""
+        instructions = _parse_python("def f(a, *, b): pass")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        param_symbolics = [
+            s for s in symbolics if any("param:" in str(op) for op in s.operands)
+        ]
+        # Should have params a and b, but no unsupported entries
+        param_names = [s.operands[0] for s in param_symbolics]
+        assert any("a" in p for p in param_names)
+        assert any("b" in p for p in param_names)
+        unsupported = [
+            s for s in symbolics if any("unsupported" in str(op) for op in s.operands)
+        ]
+        assert len(unsupported) == 0
+
+    def test_positional_separator_no_op(self):
+        """def f(a, /, b): ... should not emit SYMBOLIC for /."""
+        instructions = _parse_python("def f(a, /, b): pass")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        param_symbolics = [
+            s for s in symbolics if any("param:" in str(op) for op in s.operands)
+        ]
+        param_names = [s.operands[0] for s in param_symbolics]
+        assert any("a" in p for p in param_names)
+        assert any("b" in p for p in param_names)
+        unsupported = [
+            s for s in symbolics if any("unsupported" in str(op) for op in s.operands)
+        ]
+        assert len(unsupported) == 0
+
+    def test_both_separators(self):
+        """def f(a, /, b, *, c): ... should handle both separators."""
+        instructions = _parse_python("def f(a, /, b, *, c): pass")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        param_symbolics = [
+            s for s in symbolics if any("param:" in str(op) for op in s.operands)
+        ]
+        param_names = [s.operands[0] for s in param_symbolics]
+        assert any("a" in p for p in param_names)
+        assert any("b" in p for p in param_names)
+        assert any("c" in p for p in param_names)
+
+
+class TestPythonListPattern:
+    def test_list_pattern_basic(self):
+        """match x: case [1, 2]: ... should use NEW_ARRAY for the pattern."""
+        source = "match x:\n    case [1, 2]:\n        pass"
+        instructions = _parse_python(source)
+        new_arrs = _find_all(instructions, Opcode.NEW_ARRAY)
+        assert len(new_arrs) >= 1
+        assert any("list" in inst.operands for inst in new_arrs)
+
+    def test_list_pattern_no_symbolic(self):
+        """list_pattern should not emit SYMBOLIC unsupported:list_pattern."""
+        source = "match x:\n    case [1, 2]:\n        pass"
+        instructions = _parse_python(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        unsupported = [
+            s for s in symbolics if any("list_pattern" in str(op) for op in s.operands)
+        ]
+        assert len(unsupported) == 0
+
+    def test_list_pattern_with_body(self):
+        """List pattern match with body should lower body."""
+        source = "match x:\n    case [1, 2]:\n        y = 1"
+        instructions = _parse_python(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("y" in inst.operands for inst in stores)
+        new_arrs = _find_all(instructions, Opcode.NEW_ARRAY)
+        assert len(new_arrs) >= 1
+
+    def test_list_pattern_empty(self):
+        """match x: case []: ... should create empty array."""
+        source = "match x:\n    case []:\n        pass"
+        instructions = _parse_python(source)
+        new_arrs = _find_all(instructions, Opcode.NEW_ARRAY)
+        assert len(new_arrs) >= 1
+
+
+class TestPythonInterpolation:
+    def test_interpolation_basic(self):
+        """f'hello {name}' is lowered as const (whole f-string text)."""
+        instructions = _parse_python('x = f"hello {name}"')
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+        # The string node is lowered as CONST containing the f-string text
+        consts = _find_all(instructions, Opcode.CONST)
+        assert len(consts) >= 1
+
+    def test_interpolation_no_symbolic(self):
+        """f-string should not emit unsupported:interpolation."""
+        instructions = _parse_python('f"hello {name}"')
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        unsupported = [
+            s for s in symbolics if any("interpolation" in str(op) for op in s.operands)
+        ]
+        assert len(unsupported) == 0
+
+    def test_interpolation_handler_directly(self):
+        """interpolation node lowered directly should lower the inner expression."""
+        from tree_sitter_language_pack import get_parser
+        from interpreter.frontends.python import PythonFrontend
+
+        parser = get_parser("python")
+        source = b'f"{x + 1}"'
+        tree = parser.parse(source)
+        # string is a direct child of module
+        string_node = tree.root_node.children[0]
+        interp_node = next(
+            (c for c in string_node.children if c.type == "interpolation"),
+            string_node,
+        )
+        fe = PythonFrontend()
+        fe._source = source
+        fe._emit(Opcode.LABEL, label="entry")
+        reg = fe._lower_interpolation(interp_node)
+        assert reg.startswith("%")
+        # Should have lowered the binary_operator inside
+        binops = _find_all(fe._instructions, Opcode.BINOP)
+        assert len(binops) >= 1

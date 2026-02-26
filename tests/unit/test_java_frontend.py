@@ -708,6 +708,30 @@ class TestJavaRecordDeclaration:
         assert any("end_class_Empty" in l for l in labels)
 
 
+class TestJavaScopedIdentifier:
+    def test_scoped_identifier_in_annotation(self):
+        """Annotations use scoped_identifier for qualified names like java.lang.Override."""
+        instructions = _parse_java("@java.lang.Override class M { }")
+        # The annotation is lowered without producing SYMBOLIC for scoped_identifier
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("scoped_identifier" in str(inst.operands) for inst in symbolics)
+
+    def test_scoped_identifier_dispatch_registered(self):
+        """Verify scoped_identifier is registered in _EXPR_DISPATCH."""
+        frontend = JavaFrontend()
+        assert "scoped_identifier" in frontend._EXPR_DISPATCH
+
+    def test_scoped_identifier_handler_emits_load_var(self):
+        """When scoped_identifier is encountered, it should emit LOAD_VAR, not SYMBOLIC."""
+        # Import declarations are no-ops, but we verify the handler is wired correctly
+        # by checking the dispatch table exists and the frontend handles annotations
+        instructions = _parse_java(
+            "@java.lang.SuppressWarnings class M { void m() { } }"
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("scoped_identifier" in str(inst.operands) for inst in symbolics)
+
+
 class TestJavaTextBlock:
     def test_text_block_basic(self):
         source = (

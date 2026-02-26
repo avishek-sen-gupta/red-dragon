@@ -490,3 +490,109 @@ class TestKotlinTypeAlias:
         instructions = _parse_kotlin("typealias StringList = List<String>")
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert len(stores) == 0
+
+
+class TestKotlinConjunctionDisjunction:
+    def test_conjunction_expression(self):
+        instructions = _parse_kotlin("fun main() { val b = x && y }")
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("&&" in inst.operands for inst in binops)
+
+    def test_disjunction_expression(self):
+        instructions = _parse_kotlin("fun main() { val b = x || y }")
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("||" in inst.operands for inst in binops)
+
+    def test_conjunction_not_symbolic(self):
+        """conjunction_expression should produce BINOP, not SYMBOLIC."""
+        instructions = _parse_kotlin("fun main() { val b = a && b }")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("conjunction" in str(inst.operands) for inst in symbolics)
+
+
+class TestKotlinHexLiteral:
+    def test_hex_literal_basic(self):
+        instructions = _parse_kotlin("fun main() { val x = 0xFF }")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("0xFF" in inst.operands for inst in consts)
+
+    def test_hex_literal_not_symbolic(self):
+        instructions = _parse_kotlin("fun main() { val x = 0x1A2B }")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("hex_literal" in str(inst.operands) for inst in symbolics)
+
+    def test_hex_literal_in_expression(self):
+        instructions = _parse_kotlin("fun main() { val x = 0xFF + 1 }")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("0xFF" in inst.operands for inst in consts)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+
+class TestKotlinElvisExpression:
+    def test_elvis_basic(self):
+        instructions = _parse_kotlin("fun main() { val x = y ?: 0 }")
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("?:" in inst.operands for inst in binops)
+
+    def test_elvis_stores_result(self):
+        instructions = _parse_kotlin('fun main() { val x = name ?: "default" }')
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_elvis_not_symbolic(self):
+        instructions = _parse_kotlin("fun main() { val x = y ?: z }")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("elvis" in str(inst.operands) for inst in symbolics)
+
+
+class TestKotlinInfixExpression:
+    def test_infix_to(self):
+        instructions = _parse_kotlin("fun main() { val r = 1 to 10 }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("to" in inst.operands for inst in calls)
+
+    def test_infix_until(self):
+        instructions = _parse_kotlin("fun main() { val r = 1 until 10 }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("until" in inst.operands for inst in calls)
+
+    def test_infix_stores_result(self):
+        instructions = _parse_kotlin("fun main() { val r = 1 to 10 }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("r" in inst.operands for inst in stores)
+
+
+class TestKotlinIndexingExpression:
+    def test_indexing_basic(self):
+        instructions = _parse_kotlin("fun main() { val x = list[0] }")
+        opcodes = _opcodes(instructions)
+        assert Opcode.LOAD_INDEX in opcodes
+
+    def test_indexing_with_variable(self):
+        instructions = _parse_kotlin("fun main() { val x = map[key] }")
+        opcodes = _opcodes(instructions)
+        assert Opcode.LOAD_INDEX in opcodes
+
+    def test_indexing_stores_result(self):
+        instructions = _parse_kotlin("fun main() { val x = arr[0] }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+
+class TestKotlinAsExpression:
+    def test_as_basic(self):
+        instructions = _parse_kotlin("fun main() { val x = y as Int }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("as" in inst.operands for inst in calls)
+        assert any("Int" in str(inst.operands) for inst in calls)
+
+    def test_as_stores_result(self):
+        instructions = _parse_kotlin("fun main() { val x = obj as String }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_as_not_symbolic(self):
+        instructions = _parse_kotlin("fun main() { val x = y as Int }")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("as_expression" in str(inst.operands) for inst in symbolics)

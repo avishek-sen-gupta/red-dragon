@@ -98,6 +98,15 @@ class CSharpFrontend(BaseFrontend):
         }
         self._EXPR_DISPATCH["await_expression"] = self._lower_await_expr
         self._EXPR_DISPATCH["switch_expression"] = self._lower_switch_expr
+        self._EXPR_DISPATCH["conditional_access_expression"] = (
+            self._lower_conditional_access
+        )
+        self._EXPR_DISPATCH["member_binding_expression"] = self._lower_member_binding
+        self._EXPR_DISPATCH["tuple_expression"] = self._lower_tuple_expr
+        self._EXPR_DISPATCH["is_pattern_expression"] = self._lower_is_pattern_expr
+        self._STMT_DISPATCH["local_function_statement"] = (
+            self._lower_local_function_stmt
+        )
         self._STMT_DISPATCH["yield_statement"] = self._lower_yield_stmt
 
     # -- C#: global_statement unwrapper --------------------------------
@@ -1201,6 +1210,145 @@ class CSharpFrontend(BaseFrontend):
             operands=[event_name, val_reg],
             source_location=self._source_loc(node),
         )
+
+    # -- C#: conditional_access_expression (obj?.Field) ------------------
+
+    def _lower_conditional_access(self, node) -> str:
+        """Lower obj?.Field as LOAD_FIELD (null-safety is semantic)."""
+        named = [c for c in node.children if c.is_named]
+        if len(named) < 2:
+            return self._lower_const_literal(node)
+        obj_reg = self._lower_expr(named[0])
+        # The second named child is typically member_binding_expression
+        binding_node = named[1]
+        if binding_node.type == "member_binding_expression":
+            # Extract the field name from member_binding_expression
+            field_node = next(
+                (c for c in binding_node.children if c.type == "identifier"), None
+            )
+            field_name = self._node_text(field_node) if field_node else "unknown"
+        else:
+            field_name = self._node_text(binding_node)
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_FIELD,
+            result_reg=reg,
+            operands=[obj_reg, field_name],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- C#: member_binding_expression (.Field) ----------------------------
+
+    def _lower_member_binding(self, node) -> str:
+        """Lower .Field part of conditional access — standalone fallback."""
+        field_node = next((c for c in node.children if c.type == "identifier"), None)
+        field_name = self._node_text(field_node) if field_node else "unknown"
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=reg,
+            operands=[f"member_binding:{field_name}"],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- C#: local_function_statement --------------------------------------
+
+    def _lower_local_function_stmt(self, node):
+        """Lower local functions inside method bodies — like method_declaration."""
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            name_node = next((c for c in node.children if c.type == "identifier"), None)
+        params_node = node.child_by_field_name("parameters")
+        if params_node is None:
+            params_node = next(
+                (c for c in node.children if c.type == "parameter_list"), None
+            )
+        body_node = node.child_by_field_name("body")
+        if body_node is None:
+            body_node = next((c for c in node.children if c.type == "block"), None)
+
+        func_name = self._node_text(name_node) if name_node else "__local_fn"
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=func_label)
+
+        if params_node:
+            self._lower_csharp_params(params_node)
+
+        if body_node:
+            self._lower_block(body_node)
+
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST, result_reg=none_reg, operands=[self.DEFAULT_RETURN_VALUE]
+        )
+        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        func_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+    # -- C#: tuple_expression ((a, b, c)) ----------------------------------
+
+    def _lower_tuple_expr(self, node) -> str:
+        """Lower tuple (a, b, c) as NEW_ARRAY with elements."""
+        arguments = [c for c in node.children if c.type == "argument"]
+        elem_regs = [
+            self._lower_expr(next((gc for gc in arg.children if gc.is_named), arg))
+            for arg in arguments
+        ]
+
+        size_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elem_regs))])
+        arr_reg = self._fresh_reg()
+        self._emit(
+            Opcode.NEW_ARRAY,
+            result_reg=arr_reg,
+            operands=["tuple", size_reg],
+            source_location=self._source_loc(node),
+        )
+        for i, elem_reg in enumerate(elem_regs):
+            idx_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            self._emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, elem_reg])
+        return arr_reg
+
+    # -- C#: is_pattern_expression (x is int y) ----------------------------
+
+    def _lower_is_pattern_expr(self, node) -> str:
+        """Lower `x is int y` as CALL_FUNCTION('is_check', expr, type)."""
+        named = [c for c in node.children if c.is_named]
+        operand_node = named[0] if named else None
+        pattern_node = named[1] if len(named) > 1 else None
+
+        obj_reg = self._lower_expr(operand_node) if operand_node else self._fresh_reg()
+
+        # Extract the type from the pattern
+        type_name = self._node_text(pattern_node) if pattern_node else "Object"
+        type_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=type_reg, operands=[type_name])
+
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["is_check", obj_reg, type_reg],
+            source_location=self._source_loc(node),
+        )
+        return reg
 
     # -- C#: store target override -------------------------------------
 

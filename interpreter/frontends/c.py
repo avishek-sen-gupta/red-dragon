@@ -53,7 +53,7 @@ class CFrontend(BaseFrontend):
             "identifier": self._lower_identifier,
             "number_literal": self._lower_const_literal,
             "string_literal": self._lower_const_literal,
-            "character_literal": self._lower_const_literal,
+            "char_literal": self._lower_const_literal,
             "true": self._lower_const_literal,
             "false": self._lower_const_literal,
             "null": self._lower_const_literal,

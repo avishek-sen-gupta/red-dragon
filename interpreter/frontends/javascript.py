@@ -91,6 +91,8 @@ class JavaScriptFrontend(BaseFrontend):
             "switch_statement": self._lower_switch_statement,
             "do_statement": self._lower_do_statement,
             "labeled_statement": self._lower_labeled_statement,
+            "import_statement": lambda _: None,
+            "export_statement": self._lower_export_statement,
         }
 
     # ── JS var declaration with destructuring ───────────────────
@@ -988,6 +990,14 @@ class JavaScriptFrontend(BaseFrontend):
 
         if body_node:
             self._lower_stmt(body_node)
+
+    # ── JS export statement ───────────────────────────────────────
+
+    def _lower_export_statement(self, node):
+        """Lower `export ...` by unwrapping and lowering the inner declaration."""
+        for child in node.children:
+            if child.is_named and child.type not in ("export", "default"):
+                self._lower_stmt(child)
 
     # ── JS class static block ────────────────────────────────────
 

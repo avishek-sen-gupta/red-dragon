@@ -542,3 +542,51 @@ class TestRustUnsafeBlock:
         instructions = _parse_rust("fn main() { unsafe { do_risky(); } }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("do_risky" in inst.operands for inst in calls)
+
+
+class TestRustTypeCastExpression:
+    def test_type_cast_basic(self):
+        instructions = _parse_rust("fn main() { let x = y as f64; }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("as" in inst.operands for inst in calls)
+        assert any("f64" in str(inst.operands) for inst in calls)
+
+    def test_type_cast_stores_result(self):
+        instructions = _parse_rust("fn main() { let x = count as f64; }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_type_cast_not_symbolic(self):
+        instructions = _parse_rust("fn main() { let x = y as i32; }")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("type_cast" in str(inst.operands) for inst in symbolics)
+
+    def test_type_cast_in_expression(self):
+        instructions = _parse_rust("fn main() { let x = (a as f64) + 1.0; }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("as" in inst.operands for inst in calls)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+
+class TestRustScopedIdentifier:
+    def test_scoped_identifier_enum_variant(self):
+        instructions = _parse_rust("fn main() { let x = Shape::Circle; }")
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("Shape::Circle" in inst.operands for inst in loads)
+
+    def test_scoped_identifier_in_call(self):
+        instructions = _parse_rust("fn main() { let m = HashMap::new(); }")
+        # scoped_identifier is the callee inside call_expression
+        # The call should go through CALL_UNKNOWN since target is not a plain identifier
+        opcodes = _opcodes(instructions)
+        assert Opcode.LOAD_VAR in opcodes
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("HashMap::new" in inst.operands for inst in loads)
+
+    def test_scoped_identifier_stores_result(self):
+        instructions = _parse_rust("fn main() { let v = Option::None; }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("v" in inst.operands for inst in stores)
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("Option::None" in inst.operands for inst in loads)

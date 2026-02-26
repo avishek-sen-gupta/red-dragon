@@ -811,3 +811,195 @@ goto start;
         assert any("user_start" in lbl for lbl in labels)
         branches = _find_all(ir, Opcode.BRANCH)
         assert any(b.label == "user_start" for b in branches)
+
+
+class TestPhpAnonymousFunction:
+    def test_anonymous_function_basic(self):
+        source = "<?php $f = function($x) { return $x + 1; }; ?>"
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("function:" in str(inst.operands) for inst in consts)
+
+    def test_anonymous_function_params(self):
+        source = "<?php $f = function($a, $b) { return $a + $b; }; ?>"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        param_symbolics = [
+            s for s in symbolics if any("param:" in str(op) for op in s.operands)
+        ]
+        assert len(param_symbolics) >= 2
+
+    def test_anonymous_function_has_return(self):
+        source = "<?php $f = function() { return 42; }; ?>"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.RETURN in opcodes
+
+
+class TestPhpNullsafeMemberAccess:
+    def test_nullsafe_member_access(self):
+        source = "<?php $x = $obj?->field; ?>"
+        ir = _parse_and_lower(source)
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        assert any("field" in inst.operands for inst in load_fields)
+
+    def test_nullsafe_member_access_stores(self):
+        source = "<?php $x = $obj?->name; ?>"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("$x" in inst.operands for inst in stores)
+
+    def test_nullsafe_member_access_chain(self):
+        source = "<?php $x = $obj?->inner?->value; ?>"
+        ir = _parse_and_lower(source)
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        assert len(load_fields) >= 2
+
+
+class TestPhpClassConstantAccess:
+    def test_class_constant_access(self):
+        source = "<?php $x = MyClass::MY_CONST; ?>"
+        ir = _parse_and_lower(source)
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        assert any("MY_CONST" in inst.operands for inst in load_fields)
+
+    def test_class_constant_access_stores(self):
+        source = "<?php $val = SomeClass::VERSION; ?>"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("$val" in inst.operands for inst in stores)
+
+
+class TestPhpScopedPropertyAccess:
+    def test_scoped_property_access(self):
+        source = "<?php $x = MyClass::$instance; ?>"
+        ir = _parse_and_lower(source)
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        assert any("$instance" in inst.operands for inst in load_fields)
+
+    def test_scoped_property_access_stores(self):
+        source = "<?php $v = Config::$debug; ?>"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("$v" in inst.operands for inst in stores)
+
+
+class TestPhpPropertyDeclaration:
+    def test_property_declaration_with_value(self):
+        source = """<?php
+class Foo {
+    public $x = 10;
+}
+?>"""
+        ir = _parse_and_lower(source)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        assert any("$x" in inst.operands for inst in store_fields)
+
+    def test_property_declaration_without_value(self):
+        source = """<?php
+class Bar {
+    private $name;
+}
+?>"""
+        ir = _parse_and_lower(source)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        assert any("$name" in inst.operands for inst in store_fields)
+
+
+class TestPhpYieldExpression:
+    def test_yield_basic(self):
+        source = "<?php function gen() { yield 42; } ?>"
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("yield" in inst.operands for inst in calls)
+
+    def test_yield_stores_in_function(self):
+        source = "<?php function gen() { yield 1; yield 2; } ?>"
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        yield_calls = [c for c in calls if "yield" in c.operands]
+        assert len(yield_calls) >= 2
+
+
+class TestPhpReferenceAssignment:
+    def test_reference_assignment_basic(self):
+        source = "<?php $x = &$y; ?>"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("$x" in inst.operands for inst in stores)
+
+    def test_reference_assignment_with_expression(self):
+        source = "<?php $a = &$arr[0]; ?>"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("$a" in inst.operands for inst in stores)
+
+
+class TestPhpUseDeclaration:
+    def test_use_declaration_in_class(self):
+        source = """<?php
+class Foo {
+    use SomeTrait;
+}
+?>"""
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert any("use_trait:" in str(inst.operands) for inst in symbolics)
+
+
+class TestPhpNamespaceUseDeclaration:
+    def test_namespace_use_declaration(self):
+        source = r"<?php use App\Models\User; ?>"
+        ir = _parse_and_lower(source)
+        # Should not crash — no-op
+        assert ir[0].opcode == Opcode.LABEL
+
+    def test_namespace_use_declaration_multiple(self):
+        source = r"""<?php
+use App\Models\User;
+use App\Models\Post;
+?>"""
+        ir = _parse_and_lower(source)
+        assert ir[0].opcode == Opcode.LABEL
+
+
+class TestPhpEnumCase:
+    def test_enum_case_basic(self):
+        source = """<?php
+enum Color {
+    case Red;
+    case Green;
+    case Blue;
+}
+?>"""
+        ir = _parse_and_lower(source)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        field_names = [
+            inst.operands[1] for inst in store_fields if len(inst.operands) > 1
+        ]
+        assert "Red" in field_names
+        assert "Green" in field_names
+        assert "Blue" in field_names
+
+    def test_enum_case_with_value(self):
+        source = """<?php
+enum Suit: string {
+    case Hearts = 'H';
+    case Diamonds = 'D';
+}
+?>"""
+        ir = _parse_and_lower(source)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        field_names = [
+            inst.operands[1] for inst in store_fields if len(inst.operands) > 1
+        ]
+        assert "Hearts" in field_names
+        assert "Diamonds" in field_names
+
+
+class TestPhpHeredoc:
+    def test_heredoc_basic(self):
+        source = "<?php $s = <<<EOT\nhello world\nEOT; ?>"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("$s" in inst.operands for inst in stores)

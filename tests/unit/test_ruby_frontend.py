@@ -647,3 +647,206 @@ class TestRubyHeredoc:
         consts = _find_all(instructions, Opcode.CONST)
         # heredoc body should appear as a CONST
         assert len(consts) >= 1
+
+
+class TestRubyIfModifier:
+    def test_if_modifier_basic(self):
+        instructions = _parse_ruby("x = 1 if condition")
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        labels = _labels_in_order(instructions)
+        assert any("ifmod" in lbl for lbl in labels)
+
+    def test_if_modifier_produces_store(self):
+        instructions = _parse_ruby("x = 1 if true")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_if_modifier_with_method_call(self):
+        instructions = _parse_ruby("puts x if x > 0")
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("puts" in inst.operands for inst in calls)
+
+
+class TestRubyUnlessModifier:
+    def test_unless_modifier_basic(self):
+        instructions = _parse_ruby("x = 1 unless condition")
+        opcodes = _opcodes(instructions)
+        assert Opcode.UNOP in opcodes
+        assert Opcode.BRANCH_IF in opcodes
+        labels = _labels_in_order(instructions)
+        assert any("unlessmod" in lbl for lbl in labels)
+
+    def test_unless_modifier_negates_condition(self):
+        instructions = _parse_ruby("y = 0 unless flag")
+        unops = _find_all(instructions, Opcode.UNOP)
+        assert any("!" in inst.operands for inst in unops)
+
+    def test_unless_modifier_produces_store(self):
+        instructions = _parse_ruby("result = 42 unless done")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("result" in inst.operands for inst in stores)
+
+
+class TestRubyWhileModifier:
+    def test_while_modifier_basic(self):
+        instructions = _parse_ruby("x += 1 while x < 10")
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        labels = _labels_in_order(instructions)
+        assert any("whilemod" in lbl for lbl in labels)
+
+    def test_while_modifier_has_loop_back(self):
+        instructions = _parse_ruby("x += 1 while x < 10")
+        branches = _find_all(instructions, Opcode.BRANCH)
+        labels = _labels_in_order(instructions)
+        cond_labels = [lbl for lbl in labels if "whilemod_cond" in lbl]
+        assert any(b.label in cond_labels for b in branches)
+
+    def test_while_modifier_produces_binop(self):
+        instructions = _parse_ruby("x += 1 while x < 10")
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+
+class TestRubyUntilModifier:
+    def test_until_modifier_basic(self):
+        instructions = _parse_ruby("x -= 1 until x <= 0")
+        opcodes = _opcodes(instructions)
+        assert Opcode.UNOP in opcodes
+        assert Opcode.BRANCH_IF in opcodes
+        labels = _labels_in_order(instructions)
+        assert any("untilmod" in lbl for lbl in labels)
+
+    def test_until_modifier_negates_condition(self):
+        instructions = _parse_ruby("x -= 1 until x <= 0")
+        unops = _find_all(instructions, Opcode.UNOP)
+        assert any("!" in inst.operands for inst in unops)
+
+    def test_until_modifier_has_loop_back(self):
+        instructions = _parse_ruby("x -= 1 until x <= 0")
+        branches = _find_all(instructions, Opcode.BRANCH)
+        labels = _labels_in_order(instructions)
+        cond_labels = [lbl for lbl in labels if "untilmod_cond" in lbl]
+        assert any(b.label in cond_labels for b in branches)
+
+
+class TestRubyConditional:
+    def test_conditional_ternary(self):
+        instructions = _parse_ruby('x = a > 0 ? "pos" : "neg"')
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        labels = _labels_in_order(instructions)
+        assert any("ternary" in lbl for lbl in labels)
+
+    def test_conditional_stores_result(self):
+        instructions = _parse_ruby('x = a > 0 ? "pos" : "neg"')
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_conditional_has_both_branches(self):
+        instructions = _parse_ruby("y = cond ? 1 : 2")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("1" in inst.operands for inst in consts)
+        assert any("2" in inst.operands for inst in consts)
+
+
+class TestRubyUnary:
+    def test_unary_negation(self):
+        instructions = _parse_ruby("y = -x")
+        opcodes = _opcodes(instructions)
+        assert Opcode.UNOP in opcodes
+        unops = _find_all(instructions, Opcode.UNOP)
+        assert any("-" in inst.operands for inst in unops)
+
+    def test_unary_not(self):
+        instructions = _parse_ruby("y = !x")
+        unops = _find_all(instructions, Opcode.UNOP)
+        assert any("!" in inst.operands for inst in unops)
+
+    def test_unary_stores_result(self):
+        instructions = _parse_ruby("y = -x")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("y" in inst.operands for inst in stores)
+
+
+class TestRubySelf:
+    def test_self_keyword(self):
+        instructions = _parse_ruby("x = self")
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("self" in inst.operands for inst in loads)
+
+    def test_self_in_method_call(self):
+        instructions = _parse_ruby("self.foo")
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("foo" in inst.operands for inst in calls)
+
+    def test_self_stores(self):
+        instructions = _parse_ruby("x = self")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+
+class TestRubySingletonClass:
+    def test_singleton_class_basic(self):
+        source = """\
+class << self
+  def foo
+    42
+  end
+end
+"""
+        instructions = _parse_ruby(source)
+        labels = _labels_in_order(instructions)
+        assert any("singleton_class" in lbl for lbl in labels)
+
+    def test_singleton_class_contains_method(self):
+        source = """\
+class << self
+  def bar
+    1
+  end
+end
+"""
+        instructions = _parse_ruby(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("bar" in inst.operands for inst in stores)
+
+
+class TestRubySingletonMethod:
+    def test_singleton_method_basic(self):
+        source = """\
+def self.class_method
+  "hello"
+end
+"""
+        instructions = _parse_ruby(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("self.class_method" in inst.operands for inst in stores)
+
+    def test_singleton_method_with_params(self):
+        source = """\
+def self.create(name)
+  name
+end
+"""
+        instructions = _parse_ruby(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        param_names = [
+            inst.operands[0]
+            for inst in symbolics
+            if inst.operands and str(inst.operands[0]).startswith("param:")
+        ]
+        assert any("name" in p for p in param_names)
+
+    def test_singleton_method_has_return(self):
+        source = """\
+def self.greet
+  "hi"
+end
+"""
+        instructions = _parse_ruby(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.RETURN in opcodes

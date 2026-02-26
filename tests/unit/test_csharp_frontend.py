@@ -780,3 +780,91 @@ class C {
         assert any("OnClick" in inst.operands for inst in stores)
         consts = _find_all(ir, Opcode.CONST)
         assert any("event:" in str(inst.operands) for inst in consts)
+
+
+class TestCSharpConditionalAccess:
+    def test_conditional_access_basic(self):
+        ir = _parse_and_lower("var x = obj?.Field;")
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        assert any("Field" in inst.operands for inst in load_fields)
+
+    def test_conditional_access_stores(self):
+        ir = _parse_and_lower("var x = obj?.Name;")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_conditional_access_nested(self):
+        ir = _parse_and_lower("var x = a?.b?.c;")
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        assert len(load_fields) >= 2
+
+
+class TestCSharpLocalFunction:
+    def test_local_function_basic(self):
+        source = """\
+void Main() {
+    int Add(int a, int b) { return a + b; }
+}
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("Add" in inst.operands for inst in stores)
+
+    def test_local_function_params(self):
+        source = """\
+void Main() {
+    int Multiply(int x, int y) { return x * y; }
+}
+"""
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        param_symbolics = [
+            s for s in symbolics if any("param:" in str(op) for op in s.operands)
+        ]
+        assert len(param_symbolics) >= 2
+
+    def test_local_function_has_return(self):
+        source = """\
+void Main() {
+    int Square(int n) { return n * n; }
+}
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.RETURN in opcodes
+
+
+class TestCSharpTupleExpression:
+    def test_tuple_basic(self):
+        ir = _parse_and_lower("var t = (1, 2, 3);")
+        opcodes = _opcodes(ir)
+        assert Opcode.NEW_ARRAY in opcodes
+        assert Opcode.STORE_INDEX in opcodes
+
+    def test_tuple_stores_result(self):
+        ir = _parse_and_lower("var t = (1, 2);")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("t" in inst.operands for inst in stores)
+
+    def test_tuple_element_count(self):
+        ir = _parse_and_lower("var t = (10, 20, 30);")
+        store_indices = _find_all(ir, Opcode.STORE_INDEX)
+        assert len(store_indices) >= 3
+
+
+class TestCSharpIsPatternExpression:
+    def test_is_pattern_basic(self):
+        ir = _parse_and_lower("var r = x is int y;")
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("is_check" in inst.operands for inst in calls)
+
+    def test_is_pattern_stores(self):
+        ir = _parse_and_lower("var r = obj is string s;")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("r" in inst.operands for inst in stores)
+
+    def test_is_pattern_has_type_const(self):
+        ir = _parse_and_lower("var r = x is int y;")
+        consts = _find_all(ir, Opcode.CONST)
+        # Should have a CONST with the pattern type text
+        assert any("int" in str(inst.operands) for inst in consts)
