@@ -7,4 +7,5 @@ from .api import (  # noqa: F401
     build_cfg_from_source,
     dump_cfg,
     dump_mermaid,
+    extract_function_source,
 )
