@@ -128,7 +128,7 @@ class PythonFrontend(BaseFrontend):
                 Opcode.CALL_METHOD,
                 result_reg=reg,
                 operands=[obj_reg, method_name] + arg_regs,
-                source_location=self._source_loc(node),
+                node=node,
             )
             return reg
 
@@ -140,7 +140,7 @@ class PythonFrontend(BaseFrontend):
                 Opcode.CALL_FUNCTION,
                 result_reg=reg,
                 operands=[func_name] + arg_regs,
-                source_location=self._source_loc(node),
+                node=node,
             )
             return reg
 
@@ -151,7 +151,7 @@ class PythonFrontend(BaseFrontend):
             Opcode.CALL_UNKNOWN,
             result_reg=reg,
             operands=[target_reg] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -239,7 +239,7 @@ class PythonFrontend(BaseFrontend):
             Opcode.SYMBOLIC,
             result_reg=self._fresh_reg(),
             operands=[f"{constants.PARAM_PREFIX}{pname}"],
-            source_location=self._source_loc(child),
+            node=child,
         )
         self._emit(
             Opcode.STORE_VAR,
@@ -298,7 +298,7 @@ class PythonFrontend(BaseFrontend):
             Opcode.NEW_ARRAY,
             result_reg=arr_reg,
             operands=["tuple", size_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         for i, elem in enumerate(elems):
             val_reg = self._lower_expr(elem)
@@ -382,7 +382,7 @@ class PythonFrontend(BaseFrontend):
             Opcode.NEW_ARRAY,
             result_reg=result_arr,
             operands=["list", size_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         # Result index counter
@@ -508,7 +508,7 @@ class PythonFrontend(BaseFrontend):
             Opcode.NEW_OBJECT,
             result_reg=result_obj,
             operands=["dict"],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         # Extract loop var and iterable from for_in_clause
@@ -615,7 +615,7 @@ class PythonFrontend(BaseFrontend):
                 Opcode.CALL_METHOD,
                 result_reg=enter_reg,
                 operands=[ctx_reg, "__enter__"],
-                source_location=self._source_loc(item),
+                node=item,
             )
             if var_name:
                 self._emit(Opcode.STORE_VAR, operands=[var_name, enter_reg])
@@ -630,7 +630,7 @@ class PythonFrontend(BaseFrontend):
                 Opcode.CALL_METHOD,
                 result_reg=exit_reg,
                 operands=[ctx_reg, "__exit__"],
-                source_location=self._source_loc(node),
+                node=node,
             )
 
     # ── Python-specific: decorated definition ────────────────────
@@ -669,7 +669,7 @@ class PythonFrontend(BaseFrontend):
                 Opcode.CALL_FUNCTION,
                 result_reg=result_reg,
                 operands=[dec_reg, func_reg],
-                source_location=self._source_loc(dec),
+                node=dec,
             )
             self._emit(Opcode.STORE_VAR, operands=[func_name, result_reg])
 
@@ -713,7 +713,7 @@ class PythonFrontend(BaseFrontend):
             Opcode.CONST,
             result_reg=ref_reg,
             operands=[f"func:{func_label}"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return ref_reg
 
@@ -733,7 +733,7 @@ class PythonFrontend(BaseFrontend):
             Opcode.NEW_ARRAY,
             result_reg=result_arr,
             operands=["list", size_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         result_idx = self._fresh_reg()
@@ -759,7 +759,7 @@ class PythonFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=gen_reg,
             operands=["generator", result_arr],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return gen_reg
 
@@ -777,7 +777,7 @@ class PythonFrontend(BaseFrontend):
             Opcode.NEW_OBJECT,
             result_reg=result_obj,
             operands=["set"],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         result_idx = self._fresh_reg()
@@ -808,7 +808,7 @@ class PythonFrontend(BaseFrontend):
             Opcode.NEW_OBJECT,
             result_reg=obj_reg,
             operands=["set"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         for i, elem in enumerate(elems):
             val_reg = self._lower_expr(elem)
@@ -828,7 +828,7 @@ class PythonFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["yield"] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -843,7 +843,7 @@ class PythonFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["await"] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -858,7 +858,7 @@ class PythonFrontend(BaseFrontend):
         self._emit(
             Opcode.STORE_VAR,
             operands=[var_name, val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return val_reg
 
@@ -872,7 +872,7 @@ class PythonFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=self._fresh_reg(),
             operands=["assert"] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # ── Python-specific: delete statement ─────────────────────────
@@ -891,7 +891,7 @@ class PythonFrontend(BaseFrontend):
                             Opcode.CALL_FUNCTION,
                             result_reg=self._fresh_reg(),
                             operands=["del", target_reg],
-                            source_location=self._source_loc(node),
+                            node=node,
                         )
             else:
                 target_reg = self._lower_expr(child)
@@ -899,7 +899,7 @@ class PythonFrontend(BaseFrontend):
                     Opcode.CALL_FUNCTION,
                     result_reg=self._fresh_reg(),
                     operands=["del", target_reg],
-                    source_location=self._source_loc(node),
+                    node=node,
                 )
 
     # ── Python-specific: import statement ─────────────────────────
@@ -913,14 +913,14 @@ class PythonFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=import_reg,
             operands=["import", module_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         # Store using the top-level module name (e.g., 'os' for 'os.path')
         store_name = module_name.split(".")[0]
         self._emit(
             Opcode.STORE_VAR,
             operands=[store_name, import_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # ── Python-specific: import from statement ────────────────────
@@ -944,12 +944,12 @@ class PythonFrontend(BaseFrontend):
                 Opcode.CALL_FUNCTION,
                 result_reg=import_reg,
                 operands=["import", f"from {module_name} import {imported_name}"],
-                source_location=self._source_loc(node),
+                node=node,
             )
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[imported_name, import_reg],
-                source_location=self._source_loc(node),
+                node=node,
             )
 
     # ── Python-specific: match statement ──────────────────────────
@@ -1005,7 +1005,7 @@ class PythonFrontend(BaseFrontend):
                     Opcode.BINOP,
                     result_reg=cmp_reg,
                     operands=["==", subject_reg, pattern_reg],
-                    source_location=self._source_loc(case_node),
+                    node=case_node,
                 )
                 case_true_label = self._fresh_label("case_true")
                 case_next_label = self._fresh_label("case_next")
@@ -1076,7 +1076,7 @@ class PythonFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["slice", start_reg, stop_reg, step_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -1095,7 +1095,7 @@ class PythonFrontend(BaseFrontend):
             Opcode.CONST,
             result_reg=reg,
             operands=[self.NONE_LITERAL],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -1111,7 +1111,7 @@ class PythonFrontend(BaseFrontend):
             Opcode.NEW_ARRAY,
             result_reg=arr_reg,
             operands=["list", size_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         for i, elem in enumerate(elems):
             val_reg = self._lower_expr(elem)

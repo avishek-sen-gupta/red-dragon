@@ -118,7 +118,7 @@ class JavaScriptFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_VAR,
                     operands=[self._node_text(name_node), val_reg],
-                    source_location=self._source_loc(node),
+                    node=node,
                 )
             else:
                 val_reg = self._fresh_reg()
@@ -130,7 +130,7 @@ class JavaScriptFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_VAR,
                     operands=[self._node_text(name_node), val_reg],
-                    source_location=self._source_loc(node),
+                    node=node,
                 )
 
     def _lower_object_destructure(self, pattern_node, val_reg: str, parent_node):
@@ -143,12 +143,12 @@ class JavaScriptFrontend(BaseFrontend):
                     Opcode.LOAD_FIELD,
                     result_reg=field_reg,
                     operands=[val_reg, prop_name],
-                    source_location=self._source_loc(child),
+                    node=child,
                 )
                 self._emit(
                     Opcode.STORE_VAR,
                     operands=[prop_name, field_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
             elif child.type == "pair_pattern":
                 key_node = child.child_by_field_name("key")
@@ -161,12 +161,12 @@ class JavaScriptFrontend(BaseFrontend):
                         Opcode.LOAD_FIELD,
                         result_reg=field_reg,
                         operands=[val_reg, key_name],
-                        source_location=self._source_loc(child),
+                        node=child,
                     )
                     self._emit(
                         Opcode.STORE_VAR,
                         operands=[local_name, field_reg],
-                        source_location=self._source_loc(parent_node),
+                        node=parent_node,
                     )
 
     def _lower_array_destructure(self, pattern_node, val_reg: str, parent_node):
@@ -179,12 +179,12 @@ class JavaScriptFrontend(BaseFrontend):
                 Opcode.LOAD_INDEX,
                 result_reg=elem_reg,
                 operands=[val_reg, idx_reg],
-                source_location=self._source_loc(child),
+                node=child,
             )
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(child), elem_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
 
     # ── JS attribute access ──────────────────────────────────────
@@ -201,7 +201,7 @@ class JavaScriptFrontend(BaseFrontend):
             Opcode.LOAD_FIELD,
             result_reg=reg,
             operands=[obj_reg, field_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -217,7 +217,7 @@ class JavaScriptFrontend(BaseFrontend):
             Opcode.LOAD_INDEX,
             result_reg=reg,
             operands=[obj_reg, idx_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -239,7 +239,7 @@ class JavaScriptFrontend(BaseFrontend):
                     Opcode.CALL_METHOD,
                     result_reg=reg,
                     operands=[obj_reg, method_name] + arg_regs,
-                    source_location=self._source_loc(node),
+                    node=node,
                 )
                 return reg
 
@@ -250,7 +250,7 @@ class JavaScriptFrontend(BaseFrontend):
                 Opcode.CALL_FUNCTION,
                 result_reg=reg,
                 operands=[func_name] + arg_regs,
-                source_location=self._source_loc(node),
+                node=node,
             )
             return reg
 
@@ -260,7 +260,7 @@ class JavaScriptFrontend(BaseFrontend):
             Opcode.CALL_UNKNOWN,
             result_reg=reg,
             operands=[target_reg] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -280,7 +280,7 @@ class JavaScriptFrontend(BaseFrontend):
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
         elif target.type == "member_expression":
             obj_node = target.child_by_field_name("object")
@@ -290,7 +290,7 @@ class JavaScriptFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_FIELD,
                     operands=[obj_reg, self._node_text(prop_node), val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         elif target.type == "subscript_expression":
             obj_node = target.child_by_field_name("object")
@@ -301,13 +301,13 @@ class JavaScriptFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_INDEX,
                     operands=[obj_reg, idx_reg, val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         else:
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
 
     # ── JS assignment expression ─────────────────────────────────
@@ -327,7 +327,7 @@ class JavaScriptFrontend(BaseFrontend):
             Opcode.NEW_OBJECT,
             result_reg=obj_reg,
             operands=["object"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         for child in node.children:
             if child.type == "pair":
@@ -451,7 +451,7 @@ class JavaScriptFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=keys_reg,
             operands=["keys", obj_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         var_name = self._extract_var_name(left) if left else "__for_in_var"
@@ -594,7 +594,7 @@ class JavaScriptFrontend(BaseFrontend):
             Opcode.SYMBOLIC,
             result_reg=self._fresh_reg(),
             operands=[f"{constants.PARAM_PREFIX}{pname}"],
-            source_location=self._source_loc(child),
+            node=child,
         )
         self._emit(
             Opcode.STORE_VAR,
@@ -647,9 +647,7 @@ class JavaScriptFrontend(BaseFrontend):
         class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
         end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
 
         if body_node:
@@ -724,14 +722,14 @@ class JavaScriptFrontend(BaseFrontend):
             Opcode.NEW_OBJECT,
             result_reg=obj_reg,
             operands=[class_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         result_reg = self._fresh_reg()
         self._emit(
             Opcode.CALL_METHOD,
             result_reg=result_reg,
             operands=[obj_reg, "constructor"] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
         return result_reg
 
@@ -746,7 +744,7 @@ class JavaScriptFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["await", expr_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -762,7 +760,7 @@ class JavaScriptFrontend(BaseFrontend):
                 Opcode.CALL_FUNCTION,
                 result_reg=reg,
                 operands=["yield", expr_reg],
-                source_location=self._source_loc(node),
+                node=node,
             )
             return reg
         # Bare yield
@@ -777,7 +775,7 @@ class JavaScriptFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["yield", none_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -804,7 +802,7 @@ class JavaScriptFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["spread", expr_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -884,7 +882,7 @@ class JavaScriptFrontend(BaseFrontend):
                 Opcode.BINOP,
                 result_reg=new_reg,
                 operands=["+", result, part],
-                source_location=self._source_loc(node),
+                node=node,
             )
             result = new_reg
         return result
@@ -924,7 +922,7 @@ class JavaScriptFrontend(BaseFrontend):
                             Opcode.BINOP,
                             result_reg=cond_reg,
                             operands=["===", disc_reg, case_reg],
-                            source_location=self._source_loc(case_node),
+                            node=case_node,
                         )
                         body_label = self._fresh_label("case_body")
                         next_label = self._fresh_label("case_next")
@@ -973,7 +971,7 @@ class JavaScriptFrontend(BaseFrontend):
             Opcode.BRANCH_IF,
             operands=[cond_reg],
             label=f"{body_label},{end_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
         self._emit(Opcode.LABEL, label=end_label)
 

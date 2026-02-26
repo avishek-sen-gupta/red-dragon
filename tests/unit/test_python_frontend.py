@@ -5,7 +5,7 @@ from __future__ import annotations
 from tree_sitter_language_pack import get_parser
 
 from interpreter.frontends.python import PythonFrontend
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
 
 
 def _parse_python(source: str) -> list[IRInstruction]:
@@ -1025,3 +1025,82 @@ class TestPythonInterpolation:
         # Should have lowered the binary_operator inside
         binops = _find_all(fe._instructions, Opcode.BINOP)
         assert len(binops) >= 1
+
+
+class TestSourceLocationModel:
+    def test_source_location_str(self):
+        loc = SourceLocation(start_line=3, start_col=8, end_line=3, end_col=10)
+        assert str(loc) == "3:8-3:10"
+
+    def test_source_location_fields_accessible(self):
+        loc = SourceLocation(start_line=1, start_col=0, end_line=5, end_col=12)
+        assert loc.start_line == 1
+        assert loc.start_col == 0
+        assert loc.end_line == 5
+        assert loc.end_col == 12
+
+    def test_no_source_location_is_unknown(self):
+        assert NO_SOURCE_LOCATION.is_unknown()
+        assert str(NO_SOURCE_LOCATION) == "<unknown>"
+
+    def test_real_source_location_is_not_unknown(self):
+        loc = SourceLocation(start_line=1, start_col=0, end_line=1, end_col=5)
+        assert not loc.is_unknown()
+
+
+class TestSourceLocationTraceability:
+    def test_every_non_label_instruction_has_real_source_location(self):
+        """Every non-LABEL instruction from a simple program should have a real source_location."""
+        source = "x = 10\ny = x + 1"
+        instructions = _parse_python(source)
+        for inst in instructions:
+            if inst.opcode == Opcode.LABEL:
+                continue
+            assert not inst.source_location.is_unknown(), (
+                f"Instruction {inst.opcode.value} (operands={inst.operands}) "
+                f"has unknown source_location"
+            )
+
+    def test_source_location_is_structured(self):
+        """source_location should be a SourceLocation object, not a string."""
+        instructions = _parse_python("x = 42")
+        for inst in instructions:
+            assert isinstance(
+                inst.source_location, SourceLocation
+            ), f"Expected SourceLocation, got {type(inst.source_location)}"
+
+    def test_source_location_line_numbers_correct(self):
+        """Line numbers should be 1-based and match source positions."""
+        source = "x = 10\ny = 20"
+        instructions = _parse_python(source)
+        # x = 10 is on line 1
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        x_store = next(s for s in stores if "x" in s.operands)
+        assert x_store.source_location.start_line == 1
+        # y = 20 is on line 2
+        y_store = next(s for s in stores if "y" in s.operands)
+        assert y_store.source_location.start_line == 2
+
+    def test_instruction_str_includes_source_location(self):
+        """str(instruction) should include # line:col-line:col when source_location is set."""
+        instructions = _parse_python("x = 42")
+        const_inst = next(i for i in instructions if i.opcode == Opcode.CONST)
+        text = str(const_inst)
+        assert "  # " in text
+        assert ":" in text.split("# ")[1]
+
+    def test_label_str_without_source_location(self):
+        """LABEL instructions should not have a source location comment."""
+        instructions = _parse_python("x = 1")
+        label_inst = instructions[0]
+        assert label_inst.opcode == Opcode.LABEL
+        text = str(label_inst)
+        assert "#" not in text
+
+    def test_function_instructions_have_locations(self):
+        """Instructions inside a function body should have source locations."""
+        source = "def add(a, b):\n    return a + b"
+        instructions = _parse_python(source)
+        returns = _find_all(instructions, Opcode.RETURN)
+        explicit_return = next(r for r in returns if not r.source_location.is_unknown())
+        assert explicit_return.source_location.start_line == 2

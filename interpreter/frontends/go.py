@@ -99,7 +99,7 @@ class GoFrontend(BaseFrontend):
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[name, val_reg],
-                source_location=self._source_loc(node),
+                node=node,
             )
 
     # -- Go: assignment statement (=) ------------------------------------------
@@ -161,7 +161,7 @@ class GoFrontend(BaseFrontend):
             self._emit(
                 Opcode.RETURN,
                 operands=[val_reg],
-                source_location=self._source_loc(node),
+                node=node,
             )
             return
         # If expression_list, lower each value
@@ -173,7 +173,7 @@ class GoFrontend(BaseFrontend):
             self._emit(
                 Opcode.RETURN,
                 operands=[reg],
-                source_location=self._source_loc(node),
+                node=node,
             )
 
     # -- Go: call expression ---------------------------------------------------
@@ -195,7 +195,7 @@ class GoFrontend(BaseFrontend):
                     Opcode.CALL_METHOD,
                     result_reg=reg,
                     operands=[obj_reg, method_name] + arg_regs,
-                    source_location=self._source_loc(node),
+                    node=node,
                 )
                 return reg
 
@@ -207,7 +207,7 @@ class GoFrontend(BaseFrontend):
                 Opcode.CALL_FUNCTION,
                 result_reg=reg,
                 operands=[func_name] + arg_regs,
-                source_location=self._source_loc(node),
+                node=node,
             )
             return reg
 
@@ -218,7 +218,7 @@ class GoFrontend(BaseFrontend):
             Opcode.CALL_UNKNOWN,
             result_reg=reg,
             operands=[target_reg] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -236,7 +236,7 @@ class GoFrontend(BaseFrontend):
             Opcode.LOAD_FIELD,
             result_reg=reg,
             operands=[obj_reg, field_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -254,7 +254,7 @@ class GoFrontend(BaseFrontend):
             Opcode.LOAD_INDEX,
             result_reg=reg,
             operands=[obj_reg, idx_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -275,14 +275,14 @@ class GoFrontend(BaseFrontend):
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{true_label},{false_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
         else:
             self._emit(
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{true_label},{end_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
 
         self._emit(Opcode.LABEL, label=true_label)
@@ -460,9 +460,7 @@ class GoFrontend(BaseFrontend):
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
 
         if params_node:
@@ -500,9 +498,7 @@ class GoFrontend(BaseFrontend):
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
 
         # Lower receiver as parameter
@@ -542,7 +538,7 @@ class GoFrontend(BaseFrontend):
                         Opcode.SYMBOLIC,
                         result_reg=self._fresh_reg(),
                         operands=[f"{constants.PARAM_PREFIX}{pname}"],
-                        source_location=self._source_loc(child),
+                        node=child,
                     )
                     self._emit(
                         Opcode.STORE_VAR,
@@ -554,7 +550,7 @@ class GoFrontend(BaseFrontend):
                     Opcode.SYMBOLIC,
                     result_reg=self._fresh_reg(),
                     operands=[f"{constants.PARAM_PREFIX}{pname}"],
-                    source_location=self._source_loc(child),
+                    node=child,
                 )
                 self._emit(
                     Opcode.STORE_VAR,
@@ -576,7 +572,7 @@ class GoFrontend(BaseFrontend):
             Opcode.BINOP,
             result_reg=result_reg,
             operands=["+", operand_reg, one_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         self._lower_store_target(operand, result_reg, node)
 
@@ -593,7 +589,7 @@ class GoFrontend(BaseFrontend):
             Opcode.BINOP,
             result_reg=result_reg,
             operands=["-", operand_reg, one_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         self._lower_store_target(operand, result_reg, node)
 
@@ -604,7 +600,7 @@ class GoFrontend(BaseFrontend):
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
         elif target.type == "selector_expression":
             operand_node = target.child_by_field_name("operand")
@@ -614,7 +610,7 @@ class GoFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_FIELD,
                     operands=[obj_reg, self._node_text(field_node), val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         elif target.type == "index_expression":
             operand_node = target.child_by_field_name("operand")
@@ -625,13 +621,13 @@ class GoFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_INDEX,
                     operands=[obj_reg, idx_reg, val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         else:
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
 
     # -- Go: type declaration (struct) -----------------------------------------
@@ -653,7 +649,7 @@ class GoFrontend(BaseFrontend):
                         Opcode.SYMBOLIC,
                         result_reg=reg,
                         operands=[hint],
-                        source_location=self._source_loc(node),
+                        node=node,
                     )
                     self._emit(Opcode.STORE_VAR, operands=[type_name, reg])
 
@@ -669,7 +665,7 @@ class GoFrontend(BaseFrontend):
                     self._emit(
                         Opcode.STORE_VAR,
                         operands=[self._node_text(name_node), val_reg],
-                        source_location=self._source_loc(node),
+                        node=node,
                     )
                 elif name_node:
                     val_reg = self._fresh_reg()
@@ -681,7 +677,7 @@ class GoFrontend(BaseFrontend):
                     self._emit(
                         Opcode.STORE_VAR,
                         operands=[self._node_text(name_node), val_reg],
-                        source_location=self._source_loc(node),
+                        node=node,
                     )
 
     # -- Go: composite literal -------------------------------------------------
@@ -699,7 +695,7 @@ class GoFrontend(BaseFrontend):
             Opcode.NEW_OBJECT,
             result_reg=obj_reg,
             operands=[type_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         if not body_node:
@@ -729,7 +725,7 @@ class GoFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_FIELD,
                     operands=[obj_reg, key_name, val_reg],
-                    source_location=self._source_loc(elem),
+                    node=elem,
                 )
             elif elem.type == "literal_element":
                 # Positional element
@@ -740,7 +736,7 @@ class GoFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_INDEX,
                     operands=[obj_reg, idx_reg, val_reg],
-                    source_location=self._source_loc(elem),
+                    node=elem,
                 )
             else:
                 # Direct expression element
@@ -750,7 +746,7 @@ class GoFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_INDEX,
                     operands=[obj_reg, idx_reg, val_reg],
-                    source_location=self._source_loc(elem),
+                    node=elem,
                 )
 
         return obj_reg
@@ -773,7 +769,7 @@ class GoFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["type_assert", expr_reg, type_text],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -801,7 +797,7 @@ class GoFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["slice", obj_reg, start_reg, end_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -822,9 +818,7 @@ class GoFrontend(BaseFrontend):
         params_node = node.child_by_field_name("parameters")
         body_node = node.child_by_field_name("body")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
 
         if params_node:
@@ -865,7 +859,7 @@ class GoFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=self._fresh_reg(),
             operands=["defer", call_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # -- Go: go statement ------------------------------------------------------
@@ -883,7 +877,7 @@ class GoFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=self._fresh_reg(),
             operands=["go", call_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # -- Go: expression switch statement ---------------------------------------
@@ -922,7 +916,7 @@ class GoFrontend(BaseFrontend):
                             Opcode.BINOP,
                             result_reg=cmp_reg,
                             operands=["==", val_reg, case_exprs[0]],
-                            source_location=self._source_loc(case),
+                            node=case,
                         )
                         self._emit(
                             Opcode.BRANCH_IF,
@@ -987,7 +981,7 @@ class GoFrontend(BaseFrontend):
                         Opcode.CALL_FUNCTION,
                         result_reg=check_reg,
                         operands=["type_check", expr_reg, type_text],
-                        source_location=self._source_loc(case),
+                        node=case,
                     )
                     self._emit(
                         Opcode.BRANCH_IF,
@@ -1043,7 +1037,7 @@ class GoFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=self._fresh_reg(),
             operands=["chan_send", chan_reg, val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # -- Go: labeled statement -------------------------------------------------
@@ -1079,7 +1073,7 @@ class GoFrontend(BaseFrontend):
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(name_node), val_reg],
-                source_location=self._source_loc(node),
+                node=node,
             )
         elif name_node:
             val_reg = self._fresh_reg()
@@ -1091,7 +1085,7 @@ class GoFrontend(BaseFrontend):
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(name_node), val_reg],
-                source_location=self._source_loc(node),
+                node=node,
             )
 
     # -- Go: goto statement ----------------------------------------------------
@@ -1106,5 +1100,5 @@ class GoFrontend(BaseFrontend):
         self._emit(
             Opcode.BRANCH,
             label=label_name,
-            source_location=self._source_loc(node),
+            node=node,
         )
