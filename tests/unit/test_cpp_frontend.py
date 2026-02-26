@@ -377,3 +377,42 @@ class TestCppDeleteExpression:
         instructions = _parse_cpp("int main() { int* arr = new int[10]; delete arr; }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("delete" in inst.operands for inst in calls)
+
+
+class TestCppEnumSpecifier:
+    def test_c_style_enum(self):
+        instructions = _parse_cpp("enum Color { Red, Green, Blue };")
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("enum:Color" in str(inst.operands) for inst in new_objs)
+        store_fields = _find_all(instructions, Opcode.STORE_FIELD)
+        field_names = [
+            inst.operands[1] for inst in store_fields if len(inst.operands) > 1
+        ]
+        assert "Red" in field_names
+        assert "Green" in field_names
+        assert "Blue" in field_names
+
+    def test_enum_class_scoped(self):
+        instructions = _parse_cpp("enum class Direction { North, South, East, West };")
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("enum:" in str(inst.operands) for inst in new_objs)
+        store_fields = _find_all(instructions, Opcode.STORE_FIELD)
+        field_names = [
+            inst.operands[1] for inst in store_fields if len(inst.operands) > 1
+        ]
+        assert "North" in field_names
+        assert "West" in field_names
+
+    def test_enum_class_with_values(self):
+        instructions = _parse_cpp("enum class Flag { A = 1, B = 2, C = 4 };")
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("enum:" in str(inst.operands) for inst in new_objs)
+        store_fields = _find_all(instructions, Opcode.STORE_FIELD)
+        field_names = [
+            inst.operands[1] for inst in store_fields if len(inst.operands) > 1
+        ]
+        assert "A" in field_names
+        assert "B" in field_names
+        assert "C" in field_names
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Flag" in inst.operands for inst in stores)

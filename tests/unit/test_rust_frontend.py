@@ -363,3 +363,182 @@ fn quadruple(x: i32) -> i32 {
         assert any("double" in inst.operands for inst in calls)
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 2
+
+
+class TestRustTryExpression:
+    def test_try_expression_question_mark(self):
+        instructions = _parse_rust("fn main() { let v = read_file()?; }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("try_unwrap" in inst.operands for inst in calls)
+
+    def test_try_expression_chained(self):
+        instructions = _parse_rust("fn main() { let v = foo()?.bar()?; }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert sum(1 for inst in calls if "try_unwrap" in inst.operands) >= 2
+
+    def test_try_expression_stores_result(self):
+        instructions = _parse_rust("fn main() { let x = some_fn()?; }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+
+class TestRustAwaitExpression:
+    def test_await_expression(self):
+        instructions = _parse_rust("async fn main() { let v = fetch().await; }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("await" in inst.operands for inst in calls)
+
+    def test_await_stores_result(self):
+        instructions = _parse_rust("async fn main() { let r = get_data().await; }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("r" in inst.operands for inst in stores)
+
+
+class TestRustAsyncBlock:
+    def test_async_block_produces_ir(self):
+        instructions = _parse_rust("fn main() { let f = async { 42 }; }")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("42" in inst.operands for inst in consts)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("f" in inst.operands for inst in stores)
+
+    def test_async_block_with_statements(self):
+        instructions = _parse_rust("fn main() { let f = async { let x = 1; x + 2 }; }")
+        opcodes = _opcodes(instructions)
+        assert Opcode.BINOP in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("f" in inst.operands for inst in stores)
+
+
+class TestRustTraitItem:
+    def test_trait_definition(self):
+        instructions = _parse_rust("trait Animal { fn speak(&self); }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Animal" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("class:" in str(inst.operands) for inst in consts)
+
+    def test_trait_with_default_method(self):
+        instructions = _parse_rust(
+            'trait Greet { fn hello(&self) -> String { return String::from("hi"); } }'
+        )
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Greet" in inst.operands for inst in stores)
+        opcodes = _opcodes(instructions)
+        assert Opcode.RETURN in opcodes
+
+    def test_trait_labels(self):
+        instructions = _parse_rust("trait Drawable { fn draw(&self); }")
+        labels = _labels_in_order(instructions)
+        assert any("class_Drawable" in lbl for lbl in labels)
+
+
+class TestRustEnumItem:
+    def test_enum_basic(self):
+        instructions = _parse_rust("enum Color { Red, Green, Blue }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Color" in inst.operands for inst in stores)
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("enum:Color" in inst.operands for inst in new_objs)
+
+    def test_enum_store_fields(self):
+        instructions = _parse_rust("enum Direction { North, South, East, West }")
+        store_fields = _find_all(instructions, Opcode.STORE_FIELD)
+        assert len(store_fields) >= 4
+
+    def test_enum_with_data(self):
+        instructions = _parse_rust("enum Shape { Circle(f64), Rect(f64, f64) }")
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("enum:Shape" in inst.operands for inst in new_objs)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Shape" in inst.operands for inst in stores)
+
+
+class TestRustConstItem:
+    def test_const_item(self):
+        instructions = _parse_rust("const MAX: i32 = 100;")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("MAX" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("100" in inst.operands for inst in consts)
+
+    def test_const_item_string(self):
+        instructions = _parse_rust('const NAME: &str = "hello";')
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("NAME" in inst.operands for inst in stores)
+
+
+class TestRustStaticItem:
+    def test_static_item(self):
+        instructions = _parse_rust("static COUNT: i32 = 0;")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("COUNT" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("0" in inst.operands for inst in consts)
+
+    def test_static_mut_item(self):
+        instructions = _parse_rust("static mut COUNTER: i32 = 0;")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("COUNTER" in inst.operands for inst in stores)
+
+
+class TestRustTypeItem:
+    def test_type_alias(self):
+        instructions = _parse_rust("type Pair = (i32, i32);")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Pair" in inst.operands for inst in stores)
+
+    def test_type_alias_const_value(self):
+        instructions = _parse_rust("type Meters = f64;")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("f64" in inst.operands for inst in consts)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Meters" in inst.operands for inst in stores)
+
+
+class TestRustModItem:
+    def test_mod_item_with_body(self):
+        instructions = _parse_rust("mod utils { fn helper() { } }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("helper" in inst.operands for inst in stores)
+
+    def test_mod_item_nested_function(self):
+        instructions = _parse_rust(
+            "mod math { fn add(a: i32, b: i32) -> i32 { a + b } }"
+        )
+        opcodes = _opcodes(instructions)
+        assert Opcode.BINOP in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("add" in inst.operands for inst in stores)
+
+    def test_mod_item_empty(self):
+        instructions = _parse_rust("mod empty { }")
+        # Should not crash, should just produce entry label
+        assert instructions[0].opcode == Opcode.LABEL
+
+
+class TestRustExternCrate:
+    def test_extern_crate_noop(self):
+        instructions = _parse_rust("extern crate serde;")
+        # Should be a no-op, just the entry label
+        assert instructions[0].opcode == Opcode.LABEL
+        assert instructions[0].label == "entry"
+
+    def test_extern_crate_with_other_code(self):
+        instructions = _parse_rust("extern crate serde; const X: i32 = 1;")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("X" in inst.operands for inst in stores)
+
+
+class TestRustUnsafeBlock:
+    def test_unsafe_block_lowers_body(self):
+        instructions = _parse_rust("fn main() { unsafe { let x = 1; x + 2 } }")
+        opcodes = _opcodes(instructions)
+        assert Opcode.BINOP in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_unsafe_block_with_call(self):
+        instructions = _parse_rust("fn main() { unsafe { do_risky(); } }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("do_risky" in inst.operands for inst in calls)

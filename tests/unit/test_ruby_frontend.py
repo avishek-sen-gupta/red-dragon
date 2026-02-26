@@ -418,3 +418,232 @@ end
         assert Opcode.BINOP in opcodes
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("result" in inst.operands for inst in stores)
+
+
+class TestRubySimpleSymbol:
+    def test_simple_symbol(self):
+        instructions = _parse_ruby("x = :hello")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(":hello" in inst.operands for inst in consts)
+
+    def test_simple_symbol_in_call(self):
+        instructions = _parse_ruby("foo(:bar)")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(":bar" in inst.operands for inst in consts)
+
+    def test_simple_symbol_stores(self):
+        instructions = _parse_ruby("sym = :world")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("sym" in inst.operands for inst in stores)
+
+
+class TestRubyRange:
+    def test_range_inclusive(self):
+        instructions = _parse_ruby("r = 1..10")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("range" in inst.operands for inst in calls)
+
+    def test_range_exclusive(self):
+        instructions = _parse_ruby("r = 1...10")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("range" in inst.operands for inst in calls)
+
+    def test_range_stores_result(self):
+        instructions = _parse_ruby("rng = 0..5")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("rng" in inst.operands for inst in stores)
+
+
+class TestRubyRegex:
+    def test_regex_literal(self):
+        instructions = _parse_ruby("pat = /hello/")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("/hello/" in inst.operands for inst in consts)
+
+    def test_regex_stores(self):
+        instructions = _parse_ruby("re = /[0-9]+/")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("re" in inst.operands for inst in stores)
+
+
+class TestRubyLambda:
+    def test_lambda_basic(self):
+        instructions = _parse_ruby("f = -> { 42 }")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("function:" in str(inst.operands) for inst in consts)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("f" in inst.operands for inst in stores)
+
+    def test_lambda_with_params(self):
+        instructions = _parse_ruby("f = ->(x, y) { x + y }")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("function:" in str(inst.operands) for inst in consts)
+        opcodes = _opcodes(instructions)
+        assert Opcode.RETURN in opcodes
+
+    def test_lambda_has_return(self):
+        instructions = _parse_ruby("f = -> { 1 }")
+        opcodes = _opcodes(instructions)
+        assert Opcode.RETURN in opcodes
+
+
+class TestRubyStringArray:
+    def test_string_array(self):
+        instructions = _parse_ruby("arr = %w[foo bar baz]")
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_ARRAY in opcodes
+        assert Opcode.STORE_INDEX in opcodes
+
+    def test_symbol_array(self):
+        instructions = _parse_ruby("syms = %i[a b c]")
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_ARRAY in opcodes
+        assert Opcode.STORE_INDEX in opcodes
+
+    def test_string_array_stores(self):
+        instructions = _parse_ruby("words = %w[hello world]")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("words" in inst.operands for inst in stores)
+
+
+class TestRubyCase:
+    def test_case_with_when(self):
+        source = """\
+case x
+when 1
+  y = 10
+when 2
+  y = 20
+else
+  y = 0
+end
+"""
+        instructions = _parse_ruby(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("y" in inst.operands for inst in stores)
+
+    def test_case_produces_binop_eq(self):
+        source = """\
+case val
+when 1
+  a = 1
+when 2
+  a = 2
+end
+"""
+        instructions = _parse_ruby(source)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("==" in inst.operands for inst in binops)
+
+    def test_case_labels(self):
+        source = """\
+case x
+when :a
+  1
+when :b
+  2
+end
+"""
+        instructions = _parse_ruby(source)
+        labels = _labels_in_order(instructions)
+        assert any("when" in lbl for lbl in labels)
+        assert any("case_end" in lbl for lbl in labels)
+
+
+class TestRubyModule:
+    def test_module_definition(self):
+        source = """\
+module Greeter
+  def greet
+    "hello"
+  end
+end
+"""
+        instructions = _parse_ruby(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Greeter" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("class:" in str(inst.operands) for inst in consts)
+
+    def test_module_labels(self):
+        source = """\
+module Utils
+  def helper
+    nil
+  end
+end
+"""
+        instructions = _parse_ruby(source)
+        labels = _labels_in_order(instructions)
+        assert any("class_Utils" in lbl for lbl in labels)
+
+    def test_module_with_method(self):
+        source = """\
+module Math
+  def add(a, b)
+    a + b
+  end
+end
+"""
+        instructions = _parse_ruby(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Math" in inst.operands for inst in stores)
+        assert any("add" in inst.operands for inst in stores)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BINOP in opcodes
+
+
+class TestRubyGlobalVariable:
+    def test_global_variable_load(self):
+        instructions = _parse_ruby("x = $count")
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("$count" in inst.operands for inst in loads)
+
+    def test_global_variable_store(self):
+        instructions = _parse_ruby("$count = 10")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("$count" in inst.operands for inst in stores)
+
+    def test_global_variable_in_expression(self):
+        instructions = _parse_ruby("y = $x + 1")
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("$x" in inst.operands for inst in loads)
+
+
+class TestRubyClassVariable:
+    def test_class_variable_load(self):
+        instructions = _parse_ruby("x = @@count")
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("@@count" in inst.operands for inst in loads)
+
+    def test_class_variable_store(self):
+        instructions = _parse_ruby("@@count = 0")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("@@count" in inst.operands for inst in stores)
+
+    def test_class_variable_in_class(self):
+        source = """\
+class Foo
+  @@total = 0
+end
+"""
+        instructions = _parse_ruby(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("@@total" in inst.operands for inst in stores)
+
+
+class TestRubyHeredoc:
+    def test_heredoc_body(self):
+        source = "x = <<~HEREDOC\nhello world\nHEREDOC"
+        instructions = _parse_ruby(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_heredoc_const(self):
+        source = "msg = <<~TEXT\nsome text\nTEXT"
+        instructions = _parse_ruby(source)
+        consts = _find_all(instructions, Opcode.CONST)
+        # heredoc body should appear as a CONST
+        assert len(consts) >= 1

@@ -58,6 +58,7 @@ class JavaFrontend(BaseFrontend):
             "lambda_expression": self._lower_lambda,
             "class_literal": self._lower_class_literal,
             "super": self._lower_identifier,
+            "text_block": self._lower_const_literal,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -87,6 +88,7 @@ class JavaFrontend(BaseFrontend):
             "synchronized_statement": self._lower_synchronized_statement,
             "explicit_constructor_invocation": self._lower_explicit_constructor_invocation,
             "annotation_type_declaration": self._lower_annotation_type_decl,
+            "record_declaration": self._lower_record_decl,
         }
 
     # ── Java: local variable declaration ─────────────────────────
@@ -704,6 +706,37 @@ class JavaFrontend(BaseFrontend):
             ],
         )
         self._emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+
+    # ── Java: record declaration ──────────────────────────────────
+
+    def _lower_record_decl(self, node):
+        """Lower record_declaration like class_declaration."""
+        name_node = node.child_by_field_name("name")
+        body_node = node.child_by_field_name("body")
+        record_name = self._node_text(name_node) if name_node else "__anon_record"
+
+        class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{record_name}")
+        end_label = self._fresh_label(
+            f"{constants.END_CLASS_LABEL_PREFIX}{record_name}"
+        )
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=class_label)
+        if body_node:
+            self._lower_class_body(body_node)
+        self._emit(Opcode.LABEL, label=end_label)
+
+        cls_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=cls_reg,
+            operands=[
+                constants.CLASS_REF_TEMPLATE.format(name=record_name, label=class_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[record_name, cls_reg])
 
     def _lower_class_body(self, node):
         for child in node.children:

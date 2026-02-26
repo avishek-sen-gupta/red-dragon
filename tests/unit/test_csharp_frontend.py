@@ -535,3 +535,248 @@ class C {
         assert any("Count" in inst.operands for inst in store_fields)
         returns = _find_all(ir, Opcode.RETURN)
         assert len(returns) >= 1
+
+
+class TestCSharpAwaitExpression:
+    def test_await_produces_call_function(self):
+        source = """\
+class C {
+    async void M() {
+        var result = await GetDataAsync();
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("await" in inst.operands for inst in calls)
+
+    def test_await_in_assignment(self):
+        source = """\
+class C {
+    async void M() {
+        var x = await Task.Run(() => 42);
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("await" in inst.operands for inst in calls)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+
+class TestCSharpSwitchExpression:
+    def test_switch_expression_basic(self):
+        source = """\
+class C {
+    void M() {
+        var x = 1;
+        var result = x switch {
+            1 => 10,
+            2 => 20,
+            _ => 0
+        };
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.BINOP in opcodes or Opcode.BRANCH in opcodes
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("result" in inst.operands for inst in stores)
+
+    def test_switch_expression_with_default(self):
+        source = """\
+class C {
+    void M(int x) {
+        var y = x switch {
+            0 => "zero",
+            _ => "other"
+        };
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("y" in inst.operands for inst in stores)
+
+
+class TestCSharpYieldStatement:
+    def test_yield_return(self):
+        source = """\
+class C {
+    System.Collections.Generic.IEnumerable<int> GetNumbers() {
+        yield return 1;
+        yield return 2;
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        yield_calls = [c for c in calls if "yield" in c.operands]
+        assert len(yield_calls) >= 2
+
+    def test_yield_break(self):
+        source = """\
+class C {
+    System.Collections.Generic.IEnumerable<int> GetNumbers() {
+        yield break;
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        yield_break_calls = [c for c in calls if "yield_break" in c.operands]
+        assert len(yield_break_calls) >= 1
+
+
+class TestCSharpLockStatement:
+    def test_lock_lowers_body(self):
+        source = """\
+class C {
+    void M() {
+        lock (obj) {
+            x = 10;
+        }
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_lock_with_expression(self):
+        source = """\
+class C {
+    object syncRoot = new object();
+    void M() {
+        lock (syncRoot) {
+            count = count + 1;
+        }
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+
+class TestCSharpUsingStatement:
+    def test_using_with_declaration(self):
+        source = """\
+class C {
+    void M() {
+        using (var stream = new MemoryStream()) {
+            stream.Write(data);
+        }
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("stream" in inst.operands for inst in stores)
+
+    def test_using_lowers_body(self):
+        source = """\
+class C {
+    void M() {
+        using (var r = new Resource()) {
+            r.DoWork();
+        }
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        calls = (
+            _find_all(ir, Opcode.CALL_METHOD)
+            + _find_all(ir, Opcode.CALL_FUNCTION)
+            + _find_all(ir, Opcode.CALL_UNKNOWN)
+        )
+        assert len(calls) >= 1
+
+
+class TestCSharpCheckedStatement:
+    def test_checked_lowers_body(self):
+        source = """\
+class C {
+    void M() {
+        checked {
+            int x = 10;
+        }
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_checked_with_arithmetic(self):
+        source = """\
+class C {
+    void M() {
+        checked {
+            int y = int.MaxValue + 1;
+        }
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("y" in inst.operands for inst in stores)
+
+
+class TestCSharpFixedStatement:
+    def test_fixed_lowers_body(self):
+        source = """\
+class C {
+    unsafe void M() {
+        fixed (int* p = arr) {
+            int v = 42;
+        }
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("v" in inst.operands for inst in stores)
+
+
+class TestCSharpEventFieldDeclaration:
+    def test_event_field_declaration(self):
+        source = """\
+class C {
+    event EventHandler OnClick;
+}
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("OnClick" in inst.operands for inst in stores)
+
+    def test_event_field_with_initializer(self):
+        source = """\
+class C {
+    event EventHandler OnChange;
+    event EventHandler OnReset;
+}
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("OnChange" in inst.operands for inst in stores)
+        assert any("OnReset" in inst.operands for inst in stores)
+
+
+class TestCSharpEventDeclaration:
+    def test_event_declaration_with_accessors(self):
+        source = """\
+class C {
+    event EventHandler OnClick {
+        add { }
+        remove { }
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("OnClick" in inst.operands for inst in stores)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("event:" in str(inst.operands) for inst in consts)

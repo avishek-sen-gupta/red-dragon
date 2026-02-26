@@ -53,6 +53,9 @@ class PhpFrontend(BaseFrontend):
             "conditional_expression": self._lower_php_ternary,
             "throw_expression": self._lower_php_throw_expr,
             "object_creation_expression": self._lower_php_object_creation,
+            "match_expression": self._lower_php_match_expression,
+            "arrow_function": self._lower_php_arrow_function,
+            "scoped_call_expression": self._lower_php_scoped_call,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -71,6 +74,15 @@ class PhpFrontend(BaseFrontend):
             "break_statement": self._lower_break,
             "continue_statement": self._lower_continue,
             "try_statement": self._lower_try,
+            "switch_statement": self._lower_php_switch,
+            "do_statement": self._lower_php_do,
+            "namespace_definition": self._lower_php_namespace,
+            "interface_declaration": self._lower_php_interface,
+            "trait_declaration": self._lower_php_trait,
+            "function_static_declaration": self._lower_php_function_static,
+            "enum_declaration": self._lower_php_enum,
+            "named_label_statement": self._lower_php_named_label,
+            "goto_statement": self._lower_php_goto,
         }
 
     # -- PHP: compound statement (block with braces) ---------------------------
@@ -801,3 +813,394 @@ class PhpFrontend(BaseFrontend):
         result_reg = self._fresh_reg()
         self._emit(Opcode.LOAD_VAR, result_reg=result_reg, operands=[result_var])
         return result_reg
+
+    # -- PHP: match expression -------------------------------------------------
+
+    def _lower_php_match_expression(self, node) -> str:
+        """Lower match(subject) { pattern => expr, default => expr } as if/else chain."""
+        cond_node = node.child_by_field_name("condition")
+        body_node = node.child_by_field_name("body")
+
+        subject_reg = self._lower_expr(cond_node) if cond_node else self._fresh_reg()
+        end_label = self._fresh_label("match_end")
+        result_var = f"__match_{self._label_counter}"
+
+        arms = (
+            [c for c in body_node.children if c.type == "match_conditional_expression"]
+            if body_node
+            else []
+        )
+        default_arm = (
+            next(
+                (c for c in body_node.children if c.type == "match_default_expression"),
+                None,
+            )
+            if body_node
+            else None
+        )
+
+        for arm in arms:
+            cond_list = arm.child_by_field_name("conditional_expressions")
+            return_expr = arm.child_by_field_name("return_expression")
+
+            arm_label = self._fresh_label("match_arm")
+            next_label = self._fresh_label("match_next")
+
+            if cond_list:
+                patterns = [c for c in cond_list.children if c.is_named]
+                if patterns:
+                    pattern_reg = self._lower_expr(patterns[0])
+                    cmp_reg = self._fresh_reg()
+                    self._emit(
+                        Opcode.BINOP,
+                        result_reg=cmp_reg,
+                        operands=["===", subject_reg, pattern_reg],
+                        source_location=self._source_loc(arm),
+                    )
+                    self._emit(
+                        Opcode.BRANCH_IF,
+                        operands=[cmp_reg],
+                        label=f"{arm_label},{next_label}",
+                    )
+                else:
+                    self._emit(Opcode.BRANCH, label=arm_label)
+            else:
+                self._emit(Opcode.BRANCH, label=arm_label)
+
+            self._emit(Opcode.LABEL, label=arm_label)
+            if return_expr:
+                val_reg = self._lower_expr(return_expr)
+                self._emit(Opcode.STORE_VAR, operands=[result_var, val_reg])
+            self._emit(Opcode.BRANCH, label=end_label)
+            self._emit(Opcode.LABEL, label=next_label)
+
+        if default_arm:
+            default_body = default_arm.child_by_field_name("return_expression")
+            if default_body:
+                val_reg = self._lower_expr(default_body)
+                self._emit(Opcode.STORE_VAR, operands=[result_var, val_reg])
+            self._emit(Opcode.BRANCH, label=end_label)
+
+        self._emit(Opcode.LABEL, label=end_label)
+        result_reg = self._fresh_reg()
+        self._emit(Opcode.LOAD_VAR, result_reg=result_reg, operands=[result_var])
+        return result_reg
+
+    # -- PHP: arrow function (fn($x) => expr) ---------------------------------
+
+    def _lower_php_arrow_function(self, node) -> str:
+        """Lower fn($x) => expr as a function definition with implicit return."""
+        params_node = node.child_by_field_name("parameters")
+        body_node = node.child_by_field_name("body")
+
+        func_name = f"__arrow_{self._label_counter}"
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        self._emit(Opcode.BRANCH, label=end_label)
+        self._emit(Opcode.LABEL, label=func_label)
+
+        if params_node:
+            self._lower_php_params(params_node)
+
+        if body_node:
+            val_reg = self._lower_expr(body_node)
+            self._emit(Opcode.RETURN, operands=[val_reg])
+
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[self.DEFAULT_RETURN_VALUE],
+        )
+        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        func_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        return func_reg
+
+    # -- PHP: scoped call expression (ClassName::method(args)) -----------------
+
+    def _lower_php_scoped_call(self, node) -> str:
+        """Lower ClassName::method(args) as CALL_FUNCTION with qualified name."""
+        scope_node = node.child_by_field_name("scope")
+        name_node = node.child_by_field_name("name")
+        args_node = node.child_by_field_name("arguments")
+
+        scope_name = self._node_text(scope_node) if scope_node else "Unknown"
+        method_name = self._node_text(name_node) if name_node else "unknown"
+        qualified_name = f"{scope_name}::{method_name}"
+
+        arg_regs = self._extract_call_args_unwrap(args_node) if args_node else []
+
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=[qualified_name] + arg_regs,
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- PHP: switch statement -------------------------------------------------
+
+    def _lower_php_switch(self, node):
+        """Lower switch(expr) { case ... } as an if/else chain."""
+        cond_node = node.child_by_field_name("condition")
+        body_node = node.child_by_field_name("body")
+
+        subject_reg = self._lower_expr(cond_node) if cond_node else self._fresh_reg()
+        end_label = self._fresh_label("switch_end")
+
+        self._break_target_stack.append(end_label)
+
+        cases = (
+            [
+                c
+                for c in body_node.children
+                if c.type in ("case_statement", "default_statement")
+            ]
+            if body_node
+            else []
+        )
+
+        for case in cases:
+            is_default = case.type == "default_statement"
+            value_node = case.child_by_field_name("value")
+            body_stmts = [c for c in case.children if c.is_named and c != value_node]
+
+            arm_label = self._fresh_label("case_arm")
+            next_label = self._fresh_label("case_next")
+
+            if not is_default and value_node:
+                case_reg = self._lower_expr(value_node)
+                cmp_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.BINOP,
+                    result_reg=cmp_reg,
+                    operands=["==", subject_reg, case_reg],
+                    source_location=self._source_loc(case),
+                )
+                self._emit(
+                    Opcode.BRANCH_IF,
+                    operands=[cmp_reg],
+                    label=f"{arm_label},{next_label}",
+                )
+            else:
+                self._emit(Opcode.BRANCH, label=arm_label)
+
+            self._emit(Opcode.LABEL, label=arm_label)
+            for stmt in body_stmts:
+                self._lower_stmt(stmt)
+            self._emit(Opcode.BRANCH, label=end_label)
+            self._emit(Opcode.LABEL, label=next_label)
+
+        self._break_target_stack.pop()
+        self._emit(Opcode.LABEL, label=end_label)
+
+    # -- PHP: do-while statement -----------------------------------------------
+
+    def _lower_php_do(self, node):
+        """Lower do { body } while (condition);"""
+        body_node = node.child_by_field_name("body")
+        cond_node = node.child_by_field_name("condition")
+
+        body_label = self._fresh_label("do_body")
+        cond_label = self._fresh_label("do_cond")
+        end_label = self._fresh_label("do_end")
+
+        self._emit(Opcode.LABEL, label=body_label)
+        self._push_loop(cond_label, end_label)
+        if body_node:
+            self._lower_block(body_node)
+        self._pop_loop()
+
+        self._emit(Opcode.LABEL, label=cond_label)
+        if cond_node:
+            cond_reg = self._lower_expr(cond_node)
+            self._emit(
+                Opcode.BRANCH_IF,
+                operands=[cond_reg],
+                label=f"{body_label},{end_label}",
+                source_location=self._source_loc(node),
+            )
+        else:
+            self._emit(Opcode.BRANCH, label=body_label)
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+    # -- PHP: namespace definition ---------------------------------------------
+
+    def _lower_php_namespace(self, node):
+        """Lower namespace definition: just lower the body compound_statement."""
+        body_node = next(
+            (c for c in node.children if c.type == "compound_statement"), None
+        )
+        if body_node:
+            self._lower_php_compound(body_node)
+
+    # -- PHP: interface declaration --------------------------------------------
+
+    def _lower_php_interface(self, node):
+        """Lower interface_declaration like a class: BRANCH, LABEL, body, end."""
+        name_node = node.child_by_field_name("name")
+        body_node = node.child_by_field_name("body")
+        iface_name = self._node_text(name_node) if name_node else "__anon_interface"
+
+        class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{iface_name}")
+        end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{iface_name}")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=class_label)
+
+        if body_node:
+            self._lower_php_class_body(body_node)
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+        cls_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=cls_reg,
+            operands=[
+                constants.CLASS_REF_TEMPLATE.format(name=iface_name, label=class_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[iface_name, cls_reg])
+
+    # -- PHP: trait declaration ------------------------------------------------
+
+    def _lower_php_trait(self, node):
+        """Lower trait_declaration like a class: BRANCH, LABEL, body, end."""
+        name_node = node.child_by_field_name("name")
+        body_node = node.child_by_field_name("body")
+        trait_name = self._node_text(name_node) if name_node else "__anon_trait"
+
+        class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{trait_name}")
+        end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{trait_name}")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=class_label)
+
+        if body_node:
+            self._lower_php_class_body(body_node)
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+        cls_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=cls_reg,
+            operands=[
+                constants.CLASS_REF_TEMPLATE.format(name=trait_name, label=class_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[trait_name, cls_reg])
+
+    # -- PHP: function static declaration --------------------------------------
+
+    def _lower_php_function_static(self, node):
+        """Lower static $x = val; declarations inside functions."""
+        for child in node.children:
+            if child.type == "static_variable_declaration":
+                name_node = child.child_by_field_name("name")
+                value_node = child.child_by_field_name("value")
+                if name_node and value_node:
+                    val_reg = self._lower_expr(value_node)
+                    self._emit(
+                        Opcode.STORE_VAR,
+                        operands=[self._node_text(name_node), val_reg],
+                        source_location=self._source_loc(child),
+                    )
+                elif name_node:
+                    val_reg = self._fresh_reg()
+                    self._emit(
+                        Opcode.CONST,
+                        result_reg=val_reg,
+                        operands=[self.NONE_LITERAL],
+                    )
+                    self._emit(
+                        Opcode.STORE_VAR,
+                        operands=[self._node_text(name_node), val_reg],
+                        source_location=self._source_loc(child),
+                    )
+
+    # -- PHP: enum declaration -------------------------------------------------
+
+    def _lower_php_enum(self, node):
+        """Lower enum_declaration like a class: BRANCH, LABEL, body, end."""
+        name_node = node.child_by_field_name("name")
+        body_node = node.child_by_field_name("body")
+        enum_name = self._node_text(name_node) if name_node else "__anon_enum"
+
+        class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{enum_name}")
+        end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{enum_name}")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=class_label)
+
+        if body_node:
+            self._lower_php_class_body(body_node)
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+        cls_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=cls_reg,
+            operands=[
+                constants.CLASS_REF_TEMPLATE.format(name=enum_name, label=class_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[enum_name, cls_reg])
+
+    # -- PHP: named label statement --------------------------------------------
+
+    def _lower_php_named_label(self, node):
+        """Lower name: as LABEL user_{name}."""
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            name_node = next((c for c in node.children if c.type == "name"), None)
+        if name_node:
+            label_name = f"user_{self._node_text(name_node)}"
+            self._emit(
+                Opcode.LABEL,
+                label=label_name,
+                source_location=self._source_loc(node),
+            )
+        else:
+            logger.warning(
+                "named_label_statement without name: %s", self._node_text(node)[:40]
+            )
+
+    # -- PHP: goto statement ---------------------------------------------------
+
+    def _lower_php_goto(self, node):
+        """Lower goto name; as BRANCH user_{name}."""
+        name_node = node.child_by_field_name("label")
+        if not name_node:
+            name_node = next((c for c in node.children if c.type == "name"), None)
+        if name_node:
+            target_label = f"user_{self._node_text(name_node)}"
+            self._emit(
+                Opcode.BRANCH,
+                label=target_label,
+                source_location=self._source_loc(node),
+            )
+        else:
+            logger.warning(
+                "goto_statement without label: %s", self._node_text(node)[:40]
+            )

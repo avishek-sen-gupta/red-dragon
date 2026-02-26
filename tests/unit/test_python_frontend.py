@@ -582,3 +582,274 @@ class TestPythonNestedComprehension:
         assert Opcode.NEW_ARRAY in opcodes
         assert Opcode.STORE_INDEX in opcodes
         assert Opcode.LOAD_INDEX in opcodes
+
+
+class TestPythonGeneratorExpression:
+    def test_generator_basic(self):
+        source = "g = (x * 2 for x in items)"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("generator" in inst.operands for inst in calls)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("g" in inst.operands for inst in stores)
+
+    def test_generator_with_filter(self):
+        source = "g = (x for x in items if x > 0)"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("generator" in inst.operands for inst in calls)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        # loop condition + filter condition
+        assert len(branches) >= 2
+
+    def test_generator_in_call(self):
+        source = "result = sum(x * x for x in nums)"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        call_names = [c.operands[0] for c in calls if c.operands]
+        assert "sum" in call_names
+        assert "generator" in call_names
+
+
+class TestPythonSetComprehension:
+    def test_set_comp_basic(self):
+        source = "s = {x * 2 for x in items}"
+        instructions = _parse_python(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_OBJECT in opcodes
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("set" in inst.operands for inst in new_objs)
+        assert Opcode.STORE_INDEX in opcodes
+
+    def test_set_comp_with_filter(self):
+        source = "s = {x for x in items if x > 0}"
+        instructions = _parse_python(source)
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("set" in inst.operands for inst in new_objs)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+
+
+class TestPythonSetLiteral:
+    def test_set_literal_basic(self):
+        source = "s = {1, 2, 3}"
+        instructions = _parse_python(source)
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("set" in inst.operands for inst in new_objs)
+        store_idxs = _find_all(instructions, Opcode.STORE_INDEX)
+        assert len(store_idxs) >= 3
+
+    def test_set_literal_single(self):
+        source = "s = {42}"
+        instructions = _parse_python(source)
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("set" in inst.operands for inst in new_objs)
+        store_idxs = _find_all(instructions, Opcode.STORE_INDEX)
+        assert len(store_idxs) >= 1
+
+    def test_set_literal_with_expressions(self):
+        source = "s = {a + 1, b * 2}"
+        instructions = _parse_python(source)
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("set" in inst.operands for inst in new_objs)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert len(binops) >= 2
+
+
+class TestPythonYield:
+    def test_yield_with_value(self):
+        source = "def gen():\n    yield 42"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("yield" in inst.operands for inst in calls)
+
+    def test_yield_bare(self):
+        source = "def gen():\n    yield"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("yield" in inst.operands for inst in calls)
+
+    def test_yield_with_variable(self):
+        source = "def gen(items):\n    for x in items:\n        yield x"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("yield" in inst.operands for inst in calls)
+        assert Opcode.LOAD_INDEX in _opcodes(instructions)
+
+
+class TestPythonAwait:
+    def test_await_basic(self):
+        source = "async def f():\n    await coro()"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("await" in inst.operands for inst in calls)
+
+    def test_await_assignment(self):
+        source = "async def f():\n    result = await fetch(url)"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("await" in inst.operands for inst in calls)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("result" in inst.operands for inst in stores)
+
+
+class TestPythonNamedExpression:
+    def test_walrus_basic(self):
+        source = "if (n := len(data)) > 10:\n    print(n)"
+        instructions = _parse_python(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("n" in inst.operands for inst in stores)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("len" in inst.operands for inst in calls)
+
+    def test_walrus_in_while(self):
+        source = 'while (line := readline()) != "":\n    process(line)'
+        instructions = _parse_python(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("line" in inst.operands for inst in stores)
+
+    def test_walrus_standalone(self):
+        source = "(y := x + 1)"
+        instructions = _parse_python(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("y" in inst.operands for inst in stores)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+
+class TestPythonAssertStatement:
+    def test_assert_simple(self):
+        source = "assert x > 0"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("assert" in inst.operands for inst in calls)
+
+    def test_assert_with_message(self):
+        source = 'assert x > 0, "must be positive"'
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert_calls = [c for c in calls if "assert" in c.operands]
+        assert len(assert_calls) >= 1
+        # Should have 2 arguments (condition + message)
+        assert len(assert_calls[0].operands) >= 3
+
+    def test_assert_complex_condition(self):
+        source = "assert len(items) == expected"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("assert" in inst.operands for inst in calls)
+        assert any("len" in inst.operands for inst in calls)
+
+
+class TestPythonGlobalNonlocal:
+    def test_global_no_op(self):
+        source = "global x\nx = 10"
+        instructions = _parse_python(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_nonlocal_no_op(self):
+        source = "def outer():\n    x = 1\n    def inner():\n        nonlocal x\n        x = 2"
+        instructions = _parse_python(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+
+class TestPythonDeleteStatement:
+    def test_delete_single(self):
+        source = "del x"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("del" in inst.operands for inst in calls)
+
+    def test_delete_multiple(self):
+        source = "del x, y"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        del_calls = [c for c in calls if "del" in c.operands]
+        assert len(del_calls) >= 2
+
+    def test_delete_attribute(self):
+        source = "del obj.attr"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("del" in inst.operands for inst in calls)
+
+
+class TestPythonImportStatement:
+    def test_import_simple(self):
+        source = "import os"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("import" in inst.operands for inst in calls)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("os" in inst.operands for inst in stores)
+
+    def test_import_dotted(self):
+        source = "import os.path"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("os.path" in inst.operands for inst in calls)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("os" in inst.operands for inst in stores)
+
+    def test_import_from_basic(self):
+        source = "from os import path"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("import" in inst.operands for inst in calls)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("path" in inst.operands for inst in stores)
+
+    def test_import_from_multiple(self):
+        source = "from os import path, getcwd"
+        instructions = _parse_python(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("path" in inst.operands for inst in stores)
+        assert any("getcwd" in inst.operands for inst in stores)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        import_calls = [c for c in calls if "import" in c.operands]
+        assert len(import_calls) >= 2
+
+
+class TestPythonMatchStatement:
+    def test_match_basic(self):
+        source = "match x:\n    case 1:\n        y = 1\n    case 2:\n        y = 2"
+        instructions = _parse_python(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BINOP in opcodes
+        assert Opcode.BRANCH_IF in opcodes
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("==" in inst.operands for inst in binops)
+
+    def test_match_with_wildcard(self):
+        source = "match cmd:\n    case 1:\n        y = 1\n    case _:\n        y = 0"
+        instructions = _parse_python(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("y" in inst.operands for inst in stores)
+        labels = _labels_in_order(instructions)
+        assert any("match_end" in lbl for lbl in labels)
+
+    def test_match_multiple_cases(self):
+        source = 'match status:\n    case 200:\n        msg = "ok"\n    case 404:\n        msg = "not found"\n    case _:\n        msg = "error"'
+        instructions = _parse_python(source)
+        binops = _find_all(instructions, Opcode.BINOP)
+        eq_ops = [b for b in binops if "==" in b.operands]
+        assert len(eq_ops) >= 2
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("msg" in inst.operands for inst in stores)
+
+
+class TestPythonTypeAlias:
+    def test_type_alias_no_op(self):
+        source = "type Point = tuple[int, int]\nx = 1"
+        instructions = _parse_python(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_type_alias_does_not_emit_ir(self):
+        source = "type Vector = list[float]"
+        instructions = _parse_python(source)
+        # Only entry label should exist, no variable stores
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert len(stores) == 0

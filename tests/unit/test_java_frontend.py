@@ -677,3 +677,64 @@ class TestJavaAnnotationTypeDeclaration:
         )
         store_indexes = _find_all(instructions, Opcode.STORE_INDEX)
         assert len(store_indexes) >= 2
+
+
+class TestJavaRecordDeclaration:
+    def test_record_basic(self):
+        instructions = _parse_java("record Point(int x, int y) { }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Point" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("class:" in str(inst.operands) for inst in consts)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+
+    def test_record_with_method(self):
+        instructions = _parse_java(
+            "record Point(int x, int y) { double distance() { return Math.sqrt(x*x + y*y); } }"
+        )
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Point" in inst.operands for inst in stores)
+        assert any("distance" in inst.operands for inst in stores)
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 1
+
+    def test_record_empty_body(self):
+        instructions = _parse_java("record Empty() { }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Empty" in inst.operands for inst in stores)
+        labels = [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+        assert any("class_Empty" in l for l in labels)
+        assert any("end_class_Empty" in l for l in labels)
+
+
+class TestJavaTextBlock:
+    def test_text_block_basic(self):
+        source = (
+            'class M { void m() { String s = """\n    hello\n    world\n    """; } }'
+        )
+        instructions = _parse_java(source)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("hello" in str(inst.operands) for inst in consts)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("s" in inst.operands for inst in stores)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+
+    def test_text_block_in_expression(self):
+        source = 'class M { void m() { String s = """\n    SELECT *\n    FROM table\n    """.trim(); } }'
+        instructions = _parse_java(source)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("trim" in inst.operands for inst in calls)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+
+    def test_text_block_assigned(self):
+        source = (
+            'class M { void m() { var json = """\n    {"key": "value"}\n    """; } }'
+        )
+        instructions = _parse_java(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("json" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("key" in str(inst.operands) for inst in consts)

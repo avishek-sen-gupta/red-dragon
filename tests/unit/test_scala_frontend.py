@@ -357,3 +357,154 @@ object M {
         assert len(all_calls) >= 2
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 2
+
+
+class TestScalaForExpression:
+    def test_for_comprehension_basic(self):
+        source = """\
+object M {
+    for (x <- List(1, 2, 3)) yield x
+}
+"""
+        instructions = _parse_scala(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        iter_calls = [c for c in calls if "iter" in c.operands]
+        assert len(iter_calls) >= 1
+        labels = _labels_in_order(instructions)
+        assert any("for_comp" in lbl for lbl in labels)
+
+    def test_for_comprehension_with_body(self):
+        source = """\
+object M {
+    for (x <- items) {
+        println(x)
+    }
+}
+"""
+        instructions = _parse_scala(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("iter" in inst.operands for inst in calls)
+        assert any("next" in inst.operands for inst in calls)
+
+    def test_for_comprehension_stores_binding(self):
+        source = """\
+object M {
+    for (item <- collection) yield item
+}
+"""
+        instructions = _parse_scala(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("item" in inst.operands for inst in stores)
+
+
+class TestScalaTraitDefinition:
+    def test_trait_produces_class_ref(self):
+        source = """\
+trait Animal {
+    def speak(): String
+}
+"""
+        instructions = _parse_scala(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Animal" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("class:" in str(inst.operands) for inst in consts)
+
+    def test_trait_with_method(self):
+        source = """\
+trait Greeter {
+    def greet(name: String): String = "Hello " + name
+}
+"""
+        instructions = _parse_scala(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Greeter" in inst.operands for inst in stores)
+        assert any("greet" in inst.operands for inst in stores)
+
+    def test_trait_labels(self):
+        source = "trait Foo { val x = 1 }"
+        instructions = _parse_scala(source)
+        labels = _labels_in_order(instructions)
+        assert any("class_Foo" in lbl for lbl in labels)
+        assert any("end_class_Foo" in lbl for lbl in labels)
+
+
+class TestScalaCaseClassDefinition:
+    def test_case_class_produces_class_ref(self):
+        source = "case class Point(x: Int, y: Int)"
+        instructions = _parse_scala(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Point" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("class:" in str(inst.operands) for inst in consts)
+
+    def test_case_class_with_body(self):
+        source = """\
+case class Person(name: String, age: Int) {
+    def greeting(): String = "Hi, " + name
+}
+"""
+        instructions = _parse_scala(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Person" in inst.operands for inst in stores)
+        assert any("greeting" in inst.operands for inst in stores)
+
+
+class TestScalaLazyValDefinition:
+    def test_lazy_val_produces_store_var(self):
+        source = "object M { lazy val x = 42 }"
+        instructions = _parse_scala(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("42" in inst.operands for inst in consts)
+
+    def test_lazy_val_with_expression(self):
+        source = "object M { lazy val computed = 10 + 20 }"
+        instructions = _parse_scala(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("computed" in inst.operands for inst in stores)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+
+class TestScalaDoWhileExpression:
+    def test_do_while_basic(self):
+        source = """\
+object M {
+    var x = 10
+    do {
+        x = x - 1
+    } while (x > 0)
+}
+"""
+        instructions = _parse_scala(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        labels = _labels_in_order(instructions)
+        assert any("do_body" in lbl for lbl in labels)
+        assert any("do_end" in lbl for lbl in labels)
+
+    def test_do_while_stores_var(self):
+        source = """\
+object M {
+    var count = 0
+    do {
+        count = count + 1
+    } while (count < 5)
+}
+"""
+        instructions = _parse_scala(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("count" in inst.operands for inst in stores)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+
+class TestScalaTypeDefinition:
+    def test_type_alias_is_noop(self):
+        source = "object M { type Alias = List[Int] }"
+        instructions = _parse_scala(source)
+        # Type definition should be a no-op lambda, not crash
+        assert instructions[0].opcode == Opcode.LABEL
+        assert instructions[0].label == "entry"

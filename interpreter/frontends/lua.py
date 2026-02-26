@@ -59,6 +59,10 @@ class LuaFrontend(BaseFrontend):
             "bracket_index_expression": self._lower_bracket_index,
             "table_constructor": self._lower_table_constructor,
             "expression_list": self._lower_expression_list,
+            "function_definition": self._lower_lua_function_definition,
+            "vararg_expression": self._lower_lua_vararg,
+            "string_content": self._lower_const_literal,
+            "escape_sequence": self._lower_const_literal,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "chunk": self._lower_block,
@@ -74,6 +78,8 @@ class LuaFrontend(BaseFrontend):
             "do_statement": self._lower_lua_do,
             "expression_statement": self._lower_expression_statement,
             "break_statement": self._lower_break,
+            "goto_statement": self._lower_lua_goto,
+            "label_statement": self._lower_lua_label,
         }
 
     # -- Lua: entry point override --------------------------------------------------
@@ -708,3 +714,83 @@ class LuaFrontend(BaseFrontend):
             for child in node.children:
                 if child.is_named and child.type not in ("do", "end"):
                     self._lower_stmt(child)
+
+    # -- Lua: anonymous function definition (expression) ---------------------------
+
+    def _lower_lua_function_definition(self, node) -> str:
+        """Lower function_definition (anonymous function expression).
+
+        Produces BRANCH past body, LABEL, params, body, default RETURN,
+        end LABEL, and returns a register holding the func ref.
+        """
+        params_node = node.child_by_field_name("parameters")
+        body_node = node.child_by_field_name("body")
+
+        anon_name = self._fresh_label("anon_fn")
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{anon_name}")
+        end_label = self._fresh_label(f"end_{anon_name}")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=func_label)
+
+        if params_node:
+            self._lower_params(params_node)
+
+        if body_node:
+            self._lower_block(body_node)
+
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST, result_reg=none_reg, operands=[self.DEFAULT_RETURN_VALUE]
+        )
+        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        func_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=anon_name, label=func_label)
+            ],
+        )
+        return func_reg
+
+    # -- Lua: vararg expression (...) ----------------------------------------------
+
+    def _lower_lua_vararg(self, node) -> str:
+        """Lower vararg_expression (...) as SYMBOLIC('varargs')."""
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=reg,
+            operands=["varargs"],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- Lua: goto statement -------------------------------------------------------
+
+    def _lower_lua_goto(self, node):
+        """Lower goto_statement — BRANCH to the named label."""
+        named_children = [c for c in node.children if c.is_named]
+        label_name = self._node_text(named_children[0]) if named_children else "unknown"
+        logger.debug("Lowering goto -> %s at %s", label_name, self._source_loc(node))
+        self._emit(
+            Opcode.BRANCH,
+            label=label_name,
+            source_location=self._source_loc(node),
+        )
+
+    # -- Lua: label statement (::name::) -------------------------------------------
+
+    def _lower_lua_label(self, node):
+        """Lower label_statement (::name::) — emit LABEL with the name."""
+        named_children = [c for c in node.children if c.is_named]
+        label_name = self._node_text(named_children[0]) if named_children else "unknown"
+        logger.debug(
+            "Lowering label :: %s :: at %s", label_name, self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=label_name)

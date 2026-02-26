@@ -89,7 +89,16 @@ class CSharpFrontend(BaseFrontend):
             "property_declaration": self._lower_property_decl,
             "break_statement": self._lower_break,
             "continue_statement": self._lower_continue,
+            "lock_statement": self._lower_lock_stmt,
+            "using_statement": self._lower_using_stmt,
+            "checked_statement": self._lower_checked_stmt,
+            "fixed_statement": self._lower_fixed_stmt,
+            "event_field_declaration": self._lower_event_field_decl,
+            "event_declaration": self._lower_event_decl,
         }
+        self._EXPR_DISPATCH["await_expression"] = self._lower_await_expr
+        self._EXPR_DISPATCH["switch_expression"] = self._lower_switch_expr
+        self._STMT_DISPATCH["yield_statement"] = self._lower_yield_stmt
 
     # -- C#: global_statement unwrapper --------------------------------
 
@@ -1006,6 +1015,192 @@ class CSharpFrontend(BaseFrontend):
                     None,
                 )
         self._lower_try_catch(node, body_node, catch_clauses, finally_node)
+
+    # -- C#: await expression ------------------------------------------
+
+    def _lower_await_expr(self, node) -> str:
+        """Lower await_expression as CALL_FUNCTION('await', expr)."""
+        children = [c for c in node.children if c.is_named]
+        if children:
+            inner_reg = self._lower_expr(children[0])
+        else:
+            inner_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=inner_reg,
+                operands=[self.NONE_LITERAL],
+            )
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["await", inner_reg],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- C#: switch expression (C# 8) ----------------------------------
+
+    def _lower_switch_expr(self, node) -> str:
+        """Lower C# 8 switch expression: subject switch { pattern => expr, ... }."""
+        # First named child is the subject expression
+        named_children = [c for c in node.children if c.is_named]
+        subject_node = named_children[0] if named_children else None
+        subject_reg = (
+            self._lower_expr(subject_node) if subject_node else self._fresh_reg()
+        )
+
+        result_var = f"__switch_expr_{self._label_counter}"
+        end_label = self._fresh_label("switch_expr_end")
+
+        arms = [c for c in node.children if c.type == "switch_expression_arm"]
+
+        for arm in arms:
+            arm_children = [c for c in arm.children if c.is_named]
+            if len(arm_children) < 2:
+                continue
+            pattern_node = arm_children[0]
+            value_node = arm_children[-1]
+
+            arm_label = self._fresh_label("switch_arm")
+            next_label = self._fresh_label("switch_arm_next")
+
+            # Discard pattern _ as default
+            is_default = pattern_node.type == "discard" or (
+                pattern_node.type == "identifier"
+                and self._node_text(pattern_node) == "_"
+            )
+
+            if is_default:
+                self._emit(Opcode.BRANCH, label=arm_label)
+            else:
+                pattern_reg = self._lower_expr(pattern_node)
+                cmp_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.BINOP,
+                    result_reg=cmp_reg,
+                    operands=["==", subject_reg, pattern_reg],
+                    source_location=self._source_loc(arm),
+                )
+                self._emit(
+                    Opcode.BRANCH_IF,
+                    operands=[cmp_reg],
+                    label=f"{arm_label},{next_label}",
+                )
+
+            self._emit(Opcode.LABEL, label=arm_label)
+            val_reg = self._lower_expr(value_node)
+            self._emit(Opcode.STORE_VAR, operands=[result_var, val_reg])
+            self._emit(Opcode.BRANCH, label=end_label)
+            self._emit(Opcode.LABEL, label=next_label)
+
+        self._emit(Opcode.LABEL, label=end_label)
+        reg = self._fresh_reg()
+        self._emit(Opcode.LOAD_VAR, result_reg=reg, operands=[result_var])
+        return reg
+
+    # -- C#: yield statement -------------------------------------------
+
+    def _lower_yield_stmt(self, node):
+        """Lower yield return expr or yield break."""
+        children = [c for c in node.children if c.is_named]
+        # Check if this is yield break (no expression child)
+        node_text = self._node_text(node)
+        if "break" in node_text and not children:
+            reg = self._fresh_reg()
+            self._emit(
+                Opcode.CALL_FUNCTION,
+                result_reg=reg,
+                operands=["yield_break"],
+                source_location=self._source_loc(node),
+            )
+        else:
+            if children:
+                val_reg = self._lower_expr(children[0])
+            else:
+                val_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.CONST,
+                    result_reg=val_reg,
+                    operands=[self.NONE_LITERAL],
+                )
+            reg = self._fresh_reg()
+            self._emit(
+                Opcode.CALL_FUNCTION,
+                result_reg=reg,
+                operands=["yield", val_reg],
+                source_location=self._source_loc(node),
+            )
+
+    # -- C#: lock statement --------------------------------------------
+
+    def _lower_lock_stmt(self, node):
+        """Lower lock(expr) { body }: lower the lock expression, then the body."""
+        # lock_statement has unnamed children for lock expr and body
+        named_children = [c for c in node.children if c.is_named]
+        if named_children:
+            self._lower_expr(named_children[0])
+        body_node = next((c for c in named_children if c.type == "block"), None)
+        if body_node:
+            self._lower_block(body_node)
+
+    # -- C#: using statement -------------------------------------------
+
+    def _lower_using_stmt(self, node):
+        """Lower using(resource) { body }: lower resource, then body."""
+        named_children = [c for c in node.children if c.is_named]
+        for child in named_children:
+            if child.type == "variable_declaration":
+                self._lower_variable_declaration(child)
+            elif child.type == "block":
+                self._lower_block(child)
+            elif child.type not in ("block",):
+                self._lower_expr(child)
+
+    # -- C#: checked statement -----------------------------------------
+
+    def _lower_checked_stmt(self, node):
+        """Lower checked { body }: just lower the body block."""
+        body_node = next((c for c in node.children if c.type == "block"), None)
+        if body_node:
+            self._lower_block(body_node)
+
+    # -- C#: fixed statement -------------------------------------------
+
+    def _lower_fixed_stmt(self, node):
+        """Lower fixed(decl) { body }: just lower the body block."""
+        body_node = next((c for c in node.children if c.type == "block"), None)
+        if body_node:
+            self._lower_block(body_node)
+
+    # -- C#: event_field_declaration -----------------------------------
+
+    def _lower_event_field_decl(self, node):
+        """Lower event_field_declaration by delegating to variable_declaration child."""
+        for child in node.children:
+            if child.type == "variable_declaration":
+                self._lower_variable_declaration(child)
+
+    # -- C#: event_declaration -----------------------------------------
+
+    def _lower_event_decl(self, node):
+        """Lower event_declaration: extract name, CONST + STORE_VAR."""
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return
+        event_name = self._node_text(name_node)
+        val_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=val_reg,
+            operands=[f"event:{event_name}"],
+            source_location=self._source_loc(node),
+        )
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=[event_name, val_reg],
+            source_location=self._source_loc(node),
+        )
 
     # -- C#: store target override -------------------------------------
 

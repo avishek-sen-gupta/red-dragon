@@ -85,6 +85,12 @@ class ScalaFrontend(BaseFrontend):
             "break_expression": self._lower_break,
             "continue_expression": self._lower_continue,
             "try_expression": self._lower_try_stmt,
+            "for_expression": self._lower_for_expr,
+            "trait_definition": self._lower_trait_def,
+            "case_class_definition": self._lower_class_def,
+            "lazy_val_definition": self._lower_val_def,
+            "do_while_expression": self._lower_do_while,
+            "type_definition": lambda _: None,
         }
 
     # -- val / var definition ----------------------------------------------
@@ -555,6 +561,146 @@ class ScalaFrontend(BaseFrontend):
             source_location=self._source_loc(node),
         )
         return reg
+
+    # -- for expression (for-comprehension) --------------------------------
+
+    def _lower_for_expr(self, node):
+        """Lower for-comprehension: for (generators) body / for (generators) yield body."""
+        enumerators_node = next(
+            (c for c in node.children if c.type == "enumerators"), None
+        )
+        # Body is the last named child (after the enumerators and yield keyword)
+        named_children = [c for c in node.children if c.is_named]
+        body_node = named_children[-1] if named_children else None
+        # Don't use enumerators_node as body
+        if body_node is enumerators_node:
+            body_node = None
+
+        generators = (
+            [c for c in enumerators_node.children if c.type == "enumerator"]
+            if enumerators_node
+            else []
+        )
+        guards = (
+            [c for c in enumerators_node.children if c.type == "guard"]
+            if enumerators_node
+            else []
+        )
+
+        loop_label = self._fresh_label("for_comp_loop")
+        end_label = self._fresh_label("for_comp_end")
+
+        # Lower each generator: extract binding + iterable from children
+        for gen in generators:
+            gen_children = [c for c in gen.children if c.is_named]
+            # First named child is the binding, last is the iterable
+            binding_node = gen_children[0] if gen_children else None
+            iterable_node = gen_children[-1] if len(gen_children) > 1 else None
+            var_name = self._node_text(binding_node) if binding_node else "__for_var"
+            iter_reg = (
+                self._lower_expr(iterable_node) if iterable_node else self._fresh_reg()
+            )
+            iter_fn_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CALL_FUNCTION,
+                result_reg=iter_fn_reg,
+                operands=["iter", iter_reg],
+                source_location=self._source_loc(gen),
+            )
+
+        self._emit(Opcode.LABEL, label=loop_label)
+
+        for gen in generators:
+            gen_children = [c for c in gen.children if c.is_named]
+            binding_node = gen_children[0] if gen_children else None
+            var_name = self._node_text(binding_node) if binding_node else "__for_var"
+            next_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CALL_FUNCTION,
+                result_reg=next_reg,
+                operands=["next"],
+                source_location=self._source_loc(gen),
+            )
+            self._emit(
+                Opcode.STORE_VAR,
+                operands=[var_name, next_reg],
+                source_location=self._source_loc(gen),
+            )
+
+        # Lower guards as BRANCH_IF
+        for guard in guards:
+            guard_children = [c for c in guard.children if c.is_named]
+            if guard_children:
+                guard_reg = self._lower_expr(guard_children[0])
+                continue_label = self._fresh_label("for_guard_ok")
+                self._emit(
+                    Opcode.BRANCH_IF,
+                    operands=[guard_reg],
+                    label=f"{continue_label},{loop_label}",
+                )
+                self._emit(Opcode.LABEL, label=continue_label)
+
+        if body_node:
+            self._lower_stmt(body_node)
+
+        self._emit(Opcode.BRANCH, label=loop_label)
+        self._emit(Opcode.LABEL, label=end_label)
+
+    # -- trait definition --------------------------------------------------
+
+    def _lower_trait_def(self, node):
+        """Lower trait_definition like class_definition."""
+        name_node = node.child_by_field_name("name")
+        body_node = node.child_by_field_name("body")
+        trait_name = self._node_text(name_node) if name_node else "__anon_trait"
+
+        class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{trait_name}")
+        end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{trait_name}")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=class_label)
+        if body_node:
+            self._lower_block(body_node)
+        self._emit(Opcode.LABEL, label=end_label)
+
+        cls_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=cls_reg,
+            operands=[
+                constants.CLASS_REF_TEMPLATE.format(name=trait_name, label=class_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[trait_name, cls_reg])
+
+    # -- do-while expression -----------------------------------------------
+
+    def _lower_do_while(self, node):
+        """Lower do { body } while (condition)."""
+        body_node = node.child_by_field_name("body")
+        cond_node = node.child_by_field_name("condition")
+
+        body_label = self._fresh_label("do_body")
+        end_label = self._fresh_label("do_end")
+
+        self._emit(Opcode.LABEL, label=body_label)
+        if body_node:
+            self._lower_block(body_node)
+
+        if cond_node:
+            cond_reg = self._lower_expr(cond_node)
+            self._emit(
+                Opcode.BRANCH_IF,
+                operands=[cond_reg],
+                label=f"{body_label},{end_label}",
+                source_location=self._source_loc(node),
+            )
+        else:
+            self._emit(Opcode.BRANCH, label=body_label)
+
+        self._emit(Opcode.LABEL, label=end_label)
 
     # -- store target override for field_expression ------------------------
 

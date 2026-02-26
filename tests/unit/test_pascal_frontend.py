@@ -380,3 +380,171 @@ end.
         assert any("*" in inst.operands for inst in binops)
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 1
+
+
+class TestPascalExprDot:
+    """Tests for exprDot (obj.field) access."""
+
+    def test_dot_access_produces_load_field(self):
+        instructions = _parse_pascal("program M; begin x := rec.field; end.")
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert len(loads) >= 1
+        assert "field" in loads[0].operands
+
+    def test_dot_access_chain(self):
+        instructions = _parse_pascal("program M; begin x := a.b.c; end.")
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert len(loads) >= 2
+
+    def test_dot_access_in_assignment(self):
+        instructions = _parse_pascal("program M; begin x := obj.name; end.")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert any("name" in inst.operands for inst in loads)
+
+
+class TestPascalExprSubscript:
+    """Tests for exprSubscript (arr[idx]) access."""
+
+    def test_subscript_produces_load_index(self):
+        instructions = _parse_pascal("program M; begin x := arr[1]; end.")
+        loads = _find_all(instructions, Opcode.LOAD_INDEX)
+        assert len(loads) >= 1
+
+    def test_subscript_with_variable_index(self):
+        instructions = _parse_pascal("program M; begin x := arr[i]; end.")
+        loads = _find_all(instructions, Opcode.LOAD_INDEX)
+        assert len(loads) >= 1
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+
+class TestPascalExprUnary:
+    """Tests for exprUnary (not, -, +)."""
+
+    def test_not_operator(self):
+        instructions = _parse_pascal("program M; begin if not done then x := 1; end.")
+        unops = _find_all(instructions, Opcode.UNOP)
+        assert len(unops) >= 1
+        assert any("not" in inst.operands for inst in unops)
+
+    def test_negation_operator(self):
+        instructions = _parse_pascal("program M; begin x := -y; end.")
+        unops = _find_all(instructions, Opcode.UNOP)
+        assert len(unops) >= 1
+        assert any("-" in inst.operands for inst in unops)
+
+
+class TestPascalCaseStatement:
+    """Tests for case statement."""
+
+    def test_case_produces_branch_if(self):
+        instructions = _parse_pascal(
+            "program M; begin case x of 1: WriteLn('one'); 2: WriteLn('two'); end; end."
+        )
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.BINOP in opcodes
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("==" in inst.operands for inst in binops)
+
+    def test_case_calls_correct_branches(self):
+        instructions = _parse_pascal(
+            "program M; begin case x of 1: WriteLn('one'); 2: WriteLn('two'); end; end."
+        )
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("WriteLn" in inst.operands for inst in calls)
+        labels = _find_all(instructions, Opcode.LABEL)
+        assert any("case_match" in (inst.label or "") for inst in labels)
+
+    def test_case_with_end_label(self):
+        instructions = _parse_pascal(
+            "program M; begin case x of 1: WriteLn('one'); end; end."
+        )
+        labels = _find_all(instructions, Opcode.LABEL)
+        assert any("case_end" in (inst.label or "") for inst in labels)
+
+
+class TestPascalRepeatUntil:
+    """Tests for repeat ... until loop."""
+
+    def test_repeat_produces_branch_if(self):
+        instructions = _parse_pascal(
+            "program M; begin repeat x := x - 1; until x = 0; end."
+        )
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+
+    def test_repeat_has_body_label(self):
+        instructions = _parse_pascal(
+            "program M; begin repeat x := x + 1; until x = 10; end."
+        )
+        labels = _find_all(instructions, Opcode.LABEL)
+        assert any("repeat" in (inst.label or "") for inst in labels)
+
+    def test_repeat_lowers_body_before_condition(self):
+        """Body should appear before condition check in instruction order."""
+        instructions = _parse_pascal(
+            "program M; begin repeat WriteLn(x); until x = 0; end."
+        )
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(calls) >= 1
+        assert len(branch_ifs) >= 1
+        # Call should come before BRANCH_IF in instruction order
+        call_idx = instructions.index(calls[0])
+        branch_idx = instructions.index(branch_ifs[0])
+        assert call_idx < branch_idx
+
+
+class TestPascalExprBrackets:
+    """Tests for exprBrackets (set literal [1,2,3])."""
+
+    def test_set_literal_produces_new_array(self):
+        instructions = _parse_pascal("program M; begin x := [1, 2, 3]; end.")
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_ARRAY in opcodes
+        arrays = _find_all(instructions, Opcode.NEW_ARRAY)
+        assert any("set" in inst.operands for inst in arrays)
+
+    def test_set_literal_stores_elements(self):
+        instructions = _parse_pascal("program M; begin x := [1, 2, 3]; end.")
+        stores = _find_all(instructions, Opcode.STORE_INDEX)
+        assert len(stores) >= 3
+
+
+class TestPascalDeclConsts:
+    """Tests for const declarations."""
+
+    def test_const_declaration(self):
+        instructions = _parse_pascal("program M; const MAX = 100; begin end.")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("MAX" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("100" in inst.operands for inst in consts)
+
+    def test_multiple_consts(self):
+        instructions = _parse_pascal("program M; const A = 1; B = 2; begin end.")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("A" in inst.operands for inst in stores)
+        assert any("B" in inst.operands for inst in stores)
+
+
+class TestPascalDeclTypeNoop:
+    """Tests for type declarations (should be no-op)."""
+
+    def test_type_declaration_does_not_crash(self):
+        instructions = _parse_pascal(
+            "program M; type MyInt = Integer; begin x := 1; end."
+        )
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_type_declaration_produces_no_symbolic(self):
+        instructions = _parse_pascal("program M; type MyInt = Integer; begin end.")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        unsupported = [
+            s for s in symbolics if any("unsupported:" in str(op) for op in s.operands)
+        ]
+        assert len(unsupported) == 0

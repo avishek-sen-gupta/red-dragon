@@ -463,3 +463,351 @@ class TestPhpArrayCreation:
         assert Opcode.NEW_ARRAY in opcodes
         stores = _find_all(ir, Opcode.STORE_INDEX)
         assert len(stores) >= 3
+
+
+class TestPhpMatchExpression:
+    def test_match_produces_branch_if_per_arm(self):
+        source = (
+            '<?php $r = match($x) { 1 => "one", 2 => "two", default => "other" }; ?>'
+        )
+        ir = _parse_and_lower(source)
+        branches = _find_all(ir, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+
+    def test_match_compares_with_strict_equality(self):
+        source = '<?php $r = match($x) { 1 => "one", default => "other" }; ?>'
+        ir = _parse_and_lower(source)
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any("===" in inst.operands for inst in binops)
+
+    def test_match_stores_result(self):
+        source = '<?php $r = match($x) { 1 => "one", default => "other" }; ?>'
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("$r" in inst.operands for inst in stores)
+
+
+class TestPhpArrowFunction:
+    def test_arrow_function_produces_func_ref(self):
+        source = "<?php $f = fn($x) => $x * 2; ?>"
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        func_refs = [
+            c for c in consts if any("function:" in str(op) for op in c.operands)
+        ]
+        assert len(func_refs) >= 1
+
+    def test_arrow_function_has_param_and_return(self):
+        source = "<?php $f = fn($x) => $x * 2; ?>"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        param_symbolics = [
+            s for s in symbolics if any("param:" in str(op) for op in s.operands)
+        ]
+        assert len(param_symbolics) >= 1
+        returns = _find_all(ir, Opcode.RETURN)
+        assert len(returns) >= 1
+
+    def test_arrow_function_body_has_binop(self):
+        source = "<?php $f = fn($x) => $x + 1; ?>"
+        ir = _parse_and_lower(source)
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+
+class TestPhpScopedCallExpression:
+    def test_scoped_call_produces_call_function(self):
+        source = "<?php Math::sqrt(4); ?>"
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("Math::sqrt" in inst.operands for inst in calls)
+
+    def test_scoped_call_with_multiple_args(self):
+        source = "<?php MyClass::create(1, 2, 3); ?>"
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("MyClass::create" in inst.operands for inst in calls)
+
+    def test_scoped_call_result_stored(self):
+        source = "<?php $r = Config::get('key'); ?>"
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("Config::get" in inst.operands for inst in calls)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("$r" in inst.operands for inst in stores)
+
+
+class TestPhpSwitchStatement:
+    def test_switch_produces_branch_if_per_case(self):
+        source = """<?php
+switch ($x) {
+    case 1: echo "one"; break;
+    case 2: echo "two"; break;
+    default: echo "other";
+}
+?>"""
+        ir = _parse_and_lower(source)
+        branches = _find_all(ir, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+
+    def test_switch_end_label_for_break(self):
+        source = """<?php
+switch ($x) {
+    case 1: echo "one"; break;
+    default: echo "other";
+}
+?>"""
+        ir = _parse_and_lower(source)
+        labels = _labels_in_order(ir)
+        assert any("switch_end" in lbl for lbl in labels)
+
+    def test_switch_compares_discriminant(self):
+        source = """<?php
+switch ($x) {
+    case 1: echo "one"; break;
+}
+?>"""
+        ir = _parse_and_lower(source)
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any("==" in inst.operands for inst in binops)
+
+
+class TestPhpDoWhileStatement:
+    def test_do_while_body_before_condition(self):
+        source = """<?php
+do {
+    $x++;
+} while ($x < 10);
+?>"""
+        ir = _parse_and_lower(source)
+        labels = _labels_in_order(ir)
+        assert any("do_body" in lbl for lbl in labels)
+        assert any("do_cond" in lbl for lbl in labels)
+        body_idx = next(i for i, l in enumerate(labels) if "do_body" in l)
+        cond_idx = next(i for i, l in enumerate(labels) if "do_cond" in l)
+        assert body_idx < cond_idx
+
+    def test_do_while_has_branch_if(self):
+        source = """<?php
+do {
+    $x++;
+} while ($x < 10);
+?>"""
+        ir = _parse_and_lower(source)
+        branches = _find_all(ir, Opcode.BRANCH_IF)
+        assert len(branches) >= 1
+
+    def test_do_while_break_targets_end(self):
+        source = """<?php
+do {
+    if ($x > 5) { break; }
+    $x++;
+} while ($x < 10);
+?>"""
+        ir = _parse_and_lower(source)
+        labels = _labels_in_order(ir)
+        assert any("do_end" in lbl for lbl in labels)
+        branches = _find_all(ir, Opcode.BRANCH)
+        end_labels = [l for l in labels if "do_end" in l]
+        assert any(b.label in end_labels for b in branches)
+
+
+class TestPhpNamespaceDefinition:
+    def test_namespace_lowers_body(self):
+        source = """<?php
+namespace App\\Models {
+    class User {}
+}
+?>"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("User" in inst.operands for inst in stores)
+
+    def test_namespace_with_function(self):
+        source = """<?php
+namespace App\\Helpers {
+    function helper() { return 1; }
+}
+?>"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("helper" in inst.operands for inst in stores)
+
+
+class TestPhpInterfaceDeclaration:
+    def test_interface_produces_class_ref(self):
+        source = """<?php
+interface Printable {
+    public function print();
+}
+?>"""
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        class_refs = [
+            c for c in consts if any("class:" in str(op) for op in c.operands)
+        ]
+        assert len(class_refs) >= 1
+
+    def test_interface_stored_by_name(self):
+        source = """<?php
+interface Printable {
+    public function print();
+}
+?>"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("Printable" in inst.operands for inst in stores)
+
+    def test_interface_has_labels(self):
+        source = """<?php
+interface Printable {
+    public function print();
+}
+?>"""
+        ir = _parse_and_lower(source)
+        labels = _labels_in_order(ir)
+        assert any("class_Printable" in lbl for lbl in labels)
+
+
+class TestPhpTraitDeclaration:
+    def test_trait_produces_class_ref(self):
+        source = """<?php
+trait Loggable {
+    public function log() { echo "log"; }
+}
+?>"""
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        class_refs = [
+            c for c in consts if any("class:" in str(op) for op in c.operands)
+        ]
+        assert len(class_refs) >= 1
+
+    def test_trait_stored_by_name(self):
+        source = """<?php
+trait Loggable {
+    public function log() { echo "log"; }
+}
+?>"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("Loggable" in inst.operands for inst in stores)
+
+    def test_trait_body_methods_lowered(self):
+        source = """<?php
+trait Loggable {
+    public function log() { echo "log"; }
+}
+?>"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("log" in inst.operands for inst in stores)
+
+
+class TestPhpFunctionStaticDeclaration:
+    def test_static_var_with_value(self):
+        source = """<?php
+function counter() {
+    static $count = 0;
+    $count++;
+    return $count;
+}
+?>"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("$count" in inst.operands for inst in stores)
+
+    def test_static_var_without_value(self):
+        source = """<?php
+function f() {
+    static $x;
+    return $x;
+}
+?>"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("$x" in inst.operands for inst in stores)
+
+    def test_static_var_produces_const(self):
+        source = """<?php
+function f() {
+    static $x = 42;
+}
+?>"""
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("42" in inst.operands for inst in consts)
+
+
+class TestPhpEnumDeclaration:
+    def test_enum_produces_class_ref(self):
+        source = """<?php
+enum Color {
+    case Red;
+    case Blue;
+}
+?>"""
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        class_refs = [
+            c for c in consts if any("class:" in str(op) for op in c.operands)
+        ]
+        assert len(class_refs) >= 1
+
+    def test_enum_stored_by_name(self):
+        source = """<?php
+enum Color {
+    case Red;
+    case Blue;
+}
+?>"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("Color" in inst.operands for inst in stores)
+
+    def test_enum_has_labels(self):
+        source = """<?php
+enum Color {
+    case Red;
+    case Blue;
+}
+?>"""
+        ir = _parse_and_lower(source)
+        labels = _labels_in_order(ir)
+        assert any("class_Color" in lbl for lbl in labels)
+
+
+class TestPhpNamedLabelStatement:
+    def test_named_label_produces_label(self):
+        source = "<?php start: echo 1; ?>"
+        ir = _parse_and_lower(source)
+        labels = _labels_in_order(ir)
+        assert any("user_start" in lbl for lbl in labels)
+
+    def test_named_label_body_lowered(self):
+        source = "<?php myLabel: $x = 1; ?>"
+        ir = _parse_and_lower(source)
+        labels = _labels_in_order(ir)
+        assert any("user_myLabel" in lbl for lbl in labels)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("$x" in inst.operands for inst in stores)
+
+
+class TestPhpGotoStatement:
+    def test_goto_produces_branch(self):
+        source = "<?php goto myLabel; ?>"
+        ir = _parse_and_lower(source)
+        branches = _find_all(ir, Opcode.BRANCH)
+        assert any(b.label == "user_myLabel" for b in branches)
+
+    def test_goto_and_label_connected(self):
+        source = """<?php
+start:
+echo "loop";
+goto start;
+?>"""
+        ir = _parse_and_lower(source)
+        labels = _labels_in_order(ir)
+        assert any("user_start" in lbl for lbl in labels)
+        branches = _find_all(ir, Opcode.BRANCH)
+        assert any(b.label == "user_start" for b in branches)

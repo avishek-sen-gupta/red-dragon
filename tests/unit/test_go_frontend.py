@@ -219,12 +219,11 @@ func swap(a int, b int) (int, int) {
 
 
 class TestGoFrontendFallback:
-    def test_unsupported_construct_produces_symbolic(self):
+    def test_go_statement_produces_call_function(self):
         source = "package main; func main() { go func() {} () }"
         ir = _parse_and_lower(source)
-        opcodes = _opcodes(ir)
-        # The go statement should produce SYMBOLIC as a fallback
-        assert Opcode.SYMBOLIC in opcodes or Opcode.CALL_UNKNOWN in opcodes
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("go" in inst.operands for inst in calls)
 
     def test_entry_label_always_present(self):
         source = "package main"
@@ -373,7 +372,7 @@ func quadruple(x int) int {
         returns = _find_all(ir, Opcode.RETURN)
         assert len(returns) >= 2
 
-    def test_defer_produces_symbolic(self):
+    def test_defer_produces_call_function(self):
         source = """\
 package main
 func main() {
@@ -383,10 +382,10 @@ func main() {
 }
 """
         ir = _parse_and_lower(source)
-        opcodes = _opcodes(ir)
-        assert Opcode.SYMBOLIC in opcodes
-        calls = _find_all(ir, Opcode.CALL_METHOD)
-        assert any("Read" in inst.operands for inst in calls)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("defer" in inst.operands for inst in calls)
+        method_calls = _find_all(ir, Opcode.CALL_METHOD)
+        assert any("Read" in inst.operands for inst in method_calls)
 
 
 class TestGoCompositeLiteral:
@@ -417,3 +416,389 @@ func main() { nums := []int{1, 2, 3} }
         assert Opcode.STORE_INDEX in opcodes
         store_indices = _find_all(ir, Opcode.STORE_INDEX)
         assert len(store_indices) >= 3
+
+
+class TestGoTypeAssertionExpression:
+    def test_type_assertion_produces_call_function(self):
+        source = """\
+package main
+func main() {
+    var i interface{} = "hello"
+    s := i.(string)
+}
+"""
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("type_assert" in inst.operands for inst in calls)
+
+    def test_type_assertion_includes_type(self):
+        source = """\
+package main
+func main() {
+    var i interface{} = 42
+    n := i.(int)
+}
+"""
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        ta_calls = [c for c in calls if "type_assert" in c.operands]
+        assert any("int" in str(inst.operands) for inst in ta_calls)
+
+
+class TestGoSliceExpression:
+    def test_slice_produces_call_function(self):
+        source = """\
+package main
+func main() {
+    a := []int{1, 2, 3, 4, 5}
+    b := a[1:3]
+}
+"""
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("slice" in inst.operands for inst in calls)
+
+    def test_slice_with_indices(self):
+        source = """\
+package main
+func main() {
+    s := "hello"
+    t := s[0:2]
+}
+"""
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        slice_calls = [c for c in calls if "slice" in c.operands]
+        assert len(slice_calls) >= 1
+
+    def test_slice_without_end(self):
+        source = """\
+package main
+func main() {
+    a := []int{1, 2, 3}
+    b := a[1:]
+}
+"""
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("slice" in inst.operands for inst in calls)
+
+
+class TestGoFuncLiteral:
+    def test_func_literal_produces_function_ref(self):
+        source = """\
+package main
+func main() {
+    f := func(x int) int { return x * 2 }
+}
+"""
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("__anon" in str(inst.operands) for inst in consts)
+
+    def test_func_literal_has_return(self):
+        source = """\
+package main
+func main() {
+    f := func() { return }
+}
+"""
+        ir = _parse_and_lower(source)
+        returns = _find_all(ir, Opcode.RETURN)
+        assert len(returns) >= 1
+
+    def test_func_literal_params_lowered(self):
+        source = """\
+package main
+func main() {
+    f := func(a int, b int) int { return a + b }
+}
+"""
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        param_symbolics = [
+            s for s in symbolics if any("param:" in str(op) for op in s.operands)
+        ]
+        assert len(param_symbolics) >= 2
+
+
+class TestGoDeferStatement:
+    def test_defer_produces_defer_call(self):
+        source = """\
+package main
+func main() {
+    defer close()
+}
+"""
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("defer" in inst.operands for inst in calls)
+
+    def test_defer_method_call(self):
+        source = """\
+package main
+func main() {
+    x := open()
+    defer x.Close()
+}
+"""
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("defer" in inst.operands for inst in calls)
+
+
+class TestGoGoStatement:
+    def test_go_statement_produces_go_call(self):
+        source = """\
+package main
+func main() {
+    go doWork()
+}
+"""
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("go" in inst.operands for inst in calls)
+
+    def test_go_with_func_literal(self):
+        source = """\
+package main
+func main() {
+    go func() { doSomething() }()
+}
+"""
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("go" in inst.operands for inst in calls)
+
+
+class TestGoExpressionSwitch:
+    def test_switch_produces_branch_if(self):
+        source = """\
+package main
+func main() {
+    x := 1
+    switch x {
+    case 1:
+        y := 10
+    case 2:
+        y := 20
+    default:
+        y := 0
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        branches = _find_all(ir, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+
+    def test_switch_case_bodies_lowered(self):
+        source = """\
+package main
+func main() {
+    switch x {
+    case 1:
+        result := "one"
+    case 2:
+        result := "two"
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("result" in inst.operands for inst in stores)
+
+    def test_switch_end_label(self):
+        source = """\
+package main
+func main() {
+    switch x {
+    case 1:
+        y := 1
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        labels = _labels_in_order(ir)
+        assert any("switch_end" in lbl for lbl in labels)
+
+
+class TestGoTypeSwitchStatement:
+    def test_type_switch_produces_type_check(self):
+        source = """\
+package main
+func main() {
+    var i interface{} = "hello"
+    switch i.(type) {
+    case string:
+        x := "is string"
+    case int:
+        x := "is int"
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("type_check" in inst.operands for inst in calls)
+
+    def test_type_switch_produces_branches(self):
+        source = """\
+package main
+func main() {
+    switch v.(type) {
+    case int:
+        x := 1
+    case string:
+        x := 2
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        branches = _find_all(ir, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+
+
+class TestGoSelectStatement:
+    def test_select_produces_labels(self):
+        source = """\
+package main
+func main() {
+    select {
+    case msg := <-ch:
+        x := msg
+    default:
+        y := 0
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        labels = _labels_in_order(ir)
+        assert any("select" in lbl for lbl in labels)
+
+    def test_select_end_label(self):
+        source = """\
+package main
+func main() {
+    select {
+    default:
+        x := 1
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        labels = _labels_in_order(ir)
+        assert any("select_end" in lbl for lbl in labels)
+
+
+class TestGoSendStatement:
+    def test_send_produces_chan_send(self):
+        source = """\
+package main
+func main() {
+    ch <- 42
+}
+"""
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("chan_send" in inst.operands for inst in calls)
+
+    def test_send_with_variable(self):
+        source = """\
+package main
+func main() {
+    ch <- msg
+}
+"""
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("chan_send" in inst.operands for inst in calls)
+
+
+class TestGoLabeledStatement:
+    def test_labeled_statement_produces_label(self):
+        source = """\
+package main
+func main() {
+    outer:
+    for i := 0; i < 10; i++ {
+        x := i
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        labels = _labels_in_order(ir)
+        assert any("outer" in lbl for lbl in labels)
+
+    def test_labeled_statement_body_lowered(self):
+        source = """\
+package main
+func main() {
+    myLabel:
+    x := 42
+}
+"""
+        ir = _parse_and_lower(source)
+        labels = _labels_in_order(ir)
+        assert any("myLabel" in lbl for lbl in labels)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+
+class TestGoConstDeclaration:
+    def test_const_with_value(self):
+        source = """\
+package main
+const Pi = 3
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("Pi" in inst.operands for inst in stores)
+
+    def test_const_multiple(self):
+        source = """\
+package main
+const (
+    A = 1
+    B = 2
+)
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("A" in inst.operands for inst in stores)
+        assert any("B" in inst.operands for inst in stores)
+
+    def test_const_without_value(self):
+        source = """\
+package main
+const X int = 10
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("X" in inst.operands for inst in stores)
+
+
+class TestGoGotoStatement:
+    def test_goto_produces_branch(self):
+        source = """\
+package main
+func main() {
+    goto end
+    end:
+    x := 1
+}
+"""
+        ir = _parse_and_lower(source)
+        branches = _find_all(ir, Opcode.BRANCH)
+        assert any(inst.label == "end" for inst in branches)
+
+    def test_goto_with_label(self):
+        source = """\
+package main
+func main() {
+    goto myLabel
+    myLabel:
+    y := 2
+}
+"""
+        ir = _parse_and_lower(source)
+        branches = _find_all(ir, Opcode.BRANCH)
+        assert any(inst.label == "myLabel" for inst in branches)

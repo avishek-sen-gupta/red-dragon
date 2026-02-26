@@ -412,3 +412,102 @@ class TestLuaGenericFor:
         assert Opcode.BRANCH_IF in opcodes
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("item" in inst.operands for inst in stores)
+
+
+class TestLuaFunctionDefinition:
+    """Tests for anonymous function definition (function expression)."""
+
+    def test_anonymous_function_expression(self):
+        """Anonymous function produces BRANCH, LABEL, RETURN, and func ref CONST."""
+        instructions = _parse_lua("local f = function(x) return x end")
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH in opcodes
+        assert Opcode.RETURN in opcodes
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("function:" in str(inst.operands) for inst in consts)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("f" in inst.operands for inst in stores)
+
+    def test_anonymous_function_with_params(self):
+        """Anonymous function parameters are lowered as SYMBOLIC param:name."""
+        instructions = _parse_lua("local cb = function(a, b) return a + b end")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        param_names = [
+            inst.operands[0]
+            for inst in symbolics
+            if inst.operands and str(inst.operands[0]).startswith("param:")
+        ]
+        assert any("a" in p for p in param_names)
+        assert any("b" in p for p in param_names)
+
+    def test_anonymous_function_as_call_arg(self):
+        """Anonymous function passed as argument to a call."""
+        instructions = _parse_lua("map(function(x) return x * 2 end, t)")
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH in opcodes
+        assert Opcode.RETURN in opcodes
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("map" in inst.operands for inst in calls)
+
+
+class TestLuaVarargExpression:
+    """Tests for vararg_expression (...)."""
+
+    def test_vararg_produces_symbolic(self):
+        """... produces SYMBOLIC('varargs')."""
+        instructions = _parse_lua("function f(...) return ... end")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert any("varargs" in inst.operands for inst in symbolics)
+
+    def test_vararg_in_table_constructor(self):
+        """Varargs inside a table constructor."""
+        instructions = _parse_lua("function f(...) local t = {...} end")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert any("varargs" in inst.operands for inst in symbolics)
+        assert Opcode.NEW_OBJECT in _opcodes(instructions)
+
+
+class TestLuaGotoLabel:
+    """Tests for goto_statement and label_statement."""
+
+    def test_goto_produces_branch(self):
+        """goto label produces a BRANCH instruction."""
+        instructions = _parse_lua("goto skip\nprint('hello')\n::skip::")
+        branches = _find_all(instructions, Opcode.BRANCH)
+        assert any(inst.label == "skip" for inst in branches)
+
+    def test_label_produces_label(self):
+        """::name:: produces a LABEL instruction."""
+        instructions = _parse_lua("::myLabel::\nprint('here')")
+        labels = _find_all(instructions, Opcode.LABEL)
+        assert any(inst.label == "myLabel" for inst in labels)
+
+    def test_goto_and_label_together(self):
+        """goto + label produces BRANCH and LABEL that match."""
+        instructions = _parse_lua("goto done\nprint('skip')\n::done::\nprint('end')")
+        branches = _find_all(instructions, Opcode.BRANCH)
+        labels = _find_all(instructions, Opcode.LABEL)
+        assert any(inst.label == "done" for inst in branches)
+        assert any(inst.label == "done" for inst in labels)
+
+
+class TestLuaStringContentEscapeSequence:
+    """Tests for string_content and escape_sequence safety-net mapping."""
+
+    def test_string_content_does_not_produce_symbolic(self):
+        """string_content should produce CONST, not SYMBOLIC unsupported."""
+        instructions = _parse_lua('local x = "hello"')
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        unsupported = [
+            s for s in symbolics if any("unsupported:" in str(op) for op in s.operands)
+        ]
+        assert len(unsupported) == 0
+
+    def test_escape_sequence_does_not_produce_symbolic(self):
+        """escape_sequence should produce CONST, not SYMBOLIC unsupported."""
+        instructions = _parse_lua(r'local x = "hello\nworld"')
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        unsupported = [
+            s for s in symbolics if any("unsupported:" in str(op) for op in s.operands)
+        ]
+        assert len(unsupported) == 0

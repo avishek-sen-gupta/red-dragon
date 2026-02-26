@@ -92,7 +92,10 @@ class CFrontend(BaseFrontend):
             "continue_statement": self._lower_continue,
             "translation_unit": self._lower_block,
             "type_definition": self._lower_typedef,
+            "enum_specifier": self._lower_enum_def,
+            "union_specifier": self._lower_union_def,
         }
+        self._EXPR_DISPATCH["initializer_list"] = self._lower_initializer_list
 
     # -- C: declaration ------------------------------------------------
 
@@ -690,6 +693,109 @@ class CFrontend(BaseFrontend):
 
     # break_statement and continue_statement are handled by
     # BaseFrontend._lower_break / _lower_continue via _STMT_DISPATCH
+
+    # -- C: enum specifier ---------------------------------------------
+
+    def _lower_enum_def(self, node):
+        """Lower enum_specifier as NEW_OBJECT + STORE_FIELD per enumerator."""
+        name_node = node.child_by_field_name("name")
+        body_node = node.child_by_field_name("body")
+
+        if name_node is None and body_node is None:
+            return
+
+        enum_name = self._node_text(name_node) if name_node else "__anon_enum"
+
+        obj_reg = self._fresh_reg()
+        self._emit(
+            Opcode.NEW_OBJECT,
+            result_reg=obj_reg,
+            operands=[f"enum:{enum_name}"],
+            source_location=self._source_loc(node),
+        )
+
+        if body_node:
+            enumerators = [c for c in body_node.children if c.type == "enumerator"]
+            for i, enumerator in enumerate(enumerators):
+                name_child = enumerator.child_by_field_name("name")
+                value_child = enumerator.child_by_field_name("value")
+                member_name = (
+                    self._node_text(name_child) if name_child else f"__enum_{i}"
+                )
+                if value_child:
+                    val_reg = self._lower_expr(value_child)
+                else:
+                    val_reg = self._fresh_reg()
+                    self._emit(
+                        Opcode.CONST,
+                        result_reg=val_reg,
+                        operands=[str(i)],
+                    )
+                self._emit(
+                    Opcode.STORE_FIELD,
+                    operands=[obj_reg, member_name, val_reg],
+                    source_location=self._source_loc(enumerator),
+                )
+
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=[enum_name, obj_reg],
+            source_location=self._source_loc(node),
+        )
+
+    # -- C: union specifier --------------------------------------------
+
+    def _lower_union_def(self, node):
+        """Lower union_specifier like struct_specifier (reuse _lower_struct_body)."""
+        name_node = node.child_by_field_name("name")
+        body_node = node.child_by_field_name("body")
+
+        if name_node is None and body_node is None:
+            return
+
+        union_name = self._node_text(name_node) if name_node else "__anon_union"
+
+        class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{union_name}")
+        end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{union_name}")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=class_label)
+        if body_node:
+            self._lower_struct_body(body_node)
+        self._emit(Opcode.LABEL, label=end_label)
+
+        cls_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=cls_reg,
+            operands=[
+                constants.CLASS_REF_TEMPLATE.format(name=union_name, label=class_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[union_name, cls_reg])
+
+    # -- C: initializer list -------------------------------------------
+
+    def _lower_initializer_list(self, node) -> str:
+        """Lower initializer_list {a, b, c} as NEW_ARRAY + STORE_INDEX per element."""
+        elements = [c for c in node.children if c.is_named]
+        size_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elements))])
+        arr_reg = self._fresh_reg()
+        self._emit(
+            Opcode.NEW_ARRAY,
+            result_reg=arr_reg,
+            operands=["array", size_reg],
+            source_location=self._source_loc(node),
+        )
+        for i, elem in enumerate(elements):
+            idx_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            val_reg = self._lower_expr(elem)
+            self._emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+        return arr_reg
 
     # -- C: typedef (skip) ---------------------------------------------
 
