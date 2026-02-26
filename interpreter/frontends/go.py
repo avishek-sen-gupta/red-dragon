@@ -675,11 +675,70 @@ class GoFrontend(BaseFrontend):
     # -- Go: composite literal -------------------------------------------------
 
     def _lower_composite_literal(self, node) -> str:
-        reg = self._fresh_reg()
+        """Lower Go composite literal: Point{X: 1} or []int{1, 2, 3}."""
+        type_node = node.child_by_field_name("type")
+        body_node = node.child_by_field_name("body") or next(
+            (c for c in node.children if c.type == "literal_value"), None
+        )
+
+        type_name = self._node_text(type_node) if type_node else "Object"
+        obj_reg = self._fresh_reg()
         self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=[f"composite_literal:{self._node_text(node)[:60]}"],
+            Opcode.NEW_OBJECT,
+            result_reg=obj_reg,
+            operands=[type_name],
             source_location=self._source_loc(node),
         )
-        return reg
+
+        if not body_node:
+            return obj_reg
+
+        elements = [c for c in body_node.children if c.is_named]
+        for i, elem in enumerate(elements):
+            if elem.type == "keyed_element":
+                # Key-value pair: {Key: Value}
+                children = [c for c in elem.children if c.is_named]
+                key_elem = children[0] if children else None
+                val_elem = children[1] if len(children) > 1 else None
+                key_name = (
+                    self._node_text(
+                        next((c for c in key_elem.children if c.is_named), key_elem)
+                    )
+                    if key_elem
+                    else str(i)
+                )
+                val_reg = (
+                    self._lower_expr(
+                        next((c for c in val_elem.children if c.is_named), val_elem)
+                    )
+                    if val_elem
+                    else self._fresh_reg()
+                )
+                self._emit(
+                    Opcode.STORE_FIELD,
+                    operands=[obj_reg, key_name, val_reg],
+                    source_location=self._source_loc(elem),
+                )
+            elif elem.type == "literal_element":
+                # Positional element
+                inner = next((c for c in elem.children if c.is_named), elem)
+                val_reg = self._lower_expr(inner)
+                idx_reg = self._fresh_reg()
+                self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+                self._emit(
+                    Opcode.STORE_INDEX,
+                    operands=[obj_reg, idx_reg, val_reg],
+                    source_location=self._source_loc(elem),
+                )
+            else:
+                # Direct expression element
+                val_reg = self._lower_expr(elem)
+                idx_reg = self._fresh_reg()
+                self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+                self._emit(
+                    Opcode.STORE_INDEX,
+                    operands=[obj_reg, idx_reg, val_reg],
+                    source_location=self._source_loc(elem),
+                )
+
+        return obj_reg

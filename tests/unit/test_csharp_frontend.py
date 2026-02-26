@@ -220,15 +220,14 @@ class TestCSharpFrontendFallback:
         assert ir[0].opcode == Opcode.LABEL
         assert ir[0].label == "entry"
 
-    def test_unsupported_node_produces_symbolic(self):
-        # A lambda expression is lowered as SYMBOLIC
+    def test_lambda_produces_func_ref(self):
+        # A lambda expression is now lowered as an inline function
         source = "var f = (x) => x + 1;"
         ir = _parse_and_lower(source)
-        symbolics = _find_all(ir, Opcode.SYMBOLIC)
-        lambda_symbolics = [
-            s for s in symbolics if any("lambda:" in str(op) for op in s.operands)
-        ]
-        assert len(lambda_symbolics) >= 1
+        opcodes = _opcodes(ir)
+        assert Opcode.RETURN in opcodes
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("func:" in str(inst.operands) for inst in consts)
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
@@ -339,8 +338,8 @@ if (x > 100) {
         ir = _parse_and_lower(source)
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("square" in inst.operands for inst in stores)
-        symbolics = _find_all(ir, Opcode.SYMBOLIC)
-        assert any("lambda:" in str(inst.operands) for inst in symbolics)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("func:" in str(inst.operands) for inst in consts)
 
     def test_for_loop_with_nested_if(self):
         source = """\
@@ -376,3 +375,25 @@ switch (x) {
         eq_ops = [b for b in binops if "==" in b.operands]
         assert len(eq_ops) == 2
         assert Opcode.BRANCH_IF in opcodes
+
+
+class TestCSharpLambda:
+    def test_lambda_expr_body(self):
+        source = "var f = (int x) => x + 1;"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.RETURN in opcodes
+        assert Opcode.BINOP in opcodes
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("func:" in str(inst.operands) for inst in consts)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("f" in inst.operands for inst in stores)
+
+    def test_lambda_block_body(self):
+        source = "var f = (int x) => { return x + 1; };"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.RETURN in opcodes
+        assert Opcode.BINOP in opcodes
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("func:" in str(inst.operands) for inst in consts)

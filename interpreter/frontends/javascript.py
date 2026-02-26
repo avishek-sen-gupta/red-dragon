@@ -77,6 +77,98 @@ class JavaScriptFrontend(BaseFrontend):
             "try_statement": self._lower_try,
         }
 
+    # ── JS var declaration with destructuring ───────────────────
+
+    def _lower_var_declaration(self, node):
+        """Lower lexical_declaration / variable_declaration, handling destructuring."""
+        for child in node.children:
+            if child.type != "variable_declarator":
+                continue
+            name_node = child.child_by_field_name("name")
+            value_node = child.child_by_field_name("value")
+            if name_node is None:
+                continue
+
+            if name_node.type == "object_pattern" and value_node:
+                val_reg = self._lower_expr(value_node)
+                self._lower_object_destructure(name_node, val_reg, node)
+            elif name_node.type == "array_pattern" and value_node:
+                val_reg = self._lower_expr(value_node)
+                self._lower_array_destructure(name_node, val_reg, node)
+            elif value_node:
+                val_reg = self._lower_expr(value_node)
+                self._emit(
+                    Opcode.STORE_VAR,
+                    operands=[self._node_text(name_node), val_reg],
+                    source_location=self._source_loc(node),
+                )
+            else:
+                val_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.CONST,
+                    result_reg=val_reg,
+                    operands=[self.NONE_LITERAL],
+                )
+                self._emit(
+                    Opcode.STORE_VAR,
+                    operands=[self._node_text(name_node), val_reg],
+                    source_location=self._source_loc(node),
+                )
+
+    def _lower_object_destructure(self, pattern_node, val_reg: str, parent_node):
+        """Lower { a, b } = obj or { x: localX } = obj."""
+        for child in pattern_node.children:
+            if child.type == "shorthand_property_identifier_pattern":
+                prop_name = self._node_text(child)
+                field_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.LOAD_FIELD,
+                    result_reg=field_reg,
+                    operands=[val_reg, prop_name],
+                    source_location=self._source_loc(child),
+                )
+                self._emit(
+                    Opcode.STORE_VAR,
+                    operands=[prop_name, field_reg],
+                    source_location=self._source_loc(parent_node),
+                )
+            elif child.type == "pair_pattern":
+                key_node = child.child_by_field_name("key")
+                value_child = child.child_by_field_name("value")
+                if key_node and value_child:
+                    key_name = self._node_text(key_node)
+                    local_name = self._node_text(value_child)
+                    field_reg = self._fresh_reg()
+                    self._emit(
+                        Opcode.LOAD_FIELD,
+                        result_reg=field_reg,
+                        operands=[val_reg, key_name],
+                        source_location=self._source_loc(child),
+                    )
+                    self._emit(
+                        Opcode.STORE_VAR,
+                        operands=[local_name, field_reg],
+                        source_location=self._source_loc(parent_node),
+                    )
+
+    def _lower_array_destructure(self, pattern_node, val_reg: str, parent_node):
+        """Lower [a, b] = arr."""
+        for i, child in enumerate(c for c in pattern_node.children if c.is_named):
+            idx_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            elem_reg = self._fresh_reg()
+            self._emit(
+                Opcode.LOAD_INDEX,
+                result_reg=elem_reg,
+                operands=[val_reg, idx_reg],
+                source_location=self._source_loc(child),
+            )
+            self._emit(
+                Opcode.STORE_VAR,
+                operands=[self._node_text(child), elem_reg],
+                source_location=self._source_loc(parent_node),
+            )
+
     # ── JS attribute access ──────────────────────────────────────
 
     def _lower_attribute(self, node) -> str:
@@ -323,6 +415,14 @@ class JavaScriptFrontend(BaseFrontend):
 
     def _lower_for_in(self, node):
         # for (let x in/of obj) { body }
+        operator_node = node.child_by_field_name("operator")
+        is_for_of = operator_node is not None and self._node_text(operator_node) == "of"
+
+        if is_for_of:
+            self._lower_for_of(node)
+            return
+
+        # for...in — keep SYMBOLIC (key iteration over object properties)
         left = node.child_by_field_name("left")
         right = node.child_by_field_name("right")
         body_node = node.child_by_field_name("body")
@@ -354,7 +454,6 @@ class JavaScriptFrontend(BaseFrontend):
         )
 
         self._emit(Opcode.LABEL, label=body_label)
-        # Store the iteration variable
         if left:
             var_name = self._extract_var_name(left)
             if var_name:
@@ -372,6 +471,55 @@ class JavaScriptFrontend(BaseFrontend):
         self._pop_loop()
 
         self._emit(Opcode.BRANCH, label=loop_label)
+        self._emit(Opcode.LABEL, label=end_label)
+
+    def _lower_for_of(self, node):
+        """Lower for (const x of iterable) as index-based iteration."""
+        left = node.child_by_field_name("left")
+        right = node.child_by_field_name("right")
+        body_node = node.child_by_field_name("body")
+
+        iter_reg = self._lower_expr(right)
+        var_name = self._extract_var_name(left) if left else "__for_of_var"
+
+        idx_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
+        len_reg = self._fresh_reg()
+        self._emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
+
+        loop_label = self._fresh_label("for_of_cond")
+        body_label = self._fresh_label("for_of_body")
+        end_label = self._fresh_label("for_of_end")
+
+        self._emit(Opcode.LABEL, label=loop_label)
+        cond_reg = self._fresh_reg()
+        self._emit(Opcode.BINOP, result_reg=cond_reg, operands=["<", idx_reg, len_reg])
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[cond_reg],
+            label=f"{body_label},{end_label}",
+        )
+
+        self._emit(Opcode.LABEL, label=body_label)
+        elem_reg = self._fresh_reg()
+        self._emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
+        if var_name:
+            self._emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+
+        update_label = self._fresh_label("for_of_update")
+        self._push_loop(update_label, end_label)
+        if body_node:
+            self._lower_block(body_node)
+        self._pop_loop()
+
+        self._emit(Opcode.LABEL, label=update_label)
+        one_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
+        new_idx = self._fresh_reg()
+        self._emit(Opcode.BINOP, result_reg=new_idx, operands=["+", idx_reg, one_reg])
+        self._emit(Opcode.STORE_VAR, operands=["__for_idx", new_idx])
+        self._emit(Opcode.BRANCH, label=loop_label)
+
         self._emit(Opcode.LABEL, label=end_label)
 
     def _extract_var_name(self, node) -> str | None:

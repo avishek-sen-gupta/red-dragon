@@ -18,7 +18,7 @@
 ## Build
 
 - When asked to commit and push, always push to 'main' branch, unless otherwise instructed.
-- Before committing anything, update the README based on the diffs. I should not have to repeat this in my instructions.
+- Before committing anything, update the README based on the diffs.
 - Before committing anything, run `poetry run black` on every Python file touched in the change. The CI pipeline enforces Black formatting and will fail if this is skipped.
 - Before committing anything, run all tests, fixing them if necessary. If test assertions are being removed, ask me to review them.
 

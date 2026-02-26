@@ -330,3 +330,22 @@ class Circle {
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("*" in inst.operands for inst in binops)
         assert len(instructions) > 20
+
+
+class TestTypeScriptDestructuring:
+    def test_obj_destructure_ts(self):
+        source = "const { name, age }: { name: string; age: number } = user;"
+        instructions = _parse_ts(source)
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        field_names = [inst.operands[1] for inst in loads if len(inst.operands) > 1]
+        assert "name" in field_names
+        assert "age" in field_names
+
+    def test_arr_destructure_ts(self):
+        source = "const [first, second]: number[] = arr;"
+        instructions = _parse_ts(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.LOAD_INDEX in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("first" in inst.operands for inst in stores)
+        assert any("second" in inst.operands for inst in stores)
