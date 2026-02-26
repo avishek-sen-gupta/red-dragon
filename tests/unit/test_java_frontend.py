@@ -209,10 +209,10 @@ class TestJavaSpecial:
         opcodes = _opcodes(instructions)
         assert Opcode.THROW in opcodes
 
-    def test_fallback_symbolic_for_unsupported(self):
+    def test_synchronized_no_longer_unsupported(self):
         instructions = _parse_java("class M { void m() { synchronized(this) { } } }")
-        opcodes = _opcodes(instructions)
-        assert Opcode.SYMBOLIC in opcodes
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
@@ -536,3 +536,144 @@ class TestJavaInstanceof:
         opcodes = _opcodes(instructions)
         assert Opcode.CALL_FUNCTION in opcodes
         assert Opcode.BRANCH_IF in opcodes
+
+
+class TestJavaSuperExpression:
+    def test_super_field_access(self):
+        instructions = _parse_java(
+            "class M extends B { void m() { int x = super.field; } }"
+        )
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert any("field" in inst.operands for inst in loads)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+
+    def test_super_method_call(self):
+        instructions = _parse_java(
+            "class M extends B { void m() { super.doStuff(1); } }"
+        )
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("doStuff" in inst.operands for inst in calls)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+
+
+class TestJavaDoStatement:
+    def test_do_while_basic(self):
+        instructions = _parse_java(
+            "class M { void m() { int x = 0; do { x = x + 1; } while (x < 10); } }"
+        )
+        labels = [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+        assert any("do_body" in l for l in labels)
+        assert any("do_cond" in l for l in labels)
+        assert any("do_end" in l for l in labels)
+        assert Opcode.BRANCH_IF in _opcodes(instructions)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+
+    def test_do_while_with_break(self):
+        instructions = _parse_java(
+            "class M { void m() { do { if (done) { break; } } while (true); } }"
+        )
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.BRANCH in opcodes
+
+
+class TestJavaAssertStatement:
+    def test_assert_simple(self):
+        instructions = _parse_java("class M { void m() { assert x > 0; } }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("assert" in inst.operands for inst in calls)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+
+    def test_assert_with_message(self):
+        instructions = _parse_java(
+            'class M { void m() { assert x > 0 : "x must be positive"; } }'
+        )
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("assert" in inst.operands for inst in calls)
+        assert_call = next(c for c in calls if "assert" in c.operands)
+        assert len(assert_call.operands) >= 3  # "assert", cond_reg, msg_reg
+
+
+class TestJavaLabeledStatement:
+    def test_labeled_statement(self):
+        instructions = _parse_java(
+            "class M { void m() { outer: for (int i = 0; i < 5; i++) { x = i; } } }"
+        )
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("i" in inst.operands for inst in stores)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+
+
+class TestJavaSynchronizedStatement:
+    def test_synchronized_block(self):
+        instructions = _parse_java(
+            "class M { void m() { synchronized(lock) { x = 1; } } }"
+        )
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+
+    def test_synchronized_this(self):
+        instructions = _parse_java(
+            "class M { void m() { synchronized(this) { doStuff(); } } }"
+        )
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("doStuff" in inst.operands for inst in calls)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+
+
+class TestJavaStaticInitializer:
+    def test_static_initializer_block(self):
+        instructions = _parse_java("class M { static { x = 10; } }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+
+    def test_static_initializer_with_method_call(self):
+        instructions = _parse_java("class M { static { init(); } }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("init" in inst.operands for inst in calls)
+
+
+class TestJavaExplicitConstructorInvocation:
+    def test_super_constructor_call(self):
+        instructions = _parse_java(
+            "class M extends B { M(int x) { super(x); this.val = x; } }"
+        )
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("super" in inst.operands for inst in calls)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+
+    def test_this_constructor_call(self):
+        instructions = _parse_java("class M { M() { this(0); } M(int x) { } }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("this" in inst.operands for inst in calls)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+
+
+class TestJavaAnnotationTypeDeclaration:
+    def test_annotation_type(self):
+        instructions = _parse_java("public @interface MyAnnotation { String value(); }")
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("annotation:MyAnnotation" in str(inst.operands) for inst in new_objs)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("MyAnnotation" in inst.operands for inst in stores)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported" in str(inst.operands) for inst in symbolics)
+
+    def test_annotation_type_with_members(self):
+        instructions = _parse_java(
+            "public @interface Config { String name(); int value(); }"
+        )
+        store_indexes = _find_all(instructions, Opcode.STORE_INDEX)
+        assert len(store_indexes) >= 2

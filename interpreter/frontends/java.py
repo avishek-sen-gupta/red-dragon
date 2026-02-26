@@ -57,6 +57,7 @@ class JavaFrontend(BaseFrontend):
             "method_reference": self._lower_method_reference,
             "lambda_expression": self._lower_lambda,
             "class_literal": self._lower_class_literal,
+            "super": self._lower_identifier,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -80,6 +81,12 @@ class JavaFrontend(BaseFrontend):
             "switch_expression": self._lower_java_switch,
             "try_statement": self._lower_try,
             "try_with_resources_statement": self._lower_try,
+            "do_statement": self._lower_do_statement,
+            "assert_statement": self._lower_assert_statement,
+            "labeled_statement": self._lower_labeled_statement,
+            "synchronized_statement": self._lower_synchronized_statement,
+            "explicit_constructor_invocation": self._lower_explicit_constructor_invocation,
+            "annotation_type_declaration": self._lower_annotation_type_decl,
         }
 
     # ── Java: local variable declaration ─────────────────────────
@@ -706,6 +713,8 @@ class JavaFrontend(BaseFrontend):
                 self._lower_constructor_decl(child)
             elif child.type == "field_declaration":
                 self._lower_field_decl(child)
+            elif child.type == "static_initializer":
+                self._lower_static_initializer(child)
             elif child.is_named and child.type not in (
                 "modifiers",
                 "marker_annotation",
@@ -860,6 +869,141 @@ class JavaFrontend(BaseFrontend):
 
     def _lower_throw(self, node):
         self._lower_raise_or_throw(node, keyword="throw")
+
+    # ── Java: do-while ────────────────────────────────────────────
+
+    def _lower_do_statement(self, node):
+        """Lower do { body } while (condition);"""
+        body_node = node.child_by_field_name("body")
+        cond_node = node.child_by_field_name("condition")
+
+        body_label = self._fresh_label("do_body")
+        cond_label = self._fresh_label("do_cond")
+        end_label = self._fresh_label("do_end")
+
+        self._emit(Opcode.LABEL, label=body_label)
+        self._push_loop(cond_label, end_label)
+        if body_node:
+            self._lower_block(body_node)
+        self._pop_loop()
+
+        self._emit(Opcode.LABEL, label=cond_label)
+        if cond_node:
+            cond_reg = self._lower_expr(cond_node)
+            self._emit(
+                Opcode.BRANCH_IF,
+                operands=[cond_reg],
+                label=f"{body_label},{end_label}",
+                source_location=self._source_loc(node),
+            )
+        else:
+            self._emit(Opcode.BRANCH, label=body_label)
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+    # ── Java: assert ────────────────────────────────────────────
+
+    def _lower_assert_statement(self, node):
+        """Lower assert condition; or assert condition : message;"""
+        named_children = [c for c in node.children if c.is_named]
+        cond_node = named_children[0] if named_children else None
+        message_node = named_children[1] if len(named_children) > 1 else None
+
+        arg_regs = []
+        if cond_node:
+            arg_regs.append(self._lower_expr(cond_node))
+        if message_node:
+            arg_regs.append(self._lower_expr(message_node))
+
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=self._fresh_reg(),
+            operands=["assert"] + arg_regs,
+            source_location=self._source_loc(node),
+        )
+
+    # ── Java: labeled statement ─────────────────────────────────
+
+    def _lower_labeled_statement(self, node):
+        """Lower label: statement — just lower the inner statement."""
+        named_children = [c for c in node.children if c.is_named]
+        if len(named_children) >= 2:
+            self._lower_stmt(named_children[-1])
+
+    # ── Java: synchronized ──────────────────────────────────────
+
+    def _lower_synchronized_statement(self, node):
+        """Lower synchronized(expr) { body } — lower lock expr and body."""
+        body_node = node.child_by_field_name("body")
+        lock_node = next(
+            (c for c in node.children if c.type == "parenthesized_expression"),
+            None,
+        )
+        if lock_node:
+            self._lower_expr(lock_node)
+        if body_node:
+            self._lower_block(body_node)
+
+    # ── Java: static initializer ────────────────────────────────
+
+    def _lower_static_initializer(self, node):
+        """Lower static { ... } — find the block child and lower it."""
+        block_node = next(
+            (c for c in node.children if c.type == "block"),
+            None,
+        )
+        if block_node:
+            self._lower_block(block_node)
+
+    # ── Java: explicit constructor invocation ───────────────────
+
+    def _lower_explicit_constructor_invocation(self, node):
+        """Lower super(...) or this(...) explicit constructor calls."""
+        args_node = node.child_by_field_name("arguments")
+        arg_regs = self._extract_call_args_unwrap(args_node) if args_node else []
+
+        first_named = next(
+            (c for c in node.children if c.type in ("super", "this")), None
+        )
+        target_name = first_named.type if first_named else "super"
+
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=self._fresh_reg(),
+            operands=[target_name] + arg_regs,
+            source_location=self._source_loc(node),
+        )
+
+    # ── Java: annotation type declaration ───────────────────────
+
+    def _lower_annotation_type_decl(self, node):
+        """Lower @interface Name { ... } like interface declaration."""
+        name_node = node.child_by_field_name("name")
+        if not name_node:
+            return
+        annot_name = self._node_text(name_node)
+        obj_reg = self._fresh_reg()
+        self._emit(
+            Opcode.NEW_OBJECT,
+            result_reg=obj_reg,
+            operands=[f"annotation:{annot_name}"],
+            source_location=self._source_loc(node),
+        )
+        body_node = node.child_by_field_name("body")
+        if body_node:
+            for i, child in enumerate(c for c in body_node.children if c.is_named):
+                member_name_node = child.child_by_field_name("name")
+                member_name = (
+                    self._node_text(member_name_node)
+                    if member_name_node
+                    else self._node_text(child)[:40]
+                )
+                key_reg = self._fresh_reg()
+                self._emit(Opcode.CONST, result_reg=key_reg, operands=[member_name])
+                val_reg = self._fresh_reg()
+                self._emit(Opcode.CONST, result_reg=val_reg, operands=[str(i)])
+                self._emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
+        self._emit(Opcode.STORE_VAR, operands=[annot_name, obj_reg])
 
     # ── Java: if alternative ─────────────────────────────────────
 
