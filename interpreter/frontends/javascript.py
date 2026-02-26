@@ -37,15 +37,18 @@ class JavaScriptFrontend(BaseFrontend):
             "identifier": self._lower_identifier,
             "number": self._lower_const_literal,
             "string": self._lower_const_literal,
-            "template_string": self._lower_const_literal,
+            "template_string": self._lower_template_string,
+            "template_substitution": self._lower_template_substitution,
             "true": self._lower_const_literal,
             "false": self._lower_const_literal,
             "null": self._lower_const_literal,
             "undefined": self._lower_const_literal,
             "binary_expression": self._lower_binop,
+            "augmented_assignment_expression": self._lower_binop,
             "unary_expression": self._lower_unop,
             "update_expression": self._lower_update_expr,
             "call_expression": self._lower_call,
+            "new_expression": self._lower_new_expression,
             "member_expression": self._lower_attribute,
             "subscript_expression": self._lower_js_subscript,
             "parenthesized_expression": self._lower_paren,
@@ -55,8 +58,18 @@ class JavaScriptFrontend(BaseFrontend):
             "arrow_function": self._lower_arrow_function,
             "ternary_expression": self._lower_ternary,
             "this": self._lower_identifier,
+            "super": self._lower_identifier,
             "property_identifier": self._lower_identifier,
             "shorthand_property_identifier": self._lower_identifier,
+            "await_expression": self._lower_await_expression,
+            "yield_expression": self._lower_yield_expression,
+            "regex": self._lower_const_literal,
+            "sequence_expression": self._lower_sequence_expression,
+            "spread_element": self._lower_spread_element,
+            "function": self._lower_function_expression,
+            "function_expression": self._lower_function_expression,
+            "generator_function": self._lower_function_expression,
+            "generator_function_declaration": self._lower_function_def,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -75,6 +88,9 @@ class JavaScriptFrontend(BaseFrontend):
             "break_statement": self._lower_break,
             "continue_statement": self._lower_continue,
             "try_statement": self._lower_try,
+            "switch_statement": self._lower_switch_statement,
+            "do_statement": self._lower_do_statement,
+            "labeled_statement": self._lower_labeled_statement,
         }
 
     # ── JS var declaration with destructuring ───────────────────
@@ -638,6 +654,8 @@ class JavaScriptFrontend(BaseFrontend):
             for child in body_node.children:
                 if child.type == "method_definition":
                     self._lower_method_def(child)
+                elif child.type == "class_static_block":
+                    self._lower_class_static_block(child)
                 elif child.is_named:
                     self._lower_stmt(child)
 
@@ -689,3 +707,297 @@ class JavaScriptFrontend(BaseFrontend):
             ],
         )
         self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+    # ── JS new expression ────────────────────────────────────────
+
+    def _lower_new_expression(self, node) -> str:
+        """Lower `new Foo(args)` → NEW_OBJECT(class) + CALL_METHOD('constructor', args)."""
+        constructor_node = node.child_by_field_name("constructor")
+        args_node = node.child_by_field_name("arguments")
+        class_name = self._node_text(constructor_node) if constructor_node else "Object"
+        arg_regs = self._extract_call_args(args_node) if args_node else []
+
+        obj_reg = self._fresh_reg()
+        self._emit(
+            Opcode.NEW_OBJECT,
+            result_reg=obj_reg,
+            operands=[class_name],
+            source_location=self._source_loc(node),
+        )
+        result_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_METHOD,
+            result_reg=result_reg,
+            operands=[obj_reg, "constructor"] + arg_regs,
+            source_location=self._source_loc(node),
+        )
+        return result_reg
+
+    # ── JS await expression ──────────────────────────────────────
+
+    def _lower_await_expression(self, node) -> str:
+        """Lower `await expr` → CALL_FUNCTION('await', expr)."""
+        children = [c for c in node.children if c.is_named]
+        expr_reg = self._lower_expr(children[0]) if children else self._fresh_reg()
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["await", expr_reg],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # ── JS yield expression ──────────────────────────────────────
+
+    def _lower_yield_expression(self, node) -> str:
+        """Lower `yield expr` or bare `yield` → CALL_FUNCTION('yield', expr)."""
+        children = [c for c in node.children if c.is_named]
+        if children:
+            expr_reg = self._lower_expr(children[0])
+            reg = self._fresh_reg()
+            self._emit(
+                Opcode.CALL_FUNCTION,
+                result_reg=reg,
+                operands=["yield", expr_reg],
+                source_location=self._source_loc(node),
+            )
+            return reg
+        # Bare yield
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[self.NONE_LITERAL],
+        )
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["yield", none_reg],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # ── JS sequence expression ───────────────────────────────────
+
+    def _lower_sequence_expression(self, node) -> str:
+        """Lower `(a, b, c)` → evaluate all, return last register."""
+        children = [c for c in node.children if c.is_named]
+        if not children:
+            return self._lower_const_literal(node)
+        last_reg = self._lower_expr(children[0])
+        for child in children[1:]:
+            last_reg = self._lower_expr(child)
+        return last_reg
+
+    # ── JS spread element ────────────────────────────────────────
+
+    def _lower_spread_element(self, node) -> str:
+        """Lower `...expr` → CALL_FUNCTION('spread', expr)."""
+        children = [c for c in node.children if c.is_named]
+        expr_reg = self._lower_expr(children[0]) if children else self._fresh_reg()
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["spread", expr_reg],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # ── JS function expression (anonymous) ───────────────────────
+
+    def _lower_function_expression(self, node) -> str:
+        """Lower anonymous function expression: same as function_declaration but anonymous."""
+        name_node = node.child_by_field_name("name")
+        params_node = node.child_by_field_name("parameters")
+        body_node = node.child_by_field_name("body")
+
+        func_name = (
+            self._node_text(name_node) if name_node else f"__anon_{self._label_counter}"
+        )
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        self._emit(Opcode.BRANCH, label=end_label)
+        self._emit(Opcode.LABEL, label=func_label)
+
+        if params_node:
+            self._lower_params(params_node)
+
+        if body_node:
+            self._lower_block(body_node)
+
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[self.DEFAULT_RETURN_VALUE],
+        )
+        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        func_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        return func_reg
+
+    # ── JS template string with substitutions ────────────────────
+
+    def _lower_template_string(self, node) -> str:
+        """Lower template string, descending into template_substitution children."""
+        has_substitution = any(c.type == "template_substitution" for c in node.children)
+        if not has_substitution:
+            return self._lower_const_literal(node)
+
+        # Build by concatenating literal fragments and substitution expressions
+        parts: list[str] = []
+        for child in node.children:
+            if child.type == "template_substitution":
+                parts.append(self._lower_template_substitution(child))
+            elif child.is_named:
+                parts.append(self._lower_expr(child))
+            elif child.type not in ("`",):
+                # String fragment
+                frag_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.CONST,
+                    result_reg=frag_reg,
+                    operands=[self._node_text(child)],
+                )
+                parts.append(frag_reg)
+
+        if not parts:
+            return self._lower_const_literal(node)
+        result = parts[0]
+        for part in parts[1:]:
+            new_reg = self._fresh_reg()
+            self._emit(
+                Opcode.BINOP,
+                result_reg=new_reg,
+                operands=["+", result, part],
+                source_location=self._source_loc(node),
+            )
+            result = new_reg
+        return result
+
+    def _lower_template_substitution(self, node) -> str:
+        """Lower ${expr} inside a template string."""
+        children = [c for c in node.children if c.is_named]
+        if children:
+            return self._lower_expr(children[0])
+        return self._lower_const_literal(node)
+
+    # ── JS switch statement ──────────────────────────────────────
+
+    def _lower_switch_statement(self, node):
+        """Lower switch(x) { case a: ... default: ... } as if/else chain."""
+        value_node = node.child_by_field_name("value")
+        body_node = node.child_by_field_name("body")
+
+        disc_reg = self._lower_expr(value_node) if value_node else self._fresh_reg()
+        end_label = self._fresh_label("switch_end")
+
+        self._break_target_stack.append(end_label)
+
+        if body_node:
+            cases = [
+                c
+                for c in body_node.children
+                if c.type in ("switch_case", "switch_default")
+            ]
+            for case_node in cases:
+                if case_node.type == "switch_case":
+                    value_child = case_node.child_by_field_name("value")
+                    if value_child:
+                        case_reg = self._lower_expr(value_child)
+                        cond_reg = self._fresh_reg()
+                        self._emit(
+                            Opcode.BINOP,
+                            result_reg=cond_reg,
+                            operands=["===", disc_reg, case_reg],
+                            source_location=self._source_loc(case_node),
+                        )
+                        body_label = self._fresh_label("case_body")
+                        next_label = self._fresh_label("case_next")
+                        self._emit(
+                            Opcode.BRANCH_IF,
+                            operands=[cond_reg],
+                            label=f"{body_label},{next_label}",
+                        )
+                        self._emit(Opcode.LABEL, label=body_label)
+                        self._lower_switch_case_body(case_node)
+                        self._emit(Opcode.BRANCH, label=end_label)
+                        self._emit(Opcode.LABEL, label=next_label)
+                elif case_node.type == "switch_default":
+                    self._lower_switch_case_body(case_node)
+
+        self._break_target_stack.pop()
+        self._emit(Opcode.LABEL, label=end_label)
+
+    def _lower_switch_case_body(self, case_node):
+        """Lower the body statements of a switch case/default clause."""
+        for child in case_node.children:
+            if child.is_named and child.type not in ("switch_case", "switch_default"):
+                self._lower_stmt(child)
+
+    # ── JS do...while statement ──────────────────────────────────
+
+    def _lower_do_statement(self, node):
+        """Lower do { body } while (cond)."""
+        body_node = node.child_by_field_name("body")
+        cond_node = node.child_by_field_name("condition")
+
+        body_label = self._fresh_label("do_body")
+        cond_label = self._fresh_label("do_cond")
+        end_label = self._fresh_label("do_end")
+
+        self._emit(Opcode.LABEL, label=body_label)
+
+        self._push_loop(cond_label, end_label)
+        if body_node:
+            self._lower_block(body_node)
+        self._pop_loop()
+
+        self._emit(Opcode.LABEL, label=cond_label)
+        cond_reg = self._lower_expr(cond_node) if cond_node else self._fresh_reg()
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[cond_reg],
+            label=f"{body_label},{end_label}",
+            source_location=self._source_loc(node),
+        )
+        self._emit(Opcode.LABEL, label=end_label)
+
+    # ── JS labeled statement ─────────────────────────────────────
+
+    def _lower_labeled_statement(self, node):
+        """Lower `label: stmt` → LABEL(name) + lower body."""
+        label_node = node.child_by_field_name("label")
+        body_node = node.child_by_field_name("body")
+
+        label_name = self._node_text(label_node) if label_node else "unknown_label"
+        label = self._fresh_label(label_name)
+        self._emit(Opcode.LABEL, label=label)
+
+        if body_node:
+            self._lower_stmt(body_node)
+
+    # ── JS class static block ────────────────────────────────────
+
+    def _lower_class_static_block(self, node):
+        """Lower `static { ... }` inside a class body."""
+        body_node = node.child_by_field_name("body")
+        if body_node:
+            self._lower_block(body_node)
+            return
+        # Fallback: lower all named children as statements
+        for child in node.children:
+            if child.is_named and child.type not in ("static",):
+                self._lower_stmt(child)

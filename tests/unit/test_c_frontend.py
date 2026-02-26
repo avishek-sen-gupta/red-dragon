@@ -540,3 +540,94 @@ class TestCFrontendTypedef:
         ir = _parse_and_lower(source)
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("ulong" in inst.operands for inst in stores)
+
+
+class TestCFrontendEnumSpecifier:
+    def test_enum_produces_new_object_and_store_field(self):
+        source = "enum Color { Red, Green, Blue };"
+        ir = _parse_and_lower(source)
+        new_objs = _find_all(ir, Opcode.NEW_OBJECT)
+        assert any("enum:Color" in str(inst.operands) for inst in new_objs)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        field_names = [
+            inst.operands[1] for inst in store_fields if len(inst.operands) > 1
+        ]
+        assert "Red" in field_names
+        assert "Green" in field_names
+        assert "Blue" in field_names
+
+    def test_enum_ordinal_values(self):
+        source = "enum Priority { Low, Medium, High };"
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        const_vals = [inst.operands[0] for inst in consts if inst.operands]
+        assert "0" in const_vals
+        assert "1" in const_vals
+        assert "2" in const_vals
+
+    def test_enum_with_explicit_values(self):
+        source = "enum Bits { A = 1, B = 2, C = 4 };"
+        ir = _parse_and_lower(source)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        field_names = [
+            inst.operands[1] for inst in store_fields if len(inst.operands) > 1
+        ]
+        assert "A" in field_names
+        assert "B" in field_names
+        assert "C" in field_names
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("Bits" in inst.operands for inst in stores)
+
+
+class TestCFrontendUnionSpecifier:
+    def test_union_produces_class_ref(self):
+        source = """\
+union Data {
+    int i;
+    float f;
+};
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("Data" in inst.operands for inst in stores)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("class:" in str(inst.operands) for inst in consts)
+
+    def test_union_fields_lowered(self):
+        source = """\
+union Value {
+    int x;
+    double y;
+};
+"""
+        ir = _parse_and_lower(source)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        field_names = [
+            inst.operands[1] for inst in store_fields if len(inst.operands) > 1
+        ]
+        assert "x" in field_names
+        assert "y" in field_names
+
+
+class TestCFrontendInitializerList:
+    def test_initializer_list_produces_new_array(self):
+        source = "void f() { int arr[] = {1, 2, 3}; }"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.NEW_ARRAY in opcodes
+        store_indexes = _find_all(ir, Opcode.STORE_INDEX)
+        assert len(store_indexes) >= 3
+
+    def test_initializer_list_empty(self):
+        source = "void f() { int arr[] = {}; }"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.NEW_ARRAY in opcodes
+
+    def test_initializer_list_nested(self):
+        source = "void f() { int m[2][2] = {{1, 2}, {3, 4}}; }"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.NEW_ARRAY in opcodes
+        store_indexes = _find_all(ir, Opcode.STORE_INDEX)
+        assert len(store_indexes) >= 2
