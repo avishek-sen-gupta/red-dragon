@@ -3,6 +3,7 @@
 ## Workflow Rules
 
 - The workflow is Brainstorm -> Discuss Trade-offs of different designs -> Plan -> Write unit tests -> Implement -> Fix Tests -> Commit -> Refactor.
+- When writing tests, be thorough. Think of happy path scenarios first, then write code for that. Then write tests for edge cases, and modify the existing implementation to account for those. Don't try to do too much at any one time.
 - When brainstorming / planning, consider the follow parameters:
   - Whether there are any open source projects which perform similar functionality, so that you don't have to write new code for the task
   - The complexity of the implementation matters. Think of a good balance between absolute correctness and "good enough". If in doubt, prompt me for guidance.
