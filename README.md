@@ -217,6 +217,23 @@ mermaid = dump_mermaid(source, function_name="my_func")
 fn_source = extract_function_source(source, "my_func", language="python")
 ```
 
+### Standalone VM execution
+
+`execute_cfg` runs a pre-built CFG without re-running the full parse → lower → build pipeline — useful for programmatic use where you build/customize the CFG and registry independently:
+
+```python
+from interpreter import execute_cfg, VMConfig
+from interpreter.cfg import build_cfg
+from interpreter.registry import build_registry
+
+instructions = lower_source(source, language="python")
+cfg = build_cfg(instructions)
+registry = build_registry(instructions, cfg)
+
+vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+# stats.steps, stats.llm_calls, stats.final_heap_objects, ...
+```
+
 | Function | Returns | Purpose |
 |---|---|---|
 | `lower_source(source, language, frontend_type, backend)` | `list[IRInstruction]` | Parse + lower source to IR |
@@ -225,8 +242,9 @@ fn_source = extract_function_source(source, "my_func", language="python")
 | `dump_cfg(source, language, frontend_type, backend, function_name)` | `str` | CFG text output |
 | `dump_mermaid(source, language, frontend_type, backend, function_name)` | `str` | Mermaid flowchart output |
 | `extract_function_source(source, function_name, language)` | `str` | Raw source text of a named function (recursive AST walk) |
+| `execute_cfg(cfg, entry_point, registry, config)` | `(VMState, ExecutionStats)` | Execute a pre-built CFG from a given entry point |
 
-Functions compose hierarchically: `dump_ir` calls `lower_source`; `dump_cfg` and `dump_mermaid` call `build_cfg_from_source`, which calls `lower_source`. Full execution is available via `interpreter.run()`.
+Functions compose hierarchically: `dump_ir` calls `lower_source`; `dump_cfg` and `dump_mermaid` call `build_cfg_from_source`, which calls `lower_source`. Full execution is available via `interpreter.run()`, or via `execute_cfg()` for standalone VM execution with a pre-built CFG.
 
 ## Testing
 

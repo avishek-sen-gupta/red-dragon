@@ -1,6 +1,6 @@
 """LLM Symbolic Interpreter package."""
 
-from .run import run  # noqa: F401
+from .run import run, execute_cfg, VMConfig, ExecutionStats  # noqa: F401
 from .api import (  # noqa: F401
     lower_source,
     dump_ir,
