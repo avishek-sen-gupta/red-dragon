@@ -35,22 +35,51 @@ class Opcode(str, Enum):
     LABEL = "LABEL"
 
 
+class SourceLocation(BaseModel):
+    """Structured source span from tree-sitter AST nodes."""
+
+    start_line: int
+    start_col: int
+    end_line: int
+    end_col: int
+
+    def is_unknown(self) -> bool:
+        return (
+            self.start_line == 0
+            and self.start_col == 0
+            and self.end_line == 0
+            and self.end_col == 0
+        )
+
+    def __str__(self) -> str:
+        if self.is_unknown():
+            return "<unknown>"
+        return f"{self.start_line}:{self.start_col}-{self.end_line}:{self.end_col}"
+
+
+NO_SOURCE_LOCATION = SourceLocation(start_line=0, start_col=0, end_line=0, end_col=0)
+
+
 class IRInstruction(BaseModel):
     opcode: Opcode
     result_reg: str | None = None
     operands: list[Any] = []
     label: str | None = None  # for LABEL / branch targets
-    source_location: str | None = None
+    source_location: SourceLocation = NO_SOURCE_LOCATION
 
     def __str__(self) -> str:
         parts: list[str] = []
         if self.label and self.opcode == Opcode.LABEL:
-            return f"{self.label}:"
-        if self.result_reg:
-            parts.append(f"{self.result_reg} =")
-        parts.append(self.opcode.value.lower())
-        for op in self.operands:
-            parts.append(str(op))
-        if self.label and self.opcode != Opcode.LABEL:
-            parts.append(self.label)
-        return " ".join(parts)
+            base = f"{self.label}:"
+        else:
+            if self.result_reg:
+                parts.append(f"{self.result_reg} =")
+            parts.append(self.opcode.value.lower())
+            for op in self.operands:
+                parts.append(str(op))
+            if self.label and self.opcode != Opcode.LABEL:
+                parts.append(self.label)
+            base = " ".join(parts)
+        if not self.source_location.is_unknown():
+            return f"{base}  # {self.source_location}"
+        return base

@@ -116,7 +116,7 @@ class CFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_VAR,
                     operands=[var_name, val_reg],
-                    source_location=self._source_loc(node),
+                    node=node,
                 )
 
     def _lower_init_declarator(self, node):
@@ -138,7 +138,7 @@ class CFrontend(BaseFrontend):
         self._emit(
             Opcode.STORE_VAR,
             operands=[var_name, val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     def _extract_declarator_name(self, decl_node) -> str:
@@ -190,9 +190,7 @@ class CFrontend(BaseFrontend):
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
 
         if params_node:
@@ -239,7 +237,7 @@ class CFrontend(BaseFrontend):
                         Opcode.SYMBOLIC,
                         result_reg=self._fresh_reg(),
                         operands=[f"{constants.PARAM_PREFIX}{pname}"],
-                        source_location=self._source_loc(child),
+                        node=child,
                     )
                     self._emit(
                         Opcode.STORE_VAR,
@@ -263,9 +261,7 @@ class CFrontend(BaseFrontend):
             f"{constants.END_CLASS_LABEL_PREFIX}{struct_name}"
         )
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
         if body_node:
             self._lower_struct_body(body_node)
@@ -306,12 +302,12 @@ class CFrontend(BaseFrontend):
                 Opcode.CONST,
                 result_reg=default_reg,
                 operands=["0"],
-                source_location=self._source_loc(node),
+                node=node,
             )
             self._emit(
                 Opcode.STORE_FIELD,
                 operands=[this_reg, fname, default_reg],
-                source_location=self._source_loc(node),
+                node=node,
             )
 
     # -- C: field expression -------------------------------------------
@@ -329,7 +325,7 @@ class CFrontend(BaseFrontend):
             Opcode.LOAD_FIELD,
             result_reg=reg,
             operands=[obj_reg, field_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -348,7 +344,7 @@ class CFrontend(BaseFrontend):
             Opcode.LOAD_INDEX,
             result_reg=reg,
             operands=[arr_reg, idx_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -368,7 +364,7 @@ class CFrontend(BaseFrontend):
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
         elif target.type == "field_expression":
             obj_node = target.child_by_field_name("argument")
@@ -378,7 +374,7 @@ class CFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_FIELD,
                     operands=[obj_reg, self._node_text(field_node), val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         elif target.type == "subscript_expression":
             arr_node = target.child_by_field_name("argument")
@@ -389,7 +385,7 @@ class CFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_INDEX,
                     operands=[arr_reg, idx_reg, val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         elif target.type == "pointer_expression":
             # *ptr = val -> lower_expr(ptr_operand) -> STORE_FIELD ptr_reg, "*", val_reg
@@ -402,13 +398,13 @@ class CFrontend(BaseFrontend):
             self._emit(
                 Opcode.STORE_FIELD,
                 operands=[ptr_reg, "*", val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
         else:
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
 
     # -- C: cast expression --------------------------------------------
@@ -449,7 +445,7 @@ class CFrontend(BaseFrontend):
                 Opcode.UNOP,
                 result_reg=reg,
                 operands=["&", inner_reg],
-                source_location=self._source_loc(node),
+                node=node,
             )
             return reg
 
@@ -459,7 +455,7 @@ class CFrontend(BaseFrontend):
             Opcode.LOAD_FIELD,
             result_reg=reg,
             operands=[inner_reg, "*"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -492,7 +488,7 @@ class CFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["sizeof", arg_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -558,7 +554,7 @@ class CFrontend(BaseFrontend):
             Opcode.NEW_OBJECT,
             result_reg=obj_reg,
             operands=[type_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         if init_node:
             elements = [c for c in init_node.children if c.is_named]
@@ -595,7 +591,7 @@ class CFrontend(BaseFrontend):
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{body_label},{end_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
         else:
             self._emit(Opcode.BRANCH, label=body_label)
@@ -638,7 +634,7 @@ class CFrontend(BaseFrontend):
                     Opcode.BINOP,
                     result_reg=cmp_reg,
                     operands=["==", subject_reg, case_reg],
-                    source_location=self._source_loc(case),
+                    node=case,
                 )
                 self._emit(
                     Opcode.BRANCH_IF,
@@ -674,7 +670,7 @@ class CFrontend(BaseFrontend):
             self._emit(
                 Opcode.BRANCH,
                 label=target_label,
-                source_location=self._source_loc(node),
+                node=node,
             )
         else:
             logger.warning("goto without label: %s", self._node_text(node)[:40])
@@ -711,7 +707,7 @@ class CFrontend(BaseFrontend):
             Opcode.NEW_OBJECT,
             result_reg=obj_reg,
             operands=[f"enum:{enum_name}"],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         if body_node:
@@ -734,13 +730,13 @@ class CFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_FIELD,
                     operands=[obj_reg, member_name, val_reg],
-                    source_location=self._source_loc(enumerator),
+                    node=enumerator,
                 )
 
         self._emit(
             Opcode.STORE_VAR,
             operands=[enum_name, obj_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # -- C: union specifier --------------------------------------------
@@ -758,9 +754,7 @@ class CFrontend(BaseFrontend):
         class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{union_name}")
         end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{union_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
         if body_node:
             self._lower_struct_body(body_node)
@@ -788,7 +782,7 @@ class CFrontend(BaseFrontend):
             Opcode.NEW_ARRAY,
             result_reg=arr_reg,
             operands=["array", size_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         for i, elem in enumerate(elements):
             idx_reg = self._fresh_reg()
@@ -821,10 +815,10 @@ class CFrontend(BaseFrontend):
             Opcode.CONST,
             result_reg=type_reg,
             operands=[type_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         self._emit(
             Opcode.STORE_VAR,
             operands=[alias_name, type_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )

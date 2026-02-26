@@ -122,7 +122,7 @@ class RustFrontend(BaseFrontend):
         self._emit(
             Opcode.STORE_VAR,
             operands=[var_name, val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     def _extract_let_pattern_name(self, pattern_node) -> str:
@@ -169,7 +169,7 @@ class RustFrontend(BaseFrontend):
             Opcode.BINOP,
             result_reg=result,
             operands=[op_text, lhs_reg, rhs_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         self._lower_store_target(left, result, node)
         return result
@@ -188,7 +188,7 @@ class RustFrontend(BaseFrontend):
             Opcode.LOAD_FIELD,
             result_reg=reg,
             operands=[obj_reg, field_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -203,7 +203,7 @@ class RustFrontend(BaseFrontend):
             Opcode.UNOP,
             result_reg=reg,
             operands=["&", inner_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -216,7 +216,7 @@ class RustFrontend(BaseFrontend):
             Opcode.UNOP,
             result_reg=reg,
             operands=["*", inner_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -238,14 +238,14 @@ class RustFrontend(BaseFrontend):
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{true_label},{false_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
         else:
             self._emit(
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{true_label},{end_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
 
         self._emit(Opcode.LABEL, label=true_label)
@@ -366,7 +366,7 @@ class RustFrontend(BaseFrontend):
         self._emit(
             Opcode.RETURN,
             operands=[val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return val_reg
 
@@ -409,7 +409,7 @@ class RustFrontend(BaseFrontend):
                     Opcode.BINOP,
                     result_reg=cond_reg,
                     operands=["==", val_reg, pattern_reg],
-                    source_location=self._source_loc(arm),
+                    node=arm,
                 )
                 self._emit(
                     Opcode.BRANCH_IF,
@@ -507,7 +507,7 @@ class RustFrontend(BaseFrontend):
                     Opcode.SYMBOLIC,
                     result_reg=self._fresh_reg(),
                     operands=[f"{constants.PARAM_PREFIX}{pname}"],
-                    source_location=self._source_loc(child),
+                    node=child,
                 )
                 self._emit(
                     Opcode.STORE_VAR,
@@ -524,9 +524,7 @@ class RustFrontend(BaseFrontend):
         class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
         end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
         self._emit(Opcode.LABEL, label=end_label)
 
@@ -550,9 +548,7 @@ class RustFrontend(BaseFrontend):
         class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{impl_name}")
         end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{impl_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
         if body_node:
             self._lower_block(body_node)
@@ -580,7 +576,7 @@ class RustFrontend(BaseFrontend):
             Opcode.NEW_OBJECT,
             result_reg=obj_reg,
             operands=[struct_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         if body_node:
@@ -620,7 +616,7 @@ class RustFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=[macro_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -640,7 +636,7 @@ class RustFrontend(BaseFrontend):
             Opcode.LOAD_INDEX,
             result_reg=reg,
             operands=[obj_reg, idx_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -655,7 +651,7 @@ class RustFrontend(BaseFrontend):
             Opcode.NEW_ARRAY,
             result_reg=arr_reg,
             operands=["tuple", size_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         for i, elem in enumerate(elems):
             val_reg = self._lower_expr(elem)
@@ -678,7 +674,7 @@ class RustFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["try_unwrap", inner_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -696,7 +692,7 @@ class RustFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["await", inner_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -711,9 +707,7 @@ class RustFrontend(BaseFrontend):
         class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{trait_name}")
         end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{trait_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
         if body_node:
             self._lower_block(body_node)
@@ -742,7 +736,7 @@ class RustFrontend(BaseFrontend):
             Opcode.NEW_OBJECT,
             result_reg=obj_reg,
             operands=[f"enum:{enum_name}"],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         if body_node:
@@ -787,7 +781,7 @@ class RustFrontend(BaseFrontend):
         self._emit(
             Opcode.STORE_VAR,
             operands=[var_name, val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # -- static item -------------------------------------------------------
@@ -810,7 +804,7 @@ class RustFrontend(BaseFrontend):
         self._emit(
             Opcode.STORE_VAR,
             operands=[var_name, val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # -- type alias --------------------------------------------------------
@@ -827,12 +821,12 @@ class RustFrontend(BaseFrontend):
             Opcode.CONST,
             result_reg=val_reg,
             operands=[type_text],
-            source_location=self._source_loc(node),
+            node=node,
         )
         self._emit(
             Opcode.STORE_VAR,
             operands=[alias_name, val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # -- mod item ----------------------------------------------------------
@@ -862,7 +856,7 @@ class RustFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["as", expr_reg, type_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -878,7 +872,7 @@ class RustFrontend(BaseFrontend):
             Opcode.LOAD_VAR,
             result_reg=reg,
             operands=[full_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -890,7 +884,7 @@ class RustFrontend(BaseFrontend):
             Opcode.SYMBOLIC,
             result_reg=reg,
             operands=[f"{node.type}:{self._node_text(node)[:60]}"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -914,7 +908,7 @@ class RustFrontend(BaseFrontend):
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
         elif target.type == "field_expression":
             value_node = target.child_by_field_name("value")
@@ -924,7 +918,7 @@ class RustFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_FIELD,
                     operands=[obj_reg, self._node_text(field_node), val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         elif target.type == "index_expression":
             children = [c for c in target.children if c.is_named]
@@ -934,7 +928,7 @@ class RustFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_INDEX,
                     operands=[obj_reg, idx_reg, val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         elif target.type == "dereference_expression":
             inner_children = [c for c in target.children if c.type != "*"]
@@ -943,11 +937,11 @@ class RustFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_VAR,
                     operands=[f"*{self._node_text(inner_children[0])}", val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         else:
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )

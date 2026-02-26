@@ -56,7 +56,7 @@ class TypeScriptFrontend(JavaScriptFrontend):
                     Opcode.SYMBOLIC,
                     result_reg=self._fresh_reg(),
                     operands=[f"{constants.PARAM_PREFIX}{pname}"],
-                    source_location=self._source_loc(child),
+                    node=child,
                 )
                 self._emit(
                     Opcode.STORE_VAR,
@@ -75,7 +75,7 @@ class TypeScriptFrontend(JavaScriptFrontend):
                     Opcode.SYMBOLIC,
                     result_reg=self._fresh_reg(),
                     operands=[f"{constants.PARAM_PREFIX}{pname}"],
-                    source_location=self._source_loc(child),
+                    node=child,
                 )
                 self._emit(
                     Opcode.STORE_VAR,
@@ -119,7 +119,7 @@ class TypeScriptFrontend(JavaScriptFrontend):
             Opcode.NEW_OBJECT,
             result_reg=obj_reg,
             operands=[f"interface:{iface_name}"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         body_node = node.child_by_field_name("body")
         if body_node:
@@ -149,7 +149,7 @@ class TypeScriptFrontend(JavaScriptFrontend):
                 Opcode.NEW_OBJECT,
                 result_reg=obj_reg,
                 operands=[f"enum:{enum_name}"],
-                source_location=self._source_loc(node),
+                node=node,
             )
             if body_node:
                 for i, child in enumerate(c for c in body_node.children if c.is_named):

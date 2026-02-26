@@ -6,7 +6,7 @@ import logging
 from typing import Any, Callable
 
 from ..frontend import Frontend
-from ..ir import IRInstruction, Opcode
+from ..ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
 from .. import constants
 
 logger = logging.getLogger(__name__)
@@ -93,14 +93,20 @@ class BaseFrontend(Frontend):
         result_reg: str = "",
         operands: list[Any] = [],
         label: str = "",
-        source_location: str = "",
+        source_location: SourceLocation = NO_SOURCE_LOCATION,
+        node=None,
     ) -> IRInstruction:
+        loc = (
+            source_location
+            if not source_location.is_unknown()
+            else (self._source_loc(node) if node else NO_SOURCE_LOCATION)
+        )
         inst = IRInstruction(
             opcode=opcode,
             result_reg=result_reg or None,
             operands=operands or [],
             label=label or None,
-            source_location=source_location or None,
+            source_location=loc,
         )
         self._instructions.append(inst)
         return inst
@@ -108,8 +114,14 @@ class BaseFrontend(Frontend):
     def _node_text(self, node) -> str:
         return self._source[node.start_byte : node.end_byte].decode("utf-8")
 
-    def _source_loc(self, node) -> str:
-        return f"{node.start_point[0] + 1}:{node.start_point[1]}"
+    def _source_loc(self, node) -> SourceLocation:
+        s, e = node.start_point, node.end_point
+        return SourceLocation(
+            start_line=s[0] + 1,
+            start_col=s[1],
+            end_line=e[0] + 1,
+            end_col=e[1],
+        )
 
     # ── entry point ──────────────────────────────────────────────
 
@@ -169,7 +181,7 @@ class BaseFrontend(Frontend):
             Opcode.SYMBOLIC,
             result_reg=reg,
             operands=[f"unsupported:{node.type}"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -181,7 +193,7 @@ class BaseFrontend(Frontend):
             Opcode.CONST,
             result_reg=reg,
             operands=[self._node_text(node)],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -191,7 +203,7 @@ class BaseFrontend(Frontend):
             Opcode.LOAD_VAR,
             result_reg=reg,
             operands=[self._node_text(node)],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -214,7 +226,7 @@ class BaseFrontend(Frontend):
             Opcode.BINOP,
             result_reg=reg,
             operands=[op, lhs_reg, rhs_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -228,7 +240,7 @@ class BaseFrontend(Frontend):
             Opcode.BINOP,
             result_reg=reg,
             operands=[op, lhs_reg, rhs_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -241,7 +253,7 @@ class BaseFrontend(Frontend):
             Opcode.UNOP,
             result_reg=reg,
             operands=[op, operand_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -278,7 +290,7 @@ class BaseFrontend(Frontend):
                     Opcode.CALL_METHOD,
                     result_reg=reg,
                     operands=[obj_reg, method_name] + arg_regs,
-                    source_location=self._source_loc(node),
+                    node=node,
                 )
                 return reg
 
@@ -290,7 +302,7 @@ class BaseFrontend(Frontend):
                 Opcode.CALL_FUNCTION,
                 result_reg=reg,
                 operands=[func_name] + arg_regs,
-                source_location=self._source_loc(node),
+                node=node,
             )
             return reg
 
@@ -309,7 +321,7 @@ class BaseFrontend(Frontend):
             Opcode.CALL_UNKNOWN,
             result_reg=reg,
             operands=[target_reg] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -359,7 +371,7 @@ class BaseFrontend(Frontend):
             Opcode.LOAD_FIELD,
             result_reg=reg,
             operands=[obj_reg, field_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -375,7 +387,7 @@ class BaseFrontend(Frontend):
             Opcode.LOAD_INDEX,
             result_reg=reg,
             operands=[obj_reg, idx_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -386,7 +398,7 @@ class BaseFrontend(Frontend):
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
         elif target.type in (
             self.ATTRIBUTE_NODE_TYPE,
@@ -406,7 +418,7 @@ class BaseFrontend(Frontend):
                 self._emit(
                     Opcode.STORE_FIELD,
                     operands=[obj_reg, self._node_text(attr_node), val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         elif target.type == "subscript":
             obj_node = target.child_by_field_name(self.SUBSCRIPT_VALUE_FIELD)
@@ -417,14 +429,14 @@ class BaseFrontend(Frontend):
                 self._emit(
                     Opcode.STORE_INDEX,
                     operands=[obj_reg, idx_reg, val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         else:
             # Fallback: just store to the text of the target
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
 
     # ── common statement lowerers ────────────────────────────────
@@ -447,7 +459,7 @@ class BaseFrontend(Frontend):
             Opcode.BINOP,
             result_reg=result,
             operands=[op_text, lhs_reg, rhs_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         self._lower_store_target(left, result, node)
 
@@ -466,7 +478,7 @@ class BaseFrontend(Frontend):
         self._emit(
             Opcode.RETURN,
             operands=[val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     def _lower_if(self, node):
@@ -484,14 +496,14 @@ class BaseFrontend(Frontend):
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{true_label},{false_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
         else:
             self._emit(
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{true_label},{end_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
 
         self._emit(Opcode.LABEL, label=true_label)
@@ -534,7 +546,7 @@ class BaseFrontend(Frontend):
             Opcode.BRANCH_IF,
             operands=[cond_reg],
             label=f"{true_label},{false_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         self._emit(Opcode.LABEL, label=true_label)
@@ -552,7 +564,7 @@ class BaseFrontend(Frontend):
             self._emit(
                 Opcode.BRANCH,
                 label=self._break_target_stack[-1],
-                source_location=self._source_loc(node),
+                node=node,
             )
         else:
             reg = self._fresh_reg()
@@ -560,7 +572,7 @@ class BaseFrontend(Frontend):
                 Opcode.SYMBOLIC,
                 result_reg=reg,
                 operands=["break_outside_loop_or_switch"],
-                source_location=self._source_loc(node),
+                node=node,
             )
 
     def _lower_continue(self, node):
@@ -569,7 +581,7 @@ class BaseFrontend(Frontend):
             self._emit(
                 Opcode.BRANCH,
                 label=self._loop_stack[-1]["continue_label"],
-                source_location=self._source_loc(node),
+                node=node,
             )
         else:
             reg = self._fresh_reg()
@@ -577,7 +589,7 @@ class BaseFrontend(Frontend):
                 Opcode.SYMBOLIC,
                 result_reg=reg,
                 operands=["continue_outside_loop"],
-                source_location=self._source_loc(node),
+                node=node,
             )
 
     def _push_loop(self, continue_label: str, end_label: str):
@@ -606,7 +618,7 @@ class BaseFrontend(Frontend):
             Opcode.BRANCH_IF,
             operands=[cond_reg],
             label=f"{body_label},{end_label}",
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         self._emit(Opcode.LABEL, label=body_label)
@@ -638,6 +650,7 @@ class BaseFrontend(Frontend):
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{body_label},{end_label}",
+                node=node,
             )
         else:
             self._emit(Opcode.BRANCH, label=body_label)
@@ -664,9 +677,7 @@ class BaseFrontend(Frontend):
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
 
         if params_node:
@@ -710,7 +721,7 @@ class BaseFrontend(Frontend):
             Opcode.SYMBOLIC,
             result_reg=self._fresh_reg(),
             operands=[f"{constants.PARAM_PREFIX}{pname}"],
-            source_location=self._source_loc(child),
+            node=child,
         )
         self._emit(
             Opcode.STORE_VAR,
@@ -743,9 +754,7 @@ class BaseFrontend(Frontend):
         class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
         end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
         if body_node:
             self._lower_block(body_node)
@@ -775,7 +784,7 @@ class BaseFrontend(Frontend):
         self._emit(
             Opcode.THROW,
             operands=[val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     def _lower_list_literal(self, node) -> str:
@@ -787,7 +796,7 @@ class BaseFrontend(Frontend):
             Opcode.NEW_ARRAY,
             result_reg=arr_reg,
             operands=["list", size_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         for i, elem in enumerate(elems):
             val_reg = self._lower_expr(elem)
@@ -802,7 +811,7 @@ class BaseFrontend(Frontend):
             Opcode.NEW_OBJECT,
             result_reg=obj_reg,
             operands=["dict"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         for child in node.children:
             if child.type == "pair":
@@ -829,7 +838,7 @@ class BaseFrontend(Frontend):
             Opcode.BINOP,
             result_reg=result_reg,
             operands=[op, operand_reg, one_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         self._lower_store_target(operand, result_reg, node)
         return result_reg
@@ -875,14 +884,14 @@ class BaseFrontend(Frontend):
                 Opcode.SYMBOLIC,
                 result_reg=exc_reg,
                 operands=[f"{constants.CAUGHT_EXCEPTION_PREFIX}:{exc_type}"],
-                source_location=self._source_loc(node),
+                node=node,
             )
             exc_var = clause.get("variable")
             if exc_var:
                 self._emit(
                     Opcode.STORE_VAR,
                     operands=[exc_var, exc_reg],
-                    source_location=self._source_loc(node),
+                    node=node,
                 )
             catch_body = clause.get("body")
             if catch_body:
@@ -928,7 +937,7 @@ class BaseFrontend(Frontend):
                     self._emit(
                         Opcode.STORE_VAR,
                         operands=[self._node_text(name_node), val_reg],
-                        source_location=self._source_loc(node),
+                        node=node,
                     )
                 elif name_node:
                     # Declaration without initializer
@@ -941,5 +950,5 @@ class BaseFrontend(Frontend):
                     self._emit(
                         Opcode.STORE_VAR,
                         operands=[self._node_text(name_node), val_reg],
-                        source_location=self._source_loc(node),
+                        node=node,
                     )

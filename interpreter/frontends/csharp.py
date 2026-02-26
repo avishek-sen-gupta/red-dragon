@@ -164,7 +164,7 @@ class CSharpFrontend(BaseFrontend):
         self._emit(
             Opcode.STORE_VAR,
             operands=[var_name, val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # -- C#: invocation expression -------------------------------------
@@ -186,7 +186,7 @@ class CSharpFrontend(BaseFrontend):
                     Opcode.CALL_METHOD,
                     result_reg=reg,
                     operands=[obj_reg, method_name] + arg_regs,
-                    source_location=self._source_loc(node),
+                    node=node,
                 )
                 return reg
 
@@ -197,7 +197,7 @@ class CSharpFrontend(BaseFrontend):
                 Opcode.CALL_FUNCTION,
                 result_reg=reg,
                 operands=[func_name] + arg_regs,
-                source_location=self._source_loc(node),
+                node=node,
             )
             return reg
 
@@ -216,7 +216,7 @@ class CSharpFrontend(BaseFrontend):
             Opcode.CALL_UNKNOWN,
             result_reg=reg,
             operands=[target_reg] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -232,7 +232,7 @@ class CSharpFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=[type_name] + arg_regs,
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -250,7 +250,7 @@ class CSharpFrontend(BaseFrontend):
             Opcode.LOAD_FIELD,
             result_reg=reg,
             operands=[obj_reg, field_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -286,7 +286,7 @@ class CSharpFrontend(BaseFrontend):
             Opcode.LOAD_INDEX,
             result_reg=reg,
             operands=[obj_reg, idx_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -363,7 +363,7 @@ class CSharpFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["typeof", type_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -385,7 +385,7 @@ class CSharpFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["is_check", obj_reg, type_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -437,7 +437,7 @@ class CSharpFrontend(BaseFrontend):
             Opcode.CONST,
             result_reg=ref_reg,
             operands=[f"func:{func_label}"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return ref_reg
 
@@ -466,7 +466,7 @@ class CSharpFrontend(BaseFrontend):
                 Opcode.NEW_ARRAY,
                 result_reg=arr_reg,
                 operands=["array", size_reg],
-                source_location=self._source_loc(node),
+                node=node,
             )
             for i, elem in enumerate(elements):
                 idx_reg = self._fresh_reg()
@@ -494,7 +494,7 @@ class CSharpFrontend(BaseFrontend):
             Opcode.NEW_ARRAY,
             result_reg=arr_reg,
             operands=["array", size_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return arr_reg
 
@@ -559,9 +559,7 @@ class CSharpFrontend(BaseFrontend):
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
 
         if params_node:
@@ -598,7 +596,7 @@ class CSharpFrontend(BaseFrontend):
                         Opcode.SYMBOLIC,
                         result_reg=self._fresh_reg(),
                         operands=[f"{constants.PARAM_PREFIX}{pname}"],
-                        source_location=self._source_loc(child),
+                        node=child,
                     )
                     self._emit(
                         Opcode.STORE_VAR,
@@ -652,9 +650,7 @@ class CSharpFrontend(BaseFrontend):
         class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
         end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
         if body_node:
             self._lower_class_body(body_node)
@@ -722,13 +718,13 @@ class CSharpFrontend(BaseFrontend):
                 Opcode.CONST,
                 result_reg=val_reg,
                 operands=[self.NONE_LITERAL],
-                source_location=self._source_loc(node),
+                node=node,
             )
 
         self._emit(
             Opcode.STORE_FIELD,
             operands=[this_reg, prop_name, val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
         # Lower accessor bodies (get { ... } / set { ... }) if present
@@ -767,7 +763,7 @@ class CSharpFrontend(BaseFrontend):
             Opcode.NEW_OBJECT,
             result_reg=obj_reg,
             operands=[f"interface:{iface_name}"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         body_node = node.child_by_field_name("body")
         if body_node:
@@ -799,7 +795,7 @@ class CSharpFrontend(BaseFrontend):
                 Opcode.NEW_OBJECT,
                 result_reg=obj_reg,
                 operands=[f"enum:{enum_name}"],
-                source_location=self._source_loc(node),
+                node=node,
             )
             if body_node:
                 for i, child in enumerate(
@@ -847,14 +843,14 @@ class CSharpFrontend(BaseFrontend):
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{true_label},{false_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
         else:
             self._emit(
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{true_label},{end_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
 
         self._emit(Opcode.LABEL, label=true_label)
@@ -899,7 +895,7 @@ class CSharpFrontend(BaseFrontend):
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
                 label=f"{body_label},{end_label}",
-                source_location=self._source_loc(node),
+                node=node,
             )
         else:
             self._emit(Opcode.BRANCH, label=body_label)
@@ -954,7 +950,7 @@ class CSharpFrontend(BaseFrontend):
                     Opcode.BINOP,
                     result_reg=cmp_reg,
                     operands=["==", subject_reg, case_reg],
-                    source_location=self._source_loc(section),
+                    node=section,
                 )
                 self._emit(
                     Opcode.BRANCH_IF,
@@ -1044,7 +1040,7 @@ class CSharpFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["await", inner_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -1089,7 +1085,7 @@ class CSharpFrontend(BaseFrontend):
                     Opcode.BINOP,
                     result_reg=cmp_reg,
                     operands=["==", subject_reg, pattern_reg],
-                    source_location=self._source_loc(arm),
+                    node=arm,
                 )
                 self._emit(
                     Opcode.BRANCH_IF,
@@ -1121,7 +1117,7 @@ class CSharpFrontend(BaseFrontend):
                 Opcode.CALL_FUNCTION,
                 result_reg=reg,
                 operands=["yield_break"],
-                source_location=self._source_loc(node),
+                node=node,
             )
         else:
             if children:
@@ -1138,7 +1134,7 @@ class CSharpFrontend(BaseFrontend):
                 Opcode.CALL_FUNCTION,
                 result_reg=reg,
                 operands=["yield", val_reg],
-                source_location=self._source_loc(node),
+                node=node,
             )
 
     # -- C#: lock statement --------------------------------------------
@@ -1203,12 +1199,12 @@ class CSharpFrontend(BaseFrontend):
             Opcode.CONST,
             result_reg=val_reg,
             operands=[f"event:{event_name}"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         self._emit(
             Opcode.STORE_VAR,
             operands=[event_name, val_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
 
     # -- C#: conditional_access_expression (obj?.Field) ------------------
@@ -1234,7 +1230,7 @@ class CSharpFrontend(BaseFrontend):
             Opcode.LOAD_FIELD,
             result_reg=reg,
             operands=[obj_reg, field_name],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -1249,7 +1245,7 @@ class CSharpFrontend(BaseFrontend):
             Opcode.SYMBOLIC,
             result_reg=reg,
             operands=[f"member_binding:{field_name}"],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -1273,9 +1269,7 @@ class CSharpFrontend(BaseFrontend):
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
-        self._emit(
-            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
-        )
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
 
         if params_node:
@@ -1318,7 +1312,7 @@ class CSharpFrontend(BaseFrontend):
             Opcode.NEW_ARRAY,
             result_reg=arr_reg,
             operands=["tuple", size_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         for i, elem_reg in enumerate(elem_regs):
             idx_reg = self._fresh_reg()
@@ -1346,7 +1340,7 @@ class CSharpFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["is_check", obj_reg, type_reg],
-            source_location=self._source_loc(node),
+            node=node,
         )
         return reg
 
@@ -1357,7 +1351,7 @@ class CSharpFrontend(BaseFrontend):
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
         elif target.type == "member_access_expression":
             obj_node = target.child_by_field_name("expression")
@@ -1367,7 +1361,7 @@ class CSharpFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_FIELD,
                     operands=[obj_reg, self._node_text(name_node), val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         elif target.type == "element_access_expression":
             obj_node = target.child_by_field_name("expression")
@@ -1382,11 +1376,11 @@ class CSharpFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_INDEX,
                     operands=[obj_reg, idx_reg, val_reg],
-                    source_location=self._source_loc(parent_node),
+                    node=parent_node,
                 )
         else:
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
-                source_location=self._source_loc(parent_node),
+                node=parent_node,
             )
