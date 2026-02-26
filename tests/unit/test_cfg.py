@@ -134,7 +134,7 @@ class TestCfgToMermaidSubgraphs:
         cfg = build_cfg(instructions)
         mermaid = cfg_to_mermaid(cfg)
 
-        assert 'subgraph fn_foo_0["fn foo_0"]' in mermaid
+        assert 'subgraph fn_foo["fn foo"]' in mermaid
         # func_foo_0 node should be inside the subgraph (indented 8 spaces)
         mermaid_lines = mermaid.split("\n")
         func_node_lines = [
@@ -155,7 +155,7 @@ class TestCfgToMermaidSubgraphs:
         cfg = build_cfg(instructions)
         mermaid = cfg_to_mermaid(cfg)
 
-        assert 'subgraph class_Bar_0["class Bar_0"]' in mermaid
+        assert 'subgraph class_Bar["class Bar"]' in mermaid
 
     def test_toplevel_blocks_outside_subgraph(self):
         instructions = _make_instructions(
@@ -176,6 +176,29 @@ class TestCfgToMermaidSubgraphs:
             ln.startswith("    ") and not ln.startswith("        ")
             for ln in entry_lines
         )
+
+    def test_mismatched_counters_still_grouped(self):
+        """func_foo_0 pairs with end_foo_1 (counters differ)."""
+        instructions = _make_instructions(
+            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.BRANCH, {"label": "end_foo_1"}),
+            (Opcode.LABEL, {"label": "func_foo_0"}),
+            (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
+            (Opcode.RETURN, {"operands": ["t0"]}),
+            (Opcode.LABEL, {"label": "end_foo_1"}),
+            (Opcode.RETURN, {"operands": ["t0"]}),
+        )
+        cfg = build_cfg(instructions)
+        mermaid = cfg_to_mermaid(cfg)
+
+        assert 'subgraph fn_foo["fn foo"]' in mermaid
+        # func_foo_0 should be inside the subgraph
+        mermaid_lines = mermaid.split("\n")
+        func_node_lines = [
+            ln for ln in mermaid_lines if "func_foo_0" in ln and '["' in ln
+        ]
+        assert len(func_node_lines) == 1
+        assert func_node_lines[0].startswith("        ")
 
     def test_no_subgraph_when_no_functions(self):
         instructions = _make_instructions(

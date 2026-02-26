@@ -128,6 +128,19 @@ def _node_id(label: str) -> str:
     return label.replace(" ", "_").replace("-", "_")
 
 
+def _extract_name(label: str, prefix: str) -> str:
+    """Extract the base name from a label like ``func_foo_3`` → ``foo``.
+
+    The label format is ``<prefix><name>_<counter>``.  We strip the
+    prefix and the trailing ``_<digits>`` to recover the name.
+    """
+    import re
+
+    suffix = label[len(prefix) :]
+    match = re.match(r"^(.+)_(\d+)$", suffix)
+    return match.group(1) if match else suffix
+
+
 def _build_subgraph_ranges(
     labels: list[str],
 ) -> list[tuple[str, int, int]]:
@@ -136,33 +149,46 @@ def _build_subgraph_ranges(
     Returns a list of (display_name, start_index, end_index) where
     start_index is inclusive and end_index is exclusive.  The range
     covers all blocks from the opening label (e.g. ``func_foo_0``)
-    up to *but not including* the closing label (``end_foo_0``).
-    """
-    import re
+    up to *but not including* the closing label (``end_foo_1``).
 
+    Matching is by *name*, not by counter — ``func_foo_0`` pairs with
+    the first ``end_foo_*`` that appears after it in label order.
+    """
     func_prefix = constants.FUNC_LABEL_PREFIX
     class_prefix = constants.CLASS_LABEL_PREFIX
     end_class_prefix = constants.END_CLASS_LABEL_PREFIX
-
-    # Map label -> index for fast lookup
-    idx_of = {lbl: i for i, lbl in enumerate(labels)}
 
     ranges: list[tuple[str, int, int]] = []
 
     for i, lbl in enumerate(labels):
         if lbl.startswith(func_prefix):
-            # func_NAME_N  →  end_NAME_N
-            # Strip "func_" prefix, keep NAME_N suffix
-            suffix = lbl[len(func_prefix) :]
-            end_label = f"end_{suffix}"
-            if end_label in idx_of:
-                ranges.append((f"fn {suffix}", i, idx_of[end_label]))
+            name = _extract_name(lbl, func_prefix)
+            end_prefix = f"end_{name}_"
+            # Find the first end_NAME_* label appearing after this block
+            end_idx = next(
+                (
+                    j
+                    for j in range(i + 1, len(labels))
+                    if labels[j].startswith(end_prefix)
+                ),
+                -1,
+            )
+            if end_idx > 0:
+                ranges.append((f"fn {name}", i, end_idx))
+
         elif lbl.startswith(class_prefix) and not lbl.startswith(end_class_prefix):
-            # class_NAME_N  →  end_class_NAME_N
-            suffix = lbl[len(class_prefix) :]
-            end_label = f"{end_class_prefix}{suffix}"
-            if end_label in idx_of:
-                ranges.append((f"class {suffix}", i, idx_of[end_label]))
+            name = _extract_name(lbl, class_prefix)
+            end_prefix = f"{end_class_prefix}{name}_"
+            end_idx = next(
+                (
+                    j
+                    for j in range(i + 1, len(labels))
+                    if labels[j].startswith(end_prefix)
+                ),
+                -1,
+            )
+            if end_idx > 0:
+                ranges.append((f"class {name}", i, end_idx))
 
     return ranges
 
