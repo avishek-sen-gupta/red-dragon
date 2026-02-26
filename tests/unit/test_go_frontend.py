@@ -387,3 +387,33 @@ func main() {
         assert Opcode.SYMBOLIC in opcodes
         calls = _find_all(ir, Opcode.CALL_METHOD)
         assert any("Read" in inst.operands for inst in calls)
+
+
+class TestGoCompositeLiteral:
+    def test_composite_keyed(self):
+        source = """\
+package main
+func main() { p := Point{X: 1, Y: 2} }
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.NEW_OBJECT in opcodes
+        assert Opcode.STORE_FIELD in opcodes
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        field_names = [
+            inst.operands[1] for inst in store_fields if len(inst.operands) > 1
+        ]
+        assert "X" in field_names
+        assert "Y" in field_names
+
+    def test_composite_positional(self):
+        source = """\
+package main
+func main() { nums := []int{1, 2, 3} }
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.NEW_OBJECT in opcodes
+        assert Opcode.STORE_INDEX in opcodes
+        store_indices = _find_all(ir, Opcode.STORE_INDEX)
+        assert len(store_indices) >= 3

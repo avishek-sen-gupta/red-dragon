@@ -374,3 +374,179 @@ val = lookup["a"]
         assert any("items" in inst.operands for inst in stores)
         assert any("lookup" in inst.operands for inst in stores)
         assert any("val" in inst.operands for inst in stores)
+
+
+class TestPythonForBreakContinue:
+    def test_for_with_break(self):
+        source = """\
+for x in items:
+    if x > 10:
+        break
+"""
+        instructions = _parse_python(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.LOAD_INDEX in opcodes
+        assert Opcode.BRANCH_IF in opcodes
+        # break should emit BRANCH to the for_end label
+        labels = _labels_in_order(instructions)
+        assert any("for_end" in lbl for lbl in labels)
+        branches = _find_all(instructions, Opcode.BRANCH)
+        end_labels = [lbl for lbl in labels if "for_end" in lbl]
+        assert any(b.label in end_labels for b in branches)
+
+    def test_for_with_continue(self):
+        source = """\
+for x in items:
+    if x < 0:
+        continue
+    total += x
+"""
+        instructions = _parse_python(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.LOAD_INDEX in opcodes
+        # continue should emit BRANCH to the for_update label
+        labels = _labels_in_order(instructions)
+        assert any("for_update" in lbl for lbl in labels)
+        branches = _find_all(instructions, Opcode.BRANCH)
+        update_labels = [lbl for lbl in labels if "for_update" in lbl]
+        assert any(b.label in update_labels for b in branches)
+
+
+class TestPythonListComprehension:
+    def test_list_comp_basic(self):
+        source = "result = [x * 2 for x in items]"
+        instructions = _parse_python(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_ARRAY in opcodes
+        assert Opcode.LOAD_INDEX in opcodes
+        assert Opcode.STORE_INDEX in opcodes
+        assert Opcode.BRANCH_IF in opcodes
+
+    def test_list_comp_with_filter(self):
+        source = "result = [x for x in items if x > 0]"
+        instructions = _parse_python(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_ARRAY in opcodes
+        # Should have two BRANCH_IF: one for loop condition, one for filter
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+
+    def test_list_comp_with_call(self):
+        source = "result = [f(x) for x in items]"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        call_names = [c.operands[0] for c in calls if c.operands]
+        assert "f" in call_names
+
+
+class TestPythonDictComprehension:
+    def test_dict_comp_basic(self):
+        source = "result = {k: v for k, v in items}"
+        instructions = _parse_python(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_OBJECT in opcodes
+        assert Opcode.STORE_INDEX in opcodes
+        assert Opcode.BRANCH_IF in opcodes
+
+    def test_dict_comp_with_filter(self):
+        source = "result = {k: v for k, v in items if v > 0}"
+        instructions = _parse_python(source)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+
+
+class TestPythonWithStatement:
+    def test_with_basic(self):
+        source = 'with open("f") as fh:\n    data = fh.read()'
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        method_names = [inst.operands[1] for inst in calls if len(inst.operands) > 1]
+        assert "__enter__" in method_names
+        assert "__exit__" in method_names
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("fh" in inst.operands for inst in stores)
+
+    def test_with_no_as(self):
+        source = "with lock:\n    x = 1"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        method_names = [inst.operands[1] for inst in calls if len(inst.operands) > 1]
+        assert "__enter__" in method_names
+        assert "__exit__" in method_names
+        # No variable stored for 'as' target
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_with_body_lowered(self):
+        source = 'with open("a") as f, open("b") as g:\n    f.write(g.read())'
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        method_names = [inst.operands[1] for inst in calls if len(inst.operands) > 1]
+        # Two enters and two exits
+        assert method_names.count("__enter__") == 2
+        assert method_names.count("__exit__") == 2
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("f" in inst.operands for inst in stores)
+        assert any("g" in inst.operands for inst in stores)
+
+
+class TestPythonDecorators:
+    def test_decorator_basic(self):
+        source = "@my_dec\ndef foo():\n    return 1"
+        instructions = _parse_python(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("foo" in inst.operands for inst in stores)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        # Decorator call wraps foo
+        assert len(calls) >= 1
+
+    def test_decorator_stacked(self):
+        source = "@dec1\n@dec2\ndef bar():\n    return 1"
+        instructions = _parse_python(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        foo_stores = [i for i in stores if "bar" in i.operands]
+        # Initial store + 2 decorator re-stores
+        assert len(foo_stores) >= 3
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert len(calls) >= 2
+
+    def test_decorator_on_class(self):
+        source = "@register\nclass MyClass:\n    pass"
+        instructions = _parse_python(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("MyClass" in inst.operands for inst in stores)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert len(calls) >= 1
+
+
+class TestPythonLambda:
+    def test_lambda_basic(self):
+        source = "f = lambda x: x + 1"
+        instructions = _parse_python(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.RETURN in opcodes
+        assert Opcode.BINOP in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("f" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("func:" in str(inst.operands) for inst in consts)
+
+    def test_lambda_multi_param(self):
+        source = "add = lambda a, b: a + b"
+        instructions = _parse_python(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        param_names = [
+            inst.operands[0]
+            for inst in symbolics
+            if inst.operands and str(inst.operands[0]).startswith("param:")
+        ]
+        assert any("a" in p for p in param_names)
+        assert any("b" in p for p in param_names)
+
+    def test_lambda_in_call(self):
+        source = "result = map(lambda x: x * 2, items)"
+        instructions = _parse_python(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.RETURN in opcodes
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("map" in inst.operands for inst in calls)

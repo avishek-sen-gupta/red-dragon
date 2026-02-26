@@ -312,17 +312,35 @@ class PhpFrontend(BaseFrontend):
     # -- PHP: foreach statement ------------------------------------------------
 
     def _lower_php_foreach(self, node):
-        """Lower foreach ($arr as $k => $v) { body } with SYMBOLIC iterator."""
+        """Lower foreach ($arr as $v) or foreach ($arr as $k => $v) as index-based loop."""
         body_node = node.child_by_field_name("body")
 
-        # Emit SYMBOLIC for the iterator (PHP array iteration is not deterministic)
-        iter_reg = self._fresh_reg()
-        self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=iter_reg,
-            operands=[f"foreach_iter:{self._node_text(node)[:60]}"],
-            source_location=self._source_loc(node),
+        # Extract iterable, value var, and optional key var from children
+        named_children = [c for c in node.children if c.is_named]
+        # named_children[0] = iterable ($arr)
+        # named_children[1] = value var ($v) or pair ($k => $v)
+        # named_children[2] = body (compound_statement)
+        iterable_node = named_children[0] if named_children else None
+        binding_node = named_children[1] if len(named_children) > 1 else None
+
+        iter_reg = (
+            self._lower_expr(iterable_node) if iterable_node else self._fresh_reg()
         )
+
+        key_var = None
+        value_var = None
+        if binding_node and binding_node.type == "pair":
+            # $k => $v
+            pair_named = [c for c in binding_node.children if c.is_named]
+            key_var = self._node_text(pair_named[0]) if pair_named else None
+            value_var = self._node_text(pair_named[1]) if len(pair_named) > 1 else None
+        elif binding_node:
+            value_var = self._node_text(binding_node)
+
+        idx_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
+        len_reg = self._fresh_reg()
+        self._emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
 
         loop_label = self._fresh_label("foreach_cond")
         body_label = self._fresh_label("foreach_body")
@@ -330,11 +348,7 @@ class PhpFrontend(BaseFrontend):
 
         self._emit(Opcode.LABEL, label=loop_label)
         cond_reg = self._fresh_reg()
-        self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=cond_reg,
-            operands=["foreach_has_next"],
-        )
+        self._emit(Opcode.BINOP, result_reg=cond_reg, operands=["<", idx_reg, len_reg])
         self._emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
@@ -342,12 +356,33 @@ class PhpFrontend(BaseFrontend):
         )
 
         self._emit(Opcode.LABEL, label=body_label)
-        self._push_loop(loop_label, end_label)
+        # Store key variable (index) if present
+        if key_var:
+            self._emit(Opcode.STORE_VAR, operands=[key_var, idx_reg])
+        # Store value variable (element at index)
+        if value_var:
+            elem_reg = self._fresh_reg()
+            self._emit(
+                Opcode.LOAD_INDEX,
+                result_reg=elem_reg,
+                operands=[iter_reg, idx_reg],
+            )
+            self._emit(Opcode.STORE_VAR, operands=[value_var, elem_reg])
+
+        update_label = self._fresh_label("foreach_update")
+        self._push_loop(update_label, end_label)
         if body_node:
             self._lower_block(body_node)
         self._pop_loop()
 
+        self._emit(Opcode.LABEL, label=update_label)
+        one_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
+        new_idx = self._fresh_reg()
+        self._emit(Opcode.BINOP, result_reg=new_idx, operands=["+", idx_reg, one_reg])
+        self._emit(Opcode.STORE_VAR, operands=["__foreach_idx", new_idx])
         self._emit(Opcode.BRANCH, label=loop_label)
+
         self._emit(Opcode.LABEL, label=end_label)
 
     # -- PHP: function definition ----------------------------------------------

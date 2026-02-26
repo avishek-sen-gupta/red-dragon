@@ -231,12 +231,15 @@ class TestLuaControlFlow:
         labels = _find_all(instructions, Opcode.LABEL)
         assert any("repeat" in (inst.label or "") for inst in labels)
 
-    def test_generic_for_fallback(self):
+    def test_generic_for_index_based(self):
+        """Generic for should produce index-based IR with LOAD_INDEX."""
         instructions = _parse_lua("for k, v in pairs(t) do print(k) end")
         opcodes = _opcodes(instructions)
-        assert Opcode.SYMBOLIC in opcodes
-        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
-        assert any("generic_for_iteration" in str(inst.operands) for inst in symbolics)
+        assert Opcode.LOAD_INDEX in opcodes
+        assert Opcode.BRANCH_IF in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("k" in inst.operands for inst in stores)
+        assert any("v" in inst.operands for inst in stores)
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
@@ -289,9 +292,11 @@ end
 """
         instructions = _parse_lua(source)
         opcodes = _opcodes(instructions)
-        assert Opcode.SYMBOLIC in opcodes
-        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
-        assert any("generic_for_iteration" in str(inst.operands) for inst in symbolics)
+        assert Opcode.LOAD_INDEX in opcodes
+        assert Opcode.BRANCH_IF in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("i" in inst.operands for inst in stores)
+        assert any("v" in inst.operands for inst in stores)
         # Lua table constructors use NEW_OBJECT
         assert Opcode.NEW_OBJECT in opcodes
 
@@ -379,3 +384,31 @@ local c = a + b
         assert any("c" in inst.operands for inst in stores)
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
+
+
+class TestLuaGenericFor:
+    def test_generic_for_ipairs(self):
+        source = "for i, v in ipairs(t) do print(v) end"
+        instructions = _parse_lua(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.LOAD_INDEX in opcodes
+        assert Opcode.CALL_FUNCTION in opcodes  # len()
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("i" in inst.operands for inst in stores)
+        assert any("v" in inst.operands for inst in stores)
+
+    def test_generic_for_pairs(self):
+        source = "for k, v in pairs(t) do print(k, v) end"
+        instructions = _parse_lua(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.LOAD_INDEX in opcodes
+        labels = _labels_in_order(instructions)
+        assert any("generic_for" in lbl for lbl in labels)
+
+    def test_generic_for_single_var(self):
+        source = "for item in items() do print(item) end"
+        instructions = _parse_lua(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("item" in inst.operands for inst in stores)
