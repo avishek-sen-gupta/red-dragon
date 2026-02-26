@@ -54,6 +54,12 @@ _KEYWORD_NOISE: frozenset[str] = frozenset(
         "kUntil",
         "kFunction",
         "kProcedure",
+        "kCase",
+        "kNot",
+        "kSub",
+        "kAdd",
+        "kEq",
+        "kConst",
         ";",
         ":",
         ",",
@@ -87,6 +93,10 @@ class PascalFrontend(BaseFrontend):
             "exprBinary": self._lower_pascal_binop,
             "exprCall": self._lower_pascal_call,
             "parenthesized_expression": self._lower_paren,
+            "exprDot": self._lower_pascal_dot,
+            "exprSubscript": self._lower_pascal_subscript,
+            "exprUnary": self._lower_pascal_unary,
+            "exprBrackets": self._lower_pascal_brackets,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "root": self._lower_pascal_root,
@@ -102,6 +112,13 @@ class PascalFrontend(BaseFrontend):
             "for": self._lower_pascal_for,
             "defProc": self._lower_pascal_proc,
             "declProc": self._lower_pascal_proc,
+            "statements": self._lower_pascal_block,
+            "case": self._lower_pascal_case,
+            "repeat": self._lower_pascal_repeat,
+            "declConsts": self._lower_pascal_decl_consts,
+            "declConst": self._lower_pascal_decl_const,
+            "declType": self._lower_pascal_noop,
+            "declTypes": self._lower_pascal_noop,
         }
 
     # -- Pascal: root / program structure ------------------------------------------
@@ -517,3 +534,289 @@ class PascalFrontend(BaseFrontend):
             Opcode.STORE_VAR,
             operands=[pname, f"%{self._reg_counter - 1}"],
         )
+
+    # -- Pascal: dot access (obj.field) --------------------------------------------
+
+    def _lower_pascal_dot(self, node) -> str:
+        """Lower exprDot — first child = object, last child = field name."""
+        named_children = [
+            c for c in node.children if c.is_named and c.type not in _KEYWORD_NOISE
+        ]
+        if len(named_children) < 2:
+            return self._lower_const_literal(node)
+        obj_node = named_children[0]
+        field_node = named_children[-1]
+        obj_reg = self._lower_expr(obj_node)
+        field_name = self._node_text(field_node)
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_FIELD,
+            result_reg=reg,
+            operands=[obj_reg, field_name],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- Pascal: subscript access (arr[idx]) ---------------------------------------
+
+    def _lower_pascal_subscript(self, node) -> str:
+        """Lower exprSubscript — object followed by exprArgs containing index."""
+        named_children = [
+            c for c in node.children if c.is_named and c.type not in _KEYWORD_NOISE
+        ]
+        if not named_children:
+            return self._lower_const_literal(node)
+        obj_node = named_children[0]
+        args_node = next((c for c in node.children if c.type == "exprArgs"), None)
+        obj_reg = self._lower_expr(obj_node)
+        if args_node:
+            idx_children = [
+                c
+                for c in args_node.children
+                if c.is_named and c.type not in _KEYWORD_NOISE
+            ]
+            if idx_children:
+                idx_reg = self._lower_expr(idx_children[0])
+                reg = self._fresh_reg()
+                self._emit(
+                    Opcode.LOAD_INDEX,
+                    result_reg=reg,
+                    operands=[obj_reg, idx_reg],
+                    source_location=self._source_loc(node),
+                )
+                return reg
+        return obj_reg
+
+    # -- Pascal: unary expression --------------------------------------------------
+
+    _K_UNARY_MAP: dict[str, str] = {
+        "kNot": "not",
+        "kSub": "-",
+        "kAdd": "+",
+    }
+
+    def _lower_pascal_unary(self, node) -> str:
+        """Lower exprUnary — operator keyword + operand."""
+        op_symbol = "?"
+        for child in node.children:
+            mapped = self._K_UNARY_MAP.get(child.type)
+            if mapped:
+                op_symbol = mapped
+                break
+        named_children = [
+            c for c in node.children if c.is_named and c.type not in _KEYWORD_NOISE
+        ]
+        if not named_children:
+            return self._lower_const_literal(node)
+        operand_reg = self._lower_expr(named_children[0])
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.UNOP,
+            result_reg=reg,
+            operands=[op_symbol, operand_reg],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- Pascal: case statement ----------------------------------------------------
+
+    def _lower_pascal_case(self, node):
+        """Lower case statement as if/else chain on caseCase children."""
+        named_children = [
+            c for c in node.children if c.is_named and c.type not in _KEYWORD_NOISE
+        ]
+        if not named_children:
+            return
+
+        # First named child is the selector expression
+        selector_node = named_children[0]
+        selector_reg = self._lower_expr(selector_node)
+
+        case_cases = [c for c in node.children if c.type == "caseCase"]
+        else_case = next((c for c in node.children if c.type == "kElse"), None)
+
+        end_label = self._fresh_label("case_end")
+
+        for case_node in case_cases:
+            self._lower_pascal_case_branch(case_node, selector_reg, end_label)
+
+        # Handle else branch: lower remaining statements after kElse
+        if else_case:
+            logger.debug("Lowering case else branch at %s", self._source_loc(node))
+            # Children after kElse are the else-body statements
+            found_else = False
+            for child in node.children:
+                if child.type == "kElse":
+                    found_else = True
+                    continue
+                if found_else and child.is_named and child.type not in _KEYWORD_NOISE:
+                    self._lower_stmt(child)
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+    def _lower_pascal_case_branch(self, case_node, selector_reg: str, end_label: str):
+        """Lower a single caseCase — extract caseLabel values, BINOP == + BRANCH_IF."""
+        labels = [c for c in case_node.children if c.type == "caseLabel"]
+        body_children = [
+            c
+            for c in case_node.children
+            if c.is_named and c.type not in _KEYWORD_NOISE and c.type != "caseLabel"
+        ]
+
+        true_label = self._fresh_label("case_match")
+        next_label = self._fresh_label("case_next")
+
+        # Build OR of all label comparisons
+        if labels:
+            label_values = [
+                c
+                for lbl in labels
+                for c in lbl.children
+                if c.is_named and c.type not in _KEYWORD_NOISE
+            ]
+            if label_values:
+                cmp_reg = self._fresh_reg()
+                first_val_reg = self._lower_expr(label_values[0])
+                self._emit(
+                    Opcode.BINOP,
+                    result_reg=cmp_reg,
+                    operands=["==", selector_reg, first_val_reg],
+                    source_location=self._source_loc(case_node),
+                )
+                for extra_val in label_values[1:]:
+                    extra_reg = self._lower_expr(extra_val)
+                    extra_cmp = self._fresh_reg()
+                    self._emit(
+                        Opcode.BINOP,
+                        result_reg=extra_cmp,
+                        operands=["==", selector_reg, extra_reg],
+                    )
+                    or_reg = self._fresh_reg()
+                    self._emit(
+                        Opcode.BINOP,
+                        result_reg=or_reg,
+                        operands=["or", cmp_reg, extra_cmp],
+                    )
+                    cmp_reg = or_reg
+
+                self._emit(
+                    Opcode.BRANCH_IF,
+                    operands=[cmp_reg],
+                    label=f"{true_label},{next_label}",
+                    source_location=self._source_loc(case_node),
+                )
+
+        self._emit(Opcode.LABEL, label=true_label)
+        for child in body_children:
+            self._lower_stmt(child)
+        self._emit(Opcode.BRANCH, label=end_label)
+        self._emit(Opcode.LABEL, label=next_label)
+
+    # -- Pascal: repeat-until loop -------------------------------------------------
+
+    def _lower_pascal_repeat(self, node):
+        """Lower repeat ... until condition (execute body first, then check)."""
+        named_children = [
+            c for c in node.children if c.is_named and c.type not in _KEYWORD_NOISE
+        ]
+        if len(named_children) < 2:
+            logger.warning(
+                "Pascal repeat with fewer than 2 named children at %s",
+                self._source_loc(node),
+            )
+            return
+
+        # Last named child is the condition, everything before is body
+        cond_node = named_children[-1]
+        body_nodes = named_children[:-1]
+
+        body_label = self._fresh_label("repeat_body")
+        end_label = self._fresh_label("repeat_end")
+
+        self._emit(Opcode.LABEL, label=body_label)
+        for child in body_nodes:
+            self._lower_stmt(child)
+
+        cond_reg = self._lower_expr(cond_node)
+        # repeat-until: loop continues while condition is FALSE
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[cond_reg],
+            label=f"{end_label},{body_label}",
+            source_location=self._source_loc(node),
+        )
+        self._emit(Opcode.LABEL, label=end_label)
+
+    # -- Pascal: set literal ([1, 2, 3]) -------------------------------------------
+
+    def _lower_pascal_brackets(self, node) -> str:
+        """Lower exprBrackets (set literal) as NEW_ARRAY + STORE_INDEX per element."""
+        elems = [
+            c for c in node.children if c.is_named and c.type not in _KEYWORD_NOISE
+        ]
+        arr_reg = self._fresh_reg()
+        size_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
+        self._emit(
+            Opcode.NEW_ARRAY,
+            result_reg=arr_reg,
+            operands=["set", size_reg],
+            source_location=self._source_loc(node),
+        )
+        for i, elem in enumerate(elems):
+            val_reg = self._lower_expr(elem)
+            idx_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            self._emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+        return arr_reg
+
+    # -- Pascal: const declarations ------------------------------------------------
+
+    def _lower_pascal_decl_consts(self, node):
+        """Lower declConsts — iterate declConst children."""
+        for child in node.children:
+            if child.type == "declConst":
+                self._lower_pascal_decl_const(child)
+
+    def _lower_pascal_decl_const(self, node):
+        """Lower declConst — extract name + defaultValue child, lower value, STORE_VAR."""
+        id_node = next((c for c in node.children if c.type == "identifier"), None)
+        if id_node is None:
+            return
+        var_name = self._node_text(id_node)
+        value_node = next((c for c in node.children if c.type == "defaultValue"), None)
+        if value_node:
+            # defaultValue wraps the actual expression
+            inner = next(
+                (
+                    c
+                    for c in value_node.children
+                    if c.is_named and c.type not in _KEYWORD_NOISE
+                ),
+                None,
+            )
+            val_reg = self._lower_expr(inner) if inner else self._fresh_reg()
+            if inner is None:
+                self._emit(
+                    Opcode.CONST,
+                    result_reg=val_reg,
+                    operands=[self.NONE_LITERAL],
+                )
+        else:
+            val_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=val_reg,
+                operands=[self.NONE_LITERAL],
+            )
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=[var_name, val_reg],
+            source_location=self._source_loc(node),
+        )
+
+    # -- Pascal: type declarations (no-op) -----------------------------------------
+
+    def _lower_pascal_noop(self, node):
+        """No-op handler for declType/declTypes — type declarations produce no IR."""
+        logger.debug("Skipping %s at %s (no-op)", node.type, self._source_loc(node))

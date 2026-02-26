@@ -56,6 +56,7 @@ class KotlinFrontend(BaseFrontend):
             "statements": self._lower_statements_expr,
             "jump_expression": self._lower_jump_as_expr,
             "assignment": self._lower_kotlin_assignment_expr,
+            "check_expression": self._lower_check_expr,
             "try_expression": self._lower_try_expr,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
@@ -73,7 +74,10 @@ class KotlinFrontend(BaseFrontend):
             "import_list": lambda _: None,
             "import_header": lambda _: None,
             "package_header": lambda _: None,
+            "do_while_statement": self._lower_do_while_stmt,
+            "object_declaration": self._lower_object_decl,
             "try_expression": self._lower_try_stmt,
+            "type_alias": lambda _: None,
         }
 
     # -- property declaration ----------------------------------------------
@@ -221,7 +225,7 @@ class KotlinFrontend(BaseFrontend):
             None,
         )
         body_node = next(
-            (c for c in node.children if c.type == "class_body"),
+            (c for c in node.children if c.type in ("class_body", "enum_class_body")),
             None,
         )
         class_name = self._node_text(name_node) if name_node else "__anon_class"
@@ -234,7 +238,10 @@ class KotlinFrontend(BaseFrontend):
         )
         self._emit(Opcode.LABEL, label=class_label)
         if body_node:
-            self._lower_block(body_node)
+            if body_node.type == "enum_class_body":
+                self._lower_enum_class_body(body_node)
+            else:
+                self._lower_class_body_with_companions(body_node)
         self._emit(Opcode.LABEL, label=end_label)
 
         cls_reg = self._fresh_reg()
@@ -246,6 +253,16 @@ class KotlinFrontend(BaseFrontend):
             ],
         )
         self._emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+
+    def _lower_class_body_with_companions(self, node):
+        """Lower class_body, handling companion_object children specially."""
+        for child in node.children:
+            if not child.is_named:
+                continue
+            if child.type == "companion_object":
+                self._lower_companion_object(child)
+            else:
+                self._lower_stmt(child)
 
     # -- call expression ---------------------------------------------------
 
@@ -673,7 +690,24 @@ class KotlinFrontend(BaseFrontend):
         text = self._node_text(node)
         if "++" in text or "--" in text:
             return self._lower_update_expr(node)
+        if text.endswith("!!"):
+            return self._lower_not_null_assertion(node)
         return self._lower_const_literal(node)
+
+    def _lower_not_null_assertion(self, node) -> str:
+        """Lower not-null assertion (expr!!) as UNOP('!!', expr)."""
+        named_children = [c for c in node.children if c.is_named]
+        if not named_children:
+            return self._lower_const_literal(node)
+        expr_reg = self._lower_expr(named_children[0])
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.UNOP,
+            result_reg=reg,
+            operands=["!!", expr_reg],
+            source_location=self._source_loc(node),
+        )
+        return reg
 
     # -- lambda literal ----------------------------------------------------
 
@@ -814,6 +848,133 @@ class KotlinFrontend(BaseFrontend):
         reg = self._fresh_reg()
         self._emit(Opcode.CONST, result_reg=reg, operands=[self.NONE_LITERAL])
         return reg
+
+    # -- check expression (is / !is) --------------------------------------
+
+    def _lower_check_expr(self, node) -> str:
+        """Lower check_expression (is/!is) as CALL_FUNCTION('is', expr, type_text)."""
+        named_children = [c for c in node.children if c.is_named]
+        if len(named_children) < 2:
+            return self._lower_const_literal(node)
+        expr_reg = self._lower_expr(named_children[0])
+        type_text = self._node_text(named_children[-1])
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["is", expr_reg, type_text],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- do-while statement ------------------------------------------------
+
+    def _lower_do_while_stmt(self, node):
+        """Lower do { body } while (cond) loop."""
+        body_node = next(
+            (c for c in node.children if c.type == "control_structure_body"),
+            None,
+        )
+        # Condition is a named child that's not the body
+        cond_node = next(
+            (
+                c
+                for c in node.children
+                if c.is_named and c.type != "control_structure_body"
+            ),
+            None,
+        )
+
+        body_label = self._fresh_label("do_body")
+        cond_label = self._fresh_label("do_cond")
+        end_label = self._fresh_label("do_end")
+
+        self._emit(Opcode.LABEL, label=body_label)
+        self._push_loop(cond_label, end_label)
+        if body_node:
+            self._lower_block(body_node)
+        self._pop_loop()
+
+        self._emit(Opcode.LABEL, label=cond_label)
+        cond_reg = self._lower_expr(cond_node) if cond_node else self._fresh_reg()
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[cond_reg],
+            label=f"{body_label},{end_label}",
+            source_location=self._source_loc(node),
+        )
+        self._emit(Opcode.LABEL, label=end_label)
+
+    # -- object declaration (singleton) ------------------------------------
+
+    def _lower_object_decl(self, node):
+        """Lower object declaration (Kotlin singleton) like a class."""
+        name_node = next(
+            (c for c in node.children if c.type == "type_identifier"),
+            None,
+        )
+        body_node = next(
+            (c for c in node.children if c.type == "class_body"),
+            None,
+        )
+        obj_name = self._node_text(name_node) if name_node else "__anon_object"
+
+        obj_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{obj_name}")
+        end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{obj_name}")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=obj_label)
+        if body_node:
+            self._lower_block(body_node)
+        self._emit(Opcode.LABEL, label=end_label)
+
+        inst_reg = self._fresh_reg()
+        self._emit(
+            Opcode.NEW_OBJECT,
+            result_reg=inst_reg,
+            operands=[obj_name],
+            source_location=self._source_loc(node),
+        )
+        self._emit(Opcode.STORE_VAR, operands=[obj_name, inst_reg])
+
+    # -- companion object --------------------------------------------------
+
+    def _lower_companion_object(self, node):
+        """Lower companion object by lowering its class_body child as a block."""
+        body_node = next(
+            (c for c in node.children if c.type == "class_body"),
+            None,
+        )
+        if body_node:
+            self._lower_block(body_node)
+
+    # -- enum class body + enum entry --------------------------------------
+
+    def _lower_enum_class_body(self, node):
+        """Lower enum_class_body: create NEW_OBJECT + STORE_VAR for each entry."""
+        for child in node.children:
+            if child.type == "enum_entry":
+                self._lower_enum_entry(child)
+            elif child.is_named and child.type not in ("{", "}", ",", ";"):
+                self._lower_stmt(child)
+
+    def _lower_enum_entry(self, node):
+        """Lower a single enum_entry as NEW_OBJECT('enum:Name') + STORE_VAR."""
+        name_node = next(
+            (c for c in node.children if c.type == "simple_identifier"),
+            None,
+        )
+        entry_name = self._node_text(name_node) if name_node else "__unknown_enum"
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.NEW_OBJECT,
+            result_reg=reg,
+            operands=[f"enum:{entry_name}"],
+            source_location=self._source_loc(node),
+        )
+        self._emit(Opcode.STORE_VAR, operands=[entry_name, reg])
 
     # -- generic symbolic fallback -----------------------------------------
 

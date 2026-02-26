@@ -353,3 +353,50 @@ class TestTypeScriptDestructuring:
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("first" in inst.operands for inst in stores)
         assert any("second" in inst.operands for inst in stores)
+
+
+class TestTypeScriptAbstractClass:
+    def test_abstract_class_basic(self):
+        source = """\
+abstract class Shape {
+    abstract area(): number;
+    describe(): string {
+        return "I am a shape";
+    }
+}
+"""
+        instructions = _parse_ts(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Shape" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("class:" in str(inst.operands) for inst in consts)
+
+    def test_abstract_class_with_constructor(self):
+        source = """\
+abstract class Animal {
+    name: string;
+    constructor(name: string) {
+        this.name = name;
+    }
+    abstract speak(): string;
+}
+"""
+        instructions = _parse_ts(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Animal" in inst.operands for inst in stores)
+        store_fields = _find_all(instructions, Opcode.STORE_FIELD)
+        assert any("name" in inst.operands for inst in store_fields)
+
+    def test_abstract_class_with_concrete_method(self):
+        source = """\
+abstract class Base {
+    greet(): string {
+        return "hello";
+    }
+}
+"""
+        instructions = _parse_ts(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Base" in inst.operands for inst in stores)
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 1

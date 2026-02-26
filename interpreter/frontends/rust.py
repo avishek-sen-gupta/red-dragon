@@ -70,6 +70,10 @@ class RustFrontend(BaseFrontend):
             "else_clause": self._lower_else_clause,
             "expression_statement": self._lower_expr_stmt_as_expr,
             "range_expression": self._lower_symbolic_node,
+            "try_expression": self._lower_try_expr,
+            "await_expression": self._lower_await_expr,
+            "async_block": self._lower_block_expr,
+            "unsafe_block": self._lower_block_expr,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -89,6 +93,13 @@ class RustFrontend(BaseFrontend):
             "macro_invocation": self._lower_macro_stmt,
             "break_expression": self._lower_break,
             "continue_expression": self._lower_continue,
+            "trait_item": self._lower_trait_item,
+            "enum_item": self._lower_enum_item,
+            "const_item": self._lower_const_item,
+            "static_item": self._lower_static_item,
+            "type_item": self._lower_type_item,
+            "mod_item": self._lower_mod_item,
+            "extern_crate_declaration": lambda _: None,
         }
 
     # -- let declaration ---------------------------------------------------
@@ -650,6 +661,190 @@ class RustFrontend(BaseFrontend):
             self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
             self._emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
         return arr_reg
+
+    # -- try expression (? operator) ---------------------------------------
+
+    def _lower_try_expr(self, node) -> str:
+        """Lower `expr?` as CALL_FUNCTION("try_unwrap", inner)."""
+        inner = next(
+            (c for c in node.children if c.type != "?" and c.is_named),
+            None,
+        )
+        inner_reg = self._lower_expr(inner) if inner else self._fresh_reg()
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["try_unwrap", inner_reg],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- await expression --------------------------------------------------
+
+    def _lower_await_expr(self, node) -> str:
+        """Lower `expr.await` as CALL_FUNCTION("await", inner)."""
+        inner = next(
+            (c for c in node.children if c.type not in (".", "await") and c.is_named),
+            None,
+        )
+        inner_reg = self._lower_expr(inner) if inner else self._fresh_reg()
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["await", inner_reg],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- trait item --------------------------------------------------------
+
+    def _lower_trait_item(self, node):
+        """Lower `trait Name { ... }` like a class/impl block."""
+        name_node = node.child_by_field_name("name")
+        body_node = node.child_by_field_name("body")
+        trait_name = self._node_text(name_node) if name_node else "__anon_trait"
+
+        class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{trait_name}")
+        end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{trait_name}")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=class_label)
+        if body_node:
+            self._lower_block(body_node)
+        self._emit(Opcode.LABEL, label=end_label)
+
+        cls_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=cls_reg,
+            operands=[
+                constants.CLASS_REF_TEMPLATE.format(name=trait_name, label=class_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[trait_name, cls_reg])
+
+    # -- enum item ---------------------------------------------------------
+
+    def _lower_enum_item(self, node):
+        """Lower `enum Name { A, B(i32), ... }` as NEW_OBJECT + STORE_FIELD per variant."""
+        name_node = node.child_by_field_name("name")
+        body_node = node.child_by_field_name("body")
+        enum_name = self._node_text(name_node) if name_node else "__anon_enum"
+
+        obj_reg = self._fresh_reg()
+        self._emit(
+            Opcode.NEW_OBJECT,
+            result_reg=obj_reg,
+            operands=[f"enum:{enum_name}"],
+            source_location=self._source_loc(node),
+        )
+
+        if body_node:
+            for child in body_node.children:
+                if child.type in ("{", "}", ","):
+                    continue
+                if not child.is_named:
+                    continue
+                variant_name = (
+                    self._node_text(child).split("(")[0].split("{")[0].strip()
+                )
+                variant_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.CONST,
+                    result_reg=variant_reg,
+                    operands=[variant_name],
+                )
+                self._emit(
+                    Opcode.STORE_FIELD,
+                    operands=[obj_reg, variant_name, variant_reg],
+                )
+
+        self._emit(Opcode.STORE_VAR, operands=[enum_name, obj_reg])
+
+    # -- const item --------------------------------------------------------
+
+    def _lower_const_item(self, node):
+        """Lower `const NAME: type = value;`."""
+        name_node = node.child_by_field_name("name")
+        value_node = node.child_by_field_name("value")
+        var_name = self._node_text(name_node) if name_node else "__const"
+
+        if value_node:
+            val_reg = self._lower_expr(value_node)
+        else:
+            val_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=val_reg,
+                operands=[self.NONE_LITERAL],
+            )
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=[var_name, val_reg],
+            source_location=self._source_loc(node),
+        )
+
+    # -- static item -------------------------------------------------------
+
+    def _lower_static_item(self, node):
+        """Lower `static NAME: type = value;`."""
+        name_node = node.child_by_field_name("name")
+        value_node = node.child_by_field_name("value")
+        var_name = self._node_text(name_node) if name_node else "__static"
+
+        if value_node:
+            val_reg = self._lower_expr(value_node)
+        else:
+            val_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=val_reg,
+                operands=[self.NONE_LITERAL],
+            )
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=[var_name, val_reg],
+            source_location=self._source_loc(node),
+        )
+
+    # -- type alias --------------------------------------------------------
+
+    def _lower_type_item(self, node):
+        """Lower `type Alias = OriginalType;`."""
+        name_node = node.child_by_field_name("name")
+        type_node = node.child_by_field_name("type")
+        alias_name = self._node_text(name_node) if name_node else "__type_alias"
+        type_text = self._node_text(type_node) if type_node else "()"
+
+        val_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=val_reg,
+            operands=[type_text],
+            source_location=self._source_loc(node),
+        )
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=[alias_name, val_reg],
+            source_location=self._source_loc(node),
+        )
+
+    # -- mod item ----------------------------------------------------------
+
+    def _lower_mod_item(self, node):
+        """Lower `mod name { ... }` by lowering the body block."""
+        name_node = node.child_by_field_name("name")
+        body_node = node.child_by_field_name("body")
+        logger.debug(
+            "Lowering mod_item: %s",
+            self._node_text(name_node) if name_node else "<anonymous>",
+        )
+        if body_node:
+            self._lower_block(body_node)
 
     # -- generic symbolic fallback -----------------------------------------
 

@@ -35,6 +35,7 @@ class TypeScriptFrontend(JavaScriptFrontend):
                 "type_alias_declaration": lambda _: None,  # skip type aliases
                 "export_statement": self._lower_export_statement,
                 "import_statement": lambda _: None,
+                "abstract_class_declaration": self._lower_class_def,
             }
         )
 

@@ -53,6 +53,12 @@ class PythonFrontend(BaseFrontend):
             "list_comprehension": self._lower_list_comprehension,
             "dictionary_comprehension": self._lower_dict_comprehension,
             "lambda": self._lower_lambda,
+            "generator_expression": self._lower_generator_expression,
+            "set_comprehension": self._lower_set_comprehension,
+            "set": self._lower_set_literal,
+            "yield": self._lower_yield,
+            "await": self._lower_await,
+            "named_expression": self._lower_named_expression,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -71,6 +77,14 @@ class PythonFrontend(BaseFrontend):
             "continue_statement": self._lower_continue,
             "with_statement": self._lower_with,
             "decorated_definition": self._lower_decorated_def,
+            "assert_statement": self._lower_assert,
+            "global_statement": lambda _: None,
+            "nonlocal_statement": lambda _: None,
+            "delete_statement": self._lower_delete,
+            "import_statement": self._lower_import,
+            "import_from_statement": self._lower_import_from,
+            "match_statement": self._lower_match,
+            "type_alias_statement": lambda _: None,
         }
 
     # ── Python-specific call lowering ────────────────────────────
@@ -79,15 +93,18 @@ class PythonFrontend(BaseFrontend):
         func_node = node.child_by_field_name("function")
         args_node = node.child_by_field_name("arguments")
 
-        arg_regs = (
-            [
+        # When a generator expression is the sole argument, tree-sitter
+        # makes it the arguments node directly (not wrapped in argument_list).
+        if args_node and args_node.type == "generator_expression":
+            arg_regs = [self._lower_expr(args_node)]
+        elif args_node:
+            arg_regs = [
                 self._lower_expr(c)
                 for c in args_node.children
                 if c.type not in ("(", ")", ",")
             ]
-            if args_node
-            else []
-        )
+        else:
+            arg_regs = []
 
         # Method call: obj.method(...)
         if func_node and func_node.type == "attribute":
@@ -688,3 +705,308 @@ class PythonFrontend(BaseFrontend):
             source_location=self._source_loc(node),
         )
         return ref_reg
+
+    # ── Python-specific: generator expression ─────────────────────
+
+    def _lower_generator_expression(self, node) -> str:
+        """Lower (expr for var in iterable) like list_comprehension but as generator."""
+        children = [c for c in node.children if c.is_named]
+        body_expr = children[0] if children else None
+        for_clauses = [c for c in children if c.type == "for_in_clause"]
+        if_clauses = [c for c in children if c.type == "if_clause"]
+
+        result_arr = self._fresh_reg()
+        size_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=size_reg, operands=["0"])
+        self._emit(
+            Opcode.NEW_ARRAY,
+            result_reg=result_arr,
+            operands=["list", size_reg],
+            source_location=self._source_loc(node),
+        )
+
+        result_idx = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=result_idx, operands=["0"])
+
+        end_label = self._fresh_label("gen_end")
+
+        self._lower_comprehension_loop(
+            for_clauses,
+            if_clauses,
+            body_expr,
+            result_arr,
+            result_idx,
+            node,
+            end_label,
+        )
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+        # Wrap as generator call
+        gen_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=gen_reg,
+            operands=["generator", result_arr],
+            source_location=self._source_loc(node),
+        )
+        return gen_reg
+
+    # ── Python-specific: set comprehension ────────────────────────
+
+    def _lower_set_comprehension(self, node) -> str:
+        """Lower {expr for var in iterable} as set comprehension."""
+        children = [c for c in node.children if c.is_named]
+        body_expr = children[0] if children else None
+        for_clauses = [c for c in children if c.type == "for_in_clause"]
+        if_clauses = [c for c in children if c.type == "if_clause"]
+
+        result_obj = self._fresh_reg()
+        self._emit(
+            Opcode.NEW_OBJECT,
+            result_reg=result_obj,
+            operands=["set"],
+            source_location=self._source_loc(node),
+        )
+
+        result_idx = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=result_idx, operands=["0"])
+
+        end_label = self._fresh_label("setcomp_end")
+
+        self._lower_comprehension_loop(
+            for_clauses,
+            if_clauses,
+            body_expr,
+            result_obj,
+            result_idx,
+            node,
+            end_label,
+        )
+
+        self._emit(Opcode.LABEL, label=end_label)
+        return result_obj
+
+    # ── Python-specific: set literal ──────────────────────────────
+
+    def _lower_set_literal(self, node) -> str:
+        """Lower {1, 2, 3} as NEW_OBJECT('set') + STORE_INDEX per element."""
+        elems = [c for c in node.children if c.type not in ("{", "}", ",")]
+        obj_reg = self._fresh_reg()
+        self._emit(
+            Opcode.NEW_OBJECT,
+            result_reg=obj_reg,
+            operands=["set"],
+            source_location=self._source_loc(node),
+        )
+        for i, elem in enumerate(elems):
+            val_reg = self._lower_expr(elem)
+            idx_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            self._emit(Opcode.STORE_INDEX, operands=[obj_reg, idx_reg, val_reg])
+        return obj_reg
+
+    # ── Python-specific: yield ────────────────────────────────────
+
+    def _lower_yield(self, node) -> str:
+        """Lower yield expr → CALL_FUNCTION('yield', expr)."""
+        named_children = [c for c in node.children if c.is_named]
+        arg_regs = [self._lower_expr(c) for c in named_children]
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["yield"] + arg_regs,
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # ── Python-specific: await ────────────────────────────────────
+
+    def _lower_await(self, node) -> str:
+        """Lower await expr → CALL_FUNCTION('await', expr)."""
+        named_children = [c for c in node.children if c.is_named]
+        arg_regs = [self._lower_expr(c) for c in named_children]
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["await"] + arg_regs,
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # ── Python-specific: named expression (walrus :=) ─────────────
+
+    def _lower_named_expression(self, node) -> str:
+        """Lower (y := expr) → lower value, STORE_VAR name, return register."""
+        name_node = node.child_by_field_name("name")
+        value_node = node.child_by_field_name("value")
+        val_reg = self._lower_expr(value_node)
+        var_name = self._node_text(name_node)
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=[var_name, val_reg],
+            source_location=self._source_loc(node),
+        )
+        return val_reg
+
+    # ── Python-specific: assert statement ─────────────────────────
+
+    def _lower_assert(self, node):
+        """Lower assert cond [, msg] → CALL_FUNCTION('assert', cond [, msg])."""
+        named_children = [c for c in node.children if c.is_named]
+        arg_regs = [self._lower_expr(c) for c in named_children]
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=self._fresh_reg(),
+            operands=["assert"] + arg_regs,
+            source_location=self._source_loc(node),
+        )
+
+    # ── Python-specific: delete statement ─────────────────────────
+
+    def _lower_delete(self, node):
+        """Lower del x, y → CALL_FUNCTION('del', target) for each target."""
+        for child in node.children:
+            if not child.is_named:
+                continue
+            # expression_list wraps multiple targets
+            if child.type == "expression_list":
+                for target in child.children:
+                    if target.is_named:
+                        target_reg = self._lower_expr(target)
+                        self._emit(
+                            Opcode.CALL_FUNCTION,
+                            result_reg=self._fresh_reg(),
+                            operands=["del", target_reg],
+                            source_location=self._source_loc(node),
+                        )
+            else:
+                target_reg = self._lower_expr(child)
+                self._emit(
+                    Opcode.CALL_FUNCTION,
+                    result_reg=self._fresh_reg(),
+                    operands=["del", target_reg],
+                    source_location=self._source_loc(node),
+                )
+
+    # ── Python-specific: import statement ─────────────────────────
+
+    def _lower_import(self, node):
+        """Lower import module → CALL_FUNCTION('import', module) + STORE_VAR."""
+        name_node = node.child_by_field_name("name")
+        module_name = self._node_text(name_node) if name_node else "unknown"
+        import_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=import_reg,
+            operands=["import", module_name],
+            source_location=self._source_loc(node),
+        )
+        # Store using the top-level module name (e.g., 'os' for 'os.path')
+        store_name = module_name.split(".")[0]
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=[store_name, import_reg],
+            source_location=self._source_loc(node),
+        )
+
+    # ── Python-specific: import from statement ────────────────────
+
+    def _lower_import_from(self, node):
+        """Lower from X import Y, Z → CALL_FUNCTION('import', ...) + STORE_VAR per name."""
+        module_node = node.child_by_field_name("module_name")
+        module_name = self._node_text(module_node) if module_node else "unknown"
+
+        # Collect all imported names (dotted_name children after 'import' keyword)
+        imported_names = [
+            c
+            for c in node.children
+            if c.is_named and c.type == "dotted_name" and c != module_node
+        ]
+
+        for name_node in imported_names:
+            imported_name = self._node_text(name_node)
+            import_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CALL_FUNCTION,
+                result_reg=import_reg,
+                operands=["import", f"from {module_name} import {imported_name}"],
+                source_location=self._source_loc(node),
+            )
+            self._emit(
+                Opcode.STORE_VAR,
+                operands=[imported_name, import_reg],
+                source_location=self._source_loc(node),
+            )
+
+    # ── Python-specific: match statement ──────────────────────────
+
+    _WILDCARD_PATTERN = "_"
+
+    def _lower_match(self, node):
+        """Lower match/case as if/elif/else chain."""
+        subject_node = node.child_by_field_name("subject")
+        body_node = node.child_by_field_name("body")
+
+        subject_reg = self._lower_expr(subject_node)
+
+        case_clauses = (
+            [c for c in body_node.children if c.type == "case_clause"]
+            if body_node
+            else []
+        )
+
+        end_label = self._fresh_label("match_end")
+
+        for case_node in case_clauses:
+            pattern_node = next(
+                (c for c in case_node.children if c.type == "case_pattern"), None
+            )
+            case_body = case_node.child_by_field_name("consequence") or next(
+                (c for c in case_node.children if c.type == "block"), None
+            )
+
+            # Extract the inner pattern value from case_pattern
+            inner_pattern = (
+                next((c for c in pattern_node.children if c.is_named), None)
+                if pattern_node
+                else None
+            )
+
+            is_wildcard = (
+                inner_pattern is not None
+                and self._node_text(inner_pattern) == self._WILDCARD_PATTERN
+            )
+
+            if is_wildcard:
+                # Default case: unconditionally lower the body
+                if case_body:
+                    self._lower_block(case_body)
+                self._emit(Opcode.BRANCH, label=end_label)
+            else:
+                pattern_reg = (
+                    self._lower_expr(inner_pattern) if inner_pattern else subject_reg
+                )
+                cmp_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.BINOP,
+                    result_reg=cmp_reg,
+                    operands=["==", subject_reg, pattern_reg],
+                    source_location=self._source_loc(case_node),
+                )
+                case_true_label = self._fresh_label("case_true")
+                case_next_label = self._fresh_label("case_next")
+                self._emit(
+                    Opcode.BRANCH_IF,
+                    operands=[cmp_reg],
+                    label=f"{case_true_label},{case_next_label}",
+                )
+                self._emit(Opcode.LABEL, label=case_true_label)
+                if case_body:
+                    self._lower_block(case_body)
+                self._emit(Opcode.BRANCH, label=end_label)
+                self._emit(Opcode.LABEL, label=case_next_label)
+
+        self._emit(Opcode.LABEL, label=end_label)

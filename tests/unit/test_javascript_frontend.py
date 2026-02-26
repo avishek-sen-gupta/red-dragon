@@ -455,3 +455,321 @@ class TestJavaScriptDestructuring:
         assert any("x" in inst.operands for inst in stores)
         assert any("y" in inst.operands for inst in stores)
         assert any("z" in inst.operands for inst in stores)
+
+
+class TestJavaScriptNewExpression:
+    def test_new_expression_basic(self):
+        instructions = _parse_js("const obj = new Foo();")
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("Foo" in inst.operands for inst in new_objs)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("constructor" in inst.operands for inst in calls)
+
+    def test_new_expression_with_args(self):
+        instructions = _parse_js("const obj = new Dog(name, age);")
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("Dog" in inst.operands for inst in new_objs)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("constructor" in inst.operands for inst in calls)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("obj" in inst.operands for inst in stores)
+
+    def test_new_expression_in_throw(self):
+        instructions = _parse_js('throw new Error("fail");')
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_OBJECT in opcodes
+        assert Opcode.THROW in opcodes
+
+
+class TestJavaScriptAwaitExpression:
+    def test_await_basic(self):
+        instructions = _parse_js("const result = await fetch(url);")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("await" in inst.operands for inst in calls)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("result" in inst.operands for inst in stores)
+
+    def test_await_in_assignment(self):
+        instructions = _parse_js("const data = await response.json();")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("await" in inst.operands for inst in calls)
+
+    def test_await_nested(self):
+        instructions = _parse_js("const x = await (await fetch(url)).json();")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        await_calls = [c for c in calls if "await" in c.operands]
+        assert len(await_calls) >= 2
+
+
+class TestJavaScriptYieldExpression:
+    def test_yield_with_value(self):
+        instructions = _parse_js("function* gen() { yield 42; }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("yield" in inst.operands for inst in calls)
+
+    def test_bare_yield(self):
+        instructions = _parse_js("function* gen() { yield; }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("yield" in inst.operands for inst in calls)
+
+    def test_yield_with_expression(self):
+        instructions = _parse_js("function* gen() { const x = yield getValue(); }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("yield" in inst.operands for inst in calls)
+
+
+class TestJavaScriptRegex:
+    def test_regex_literal(self):
+        instructions = _parse_js("const r = /abc/gi;")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("/abc/gi" in inst.operands for inst in consts)
+
+    def test_regex_in_condition(self):
+        instructions = _parse_js("if (/test/.test(str)) { x = 1; }")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("/test/" in inst.operands for inst in consts)
+
+
+class TestJavaScriptSequenceExpression:
+    def test_sequence_basic(self):
+        instructions = _parse_js("const x = (1, 2, 3);")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("1" in inst.operands for inst in consts)
+        assert any("2" in inst.operands for inst in consts)
+        assert any("3" in inst.operands for inst in consts)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_sequence_with_side_effects(self):
+        instructions = _parse_js("const x = (a++, b++, c);")
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert len(binops) >= 2
+
+
+class TestJavaScriptSpreadElement:
+    def test_spread_in_call(self):
+        instructions = _parse_js("foo(...args);")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("spread" in inst.operands for inst in calls)
+
+    def test_spread_in_array(self):
+        instructions = _parse_js("const arr = [...items, 4, 5];")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("spread" in inst.operands for inst in calls)
+
+    def test_spread_multiple(self):
+        instructions = _parse_js("foo(...a, ...b);")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        spread_calls = [c for c in calls if "spread" in c.operands]
+        assert len(spread_calls) >= 2
+
+
+class TestJavaScriptFunctionExpression:
+    def test_anonymous_function(self):
+        instructions = _parse_js("const f = function(x) { return x + 1; };")
+        opcodes = _opcodes(instructions)
+        assert Opcode.RETURN in opcodes
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("function:" in str(inst.operands) for inst in consts)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("f" in inst.operands for inst in stores)
+
+    def test_named_function_expression(self):
+        instructions = _parse_js("const f = function myFunc(x) { return x; };")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("function:" in str(inst.operands) for inst in consts)
+        assert any("myFunc" in str(inst.operands) for inst in consts)
+
+    def test_function_expression_as_callback(self):
+        instructions = _parse_js("arr.forEach(function(item) { process(item); });")
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("forEach" in inst.operands for inst in calls)
+
+
+class TestJavaScriptSuperExpression:
+    def test_super_call(self):
+        source = """\
+class Dog extends Animal {
+    constructor(name) {
+        super(name);
+    }
+}
+"""
+        instructions = _parse_js(source)
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("super" in inst.operands for inst in loads)
+
+    def test_super_method_call(self):
+        source = """\
+class Dog extends Animal {
+    speak() {
+        return super.speak() + " woof";
+    }
+}
+"""
+        instructions = _parse_js(source)
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("super" in inst.operands for inst in loads)
+
+
+class TestJavaScriptSwitchStatement:
+    def test_switch_basic(self):
+        source = """\
+switch (x) {
+    case 1:
+        y = "one";
+        break;
+    case 2:
+        y = "two";
+        break;
+    default:
+        y = "other";
+}
+"""
+        instructions = _parse_js(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("===" in inst.operands for inst in binops)
+        labels = _labels_in_order(instructions)
+        assert any("switch_end" in lbl for lbl in labels)
+
+    def test_switch_with_expressions(self):
+        source = """\
+switch (status) {
+    case "active":
+        process();
+        break;
+    default:
+        skip();
+}
+"""
+        instructions = _parse_js(source)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("===" in inst.operands for inst in binops)
+
+    def test_switch_break_targets(self):
+        source = """\
+switch (x) {
+    case 1:
+        break;
+    case 2:
+        break;
+}
+"""
+        instructions = _parse_js(source)
+        branches = _find_all(instructions, Opcode.BRANCH)
+        labels = _labels_in_order(instructions)
+        end_labels = [lbl for lbl in labels if "switch_end" in lbl]
+        assert len(end_labels) >= 1
+        assert any(b.label in end_labels for b in branches)
+
+
+class TestJavaScriptDoWhileStatement:
+    def test_do_while_basic(self):
+        source = "do { x++; } while (x < 10);"
+        instructions = _parse_js(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        labels = _labels_in_order(instructions)
+        assert any("do_body" in lbl for lbl in labels)
+        assert any("do_cond" in lbl for lbl in labels)
+        assert any("do_end" in lbl for lbl in labels)
+
+    def test_do_while_with_break(self):
+        source = "do { if (x > 5) break; x++; } while (true);"
+        instructions = _parse_js(source)
+        labels = _labels_in_order(instructions)
+        end_labels = [lbl for lbl in labels if "do_end" in lbl]
+        assert len(end_labels) >= 1
+        branches = _find_all(instructions, Opcode.BRANCH)
+        assert any(b.label in end_labels for b in branches)
+
+    def test_do_while_with_continue(self):
+        source = "do { if (x > 5) continue; x++; } while (x < 10);"
+        instructions = _parse_js(source)
+        labels = _labels_in_order(instructions)
+        cond_labels = [lbl for lbl in labels if "do_cond" in lbl]
+        assert len(cond_labels) >= 1
+        branches = _find_all(instructions, Opcode.BRANCH)
+        assert any(b.label in cond_labels for b in branches)
+
+
+class TestJavaScriptLabeledStatement:
+    def test_labeled_statement_basic(self):
+        source = "outer: for (let i = 0; i < 10; i++) { x = i; }"
+        instructions = _parse_js(source)
+        labels = _labels_in_order(instructions)
+        assert any("outer" in lbl for lbl in labels)
+
+    def test_labeled_statement_with_block(self):
+        source = "myLabel: { x = 1; y = 2; }"
+        instructions = _parse_js(source)
+        labels = _labels_in_order(instructions)
+        assert any("myLabel" in lbl for lbl in labels)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+        assert any("y" in inst.operands for inst in stores)
+
+
+class TestJavaScriptTemplateSubstitution:
+    def test_template_with_substitution(self):
+        source = "const msg = `Hello ${name}!`;"
+        instructions = _parse_js(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.LOAD_VAR in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("msg" in inst.operands for inst in stores)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+    def test_template_multiple_substitutions(self):
+        source = "const msg = `${a} and ${b}`;"
+        instructions = _parse_js(source)
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        load_names = [inst.operands[0] for inst in loads if inst.operands]
+        assert "a" in load_names
+        assert "b" in load_names
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert len(binops) >= 2
+
+    def test_template_no_substitution(self):
+        source = "const msg = `plain text`;"
+        instructions = _parse_js(source)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("`plain text`" in inst.operands for inst in consts)
+
+
+class TestJavaScriptClassStaticBlock:
+    def test_class_static_block(self):
+        source = """\
+class Foo {
+    static {
+        Foo.count = 0;
+    }
+    constructor() {
+        Foo.count++;
+    }
+}
+"""
+        instructions = _parse_js(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Foo" in inst.operands for inst in stores)
+        store_fields = _find_all(instructions, Opcode.STORE_FIELD)
+        assert any("count" in inst.operands for inst in store_fields)
+
+    def test_class_static_block_with_logic(self):
+        source = """\
+class Config {
+    static {
+        if (env === "prod") {
+            Config.debug = false;
+        }
+    }
+}
+"""
+        instructions = _parse_js(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Config" in inst.operands for inst in stores)

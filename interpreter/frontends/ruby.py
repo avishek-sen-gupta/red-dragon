@@ -45,6 +45,15 @@ class RubyFrontend(BaseFrontend):
             "array": self._lower_list_literal,
             "hash": self._lower_ruby_hash,
             "argument_list": self._lower_ruby_argument_list,
+            "simple_symbol": self._lower_const_literal,
+            "range": self._lower_ruby_range,
+            "regex": self._lower_const_literal,
+            "lambda": self._lower_ruby_lambda,
+            "string_array": self._lower_ruby_word_array,
+            "symbol_array": self._lower_ruby_word_array,
+            "global_variable": self._lower_identifier,
+            "class_variable": self._lower_identifier,
+            "heredoc_body": self._lower_const_literal,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -67,6 +76,8 @@ class RubyFrontend(BaseFrontend):
             "break": self._lower_break,
             "next": self._lower_continue,
             "begin": self._lower_begin,
+            "case": self._lower_case,
+            "module": self._lower_ruby_module,
         }
 
     # -- Ruby: argument_list unwrap -------------------------------------------
@@ -425,7 +436,13 @@ class RubyFrontend(BaseFrontend):
     # -- Ruby: store target with instance variables ----------------------------
 
     def _lower_store_target(self, target, val_reg: str, parent_node):
-        if target.type in ("identifier", "instance_variable", "constant"):
+        if target.type in (
+            "identifier",
+            "instance_variable",
+            "constant",
+            "global_variable",
+            "class_variable",
+        ):
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
@@ -646,3 +663,203 @@ class RubyFrontend(BaseFrontend):
     def _lower_symbolic_block(self, node):
         """Backward-compat: lower block/do_block appearing as statement."""
         self._lower_ruby_block(node)
+
+    # -- Ruby: range expression ------------------------------------------------
+
+    def _lower_ruby_range(self, node) -> str:
+        """Lower `a..b` or `a...b` as CALL_FUNCTION("range", start, end)."""
+        named = [c for c in node.children if c.is_named]
+        start_reg = self._lower_expr(named[0]) if len(named) > 0 else self._fresh_reg()
+        end_reg = self._lower_expr(named[1]) if len(named) > 1 else self._fresh_reg()
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["range", start_reg, end_reg],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- Ruby: lambda ----------------------------------------------------------
+
+    def _lower_ruby_lambda(self, node) -> str:
+        """Lower `-> (params) { body }` as anonymous function."""
+        func_name = f"__lambda_{self._label_counter}"
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        self._emit(Opcode.BRANCH, label=end_label)
+        self._emit(Opcode.LABEL, label=func_label)
+
+        params_node = node.child_by_field_name("parameters")
+        if params_node:
+            self._lower_ruby_params(params_node)
+
+        body_node = node.child_by_field_name("body")
+        if body_node:
+            self._lower_block(body_node)
+        else:
+            # Inline body: lower named children except params and delimiters
+            for child in node.children:
+                if (
+                    child.is_named
+                    and child.type
+                    not in ("lambda_parameters", "block_parameters", "->")
+                    and child.type not in self.NOISE_TYPES
+                    and child.type not in self.COMMENT_TYPES
+                ):
+                    self._lower_stmt(child)
+
+        nil_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=nil_reg,
+            operands=[self.DEFAULT_RETURN_VALUE],
+        )
+        self._emit(Opcode.RETURN, operands=[nil_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        ref_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=ref_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        return ref_reg
+
+    # -- Ruby: string_array / symbol_array (%w, %i) ----------------------------
+
+    def _lower_ruby_word_array(self, node) -> str:
+        """Lower `%w[a b c]` or `%i[a b c]` as NEW_ARRAY + STORE_INDEX per element."""
+        elems = [
+            c
+            for c in node.children
+            if c.is_named and c.type not in ("{", "}", "[", "]")
+        ]
+        arr_reg = self._fresh_reg()
+        size_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
+        self._emit(
+            Opcode.NEW_ARRAY,
+            result_reg=arr_reg,
+            operands=["list", size_reg],
+            source_location=self._source_loc(node),
+        )
+        for i, elem in enumerate(elems):
+            val_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=val_reg,
+                operands=[self._node_text(elem)],
+            )
+            idx_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            self._emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+        return arr_reg
+
+    # -- Ruby: case/when -------------------------------------------------------
+
+    def _lower_case(self, node):
+        """Lower `case expr; when val; ...; else; ...; end` as if/else chain."""
+        value_node = node.child_by_field_name("value")
+        val_reg = self._lower_expr(value_node) if value_node else ""
+
+        when_clauses = [c for c in node.children if c.type == "when"]
+        else_clause = next(
+            (c for c in node.children if c.type == "else"),
+            None,
+        )
+        end_label = self._fresh_label("case_end")
+
+        for when_node in when_clauses:
+            when_label = self._fresh_label("when_body")
+            next_label = self._fresh_label("when_next")
+
+            # Extract pattern(s) and body from when clause
+            pattern_node = next(
+                (c for c in when_node.children if c.type == "pattern"),
+                None,
+            )
+            when_patterns = [
+                c
+                for c in when_node.children
+                if c.is_named
+                and c.type not in ("when", "then", "pattern", "body_statement")
+            ]
+            body_node = when_node.child_by_field_name("body")
+
+            # If there's a pattern node, use it; otherwise use the first named child
+            if pattern_node:
+                pattern_reg = self._lower_expr(pattern_node)
+            elif when_patterns:
+                pattern_reg = self._lower_expr(when_patterns[0])
+            else:
+                self._emit(Opcode.BRANCH, label=when_label)
+                self._emit(Opcode.LABEL, label=when_label)
+                if body_node:
+                    self._lower_block(body_node)
+                self._emit(Opcode.BRANCH, label=end_label)
+                self._emit(Opcode.LABEL, label=next_label)
+                continue
+
+            if val_reg:
+                cond_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.BINOP,
+                    result_reg=cond_reg,
+                    operands=["==", val_reg, pattern_reg],
+                    source_location=self._source_loc(when_node),
+                )
+            else:
+                cond_reg = pattern_reg
+
+            self._emit(
+                Opcode.BRANCH_IF,
+                operands=[cond_reg],
+                label=f"{when_label},{next_label}",
+                source_location=self._source_loc(when_node),
+            )
+
+            self._emit(Opcode.LABEL, label=when_label)
+            if body_node:
+                self._lower_block(body_node)
+            self._emit(Opcode.BRANCH, label=end_label)
+            self._emit(Opcode.LABEL, label=next_label)
+
+        if else_clause:
+            self._lower_block(else_clause)
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+    # -- Ruby: module ----------------------------------------------------------
+
+    def _lower_ruby_module(self, node):
+        """Lower `module Name; ...; end` like a class."""
+        name_node = node.child_by_field_name("name")
+        body_node = node.child_by_field_name("body")
+        module_name = self._node_text(name_node) if name_node else "__anon_module"
+
+        class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{module_name}")
+        end_label = self._fresh_label(
+            f"{constants.END_CLASS_LABEL_PREFIX}{module_name}"
+        )
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=class_label)
+        if body_node:
+            self._lower_block(body_node)
+        self._emit(Opcode.LABEL, label=end_label)
+
+        cls_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=cls_reg,
+            operands=[
+                constants.CLASS_REF_TEMPLATE.format(name=module_name, label=class_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[module_name, cls_reg])

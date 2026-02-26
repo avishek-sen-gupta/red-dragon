@@ -47,6 +47,9 @@ class GoFrontend(BaseFrontend):
             "composite_literal": self._lower_composite_literal,
             "type_identifier": self._lower_identifier,
             "field_identifier": self._lower_identifier,
+            "type_assertion_expression": self._lower_type_assertion,
+            "slice_expression": self._lower_slice_expr,
+            "func_literal": self._lower_func_literal,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -66,6 +69,15 @@ class GoFrontend(BaseFrontend):
             "var_declaration": self._lower_go_var_decl,
             "break_statement": self._lower_break,
             "continue_statement": self._lower_continue,
+            "defer_statement": self._lower_defer_stmt,
+            "go_statement": self._lower_go_stmt,
+            "expression_switch_statement": self._lower_expression_switch,
+            "type_switch_statement": self._lower_type_switch,
+            "select_statement": self._lower_select_stmt,
+            "send_statement": self._lower_send_stmt,
+            "labeled_statement": self._lower_labeled_stmt,
+            "const_declaration": self._lower_go_const_decl,
+            "goto_statement": self._lower_goto_stmt,
         }
 
     # -- Go: block (iterate named children, skip braces) -----------------------
@@ -742,3 +754,357 @@ class GoFrontend(BaseFrontend):
                 )
 
         return obj_reg
+
+    # -- Go: type assertion expression -----------------------------------------
+
+    def _lower_type_assertion(self, node) -> str:
+        """Lower type_assertion_expression: x.(Type) -> CALL_FUNCTION('type_assert', x, Type)."""
+        named_children = [c for c in node.children if c.is_named]
+        if not named_children:
+            return self._lower_const_literal(node)
+        expr_reg = self._lower_expr(named_children[0])
+        type_text = (
+            self._node_text(named_children[-1])
+            if len(named_children) > 1
+            else "interface{}"
+        )
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["type_assert", expr_reg, type_text],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- Go: slice expression --------------------------------------------------
+
+    def _lower_slice_expr(self, node) -> str:
+        """Lower slice_expression: a[low:high] -> CALL_FUNCTION('slice', a, low, high)."""
+        operand_node = node.child_by_field_name("operand")
+        obj_reg = self._lower_expr(operand_node) if operand_node else self._fresh_reg()
+
+        start_node = node.child_by_field_name("start")
+        end_node = node.child_by_field_name("end")
+
+        start_reg = (
+            self._lower_expr(start_node) if start_node else self._make_const("0")
+        )
+        end_reg = (
+            self._lower_expr(end_node)
+            if end_node
+            else self._make_const(self.NONE_LITERAL)
+        )
+
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["slice", obj_reg, start_reg, end_reg],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    def _make_const(self, value: str) -> str:
+        """Emit a CONST and return its register."""
+        reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=reg, operands=[value])
+        return reg
+
+    # -- Go: func literal (anonymous function) ---------------------------------
+
+    def _lower_func_literal(self, node) -> str:
+        """Lower func_literal as an anonymous function."""
+        func_name = f"__anon_{self._label_counter}"
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        params_node = node.child_by_field_name("parameters")
+        body_node = node.child_by_field_name("body")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=func_label)
+
+        if params_node:
+            self._lower_go_params(params_node)
+
+        if body_node:
+            self._lower_go_block(body_node)
+
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST, result_reg=none_reg, operands=[self.DEFAULT_RETURN_VALUE]
+        )
+        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        return reg
+
+    # -- Go: defer statement ---------------------------------------------------
+
+    def _lower_defer_stmt(self, node):
+        """Lower defer statement: lower call child, then CALL_FUNCTION('defer', call_reg)."""
+        call_node = next(
+            (c for c in node.children if c.is_named and c.type != "defer"),
+            None,
+        )
+        if not call_node:
+            return
+        call_reg = self._lower_expr(call_node)
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=self._fresh_reg(),
+            operands=["defer", call_reg],
+            source_location=self._source_loc(node),
+        )
+
+    # -- Go: go statement ------------------------------------------------------
+
+    def _lower_go_stmt(self, node):
+        """Lower go statement: lower call child, then CALL_FUNCTION('go', call_reg)."""
+        call_node = next(
+            (c for c in node.children if c.is_named and c.type != "go"),
+            None,
+        )
+        if not call_node:
+            return
+        call_reg = self._lower_expr(call_node)
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=self._fresh_reg(),
+            operands=["go", call_reg],
+            source_location=self._source_loc(node),
+        )
+
+    # -- Go: expression switch statement ---------------------------------------
+
+    def _lower_expression_switch(self, node):
+        """Lower expression_switch_statement as if/else chain."""
+        value_node = node.child_by_field_name("value")
+        val_reg = (
+            self._lower_expr(value_node)
+            if value_node
+            else self._make_const(self.TRUE_LITERAL)
+        )
+
+        end_label = self._fresh_label("switch_end")
+        cases = [
+            c for c in node.children if c.type in ("expression_case", "default_case")
+        ]
+
+        self._push_loop(end_label, end_label)
+        for case in cases:
+            if case.type == "default_case":
+                body_children = [c for c in case.children if c.is_named]
+                for child in body_children:
+                    self._lower_stmt(child)
+                self._emit(Opcode.BRANCH, label=end_label)
+            else:
+                value_nodes = [c for c in case.children if c.type == "expression_list"]
+                body_label = self._fresh_label("case_body")
+                next_label = self._fresh_label("case_next")
+
+                if value_nodes:
+                    case_exprs = self._lower_expression_list(value_nodes[0])
+                    if case_exprs:
+                        cmp_reg = self._fresh_reg()
+                        self._emit(
+                            Opcode.BINOP,
+                            result_reg=cmp_reg,
+                            operands=["==", val_reg, case_exprs[0]],
+                            source_location=self._source_loc(case),
+                        )
+                        self._emit(
+                            Opcode.BRANCH_IF,
+                            operands=[cmp_reg],
+                            label=f"{body_label},{next_label}",
+                        )
+                    else:
+                        self._emit(Opcode.BRANCH, label=body_label)
+                else:
+                    self._emit(Opcode.BRANCH, label=body_label)
+
+                self._emit(Opcode.LABEL, label=body_label)
+                body_children = [
+                    c
+                    for c in case.children
+                    if c.is_named and c.type != "expression_list"
+                ]
+                for child in body_children:
+                    self._lower_stmt(child)
+                self._emit(Opcode.BRANCH, label=end_label)
+                self._emit(Opcode.LABEL, label=next_label)
+
+        self._pop_loop()
+        self._emit(Opcode.LABEL, label=end_label)
+
+    # -- Go: type switch statement ---------------------------------------------
+
+    def _lower_type_switch(self, node):
+        """Lower type_switch_statement with CALL_FUNCTION('type_check') per case."""
+        header = next(
+            (c for c in node.children if c.type == "type_switch_header"), None
+        )
+        expr_reg = self._fresh_reg()
+        if header:
+            named = [c for c in header.children if c.is_named]
+            if named:
+                expr_reg = self._lower_expr(named[-1])
+
+        end_label = self._fresh_label("type_switch_end")
+        cases = [c for c in node.children if c.type in ("type_case", "default_case")]
+
+        self._push_loop(end_label, end_label)
+        for case in cases:
+            if case.type == "default_case":
+                body_children = [c for c in case.children if c.is_named]
+                for child in body_children:
+                    self._lower_stmt(child)
+                self._emit(Opcode.BRANCH, label=end_label)
+            else:
+                type_nodes = [
+                    c
+                    for c in case.children
+                    if c.type not in ("case", ":") and c.is_named
+                ]
+                body_label = self._fresh_label("type_case_body")
+                next_label = self._fresh_label("type_case_next")
+
+                if type_nodes:
+                    type_text = self._node_text(type_nodes[0])
+                    check_reg = self._fresh_reg()
+                    self._emit(
+                        Opcode.CALL_FUNCTION,
+                        result_reg=check_reg,
+                        operands=["type_check", expr_reg, type_text],
+                        source_location=self._source_loc(case),
+                    )
+                    self._emit(
+                        Opcode.BRANCH_IF,
+                        operands=[check_reg],
+                        label=f"{body_label},{next_label}",
+                    )
+                else:
+                    self._emit(Opcode.BRANCH, label=body_label)
+
+                self._emit(Opcode.LABEL, label=body_label)
+                body_children = type_nodes[1:] if len(type_nodes) > 1 else []
+                for child in body_children:
+                    self._lower_stmt(child)
+                self._emit(Opcode.BRANCH, label=end_label)
+                self._emit(Opcode.LABEL, label=next_label)
+
+        self._pop_loop()
+        self._emit(Opcode.LABEL, label=end_label)
+
+    # -- Go: select statement --------------------------------------------------
+
+    def _lower_select_stmt(self, node):
+        """Lower select_statement: lower each communication_case."""
+        end_label = self._fresh_label("select_end")
+        cases = [
+            c for c in node.children if c.type in ("communication_case", "default_case")
+        ]
+
+        for case in cases:
+            case_label = self._fresh_label("select_case")
+            self._emit(Opcode.LABEL, label=case_label)
+            body_children = [c for c in case.children if c.is_named]
+            for child in body_children:
+                self._lower_stmt(child)
+            self._emit(Opcode.BRANCH, label=end_label)
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+    # -- Go: send statement ----------------------------------------------------
+
+    def _lower_send_stmt(self, node):
+        """Lower send_statement: ch <- val -> CALL_FUNCTION('chan_send', ch, val)."""
+        channel_node = node.child_by_field_name("channel")
+        value_node = node.child_by_field_name("value")
+        if not channel_node or not value_node:
+            named = [c for c in node.children if c.is_named]
+            channel_node = named[0] if named else None
+            value_node = named[-1] if len(named) > 1 else None
+
+        chan_reg = self._lower_expr(channel_node) if channel_node else self._fresh_reg()
+        val_reg = self._lower_expr(value_node) if value_node else self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=self._fresh_reg(),
+            operands=["chan_send", chan_reg, val_reg],
+            source_location=self._source_loc(node),
+        )
+
+    # -- Go: labeled statement -------------------------------------------------
+
+    def _lower_labeled_stmt(self, node):
+        """Lower labeled_statement: LABEL(name) + lower body."""
+        label_node = next(
+            (c for c in node.children if c.type == "label_name"),
+            None,
+        )
+        label_name = self._node_text(label_node) if label_node else "__label"
+        self._emit(Opcode.LABEL, label=label_name)
+        body_children = [
+            c for c in node.children if c.is_named and c.type != "label_name"
+        ]
+        for child in body_children:
+            self._lower_stmt(child)
+
+    # -- Go: const declaration -------------------------------------------------
+
+    def _lower_go_const_decl(self, node):
+        """Lower const_declaration: iterate const_spec children."""
+        for child in node.children:
+            if child.type == "const_spec":
+                self._lower_const_spec(child)
+
+    def _lower_const_spec(self, node):
+        """Lower a single const_spec: lower value, STORE_VAR."""
+        name_node = node.child_by_field_name("name")
+        value_node = node.child_by_field_name("value")
+        if name_node and value_node:
+            val_reg = self._lower_expr(value_node)
+            self._emit(
+                Opcode.STORE_VAR,
+                operands=[self._node_text(name_node), val_reg],
+                source_location=self._source_loc(node),
+            )
+        elif name_node:
+            val_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=val_reg,
+                operands=[self.NONE_LITERAL],
+            )
+            self._emit(
+                Opcode.STORE_VAR,
+                operands=[self._node_text(name_node), val_reg],
+                source_location=self._source_loc(node),
+            )
+
+    # -- Go: goto statement ----------------------------------------------------
+
+    def _lower_goto_stmt(self, node):
+        """Lower goto_statement as BRANCH(label_name)."""
+        label_node = next(
+            (c for c in node.children if c.type == "label_name"),
+            None,
+        )
+        label_name = self._node_text(label_node) if label_node else "__unknown_label"
+        self._emit(
+            Opcode.BRANCH,
+            label=label_name,
+            source_location=self._source_loc(node),
+        )

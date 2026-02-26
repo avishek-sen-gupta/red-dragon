@@ -322,3 +322,171 @@ fun main() {
         assert any("name" in inst.operands for inst in stores)
         assert any("upper" in inst.operands for inst in stores)
         assert len(instructions) > 3
+
+
+class TestKotlinNotNullAssertion:
+    def test_not_null_assertion_produces_unop(self):
+        instructions = _parse_kotlin("fun main() { val x = y!! }")
+        unops = _find_all(instructions, Opcode.UNOP)
+        assert any("!!" in inst.operands for inst in unops)
+
+    def test_not_null_assertion_on_member(self):
+        instructions = _parse_kotlin("fun main() { val x = obj.value!! }")
+        unops = _find_all(instructions, Opcode.UNOP)
+        assert any("!!" in inst.operands for inst in unops)
+
+
+class TestKotlinCheckExpression:
+    def test_is_check_produces_call_function(self):
+        instructions = _parse_kotlin("fun main() { val b = x is String }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("is" in inst.operands for inst in calls)
+
+    def test_is_check_includes_type(self):
+        instructions = _parse_kotlin("fun main() { val b = x is Int }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        is_calls = [c for c in calls if "is" in c.operands]
+        assert any("Int" in str(inst.operands) for inst in is_calls)
+
+    def test_is_check_in_when(self):
+        source = """\
+fun main() {
+    val result = when {
+        x is String -> "string"
+        x is Int -> "int"
+        else -> "other"
+    }
+}
+"""
+        instructions = _parse_kotlin(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("result" in inst.operands for inst in stores)
+
+
+class TestKotlinDoWhile:
+    def test_do_while_produces_labels_and_branch(self):
+        instructions = _parse_kotlin(
+            "fun main() { var i = 0; do { i = i + 1 } while (i < 10) }"
+        )
+        labels = _labels_in_order(instructions)
+        assert any("do_body" in lbl for lbl in labels)
+        assert any("do_end" in lbl for lbl in labels)
+
+    def test_do_while_has_branch_if(self):
+        instructions = _parse_kotlin(
+            "fun main() { var i = 0; do { i = i + 1 } while (i < 10) }"
+        )
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 1
+
+    def test_do_while_body_executes_first(self):
+        instructions = _parse_kotlin("fun main() { do { x = 1 } while (false) }")
+        # Body should produce STORE_VAR before the BRANCH_IF
+        store_idx = next(
+            i
+            for i, inst in enumerate(instructions)
+            if inst.opcode == Opcode.STORE_VAR and "x" in inst.operands
+        )
+        branch_idx = next(
+            i for i, inst in enumerate(instructions) if inst.opcode == Opcode.BRANCH_IF
+        )
+        assert store_idx < branch_idx
+
+
+class TestKotlinObjectDeclaration:
+    def test_object_declaration_produces_new_object(self):
+        instructions = _parse_kotlin("object Singleton { val x = 10 }")
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("Singleton" in inst.operands for inst in new_objs)
+
+    def test_object_declaration_stores_var(self):
+        instructions = _parse_kotlin("object Config { val debug = true }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Config" in inst.operands for inst in stores)
+
+    def test_object_declaration_body_lowered(self):
+        instructions = _parse_kotlin("object Logger { fun log() { return } }")
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 1
+
+
+class TestKotlinCompanionObject:
+    def test_companion_object_body_lowered(self):
+        source = """\
+class MyClass {
+    companion object {
+        val DEFAULT = 42
+    }
+}
+"""
+        instructions = _parse_kotlin(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("MyClass" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("42" in inst.operands for inst in consts)
+
+    def test_companion_with_method(self):
+        source = """\
+class Factory {
+    companion object {
+        fun create(): Factory { return Factory() }
+    }
+}
+"""
+        instructions = _parse_kotlin(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Factory" in inst.operands for inst in stores)
+
+
+class TestKotlinEnumClassBody:
+    def test_enum_entries_produce_new_object(self):
+        source = """\
+enum class Color {
+    RED,
+    GREEN,
+    BLUE
+}
+"""
+        instructions = _parse_kotlin(source)
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        obj_names = [str(inst.operands) for inst in new_objs]
+        assert any("enum:RED" in name for name in obj_names)
+        assert any("enum:GREEN" in name for name in obj_names)
+        assert any("enum:BLUE" in name for name in obj_names)
+
+    def test_enum_entries_stored_as_vars(self):
+        source = """\
+enum class Direction {
+    NORTH,
+    SOUTH
+}
+"""
+        instructions = _parse_kotlin(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("NORTH" in inst.operands for inst in stores)
+        assert any("SOUTH" in inst.operands for inst in stores)
+
+    def test_enum_class_stored(self):
+        source = """\
+enum class Status {
+    ACTIVE,
+    INACTIVE
+}
+"""
+        instructions = _parse_kotlin(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Status" in inst.operands for inst in stores)
+
+
+class TestKotlinTypeAlias:
+    def test_type_alias_is_noop(self):
+        instructions = _parse_kotlin("typealias Name = String")
+        # Should not produce any meaningful IR beyond entry label
+        opcodes = _opcodes(instructions)
+        assert Opcode.LABEL in opcodes
+        # Should not crash
+
+    def test_type_alias_does_not_produce_store(self):
+        instructions = _parse_kotlin("typealias StringList = List<String>")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert len(stores) == 0
