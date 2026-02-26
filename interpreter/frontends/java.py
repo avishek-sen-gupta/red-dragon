@@ -48,6 +48,7 @@ class JavaFrontend(BaseFrontend):
             "field_access": self._lower_field_access,
             "array_access": self._lower_array_access,
             "array_creation_expression": self._lower_array_creation,
+            "array_initializer": self._lower_array_creation,
             "assignment_expression": self._lower_assignment_expr,
             "cast_expression": self._lower_cast_expr,
             "instanceof_expression": self._lower_instanceof,
@@ -190,14 +191,74 @@ class JavaFrontend(BaseFrontend):
     # ── Java: array creation ─────────────────────────────────────
 
     def _lower_array_creation(self, node) -> str:
-        reg = self._fresh_reg()
+        """Lower array_creation_expression or standalone array_initializer.
+
+        With initializer: NEW_ARRAY + STORE_INDEX per element.
+        Without initializer (sized): just NEW_ARRAY with size.
+        """
+        # Handle standalone array_initializer: {1, 2, 3}
+        if node.type == "array_initializer":
+            elements = [c for c in node.children if c.is_named]
+            size_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elements))])
+            arr_reg = self._fresh_reg()
+            self._emit(
+                Opcode.NEW_ARRAY,
+                result_reg=arr_reg,
+                operands=["array", size_reg],
+                source_location=self._source_loc(node),
+            )
+            for i, elem in enumerate(elements):
+                idx_reg = self._fresh_reg()
+                self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+                val_reg = self._lower_expr(elem)
+                self._emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+            return arr_reg
+
+        # array_creation_expression: look for array_initializer child
+        init_node = next(
+            (c for c in node.children if c.type == "array_initializer"),
+            None,
+        )
+        if init_node is not None:
+            elements = [c for c in init_node.children if c.is_named]
+            size_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elements))])
+            arr_reg = self._fresh_reg()
+            self._emit(
+                Opcode.NEW_ARRAY,
+                result_reg=arr_reg,
+                operands=["array", size_reg],
+                source_location=self._source_loc(node),
+            )
+            for i, elem in enumerate(elements):
+                idx_reg = self._fresh_reg()
+                self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+                val_reg = self._lower_expr(elem)
+                self._emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+            return arr_reg
+
+        # Sized array without initializer: new int[5]
+        dims_node = next(
+            (c for c in node.children if c.type == "dimensions_expr"),
+            None,
+        )
+        if dims_node:
+            dim_children = [c for c in dims_node.children if c.is_named]
+            size_reg = (
+                self._lower_expr(dim_children[0]) if dim_children else self._fresh_reg()
+            )
+        else:
+            size_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=size_reg, operands=["0"])
+        arr_reg = self._fresh_reg()
         self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=[f"new_array:{self._node_text(node)[:60]}"],
+            Opcode.NEW_ARRAY,
+            result_reg=arr_reg,
+            operands=["array", size_reg],
             source_location=self._source_loc(node),
         )
-        return reg
+        return arr_reg
 
     # ── Java: assignment expression ──────────────────────────────
 
@@ -259,11 +320,23 @@ class JavaFrontend(BaseFrontend):
     # ── Java: instanceof ────────────────────────────────────────
 
     def _lower_instanceof(self, node) -> str:
+        """Lower instanceof_expression: operand instanceof Type.
+
+        Emits: lower_expr(operand) -> CONST type_name -> CALL_FUNCTION instanceof(obj, type)
+        """
+        named_children = [c for c in node.children if c.is_named]
+        operand_node = named_children[0] if named_children else None
+        type_node = named_children[1] if len(named_children) > 1 else None
+
+        obj_reg = self._lower_expr(operand_node) if operand_node else self._fresh_reg()
+        type_reg = self._fresh_reg()
+        type_name = self._node_text(type_node) if type_node else "Object"
+        self._emit(Opcode.CONST, result_reg=type_reg, operands=[type_name])
         reg = self._fresh_reg()
         self._emit(
-            Opcode.SYMBOLIC,
+            Opcode.CALL_FUNCTION,
             result_reg=reg,
-            operands=[f"instanceof:{self._node_text(node)[:60]}"],
+            operands=["instanceof", obj_reg, type_reg],
             source_location=self._source_loc(node),
         )
         return reg
@@ -594,17 +667,34 @@ class JavaFrontend(BaseFrontend):
             self._emit(Opcode.STORE_VAR, operands=[iface_name, reg])
 
     def _lower_enum_decl(self, node):
+        """Lower enum_declaration as NEW_OBJECT with STORE_INDEX per member."""
         name_node = node.child_by_field_name("name")
+        body_node = node.child_by_field_name("body")
         if name_node:
             enum_name = self._node_text(name_node)
-            reg = self._fresh_reg()
+            obj_reg = self._fresh_reg()
             self._emit(
-                Opcode.SYMBOLIC,
-                result_reg=reg,
+                Opcode.NEW_OBJECT,
+                result_reg=obj_reg,
                 operands=[f"enum:{enum_name}"],
                 source_location=self._source_loc(node),
             )
-            self._emit(Opcode.STORE_VAR, operands=[enum_name, reg])
+            if body_node:
+                for i, child in enumerate(
+                    c for c in body_node.children if c.type == "enum_constant"
+                ):
+                    member_name_node = child.child_by_field_name("name")
+                    member_name = (
+                        self._node_text(member_name_node)
+                        if member_name_node
+                        else self._node_text(child)
+                    )
+                    key_reg = self._fresh_reg()
+                    self._emit(Opcode.CONST, result_reg=key_reg, operands=[member_name])
+                    val_reg = self._fresh_reg()
+                    self._emit(Opcode.CONST, result_reg=val_reg, operands=[str(i)])
+                    self._emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
+            self._emit(Opcode.STORE_VAR, operands=[enum_name, obj_reg])
 
     # ── Java: try/catch/finally ─────────────────────────────────
 

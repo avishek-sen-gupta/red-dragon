@@ -313,14 +313,118 @@ class CppFrontend(CFrontend):
                 self._lower_stmt(child)
 
     def _lower_field_initializer_list(self, node):
-        """Lower field_initializer_list as SYMBOLIC."""
-        reg = self._fresh_reg()
+        """Lower field_initializer_list: : field(val), field2(val2).
+
+        Emits: LOAD_VAR this → [lower_expr(arg) → STORE_FIELD this, field, val]×N
+        """
+        this_reg = self._fresh_reg()
         self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=[f"field_initializer_list:{self._node_text(node)[:60]}"],
+            Opcode.LOAD_VAR,
+            result_reg=this_reg,
+            operands=["this"],
             source_location=self._source_loc(node),
         )
+        for child in node.children:
+            if child.type == "field_initializer":
+                field_node = next(
+                    (c for c in child.children if c.type == "field_identifier"),
+                    None,
+                )
+                args_node = next(
+                    (c for c in child.children if c.type == "argument_list"),
+                    None,
+                )
+                if field_node is None:
+                    continue
+                field_name = self._node_text(field_node)
+                if args_node:
+                    arg_children = [c for c in args_node.children if c.is_named]
+                    val_reg = (
+                        self._lower_expr(arg_children[0])
+                        if arg_children
+                        else self._fresh_reg()
+                    )
+                else:
+                    val_reg = self._fresh_reg()
+                    self._emit(
+                        Opcode.CONST,
+                        result_reg=val_reg,
+                        operands=[self.DEFAULT_RETURN_VALUE],
+                    )
+                self._emit(
+                    Opcode.STORE_FIELD,
+                    operands=[this_reg, field_name, val_reg],
+                    source_location=self._source_loc(child),
+                )
+
+    # -- C++: override function_def to handle field_initializer_list -----
+
+    def _lower_function_def_c(self, node):
+        """Override to detect and lower field_initializer_list in constructors."""
+        declarator_node = node.child_by_field_name("declarator")
+        body_node = node.child_by_field_name("body")
+        init_list_node = next(
+            (c for c in node.children if c.type == "field_initializer_list"),
+            None,
+        )
+
+        func_name = "__anon"
+        params_node = None
+
+        if declarator_node:
+            if declarator_node.type == "function_declarator":
+                name_node = declarator_node.child_by_field_name("declarator")
+                params_node = declarator_node.child_by_field_name("parameters")
+                func_name = (
+                    self._extract_declarator_name(name_node) if name_node else "__anon"
+                )
+            else:
+                func_decl = self._find_function_declarator(declarator_node)
+                if func_decl:
+                    name_node = func_decl.child_by_field_name("declarator")
+                    params_node = func_decl.child_by_field_name("parameters")
+                    func_name = (
+                        self._extract_declarator_name(name_node)
+                        if name_node
+                        else "__anon"
+                    )
+                else:
+                    func_name = self._extract_declarator_name(declarator_node)
+
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=func_label)
+
+        if params_node:
+            self._lower_c_params(params_node)
+
+        # Emit field initializer list (C++ constructor initializer) before body
+        if init_list_node:
+            self._lower_field_initializer_list(init_list_node)
+
+        if body_node:
+            self._lower_block(body_node)
+
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST, result_reg=none_reg, operands=[self.DEFAULT_RETURN_VALUE]
+        )
+        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        func_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
 
     # -- C++: namespace ------------------------------------------------
 

@@ -550,3 +550,35 @@ class TestPythonLambda:
         assert Opcode.RETURN in opcodes
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("map" in inst.operands for inst in calls)
+
+
+class TestPythonNestedComprehension:
+    def test_nested_comprehension_basic(self):
+        source = "result = [x * y for x in xs for y in ys]"
+        instructions = _parse_python(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_ARRAY in opcodes
+        assert Opcode.STORE_INDEX in opcodes
+        assert Opcode.LOAD_INDEX in opcodes
+        # Should have multiple loop labels (at least 2 comp_cond)
+        labels = [i.label for i in instructions if i.opcode == Opcode.LABEL]
+        comp_labels = [lbl for lbl in labels if "comp_cond" in lbl]
+        assert len(comp_labels) >= 2
+
+    def test_nested_comprehension_with_filter(self):
+        source = "result = [x + y for x in xs for y in ys if x != y]"
+        instructions = _parse_python(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_ARRAY in opcodes
+        assert Opcode.BRANCH_IF in opcodes
+        # filter branch
+        labels = [i.label for i in instructions if i.opcode == Opcode.LABEL]
+        assert any("comp_store" in lbl for lbl in labels)
+
+    def test_single_comprehension_regression(self):
+        source = "result = [x * 2 for x in items]"
+        instructions = _parse_python(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_ARRAY in opcodes
+        assert Opcode.STORE_INDEX in opcodes
+        assert Opcode.LOAD_INDEX in opcodes

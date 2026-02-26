@@ -699,14 +699,63 @@ class PhpFrontend(BaseFrontend):
     # -- PHP: array creation ---------------------------------------------------
 
     def _lower_php_array(self, node) -> str:
-        reg = self._fresh_reg()
+        """Lower array_creation_expression: array(1, 2) or [1, 2] or ['k' => 'v'].
+
+        Value-only elements: NEW_ARRAY + STORE_INDEX per element.
+        Key-value elements: NEW_OBJECT + STORE_INDEX with key.
+        """
+        elements = [c for c in node.children if c.type == "array_element_initializer"]
+
+        # Determine if associative (any element has =>)
+        is_associative = any(
+            any(self._node_text(sub) == "=>" for sub in elem.children)
+            for elem in elements
+        )
+
+        if is_associative:
+            obj_reg = self._fresh_reg()
+            self._emit(
+                Opcode.NEW_OBJECT,
+                result_reg=obj_reg,
+                operands=["array"],
+                source_location=self._source_loc(node),
+            )
+            for elem in elements:
+                named = [c for c in elem.children if c.is_named]
+                if len(named) >= 2:
+                    key_reg = self._lower_expr(named[0])
+                    val_reg = self._lower_expr(named[1])
+                    self._emit(
+                        Opcode.STORE_INDEX,
+                        operands=[obj_reg, key_reg, val_reg],
+                    )
+                elif named:
+                    idx_reg = self._fresh_reg()
+                    self._emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
+                    val_reg = self._lower_expr(named[0])
+                    self._emit(
+                        Opcode.STORE_INDEX,
+                        operands=[obj_reg, idx_reg, val_reg],
+                    )
+            return obj_reg
+
+        # Value-only: indexed array
+        size_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elements))])
+        arr_reg = self._fresh_reg()
         self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=[f"array_creation:{self._node_text(node)[:60]}"],
+            Opcode.NEW_ARRAY,
+            result_reg=arr_reg,
+            operands=["array", size_reg],
             source_location=self._source_loc(node),
         )
-        return reg
+        for i, elem in enumerate(elements):
+            named = [c for c in elem.children if c.is_named]
+            val_reg = self._lower_expr(named[0]) if named else self._fresh_reg()
+            idx_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            self._emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+        return arr_reg
 
     # -- PHP: cast expression --------------------------------------------------
 

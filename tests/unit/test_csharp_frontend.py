@@ -397,3 +397,46 @@ class TestCSharpLambda:
         assert Opcode.BINOP in opcodes
         consts = _find_all(ir, Opcode.CONST)
         assert any("func:" in str(inst.operands) for inst in consts)
+
+
+class TestCSharpArrayCreation:
+    def test_array_creation_with_initializer(self):
+        source = "int[] a = new int[] { 1, 2, 3 };"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.NEW_ARRAY in opcodes
+        stores = _find_all(ir, Opcode.STORE_INDEX)
+        assert len(stores) >= 3
+
+    def test_implicit_array_creation(self):
+        source = "var a = new[] { 1, 2, 3 };"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.NEW_ARRAY in opcodes
+
+    def test_array_creation_sized(self):
+        source = "int[] a = new int[5];"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.NEW_ARRAY in opcodes
+
+
+class TestCSharpEnumDeclaration:
+    def test_enum_declaration(self):
+        source = "enum Color { Red, Green, Blue }"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.NEW_OBJECT in opcodes
+        new_objs = _find_all(ir, Opcode.NEW_OBJECT)
+        assert any("enum:Color" in str(inst.operands) for inst in new_objs)
+        stores = _find_all(ir, Opcode.STORE_INDEX)
+        assert len(stores) >= 3
+
+    def test_enum_with_values(self):
+        source = "enum Priority { Low, Medium, High }"
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        const_vals = [inst.operands[0] for inst in consts if inst.operands]
+        assert "Low" in const_vals
+        assert "Medium" in const_vals
+        assert "High" in const_vals

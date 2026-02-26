@@ -88,6 +88,15 @@ class RubyFrontend(BaseFrontend):
         args_node = node.child_by_field_name("arguments")
         arg_regs = self._extract_call_args(args_node) if args_node else []
 
+        # Detect block/do_block child and lower it as a closure argument
+        block_node = next(
+            (c for c in node.children if c.type in ("block", "do_block")),
+            None,
+        )
+        if block_node:
+            block_reg = self._lower_ruby_block(block_node)
+            arg_regs = arg_regs + [block_reg]
+
         # Method call on receiver: obj.method(...)
         if receiver_node and method_node:
             obj_reg = self._lower_expr(receiver_node)
@@ -576,13 +585,64 @@ class RubyFrontend(BaseFrontend):
 
         self._emit(Opcode.LABEL, label=end_label)
 
-    # -- Ruby: symbolic block (do_block, block) --------------------------------
+    # -- Ruby: block / do_block as inline closure --------------------------------
 
-    def _lower_symbolic_block(self, node):
-        reg = self._fresh_reg()
+    def _lower_ruby_block(self, node) -> str:
+        """Lower a Ruby block (curly brace) or do_block (do/end) as inline closure.
+
+        BRANCH end → LABEL block_ → params → body → CONST nil → RETURN → LABEL end → CONST func:label
+        """
+        block_label = self._fresh_label("block")
+        end_label = self._fresh_label("block_end")
+
+        self._emit(Opcode.BRANCH, label=end_label)
+        self._emit(Opcode.LABEL, label=block_label)
+
+        # Lower block parameters from block_parameters or |x, y| syntax
+        params_node = next(
+            (c for c in node.children if c.type == "block_parameters"),
+            None,
+        )
+        if params_node:
+            self._lower_ruby_params(params_node)
+
+        # Lower block body
+        body_node = next(
+            (c for c in node.children if c.type in ("block_body", "body_statement")),
+            None,
+        )
+        if body_node:
+            self._lower_block(body_node)
+        else:
+            # Inline body: lower all named children except params and delimiters
+            for child in node.children:
+                if (
+                    child.is_named
+                    and child.type not in ("block_parameters", "{", "}", "do", "end")
+                    and child.type not in self.NOISE_TYPES
+                    and child.type not in self.COMMENT_TYPES
+                ):
+                    self._lower_stmt(child)
+
+        nil_reg = self._fresh_reg()
         self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=[f"block:{node.type}"],
+            Opcode.CONST,
+            result_reg=nil_reg,
+            operands=[self.DEFAULT_RETURN_VALUE],
+        )
+        self._emit(Opcode.RETURN, operands=[nil_reg])
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+        ref_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=ref_reg,
+            operands=[f"func:{block_label}"],
             source_location=self._source_loc(node),
         )
+        return ref_reg
+
+    def _lower_symbolic_block(self, node):
+        """Backward-compat: lower block/do_block appearing as statement."""
+        self._lower_ruby_block(node)

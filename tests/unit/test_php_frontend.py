@@ -437,3 +437,29 @@ foreach ($arr as $v) {
         branches = _find_all(ir, Opcode.BRANCH)
         end_labels = [lbl for lbl in labels if "foreach_end" in lbl]
         assert any(b.label in end_labels for b in branches)
+
+
+class TestPhpArrayCreation:
+    def test_array_indexed(self):
+        source = "<?php $a = array(1, 2, 3); ?>"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.NEW_ARRAY in opcodes
+        stores = _find_all(ir, Opcode.STORE_INDEX)
+        assert len(stores) >= 3
+
+    def test_array_associative(self):
+        source = "<?php $m = array('a' => 1, 'b' => 2); ?>"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.NEW_OBJECT in opcodes
+        stores = _find_all(ir, Opcode.STORE_INDEX)
+        assert len(stores) >= 2
+
+    def test_array_bracket_syntax(self):
+        source = "<?php $a = [10, 20, 30]; ?>"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.NEW_ARRAY in opcodes
+        stores = _find_all(ir, Opcode.STORE_INDEX)
+        assert len(stores) >= 3

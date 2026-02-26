@@ -379,12 +379,16 @@ class CFrontend(BaseFrontend):
                     source_location=self._source_loc(parent_node),
                 )
         elif target.type == "pointer_expression":
-            # *ptr = val  ->  SYMBOLIC store through pointer
-            reg = self._fresh_reg()
+            # *ptr = val -> lower_expr(ptr_operand) -> STORE_FIELD ptr_reg, "*", val_reg
+            operand_node = target.child_by_field_name("argument")
+            if operand_node is None:
+                operand_node = next((c for c in target.children if c.is_named), None)
+            ptr_reg = (
+                self._lower_expr(operand_node) if operand_node else self._fresh_reg()
+            )
             self._emit(
-                Opcode.SYMBOLIC,
-                result_reg=reg,
-                operands=[f"pointer_store:{self._node_text(target)[:40]}"],
+                Opcode.STORE_FIELD,
+                operands=[ptr_reg, "*", val_reg],
                 source_location=self._source_loc(parent_node),
             )
         else:
@@ -408,12 +412,40 @@ class CFrontend(BaseFrontend):
     # -- C: pointer expression -----------------------------------------
 
     def _lower_pointer_expr(self, node) -> str:
-        """Lower pointer dereference (*p) or address-of (&x) as SYMBOLIC."""
+        """Lower pointer dereference (*p) as LOAD_FIELD or address-of (&x) as UNOP."""
+        operand_node = node.child_by_field_name("argument")
+        # Detect operator: first non-named child is '*' or '&'
+        op_char = next(
+            (
+                self._node_text(c)
+                for c in node.children
+                if not c.is_named and self._node_text(c) in ("*", "&")
+            ),
+            "*",
+        )
+        if operand_node is None:
+            operand_node = next((c for c in node.children if c.is_named), None)
+
+        inner_reg = (
+            self._lower_expr(operand_node) if operand_node else self._fresh_reg()
+        )
+
+        if op_char == "&":
+            reg = self._fresh_reg()
+            self._emit(
+                Opcode.UNOP,
+                result_reg=reg,
+                operands=["&", inner_reg],
+                source_location=self._source_loc(node),
+            )
+            return reg
+
+        # Dereference: *ptr -> LOAD_FIELD ptr, "*"
         reg = self._fresh_reg()
         self._emit(
-            Opcode.SYMBOLIC,
+            Opcode.LOAD_FIELD,
             result_reg=reg,
-            operands=[f"pointer:{self._node_text(node)[:40]}"],
+            operands=[inner_reg, "*"],
             source_location=self._source_loc(node),
         )
         return reg
@@ -421,11 +453,32 @@ class CFrontend(BaseFrontend):
     # -- C: sizeof -----------------------------------------------------
 
     def _lower_sizeof(self, node) -> str:
+        """Lower sizeof(type) or sizeof(expr) as CALL_FUNCTION sizeof(arg)."""
+        # Find the type_descriptor or expression child
+        type_node = next(
+            (c for c in node.children if c.type == "type_descriptor"),
+            None,
+        )
+        if type_node:
+            arg_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=arg_reg,
+                operands=[self._node_text(type_node)],
+            )
+        else:
+            # sizeof applied to an expression
+            expr_node = next(
+                (c for c in node.children if c.is_named and c.type != "sizeof"),
+                None,
+            )
+            arg_reg = self._lower_expr(expr_node) if expr_node else self._fresh_reg()
+
         reg = self._fresh_reg()
         self._emit(
-            Opcode.SYMBOLIC,
+            Opcode.CALL_FUNCTION,
             result_reg=reg,
-            operands=[f"sizeof:{self._node_text(node)[:40]}"],
+            operands=["sizeof", arg_reg],
             source_location=self._source_loc(node),
         )
         return reg
@@ -477,14 +530,34 @@ class CFrontend(BaseFrontend):
     # -- C: compound literal -------------------------------------------
 
     def _lower_compound_literal(self, node) -> str:
-        reg = self._fresh_reg()
+        """Lower (type){elem1, elem2, ...} as NEW_OBJECT + STORE_INDEX per element."""
+        type_node = next(
+            (c for c in node.children if c.type == "type_descriptor"),
+            None,
+        )
+        init_node = next(
+            (c for c in node.children if c.type == "initializer_list"),
+            None,
+        )
+        type_name = self._node_text(type_node) if type_node else "compound"
+        obj_reg = self._fresh_reg()
         self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=[f"compound_literal:{self._node_text(node)[:60]}"],
+            Opcode.NEW_OBJECT,
+            result_reg=obj_reg,
+            operands=[type_name],
             source_location=self._source_loc(node),
         )
-        return reg
+        if init_node:
+            elements = [c for c in init_node.children if c.is_named]
+            for i, elem in enumerate(elements):
+                idx_reg = self._fresh_reg()
+                self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+                val_reg = self._lower_expr(elem)
+                self._emit(
+                    Opcode.STORE_INDEX,
+                    operands=[obj_reg, idx_reg, val_reg],
+                )
+        return obj_reg
 
     # -- C: do-while ---------------------------------------------------
 
