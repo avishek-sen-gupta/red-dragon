@@ -4,7 +4,7 @@
 
 # RedDragon
 
-![CI](https://github.com/avishek-sen-gupta/red-dragon/actions/workflows/ci.yml/badge.svg) | [Presentation](presentation/index.html) | [MIT License](LICENSE.md)
+![CI](https://github.com/avishek-sen-gupta/red-dragon/actions/workflows/ci.yml/badge.svg) [![Presentation](https://img.shields.io/badge/Presentation-slides-blue)](presentation/index.html) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE.md)
 
 A multi-language source code analysis toolkit that:
 
