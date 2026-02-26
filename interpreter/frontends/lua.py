@@ -573,14 +573,26 @@ class LuaFrontend(BaseFrontend):
         self._emit(Opcode.LABEL, label=end_label)
 
     def _lower_lua_for_generic(self, clause, body_node, for_node):
-        """Lower for k, v in pairs(t) do ... end — SYMBOLIC iterator with loop structure."""
-        reg = self._fresh_reg()
-        self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=["generic_for_iteration"],
-            source_location=self._source_loc(for_node),
+        """Lower for k, v in ipairs/pairs(t) do ... end as index-based iteration."""
+        # Extract variable names from variable_list
+        var_list = next((c for c in clause.children if c.type == "variable_list"), None)
+        expr_list = next(
+            (c for c in clause.children if c.type == "expression_list"), None
         )
+
+        var_names = (
+            [self._node_text(c) for c in var_list.children if c.is_named]
+            if var_list
+            else []
+        )
+
+        # Lower the iterable expression (e.g., pairs(t) or ipairs(t))
+        iter_reg = self._lower_expr(expr_list) if expr_list else self._fresh_reg()
+
+        idx_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
+        len_reg = self._fresh_reg()
+        self._emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
 
         loop_label = self._fresh_label("generic_for_cond")
         body_label = self._fresh_label("generic_for_body")
@@ -588,11 +600,7 @@ class LuaFrontend(BaseFrontend):
 
         self._emit(Opcode.LABEL, label=loop_label)
         cond_reg = self._fresh_reg()
-        self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=cond_reg,
-            operands=["generic_for_has_next"],
-        )
+        self._emit(Opcode.BINOP, result_reg=cond_reg, operands=["<", idx_reg, len_reg])
         self._emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
@@ -600,10 +608,30 @@ class LuaFrontend(BaseFrontend):
         )
 
         self._emit(Opcode.LABEL, label=body_label)
-        self._push_loop(loop_label, end_label)
+        # First var = index, second var = element
+        if len(var_names) >= 1:
+            self._emit(Opcode.STORE_VAR, operands=[var_names[0], idx_reg])
+        if len(var_names) >= 2:
+            elem_reg = self._fresh_reg()
+            self._emit(
+                Opcode.LOAD_INDEX,
+                result_reg=elem_reg,
+                operands=[iter_reg, idx_reg],
+            )
+            self._emit(Opcode.STORE_VAR, operands=[var_names[1], elem_reg])
+
+        update_label = self._fresh_label("generic_for_update")
+        self._push_loop(update_label, end_label)
         if body_node:
             self._lower_block(body_node)
         self._pop_loop()
+
+        self._emit(Opcode.LABEL, label=update_label)
+        one_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
+        new_idx = self._fresh_reg()
+        self._emit(Opcode.BINOP, result_reg=new_idx, operands=["+", idx_reg, one_reg])
+        self._emit(Opcode.STORE_VAR, operands=["__for_idx", new_idx])
         self._emit(Opcode.BRANCH, label=loop_label)
 
         self._emit(Opcode.LABEL, label=end_label)

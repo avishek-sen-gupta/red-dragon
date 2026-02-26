@@ -398,3 +398,42 @@ for ($i = 0; $i < 10; $i++) {
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("$total" in inst.operands for inst in stores)
         assert len(ir) > 15
+
+
+class TestPhpForeach:
+    def test_foreach_simple(self):
+        """foreach ($arr as $v) should produce index-based IR."""
+        source = "<?php foreach ($arr as $v) { echo $v; } ?>"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.LOAD_INDEX in opcodes
+        assert Opcode.CALL_FUNCTION in opcodes  # len()
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("$v" in inst.operands for inst in stores)
+
+    def test_foreach_key_value(self):
+        """foreach ($arr as $k => $v) should store both key and value."""
+        source = "<?php foreach ($arr as $k => $v) { echo $v; } ?>"
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        assert Opcode.LOAD_INDEX in opcodes
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("$k" in inst.operands for inst in stores)
+        assert any("$v" in inst.operands for inst in stores)
+
+    def test_foreach_with_break(self):
+        source = """\
+<?php
+foreach ($arr as $v) {
+    if ($v > 10) {
+        break;
+    }
+}
+?>
+"""
+        ir = _parse_and_lower(source)
+        labels = _labels_in_order(ir)
+        assert any("foreach_end" in lbl for lbl in labels)
+        branches = _find_all(ir, Opcode.BRANCH)
+        end_labels = [lbl for lbl in labels if "foreach_end" in lbl]
+        assert any(b.label in end_labels for b in branches)

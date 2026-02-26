@@ -357,14 +357,47 @@ class CSharpFrontend(BaseFrontend):
     # -- C#: lambda ----------------------------------------------------
 
     def _lower_lambda(self, node) -> str:
-        reg = self._fresh_reg()
+        """Lower C# lambda: (params) => expr or (params) => { body }."""
+        func_label = self._fresh_label("lambda")
+        end_label = self._fresh_label("lambda_end")
+
+        self._emit(Opcode.BRANCH, label=end_label)
+        self._emit(Opcode.LABEL, label=func_label)
+
+        # Lower parameters
+        params_node = node.child_by_field_name("parameters")
+        if params_node:
+            self._lower_csharp_params(params_node)
+
+        # Lower body
+        body_node = node.child_by_field_name("body")
+        if body_node and body_node.type == "block":
+            self._lower_block(body_node)
+        elif body_node:
+            # Expression body — evaluate and return
+            body_reg = self._lower_expr(body_node)
+            self._emit(Opcode.RETURN, operands=[body_reg])
+
+        # Implicit return for block bodies (if no explicit return)
+        if body_node and body_node.type == "block":
+            none_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=none_reg,
+                operands=[self.DEFAULT_RETURN_VALUE],
+            )
+            self._emit(Opcode.RETURN, operands=[none_reg])
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+        ref_reg = self._fresh_reg()
         self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=[f"lambda:{self._node_text(node)[:60]}"],
+            Opcode.CONST,
+            result_reg=ref_reg,
+            operands=[f"func:{func_label}"],
             source_location=self._source_loc(node),
         )
-        return reg
+        return ref_reg
 
     # -- C#: array creation --------------------------------------------
 

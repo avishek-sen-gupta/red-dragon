@@ -212,6 +212,7 @@ for (const item of items) {
         instructions = _parse_js(source)
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.LOAD_INDEX in opcodes
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         method_names = [inst.operands[1] for inst in calls if len(inst.operands) > 1]
         assert "log" in method_names
@@ -354,3 +355,84 @@ const upper = config.name.toUpperCase();
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("config" in inst.operands for inst in stores)
         assert any("upper" in inst.operands for inst in stores)
+
+
+class TestJavaScriptForOf:
+    def test_for_of_basic(self):
+        """for...of should produce index-based IR (LOAD_INDEX, not SYMBOLIC)."""
+        source = "for (const x of items) { y = x; }"
+        instructions = _parse_js(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.LOAD_INDEX in opcodes
+        assert Opcode.CALL_FUNCTION in opcodes  # len()
+        labels = _labels_in_order(instructions)
+        assert any("for_of" in lbl for lbl in labels)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_for_of_with_break(self):
+        source = """\
+for (const x of items) {
+    if (x > 10) break;
+}
+"""
+        instructions = _parse_js(source)
+        labels = _labels_in_order(instructions)
+        assert any("for_of_end" in lbl for lbl in labels)
+        branches = _find_all(instructions, Opcode.BRANCH)
+        end_labels = [lbl for lbl in labels if "for_of_end" in lbl]
+        assert any(b.label in end_labels for b in branches)
+
+    def test_for_in_stays_symbolic(self):
+        """for...in should still emit SYMBOLIC (key iteration)."""
+        source = "for (let k in obj) { x = k; }"
+        instructions = _parse_js(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.SYMBOLIC in opcodes
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert any("for_in" in str(inst.operands) for inst in symbolics)
+
+
+class TestJavaScriptDestructuring:
+    def test_obj_destructure_basic(self):
+        source = "const { a, b } = obj;"
+        instructions = _parse_js(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.LOAD_FIELD in opcodes
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        field_names = [inst.operands[1] for inst in loads if len(inst.operands) > 1]
+        assert "a" in field_names
+        assert "b" in field_names
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("a" in inst.operands for inst in stores)
+        assert any("b" in inst.operands for inst in stores)
+
+    def test_obj_destructure_rename(self):
+        source = "const { x: localX, y: localY } = obj;"
+        instructions = _parse_js(source)
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        field_names = [inst.operands[1] for inst in loads if len(inst.operands) > 1]
+        assert "x" in field_names
+        assert "y" in field_names
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("localX" in inst.operands for inst in stores)
+        assert any("localY" in inst.operands for inst in stores)
+
+    def test_arr_destructure_basic(self):
+        source = "const [a, b] = arr;"
+        instructions = _parse_js(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.LOAD_INDEX in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("a" in inst.operands for inst in stores)
+        assert any("b" in inst.operands for inst in stores)
+
+    def test_arr_destructure_three(self):
+        source = "const [x, y, z] = arr;"
+        instructions = _parse_js(source)
+        loads = _find_all(instructions, Opcode.LOAD_INDEX)
+        assert len(loads) >= 3
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+        assert any("y" in inst.operands for inst in stores)
+        assert any("z" in inst.operands for inst in stores)
