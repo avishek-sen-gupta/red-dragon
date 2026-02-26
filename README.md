@@ -198,7 +198,7 @@ The **chunked LLM frontend** (`--frontend chunked_llm`) handles large files by d
 All CLI pipelines are available as composable functions — no argparse required:
 
 ```python
-from interpreter import lower_source, dump_ir, build_cfg_from_source, dump_cfg, dump_mermaid
+from interpreter import lower_source, dump_ir, build_cfg_from_source, dump_cfg, dump_mermaid, extract_function_source
 
 # Parse and lower to IR
 instructions = lower_source(source, language="python")
@@ -212,6 +212,9 @@ cfg = build_cfg_from_source(source, function_name="my_func")
 # Get CFG or Mermaid text
 cfg_text = dump_cfg(source)
 mermaid = dump_mermaid(source, function_name="my_func")
+
+# Extract raw source text of a named function (recursive — finds methods and nested functions)
+fn_source = extract_function_source(source, "my_func", language="python")
 ```
 
 | Function | Returns | Purpose |
@@ -221,6 +224,7 @@ mermaid = dump_mermaid(source, function_name="my_func")
 | `build_cfg_from_source(source, language, frontend_type, backend, function_name)` | `CFG` | Parse → lower → optionally slice → build CFG |
 | `dump_cfg(source, language, frontend_type, backend, function_name)` | `str` | CFG text output |
 | `dump_mermaid(source, language, frontend_type, backend, function_name)` | `str` | Mermaid flowchart output |
+| `extract_function_source(source, function_name, language)` | `str` | Raw source text of a named function (recursive AST walk) |
 
 Functions compose hierarchically: `dump_ir` calls `lower_source`; `dump_cfg` and `dump_mermaid` call `build_cfg_from_source`, which calls `lower_source`. Full execution is available via `interpreter.run()`.
 

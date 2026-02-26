@@ -7,6 +7,9 @@ but is callable programmatically without argparse.
 from __future__ import annotations
 
 import logging
+from typing import Optional
+
+from tree_sitter import Node
 
 from .cfg import CFG, build_cfg, cfg_to_mermaid, extract_function_instructions
 from .frontend import get_frontend
@@ -15,6 +18,17 @@ from .parser import Parser, TreeSitterParserFactory
 from . import constants
 
 logger = logging.getLogger(__name__)
+
+FUNCTION_NODE_TYPES: frozenset[str] = frozenset(
+    {
+        "function_definition",
+        "function_declaration",
+        "method_declaration",
+        "function_item",
+        "function_expression",
+        "arrow_function",
+    }
+)
 
 
 def lower_source(
@@ -140,3 +154,50 @@ def dump_mermaid(
     """
     cfg = build_cfg_from_source(source, language, frontend_type, backend, function_name)
     return cfg_to_mermaid(cfg)
+
+
+def _find_function_node(node: Node, name: str, source_bytes: bytes) -> Optional[Node]:
+    """Recursively walk the AST to find a function/method node matching *name*."""
+    if node.type in FUNCTION_NODE_TYPES:
+        name_node = node.child_by_field_name("name")
+        if name_node is not None and name_node.text.decode("utf-8") == name:
+            return node
+
+    return next(
+        (
+            found
+            for child in node.children
+            if (found := _find_function_node(child, name, source_bytes)) is not None
+        ),
+        None,
+    )
+
+
+def extract_function_source(
+    source: str,
+    function_name: str,
+    language: str = "python",
+) -> str:
+    """Extract the raw source text of a named function from source code.
+
+    Parses *source* with tree-sitter, then recursively walks the AST to find
+    a function or method node whose name matches *function_name*.
+
+    Args:
+        source: The source code text.
+        function_name: The name of the function/method to extract.
+        language: Source language name (e.g. "python", "javascript").
+
+    Returns:
+        The source text of the matched function.
+
+    Raises:
+        ValueError: If no function with the given name is found.
+    """
+    logger.info("Extracting function source for '%s' (%s)", function_name, language)
+    tree = Parser(TreeSitterParserFactory()).parse(source, language)
+    source_bytes = source.encode("utf-8")
+    match = _find_function_node(tree.root_node, function_name, source_bytes)
+    if match is None:
+        raise ValueError(f"Function '{function_name}' not found in source")
+    return source_bytes[match.start_byte : match.end_byte].decode("utf-8")

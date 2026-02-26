@@ -8,6 +8,7 @@ from interpreter.api import (
     build_cfg_from_source,
     dump_cfg,
     dump_mermaid,
+    extract_function_source,
 )
 from interpreter.cfg import CFG
 from interpreter.ir import IRInstruction, Opcode
@@ -120,6 +121,54 @@ class TestDumpMermaid:
         result = dump_mermaid(FUNCTION_SOURCE, function_name="greet")
         assert "flowchart TD" in result
         assert "greet" in result
+
+
+CLASS_WITH_METHOD_SOURCE = """\
+class Greeter:
+    def hello(self, name):
+        return f"Hello, {name}"
+"""
+
+NESTED_FUNCTION_SOURCE = """\
+def outer():
+    def inner():
+        return 42
+    return inner()
+"""
+
+JS_FUNCTION_SOURCE = """\
+function add(a, b) {
+    return a + b;
+}
+"""
+
+
+class TestExtractFunctionSource:
+    def test_top_level_function(self):
+        result = extract_function_source(FUNCTION_SOURCE, "greet")
+        assert "def greet(name):" in result
+        assert "return name" in result
+
+    def test_class_method(self):
+        result = extract_function_source(CLASS_WITH_METHOD_SOURCE, "hello")
+        assert "def hello(self, name):" in result
+        assert 'return f"Hello, {name}"' in result
+
+    def test_nested_function(self):
+        result = extract_function_source(NESTED_FUNCTION_SOURCE, "inner")
+        assert "def inner():" in result
+        assert "return 42" in result
+
+    def test_not_found_raises_value_error(self):
+        with pytest.raises(ValueError, match="not found"):
+            extract_function_source(SIMPLE_SOURCE, "nonexistent")
+
+    def test_non_python_language(self):
+        result = extract_function_source(
+            JS_FUNCTION_SOURCE, "add", language="javascript"
+        )
+        assert "function add(a, b)" in result
+        assert "return a + b" in result
 
 
 class TestCompositionHierarchy:
