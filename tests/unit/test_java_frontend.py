@@ -172,10 +172,12 @@ class TestJavaClasses:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
 
-    def test_interface_emits_symbolic(self):
+    def test_interface_emits_new_object(self):
         instructions = _parse_java("interface Runnable { void run(); }")
-        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
-        assert any("interface:Runnable" in str(inst.operands) for inst in symbolics)
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("interface:Runnable" in str(inst.operands) for inst in new_objs)
+        store_indexes = _find_all(instructions, Opcode.STORE_INDEX)
+        assert len(store_indexes) >= 1
 
     def test_enum_declaration(self):
         instructions = _parse_java("enum Color { RED, GREEN, BLUE }")
@@ -271,8 +273,8 @@ class Circle implements Shape {
 }
 """
         instructions = _parse_java(source)
-        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
-        assert any("interface:Shape" in str(inst.operands) for inst in symbolics)
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("interface:Shape" in str(inst.operands) for inst in new_objs)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("Circle" in inst.operands for inst in stores)
         store_fields = _find_all(instructions, Opcode.STORE_FIELD)

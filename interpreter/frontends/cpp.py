@@ -163,12 +163,18 @@ class CppFrontend(CFrontend):
     # -- C++: delete expression ----------------------------------------
 
     def _lower_delete_expr(self, node) -> str:
-        """Lower delete as SYMBOLIC."""
+        """Lower delete expression: delete ptr.
+
+        Emits: lower_expr(operand) -> CALL_FUNCTION delete(ptr_reg)
+        """
+        named_children = [c for c in node.children if c.is_named]
+        operand_node = named_children[0] if named_children else None
+        ptr_reg = self._lower_expr(operand_node) if operand_node else self._fresh_reg()
         reg = self._fresh_reg()
         self._emit(
-            Opcode.SYMBOLIC,
+            Opcode.CALL_FUNCTION,
             result_reg=reg,
-            operands=[f"delete:{self._node_text(node)[:40]}"],
+            operands=["delete", ptr_reg],
             source_location=self._source_loc(node),
         )
         return reg

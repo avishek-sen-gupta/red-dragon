@@ -58,17 +58,21 @@ class TestTypeScriptTypedBasics:
 
 
 class TestTypeScriptInterfaces:
-    def test_interface_emits_symbolic(self):
+    def test_interface_emits_new_object(self):
         instructions = _parse_ts("interface Foo { bar: string; }")
-        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
-        assert any("interface:Foo" in str(inst.operands) for inst in symbolics)
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("interface:Foo" in str(inst.operands) for inst in new_objs)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("Foo" in inst.operands for inst in stores)
+        store_indexes = _find_all(instructions, Opcode.STORE_INDEX)
+        assert len(store_indexes) >= 1
 
     def test_interface_with_multiple_fields(self):
         instructions = _parse_ts("interface Point { x: number; y: number; }")
-        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
-        assert any("interface:Point" in str(inst.operands) for inst in symbolics)
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("interface:Point" in str(inst.operands) for inst in new_objs)
+        store_indexes = _find_all(instructions, Opcode.STORE_INDEX)
+        assert len(store_indexes) >= 2
 
 
 class TestTypeScriptEnums:
@@ -190,8 +194,8 @@ function greet(user: User): string {
 }
 """
         instructions = _parse_ts(source)
-        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
-        assert any("interface:User" in str(inst.operands) for inst in symbolics)
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("interface:User" in str(inst.operands) for inst in new_objs)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("greet" in inst.operands for inst in stores)
         returns = _find_all(instructions, Opcode.RETURN)
@@ -321,8 +325,8 @@ class Circle {
 }
 """
         instructions = _parse_ts(source)
-        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
-        assert any("interface:Shape" in str(inst.operands) for inst in symbolics)
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("interface:Shape" in str(inst.operands) for inst in new_objs)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("Circle" in inst.operands for inst in stores)
         store_fields = _find_all(instructions, Opcode.STORE_FIELD)
