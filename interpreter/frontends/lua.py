@@ -504,12 +504,9 @@ class LuaFrontend(BaseFrontend):
         elif generic_clause:
             self._lower_lua_for_generic(generic_clause, body_node, node)
         else:
-            reg = self._fresh_reg()
-            self._emit(
-                Opcode.SYMBOLIC,
-                result_reg=reg,
-                operands=["unsupported:for_statement_unknown_clause"],
-                source_location=self._source_loc(node),
+            logger.warning(
+                "Lua for_statement: no numeric or generic clause found in %s",
+                self._node_text(node)[:60],
             )
 
     def _lower_lua_for_numeric(self, clause, body_node, for_node):

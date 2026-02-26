@@ -658,13 +658,23 @@ class CFrontend(BaseFrontend):
     # -- C: goto / labeled statement / break / continue ----------------
 
     def _lower_goto(self, node):
-        reg = self._fresh_reg()
-        self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=[f"goto:{self._node_text(node)[:40]}"],
-            source_location=self._source_loc(node),
+        """Lower goto_statement as BRANCH user_{label}.
+
+        The labeled_statement handler emits LABEL user_{label}, so this
+        creates a matching branch target.
+        """
+        label_node = next(
+            (c for c in node.children if c.type == "statement_identifier"), None
         )
+        if label_node:
+            target_label = f"user_{self._node_text(label_node)}"
+            self._emit(
+                Opcode.BRANCH,
+                label=target_label,
+                source_location=self._source_loc(node),
+            )
+        else:
+            logger.warning("goto without label: %s", self._node_text(node)[:40])
 
     def _lower_labeled_stmt(self, node):
         """Lower labeled_statement: emit label then lower the inner statement."""
@@ -684,11 +694,31 @@ class CFrontend(BaseFrontend):
     # -- C: typedef (skip) ---------------------------------------------
 
     def _lower_typedef(self, node):
-        """Lower typedef as SYMBOLIC -- type system detail."""
-        reg = self._fresh_reg()
+        """Lower type_definition as CONST type_name -> STORE_VAR alias.
+
+        The alias (type_identifier) is stored as a variable pointing to the
+        original type name, enabling data-flow tracking through type aliases.
+        """
+        named_children = [c for c in node.children if c.is_named]
+        alias_node = next(
+            (c for c in reversed(named_children) if c.type == "type_identifier"),
+            None,
+        )
+        type_nodes = [
+            c for c in named_children if c != alias_node and c.type != "type_identifier"
+        ]
+        type_name = self._node_text(type_nodes[0]) if type_nodes else "unknown_type"
+        alias_name = self._node_text(alias_node) if alias_node else "unknown_alias"
+
+        type_reg = self._fresh_reg()
         self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=[f"typedef:{self._node_text(node)[:60]}"],
+            Opcode.CONST,
+            result_reg=type_reg,
+            operands=[type_name],
+            source_location=self._source_loc(node),
+        )
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=[alias_name, type_reg],
             source_location=self._source_loc(node),
         )

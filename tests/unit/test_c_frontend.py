@@ -490,3 +490,53 @@ struct Pair {
         load_vars = _find_all(ir, Opcode.LOAD_VAR)
         this_loads = [v for v in load_vars if "this" in v.operands]
         assert len(this_loads) >= 2
+
+
+class TestCFrontendGoto:
+    def test_goto_emits_branch(self):
+        source = """\
+void f() {
+    int x = 0;
+    start: x++;
+    if (x < 10) goto start;
+}
+"""
+        ir = _parse_and_lower(source)
+        labels = _find_all(ir, Opcode.LABEL)
+        assert any("user_start" in (inst.label or "") for inst in labels)
+        branches = _find_all(ir, Opcode.BRANCH)
+        assert any("user_start" in (inst.label or "") for inst in branches)
+
+    def test_goto_with_different_label(self):
+        source = """\
+void f() {
+    goto done;
+    int x = 1;
+    done: return;
+}
+"""
+        ir = _parse_and_lower(source)
+        branches = _find_all(ir, Opcode.BRANCH)
+        assert any("user_done" in (inst.label or "") for inst in branches)
+
+
+class TestCFrontendTypedef:
+    def test_typedef_simple(self):
+        source = "typedef int myint;"
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("int" in str(inst.operands) for inst in consts)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("myint" in inst.operands for inst in stores)
+
+    def test_typedef_struct(self):
+        source = "typedef struct Point { int x; int y; } Point;"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("Point" in inst.operands for inst in stores)
+
+    def test_typedef_unsigned(self):
+        source = "typedef unsigned long ulong;"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("ulong" in inst.operands for inst in stores)
