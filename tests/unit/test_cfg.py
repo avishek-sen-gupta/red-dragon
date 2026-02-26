@@ -334,3 +334,82 @@ class TestCfgToMermaidShapes:
         # Should NOT be stadium or diamond
         assert '(["' not in middle_lines[0]
         assert '{"' not in middle_lines[0]
+
+
+class TestCfgToMermaidCallEdges:
+    def test_function_body_visible_as_root(self):
+        """Function entry blocks are BFS roots and appear in output."""
+        instructions = _make_instructions(
+            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.BRANCH, {"label": "end_foo_0"}),
+            (Opcode.LABEL, {"label": "func_foo_0"}),
+            (Opcode.CONST, {"result_reg": "t1", "operands": [42]}),
+            (Opcode.RETURN, {"operands": ["t1"]}),
+            (Opcode.LABEL, {"label": "end_foo_0"}),
+            (Opcode.RETURN, {"operands": ["t0"]}),
+        )
+        cfg = build_cfg(instructions)
+        mermaid = cfg_to_mermaid(cfg)
+
+        assert "func_foo_0" in mermaid
+        assert "t1 = const 42" in mermaid
+
+    def test_uncalled_function_still_visible(self):
+        """Functions with no callers still appear (they're roots)."""
+        instructions = _make_instructions(
+            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.BRANCH, {"label": "end_bar_0"}),
+            (Opcode.LABEL, {"label": "func_bar_0"}),
+            (Opcode.RETURN, {"operands": ["t0"]}),
+            (Opcode.LABEL, {"label": "end_bar_0"}),
+            (Opcode.RETURN, {"operands": ["t0"]}),
+        )
+        cfg = build_cfg(instructions)
+        mermaid = cfg_to_mermaid(cfg)
+
+        assert "func_bar_0" in mermaid
+
+    def test_call_function_produces_dashed_edge(self):
+        """CALL_FUNCTION emits a dashed edge to the function entry block."""
+        instructions = _make_instructions(
+            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.CALL_FUNCTION, {"result_reg": "t1", "operands": ["foo", "t0"]}),
+            (Opcode.BRANCH, {"label": "end_foo_0"}),
+            (Opcode.LABEL, {"label": "func_foo_0"}),
+            (Opcode.RETURN, {"operands": ["t0"]}),
+            (Opcode.LABEL, {"label": "end_foo_0"}),
+            (Opcode.RETURN, {"operands": ["t1"]}),
+        )
+        cfg = build_cfg(instructions)
+        mermaid = cfg_to_mermaid(cfg)
+
+        assert '-.->|"call"|' in mermaid
+        assert "func_foo_0" in mermaid
+
+    def test_call_function_no_edge_for_unknown_target(self):
+        """CALL_FUNCTION with no matching func_ label emits no dashed edge."""
+        instructions = _make_instructions(
+            (Opcode.LABEL, {"label": "entry"}),
+            (
+                Opcode.CALL_FUNCTION,
+                {"result_reg": "t1", "operands": ["unknown_fn", "t0"]},
+            ),
+            (Opcode.RETURN, {"operands": ["t1"]}),
+        )
+        cfg = build_cfg(instructions)
+        mermaid = cfg_to_mermaid(cfg)
+
+        assert "-.->|" not in mermaid
+
+    def test_non_func_dead_block_still_pruned(self):
+        """Non-function unreachable blocks remain pruned."""
+        instructions = _make_instructions(
+            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.RETURN, {"operands": ["t0"]}),
+            (Opcode.LABEL, {"label": "dead_block"}),
+            (Opcode.RETURN, {"operands": ["t1"]}),
+        )
+        cfg = build_cfg(instructions)
+        mermaid = cfg_to_mermaid(cfg)
+
+        assert "dead_block" not in mermaid

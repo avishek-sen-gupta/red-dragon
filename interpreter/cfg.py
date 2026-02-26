@@ -194,9 +194,16 @@ def _build_subgraph_ranges(
 
 
 def _reachable_blocks(cfg: CFG) -> set[str]:
-    """Return the set of block labels reachable from the entry via BFS."""
+    """Return the set of block labels reachable from the entry and function roots via BFS.
+
+    Function entry blocks (labels starting with ``FUNC_LABEL_PREFIX``) are
+    treated as additional BFS roots so that function bodies remain visible
+    even though the frontend emits a ``BRANCH end_foo`` that skips over them.
+    """
+    func_prefix = constants.FUNC_LABEL_PREFIX
+    roots = [cfg.entry] + [lbl for lbl in cfg.blocks if lbl.startswith(func_prefix)]
     visited: set[str] = set()
-    queue = [cfg.entry]
+    queue = list(roots)
     while queue:
         label = queue.pop(0)
         if label in visited:
@@ -205,6 +212,23 @@ def _reachable_blocks(cfg: CFG) -> set[str]:
         if label in cfg.blocks:
             queue.extend(cfg.blocks[label].successors)
     return visited
+
+
+def _build_call_target_map(block_labels: list[str]) -> dict[str, str]:
+    """Map function name → entry label for all ``func_<name>_<counter>`` labels.
+
+    Example: ``["func_foo_0", "func_bar_2"]`` → ``{"foo": "func_foo_0", "bar": "func_bar_2"}``.
+    Only the *first* matching label per name is kept (there should be exactly one).
+    """
+    func_prefix = constants.FUNC_LABEL_PREFIX
+    result: dict[str, str] = {}
+    for lbl in block_labels:
+        if not lbl.startswith(func_prefix):
+            continue
+        name = _extract_name(lbl, func_prefix)
+        if name not in result:
+            result[name] = lbl
+    return result
 
 
 def _node_shape(block: BasicBlock, is_entry: bool) -> tuple[str, str]:
@@ -285,6 +309,19 @@ def cfg_to_mermaid(cfg: CFG) -> str:
         else:
             for succ in block.successors:
                 lines.append(f"    {src} --> {_node_id(succ)}")
+
+    # Emit dashed call edges for CALL_FUNCTION instructions
+    call_target_map = _build_call_target_map(block_labels)
+    for label in block_labels:
+        block = cfg.blocks[label]
+        src = _node_id(label)
+        for inst in block.instructions:
+            if inst.opcode != Opcode.CALL_FUNCTION or not inst.operands:
+                continue
+            func_name = inst.operands[0]
+            target_label = call_target_map.get(func_name, "")
+            if target_label:
+                lines.append(f'    {src} -.->|"call"| {_node_id(target_label)}')
 
     if entry_node_id:
         lines.append(f"    style {entry_node_id} fill:#28a745,color:#fff")
