@@ -49,6 +49,11 @@ def main():
         "--cfg-only", action="store_true", help="Only print the CFG (no LLM execution)"
     )
     parser.add_argument(
+        "--mermaid",
+        action="store_true",
+        help="Output CFG as a Mermaid flowchart diagram",
+    )
+    parser.add_argument(
         "--frontend",
         "-f",
         default=constants.FRONTEND_DETERMINISTIC,
@@ -99,6 +104,12 @@ result = factorial(5)
         return
 
     cfg = build_cfg(instructions)
+
+    if args.mermaid:
+        from interpreter.cfg import cfg_to_mermaid
+
+        print(cfg_to_mermaid(cfg))
+        return
 
     if args.cfg_only:
         print("═══ CFG ═══")

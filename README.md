@@ -61,6 +61,7 @@ poetry run python interpreter.py example.js -l javascript  # non-Python source
 poetry run python interpreter.py myfile.py -f llm -v       # LLM frontend
 poetry run python interpreter.py myfile.py -f chunked_llm  # chunked LLM frontend
 poetry run python interpreter.py example.cob -l cobol -f llm  # unsupported language via LLM
+poetry run python interpreter.py myfile.py --mermaid        # output CFG as Mermaid flowchart
 ```
 
 | Flag | Description |
@@ -72,6 +73,7 @@ poetry run python interpreter.py example.cob -l cobol -f llm  # unsupported lang
 | `-f` | Frontend: `deterministic`, `llm`, `chunked_llm` (default: `deterministic`) |
 | `--ir-only` | Print the IR and exit |
 | `--cfg-only` | Print the CFG and exit |
+| `--mermaid` | Output CFG as a Mermaid flowchart diagram and exit |
 
 ## Supported languages
 
@@ -197,4 +199,4 @@ poetry run pytest tests/unit/ -v     # unit tests only
 poetry run pytest tests/integration/ -v  # integration tests only
 ```
 
-Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Currently 690 unit tests using dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures, symbolic execution, and factory routing.
+Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Currently 698 unit tests using dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures, symbolic execution, and factory routing.
