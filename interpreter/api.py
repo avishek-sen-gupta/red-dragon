@@ -19,7 +19,7 @@ from . import constants
 
 logger = logging.getLogger(__name__)
 
-FUNCTION_NODE_TYPES: frozenset[str] = frozenset(
+_FUNCTION_NODE_TYPES: frozenset[str] = frozenset(
     {
         "function_definition",
         "function_declaration",
@@ -156,9 +156,9 @@ def dump_mermaid(
     return cfg_to_mermaid(cfg)
 
 
-def _find_function_node(node: Node, name: str, source_bytes: bytes) -> Optional[Node]:
+def _find_function_node(node: Node, name: str) -> Optional[Node]:
     """Recursively walk the AST to find a function/method node matching *name*."""
-    if node.type in FUNCTION_NODE_TYPES:
+    if node.type in _FUNCTION_NODE_TYPES:
         name_node = node.child_by_field_name("name")
         if name_node is not None and name_node.text.decode("utf-8") == name:
             return node
@@ -167,7 +167,7 @@ def _find_function_node(node: Node, name: str, source_bytes: bytes) -> Optional[
         (
             found
             for child in node.children
-            if (found := _find_function_node(child, name, source_bytes)) is not None
+            if (found := _find_function_node(child, name)) is not None
         ),
         None,
     )
@@ -197,7 +197,7 @@ def extract_function_source(
     logger.info("Extracting function source for '%s' (%s)", function_name, language)
     tree = Parser(TreeSitterParserFactory()).parse(source, language)
     source_bytes = source.encode("utf-8")
-    match = _find_function_node(tree.root_node, function_name, source_bytes)
+    match = _find_function_node(tree.root_node, function_name)
     if match is None:
         raise ValueError(f"Function '{function_name}' not found in source")
     return source_bytes[match.start_byte : match.end_byte].decode("utf-8")
