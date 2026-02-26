@@ -12,6 +12,7 @@ CLASS_REF_TEMPLATE = "<class:{name}@{label}>"
 
 OBJ_ADDR_PREFIX = "obj_"
 ARR_ADDR_PREFIX = "arr_"
+ENV_ID_PREFIX = "env_"
 
 FUNC_LABEL_PREFIX = "func_"
 CLASS_LABEL_PREFIX = "class_"

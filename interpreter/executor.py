@@ -11,6 +11,7 @@ from .vm import (
     VMState,
     SymbolicValue,
     HeapObject,
+    ClosureEnvironment,
     StackFramePush,
     StateUpdate,
     HeapWrite,
@@ -101,22 +102,37 @@ def _handle_const(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
     val = _parse_const(raw)
 
     # Closure capture: when a function ref is created inside another function,
-    # snapshot the enclosing scope's variables so they're available at call time.
-    # Each closure instance gets a unique ID so multiple closures from the same
-    # factory (e.g., make_adder(2) and make_adder(3)) don't collide.
+    # link it to a shared ClosureEnvironment so mutations persist across calls.
+    # If the enclosing frame already has an environment (second closure from
+    # the same factory), reuse it; otherwise create a new one.
     if len(vm.call_stack) > 1 and isinstance(val, str):
         fr = _parse_func_ref(val)
         if fr.matched:
+            enclosing = vm.current_frame
+            env_id = enclosing.closure_env_id
+            if env_id:
+                # Reuse existing environment; sync any new local vars into it
+                env = vm.closures[env_id]
+                for k, v in enclosing.local_vars.items():
+                    if k not in env.bindings:
+                        env.bindings[k] = v
+            else:
+                env_id = f"{constants.ENV_ID_PREFIX}{vm.symbolic_counter}"
+                vm.symbolic_counter += 1
+                env = ClosureEnvironment(bindings=dict(enclosing.local_vars))
+                vm.closures[env_id] = env
+                enclosing.closure_env_id = env_id
+                enclosing.captured_var_names = frozenset(enclosing.local_vars.keys())
             closure_id = f"closure_{vm.symbolic_counter}"
             vm.symbolic_counter += 1
-            captured = dict(vm.current_frame.local_vars)
-            vm.closures[closure_id] = captured
+            vm.closures[closure_id] = env
             val = f"<function:{fr.name}@{fr.label}#{closure_id}>"
             logger.debug(
-                "Captured closure %s for %s: %s",
+                "Captured closure %s (env %s) for %s: %s",
                 closure_id,
+                env_id,
                 fr.name,
-                list(captured.keys()),
+                list(env.bindings.keys()),
             )
 
     return ExecutionResult.success(
@@ -603,15 +619,29 @@ def _try_user_function_call(
     }
 
     # Inject captured closure variables; parameter bindings take priority
-    captured = vm.closures.get(fr.closure_id, {}) if fr.closure_id else {}
+    closure_env: ClosureEnvironment | None = None
+    captured: dict[str, Any] = {}
+    if fr.closure_id:
+        closure_env = vm.closures.get(fr.closure_id)
+        if closure_env:
+            captured = closure_env.bindings
+
     new_vars = {k: _serialize_value(v) for k, v in captured.items()} if captured else {}
     new_vars.update(param_vars)
     if captured:
         logger.debug("Injecting closure vars for %s: %s", fname, list(captured.keys()))
 
+    closure_env_id = fr.closure_id if closure_env else ""
+    captured_var_names = list(captured.keys()) if closure_env else []
+
     return ExecutionResult.success(
         StateUpdate(
-            call_push=StackFramePush(function_name=fname, return_label=current_label),
+            call_push=StackFramePush(
+                function_name=fname,
+                return_label=current_label,
+                closure_env_id=closure_env_id,
+                captured_var_names=captured_var_names,
+            ),
             next_label=flabel,
             reasoning=(
                 f"call {fname}"
