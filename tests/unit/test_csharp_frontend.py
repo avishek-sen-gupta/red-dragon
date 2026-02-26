@@ -500,3 +500,38 @@ class TestCSharpInterfaceDeclaration:
         assert any("interface:IAnimal" in str(inst.operands) for inst in new_objs)
         store_indexes = _find_all(ir, Opcode.STORE_INDEX)
         assert len(store_indexes) >= 2
+
+
+class TestCSharpPropertyDeclaration:
+    def test_auto_property(self):
+        source = "class C { public int X { get; set; } }"
+        ir = _parse_and_lower(source)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        assert any("X" in inst.operands for inst in store_fields)
+        load_vars = _find_all(ir, Opcode.LOAD_VAR)
+        assert any("this" in inst.operands for inst in load_vars)
+
+    def test_property_with_initializer(self):
+        source = "class C { public int X { get; set; } = 42; }"
+        ir = _parse_and_lower(source)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        assert any("X" in inst.operands for inst in store_fields)
+        consts = _find_all(ir, Opcode.CONST)
+        const_vals = [inst.operands[0] for inst in consts if inst.operands]
+        assert "42" in const_vals
+
+    def test_property_with_accessor_body(self):
+        source = """\
+class C {
+    int count;
+    public int Count {
+        get { return count; }
+        set { count = value; }
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        assert any("Count" in inst.operands for inst in store_fields)
+        returns = _find_all(ir, Opcode.RETURN)
+        assert len(returns) >= 1

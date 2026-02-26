@@ -678,18 +678,65 @@ class CSharpFrontend(BaseFrontend):
                 self._lower_variable_declaration(child)
 
     def _lower_property_decl(self, node):
-        """Lower a property declaration as SYMBOLIC."""
+        """Lower a property declaration as STORE_FIELD on this.
+
+        Auto-properties (``get; set;``) emit a backing-field store:
+        ``LOAD_VAR this → CONST default → STORE_FIELD this, name, default``.
+        If the property has an initializer (``= value``), the initializer
+        expression is used instead of the default.  Accessor bodies with
+        explicit ``block`` children are lowered as statements.
+        """
         name_node = node.child_by_field_name("name")
-        if name_node:
-            prop_name = self._node_text(name_node)
-            reg = self._fresh_reg()
+        if not name_node:
+            return
+        prop_name = self._node_text(name_node)
+
+        this_reg = self._fresh_reg()
+        self._emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+
+        # Check for an initializer (e.g. ``= 42``)
+        initializer_node = self._find_property_initializer(node)
+        if initializer_node:
+            val_reg = self._lower_expr(initializer_node)
+        else:
+            val_reg = self._fresh_reg()
             self._emit(
-                Opcode.SYMBOLIC,
-                result_reg=reg,
-                operands=[f"property:{prop_name}"],
+                Opcode.CONST,
+                result_reg=val_reg,
+                operands=[self.NONE_LITERAL],
                 source_location=self._source_loc(node),
             )
-            self._emit(Opcode.STORE_VAR, operands=[prop_name, reg])
+
+        self._emit(
+            Opcode.STORE_FIELD,
+            operands=[this_reg, prop_name, val_reg],
+            source_location=self._source_loc(node),
+        )
+
+        # Lower accessor bodies (get { ... } / set { ... }) if present
+        accessor_list = next(
+            (c for c in node.children if c.type == "accessor_list"), None
+        )
+        if accessor_list:
+            for accessor in (
+                c for c in accessor_list.children if c.type == "accessor_declaration"
+            ):
+                body_block = next(
+                    (b for b in accessor.children if b.type == "block"), None
+                )
+                if body_block:
+                    self._lower_block(body_block)
+
+    def _find_property_initializer(self, node):
+        """Find the initializer expression after ``=`` in a property_declaration."""
+        found_eq = False
+        for child in node.children:
+            if not child.is_named and self._node_text(child) == "=":
+                found_eq = True
+                continue
+            if found_eq and child.is_named and child.type != "accessor_list":
+                return child
+        return None
 
     def _lower_interface_decl(self, node):
         """Lower interface_declaration as NEW_OBJECT with STORE_INDEX per member."""
