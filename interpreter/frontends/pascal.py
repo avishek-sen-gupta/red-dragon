@@ -357,24 +357,39 @@ class PascalFrontend(BaseFrontend):
     # -- Pascal: for loop ----------------------------------------------------------
 
     def _lower_pascal_for(self, node):
-        """Lower for — contains kFor, identifier, kAssign, start, kTo/kDownto, end, kDo, body."""
+        """Lower for — contains kFor, assignment(var := start), kTo/kDownto, end, kDo, body.
+
+        The tree-sitter AST packs the loop variable and start value into an
+        ``assignment`` node, so named non-noise children are typically 3:
+        [assignment, end_value, body].  We detect this case and extract
+        var_node / start_node from the assignment.
+        """
         named_children = [
             c for c in node.children if c.is_named and c.type not in _KEYWORD_NOISE
         ]
-        if len(named_children) < 4:
-            reg = self._fresh_reg()
-            self._emit(
-                Opcode.SYMBOLIC,
-                result_reg=reg,
-                operands=["unsupported:for_incomplete"],
-                source_location=self._source_loc(node),
+
+        if len(named_children) >= 3 and named_children[0].type == "assignment":
+            assignment_node = named_children[0]
+            assign_children = [
+                c
+                for c in assignment_node.children
+                if c.is_named and c.type not in _KEYWORD_NOISE
+            ]
+            var_node = assign_children[0] if assign_children else None
+            start_node = assign_children[1] if len(assign_children) > 1 else None
+            end_node = named_children[1]
+            body_node = named_children[2]
+        elif len(named_children) >= 4:
+            var_node = named_children[0]
+            start_node = named_children[1]
+            end_node = named_children[2]
+            body_node = named_children[3]
+        else:
+            logger.warning(
+                "Pascal for-loop: insufficient children (%d), skipping",
+                len(named_children),
             )
             return
-
-        var_node = named_children[0]
-        start_node = named_children[1]
-        end_node = named_children[2]
-        body_node = named_children[3]
 
         # Determine direction: kTo or kDownto
         is_downto = any(c.type == "kDownto" for c in node.children)

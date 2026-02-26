@@ -665,13 +665,7 @@ class KotlinFrontend(BaseFrontend):
         elif text.startswith("continue"):
             self._lower_continue(node)
         else:
-            reg = self._fresh_reg()
-            self._emit(
-                Opcode.SYMBOLIC,
-                result_reg=reg,
-                operands=[f"jump:{text[:40]}"],
-                source_location=self._source_loc(node),
-            )
+            logger.warning("Unrecognised jump expression: %s", text[:40])
 
     # -- postfix expression ------------------------------------------------
 
