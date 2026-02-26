@@ -37,8 +37,8 @@ class KotlinFrontend(BaseFrontend):
             "multiplicative_expression": self._lower_binop,
             "comparison_expression": self._lower_binop,
             "equality_expression": self._lower_binop,
-            "conjunction": self._lower_binop,
-            "disjunction": self._lower_binop,
+            "conjunction_expression": self._lower_binop,
+            "disjunction_expression": self._lower_binop,
             "prefix_expression": self._lower_unop,
             "postfix_expression": self._lower_postfix_expr,
             "parenthesized_expression": self._lower_paren,
@@ -46,7 +46,6 @@ class KotlinFrontend(BaseFrontend):
             "navigation_expression": self._lower_navigation_expr,
             "if_expression": self._lower_if_expr,
             "when_expression": self._lower_when_expr,
-            "string_template": self._lower_const_literal,
             "collection_literal": self._lower_list_literal,
             "this_expression": self._lower_identifier,
             "super_expression": self._lower_identifier,
@@ -58,6 +57,11 @@ class KotlinFrontend(BaseFrontend):
             "assignment": self._lower_kotlin_assignment_expr,
             "check_expression": self._lower_check_expr,
             "try_expression": self._lower_try_expr,
+            "hex_literal": self._lower_const_literal,
+            "elvis_expression": self._lower_elvis_expr,
+            "infix_expression": self._lower_infix_expr,
+            "indexing_expression": self._lower_indexing_expr,
+            "as_expression": self._lower_as_expr,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "property_declaration": self._lower_property_decl,
@@ -68,7 +72,6 @@ class KotlinFrontend(BaseFrontend):
             "while_statement": self._lower_while_stmt,
             "for_statement": self._lower_for_stmt,
             "jump_expression": self._lower_jump_expr,
-            "expression_statement": self._lower_expression_statement,
             "source_file": self._lower_block,
             "statements": self._lower_block,
             "import_list": lambda _: None,
@@ -975,6 +978,89 @@ class KotlinFrontend(BaseFrontend):
             source_location=self._source_loc(node),
         )
         self._emit(Opcode.STORE_VAR, operands=[entry_name, reg])
+
+    # -- elvis expression (?:) ---------------------------------------------
+
+    def _lower_elvis_expr(self, node) -> str:
+        """Lower `x ?: default` as BINOP('?:', left, right)."""
+        named_children = [c for c in node.children if c.is_named]
+        if len(named_children) < 2:
+            return self._lower_const_literal(node)
+        left_reg = self._lower_expr(named_children[0])
+        right_reg = self._lower_expr(named_children[-1])
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.BINOP,
+            result_reg=reg,
+            operands=["?:", left_reg, right_reg],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- infix expression --------------------------------------------------
+
+    def _lower_infix_expr(self, node) -> str:
+        """Lower `a to b`, `x until y` as CALL_FUNCTION(infix_name, left, right)."""
+        named_children = [c for c in node.children if c.is_named]
+        if len(named_children) < 3:
+            return self._lower_const_literal(node)
+        left_reg = self._lower_expr(named_children[0])
+        func_name = self._node_text(named_children[1])
+        right_reg = self._lower_expr(named_children[2])
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=[func_name, left_reg, right_reg],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- indexing expression -----------------------------------------------
+
+    def _lower_indexing_expr(self, node) -> str:
+        """Lower `collection[index]` as LOAD_INDEX."""
+        named_children = [c for c in node.children if c.is_named]
+        if not named_children:
+            return self._lower_const_literal(node)
+        obj_reg = self._lower_expr(named_children[0])
+        # The index is inside indexing_suffix
+        suffix_node = next(
+            (c for c in node.children if c.type == "indexing_suffix"),
+            None,
+        )
+        if suffix_node is None:
+            return obj_reg
+        idx_children = [c for c in suffix_node.children if c.is_named]
+        if not idx_children:
+            return obj_reg
+        idx_reg = self._lower_expr(idx_children[0])
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_INDEX,
+            result_reg=reg,
+            operands=[obj_reg, idx_reg],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- as expression (type cast) -----------------------------------------
+
+    def _lower_as_expr(self, node) -> str:
+        """Lower `expr as Type` as CALL_FUNCTION('as', expr, type_name)."""
+        named_children = [c for c in node.children if c.is_named]
+        if len(named_children) < 2:
+            return self._lower_const_literal(node)
+        expr_reg = self._lower_expr(named_children[0])
+        type_name = self._node_text(named_children[-1])
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["as", expr_reg, type_name],
+            source_location=self._source_loc(node),
+        )
+        return reg
 
     # -- generic symbolic fallback -----------------------------------------
 

@@ -773,3 +773,44 @@ class Config {
         assert Opcode.BRANCH_IF in opcodes
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("Config" in inst.operands for inst in stores)
+
+
+class TestJavaScriptImportStatement:
+    def test_import_default_is_noop(self):
+        instructions = _parse_js('import foo from "bar";')
+        # Should not crash; import is a no-op
+        assert instructions[0].opcode == Opcode.LABEL
+
+    def test_import_named_is_noop(self):
+        instructions = _parse_js('import { a, b } from "module";')
+        assert instructions[0].opcode == Opcode.LABEL
+        # No SYMBOLIC for the import itself
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("import" in str(inst.operands) for inst in symbolics)
+
+    def test_import_star_is_noop(self):
+        instructions = _parse_js('import * as utils from "./utils";')
+        assert instructions[0].opcode == Opcode.LABEL
+
+
+class TestJavaScriptExportStatement:
+    def test_export_function_declaration(self):
+        instructions = _parse_js("export function add(a, b) { return a + b; }")
+        opcodes = _opcodes(instructions)
+        assert Opcode.RETURN in opcodes
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("add" in inst.operands for inst in stores)
+
+    def test_export_variable_declaration(self):
+        instructions = _parse_js("export const x = 42;")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("42" in inst.operands for inst in consts)
+
+    def test_export_class_declaration(self):
+        instructions = _parse_js("export class Foo { constructor() {} }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("Foo" in inst.operands for inst in stores)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("class:" in str(inst.operands) for inst in consts)

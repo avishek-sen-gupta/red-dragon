@@ -531,6 +531,32 @@ class TestPascalDeclConsts:
         assert any("B" in inst.operands for inst in stores)
 
 
+class TestPascalParenthesizedExpression:
+    def test_parenthesized_expression_no_symbolic(self):
+        instructions = _parse_pascal("program M; begin x := (5 + 3); end.")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("exprParens" in str(inst.operands) for inst in symbolics)
+        assert not any(
+            "parenthesized_expression" in str(inst.operands) for inst in symbolics
+        )
+
+    def test_parenthesized_expression_evaluates(self):
+        instructions = _parse_pascal("program M; begin x := (10); end.")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("10" in inst.operands for inst in consts)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_parenthesized_nested(self):
+        instructions = _parse_pascal("program M; begin x := ((2 + 3) * 4); end.")
+        binops = _find_all(instructions, Opcode.BINOP)
+        operators = [inst.operands[0] for inst in binops if inst.operands]
+        assert "+" in operators
+        assert "*" in operators
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("exprParens" in str(inst.operands) for inst in symbolics)
+
+
 class TestPascalDeclTypeNoop:
     """Tests for type declarations (should be no-op)."""
 

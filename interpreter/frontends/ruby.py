@@ -55,6 +55,10 @@ class RubyFrontend(BaseFrontend):
             "class_variable": self._lower_identifier,
             "heredoc_body": self._lower_const_literal,
         }
+        self._EXPR_DISPATCH["conditional"] = self._lower_ruby_conditional
+        self._EXPR_DISPATCH["unary"] = self._lower_unop
+        self._EXPR_DISPATCH["self"] = self._lower_ruby_self
+
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
             "assignment": self._lower_assignment,
@@ -62,13 +66,19 @@ class RubyFrontend(BaseFrontend):
             "return": self._lower_ruby_return,
             "return_statement": self._lower_ruby_return,
             "if": self._lower_if,
+            "if_modifier": self._lower_ruby_if_modifier,
             "unless": self._lower_unless,
+            "unless_modifier": self._lower_ruby_unless_modifier,
             "elsif": self._lower_ruby_elsif_stmt,
             "while": self._lower_while,
+            "while_modifier": self._lower_ruby_while_modifier,
             "until": self._lower_until,
+            "until_modifier": self._lower_ruby_until_modifier,
             "for": self._lower_ruby_for,
             "method": self._lower_ruby_method,
+            "singleton_method": self._lower_ruby_singleton_method,
             "class": self._lower_ruby_class,
+            "singleton_class": self._lower_ruby_singleton_class,
             "program": self._lower_block,
             "body_statement": self._lower_block,
             "do_block": self._lower_symbolic_block,
@@ -863,3 +873,258 @@ class RubyFrontend(BaseFrontend):
             ],
         )
         self._emit(Opcode.STORE_VAR, operands=[module_name, cls_reg])
+
+    # -- Ruby: if_modifier (body if condition) ---------------------------------
+
+    def _lower_ruby_if_modifier(self, node):
+        """Lower `body if condition` — modifier-form if."""
+        named = [c for c in node.children if c.is_named]
+        if len(named) < 2:
+            logger.warning(
+                "if_modifier with fewer than 2 children: %s", self._node_text(node)[:40]
+            )
+            return
+        body_node = named[0]
+        cond_node = named[1]
+
+        cond_reg = self._lower_expr(cond_node)
+        true_label = self._fresh_label("ifmod_true")
+        end_label = self._fresh_label("ifmod_end")
+
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[cond_reg],
+            label=f"{true_label},{end_label}",
+            source_location=self._source_loc(node),
+        )
+        self._emit(Opcode.LABEL, label=true_label)
+        self._lower_stmt(body_node)
+        self._emit(Opcode.BRANCH, label=end_label)
+        self._emit(Opcode.LABEL, label=end_label)
+
+    # -- Ruby: unless_modifier (body unless condition) -------------------------
+
+    def _lower_ruby_unless_modifier(self, node):
+        """Lower `body unless condition` — inverted modifier-form if."""
+        named = [c for c in node.children if c.is_named]
+        if len(named) < 2:
+            logger.warning(
+                "unless_modifier with fewer than 2 children: %s",
+                self._node_text(node)[:40],
+            )
+            return
+        body_node = named[0]
+        cond_node = named[1]
+
+        cond_reg = self._lower_expr(cond_node)
+        negated_reg = self._fresh_reg()
+        self._emit(
+            Opcode.UNOP,
+            result_reg=negated_reg,
+            operands=["!", cond_reg],
+            source_location=self._source_loc(node),
+        )
+        true_label = self._fresh_label("unlessmod_true")
+        end_label = self._fresh_label("unlessmod_end")
+
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[negated_reg],
+            label=f"{true_label},{end_label}",
+            source_location=self._source_loc(node),
+        )
+        self._emit(Opcode.LABEL, label=true_label)
+        self._lower_stmt(body_node)
+        self._emit(Opcode.BRANCH, label=end_label)
+        self._emit(Opcode.LABEL, label=end_label)
+
+    # -- Ruby: while_modifier (body while condition) ---------------------------
+
+    def _lower_ruby_while_modifier(self, node):
+        """Lower `body while condition` — modifier-form while loop."""
+        named = [c for c in node.children if c.is_named]
+        if len(named) < 2:
+            logger.warning(
+                "while_modifier with fewer than 2 children: %s",
+                self._node_text(node)[:40],
+            )
+            return
+        body_node = named[0]
+        cond_node = named[1]
+
+        loop_label = self._fresh_label("whilemod_cond")
+        body_label = self._fresh_label("whilemod_body")
+        end_label = self._fresh_label("whilemod_end")
+
+        self._emit(Opcode.LABEL, label=loop_label)
+        cond_reg = self._lower_expr(cond_node)
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[cond_reg],
+            label=f"{body_label},{end_label}",
+            source_location=self._source_loc(node),
+        )
+
+        self._emit(Opcode.LABEL, label=body_label)
+        self._push_loop(loop_label, end_label)
+        self._lower_stmt(body_node)
+        self._pop_loop()
+        self._emit(Opcode.BRANCH, label=loop_label)
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+    # -- Ruby: until_modifier (body until condition) ---------------------------
+
+    def _lower_ruby_until_modifier(self, node):
+        """Lower `body until condition` — inverted modifier-form while loop."""
+        named = [c for c in node.children if c.is_named]
+        if len(named) < 2:
+            logger.warning(
+                "until_modifier with fewer than 2 children: %s",
+                self._node_text(node)[:40],
+            )
+            return
+        body_node = named[0]
+        cond_node = named[1]
+
+        loop_label = self._fresh_label("untilmod_cond")
+        body_label = self._fresh_label("untilmod_body")
+        end_label = self._fresh_label("untilmod_end")
+
+        self._emit(Opcode.LABEL, label=loop_label)
+        cond_reg = self._lower_expr(cond_node)
+        negated_reg = self._fresh_reg()
+        self._emit(
+            Opcode.UNOP,
+            result_reg=negated_reg,
+            operands=["!", cond_reg],
+            source_location=self._source_loc(node),
+        )
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[negated_reg],
+            label=f"{body_label},{end_label}",
+            source_location=self._source_loc(node),
+        )
+
+        self._emit(Opcode.LABEL, label=body_label)
+        self._push_loop(loop_label, end_label)
+        self._lower_stmt(body_node)
+        self._pop_loop()
+        self._emit(Opcode.BRANCH, label=loop_label)
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+    # -- Ruby: conditional (ternary) -------------------------------------------
+
+    def _lower_ruby_conditional(self, node) -> str:
+        """Lower `condition ? true_expr : false_expr` as ternary."""
+        cond_node = node.child_by_field_name("condition")
+        true_node = node.child_by_field_name("consequence")
+        false_node = node.child_by_field_name("alternative")
+
+        cond_reg = self._lower_expr(cond_node)
+        true_label = self._fresh_label("ternary_true")
+        false_label = self._fresh_label("ternary_false")
+        end_label = self._fresh_label("ternary_end")
+
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[cond_reg],
+            label=f"{true_label},{false_label}",
+        )
+
+        self._emit(Opcode.LABEL, label=true_label)
+        true_reg = self._lower_expr(true_node) if true_node else self._fresh_reg()
+        result_var = f"__ternary_{self._label_counter}"
+        self._emit(Opcode.STORE_VAR, operands=[result_var, true_reg])
+        self._emit(Opcode.BRANCH, label=end_label)
+
+        self._emit(Opcode.LABEL, label=false_label)
+        false_reg = self._lower_expr(false_node) if false_node else self._fresh_reg()
+        self._emit(Opcode.STORE_VAR, operands=[result_var, false_reg])
+        self._emit(Opcode.BRANCH, label=end_label)
+
+        self._emit(Opcode.LABEL, label=end_label)
+        result_reg = self._fresh_reg()
+        self._emit(Opcode.LOAD_VAR, result_reg=result_reg, operands=[result_var])
+        return result_reg
+
+    # -- Ruby: self keyword ----------------------------------------------------
+
+    def _lower_ruby_self(self, node) -> str:
+        """Lower `self` as LOAD_VAR('self')."""
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_VAR,
+            result_reg=reg,
+            operands=["self"],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- Ruby: singleton_class (class << obj) ----------------------------------
+
+    def _lower_ruby_singleton_class(self, node):
+        """Lower `class << obj ... end` — lower the body."""
+        body_node = node.child_by_field_name("body")
+        value_node = node.child_by_field_name("value")
+
+        class_label = self._fresh_label("singleton_class")
+        end_label = self._fresh_label("singleton_class_end")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=class_label)
+
+        if value_node:
+            self._lower_expr(value_node)
+
+        if body_node:
+            self._lower_block(body_node)
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+    # -- Ruby: singleton_method (def obj.method) -------------------------------
+
+    def _lower_ruby_singleton_method(self, node):
+        """Lower `def self.method_name(...) ... end` — like a regular method."""
+        name_node = node.child_by_field_name("name")
+        params_node = node.child_by_field_name("parameters")
+        body_node = node.child_by_field_name("body")
+        object_node = node.child_by_field_name("object")
+
+        object_name = self._node_text(object_node) if object_node else "self"
+        method_name = self._node_text(name_node) if name_node else "__anon"
+        func_name = f"{object_name}.{method_name}"
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        self._emit(
+            Opcode.BRANCH, label=end_label, source_location=self._source_loc(node)
+        )
+        self._emit(Opcode.LABEL, label=func_label)
+
+        if params_node:
+            self._lower_ruby_params(params_node)
+
+        if body_node:
+            self._lower_block(body_node)
+
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST, result_reg=none_reg, operands=[self.DEFAULT_RETURN_VALUE]
+        )
+        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        func_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])

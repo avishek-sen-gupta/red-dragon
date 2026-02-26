@@ -62,10 +62,11 @@ class ScalaFrontend(BaseFrontend):
             "string_literal": self._lower_const_literal,
             "interpolated_string": self._lower_const_literal,
             "lambda_expression": self._lower_lambda_expr,
-            "new_expression": self._lower_new_expr,
+            "instance_expression": self._lower_new_expr,
             "generic_type": self._lower_symbolic_node,
             "type_identifier": self._lower_identifier,
             "try_expression": self._lower_try_expr,
+            "throw_expression": self._lower_throw_expr,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "val_definition": self._lower_val_def,
@@ -800,6 +801,27 @@ class ScalaFrontend(BaseFrontend):
         reg = self._fresh_reg()
         self._emit(Opcode.CONST, result_reg=reg, operands=[self.NONE_LITERAL])
         return reg
+
+    # -- throw expression --------------------------------------------------
+
+    def _lower_throw_expr(self, node) -> str:
+        """Lower throw_expression: throw expr -> lower expr, emit THROW, return reg."""
+        children = [c for c in node.children if c.type != "throw" and c.is_named]
+        if children:
+            val_reg = self._lower_expr(children[0])
+        else:
+            val_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=val_reg,
+                operands=[self.DEFAULT_RETURN_VALUE],
+            )
+        self._emit(
+            Opcode.THROW,
+            operands=[val_reg],
+            source_location=self._source_loc(node),
+        )
+        return val_reg
 
     # -- generic symbolic fallback -----------------------------------------
 

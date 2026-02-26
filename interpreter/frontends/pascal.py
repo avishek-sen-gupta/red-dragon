@@ -92,7 +92,7 @@ class PascalFrontend(BaseFrontend):
             "literalString": self._lower_const_literal,
             "exprBinary": self._lower_pascal_binop,
             "exprCall": self._lower_pascal_call,
-            "parenthesized_expression": self._lower_paren,
+            "exprParens": self._lower_paren,
             "exprDot": self._lower_pascal_dot,
             "exprSubscript": self._lower_pascal_subscript,
             "exprUnary": self._lower_pascal_unary,

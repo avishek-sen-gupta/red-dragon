@@ -56,6 +56,14 @@ class PhpFrontend(BaseFrontend):
             "match_expression": self._lower_php_match_expression,
             "arrow_function": self._lower_php_arrow_function,
             "scoped_call_expression": self._lower_php_scoped_call,
+            "anonymous_function": self._lower_php_anonymous_function,
+            "nullsafe_member_access_expression": self._lower_php_nullsafe_member_access,
+            "class_constant_access_expression": self._lower_php_class_constant_access,
+            "scoped_property_access_expression": self._lower_php_scoped_property_access,
+            "yield_expression": self._lower_php_yield,
+            "reference_assignment_expression": self._lower_php_reference_assignment,
+            "heredoc": self._lower_const_literal,
+            "nowdoc": self._lower_const_literal,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -83,6 +91,10 @@ class PhpFrontend(BaseFrontend):
             "enum_declaration": self._lower_php_enum,
             "named_label_statement": self._lower_php_named_label,
             "goto_statement": self._lower_php_goto,
+            "property_declaration": self._lower_php_property_declaration,
+            "use_declaration": self._lower_php_use_declaration,
+            "namespace_use_declaration": self._lower_php_namespace_use_declaration,
+            "enum_case": self._lower_php_enum_case,
         }
 
     # -- PHP: compound statement (block with braces) ---------------------------
@@ -556,7 +568,7 @@ class PhpFrontend(BaseFrontend):
             if child.type == "method_declaration":
                 self._lower_php_method_decl(child)
             elif child.type == "property_declaration":
-                self._lower_php_property_decl(child)
+                self._lower_php_property_declaration(child)
             elif child.is_named and child.type not in (
                 "visibility_modifier",
                 "static_modifier",
@@ -1203,4 +1215,207 @@ class PhpFrontend(BaseFrontend):
         else:
             logger.warning(
                 "goto_statement without label: %s", self._node_text(node)[:40]
+            )
+
+    # -- PHP: anonymous function (closure) -------------------------------------
+
+    def _lower_php_anonymous_function(self, node) -> str:
+        """Lower function($x) use ($y) { body } as anonymous function."""
+        params_node = node.child_by_field_name("parameters")
+        body_node = node.child_by_field_name("body")
+
+        func_name = f"__anon_{self._label_counter}"
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        self._emit(Opcode.BRANCH, label=end_label)
+        self._emit(Opcode.LABEL, label=func_label)
+
+        if params_node:
+            self._lower_php_params(params_node)
+
+        if body_node:
+            self._lower_php_compound(body_node)
+
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[self.DEFAULT_RETURN_VALUE],
+        )
+        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        func_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        return func_reg
+
+    # -- PHP: nullsafe member access ($obj?->field) ----------------------------
+
+    def _lower_php_nullsafe_member_access(self, node) -> str:
+        """Lower $obj?->field as LOAD_FIELD (null-safety is semantic)."""
+        obj_node = node.child_by_field_name("object")
+        name_node = node.child_by_field_name("name")
+        if obj_node is None or name_node is None:
+            return self._lower_const_literal(node)
+        obj_reg = self._lower_expr(obj_node)
+        field_name = self._node_text(name_node)
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_FIELD,
+            result_reg=reg,
+            operands=[obj_reg, field_name],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- PHP: class constant access (ClassName::CONST) -------------------------
+
+    def _lower_php_class_constant_access(self, node) -> str:
+        """Lower ClassName::CONST as LOAD_FIELD on the class."""
+        named = [c for c in node.children if c.is_named]
+        if len(named) < 2:
+            return self._lower_const_literal(node)
+        class_reg = self._lower_expr(named[0])
+        const_name = self._node_text(named[1])
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_FIELD,
+            result_reg=reg,
+            operands=[class_reg, const_name],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- PHP: scoped property access (ClassName::$prop) ------------------------
+
+    def _lower_php_scoped_property_access(self, node) -> str:
+        """Lower ClassName::$prop as LOAD_FIELD on the class."""
+        named = [c for c in node.children if c.is_named]
+        if len(named) < 2:
+            return self._lower_const_literal(node)
+        class_reg = self._lower_expr(named[0])
+        prop_name = self._node_text(named[1])
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_FIELD,
+            result_reg=reg,
+            operands=[class_reg, prop_name],
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- PHP: yield expression -------------------------------------------------
+
+    def _lower_php_yield(self, node) -> str:
+        """Lower yield $value as CALL_FUNCTION('yield', expr)."""
+        named = [c for c in node.children if c.is_named]
+        arg_regs = [self._lower_expr(c) for c in named]
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["yield"] + arg_regs,
+            source_location=self._source_loc(node),
+        )
+        return reg
+
+    # -- PHP: reference assignment ($x = &$y) ----------------------------------
+
+    def _lower_php_reference_assignment(self, node) -> str:
+        """Lower $x = &$y as STORE_VAR (ignore reference semantics)."""
+        left = node.child_by_field_name("left")
+        right = node.child_by_field_name("right")
+        val_reg = self._lower_expr(right) if right else self._fresh_reg()
+        if left:
+            self._lower_store_target(left, val_reg, node)
+        return val_reg
+
+    # -- PHP: property declaration (class property) ----------------------------
+
+    def _lower_php_property_declaration(self, node):
+        """Lower property declarations inside classes, e.g. public $x = 10;"""
+        for child in node.children:
+            if child.type == "property_element":
+                name_node = next(
+                    (c for c in child.children if c.type == "variable_name"), None
+                )
+                value_node = next(
+                    (
+                        c
+                        for c in child.children
+                        if c.is_named and c.type != "variable_name"
+                    ),
+                    None,
+                )
+                if name_node and value_node:
+                    val_reg = self._lower_expr(value_node)
+                    self._emit(
+                        Opcode.STORE_FIELD,
+                        operands=["self", self._node_text(name_node), val_reg],
+                        source_location=self._source_loc(node),
+                    )
+                elif name_node:
+                    val_reg = self._fresh_reg()
+                    self._emit(
+                        Opcode.CONST,
+                        result_reg=val_reg,
+                        operands=[self.NONE_LITERAL],
+                    )
+                    self._emit(
+                        Opcode.STORE_FIELD,
+                        operands=["self", self._node_text(name_node), val_reg],
+                        source_location=self._source_loc(node),
+                    )
+
+    # -- PHP: use declaration (trait use) --------------------------------------
+
+    def _lower_php_use_declaration(self, node):
+        """Lower `use SomeTrait;` inside classes — no-op / SYMBOLIC."""
+        named = [c for c in node.children if c.is_named]
+        trait_names = [self._node_text(c) for c in named]
+        for trait_name in trait_names:
+            self._emit(
+                Opcode.SYMBOLIC,
+                result_reg=self._fresh_reg(),
+                operands=[f"use_trait:{trait_name}"],
+                source_location=self._source_loc(node),
+            )
+
+    # -- PHP: namespace use declaration ----------------------------------------
+
+    def _lower_php_namespace_use_declaration(self, node):
+        """Lower `use Some\\Namespace;` — no-op."""
+        pass
+
+    # -- PHP: enum case --------------------------------------------------------
+
+    def _lower_php_enum_case(self, node):
+        """Lower enum case inside an enum_declaration as STORE_FIELD."""
+        name_node = node.child_by_field_name("name")
+        value_node = next(
+            (c for c in node.children if c.is_named and c.type not in ("name",)),
+            None,
+        )
+        if name_node:
+            case_name = self._node_text(name_node)
+            if value_node:
+                val_reg = self._lower_expr(value_node)
+            else:
+                val_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.CONST,
+                    result_reg=val_reg,
+                    operands=[case_name],
+                )
+            self._emit(
+                Opcode.STORE_FIELD,
+                operands=["self", case_name, val_reg],
+                source_location=self._source_loc(node),
             )
