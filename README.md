@@ -133,7 +133,7 @@ result = factorial(5)
 Final state: result = 120  (67 steps, 0 LLM calls)
 ```
 
-The VM also handles classes with heap allocation, method dispatch, field access, closures with captured scopes, and builtins (`len`, `range`, `print`, `int`, `str`, etc.) — all deterministically. The interpreter's execution engine is split into focused modules: `interpreter/registry.py` (function/class registry), `interpreter/builtins.py` (built-in function table), and `interpreter/executor.py` (opcode handlers and dispatch).
+The VM also handles classes with heap allocation, method dispatch, field access, closures with shared mutable environments (capture-by-reference — mutations inside closures persist across calls and are visible to sibling closures from the same scope), and builtins (`len`, `range`, `print`, `int`, `str`, etc.) — all deterministically. The interpreter's execution engine is split into focused modules: `interpreter/registry.py` (function/class registry), `interpreter/builtins.py` (built-in function table), and `interpreter/executor.py` (opcode handlers and dispatch).
 
 ## Symbolic data flow
 
@@ -254,7 +254,7 @@ poetry run pytest tests/unit/ -v     # unit tests only
 poetry run pytest tests/integration/ -v  # integration tests only
 ```
 
-Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures, symbolic execution, factory routing, and the composable API layer.
+Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures (including mutation persistence and shared environments), symbolic execution, factory routing, and the composable API layer.
 
 ## See Also
 

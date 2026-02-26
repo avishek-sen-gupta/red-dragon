@@ -40,6 +40,16 @@ class HeapObject:
 
 
 @dataclass
+class ClosureEnvironment:
+    """Shared mutable environment for closure capture-by-reference."""
+
+    bindings: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        return {k: _serialize_value(v) for k, v in self.bindings.items()}
+
+
+@dataclass
 class StackFrame:
     function_name: str
     registers: dict[str, Any] = field(default_factory=dict)
@@ -47,14 +57,19 @@ class StackFrame:
     return_label: str | None = None
     return_ip: int | None = None  # ip to resume at in caller block
     result_reg: str | None = None  # caller's register for return value
+    closure_env_id: str = ""
+    captured_var_names: frozenset[str] = field(default_factory=frozenset)
 
     def to_dict(self) -> dict:
-        return {
+        d: dict[str, Any] = {
             "function_name": self.function_name,
             "registers": {k: _serialize_value(v) for k, v in self.registers.items()},
             "local_vars": {k: _serialize_value(v) for k, v in self.local_vars.items()},
             "return_label": self.return_label,
         }
+        if self.closure_env_id:
+            d["closure_env_id"] = self.closure_env_id
+        return d
 
 
 def _serialize_value(v: Any) -> Any:
@@ -71,7 +86,7 @@ class VMState:
     call_stack: list[StackFrame] = field(default_factory=list)
     path_conditions: list[str] = field(default_factory=list)
     symbolic_counter: int = 0
-    closures: dict[str, dict[str, Any]] = field(default_factory=dict)
+    closures: dict[str, ClosureEnvironment] = field(default_factory=dict)
 
     def fresh_symbolic(self, hint: str = "") -> SymbolicValue:
         name = f"sym_{self.symbolic_counter}"
@@ -91,8 +106,7 @@ class VMState:
         }
         if self.closures:
             result["closures"] = {
-                label: {k: _serialize_value(v) for k, v in captured.items()}
-                for label, captured in self.closures.items()
+                label: env.to_dict() for label, env in self.closures.items()
             }
         return result
 
@@ -114,6 +128,8 @@ class NewObject(BaseModel):
 class StackFramePush(BaseModel):
     function_name: str
     return_label: str | None = None
+    closure_env_id: str = ""
+    captured_var_names: list[str] = []
 
 
 class StateUpdate(BaseModel):
@@ -177,6 +193,8 @@ def apply_update(vm: VMState, update: StateUpdate):
             StackFrame(
                 function_name=update.call_push.function_name,
                 return_label=update.call_push.return_label,
+                closure_env_id=update.call_push.closure_env_id,
+                captured_var_names=frozenset(update.call_push.captured_var_names),
             )
         )
 
@@ -184,7 +202,12 @@ def apply_update(vm: VMState, update: StateUpdate):
     # if call_push just fired, i.e. parameter bindings)
     target_frame = vm.current_frame
     for var, val in update.var_writes.items():
-        target_frame.local_vars[var] = _deserialize_value(val, vm)
+        deserialized = _deserialize_value(val, vm)
+        target_frame.local_vars[var] = deserialized
+        if target_frame.closure_env_id and var in target_frame.captured_var_names:
+            env = vm.closures.get(target_frame.closure_env_id)
+            if env:
+                env.bindings[var] = deserialized
 
     # Call pop
     if update.call_pop and len(vm.call_stack) > 1:
