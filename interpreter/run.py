@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 import time
 from typing import Any
@@ -27,6 +28,7 @@ from .run_types import (
     ExecutionStats,
     PipelineStats,
 )  # noqa: F401 — re-exported for backwards compatibility
+from .trace_types import TraceStep, ExecutionTrace
 from .backend import get_backend
 from . import constants
 
@@ -254,6 +256,141 @@ def execute_cfg(
         print(f"\n({stats.steps} steps, {stats.llm_calls} LLM calls)")
 
     return (vm, stats)
+
+
+def execute_cfg_traced(
+    cfg: CFG,
+    entry_point: str,
+    registry: FunctionRegistry,
+    config: VMConfig = VMConfig(),
+) -> tuple[VMState, ExecutionTrace]:
+    """Execute a pre-built CFG and record a trace of every step.
+
+    Identical to execute_cfg() but deep-copies the VMState after each
+    instruction so callers can replay the execution step by step.
+
+    Args:
+        cfg: Pre-built control flow graph.
+        entry_point: Label of the block to start execution from.
+        registry: Pre-built function/class registry.
+        config: Execution configuration (backend, max_steps, verbose).
+
+    Returns:
+        Tuple of (final VMState, ExecutionTrace with per-step snapshots).
+    """
+    entry = _find_entry_point(cfg, entry_point)
+
+    vm = VMState()
+    vm.call_stack.append(StackFrame(function_name=constants.MAIN_FRAME_NAME))
+    initial_state = copy.deepcopy(vm)
+
+    llm = get_backend(config.backend)
+    current_label = entry
+    ip = 0
+    llm_calls = 0
+    step = 0
+    trace_steps: list[TraceStep] = []
+
+    for step in range(config.max_steps):
+        block = cfg.blocks[current_label]
+
+        if ip >= len(block.instructions):
+            if block.successors:
+                current_label = block.successors[0]
+                ip = 0
+                continue
+            if config.verbose:
+                print(
+                    f"[step {step}] End of '{current_label}', "
+                    "no successors. Stopping."
+                )
+            break
+
+        instruction = block.instructions[ip]
+
+        if config.verbose:
+            print(f"[step {step}] {current_label}:{ip}  {instruction}")
+
+        if instruction.opcode == Opcode.LABEL:
+            ip += 1
+            continue
+
+        result = _try_execute_locally(
+            instruction,
+            vm,
+            cfg=cfg,
+            registry=registry,
+            current_label=current_label,
+            ip=ip,
+        )
+        used_llm = False
+        if result.handled:
+            update = result.update
+        else:
+            update = llm.interpret_instruction(instruction, vm)
+            used_llm = True
+            llm_calls += 1
+
+        if config.verbose:
+            _log_update(step, current_label, ip, instruction, update, used_llm)
+
+        is_return = instruction.opcode == Opcode.RETURN
+        is_throw = instruction.opcode == Opcode.THROW
+        return_frame = vm.current_frame if (is_return or is_throw) else None
+
+        is_call_dispatch = (
+            update.call_push is not None and update.next_label is not None
+        )
+        if is_call_dispatch:
+            _handle_call_dispatch_setup(vm, instruction, update, current_label, ip)
+        else:
+            apply_update(vm, update)
+
+        # Snapshot the VM state after update
+        trace_steps.append(
+            TraceStep(
+                step_index=len(trace_steps),
+                block_label=current_label,
+                instruction_index=ip,
+                instruction=instruction,
+                update=update,
+                vm_state=copy.deepcopy(vm),
+                used_llm=used_llm,
+            )
+        )
+
+        if is_return or is_throw:
+            flow = _handle_return_flow(
+                vm, cfg, return_frame, update, config.verbose, step
+            )
+            if isinstance(flow, _StopExecution):
+                break
+            current_label, ip = flow
+
+        elif update.next_label and update.next_label in cfg.blocks:
+            current_label = update.next_label
+            ip = 0
+        else:
+            ip += 1
+
+    stats = ExecutionStats(
+        steps=step + 1,
+        llm_calls=llm_calls,
+        final_heap_objects=len(vm.heap),
+        final_symbolic_count=vm.symbolic_counter,
+        closures_captured=len(vm.closures),
+    )
+
+    if config.verbose:
+        print(f"\n({stats.steps} steps, {stats.llm_calls} LLM calls)")
+
+    trace = ExecutionTrace(
+        steps=trace_steps,
+        stats=stats,
+        initial_state=initial_state,
+    )
+
+    return (vm, trace)
 
 
 def run(
