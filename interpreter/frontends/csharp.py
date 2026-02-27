@@ -48,6 +48,7 @@ class CSharpFrontend(BaseFrontend):
             "object_creation_expression": self._lower_object_creation,
             "member_access_expression": self._lower_member_access,
             "element_access_expression": self._lower_element_access,
+            "initializer_expression": self._lower_initializer_expr,
             "assignment_expression": self._lower_assignment_expr,
             "cast_expression": self._lower_cast_expr,
             "conditional_expression": self._lower_ternary,
@@ -254,6 +255,40 @@ class CSharpFrontend(BaseFrontend):
         )
         return reg
 
+    # -- C#: bracket index extraction ----------------------------------
+
+    def _extract_bracket_index(self, bracket_node) -> str:
+        """Unwrap bracketed_argument_list → argument → inner expression."""
+        if bracket_node is None:
+            reg = self._fresh_reg()
+            self._emit(
+                Opcode.SYMBOLIC,
+                result_reg=reg,
+                operands=["unknown_index"],
+            )
+            return reg
+        if bracket_node.type == "bracketed_argument_list":
+            args = [c for c in bracket_node.children if c.is_named]
+            if args:
+                inner = args[0]
+                # argument node wraps the actual expression
+                if inner.type == "argument":
+                    expr_children = [c for c in inner.children if c.is_named]
+                    return (
+                        self._lower_expr(expr_children[0])
+                        if expr_children
+                        else self._lower_expr(inner)
+                    )
+                return self._lower_expr(inner)
+            reg = self._fresh_reg()
+            self._emit(
+                Opcode.SYMBOLIC,
+                result_reg=reg,
+                operands=["unknown_index"],
+            )
+            return reg
+        return self._lower_expr(bracket_node)
+
     # -- C#: element access (indexing) ---------------------------------
 
     def _lower_element_access(self, node) -> str:
@@ -262,25 +297,16 @@ class CSharpFrontend(BaseFrontend):
         if obj_node is None:
             return self._lower_const_literal(node)
         obj_reg = self._lower_expr(obj_node)
-        if bracket_node:
-            idx_reg = self._lower_expr(bracket_node)
-        else:
-            # Fallback: find the bracketed argument list child
-            idx_children = [
-                c
-                for c in node.children
-                if c.is_named and c.type == "bracketed_argument_list"
-            ]
-            if idx_children:
-                inner = [c for c in idx_children[0].children if c.is_named]
-                idx_reg = self._lower_expr(inner[0]) if inner else self._fresh_reg()
-            else:
-                idx_reg = self._fresh_reg()
-                self._emit(
-                    Opcode.SYMBOLIC,
-                    result_reg=idx_reg,
-                    operands=["unknown_index"],
-                )
+        if bracket_node is None:
+            bracket_node = next(
+                (
+                    c
+                    for c in node.children
+                    if c.is_named and c.type == "bracketed_argument_list"
+                ),
+                None,
+            )
+        idx_reg = self._extract_bracket_index(bracket_node)
         reg = self._fresh_reg()
         self._emit(
             Opcode.LOAD_INDEX,
@@ -289,6 +315,29 @@ class CSharpFrontend(BaseFrontend):
             node=node,
         )
         return reg
+
+    # -- C#: initializer expression ({1, 2, 3}) -------------------------
+
+    def _lower_initializer_expr(self, node) -> str:
+        """Lower initializer_expression {a, b, c} as NEW_ARRAY + STORE_INDEX."""
+        elems = [
+            c for c in node.children if c.is_named and c.type not in ("{", "}", ",")
+        ]
+        arr_reg = self._fresh_reg()
+        size_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
+        self._emit(
+            Opcode.NEW_ARRAY,
+            result_reg=arr_reg,
+            operands=["list", size_reg],
+            node=node,
+        )
+        for i, elem in enumerate(elems):
+            val_reg = self._lower_expr(elem)
+            idx_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            self._emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+        return arr_reg
 
     # -- C#: assignment expression -------------------------------------
 
@@ -1368,11 +1417,16 @@ class CSharpFrontend(BaseFrontend):
             bracket_node = target.child_by_field_name("subscript")
             if obj_node:
                 obj_reg = self._lower_expr(obj_node)
-                idx_reg = (
-                    self._lower_expr(bracket_node)
-                    if bracket_node
-                    else self._fresh_reg()
-                )
+                if bracket_node is None:
+                    bracket_node = next(
+                        (
+                            c
+                            for c in target.children
+                            if c.is_named and c.type == "bracketed_argument_list"
+                        ),
+                        None,
+                    )
+                idx_reg = self._extract_bracket_index(bracket_node)
                 self._emit(
                     Opcode.STORE_INDEX,
                     operands=[obj_reg, idx_reg, val_reg],

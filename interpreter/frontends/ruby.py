@@ -54,6 +54,7 @@ class RubyFrontend(BaseFrontend):
             "global_variable": self._lower_identifier,
             "class_variable": self._lower_identifier,
             "heredoc_body": self._lower_const_literal,
+            "element_reference": self._lower_element_reference,
         }
         self._EXPR_DISPATCH["conditional"] = self._lower_ruby_conditional
         self._EXPR_DISPATCH["unary"] = self._lower_unop
@@ -89,6 +90,28 @@ class RubyFrontend(BaseFrontend):
             "case": self._lower_case,
             "module": self._lower_ruby_module,
         }
+
+    # -- Ruby: element_reference (array indexing) --------------------------------
+
+    def _lower_element_reference(self, node) -> str:
+        """Lower `arr[idx]` (element_reference) as LOAD_INDEX."""
+        named_children = [c for c in node.children if c.is_named]
+        if not named_children:
+            return self._lower_const_literal(node)
+        obj_reg = self._lower_expr(named_children[0])
+        idx_reg = (
+            self._lower_expr(named_children[1])
+            if len(named_children) > 1
+            else self._fresh_reg()
+        )
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_INDEX,
+            result_reg=reg,
+            operands=[obj_reg, idx_reg],
+            node=node,
+        )
+        return reg
 
     # -- Ruby: argument_list unwrap -------------------------------------------
 
@@ -454,6 +477,18 @@ class RubyFrontend(BaseFrontend):
                 operands=[self._node_text(target), val_reg],
                 node=parent_node,
             )
+        elif target.type == "element_reference":
+            named_children = [c for c in target.children if c.is_named]
+            if len(named_children) >= 2:
+                obj_reg = self._lower_expr(named_children[0])
+                idx_reg = self._lower_expr(named_children[1])
+                self._emit(
+                    Opcode.STORE_INDEX,
+                    operands=[obj_reg, idx_reg, val_reg],
+                    node=parent_node,
+                )
+            else:
+                super()._lower_store_target(target, val_reg, parent_node)
         else:
             super()._lower_store_target(target, val_reg, parent_node)
 

@@ -63,6 +63,71 @@ class CppFrontend(CFrontend):
             }
         )
 
+    # -- C++: subscript_expression override ----------------------------
+
+    def _lower_subscript_expr(self, node) -> str:
+        """Lower subscript_expression — C++ wraps index in subscript_argument_list."""
+        arr_node = node.child_by_field_name("argument")
+        idx_node = node.child_by_field_name("index")
+        if arr_node and idx_node:
+            return super()._lower_subscript_expr(node)
+        # C++ tree-sitter: first named child = object, subscript_argument_list = index wrapper
+        named_children = [c for c in node.children if c.is_named]
+        if not named_children:
+            return self._lower_const_literal(node)
+        obj_reg = self._lower_expr(named_children[0])
+        suffix = next(
+            (c for c in node.children if c.type == "subscript_argument_list"),
+            None,
+        )
+        if suffix:
+            idx_children = [c for c in suffix.children if c.is_named]
+            idx_reg = (
+                self._lower_expr(idx_children[0]) if idx_children else self._fresh_reg()
+            )
+        else:
+            idx_reg = self._fresh_reg()
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_INDEX,
+            result_reg=reg,
+            operands=[obj_reg, idx_reg],
+            node=node,
+        )
+        return reg
+
+    def _lower_store_target(self, target, val_reg: str, parent_node):
+        """Override to handle C++ subscript_expression with subscript_argument_list."""
+        if target.type == "subscript_expression":
+            arr_node = target.child_by_field_name("argument")
+            idx_node = target.child_by_field_name("index")
+            if arr_node and idx_node:
+                return super()._lower_store_target(target, val_reg, parent_node)
+            named_children = [c for c in target.children if c.is_named]
+            if not named_children:
+                return super()._lower_store_target(target, val_reg, parent_node)
+            obj_reg = self._lower_expr(named_children[0])
+            suffix = next(
+                (c for c in target.children if c.type == "subscript_argument_list"),
+                None,
+            )
+            if suffix:
+                idx_children = [c for c in suffix.children if c.is_named]
+                idx_reg = (
+                    self._lower_expr(idx_children[0])
+                    if idx_children
+                    else self._fresh_reg()
+                )
+            else:
+                idx_reg = self._fresh_reg()
+            self._emit(
+                Opcode.STORE_INDEX,
+                operands=[obj_reg, idx_reg, val_reg],
+                node=parent_node,
+            )
+        else:
+            super()._lower_store_target(target, val_reg, parent_node)
+
     # -- C++: condition_clause (wraps if/while conditions) -------------
 
     def _lower_condition_clause(self, node) -> str:
