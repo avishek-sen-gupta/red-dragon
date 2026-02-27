@@ -776,17 +776,68 @@ class KotlinFrontend(BaseFrontend):
                     operands=[self._node_text(target), val_reg],
                     node=parent_node,
                 )
-        elif target.type == "directly_assignable_expression":
-            # Unwrap the inner node
-            inner = next((c for c in target.children if c.is_named), None)
-            if inner:
-                self._lower_store_target(inner, val_reg, parent_node)
+        elif target.type == "indexing_expression":
+            named_children = [c for c in target.children if c.is_named]
+            if named_children:
+                obj_reg = self._lower_expr(named_children[0])
+                suffix_node = next(
+                    (c for c in target.children if c.type == "indexing_suffix"),
+                    None,
+                )
+                if suffix_node:
+                    idx_children = [c for c in suffix_node.children if c.is_named]
+                    idx_reg = (
+                        self._lower_expr(idx_children[0])
+                        if idx_children
+                        else self._fresh_reg()
+                    )
+                else:
+                    idx_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.STORE_INDEX,
+                    operands=[obj_reg, idx_reg, val_reg],
+                    node=parent_node,
+                )
             else:
                 self._emit(
                     Opcode.STORE_VAR,
                     operands=[self._node_text(target), val_reg],
                     node=parent_node,
                 )
+        elif target.type == "directly_assignable_expression":
+            # Check for indexing: simple_identifier + indexing_suffix
+            suffix_node = next(
+                (c for c in target.children if c.type == "indexing_suffix"),
+                None,
+            )
+            if suffix_node:
+                id_node = next(
+                    (c for c in target.children if c.type == "simple_identifier"),
+                    None,
+                )
+                obj_reg = self._lower_expr(id_node) if id_node else self._fresh_reg()
+                idx_children = [c for c in suffix_node.children if c.is_named]
+                idx_reg = (
+                    self._lower_expr(idx_children[0])
+                    if idx_children
+                    else self._fresh_reg()
+                )
+                self._emit(
+                    Opcode.STORE_INDEX,
+                    operands=[obj_reg, idx_reg, val_reg],
+                    node=parent_node,
+                )
+            else:
+                # Unwrap the inner node
+                inner = next((c for c in target.children if c.is_named), None)
+                if inner:
+                    self._lower_store_target(inner, val_reg, parent_node)
+                else:
+                    self._emit(
+                        Opcode.STORE_VAR,
+                        operands=[self._node_text(target), val_reg],
+                        node=parent_node,
+                    )
         else:
             self._emit(
                 Opcode.STORE_VAR,
