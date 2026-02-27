@@ -311,7 +311,7 @@
   <h1 class="banner-title"><svg class="banner-logo" viewBox="0 0 30 50" width="30" height="50"><polygon points="5,10 25,25 5,40" fill="#e57373"/></svg>Red<span style="color: #e57373;">Dragon</span></h1>
   <h2 style="color: #90a4ae;">Multi-language LLM-assisted symbolic execution and dataflow analysis</h2>
   <p class="tagline">"Deterministic where possible. Symbolic where necessary. LLM only as a last resort."</p>
-  <p class="small dim" style="margin-top: 40px;">~12,500 LOC &middot; 20 opcodes &middot; 15 frontends &middot; 507 tests &middot; 4 LLM providers</p>
+  <p class="small dim" style="margin-top: 40px;">~24K LOC &middot; 20 opcodes &middot; 15 frontends &middot; 1,214 tests &middot; 4 LLM providers</p>
   <aside class="notes">
     This is an end-to-end technical deep dive into RedDragon's architecture.
     The key idea: avoid LLMs entirely for concrete programs, fall back gracefully
@@ -1443,7 +1443,7 @@ class VMState:
     call_stack: list[StackFrame]
     path_conditions: list[str]
     symbolic_counter: int
-    closures: dict[str, dict]</code></pre>
+    closures: dict[str, ClosureEnvironment]</code></pre>
     </div>
     <div>
       <h3>StackFrame</h3>
@@ -1580,9 +1580,9 @@ greeting = "Hello, " + name     # symbolic propagation</code></pre>
 add5 = make_adder(5)
 result = add5(3)  # => 8</code></pre>
       <ul class="small" style="margin-top: 10px;">
-        <li class="fragment">Each closure gets a <strong class="accent">unique ID</strong></li>
-        <li class="fragment">Captured variables stored in <code>VMState.closures</code></li>
-        <li class="fragment">Invocation restores captured scope</li>
+        <li class="fragment">Closures share a mutable <strong class="accent">ClosureEnvironment</strong></li>
+        <li class="fragment">Sibling closures from the same scope see each other's mutations</li>
+        <li class="fragment">Capture-by-reference &mdash; matches Python/JS semantics</li>
       </ul>
     </div>
     <div class="fragment">
@@ -1690,12 +1690,64 @@ p = Point(3, 4)
   </aside>
 </section>
 
-<!-- Slide 27: Testing -->
+<!-- Slide 27: Source Traceability -->
+<section>
+  <h2>Source Location Traceability</h2>
+  <p>Every IR instruction from deterministic frontends carries its originating AST span:</p>
+  <pre><code class="language-python">@dataclass
+class SourceLocation:
+    file: str
+    start_line: int
+    start_column: int
+    end_line: int
+    end_column: int
+
+class IRInstruction:
+    opcode: Opcode
+    ...
+    source_location: SourceLocation  # from tree-sitter AST node</code></pre>
+  <ul style="margin-top: 15px;">
+    <li class="fragment">Deterministic frontends &rarr; <strong class="accent2">precise spans</strong> from tree-sitter AST nodes</li>
+    <li class="fragment">LLM frontends &rarr; <code class="accent4">NO_SOURCE_LOCATION</code> (sentinel &mdash; no AST to reference)</li>
+    <li class="fragment">Enables <strong class="accent">IR &harr; source mapping</strong> for debugging, error reporting, and tooling</li>
+  </ul>
+</section>
+
+<!-- Slide 28: Composable API -->
+<section>
+  <h2>Composable API</h2>
+  <p class="small">All pipelines available as functions &mdash; no argparse required:</p>
+  <pre><code class="language-python">from interpreter import (
+    lower_source, dump_ir, build_cfg_from_source,
+    dump_cfg, dump_mermaid, ir_stats, execute_cfg,
+    extract_function_source,
+)
+
+instructions = lower_source(source, language="python")
+cfg_text     = dump_cfg(source, function_name="main")
+mermaid      = dump_mermaid(source, function_name="main")
+stats        = ir_stats(source)  # {"CONST": 3, "BINOP": 1, ...}
+vm, ex_stats = execute_cfg(cfg, "entry", registry, VMConfig())</code></pre>
+  <div class="fragment" style="margin-top: 15px;">
+    <table style="font-size: 0.7em;">
+      <tr><th>Function</th><th>Returns</th></tr>
+      <tr><td><code>lower_source()</code></td><td><code>list[IRInstruction]</code></td></tr>
+      <tr><td><code>dump_ir()</code> / <code>dump_cfg()</code> / <code>dump_mermaid()</code></td><td><code>str</code></td></tr>
+      <tr><td><code>build_cfg_from_source()</code></td><td><code>CFG</code></td></tr>
+      <tr><td><code>ir_stats()</code></td><td><code>dict[str, int]</code></td></tr>
+      <tr><td><code>execute_cfg()</code></td><td><code>(VMState, ExecutionStats)</code></td></tr>
+      <tr><td><code>extract_function_source()</code></td><td><code>str</code></td></tr>
+    </table>
+  </div>
+  <p class="fragment small dim" style="margin-top: 10px;">Functions compose hierarchically: <code>dump_cfg</code> &rarr; <code>build_cfg_from_source</code> &rarr; <code>lower_source</code></p>
+</section>
+
+<!-- Slide 29: Testing -->
 <section>
   <h2>Testing</h2>
   <div class="stats-grid" style="grid-template-columns: repeat(2, 1fr);">
     <div class="stat-card">
-      <div class="number">507</div>
+      <div class="number">1,214</div>
       <div class="label">test functions</div>
     </div>
     <div class="stat-card">
@@ -1706,7 +1758,7 @@ p = Point(3, 4)
   <ul style="margin-top: 20px;">
     <li class="fragment"><strong class="accent">pytest + fixtures</strong> for setup, <code>tmp_path</code> for filesystem tests</li>
     <li class="fragment"><strong class="accent2">Dependency injection</strong> with fake API clients &mdash; no <code>unittest.mock.patch</code></li>
-    <li class="fragment">Each language frontend has a <strong>dedicated test file</strong> (22 test files total)</li>
+    <li class="fragment">Each language frontend has a <strong>dedicated test file</strong> (29 test files total)</li>
     <li class="fragment">Integration tests use local repos (<code>~/code/mojo-lsp</code>, <code>~/code/smojol</code>)</li>
   </ul>
   <div class="fragment" style="margin-top: 20px;">
@@ -1728,7 +1780,7 @@ def test_symbolic_execution(tmp_path):
   <h2>By The Numbers</h2>
   <div class="stats-grid">
     <div class="stat-card">
-      <div class="number">~12.5K</div>
+      <div class="number">~24K</div>
       <div class="label">lines of code</div>
     </div>
     <div class="stat-card">
@@ -1740,7 +1792,7 @@ def test_symbolic_execution(tmp_path):
       <div class="label">language frontends</div>
     </div>
     <div class="stat-card">
-      <div class="number">526</div>
+      <div class="number">1,214</div>
       <div class="label">tests</div>
     </div>
     <div class="stat-card">
