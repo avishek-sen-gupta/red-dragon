@@ -3,7 +3,6 @@
 ## Workflow Rules
 
 - The workflow is Brainstorm -> Discuss Trade-offs of different designs -> Plan -> Write unit tests -> Implement -> Fix Tests -> Commit -> Refactor.
-- When writing tests, be thorough. Think of happy path scenarios first, then write code for that. Then write tests for edge cases, and modify the existing implementation to account for those. Don't try to do too much at any one time.
 - When brainstorming / planning, consider the follow parameters:
   - Whether there are any open source projects which perform similar functionality, so that you don't have to write new code for the task
   - The complexity of the implementation matters. Think of a good balance between absolute correctness and "good enough". If in doubt, prompt me for guidance.
@@ -13,8 +12,10 @@
 ## Project Context
 - Primary languages: Python (main codebase), TypeScript/JavaScript (tooling/web), Markdown (docs).
 - When editing Python, always run `black` formatting before committing. When test counts are mentioned (e.g., 'all 625 tests passing'), verify that count hasn't regressed.
+- When you are generating a new run, for every output directory, please attach time stamp and the technique used
 
 ## Common Mistakes to Avoid
+- When the user asks to run detection/analysis on a specific subdirectory or module (e.g., 'smojol-api'), scope the operation precisely to that directory. Do not run on the parent repo or broader scope unless explicitly asked.
 - When working with LLM API calls or external APIs, start with small test inputs before processing large datasets. Large inputs (e.g., full grammar files, large symbol sets) can overflow context windows or crash connections.
 
 ## Interaction Style
@@ -40,6 +41,7 @@
 
 - Use proper dependency injection for interfaces to external systems like Neo4J, OS, and File I/O. Do not hardcode importing the concrete modules in these cases. This applies especially to I/O or nondeterministic modules (eg: clock libraries, GUID libraries, etc.).
 - Minimise and/or avoid mutation.
+- STOP USING FOR LOOPS WITH MUTATIONS IN THEM. JUST STOP.
 - Write your code aggressively in the Functional Programming style, but balance it with readability. Avoid for loops where list comprehensions, map, filter, reduce, etc. can be used.
 - Minimise magic strings and numbers by refactoring them into constants
 - Don't expose raw global variables in files indiscriminately; wrap them as constants in classes, etc.
