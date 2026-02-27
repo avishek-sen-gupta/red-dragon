@@ -271,8 +271,9 @@ vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
 | `ir_stats(source, language, frontend_type, backend)` | `dict[str, int]` | Opcode frequency counts |
 | `extract_function_source(source, function_name, language)` | `str` | Raw source text of a named function (recursive AST walk) |
 | `execute_cfg(cfg, entry_point, registry, config)` | `(VMState, ExecutionStats)` | Execute a pre-built CFG from a given entry point |
+| `execute_traced(source, language, function_name, entry_point, frontend_type, backend, max_steps)` | `ExecutionTrace` | Parse → lower → CFG → execute with per-step VMState snapshots for replay |
 
-Functions compose hierarchically: `dump_ir` calls `lower_source`; `dump_cfg` and `dump_mermaid` call `build_cfg_from_source`, which calls `lower_source`. Full execution is available via `interpreter.run()`, or via `execute_cfg()` for standalone VM execution with a pre-built CFG.
+Functions compose hierarchically: `dump_ir` calls `lower_source`; `dump_cfg` and `dump_mermaid` call `build_cfg_from_source`, which calls `lower_source`. Full execution is available via `interpreter.run()`, via `execute_cfg()` for standalone VM execution with a pre-built CFG, or via `execute_traced()` for step-by-step replay with VMState snapshots at each instruction.
 
 ## Testing
 

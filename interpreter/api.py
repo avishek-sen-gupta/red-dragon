@@ -16,6 +16,10 @@ from .frontend import get_frontend
 from .ir import IRInstruction
 from .ir_stats import count_opcodes
 from .parser import Parser, TreeSitterParserFactory
+from .registry import build_registry
+from .run import execute_cfg_traced
+from .run_types import VMConfig
+from .trace_types import ExecutionTrace
 from . import constants
 
 logger = logging.getLogger(__name__)
@@ -176,6 +180,49 @@ def ir_stats(
     """
     instructions = lower_source(source, language, frontend_type, backend)
     return count_opcodes(instructions)
+
+
+def execute_traced(
+    source: str,
+    language: str = "python",
+    function_name: str = "",
+    entry_point: str = "",
+    frontend_type: str = constants.FRONTEND_DETERMINISTIC,
+    backend: str = "claude",
+    max_steps: int = 100,
+) -> ExecutionTrace:
+    """Parse, lower, build CFG, and execute with full trace recording.
+
+    Composes: lower_source → build_cfg_from_source → build_registry →
+    execute_cfg_traced.  Returns an ExecutionTrace containing per-step
+    VMState snapshots suitable for replay in a TUI.
+
+    Args:
+        source: The source code text.
+        language: Source language name (e.g. "python", "javascript").
+        function_name: If non-empty, scope CFG to this function.
+        entry_point: Entry point label or function name.
+        frontend_type: Frontend type.
+        backend: LLM provider name.
+        max_steps: Maximum interpretation steps.
+
+    Returns:
+        An ExecutionTrace with initial_state, steps, and stats.
+    """
+    logger.info(
+        "execute_traced: language=%s, function=%s, max_steps=%d",
+        language,
+        function_name,
+        max_steps,
+    )
+    instructions = lower_source(source, language, frontend_type, backend)
+    cfg = build_cfg_from_source(
+        source, language, frontend_type, backend, function_name=function_name
+    )
+    registry = build_registry(instructions, cfg)
+    config = VMConfig(backend=backend, max_steps=max_steps)
+    _vm, trace = execute_cfg_traced(cfg, entry_point, registry, config)
+    return trace
 
 
 def _find_function_node(node: Node, name: str) -> Optional[Node]:
