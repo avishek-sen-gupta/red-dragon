@@ -1,14 +1,22 @@
 """Shared helpers for the Rosetta cross-language test suite."""
 
+import logging
 import statistics
 
 import tree_sitter_language_pack
 
+from interpreter.cfg import build_cfg
 from interpreter.frontends import (
     get_deterministic_frontend,
     SUPPORTED_DETERMINISTIC_LANGUAGES,
 )
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.registry import build_registry
+from interpreter.run import execute_cfg
+from interpreter.run_types import ExecutionStats, VMConfig
+from interpreter.vm_types import VMState
+
+logger = logging.getLogger(__name__)
 
 
 def parse_for_language(language: str, source: str) -> list[IRInstruction]:
@@ -97,3 +105,96 @@ def assert_cross_language_consistency(
             f"[{lang}] instruction count {len(ir)} is {ratio:.1f}x median "
             f"({median_count:.0f}) — possible degenerate lowering"
         )
+
+
+# ---------------------------------------------------------------------------
+# VM execution helpers
+# ---------------------------------------------------------------------------
+
+# Languages excluded from all execution tests (structural barriers):
+#   Java, C#, Scala: `answer` inside class body, not reachable from top-level VM frame
+#   Go: `answer` inside `main()`, which isn't auto-called from `entry`
+#   Pascal: function-name return pattern produces SymbolicValue
+EXCLUDED_EXECUTION_LANGUAGES: frozenset[str] = frozenset(
+    {"java", "csharp", "scala", "go", "pascal"}
+)
+
+STANDARD_EXECUTABLE_LANGUAGES: frozenset[str] = frozenset(
+    {
+        "python",
+        "javascript",
+        "typescript",
+        "ruby",
+        "php",
+        "c",
+        "cpp",
+        "rust",
+        "kotlin",
+        "lua",
+    }
+)
+
+
+def execute_for_language(
+    language: str, source: str, max_steps: int = 2000
+) -> tuple[VMState, ExecutionStats]:
+    """Parse, lower, build CFG/registry, and execute IR through the VM.
+
+    Returns the final (VMState, ExecutionStats) pair.
+    """
+    logger.info("Executing %s program through VM (max_steps=%d)", language, max_steps)
+    instructions = parse_for_language(language, source)
+    cfg = build_cfg(instructions)
+    registry = build_registry(instructions, cfg)
+    config = VMConfig(max_steps=max_steps)
+    vm, stats = execute_cfg(cfg, "entry", registry, config)
+    logger.info(
+        "Execution complete for %s: %d steps, %d LLM calls",
+        language,
+        stats.steps,
+        stats.llm_calls,
+    )
+    return vm, stats
+
+
+def _var_name_for_language(var_name: str, language: str) -> str:
+    """Return the variable name as stored by the VM for a given language.
+
+    PHP variables are stored with their ``$`` prefix.
+    """
+    return f"${var_name}" if language == "php" else var_name
+
+
+def extract_answer(vm: VMState, language: str) -> object:
+    """Extract the ``answer`` variable from frame 0 locals."""
+    name = _var_name_for_language("answer", language)
+    frame = vm.call_stack[0]
+    assert name in frame.local_vars, (
+        f"[{language}] expected '{name}' in frame 0 locals, "
+        f"got: {sorted(frame.local_vars.keys())}"
+    )
+    return frame.local_vars[name]
+
+
+def extract_array(
+    vm: VMState, var_name: str, length: int, language: str
+) -> list[object]:
+    """Extract a heap-allocated array from frame 0 locals.
+
+    Returns a Python list of the first *length* indexed fields.
+    """
+    name = _var_name_for_language(var_name, language)
+    frame = vm.call_stack[0]
+    assert name in frame.local_vars, (
+        f"[{language}] expected '{name}' in frame 0 locals, "
+        f"got: {sorted(frame.local_vars.keys())}"
+    )
+    heap_addr = frame.local_vars[name]
+    assert heap_addr in vm.heap, (
+        f"[{language}] expected heap address '{heap_addr}' in heap, "
+        f"got: {sorted(vm.heap.keys())}"
+    )
+    obj = vm.heap[heap_addr]
+    # Lua uses 1-based indexing; detect by checking for key "0"
+    start_index = 0 if "0" in obj.fields else 1
+    return [obj.fields[str(start_index + i)] for i in range(length)]

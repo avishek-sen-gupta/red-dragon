@@ -11,6 +11,9 @@ from tests.unit.rosetta.conftest import (
     find_all,
     assert_clean_lowering,
     assert_cross_language_consistency,
+    execute_for_language,
+    extract_array,
+    STANDARD_EXECUTABLE_LANGUAGES,
 )
 
 # ---------------------------------------------------------------------------
@@ -390,3 +393,41 @@ class TestBubbleSortCrossLanguage:
         assert_cross_language_consistency(
             all_results, required_opcodes=REQUIRED_OPCODES
         )
+
+
+# ---------------------------------------------------------------------------
+# VM execution tests (parametrized over executable languages)
+# ---------------------------------------------------------------------------
+
+# Bubble sort executable set: languages where arr is at top-level scope
+# and accessible after execution. C/C++/Rust/Kotlin wrap logic in functions
+# not called from top level; Go/Java/C#/Scala inside main()/class.
+BUBBLE_SORT_EXECUTABLE_LANGUAGES: frozenset[str] = frozenset(
+    {"python", "javascript", "typescript", "ruby", "php", "lua"}
+)
+EXPECTED_SORTED_ARRAY = [1, 2, 3, 5, 8]
+
+
+class TestBubbleSortExecution:
+    @pytest.fixture(
+        params=sorted(BUBBLE_SORT_EXECUTABLE_LANGUAGES),
+        ids=lambda lang: lang,
+        scope="class",
+    )
+    def execution_result(self, request):
+        lang = request.param
+        vm, stats = execute_for_language(lang, PROGRAMS[lang], max_steps=5000)
+        return lang, vm, stats
+
+    def test_correct_result(self, execution_result):
+        lang, vm, _stats = execution_result
+        arr = extract_array(vm, "arr", 5, lang)
+        assert (
+            arr == EXPECTED_SORTED_ARRAY
+        ), f"[{lang}] expected sorted array={EXPECTED_SORTED_ARRAY}, got {arr}"
+
+    def test_zero_llm_calls(self, execution_result):
+        lang, _vm, stats = execution_result
+        assert (
+            stats.llm_calls == 0
+        ), f"[{lang}] expected 0 LLM calls, got {stats.llm_calls}"
