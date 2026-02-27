@@ -34,6 +34,11 @@ flowchart TD
 
 For programs with concrete inputs and no external dependencies, the entire execution is **deterministic with 0 LLM calls**.
 
+### Execution replay in Rev-Eng TUI
+
+![Execute Screen](docs/screenshots/execute-screen.png)
+> Step-by-step execution replay via [Rev-Eng TUI](https://github.com/avishek-sen-gupta/reddragon-codescry-tui) — IR with current instruction highlighted, Frame (registers + locals) and Heap (objects + path conditions) in side-by-side panes.
+
 ## Setup
 
 Requires Python >= 3.10 and [Poetry](https://python-poetry.org/).
