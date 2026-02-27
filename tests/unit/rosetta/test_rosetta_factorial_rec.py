@@ -11,6 +11,9 @@ from tests.unit.rosetta.conftest import (
     find_all,
     assert_clean_lowering,
     assert_cross_language_consistency,
+    execute_for_language,
+    extract_answer,
+    STANDARD_EXECUTABLE_LANGUAGES,
 )
 
 # ---------------------------------------------------------------------------
@@ -243,3 +246,34 @@ class TestFactorialRecCrossLanguage:
         assert_cross_language_consistency(
             all_results, required_opcodes=REQUIRED_OPCODES
         )
+
+
+# ---------------------------------------------------------------------------
+# VM execution tests (parametrized over executable languages)
+# ---------------------------------------------------------------------------
+
+EXECUTABLE_LANGUAGES: frozenset[str] = STANDARD_EXECUTABLE_LANGUAGES
+EXPECTED_ANSWER = 120  # 5! via recursion
+
+
+class TestFactorialRecExecution:
+    @pytest.fixture(
+        params=sorted(EXECUTABLE_LANGUAGES), ids=lambda lang: lang, scope="class"
+    )
+    def execution_result(self, request):
+        lang = request.param
+        vm, stats = execute_for_language(lang, PROGRAMS[lang])
+        return lang, vm, stats
+
+    def test_correct_result(self, execution_result):
+        lang, vm, _stats = execution_result
+        answer = extract_answer(vm, lang)
+        assert (
+            answer == EXPECTED_ANSWER
+        ), f"[{lang}] expected answer={EXPECTED_ANSWER}, got {answer}"
+
+    def test_zero_llm_calls(self, execution_result):
+        lang, _vm, stats = execution_result
+        assert (
+            stats.llm_calls == 0
+        ), f"[{lang}] expected 0 LLM calls, got {stats.llm_calls}"
