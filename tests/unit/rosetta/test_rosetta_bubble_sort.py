@@ -329,51 +329,10 @@ REQUIRED_OPCODES: set[Opcode] = {
     Opcode.BRANCH_IF,
 }
 
-# STORE_INDEX and LOAD_INDEX are the distinguishing opcodes for bubble sort
-# (array element access).  However, several frontends have partial support:
-#   - cpp:    STORE_INDEX only (subscript_expression reads not lowered)
-#   - csharp: both present but bracketed_argument_list produces unsupported SYMBOLIC
-#   - kotlin: LOAD_INDEX only (indexing assignment not lowered to STORE_INDEX)
-#   - pascal: LOAD_INDEX only (subscript assignment not lowered to STORE_INDEX)
-#   - ruby:   STORE_INDEX only (element_reference reads not lowered)
-#   - scala:  neither (arr(j) syntax parsed as call_expression)
-# We test index operations only for languages whose frontends support them.
-
-LANGUAGES_WITH_STORE_INDEX: set[str] = {
-    "python",
-    "javascript",
-    "typescript",
-    "java",
-    "go",
-    "php",
-    "c",
-    "cpp",
-    "rust",
-    "lua",
-    "ruby",
-    "csharp",
-}
-
-LANGUAGES_WITH_LOAD_INDEX: set[str] = {
-    "python",
-    "javascript",
-    "typescript",
-    "java",
-    "go",
-    "php",
-    "c",
-    "rust",
-    "lua",
-    "kotlin",
-    "pascal",
-    "csharp",
-}
-
-# Languages that have zero unsupported SYMBOLIC nodes.
-# csharp emits unsupported:bracketed_argument_list; ruby emits
-# unsupported:element_reference.  We skip the zero-unsupported check for them
-# and instead run a relaxed lowering assertion.
-LANGUAGES_WITH_UNSUPPORTED_SYMBOLICS: set[str] = {"csharp", "ruby"}
+# STORE_INDEX and LOAD_INDEX are required for all languages except Scala.
+# Scala's arr(j) syntax is indistinguishable from a method call without
+# type inference, so it uses CALL_FUNCTION instead of index operations.
+LANGUAGES_WITHOUT_INDEX_OPS: set[str] = {"scala"}
 
 MIN_INSTRUCTIONS = 15
 
@@ -393,40 +352,25 @@ class TestBubbleSortLowering:
     def test_clean_lowering(self, language_ir):
         """Verify entry label, min instructions, required opcodes, and no unsupported symbolics."""
         lang, ir = language_ir
-        if lang in LANGUAGES_WITH_UNSUPPORTED_SYMBOLICS:
-            # These languages have known unsupported SYMBOLIC nodes from
-            # partial subscript support.  We still check label, count, and
-            # required opcodes, but skip the zero-unsupported assertion.
-            assert (
-                ir[0].opcode == Opcode.LABEL
-            ), f"[{lang}] first instruction must be LABEL"
-            assert ir[0].label == "entry", f"[{lang}] first label must be 'entry'"
-            assert (
-                len(ir) >= MIN_INSTRUCTIONS
-            ), f"[{lang}] expected >= {MIN_INSTRUCTIONS} instructions, got {len(ir)}"
-            present = opcodes(ir)
-            missing = REQUIRED_OPCODES - present
-            assert not missing, f"[{lang}] missing required opcodes: {missing}"
-        else:
-            assert_clean_lowering(
-                ir,
-                min_instructions=MIN_INSTRUCTIONS,
-                required_opcodes=REQUIRED_OPCODES,
-                language=lang,
-            )
+        assert_clean_lowering(
+            ir,
+            min_instructions=MIN_INSTRUCTIONS,
+            required_opcodes=REQUIRED_OPCODES,
+            language=lang,
+        )
 
     def test_index_operations_present(self, language_ir):
-        """Verify STORE_INDEX and LOAD_INDEX for languages whose frontends support them."""
+        """Verify STORE_INDEX and LOAD_INDEX for all languages except Scala."""
         lang, ir = language_ir
+        if lang in LANGUAGES_WITHOUT_INDEX_OPS:
+            return
         present = opcodes(ir)
-        if lang in LANGUAGES_WITH_STORE_INDEX:
-            assert (
-                Opcode.STORE_INDEX in present
-            ), f"[{lang}] expected STORE_INDEX in opcodes: {present}"
-        if lang in LANGUAGES_WITH_LOAD_INDEX:
-            assert (
-                Opcode.LOAD_INDEX in present
-            ), f"[{lang}] expected LOAD_INDEX in opcodes: {present}"
+        assert (
+            Opcode.STORE_INDEX in present
+        ), f"[{lang}] expected STORE_INDEX in opcodes: {present}"
+        assert (
+            Opcode.LOAD_INDEX in present
+        ), f"[{lang}] expected LOAD_INDEX in opcodes: {present}"
 
 
 # ---------------------------------------------------------------------------

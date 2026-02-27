@@ -189,7 +189,7 @@ class PascalFrontend(BaseFrontend):
     # -- Pascal: assignment (identifier := expression) -----------------------------
 
     def _lower_pascal_assignment(self, node):
-        """Lower assignment — children: identifier, kAssign, expression."""
+        """Lower assignment — children: target, kAssign, expression."""
         named_children = [
             c for c in node.children if c.is_named and c.type not in _KEYWORD_NOISE
         ]
@@ -202,11 +202,47 @@ class PascalFrontend(BaseFrontend):
         target = named_children[0]
         value = named_children[-1]
         val_reg = self._lower_expr(value)
-        self._emit(
-            Opcode.STORE_VAR,
-            operands=[self._node_text(target), val_reg],
-            node=node,
-        )
+        if target.type == "exprSubscript":
+            target_named = [
+                c
+                for c in target.children
+                if c.is_named and c.type not in _KEYWORD_NOISE
+            ]
+            if target_named:
+                obj_reg = self._lower_expr(target_named[0])
+                args_node = next(
+                    (c for c in target.children if c.type == "exprArgs"), None
+                )
+                if args_node:
+                    idx_children = [
+                        c
+                        for c in args_node.children
+                        if c.is_named and c.type not in _KEYWORD_NOISE
+                    ]
+                    idx_reg = (
+                        self._lower_expr(idx_children[0])
+                        if idx_children
+                        else self._fresh_reg()
+                    )
+                else:
+                    idx_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.STORE_INDEX,
+                    operands=[obj_reg, idx_reg, val_reg],
+                    node=node,
+                )
+            else:
+                self._emit(
+                    Opcode.STORE_VAR,
+                    operands=[self._node_text(target), val_reg],
+                    node=node,
+                )
+        else:
+            self._emit(
+                Opcode.STORE_VAR,
+                operands=[self._node_text(target), val_reg],
+                node=node,
+            )
 
     # -- Pascal: binary expression -------------------------------------------------
 
