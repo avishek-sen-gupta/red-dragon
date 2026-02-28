@@ -112,12 +112,9 @@ def assert_cross_language_consistency(
 # ---------------------------------------------------------------------------
 
 # Languages excluded from all execution tests (structural barriers):
-#   Java, C#, Scala: `answer` inside class body, not reachable from top-level VM frame
 #   Go: `answer` inside `main()`, which isn't auto-called from `entry`
 #   Pascal: function-name return pattern produces SymbolicValue
-EXCLUDED_EXECUTION_LANGUAGES: frozenset[str] = frozenset(
-    {"java", "csharp", "scala", "go", "pascal"}
-)
+EXCLUDED_EXECUTION_LANGUAGES: frozenset[str] = frozenset({"go", "pascal"})
 
 STANDARD_EXECUTABLE_LANGUAGES: frozenset[str] = frozenset(
     {
@@ -131,6 +128,9 @@ STANDARD_EXECUTABLE_LANGUAGES: frozenset[str] = frozenset(
         "rust",
         "kotlin",
         "lua",
+        "java",
+        "csharp",
+        "scala",
     }
 )
 

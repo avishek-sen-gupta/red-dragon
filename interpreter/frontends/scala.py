@@ -402,6 +402,8 @@ class ScalaFrontend(BaseFrontend):
 
     # -- class definition --------------------------------------------------
 
+    _CLASS_BODY_FUNC_TYPES = frozenset({"function_definition"})
+
     def _lower_class_def(self, node):
         name_node = node.child_by_field_name("name")
         body_node = node.child_by_field_name("body")
@@ -412,8 +414,6 @@ class ScalaFrontend(BaseFrontend):
 
         self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
-        if body_node:
-            self._lower_block(body_node)
         self._emit(Opcode.LABEL, label=end_label)
 
         cls_reg = self._fresh_reg()
@@ -425,6 +425,9 @@ class ScalaFrontend(BaseFrontend):
             ],
         )
         self._emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+
+        if body_node:
+            self._lower_class_body_hoisted(body_node)
 
     # -- object definition (singleton) -------------------------------------
 
@@ -438,8 +441,6 @@ class ScalaFrontend(BaseFrontend):
 
         self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
-        if body_node:
-            self._lower_block(body_node)
         self._emit(Opcode.LABEL, label=end_label)
 
         cls_reg = self._fresh_reg()
@@ -451,6 +452,29 @@ class ScalaFrontend(BaseFrontend):
             ],
         )
         self._emit(Opcode.STORE_VAR, operands=[obj_name, cls_reg])
+
+        if body_node:
+            self._lower_class_body_hoisted(body_node)
+
+    def _lower_class_body_hoisted(self, node):
+        """Hoist all class-body children to top level.
+
+        Emits function definitions first (so their refs are registered),
+        then field initializers and other statements.
+        """
+        children = [
+            c
+            for c in node.children
+            if c.is_named
+            and c.type not in self.COMMENT_TYPES
+            and c.type not in self.NOISE_TYPES
+        ]
+        functions = [c for c in children if c.type in self._CLASS_BODY_FUNC_TYPES]
+        rest = [c for c in children if c.type not in self._CLASS_BODY_FUNC_TYPES]
+        for child in functions:
+            self._lower_function_def(child)
+        for child in rest:
+            self._lower_stmt(child)
 
     # -- return expression -------------------------------------------------
 
