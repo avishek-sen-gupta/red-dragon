@@ -49,7 +49,7 @@ class TestJavaVariables:
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("null" in inst.operands for inst in consts)
+        assert any("None" in inst.operands for inst in consts)
 
     def test_assignment_expression(self):
         instructions = _parse_java("class M { void m() { int x; x = 5; } }")

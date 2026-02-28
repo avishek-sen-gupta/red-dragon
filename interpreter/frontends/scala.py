@@ -15,9 +15,6 @@ logger = logging.getLogger(__name__)
 class ScalaFrontend(BaseFrontend):
     """Lowers a Scala tree-sitter AST into flattened TAC IR."""
 
-    NONE_LITERAL = "null"
-    TRUE_LITERAL = "true"
-    FALSE_LITERAL = "false"
     DEFAULT_RETURN_VALUE = "()"
 
     CALL_FUNCTION_FIELD = "function"
@@ -42,8 +39,8 @@ class ScalaFrontend(BaseFrontend):
             "integer_literal": self._lower_const_literal,
             "floating_point_literal": self._lower_const_literal,
             "string": self._lower_const_literal,
-            "boolean_literal": self._lower_const_literal,
-            "null_literal": self._lower_const_literal,
+            "boolean_literal": self._lower_canonical_bool,
+            "null_literal": self._lower_canonical_none,
             "unit": self._lower_const_literal,
             "infix_expression": self._lower_binop,
             "prefix_expression": self._lower_unop,

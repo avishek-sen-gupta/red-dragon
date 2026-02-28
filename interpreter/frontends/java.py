@@ -12,11 +12,6 @@ from .. import constants
 class JavaFrontend(BaseFrontend):
     """Lowers a Java tree-sitter AST into flattened TAC IR."""
 
-    NONE_LITERAL = "null"
-    TRUE_LITERAL = "true"
-    FALSE_LITERAL = "false"
-    DEFAULT_RETURN_VALUE = "null"
-
     ATTRIBUTE_NODE_TYPE = "field_access"
     ATTR_OBJECT_FIELD = "object"
     ATTR_ATTRIBUTE_FIELD = "field"
@@ -35,9 +30,9 @@ class JavaFrontend(BaseFrontend):
             "decimal_floating_point_literal": self._lower_const_literal,
             "string_literal": self._lower_const_literal,
             "character_literal": self._lower_const_literal,
-            "true": self._lower_const_literal,
-            "false": self._lower_const_literal,
-            "null_literal": self._lower_const_literal,
+            "true": self._lower_canonical_true,
+            "false": self._lower_canonical_false,
+            "null_literal": self._lower_canonical_none,
             "this": self._lower_identifier,
             "binary_expression": self._lower_binop,
             "unary_expression": self._lower_unop,

@@ -150,7 +150,7 @@ class TestKotlinExpressions:
     def test_null_literal(self):
         instructions = _parse_kotlin("fun main() { val n = null }")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("null" in inst.operands for inst in consts)
+        assert any("None" in inst.operands for inst in consts)
 
 
 class TestKotlinSpecial:

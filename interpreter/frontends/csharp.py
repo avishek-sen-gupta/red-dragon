@@ -15,11 +15,6 @@ logger = logging.getLogger(__name__)
 class CSharpFrontend(BaseFrontend):
     """Lowers a C# tree-sitter AST into flattened TAC IR."""
 
-    NONE_LITERAL = "null"
-    TRUE_LITERAL = "true"
-    FALSE_LITERAL = "false"
-    DEFAULT_RETURN_VALUE = "null"
-
     ATTRIBUTE_NODE_TYPE = "member_access_expression"
     ATTR_OBJECT_FIELD = "expression"
     ATTR_ATTRIBUTE_FIELD = "name"
@@ -37,8 +32,8 @@ class CSharpFrontend(BaseFrontend):
             "real_literal": self._lower_const_literal,
             "string_literal": self._lower_const_literal,
             "character_literal": self._lower_const_literal,
-            "boolean_literal": self._lower_const_literal,
-            "null_literal": self._lower_const_literal,
+            "boolean_literal": self._lower_canonical_bool,
+            "null_literal": self._lower_canonical_none,
             "this_expression": self._lower_identifier,
             "binary_expression": self._lower_binop,
             "prefix_unary_expression": self._lower_unop,

@@ -15,11 +15,6 @@ logger = logging.getLogger(__name__)
 class LuaFrontend(BaseFrontend):
     """Lowers a Lua tree-sitter AST into flattened TAC IR."""
 
-    NONE_LITERAL = "nil"
-    TRUE_LITERAL = "true"
-    FALSE_LITERAL = "false"
-    DEFAULT_RETURN_VALUE = "nil"
-
     FUNC_NAME_FIELD = "name"
     FUNC_PARAMS_FIELD = "parameters"
     FUNC_BODY_FIELD = "body"
@@ -48,9 +43,9 @@ class LuaFrontend(BaseFrontend):
             "identifier": self._lower_identifier,
             "number": self._lower_const_literal,
             "string": self._lower_const_literal,
-            "true": self._lower_const_literal,
-            "false": self._lower_const_literal,
-            "nil": self._lower_const_literal,
+            "true": self._lower_canonical_true,
+            "false": self._lower_canonical_false,
+            "nil": self._lower_canonical_none,
             "binary_expression": self._lower_binop,
             "unary_expression": self._lower_unop,
             "parenthesized_expression": self._lower_paren,

@@ -163,7 +163,7 @@ class TestScalaExpressions:
     def test_boolean_literal(self):
         instructions = _parse_scala("object M { val b = true }")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("true" in inst.operands for inst in consts)
+        assert any("True" in inst.operands for inst in consts)
 
 
 class TestScalaSpecial:
@@ -199,7 +199,7 @@ class TestScalaSpecial:
     def test_null_literal(self):
         instructions = _parse_scala("object M { val n = null }")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("null" in inst.operands for inst in consts)
+        assert any("None" in inst.operands for inst in consts)
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:

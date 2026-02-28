@@ -15,11 +15,6 @@ logger = logging.getLogger(__name__)
 class KotlinFrontend(BaseFrontend):
     """Lowers a Kotlin tree-sitter AST into flattened TAC IR."""
 
-    NONE_LITERAL = "null"
-    TRUE_LITERAL = "true"
-    FALSE_LITERAL = "false"
-    DEFAULT_RETURN_VALUE = "null"
-
     COMMENT_TYPES = frozenset({"comment", "multiline_comment"})
     NOISE_TYPES = frozenset({"\n"})
 
@@ -31,8 +26,8 @@ class KotlinFrontend(BaseFrontend):
             "long_literal": self._lower_const_literal,
             "real_literal": self._lower_const_literal,
             "string_literal": self._lower_const_literal,
-            "boolean_literal": self._lower_const_literal,
-            "null_literal": self._lower_const_literal,
+            "boolean_literal": self._lower_canonical_bool,
+            "null_literal": self._lower_canonical_none,
             "additive_expression": self._lower_binop,
             "multiplicative_expression": self._lower_binop,
             "comparison_expression": self._lower_binop,

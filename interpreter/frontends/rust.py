@@ -15,9 +15,6 @@ logger = logging.getLogger(__name__)
 class RustFrontend(BaseFrontend):
     """Lowers a Rust tree-sitter AST into flattened TAC IR."""
 
-    NONE_LITERAL = "()"
-    TRUE_LITERAL = "true"
-    FALSE_LITERAL = "false"
     DEFAULT_RETURN_VALUE = "()"
 
     ATTRIBUTE_NODE_TYPE = "field_expression"
@@ -43,9 +40,9 @@ class RustFrontend(BaseFrontend):
             "float_literal": self._lower_const_literal,
             "string_literal": self._lower_const_literal,
             "char_literal": self._lower_const_literal,
-            "boolean_literal": self._lower_const_literal,
-            "true": self._lower_const_literal,
-            "false": self._lower_const_literal,
+            "boolean_literal": self._lower_canonical_bool,
+            "true": self._lower_canonical_true,
+            "false": self._lower_canonical_false,
             "binary_expression": self._lower_binop,
             "unary_expression": self._lower_unop,
             "parenthesized_expression": self._lower_paren,

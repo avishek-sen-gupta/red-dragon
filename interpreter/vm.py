@@ -118,11 +118,11 @@ def _resolve_reg(vm: VMState, operand: str) -> Any:
 
 def _parse_const(raw: str) -> Any:
     """Parse a constant literal string into a Python value."""
-    if raw in ("None", "null"):
+    if raw == "None":
         return None
-    if raw in ("True", "true"):
+    if raw == "True":
         return True
-    if raw in ("False", "false"):
+    if raw == "False":
         return False
     try:
         return int(raw)

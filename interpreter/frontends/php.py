@@ -15,11 +15,6 @@ logger = logging.getLogger(__name__)
 class PhpFrontend(BaseFrontend):
     """Lowers a PHP tree-sitter AST into flattened TAC IR."""
 
-    NONE_LITERAL = "null"
-    TRUE_LITERAL = "true"
-    FALSE_LITERAL = "false"
-    DEFAULT_RETURN_VALUE = "null"
-
     ATTRIBUTE_NODE_TYPE = "member_access_expression"
     ATTR_OBJECT_FIELD = "object"
     ATTR_ATTRIBUTE_FIELD = "name"
@@ -36,8 +31,8 @@ class PhpFrontend(BaseFrontend):
             "float": self._lower_const_literal,
             "string": self._lower_const_literal,
             "encapsed_string": self._lower_const_literal,
-            "boolean": self._lower_const_literal,
-            "null": self._lower_const_literal,
+            "boolean": self._lower_canonical_bool,
+            "null": self._lower_canonical_none,
             "binary_expression": self._lower_binop,
             "unary_op_expression": self._lower_unop,
             "update_expression": self._lower_update_expr,

@@ -12,11 +12,6 @@ from .. import constants
 class PythonFrontend(BaseFrontend):
     """Lowers a Python tree-sitter AST into flattened TAC IR."""
 
-    NONE_LITERAL = "None"
-    TRUE_LITERAL = "True"
-    FALSE_LITERAL = "False"
-    DEFAULT_RETURN_VALUE = "None"
-
     PAREN_EXPR_TYPE = "parenthesized_expression"
     ATTRIBUTE_NODE_TYPE = "attribute"
 
@@ -34,9 +29,9 @@ class PythonFrontend(BaseFrontend):
             "float": self._lower_const_literal,
             "string": self._lower_const_literal,
             "concatenated_string": self._lower_const_literal,
-            "true": self._lower_const_literal,
-            "false": self._lower_const_literal,
-            "none": self._lower_const_literal,
+            "true": self._lower_canonical_true,
+            "false": self._lower_canonical_false,
+            "none": self._lower_canonical_none,
             "binary_operator": self._lower_binop,
             "boolean_operator": self._lower_binop,
             "comparison_operator": self._lower_comparison,

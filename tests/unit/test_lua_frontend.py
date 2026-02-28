@@ -65,7 +65,7 @@ class TestLuaLocalVariables:
         assert Opcode.CONST in opcodes
         assert Opcode.STORE_VAR in opcodes
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("nil" in inst.operands for inst in consts)
+        assert any("None" in inst.operands for inst in consts)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
 
@@ -93,17 +93,17 @@ class TestLuaExpressions:
     def test_nil_literal(self):
         instructions = _parse_lua("local x = nil")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("nil" in inst.operands for inst in consts)
+        assert any("None" in inst.operands for inst in consts)
 
     def test_boolean_true(self):
         instructions = _parse_lua("local x = true")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("true" in inst.operands for inst in consts)
+        assert any("True" in inst.operands for inst in consts)
 
     def test_boolean_false(self):
         instructions = _parse_lua("local x = false")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("false" in inst.operands for inst in consts)
+        assert any("False" in inst.operands for inst in consts)
 
 
 class TestLuaOperators:
@@ -171,7 +171,7 @@ class TestLuaFunctions:
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 1
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("nil" in inst.operands for inst in consts)
+        assert any("None" in inst.operands for inst in consts)
 
 
 class TestLuaTableAccess:

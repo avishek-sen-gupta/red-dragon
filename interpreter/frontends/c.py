@@ -30,9 +30,6 @@ PREPROC_NOISE_TYPES = frozenset(
 class CFrontend(BaseFrontend):
     """Lowers a C tree-sitter AST into flattened TAC IR."""
 
-    NONE_LITERAL = "NULL"
-    TRUE_LITERAL = "true"
-    FALSE_LITERAL = "false"
     DEFAULT_RETURN_VALUE = "0"
 
     ATTR_OBJECT_FIELD = "argument"
@@ -54,9 +51,9 @@ class CFrontend(BaseFrontend):
             "number_literal": self._lower_const_literal,
             "string_literal": self._lower_const_literal,
             "char_literal": self._lower_const_literal,
-            "true": self._lower_const_literal,
-            "false": self._lower_const_literal,
-            "null": self._lower_const_literal,
+            "true": self._lower_canonical_true,
+            "false": self._lower_canonical_false,
+            "null": self._lower_canonical_none,
             "binary_expression": self._lower_binop,
             "unary_expression": self._lower_unop,
             "update_expression": self._lower_update_expr,
