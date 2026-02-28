@@ -112,7 +112,7 @@ Control flow constructs (if/else, while, for, for-of/foreach, switch, break/cont
 
 </details>
 
-All constructs above produce real IR for proper data-flow analysis. All 15 frontends have **zero unsupported SYMBOLIC instructions** on the audit test suite. For unlisted languages, use `--frontend llm`.
+All constructs above produce real IR for proper data-flow analysis. All 15 frontends have **zero unsupported SYMBOLIC instructions** on the two-pass audit suite (`scripts/audit_all_frontends.py`), which combines dispatch-table coverage analysis (comparing AST node types against frontend dispatch tables with automatic structural/substantive classification) and runtime SYMBOLIC detection. For unlisted languages, use `--frontend llm`.
 
 ## Example: CFG
 
