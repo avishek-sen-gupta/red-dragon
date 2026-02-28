@@ -37,6 +37,7 @@ class RubyFrontend(BaseFrontend):
             "binary": self._lower_binop,
             "call": self._lower_ruby_call,
             "parenthesized_expression": self._lower_paren,
+            "parenthesized_statements": self._lower_paren,
             "array": self._lower_list_literal,
             "hash": self._lower_ruby_hash,
             "argument_list": self._lower_ruby_argument_list,

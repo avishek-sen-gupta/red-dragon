@@ -21,8 +21,7 @@ def space_age(planet, seconds)
     if planet == "Neptune"
         ratio = 164.79132
     end
-    divisor = 31557600.0 * ratio
-    return seconds / divisor
+    return seconds / (31557600.0 * ratio)
 end
 
 answer = space_age("Earth", 1000000000)
