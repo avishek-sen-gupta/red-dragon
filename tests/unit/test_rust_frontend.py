@@ -620,3 +620,23 @@ class TestRustDestructuring:
         assert "y" in store_names
         load_fields = _find_all(instructions, Opcode.LOAD_FIELD)
         assert len(load_fields) >= 2
+
+
+class TestRustRangeExpression:
+    def test_range_expression_basic(self):
+        instructions = _parse_rust("fn main() { let r = 0..10; }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("range" in inst.operands for inst in calls)
+        # No SYMBOLIC fallback
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("range_expression" in str(inst.operands) for inst in symbolics)
+
+    def test_range_inclusive(self):
+        instructions = _parse_rust("fn main() { let r = 0..=10; }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("range" in inst.operands for inst in calls)
+
+    def test_range_in_for_loop(self):
+        instructions = _parse_rust("fn main() { for i in 0..n {} }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("range" in inst.operands for inst in calls)

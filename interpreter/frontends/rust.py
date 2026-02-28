@@ -66,7 +66,7 @@ class RustFrontend(BaseFrontend):
             "tuple_expression": self._lower_tuple_expr,
             "else_clause": self._lower_else_clause,
             "expression_statement": self._lower_expr_stmt_as_expr,
-            "range_expression": self._lower_symbolic_node,
+            "range_expression": self._lower_range_expr,
             "try_expression": self._lower_try_expr,
             "await_expression": self._lower_await_expr,
             "async_block": self._lower_block_expr,
@@ -960,6 +960,22 @@ class RustFrontend(BaseFrontend):
             Opcode.LOAD_VAR,
             result_reg=reg,
             operands=[full_name],
+            node=node,
+        )
+        return reg
+
+    # -- range expression --------------------------------------------------
+
+    def _lower_range_expr(self, node) -> str:
+        """Lower `0..10` or `0..=10` as CALL_FUNCTION("range", start, end)."""
+        named = [c for c in node.children if c.is_named]
+        start_reg = self._lower_expr(named[0]) if len(named) > 0 else self._fresh_reg()
+        end_reg = self._lower_expr(named[1]) if len(named) > 1 else self._fresh_reg()
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["range", start_reg, end_reg],
             node=node,
         )
         return reg
