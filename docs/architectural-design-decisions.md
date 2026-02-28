@@ -224,4 +224,13 @@ This document captures key architectural decisions made during the development o
 3. **Property-to-function mapping** — For multi-function exercises (difference-of-squares), canonical property names map to language-appropriate function names, with a `default_function_name` parameter enabling function name substitution.
 4. **Reuse Rosetta conftest** — All shared helpers (`parse_for_language`, `execute_for_language`, `extract_answer`, `assert_clean_lowering`, `assert_cross_language_consistency`) are imported from the Rosetta conftest.
 
-**Consequences:** 711 additional tests from 3 exercises (leap, collatz-conjecture, difference-of-squares) across 15 languages. Each exercise tests IR lowering quality, cross-language consistency, and VM execution correctness for every canonical test case. The file-based approach scales to additional exercises without growing test file size. The `exercism_harvest.py` script automates fetching new canonical data.
+**Consequences:** 711 additional tests from 3 exercises across 15 languages:
+
+| Exercise | Constructs tested | Cases | Lowering | Cross-lang | Execution | Total |
+|----------|-------------------|-------|----------|------------|-----------|-------|
+| leap | modulo, boolean logic, short-circuit eval | 9 | 15 | 2 | 270 | 287 |
+| collatz-conjecture | while loop, conditional, integer division | 4 | 15 | 2 | 120 | 137 |
+| difference-of-squares | while loop, accumulator, function composition | 9 | 15 | 2 | 270 | 287 |
+| **Total** | | **22** | **45** | **6** | **660** | **711** |
+
+Each exercise tests IR lowering quality, cross-language consistency, and VM execution correctness for every canonical test case. The file-based approach scales to additional exercises without growing test file size. The `exercism_harvest.py` script automates fetching new canonical data. Combined with Rosetta, the full suite reaches 2412 tests.
