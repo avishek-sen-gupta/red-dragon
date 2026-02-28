@@ -159,6 +159,30 @@ class SourceLocation(BaseModel):
 
 LLM-generated instructions use `NO_SOURCE_LOCATION` (all zeros).
 
+### Canonical literal constants
+
+All frontends emit **canonical Python-form literals** in `CONST` operands. Language-native null/boolean forms are canonicalized at lowering time so the VM handles a single set:
+
+| Canonical IR form | Language-native forms canonicalized |
+|---|---|
+| `"None"` | `nil` (Lua, Go, Ruby, Pascal), `null` (Java, Kotlin, C#, PHP, Scala), `undefined` (JS/TS), `NULL` (C), `nullptr` (C++) |
+| `"True"` | `true` (all languages) |
+| `"False"` | `false` (all languages) |
+
+This is implemented via `_lower_canonical_none()`, `_lower_canonical_true()`, `_lower_canonical_false()`, and `_lower_canonical_bool()` methods on `BaseFrontend` (`interpreter/frontends/_base.py:200`). Each frontend's expression dispatch table maps its language-specific null/boolean node types (e.g., `"nil"`, `"null_literal"`, `"boolean_literal"`, `"kTrue"`) to these canonical lowering methods instead of the raw `_lower_const_literal()`.
+
+The VM's `_parse_const()` (`interpreter/vm.py:119`) then only needs to recognize the three canonical forms:
+
+```python
+def _parse_const(raw: str) -> Any:
+    if raw == "None":   return None
+    if raw == "True":   return True
+    if raw == "False":  return False
+    # ... int/float/string parsing unchanged
+```
+
+**Key design choice**: canonicalization happens in the **frontend** (at lowering time), not in the VM. This keeps the VM simple and ensures the IR itself is language-agnostic — inspecting a `CONST` operand never reveals which source language it came from. Language-specific `DEFAULT_RETURN_VALUE` overrides are preserved where they represent unit types (`"()"` for Rust/Scala, `"0"` for C) rather than null.
+
 ### Example IR
 
 For `x = 2 + 3`:
@@ -1028,7 +1052,7 @@ Result: total depends on {subtotal, tax, price, quantity}  (transitive)
 interpreter/
 ├── ir.py                    IR instruction format, Opcode enum, SourceLocation
 ├── vm_types.py              VM data types (SymbolicValue, HeapObject, VMState, StateUpdate, ...)
-├── vm.py                    apply_update(), helpers (Operators, _parse_const, _resolve_reg, ...)
+├── vm.py                    apply_update(), helpers (Operators, _parse_const [canonical forms only], _resolve_reg, ...)
 ├── cfg_types.py             BasicBlock, CFG
 ├── cfg.py                   build_cfg(), cfg_to_mermaid(), extract_function_instructions()
 ├── run_types.py             VMConfig, ExecutionStats, PipelineStats
