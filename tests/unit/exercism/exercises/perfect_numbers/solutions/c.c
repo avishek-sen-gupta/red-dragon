@@ -1,0 +1,19 @@
+char* classify(int n) {
+    int total = 0;
+    int i = 1;
+    while (i < n) {
+        if (n % i == 0) {
+            total = total + i;
+        }
+        i = i + 1;
+    }
+    if (total == n) {
+        return "perfect";
+    }
+    if (total > n) {
+        return "abundant";
+    }
+    return "deficient";
+}
+
+char* answer = classify(6);

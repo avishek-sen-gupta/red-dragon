@@ -263,3 +263,32 @@ Three VM/infrastructure prerequisites were needed:
 | **Total** | | **30** | **75** | **10** | **900** | **985** |
 
 Combined with Rosetta, the full suite reaches 2686 tests.
+
+---
+
+### ADR-024: Expand Exercism suite with reverse-string, rna-transcription, and perfect-numbers (2026-02-28)
+
+**Context:** The Exercism suite covered 5 exercises (985 tests) focusing on numeric logic and basic string operations (concatenation, indexing). Broader construct coverage was needed for backward iteration, character-by-character mapping with multi-branch conditionals, and string return values from numeric computations.
+
+**Decision:** Add three exercises:
+1. **reverse-string** — tests backward iteration (decrementing while loop from `n-1` to `0`), string building by character-by-character concatenation, and empty string initialization. Cases with apostrophes are filtered because Pascal's `''` escape sequence cannot round-trip through `_parse_const` (which strips outer quotes but does not un-escape inner doubled quotes).
+2. **rna-transcription** — tests character comparison (`==`) with 4 separate `if` branches (avoiding language-specific `elif`/`elseif`/`elsif` syntax), forward iteration with string building, and single-character string matching.
+3. **perfect-numbers** — tests divisor accumulation with modulo (`%`), three-way string return (`"perfect"`, `"abundant"`, `"deficient"`), and is the first exercise returning string values from a purely numeric computation. Cases with inputs > 10000 are filtered to keep VM execution tractable.
+
+No VM prerequisites were needed — all required features (string indexing, string concat, string return, `_parse_const` string literal handling) were already in place from ADR-023.
+
+**Consequences:** 651 additional tests (167 reverse-string + 197 rna-transcription + 287 perfect-numbers), bringing Exercism total to 1636 and overall to 3337. Unicode cases (wide chars, grapheme clusters) in reverse-string are filtered as they require grapheme-aware reversal beyond the VM's scope.
+
+| Exercise | Constructs tested | Cases | Lowering | Cross-lang | Execution | Total |
+|----------|-------------------|-------|----------|------------|-----------|-------|
+| leap | modulo, boolean logic, short-circuit eval | 9 | 15 | 2 | 270 | 287 |
+| collatz-conjecture | while loop, conditional, integer division | 4 | 15 | 2 | 120 | 137 |
+| difference-of-squares | while loop, accumulator, function composition | 9 | 15 | 2 | 270 | 287 |
+| two-fer | string concatenation, string literals | 3 | 15 | 2 | 90 | 107 |
+| hamming | string indexing, character comparison, while loop | 5 | 15 | 2 | 150 | 167 |
+| reverse-string | backward iteration, string building char-by-char | 5 | 15 | 2 | 150 | 167 |
+| rna-transcription | character comparison, multi-branch if, char mapping | 6 | 15 | 2 | 180 | 197 |
+| perfect-numbers | divisor loop, modulo, accumulator, three-way string return | 9 | 15 | 2 | 270 | 287 |
+| **Total** | | **50** | **120** | **16** | **1500** | **1636** |
+
+Combined with Rosetta, the full suite reaches 3337 tests.
