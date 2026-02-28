@@ -175,6 +175,7 @@ class Operators:
         "^": lambda a, b: a ^ b,
         "<<": lambda a, b: a << b,
         ">>": lambda a, b: a >> b,
+        "..": lambda a, b: str(a) + str(b),
     }
 
     @classmethod
@@ -198,6 +199,8 @@ class Operators:
                 return not operand
             if op == "~":
                 return ~operand
+            if op == "#":
+                return len(operand)
         except Exception:
             pass
         return cls.UNCOMPUTABLE
