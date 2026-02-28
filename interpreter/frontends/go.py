@@ -668,29 +668,56 @@ class GoFrontend(BaseFrontend):
     # -- Go: var declaration ---------------------------------------------------
 
     def _lower_go_var_decl(self, node):
-        for child in node.children:
-            if child.type == "var_spec":
-                name_node = child.child_by_field_name("name")
-                value_node = child.child_by_field_name("value")
-                if name_node and value_node:
-                    val_reg = self._lower_expr(value_node)
-                    self._emit(
-                        Opcode.STORE_VAR,
-                        operands=[self._node_text(name_node), val_reg],
-                        node=node,
-                    )
-                elif name_node:
-                    val_reg = self._fresh_reg()
-                    self._emit(
-                        Opcode.CONST,
-                        result_reg=val_reg,
-                        operands=[self.NONE_LITERAL],
-                    )
-                    self._emit(
-                        Opcode.STORE_VAR,
-                        operands=[self._node_text(name_node), val_reg],
-                        node=node,
-                    )
+        specs = [c for c in node.children if c.type == "var_spec"]
+        # Handle var (...) block form: var_spec_list contains var_spec children
+        spec_list = next(
+            (c for c in node.children if c.type == "var_spec_list"),
+            None,
+        )
+        if spec_list is not None:
+            specs = [c for c in spec_list.children if c.type == "var_spec"]
+        for spec in specs:
+            self._lower_var_spec(spec, node)
+
+    def _lower_var_spec(self, spec, parent_node):
+        """Lower a single var_spec, supporting multiple names: `var a, b = 1, 2`."""
+        names = [c for c in spec.children if c.type == "identifier"]
+        value_node = spec.child_by_field_name("value")
+
+        if value_node:
+            val_regs = self._lower_expression_list(value_node)
+            for name_node, val_reg in zip(names, val_regs):
+                self._emit(
+                    Opcode.STORE_VAR,
+                    operands=[self._node_text(name_node), val_reg],
+                    node=parent_node,
+                )
+            # If more names than values (e.g. `var a, b int`), store None for remainder
+            for name_node in names[len(val_regs) :]:
+                val_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.CONST,
+                    result_reg=val_reg,
+                    operands=[self.NONE_LITERAL],
+                )
+                self._emit(
+                    Opcode.STORE_VAR,
+                    operands=[self._node_text(name_node), val_reg],
+                    node=parent_node,
+                )
+        else:
+            for name_node in names:
+                val_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.CONST,
+                    result_reg=val_reg,
+                    operands=[self.NONE_LITERAL],
+                )
+                self._emit(
+                    Opcode.STORE_VAR,
+                    operands=[self._node_text(name_node), val_reg],
+                    node=parent_node,
+                )
 
     # -- Go: composite literal -------------------------------------------------
 

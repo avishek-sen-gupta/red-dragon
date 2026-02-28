@@ -45,8 +45,8 @@ class KotlinFrontend(BaseFrontend):
             "this_expression": self._lower_identifier,
             "super_expression": self._lower_identifier,
             "lambda_literal": self._lower_lambda_literal,
-            "object_literal": self._lower_symbolic_node,
-            "range_expression": self._lower_symbolic_node,
+            "object_literal": self._lower_object_literal,
+            "range_expression": self._lower_range_expr,
             "statements": self._lower_statements_expr,
             "jump_expression": self._lower_jump_as_expr,
             "assignment": self._lower_kotlin_assignment_expr,
@@ -1065,6 +1065,38 @@ class KotlinFrontend(BaseFrontend):
         )
         self._emit(Opcode.STORE_VAR, operands=[obj_name, inst_reg])
 
+    # -- object literal (anonymous object expression) ------------------------
+
+    def _lower_object_literal(self, node) -> str:
+        """Lower `object : Type { ... }` as NEW_OBJECT + body lowering."""
+        delegation = next(
+            (c for c in node.children if c.type == "delegation_specifier"),
+            None,
+        )
+        body_node = next(
+            (c for c in node.children if c.type == "class_body"),
+            None,
+        )
+        type_name = self._node_text(delegation) if delegation else "__anon_object"
+
+        obj_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{type_name}")
+        end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{type_name}")
+
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
+        self._emit(Opcode.LABEL, label=obj_label)
+        if body_node:
+            self._lower_block(body_node)
+        self._emit(Opcode.LABEL, label=end_label)
+
+        inst_reg = self._fresh_reg()
+        self._emit(
+            Opcode.NEW_OBJECT,
+            result_reg=inst_reg,
+            operands=[type_name],
+            node=node,
+        )
+        return inst_reg
+
     # -- companion object --------------------------------------------------
 
     def _lower_companion_object(self, node):
@@ -1181,6 +1213,22 @@ class KotlinFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["as", expr_reg, type_name],
+            node=node,
+        )
+        return reg
+
+    # -- range expression --------------------------------------------------
+
+    def _lower_range_expr(self, node) -> str:
+        """Lower `1..10` as CALL_FUNCTION("range", start, end)."""
+        named = [c for c in node.children if c.is_named]
+        start_reg = self._lower_expr(named[0]) if len(named) > 0 else self._fresh_reg()
+        end_reg = self._lower_expr(named[1]) if len(named) > 1 else self._fresh_reg()
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["range", start_reg, end_reg],
             node=node,
         )
         return reg

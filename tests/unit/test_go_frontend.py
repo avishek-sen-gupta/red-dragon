@@ -802,3 +802,38 @@ func main() {
         ir = _parse_and_lower(source)
         branches = _find_all(ir, Opcode.BRANCH)
         assert any(inst.label == "myLabel" for inst in branches)
+
+
+class TestGoVarDeclarationMultiName:
+    def test_var_multi_name_with_values(self):
+        source = "package main\nvar a, b = 1, 2"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "a" in store_names
+        assert "b" in store_names
+
+    def test_var_multi_name_without_values(self):
+        source = "package main\nvar a, b int"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "a" in store_names
+        assert "b" in store_names
+
+    def test_var_block_form(self):
+        source = "package main\nvar (\n    x = 10\n    y = 20\n)"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "x" in store_names
+        assert "y" in store_names
+
+    def test_var_multi_name_three_elements(self):
+        source = "package main\nfunc f() { var x, y, z = 1, 2, 3 }"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "x" in store_names
+        assert "y" in store_names
+        assert "z" in store_names

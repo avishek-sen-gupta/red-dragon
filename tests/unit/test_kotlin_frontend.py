@@ -697,3 +697,52 @@ class TestKotlinDestructuring:
         store_names = [inst.operands[0] for inst in stores]
         assert "first" in store_names
         assert "second" in store_names
+
+
+class TestKotlinRangeExpression:
+    def test_range_expression_basic(self):
+        instructions = _parse_kotlin("val r = 1..10")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("range" in inst.operands for inst in calls)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("range_expression" in str(inst.operands) for inst in symbolics)
+
+    def test_range_in_for_loop(self):
+        instructions = _parse_kotlin("for (i in 1..10) { println(i) }")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("range" in inst.operands for inst in calls)
+
+    def test_range_with_variables(self):
+        instructions = _parse_kotlin("val r = start..end")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("range" in inst.operands for inst in calls)
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        load_names = [inst.operands[0] for inst in loads]
+        assert "start" in load_names
+        assert "end" in load_names
+
+
+class TestKotlinObjectLiteral:
+    def test_object_literal_produces_new_object(self):
+        source = "val listener = object : OnClickListener {\n    fun onClick() { }\n}"
+        instructions = _parse_kotlin(source)
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert len(new_objs) >= 1
+        assert any("OnClickListener" in inst.operands for inst in new_objs)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("object_literal" in str(inst.operands) for inst in symbolics)
+
+    def test_object_literal_lowers_body(self):
+        source = "val x = object : Runnable {\n    fun run() { println(42) }\n}"
+        instructions = _parse_kotlin(source)
+        opcodes = _opcodes(instructions)
+        # Body function should be lowered (BRANCH + LABEL + RETURN pattern)
+        assert Opcode.RETURN in opcodes
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("Runnable" in inst.operands for inst in new_objs)
+
+    def test_object_literal_no_supertype(self):
+        source = "val obj = object {\n    fun greet() { }\n}"
+        instructions = _parse_kotlin(source)
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert len(new_objs) >= 1
