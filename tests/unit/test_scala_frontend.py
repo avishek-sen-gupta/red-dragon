@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from tree_sitter_language_pack import get_parser
 
 from interpreter.frontends.scala import ScalaFrontend
@@ -549,6 +550,54 @@ class TestScalaInstanceExpression:
         instructions = _parse_scala(source)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("msg" in inst.operands for inst in stores)
+
+
+class TestScalaOperatorPrecedenceBug:
+    """Document tree-sitter Scala grammar operator precedence bug.
+
+    Tree-sitter's Scala grammar uses a flat ``infix_expression`` with
+    ``operator_identifier`` for ALL binary operators, ignoring Scala's
+    actual precedence rules.  This means ``j < n - 1`` is parsed as
+    ``(j < n) - 1`` instead of ``j < (n - 1)``.
+
+    Other language grammars (Java, Kotlin, Rust, etc.) use distinct node
+    types for comparison vs arithmetic (e.g. ``comparison_expression`` vs
+    ``additive_expression``), so they parse correctly.
+
+    This is an upstream tree-sitter-scala limitation, not a RedDragon
+    frontend bug.  Fixing it would require implementing a precedence-
+    climbing re-association pass on top of the flat AST.
+    """
+
+    @pytest.mark.xfail(
+        reason="tree-sitter Scala grammar lacks operator precedence",
+        strict=True,
+    )
+    def test_comparison_lower_precedence_than_subtraction(self):
+        """``j < n - 1`` should parse as ``j < (n - 1)``, not ``(j < n) - 1``."""
+        instructions = _parse_scala("object M { val r = j < n - 1 }")
+        binops = _find_all(instructions, Opcode.BINOP)
+        # Correct precedence: subtraction first, comparison second.
+        # The last BINOP emitted should be the comparison ``<``.
+        assert len(binops) == 2
+        assert (
+            binops[0].operands[0] == "-"
+        ), f"expected first binop to be '-', got '{binops[0].operands[0]}'"
+        assert (
+            binops[1].operands[0] == "<"
+        ), f"expected second binop to be '<', got '{binops[1].operands[0]}'"
+
+    @pytest.mark.xfail(
+        reason="tree-sitter Scala grammar lacks operator precedence",
+        strict=True,
+    )
+    def test_mixed_arithmetic_and_comparison(self):
+        """``a + b > c * d`` should compare the sum against the product."""
+        instructions = _parse_scala("object M { val r = a + b > c * d }")
+        binops = _find_all(instructions, Opcode.BINOP)
+        ops = [inst.operands[0] for inst in binops]
+        # Correct order: +, *, then >
+        assert ops == ["+", "*", ">"], f"expected ['+', '*', '>'], got {ops}"
 
 
 class TestScalaTypeDefinition:
