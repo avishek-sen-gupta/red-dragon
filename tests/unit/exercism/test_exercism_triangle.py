@@ -5,11 +5,9 @@ Each language solution is a separate file under
 exercises/triangle/solutions/.
 
 Three functions per solution: isEquilateral, isIsosceles, isScalene.
-The canonical test cases cover all three properties; the execution test
-substitutes the correct function call via build_program().
-
-Cases tagged with ``"scenarios": ["floating-point"]`` are excluded
-because the VM operates on integer arithmetic only.
+The canonical test cases cover all three properties, including
+floating-point sides; the execution test substitutes the correct
+function call via build_program().
 """
 
 import pytest
@@ -64,12 +62,7 @@ SOLUTIONS: dict[str, str] = {
     for lang in sorted(STANDARD_EXECUTABLE_LANGUAGES)
 }
 
-_ALL_CASES: list[dict] = load_canonical_cases(EXERCISE)
-
-# Filter out floating-point scenario cases
-CANONICAL_CASES: list[dict] = [
-    case for case in _ALL_CASES if "floating-point" not in case.get("scenarios", [])
-]
+CANONICAL_CASES: list[dict] = load_canonical_cases(EXERCISE)
 
 REQUIRED_OPCODES: set[Opcode] = {
     Opcode.RETURN,
