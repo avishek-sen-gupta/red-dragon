@@ -36,6 +36,7 @@ class TypeScriptFrontend(JavaScriptFrontend):
                 "export_statement": self._lower_export_statement,
                 "import_statement": lambda _: None,
                 "abstract_class_declaration": self._lower_class_def,
+                "public_field_definition": self._lower_ts_field_definition,
             }
         )
 
@@ -163,6 +164,35 @@ class TypeScriptFrontend(JavaScriptFrontend):
                         operands=[obj_reg, key_reg, val_reg],
                     )
             self._emit(Opcode.STORE_VAR, operands=[enum_name, obj_reg])
+
+    # ── TS: class field definition ──────────────────────────────
+
+    def _lower_ts_field_definition(self, node):
+        """Lower `public name: type` or `public name = expr` as STORE_VAR."""
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            name_node = next(
+                (c for c in node.children if c.type == "property_identifier"),
+                None,
+            )
+        if name_node is None:
+            return
+        field_name = self._node_text(name_node)
+        value_node = node.child_by_field_name("value")
+        if value_node:
+            val_reg = self._lower_expr(value_node)
+        else:
+            val_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=val_reg,
+                operands=[self.NONE_LITERAL],
+            )
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=[field_name, val_reg],
+            node=node,
+        )
 
     # ── TS: export statement → unwrap ────────────────────────────
 

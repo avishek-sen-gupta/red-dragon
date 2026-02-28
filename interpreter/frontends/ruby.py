@@ -42,6 +42,7 @@ class RubyFrontend(BaseFrontend):
             "hash": self._lower_ruby_hash,
             "argument_list": self._lower_ruby_argument_list,
             "simple_symbol": self._lower_const_literal,
+            "hash_key_symbol": self._lower_const_literal,
             "range": self._lower_ruby_range,
             "regex": self._lower_const_literal,
             "lambda": self._lower_ruby_lambda,
@@ -55,6 +56,8 @@ class RubyFrontend(BaseFrontend):
         self._EXPR_DISPATCH["conditional"] = self._lower_ruby_conditional
         self._EXPR_DISPATCH["unary"] = self._lower_unop
         self._EXPR_DISPATCH["self"] = self._lower_ruby_self
+        self._EXPR_DISPATCH["super"] = self._lower_ruby_super
+        self._EXPR_DISPATCH["yield"] = self._lower_ruby_yield
 
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -85,6 +88,8 @@ class RubyFrontend(BaseFrontend):
             "begin": self._lower_begin,
             "case": self._lower_case,
             "module": self._lower_ruby_module,
+            "super": self._lower_ruby_super_stmt,
+            "yield": self._lower_ruby_yield_stmt,
         }
 
     # -- Ruby: element_reference (array indexing) --------------------------------
@@ -750,6 +755,48 @@ class RubyFrontend(BaseFrontend):
     def _lower_symbolic_block(self, node):
         """Backward-compat: lower block/do_block appearing as statement."""
         self._lower_ruby_block(node)
+
+    # -- Ruby: super and yield -------------------------------------------------
+
+    def _lower_ruby_super(self, node) -> str:
+        """Lower `super` or `super(args)` as CALL_FUNCTION("super", ...args)."""
+        args_node = next(
+            (c for c in node.children if c.type == "argument_list"),
+            None,
+        )
+        arg_regs = self._extract_call_args(args_node) if args_node else []
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["super"] + arg_regs,
+            node=node,
+        )
+        return reg
+
+    def _lower_ruby_super_stmt(self, node):
+        """Lower super as a statement."""
+        self._lower_ruby_super(node)
+
+    def _lower_ruby_yield(self, node) -> str:
+        """Lower `yield` or `yield expr` as CALL_FUNCTION("yield", ...args)."""
+        args_node = next(
+            (c for c in node.children if c.type == "argument_list"),
+            None,
+        )
+        arg_regs = self._extract_call_args(args_node) if args_node else []
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["yield"] + arg_regs,
+            node=node,
+        )
+        return reg
+
+    def _lower_ruby_yield_stmt(self, node):
+        """Lower yield as a statement."""
+        self._lower_ruby_yield(node)
 
     # -- Ruby: range expression ------------------------------------------------
 

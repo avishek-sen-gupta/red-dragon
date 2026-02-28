@@ -1104,3 +1104,37 @@ class TestSourceLocationTraceability:
         returns = _find_all(instructions, Opcode.RETURN)
         explicit_return = next(r for r in returns if not r.source_location.is_unknown())
         assert explicit_return.source_location.start_line == 2
+
+
+class TestPythonEllipsis:
+    def test_ellipsis_no_symbolic(self):
+        source = "x = ..."
+        instructions = _parse_python(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("ellipsis" in str(inst.operands) for inst in symbolics)
+
+    def test_ellipsis_as_const(self):
+        source = "x = ..."
+        instructions = _parse_python(source)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("..." in str(inst.operands) for inst in consts)
+
+
+class TestPythonListSplat:
+    def test_list_splat_no_symbolic(self):
+        source = "x = [*a, 1]"
+        instructions = _parse_python(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("list_splat" in str(inst.operands) for inst in symbolics)
+
+    def test_list_splat_call_function(self):
+        source = "x = [*items, 1]"
+        instructions = _parse_python(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("spread" in inst.operands for inst in calls)
+
+    def test_dict_splat_no_symbolic(self):
+        source = "x = {**defaults, 'key': 1}"
+        instructions = _parse_python(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("dictionary_splat" in str(inst.operands) for inst in symbolics)

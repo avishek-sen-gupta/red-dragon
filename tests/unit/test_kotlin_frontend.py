@@ -746,3 +746,17 @@ class TestKotlinObjectLiteral:
         instructions = _parse_kotlin(source)
         new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
         assert len(new_objs) >= 1
+
+
+class TestKotlinCharacterLiteral:
+    def test_char_literal_no_symbolic(self):
+        source = "val c = 'A'"
+        instructions = _parse_kotlin(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("character_literal" in str(inst.operands) for inst in symbolics)
+
+    def test_char_literal_as_const(self):
+        source = "val c = 'Z'"
+        instructions = _parse_kotlin(source)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("'Z'" in str(inst.operands) for inst in consts)
