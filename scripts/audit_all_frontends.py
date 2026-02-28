@@ -1,12 +1,55 @@
 """Two-pass audit across all 15 deterministic frontends.
 
-Pass 1 (Dispatch Comparison): Parses source, collects all AST node types,
-compares against _EXPR_DISPATCH / _STMT_DISPATCH / NOISE_TYPES / COMMENT_TYPES.
-Automatically classifies unhandled types as structural (child-only) or
-substantive (gaps requiring attention).
+Architecture
+------------
+Pass 1 (Dispatch Comparison — Block-Reachability):
+    Parses source, collects all AST node types, compares against
+    _EXPR_DISPATCH / _STMT_DISPATCH / NOISE_TYPES / COMMENT_TYPES.
+    Unhandled types are classified using **block-reachability analysis**:
+    only nodes that are direct named children of block-iterated nodes
+    are flagged as substantive gaps. All others are deep structural nodes
+    consumed by their parent's lowerer and can never produce SYMBOLIC.
 
-Pass 2 (Runtime SYMBOLIC): Lowers source through each frontend, scans IR for
-SYMBOLIC instructions with "unsupported:" operands.
+Pass 2 (Runtime SYMBOLIC):
+    Lowers source through each frontend, scans IR for SYMBOLIC instructions
+    with "unsupported:" operands.
+
+How the Lowering Dispatch Chain Works
+-------------------------------------
+The fallback chain in BaseFrontend:
+
+    lower(root)
+      → _lower_block(root)           # iterates named children
+        → _lower_stmt(child)         # skip noise/comments; try STMT_DISPATCH
+          → _lower_expr(child)       # fallback: try EXPR_DISPATCH
+            → SYMBOLIC("unsupported:X")  # final fallback for unknown types
+
+A node type produces SYMBOLIC **only** if it is passed to _lower_stmt as a
+direct named child of a block-iterated node. _lower_block iterates children
+when:
+  1. The root node is passed from lower()
+  2. A node's type maps to _lower_block itself in _STMT_DISPATCH (e.g.,
+     compound_statement in C, block in Rust, statement_block in JS)
+
+Nodes that are only ever children of handled parents (like parameter_list
+inside function_definition) are consumed by the parent's lowerer directly —
+they never pass through _lower_block → _lower_stmt.
+
+Why One-Level Parent Checking Produced False Positives
+------------------------------------------------------
+The old heuristic checked whether an unhandled node's immediate parent was
+in a dispatch table. This failed when the parent was also unhandled but was
+itself deep structural (never block-iterated). For example, a type_annotation
+inside a typed_parameter inside a parameters inside a function_definition:
+the old heuristic saw typed_parameter (unhandled parent) and flagged
+type_annotation as substantive, even though typed_parameter itself is never
+block-iterated.
+
+Root Node Edge Case
+-------------------
+Root nodes (module, program, translation_unit, etc.) are always reachable
+because lower() calls _lower_block(root) directly. They show up as
+"substantive" but are harmless — they're the entry point, not a gap.
 """
 
 from __future__ import annotations
@@ -17,6 +60,7 @@ import logging
 import tree_sitter_language_pack
 
 from interpreter.frontends import get_deterministic_frontend
+from interpreter.frontends._base import BaseFrontend
 from interpreter.ir import Opcode
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -2717,17 +2761,6 @@ FRONTEND_LANG_NAMES: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
-# Universal exclusion set — node types that are structural across all
-# tree-sitter grammars and never need their own dispatch entry.
-# ---------------------------------------------------------------------------
-
-UNIVERSAL_EXCLUSIONS: frozenset[str] = frozenset(
-    {
-        "ERROR",  # parse errors
-    }
-)
-
-
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
@@ -2746,7 +2779,18 @@ class AuditResult:
 
 
 # ---------------------------------------------------------------------------
-# Pass 1 helpers — dispatch table comparison
+# Pass 1 helpers — dispatch table comparison with block-reachability
+#
+# The key insight: a node type can only produce SYMBOLIC if _lower_stmt
+# is called on it, which only happens when _lower_block iterates the
+# named children of a "block context" node. Block contexts are:
+#   1. The root node (lower() calls _lower_block(root))
+#   2. Any node whose type maps to _lower_block in _STMT_DISPATCH
+#      (e.g., compound_statement, block, statement_block)
+#
+# An unhandled node type is a substantive gap ONLY if it appears as a
+# direct named child of one of these block contexts. Otherwise, it is
+# a deep structural node consumed by the parent's lowerer.
 # ---------------------------------------------------------------------------
 
 
@@ -2776,56 +2820,75 @@ def get_handled_types(frontend) -> set[str]:
     return handled
 
 
-def collect_parent_child_map(source: str, ts_language: str) -> dict[str, set[str]]:
-    """Build a mapping of child_type -> set of parent types seen in the AST.
+def get_block_types(frontend) -> set[str]:
+    """Identify node types whose _STMT_DISPATCH handler is _lower_block.
 
-    For each named node, records the parent's type. Used to determine
-    whether an unhandled type only appears as a child of handled parents.
+    These are types like ``compound_statement``, ``block``,
+    ``statement_block`` — nodes where _lower_block would iterate children
+    rather than delegate to a specific handler.
+
+    Returns the set of type strings that map to _lower_block in the
+    frontend's statement dispatch table.
+    """
+    return {
+        node_type
+        for node_type, handler in frontend._STMT_DISPATCH.items()
+        if getattr(handler, "__func__", None) is BaseFrontend._lower_block
+    }
+
+
+def classify_by_block_reachability(
+    source: str,
+    ts_language: str,
+    unhandled_types: set[str],
+    block_types: set[str],
+) -> tuple[list[str], list[str]]:
+    """Classify unhandled types by whether they are block-reachable.
+
+    Walks the AST and identifies which unhandled node types appear as
+    direct named children of block-iterated nodes.
+
+    A block context is a node where ``_lower_block`` would iterate its
+    children:
+      - The root node (always — lower() calls _lower_block(root))
+      - A node whose type is in ``block_types`` (maps to _lower_block
+        in _STMT_DISPATCH)
+
+    Returns (structural, substantive) as sorted lists of type names.
     """
     parser = tree_sitter_language_pack.get_parser(ts_language)
     tree = parser.parse(source.encode("utf-8"))
-    parent_map: dict[str, set[str]] = {}
+    reachable: set[str] = set()
 
-    def _walk(node, parent_type: str):
-        if node.is_named:
-            parent_map.setdefault(node.type, set()).add(parent_type)
+    def _is_block_context(node, is_root: bool) -> bool:
+        """Determine if _lower_block would iterate this node's children.
+
+        Block contexts are nodes where _lower_block is explicitly called:
+          - The root node (from lower())
+          - Nodes whose type maps to _lower_block in _STMT_DISPATCH
+            (e.g., compound_statement, block, statement_block)
+
+        Unhandled nodes are NOT block contexts — they never have
+        _lower_block called on them. They pass through _lower_stmt →
+        _lower_expr → SYMBOLIC instead.
+        """
+        if is_root:
+            return True
+        return node.type in block_types
+
+    def _walk(node, is_root: bool):
+        if _is_block_context(node, is_root):
+            for child in node.children:
+                if child.is_named and child.type in unhandled_types:
+                    reachable.add(child.type)
         for child in node.children:
-            _walk(child, node.type if node.is_named else parent_type)
+            if child.is_named:
+                _walk(child, is_root=False)
 
-    _walk(tree.root_node, "__root__")
-    return parent_map
+    _walk(tree.root_node, is_root=True)
 
-
-def classify_unhandled(
-    unhandled_types: set[str],
-    parent_map: dict[str, set[str]],
-    handled_types: set[str],
-) -> tuple[list[str], list[str]]:
-    """Classify unhandled types into structural (child-only) vs substantive.
-
-    A type is structural if ALL its occurrences appear as children of
-    handled parent types. If any occurrence is at root level or under an
-    unhandled parent, it is substantive.
-    """
-    structural: list[str] = []
-    substantive: list[str] = []
-
-    for node_type in sorted(unhandled_types):
-        if node_type in UNIVERSAL_EXCLUSIONS:
-            structural.append(node_type)
-            continue
-
-        parents = parent_map.get(node_type, set())
-        all_parents_handled = len(parents) > 0 and all(
-            p in handled_types or p == "__root__" and node_type in handled_types
-            for p in parents
-        )
-
-        if all_parents_handled:
-            structural.append(node_type)
-        else:
-            substantive.append(node_type)
-
+    structural = sorted(unhandled_types - reachable)
+    substantive = sorted(reachable)
     return structural, substantive
 
 
@@ -2882,12 +2945,14 @@ def audit_language(lang_key: str) -> AuditResult:
 
     frontend = get_deterministic_frontend(frontend_name)
 
-    # Pass 1: dispatch table comparison
+    # Pass 1: dispatch table comparison with block-reachability
     all_types = collect_ast_types(source, ts_name)
     handled = get_handled_types(frontend)
     unhandled = all_types - handled
-    parent_map = collect_parent_child_map(source, ts_name)
-    structural, substantive = classify_unhandled(unhandled, parent_map, handled)
+    block_types = get_block_types(frontend)
+    structural, substantive = classify_by_block_reachability(
+        source, ts_name, unhandled, block_types
+    )
 
     # Pass 2: runtime SYMBOLIC check
     symbolic_results = run_symbolic_check(frontend, source, ts_name)
@@ -2916,8 +2981,8 @@ def print_language_result(result: AuditResult):
     logger.info("  AST types found in source:     %3d", result.total_ast_types)
     logger.info("  Handled (dispatch+noise):      %3d", result.handled_count)
     logger.info("  Unhandled:                     %3d", unhandled_total)
-    logger.info("    Structural (child-only):      %3d", structural_count)
-    logger.info("    Substantive gaps:             %3d", substantive_count)
+    logger.info("    Structural (deep/unreachable): %3d", structural_count)
+    logger.info("    Substantive (block-reachable): %3d", substantive_count)
 
     for gap in result.unhandled_substantive:
         logger.info("      - %s", gap)
