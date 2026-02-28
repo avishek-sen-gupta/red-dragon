@@ -60,6 +60,7 @@ class CppFrontend(CFrontend):
                 "try_statement": self._lower_try,
                 "throw_statement": self._lower_throw,
                 "for_range_loop": self._lower_range_for,
+                "concept_definition": lambda _: None,
             }
         )
 

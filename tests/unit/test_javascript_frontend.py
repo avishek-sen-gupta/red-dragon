@@ -865,3 +865,53 @@ class TestJSStringFragment:
         ir = _parse_js(source)
         consts = _find_all(ir, Opcode.CONST)
         assert any("prefix " in str(inst.operands) for inst in consts)
+
+
+class TestJavaScriptExportClause:
+    def test_export_clause_no_unsupported(self):
+        """export { a, b } from './module' should not produce unsupported SYMBOLIC."""
+        source = 'export { a, b } from "./module";'
+        instructions = _parse_js(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_export_clause_basic(self):
+        source = 'export { foo, bar } from "./lib";'
+        instructions = _parse_js(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+
+class TestJavaScriptFieldDefinition:
+    def test_private_field_no_unsupported(self):
+        """Class with #privateField = 0 should not produce unsupported SYMBOLIC."""
+        source = """\
+class Foo {
+    #privateField = 0;
+    constructor() {
+        this.#privateField = 1;
+    }
+}
+"""
+        instructions = _parse_js(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_field_definition_stores(self):
+        source = """\
+class Bar {
+    count = 42;
+}
+"""
+        instructions = _parse_js(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+
+class TestJavaScriptWithStatement:
+    def test_with_statement_no_unsupported(self):
+        """with (obj) { foo(); } should not produce unsupported SYMBOLIC."""
+        source = "with (obj) { foo(); }"
+        instructions = _parse_js(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)

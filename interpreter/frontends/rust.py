@@ -109,6 +109,7 @@ class RustFrontend(BaseFrontend):
             "type_item": self._lower_type_item,
             "mod_item": self._lower_mod_item,
             "extern_crate_declaration": lambda _: None,
+            "function_signature_item": self._lower_function_signature,
         }
 
     # -- let declaration ---------------------------------------------------
@@ -1165,3 +1166,38 @@ class RustFrontend(BaseFrontend):
                 self._emit(Opcode.CONST, result_reg=val_reg, operands=[field_name])
                 self._emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
         return obj_reg
+
+    # -- Rust: function signature item (trait method stub) ------------------
+
+    def _lower_function_signature(self, node):
+        """Lower `fn area(&self) -> f64;` as function stub (no body)."""
+        name_node = node.child_by_field_name("name")
+        func_name = self._node_text(name_node) if name_node else "__trait_fn"
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
+        self._emit(Opcode.LABEL, label=func_label)
+
+        params_node = node.child_by_field_name("parameters")
+        if params_node:
+            self._lower_params(params_node)
+
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[self.DEFAULT_RETURN_VALUE],
+        )
+        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        func_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])

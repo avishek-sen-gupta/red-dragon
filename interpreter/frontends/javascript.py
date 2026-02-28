@@ -66,6 +66,9 @@ class JavaScriptFrontend(BaseFrontend):
             "generator_function": self._lower_function_expression,
             "generator_function_declaration": self._lower_function_def,
             "string_fragment": self._lower_const_literal,
+            "field_definition": self._lower_js_field_definition,
+            "export_clause": self._lower_export_clause,
+            "export_specifier": self._lower_paren,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -89,6 +92,7 @@ class JavaScriptFrontend(BaseFrontend):
             "labeled_statement": self._lower_labeled_statement,
             "import_statement": lambda _: None,
             "export_statement": self._lower_export_statement,
+            "with_statement": self._lower_with_statement,
         }
 
     # ── JS var declaration with destructuring ───────────────────
@@ -652,6 +656,8 @@ class JavaScriptFrontend(BaseFrontend):
                     self._lower_method_def(child)
                 elif child.type == "class_static_block":
                     self._lower_class_static_block(child)
+                elif child.type == "field_definition":
+                    self._lower_js_field_definition(child)
                 elif child.is_named:
                     self._lower_stmt(child)
 
@@ -1005,3 +1011,49 @@ class JavaScriptFrontend(BaseFrontend):
         for child in node.children:
             if child.is_named and child.type not in ("static",):
                 self._lower_stmt(child)
+
+    # ── JS export clause ──────────────────────────────────────────
+
+    def _lower_export_clause(self, node) -> str:
+        """Lower `{ a, b }` export clause — lower inner export_specifiers."""
+        last_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=last_reg, operands=[self.NONE_LITERAL])
+        for child in node.children:
+            if child.is_named:
+                last_reg = self._lower_expr(child)
+        return last_reg
+
+    # ── JS field definition (class fields) ────────────────────────
+
+    def _lower_js_field_definition(self, node):
+        """Lower class field: `#privateField = 0` or `name = expr`."""
+        property_node = node.child_by_field_name("property")
+        value_node = node.child_by_field_name("value")
+        field_name = (
+            self._node_text(property_node) if property_node else self._node_text(node)
+        )
+        if value_node:
+            val_reg = self._lower_expr(value_node)
+        else:
+            val_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=val_reg,
+                operands=[self.NONE_LITERAL],
+            )
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=[field_name, val_reg],
+            node=node,
+        )
+
+    # ── JS with statement (deprecated) ───────────────────────────
+
+    def _lower_with_statement(self, node):
+        """Lower `with (obj) { body }` — lower object then body."""
+        object_node = node.child_by_field_name("object")
+        body_node = node.child_by_field_name("body")
+        if object_node:
+            self._lower_expr(object_node)
+        if body_node:
+            self._lower_block(body_node)

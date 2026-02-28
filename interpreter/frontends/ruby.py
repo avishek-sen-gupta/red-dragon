@@ -55,6 +55,8 @@ class RubyFrontend(BaseFrontend):
             "heredoc_beginning": self._lower_const_literal,
             "right_assignment_list": self._lower_list_literal,
             "pattern": self._lower_ruby_pattern,
+            "delimited_symbol": self._lower_const_literal,
+            "in": self._lower_const_literal,
         }
         self._EXPR_DISPATCH["conditional"] = self._lower_ruby_conditional
         self._EXPR_DISPATCH["unary"] = self._lower_unop
@@ -94,6 +96,7 @@ class RubyFrontend(BaseFrontend):
             "super": self._lower_ruby_super_stmt,
             "yield": self._lower_ruby_yield_stmt,
             "in": self._lower_ruby_in_clause,
+            "retry": self._lower_ruby_retry,
         }
 
     # -- Ruby: element_reference (array indexing) --------------------------------
@@ -1272,3 +1275,15 @@ class RubyFrontend(BaseFrontend):
                 self._lower_block(child)
             else:
                 self._lower_expr(child)
+
+    # -- Ruby: retry --------------------------------------------------------
+
+    def _lower_ruby_retry(self, node):
+        """Lower `retry` as CALL_FUNCTION('retry')."""
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["retry"],
+            node=node,
+        )

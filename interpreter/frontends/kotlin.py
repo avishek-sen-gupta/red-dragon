@@ -62,6 +62,7 @@ class KotlinFrontend(BaseFrontend):
             "for_statement": self._lower_loop_as_expr,
             "do_while_statement": self._lower_loop_as_expr,
             "type_test": self._lower_type_test,
+            "label": self._lower_const_literal,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "property_declaration": self._lower_property_decl,

@@ -788,3 +788,30 @@ class TestKotlinLineComment:
         instructions = _parse_kotlin(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("line_comment" in str(inst.operands) for inst in symbolics)
+
+
+class TestKotlinLabel:
+    def test_label_no_unsupported(self):
+        """outer@ for (i in 1..10) { break@outer } should not produce unsupported SYMBOLIC."""
+        source = """\
+fun main() {
+    outer@ for (i in 1..10) {
+        break@outer
+    }
+}
+"""
+        instructions = _parse_kotlin(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_label_with_continue(self):
+        source = """\
+fun main() {
+    loop@ for (i in 1..10) {
+        if (i == 5) continue@loop
+    }
+}
+"""
+        instructions = _parse_kotlin(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)

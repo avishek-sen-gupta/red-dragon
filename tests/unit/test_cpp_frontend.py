@@ -431,3 +431,23 @@ class TestCppEnumSpecifier:
         assert "C" in field_names
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("Flag" in inst.operands for inst in stores)
+
+
+class TestCppConceptDefinition:
+    def test_concept_definition_no_unsupported(self):
+        """template<typename T> concept Numeric = std::is_arithmetic_v<T>; should not produce unsupported SYMBOLIC."""
+        source = "template<typename T> concept Numeric = std::is_arithmetic_v<T>;"
+        instructions = _parse_cpp(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_concept_definition_with_requires(self):
+        source = """\
+template<typename T>
+concept Addable = requires(T a, T b) {
+    { a + b } -> std::same_as<T>;
+};
+"""
+        instructions = _parse_cpp(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)

@@ -603,3 +603,119 @@ class TestPascalDeclUsesNoop:
     def test_uses_declaration_does_not_crash(self):
         instructions = _parse_pascal("program M; uses SysUtils; begin end.")
         assert instructions[0].opcode == Opcode.LABEL
+
+
+class TestPascalExceptionHandler:
+    def test_exception_handler_no_unsupported(self):
+        """on E: Exception do ... should not produce unsupported SYMBOLIC."""
+        source = """\
+program M;
+begin
+  try
+    x := 1;
+  except
+    on E: Exception do
+      x := 0;
+  end;
+end.
+"""
+        instructions = _parse_pascal(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_exception_handler_lowers_body(self):
+        source = """\
+program M;
+begin
+  try
+    x := 1;
+  except
+    on E: Exception do
+      WriteLn(E.Message);
+  end;
+end.
+"""
+        instructions = _parse_pascal(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("WriteLn" in inst.operands for inst in calls)
+
+
+class TestPascalRaise:
+    def test_raise_no_unsupported(self):
+        """raise Exception.Create('error') should not produce unsupported SYMBOLIC."""
+        source = "program M; begin raise Exception.Create('error'); end."
+        instructions = _parse_pascal(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_raise_produces_throw(self):
+        source = "program M; begin raise Exception.Create('error'); end."
+        instructions = _parse_pascal(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.THROW in opcodes
+
+
+class TestPascalRange:
+    def test_range_no_unsupported(self):
+        """case x of 1..10: should not produce unsupported SYMBOLIC for the range."""
+        source = "program M; begin case x of 1..10: WriteLn('range'); end; end."
+        instructions = _parse_pascal(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+
+class TestPascalWith:
+    def test_with_no_unsupported(self):
+        """with rec do ... should not produce unsupported SYMBOLIC."""
+        source = """\
+program M;
+begin
+  with rec do
+  begin
+    x := 1;
+    y := 2;
+  end;
+end.
+"""
+        instructions = _parse_pascal(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_with_lowers_body(self):
+        source = "program M; begin with rec do x := 10; end."
+        instructions = _parse_pascal(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+
+class TestPascalInherited:
+    def test_inherited_no_unsupported(self):
+        """inherited Create; should not produce unsupported SYMBOLIC."""
+        source = """\
+program M;
+procedure Init;
+begin
+  inherited Create;
+end;
+begin
+end.
+"""
+        instructions = _parse_pascal(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_inherited_produces_call(self):
+        source = """\
+program M;
+procedure Init;
+begin
+  inherited Create;
+end;
+begin
+end.
+"""
+        instructions = _parse_pascal(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any(
+            "inherited" in inst.operands or "Create" in inst.operands for inst in calls
+        )

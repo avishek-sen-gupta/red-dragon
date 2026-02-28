@@ -696,3 +696,30 @@ class TestRustMatchPatternUnwrap:
         instructions = _parse_rust(source)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("1" in inst.operands for inst in consts)
+
+
+class TestRustFunctionSignatureItem:
+    def test_function_signature_item_no_unsupported(self):
+        """trait Shape { fn area(&self) -> f64; } should not produce unsupported SYMBOLIC for the signature."""
+        instructions = _parse_rust("trait Shape { fn area(&self) -> f64; }")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_function_signature_item_stores_name(self):
+        instructions = _parse_rust("trait Drawable { fn draw(&self); }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("draw" in inst.operands for inst in stores)
+
+    def test_function_signature_item_in_trait_with_default(self):
+        """Trait with both signatures and default methods should lower without unsupported SYMBOLIC."""
+        source = """\
+trait Animal {
+    fn name(&self) -> &str;
+    fn speak(&self) {
+        println!("...");
+    }
+}
+"""
+        instructions = _parse_rust(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)

@@ -1038,3 +1038,45 @@ class TestRubyRightAssignmentList:
         assert not any(
             "right_assignment_list" in str(inst.operands) for inst in symbolics
         )
+
+
+class TestRubyDelimitedSymbol:
+    def test_delimited_symbol_no_unsupported(self):
+        """delimited_symbol like :"hello" should not produce unsupported SYMBOLIC."""
+        instructions = _parse_ruby('sym = :"hello"')
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_delimited_symbol_as_const(self):
+        instructions = _parse_ruby('sym = :"hello world"')
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("hello" in str(inst.operands) for inst in consts)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("sym" in inst.operands for inst in stores)
+
+
+class TestRubyRetry:
+    def test_retry_no_unsupported(self):
+        """retry statement should not produce unsupported SYMBOLIC."""
+        source = """\
+begin
+  raise "error"
+rescue
+  retry
+end
+"""
+        instructions = _parse_ruby(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_retry_produces_branch(self):
+        source = """\
+begin
+  x = risky()
+rescue
+  retry
+end
+"""
+        instructions = _parse_ruby(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH in opcodes

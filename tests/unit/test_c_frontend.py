@@ -669,3 +669,23 @@ class TestCInitializerPair:
         consts = _find_all(ir, Opcode.CONST)
         assert any("10" in inst.operands for inst in consts)
         assert any("20" in inst.operands for inst in consts)
+
+
+class TestCFrontendPreprocFunctionDef:
+    def test_preproc_function_def_no_unsupported(self):
+        """#define MAX(a, b) ((a) > (b) ? (a) : (b)) should not produce unsupported SYMBOLIC."""
+        source = "#define MAX(a, b) ((a) > (b) ? (a) : (b))"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_preproc_function_def_with_other_code(self):
+        source = """\
+#define SQUARE(x) ((x) * (x))
+int y = 10;
+"""
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("y" in inst.operands for inst in stores)

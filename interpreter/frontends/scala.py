@@ -76,6 +76,9 @@ class ScalaFrontend(BaseFrontend):
             "typed_pattern": self._lower_typed_pattern,
             "guard": self._lower_guard,
             "tuple_pattern": self._lower_tuple_pattern_expr,
+            "case_block": self._lower_block_expr,
+            "infix_pattern": self._lower_infix_pattern,
+            "case_clause": self._lower_case_clause_expr,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "val_definition": self._lower_val_def,
@@ -1050,6 +1053,40 @@ class ScalaFrontend(BaseFrontend):
             ],
         )
         self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+    # -- Scala: case_clause in expression context --------------------------------
+
+    def _lower_case_clause_expr(self, node) -> str:
+        """Lower case_clause in expression context — lower the body."""
+        body_node = node.child_by_field_name("body")
+        if body_node:
+            return self._lower_body_as_expr(body_node)
+        return self._lower_const_literal(node)
+
+    # -- Scala: infix_pattern (e.g., head :: tail) ----------------------------
+
+    def _lower_infix_pattern(self, node) -> str:
+        """Lower `head :: tail` infix pattern as BINOP(::, head, tail)."""
+        named_children = [c for c in node.children if c.is_named]
+        if len(named_children) >= 2:
+            left_reg = self._lower_expr(named_children[0])
+            right_reg = self._lower_expr(named_children[-1])
+            op_node = next(
+                (c for c in node.children if c.type == "operator_identifier"),
+                None,
+            )
+            op = self._node_text(op_node) if op_node else "::"
+            reg = self._fresh_reg()
+            self._emit(
+                Opcode.BINOP,
+                result_reg=reg,
+                operands=[op, left_reg, right_reg],
+                node=node,
+            )
+            return reg
+        if named_children:
+            return self._lower_expr(named_children[0])
+        return self._lower_const_literal(node)
 
     # -- generic symbolic fallback -----------------------------------------
 
