@@ -228,11 +228,11 @@ IF_CONDITION_FIELD: str = "condition"
 IF_CONSEQUENCE_FIELD: str = "consequence"
 IF_ALTERNATIVE_FIELD: str = "alternative"
 
-# Language-specific literals
-NONE_LITERAL: str = "None"        # Python: "None", JS: "undefined", Java: "null"
-TRUE_LITERAL: str = "true"
-FALSE_LITERAL: str = "false"
-DEFAULT_RETURN_VALUE: str = "None"
+# Canonical literal constants (Python-form, shared by all frontends)
+NONE_LITERAL: str = "None"
+TRUE_LITERAL: str = "True"
+FALSE_LITERAL: str = "False"
+DEFAULT_RETURN_VALUE: str = "None"  # C: "0", Rust/Scala: "()"
 
 # Attribute access node type
 ATTRIBUTE_NODE_TYPE: str = "attribute"  # Python: "attribute", JS: "member_expression"
@@ -309,7 +309,11 @@ BaseFrontend provides reusable handlers that most languages share:
 
 | Handler | Opcode(s) | Description |
 |---|---|---|
-| `_lower_const_literal` | `CONST` | Number, string, boolean, null literals |
+| `_lower_const_literal` | `CONST` | Number, string literals (raw text) |
+| `_lower_canonical_none` | `CONST "None"` | Null/nil/undefined → canonical `"None"` |
+| `_lower_canonical_true` | `CONST "True"` | Boolean true → canonical `"True"` |
+| `_lower_canonical_false` | `CONST "False"` | Boolean false → canonical `"False"` |
+| `_lower_canonical_bool` | `CONST "True"`/`"False"` | Boolean literal (reads text to decide) |
 | `_lower_identifier` | `LOAD_VAR` | Variable references |
 | `_lower_paren` | (delegates) | Unwrap parenthesised expression |
 | `_lower_binop` | `BINOP` | Binary operators: lower left, extract op, lower right |
@@ -408,22 +412,14 @@ This avoids loading all 15 tree-sitter grammars at startup — only the requeste
 
 Each language frontend is a subclass of `BaseFrontend` that:
 
-1. **Sets literal constants** (`NONE_LITERAL`, `TRUE_LITERAL`, etc.)
-2. **Overrides field name constants** where the grammar differs
-3. **Populates `_EXPR_DISPATCH` and `_STMT_DISPATCH`** with language-specific handlers
+1. **Overrides field name constants** where the grammar differs (e.g., `ATTR_ATTRIBUTE_FIELD`)
+2. **Overrides `DEFAULT_RETURN_VALUE`** only for unit-type languages (C: `"0"`, Rust/Scala: `"()"`)
+3. **Populates `_EXPR_DISPATCH` and `_STMT_DISPATCH`** with language-specific handlers — mapping null/boolean node types to canonical lowering methods (`_lower_canonical_none`, `_lower_canonical_true`, etc.)
 4. **Adds language-specific lowerers** for constructs unique to that language
 
 ### Python frontend (`interpreter/frontends/python.py`, ~320 lines)
 
-The canonical and most complete frontend. Key specialisations:
-
-```python
-class PythonFrontend(BaseFrontend):
-    NONE_LITERAL = "None"
-    TRUE_LITERAL = "True"
-    FALSE_LITERAL = "False"
-    DEFAULT_RETURN_VALUE = "None"
-```
+The canonical and most complete frontend. Inherits all literal constants from `BaseFrontend` unchanged (the base defaults *are* Python-form). Maps `"true"` → `_lower_canonical_true`, `"false"` → `_lower_canonical_false`, `"none"` → `_lower_canonical_none` in its expression dispatch.
 
 Python-specific handlers include:
 - `_lower_for_in()` — Python `for x in iterable` modelled as index-based loop with `len()` and `range()`
@@ -436,14 +432,7 @@ Python-specific handlers include:
 
 ### JavaScript frontend (`interpreter/frontends/javascript.py`, ~1000 lines)
 
-The largest frontend, handling JavaScript's diverse syntax:
-
-```python
-class JavaScriptFrontend(BaseFrontend):
-    NONE_LITERAL = "undefined"
-    ATTRIBUTE_NODE_TYPE = "member_expression"
-    ATTR_ATTRIBUTE_FIELD = "property"
-```
+The largest frontend, handling JavaScript's diverse syntax. Maps both `"null"` and `"undefined"` node types to `_lower_canonical_none` (both canonicalize to `"None"` in IR).
 
 JavaScript-specific handlers include:
 - `_lower_var_declaration()` — `let`/`const`/`var` with destructuring (`{a, b} = obj`, `[x, y] = arr`)
@@ -458,14 +447,7 @@ JavaScript-specific handlers include:
 
 ### Java frontend (`interpreter/frontends/java.py`, ~400 lines)
 
-```python
-class JavaFrontend(BaseFrontend):
-    NONE_LITERAL = "null"
-    ATTRIBUTE_NODE_TYPE = "field_access"
-    ATTR_ATTRIBUTE_FIELD = "field"
-```
-
-Java-specific: explicit type annotations ignored (only names extracted), records, instanceof, method references, synchronized blocks, static initializers.
+Maps `"null_literal"` → `_lower_canonical_none`, `"true"`/`"false"` → canonical lowering methods. Java-specific: explicit type annotations ignored (only names extracted), records, instanceof, method references, synchronized blocks, static initializers.
 
 ### Go frontend (`interpreter/frontends/go.py`, ~400 lines)
 
