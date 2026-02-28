@@ -310,9 +310,13 @@ The **Exercism integration test suite** (`tests/unit/exercism/`) extends coverag
 | **isogram** | nested while loops, case-insensitive char comparison via helper, function composition, continue | 14 | 15 | 2 | 420 | **437** |
 | **nth-prime** | nested loops for trial division, primality testing, counting loop with inner check | 3 | 15 | 2 | 90 | **107** |
 | **resistor-color** | string-to-integer if-chain mapping, string equality | 3 | 15 | 2 | 90 | **107** |
-| **Total** | | **107** | **210** | **28** | **3210** | **3448** |
+| **pangram** | nested loops, toLowerChar helper, case-insensitive letter search, string variable indexing | 11 | 15 | 2 | 330 | **347** |
+| **bob** | isUpperChar/isLowerChar helpers, string classification, multi-branch string return, yelling/question detection | 22 | 15 | 2 | 616 | **633** |
+| **luhn** | charToDigit helper, two-pass validation, right-to-left traversal, modulo arithmetic | 22 | 15 | 2 | 660 | **677** |
+| **acronym** | toUpperChar helper, word boundary detection, string building, separator classification | 9 | 15 | 2 | 252 | **269** |
+| **Total** | | **171** | **270** | **36** | **5068** | **5374** |
 
-Combined with the Rosetta suite, the project has **5150 tests** (5150 passed, 3 xfailed) — all with zero LLM calls.
+Combined with the Rosetta suite, the project has **7076 tests** (7076 passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 
