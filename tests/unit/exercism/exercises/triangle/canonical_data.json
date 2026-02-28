@@ -39,6 +39,15 @@
             "sides": [0, 0, 0]
           },
           "expected": false
+        },
+        {
+          "uuid": "3022f537-b8e5-4cc1-8f12-fd775827a00c",
+          "description": "sides may be floats",
+          "property": "equilateral",
+          "input": {
+            "sides": [0.5, 0.5, 0.5]
+          },
+          "expected": true
         }
       ]
     },
@@ -116,6 +125,15 @@
             "sides": [3, 1, 1]
           },
           "expected": false
+        },
+        {
+          "uuid": "adb4ee20-532f-43dc-8d31-e9271b7ef2bc",
+          "description": "sides may be floats",
+          "property": "isosceles",
+          "input": {
+            "sides": [0.5, 0.4, 0.5]
+          },
+          "expected": true
         }
       ]
     },
@@ -175,6 +193,15 @@
             "sides": [7, 3, 2]
           },
           "expected": false
+        },
+        {
+          "uuid": "26d9d59d-f8f1-40d3-ad58-ae4d54123d7d",
+          "description": "sides may be floats",
+          "property": "scalene",
+          "input": {
+            "sides": [0.5, 0.4, 0.6]
+          },
+          "expected": true
         }
       ]
     }
