@@ -292,8 +292,7 @@ class TestGcdCrossLanguage:
 # VM execution tests (parametrized over executable languages)
 # ---------------------------------------------------------------------------
 
-# Lua excluded: module-level call result not captured for GCD
-GCD_EXECUTABLE_LANGUAGES: frozenset[str] = STANDARD_EXECUTABLE_LANGUAGES - {"lua"}
+GCD_EXECUTABLE_LANGUAGES: frozenset[str] = STANDARD_EXECUTABLE_LANGUAGES
 EXPECTED_ANSWER = 6  # gcd(48, 18)
 
 
