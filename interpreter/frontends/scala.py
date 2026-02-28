@@ -72,6 +72,10 @@ class ScalaFrontend(BaseFrontend):
             "continue_expression": self._lower_continue_as_expr,
             "operator_identifier": self._lower_const_literal,
             "arguments": self._lower_paren,
+            "case_class_pattern": self._lower_case_class_pattern,
+            "typed_pattern": self._lower_typed_pattern,
+            "guard": self._lower_guard,
+            "tuple_pattern": self._lower_tuple_pattern_expr,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "val_definition": self._lower_val_def,
@@ -97,6 +101,7 @@ class ScalaFrontend(BaseFrontend):
             "lazy_val_definition": self._lower_val_def,
             "do_while_expression": self._lower_do_while,
             "type_definition": lambda _: None,
+            "function_declaration": self._lower_function_declaration,
         }
 
     # -- string interpolation ----------------------------------------------
@@ -943,6 +948,108 @@ class ScalaFrontend(BaseFrontend):
             node=node,
         )
         return val_reg
+
+    # -- Scala: case_class_pattern (e.g., Circle(r)) -------------------------
+
+    def _lower_case_class_pattern(self, node) -> str:
+        """Lower case class pattern like Circle(r) in match arms."""
+        type_node = next(
+            (c for c in node.children if c.type in ("type_identifier", "identifier")),
+            None,
+        )
+        class_name = self._node_text(type_node) if type_node else self._node_text(node)
+
+        obj_reg = self._fresh_reg()
+        self._emit(
+            Opcode.NEW_OBJECT,
+            result_reg=obj_reg,
+            operands=[f"pattern:{class_name}"],
+            node=node,
+        )
+        # Extract inner bindings
+        inner_bindings = [
+            c
+            for c in node.children
+            if c.is_named and c.type not in ("type_identifier", "identifier")
+        ]
+        for i, child in enumerate(inner_bindings):
+            child_reg = self._lower_expr(child)
+            idx_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            self._emit(Opcode.STORE_INDEX, operands=[obj_reg, idx_reg, child_reg])
+        return obj_reg
+
+    # -- Scala: typed_pattern (e.g., i: Int) -------------------------------
+
+    def _lower_typed_pattern(self, node) -> str:
+        """Lower typed pattern `i: Int` → lower the identifier, ignore type."""
+        named_children = [c for c in node.children if c.is_named]
+        if named_children:
+            return self._lower_expr(named_children[0])
+        return self._lower_const_literal(node)
+
+    # -- Scala: guard (e.g., if n % 2 == 0) --------------------------------
+
+    def _lower_guard(self, node) -> str:
+        """Lower guard clause `if condition` in match → lower the condition."""
+        named_children = [c for c in node.children if c.is_named]
+        if named_children:
+            return self._lower_expr(named_children[0])
+        return self._lower_const_literal(node)
+
+    # -- Scala: tuple_pattern (e.g., (a, b)) in match ----------------------
+
+    def _lower_tuple_pattern_expr(self, node) -> str:
+        """Lower (a, b) pattern in match as tuple literal."""
+        elems = [
+            c for c in node.children if c.type not in ("(", ")", ",") and c.is_named
+        ]
+        arr_reg = self._fresh_reg()
+        size_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
+        self._emit(
+            Opcode.NEW_ARRAY,
+            result_reg=arr_reg,
+            operands=["tuple", size_reg],
+            node=node,
+        )
+        for i, elem in enumerate(elems):
+            val_reg = self._lower_expr(elem)
+            idx_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            self._emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+        return arr_reg
+
+    # -- Scala: function_declaration (abstract/trait method stub) -----------
+
+    def _lower_function_declaration(self, node):
+        """Lower abstract function declaration (no body) as function stub."""
+        name_node = node.child_by_field_name("name")
+        func_name = self._node_text(name_node) if name_node else "__abstract"
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
+        self._emit(Opcode.LABEL, label=func_label)
+
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[self.DEFAULT_RETURN_VALUE],
+        )
+        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        func_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
 
     # -- generic symbolic fallback -----------------------------------------
 

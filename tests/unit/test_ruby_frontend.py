@@ -1014,6 +1014,22 @@ class TestRubyHeredocBeginning:
         assert not any("heredoc_beginning" in str(inst.operands) for inst in symbolics)
 
 
+class TestRubyPattern:
+    def test_pattern_no_symbolic(self):
+        source = "case x\nin 1 then puts 'one'\nin 2 then puts 'two'\nend"
+        instructions = _parse_ruby(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any(
+            "unsupported:pattern" in str(inst.operands) for inst in symbolics
+        )
+
+    def test_in_clause_no_symbolic(self):
+        source = "case x\nin 1 then puts 'one'\nend"
+        instructions = _parse_ruby(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:in" in str(inst.operands) for inst in symbolics)
+
+
 class TestRubyRightAssignmentList:
     def test_right_assignment_list_no_symbolic(self):
         source = "a, b, c = 1, 2, 3"

@@ -917,6 +917,29 @@ class TestCSharpRecordDeclaration:
         assert any("Point" in inst.operands for inst in stores)
 
 
+class TestCSharpVariableDeclaration:
+    def test_variable_declaration_no_symbolic(self):
+        ir = _parse_and_lower("for (int i = 0; i < 10; i++) { }")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "variable_declaration" in str(inst.operands) for inst in symbolics
+        )
+
+
+class TestCSharpDeclarationPattern:
+    def test_declaration_pattern_no_symbolic(self):
+        ir = _parse_and_lower("var r = x switch { int i => i, _ => 0 };")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "declaration_pattern" in str(inst.operands) for inst in symbolics
+        )
+
+    def test_declaration_pattern_stores_var(self):
+        ir = _parse_and_lower("var r = x switch { int n => n, _ => 0 };")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("n" in inst.operands for inst in stores)
+
+
 class TestCSharpVerbatimStringLiteral:
     def test_verbatim_string_no_symbolic(self):
         ir = _parse_and_lower('var p = @"C:\\Users\\test";')

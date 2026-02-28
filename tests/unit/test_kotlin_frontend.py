@@ -762,6 +762,20 @@ class TestKotlinCharacterLiteral:
         assert any("'Z'" in str(inst.operands) for inst in consts)
 
 
+class TestKotlinTypeTest:
+    def test_type_test_no_symbolic(self):
+        source = "fun f(x: Any) = when (x) {\n    is String -> x.length\n    is Int -> x\n    else -> 0\n}"
+        instructions = _parse_kotlin(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("type_test" in str(inst.operands) for inst in symbolics)
+
+    def test_type_test_const(self):
+        source = "fun f(x: Any) = when (x) {\n    is String -> 1\n    else -> 0\n}"
+        instructions = _parse_kotlin(source)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("is:String" in str(inst.operands) for inst in consts)
+
+
 class TestKotlinLineComment:
     def test_line_comment_not_symbolic(self):
         source = "// this is a comment\nval x = 1"

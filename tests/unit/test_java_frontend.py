@@ -762,3 +762,17 @@ class TestJavaTextBlock:
         assert any("json" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("key" in str(inst.operands) for inst in consts)
+
+
+class TestJavaSwitchExpression:
+    def test_switch_expression_no_symbolic(self):
+        source = 'class M { String m(int x) { return switch (x) { case 1 -> "one"; default -> "other"; }; } }'
+        instructions = _parse_java(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("switch_expression" in str(inst.operands) for inst in symbolics)
+
+    def test_switch_expression_returns_value(self):
+        source = 'class M { String m(int x) { return switch (x) { case 1 -> "one"; default -> "other"; }; } }'
+        instructions = _parse_java(source)
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("__switch_result" in inst.operands[0] for inst in loads)

@@ -76,6 +76,7 @@ class GoFrontend(BaseFrontend):
             "labeled_statement": self._lower_labeled_stmt,
             "const_declaration": self._lower_go_const_decl,
             "goto_statement": self._lower_goto_stmt,
+            "receive_statement": self._lower_receive_stmt,
         }
 
     # -- Go: block (iterate named children, skip braces) -----------------------
@@ -1131,6 +1132,38 @@ class GoFrontend(BaseFrontend):
             )
 
     # -- Go: goto statement ----------------------------------------------------
+
+    def _lower_receive_stmt(self, node):
+        """Lower receive_statement: v := <-ch → CALL_FUNCTION('chan_recv', ch) + STORE_VAR."""
+        left = node.child_by_field_name("left")
+        right = node.child_by_field_name("right")
+
+        if right:
+            chan_reg = self._lower_expr(right)
+        else:
+            # Bare receive — find the unary_expression child (<-ch)
+            unary = next(
+                (c for c in node.children if c.type == "unary_expression"),
+                None,
+            )
+            chan_reg = self._lower_expr(unary) if unary else self._fresh_reg()
+
+        recv_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=recv_reg,
+            operands=["chan_recv", chan_reg],
+            node=node,
+        )
+
+        if left:
+            left_names = self._extract_expression_list(left)
+            for name in left_names:
+                self._emit(
+                    Opcode.STORE_VAR,
+                    operands=[name, recv_reg],
+                    node=node,
+                )
 
     def _lower_goto_stmt(self, node):
         """Lower goto_statement as BRANCH(label_name)."""

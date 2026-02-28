@@ -576,6 +576,22 @@ class TestPascalDeclTypeNoop:
         assert len(unsupported) == 0
 
 
+class TestPascalTry:
+    def test_try_no_symbolic(self):
+        instructions = _parse_pascal(
+            "program M; begin try x := 1; except x := 0; end; end."
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:try" in str(inst.operands) for inst in symbolics)
+
+    def test_try_lowers_body(self):
+        instructions = _parse_pascal(
+            "program M; begin try x := 1; except x := 0; end; end."
+        )
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+
 class TestPascalDeclUsesNoop:
     def test_uses_declaration_no_symbolic(self):
         instructions = _parse_pascal(
