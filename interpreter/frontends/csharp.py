@@ -59,6 +59,11 @@ class CSharpFrontend(BaseFrontend):
             "lambda_expression": self._lower_lambda,
             "array_creation_expression": self._lower_array_creation,
             "implicit_array_creation_expression": self._lower_array_creation,
+            "implicit_object_creation_expression": self._lower_implicit_object_creation,
+            "query_expression": self._lower_query_expression,
+            "from_clause": self._lower_linq_clause,
+            "select_clause": self._lower_linq_clause,
+            "where_clause": self._lower_linq_clause,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -97,6 +102,7 @@ class CSharpFrontend(BaseFrontend):
             "record_declaration": self._lower_class_def,
             "record_struct_declaration": self._lower_class_def,
             "variable_declaration": self._lower_variable_declaration,
+            "delegate_declaration": self._lower_delegate_declaration,
         }
         self._EXPR_DISPATCH["await_expression"] = self._lower_await_expr
         self._EXPR_DISPATCH["switch_expression"] = self._lower_switch_expr
@@ -1524,3 +1530,90 @@ class CSharpFrontend(BaseFrontend):
                 operands=[self._node_text(target), val_reg],
                 node=parent_node,
             )
+
+    # -- C#: LINQ clause helper --------------------------------------------
+
+    def _lower_linq_clause(self, node) -> str:
+        """Lower LINQ clause (from/select/where) — lower named children only."""
+        named_children = [c for c in node.children if c.is_named]
+        last_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=last_reg, operands=[self.NONE_LITERAL])
+        for child in named_children:
+            last_reg = self._lower_expr(child)
+        return last_reg
+
+    # -- C#: delegate declaration ------------------------------------------
+
+    def _lower_delegate_declaration(self, node):
+        """Lower `public delegate void Notify(string message);` as function stub."""
+        name_node = node.child_by_field_name("name")
+        func_name = self._node_text(name_node) if name_node else "__delegate"
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
+        self._emit(Opcode.LABEL, label=func_label)
+
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[self.DEFAULT_RETURN_VALUE],
+        )
+        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        func_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+    # -- C#: implicit object creation (new()) ------------------------------
+
+    def _lower_implicit_object_creation(self, node) -> str:
+        """Lower `new()` or `new() { ... }` as NEW_OBJECT + CALL_METHOD constructor."""
+        args_node = node.child_by_field_name("arguments")
+        arg_regs = (
+            [
+                self._lower_expr(c)
+                for c in args_node.children
+                if c.is_named and c.type not in ("(", ")", ",")
+            ]
+            if args_node
+            else []
+        )
+        obj_reg = self._fresh_reg()
+        self._emit(
+            Opcode.NEW_OBJECT,
+            result_reg=obj_reg,
+            operands=["__implicit"],
+            node=node,
+        )
+        result_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_METHOD,
+            result_reg=result_reg,
+            operands=[obj_reg, "constructor"] + arg_regs,
+            node=node,
+        )
+        return result_reg
+
+    # -- C#: query expression (LINQ) ---------------------------------------
+
+    def _lower_query_expression(self, node) -> str:
+        """Lower LINQ `from n in nums where ... select ...` as CALL_FUNCTION chain."""
+        named_children = [c for c in node.children if c.is_named]
+        arg_regs = [self._lower_expr(c) for c in named_children]
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["linq_query"] + arg_regs,
+            node=node,
+        )
+        return reg

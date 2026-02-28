@@ -959,3 +959,63 @@ class TestCSharpConstantPattern:
         ir = _parse_and_lower("var r = x switch { null => 0, _ => 1 };")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("constant_pattern" in str(inst.operands) for inst in symbolics)
+
+
+class TestCSharpDelegateDeclaration:
+    def test_delegate_declaration_no_unsupported(self):
+        """delegate int Transform(int x); should not produce unsupported SYMBOLIC."""
+        source = "delegate int Transform(int x);"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_delegate_declaration_stores(self):
+        source = "delegate void Action();"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("Action" in inst.operands for inst in stores)
+
+
+class TestCSharpImplicitObjectCreationExpression:
+    def test_implicit_object_creation_no_unsupported(self):
+        """Point p = new(1, 2); should not produce unsupported SYMBOLIC."""
+        source = "class C { void M() { Point p = new(1, 2); } }"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_implicit_object_creation_stores(self):
+        source = "class C { void M() { List<int> items = new(); } }"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("items" in inst.operands for inst in stores)
+
+
+class TestCSharpQueryExpression:
+    def test_query_expression_no_unsupported(self):
+        """LINQ query expression should not produce unsupported SYMBOLIC."""
+        source = """\
+class C {
+    void M() {
+        var result = from x in items
+                     where x > 0
+                     select x;
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_query_expression_stores_result(self):
+        source = """\
+class C {
+    void M() {
+        var result = from n in numbers
+                     select n * 2;
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("result" in inst.operands for inst in stores)

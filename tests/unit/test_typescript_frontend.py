@@ -434,3 +434,52 @@ class Foo {
         instructions = _parse_ts(source)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("label" in inst.operands for inst in stores)
+
+
+class TestTypeScriptAbstractMethodSignature:
+    def test_abstract_method_signature_no_unsupported(self):
+        """abstract method signature should not produce unsupported SYMBOLIC."""
+        source = """\
+abstract class Animal {
+    abstract speak(): string;
+}
+"""
+        instructions = _parse_ts(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_abstract_method_signature_with_params(self):
+        source = """\
+abstract class Shape {
+    abstract area(scale: number): number;
+}
+"""
+        instructions = _parse_ts(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+
+class TestTypeScriptInternalModule:
+    def test_internal_module_no_unsupported(self):
+        """namespace (internal_module) should not produce unsupported SYMBOLIC."""
+        source = """\
+namespace Geometry {
+    export function area(): number { return 0; }
+}
+"""
+        instructions = _parse_ts(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_internal_module_lowers_body(self):
+        source = """\
+namespace Utils {
+    export const PI = 3.14;
+    export function double(x: number): number { return x * 2; }
+}
+"""
+        instructions = _parse_ts(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("PI" in inst.operands for inst in stores)

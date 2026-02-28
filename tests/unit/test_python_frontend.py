@@ -1168,3 +1168,19 @@ class TestPythonSplatPattern:
         instructions = _parse_python(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("splat_pattern" in str(inst.operands) for inst in symbolics)
+
+
+class TestPythonDottedName:
+    def test_dotted_name_in_expression(self):
+        """dotted_name like os.path.join should lower without unsupported SYMBOLIC."""
+        instructions = _parse_python("result = os.path.join(a, b)")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_dotted_name_attribute_access(self):
+        """Accessing a module attribute via dotted name should produce LOAD_FIELD."""
+        instructions = _parse_python("x = os.path.sep")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert len(loads) >= 1

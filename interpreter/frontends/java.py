@@ -55,6 +55,8 @@ class JavaFrontend(BaseFrontend):
             "super": self._lower_identifier,
             "scoped_identifier": self._lower_scoped_identifier,
             "switch_expression": self._lower_java_switch_expr,
+            "expression_statement": self._lower_expr_stmt_as_expr,
+            "throw_statement": self._lower_throw_as_expr,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -1178,3 +1180,27 @@ class JavaFrontend(BaseFrontend):
             self._emit(Opcode.BRANCH, label=end_label)
 
         self._emit(Opcode.LABEL, label=end_label)
+
+    # ── Java: expression_statement / throw_statement as expr ─────
+
+    def _lower_expr_stmt_as_expr(self, node) -> str:
+        """Lower expression_statement in expr context (e.g., inside switch expression)."""
+        named_children = [c for c in node.children if c.is_named]
+        if named_children:
+            return self._lower_expr(named_children[0])
+        return self._lower_const_literal(node)
+
+    def _lower_throw_as_expr(self, node) -> str:
+        """Lower throw_statement in expr context (e.g., switch expression arm)."""
+        named_children = [c for c in node.children if c.is_named]
+        if named_children:
+            val_reg = self._lower_expr(named_children[0])
+        else:
+            val_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=val_reg,
+                operands=[self.DEFAULT_RETURN_VALUE],
+            )
+        self._emit(Opcode.THROW, operands=[val_reg], node=node)
+        return val_reg
