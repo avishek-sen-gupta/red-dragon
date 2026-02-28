@@ -6,6 +6,7 @@ from tree_sitter_language_pack import get_parser
 
 from interpreter.frontends.lua import LuaFrontend
 from interpreter.ir import IRInstruction, Opcode
+from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
 def _parse_lua(source: str) -> list[IRInstruction]:
@@ -103,6 +104,23 @@ class TestLuaExpressions:
         instructions = _parse_lua("local x = false")
         consts = _find_all(instructions, Opcode.CONST)
         assert any("false" in inst.operands for inst in consts)
+
+
+class TestLuaOperators:
+    def test_concatenation_operator(self):
+        instructions = _parse_lua('local x = "hello" .. " world"')
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any(".." in inst.operands for inst in binops)
+
+    def test_not_equal_operator(self):
+        instructions = _parse_lua("if x ~= 0 then y = 1 end")
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("~=" in inst.operands for inst in binops)
+
+    def test_length_operator(self):
+        instructions = _parse_lua('local x = #"hello"')
+        unops = _find_all(instructions, Opcode.UNOP)
+        assert any("#" in inst.operands for inst in unops)
 
 
 class TestLuaFunctions:
@@ -511,3 +529,42 @@ class TestLuaStringContentEscapeSequence:
             s for s in symbolics if any("unsupported:" in str(op) for op in s.operands)
         ]
         assert len(unsupported) == 0
+
+
+class TestLuaOperatorExecution:
+    """VM execution tests for Lua-specific operators."""
+
+    def test_concatenation_produces_correct_result(self):
+        source = """\
+function greet(name)
+    return "hello " .. name
+end
+
+answer = greet("world")
+"""
+        vm, stats = execute_for_language("lua", source)
+        assert extract_answer(vm, "lua") == "hello world"
+        assert stats.llm_calls == 0
+
+    def test_length_operator_produces_correct_result(self):
+        source = 'answer = #"hello"'
+        vm, stats = execute_for_language("lua", source)
+        assert extract_answer(vm, "lua") == 5
+        assert stats.llm_calls == 0
+
+    def test_not_equal_in_while_loop(self):
+        source = """\
+function countdown(n)
+    local count = 0
+    while n ~= 0 do
+        count = count + 1
+        n = n - 1
+    end
+    return count
+end
+
+answer = countdown(7)
+"""
+        vm, stats = execute_for_language("lua", source)
+        assert extract_answer(vm, "lua") == 7
+        assert stats.llm_calls == 0
