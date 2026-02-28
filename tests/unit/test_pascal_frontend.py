@@ -574,3 +574,16 @@ class TestPascalDeclTypeNoop:
             s for s in symbolics if any("unsupported:" in str(op) for op in s.operands)
         ]
         assert len(unsupported) == 0
+
+
+class TestPascalDeclUsesNoop:
+    def test_uses_declaration_no_symbolic(self):
+        instructions = _parse_pascal(
+            "program M; uses SysUtils, Classes; begin x := 1; end."
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("declUses" in str(inst.operands) for inst in symbolics)
+
+    def test_uses_declaration_does_not_crash(self):
+        instructions = _parse_pascal("program M; uses SysUtils; begin end.")
+        assert instructions[0].opcode == Opcode.LABEL

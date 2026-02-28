@@ -1004,3 +1004,21 @@ class TestRubyYield:
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         yield_calls = [inst for inst in calls if "yield" in inst.operands]
         assert len(yield_calls) >= 1
+
+
+class TestRubyHeredocBeginning:
+    def test_heredoc_beginning_no_symbolic(self):
+        source = "x = <<~HEREDOC\nhello\nHEREDOC"
+        instructions = _parse_ruby(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("heredoc_beginning" in str(inst.operands) for inst in symbolics)
+
+
+class TestRubyRightAssignmentList:
+    def test_right_assignment_list_no_symbolic(self):
+        source = "a, b, c = 1, 2, 3"
+        instructions = _parse_ruby(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any(
+            "right_assignment_list" in str(inst.operands) for inst in symbolics
+        )

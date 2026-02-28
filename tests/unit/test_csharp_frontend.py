@@ -915,3 +915,24 @@ class TestCSharpRecordDeclaration:
         ir = _parse_and_lower(source)
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("Point" in inst.operands for inst in stores)
+
+
+class TestCSharpVerbatimStringLiteral:
+    def test_verbatim_string_no_symbolic(self):
+        ir = _parse_and_lower('var p = @"C:\\Users\\test";')
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "verbatim_string_literal" in str(inst.operands) for inst in symbolics
+        )
+
+    def test_verbatim_string_as_const(self):
+        ir = _parse_and_lower('var p = @"hello";')
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("hello" in str(inst.operands) for inst in consts)
+
+
+class TestCSharpConstantPattern:
+    def test_constant_pattern_no_symbolic(self):
+        ir = _parse_and_lower("var r = x switch { null => 0, _ => 1 };")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("constant_pattern" in str(inst.operands) for inst in symbolics)

@@ -59,6 +59,7 @@ class PhpFrontend(BaseFrontend):
             "reference_assignment_expression": self._lower_php_reference_assignment,
             "heredoc": self._lower_php_heredoc,
             "nowdoc": self._lower_const_literal,
+            "relative_scope": self._lower_identifier,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,

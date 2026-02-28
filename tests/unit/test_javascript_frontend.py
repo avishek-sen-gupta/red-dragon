@@ -851,3 +851,17 @@ let answer = classify(99);
         vm, stats = execute_for_language("javascript", source)
         assert extract_answer(vm, "javascript") == "other"
         assert stats.llm_calls == 0
+
+
+class TestJSStringFragment:
+    def test_string_fragment_no_symbolic(self):
+        source = "let x = `hello ${name} world`;"
+        ir = _parse_js(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("string_fragment" in str(inst.operands) for inst in symbolics)
+
+    def test_string_fragment_as_const(self):
+        source = "let x = `prefix ${y}`;"
+        ir = _parse_js(source)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("prefix " in str(inst.operands) for inst in consts)

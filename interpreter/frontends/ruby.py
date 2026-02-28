@@ -52,6 +52,8 @@ class RubyFrontend(BaseFrontend):
             "class_variable": self._lower_identifier,
             "heredoc_body": self._lower_ruby_heredoc_body,
             "element_reference": self._lower_element_reference,
+            "heredoc_beginning": self._lower_const_literal,
+            "right_assignment_list": self._lower_list_literal,
         }
         self._EXPR_DISPATCH["conditional"] = self._lower_ruby_conditional
         self._EXPR_DISPATCH["unary"] = self._lower_unop

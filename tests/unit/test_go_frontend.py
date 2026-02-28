@@ -837,3 +837,19 @@ class TestGoVarDeclarationMultiName:
         assert "x" in store_names
         assert "y" in store_names
         assert "z" in store_names
+
+
+class TestGoChannelType:
+    def test_channel_type_no_symbolic(self):
+        source = "package main\nfunc f() { var ch chan int }"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("channel_type" in str(inst.operands) for inst in symbolics)
+
+
+class TestGoSliceType:
+    def test_slice_type_no_symbolic(self):
+        source = "package main\nfunc f() { var s []int }"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("slice_type" in str(inst.operands) for inst in symbolics)

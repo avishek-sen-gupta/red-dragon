@@ -674,3 +674,21 @@ class TestScalaDestructuring:
         assert "second" in store_names
         load_indices = _find_all(instructions, Opcode.LOAD_INDEX)
         assert len(load_indices) >= 2
+
+
+class TestScalaOperatorIdentifier:
+    def test_operator_identifier_no_symbolic(self):
+        source = "object M { val x = List(1, 2, 3).reduce(_ + _) }"
+        instructions = _parse_scala(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any(
+            "operator_identifier" in str(inst.operands) for inst in symbolics
+        )
+
+
+class TestScalaArguments:
+    def test_arguments_no_symbolic(self):
+        source = "object M { val s = Set(1, 2, 3) }"
+        instructions = _parse_scala(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("arguments" in str(inst.operands) for inst in symbolics)

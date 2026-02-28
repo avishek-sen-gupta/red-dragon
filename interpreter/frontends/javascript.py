@@ -65,6 +65,7 @@ class JavaScriptFrontend(BaseFrontend):
             "function_expression": self._lower_function_expression,
             "generator_function": self._lower_function_expression,
             "generator_function_declaration": self._lower_function_def,
+            "string_fragment": self._lower_const_literal,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,

@@ -1138,3 +1138,11 @@ class TestPythonListSplat:
         instructions = _parse_python(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("dictionary_splat" in str(inst.operands) for inst in symbolics)
+
+
+class TestPythonExpressionList:
+    def test_expression_list_no_symbolic(self):
+        source = "a, b = 2, 3"
+        instructions = _parse_python(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("expression_list" in str(inst.operands) for inst in symbolics)
