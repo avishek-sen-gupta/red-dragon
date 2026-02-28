@@ -73,6 +73,11 @@ class RustFrontend(BaseFrontend):
             "unsafe_block": self._lower_block_expr,
             "type_cast_expression": self._lower_type_cast_expr,
             "scoped_identifier": self._lower_scoped_identifier,
+            "while_expression": self._lower_loop_as_expr,
+            "loop_expression": self._lower_loop_as_expr,
+            "for_expression": self._lower_loop_as_expr,
+            "continue_expression": self._lower_continue_as_expr,
+            "break_expression": self._lower_break_as_expr,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -454,6 +459,29 @@ class RustFrontend(BaseFrontend):
         for child in children[:-1]:
             self._lower_stmt(child)
         return self._lower_expr(children[-1])
+
+    # -- loop/break/continue as expression ---------------------------------
+
+    def _lower_loop_as_expr(self, node) -> str:
+        """Lower while/loop/for in expression position (returns unit)."""
+        self._lower_stmt(node)
+        reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=reg, operands=[self.NONE_LITERAL])
+        return reg
+
+    def _lower_continue_as_expr(self, node) -> str:
+        """Lower continue in expression position."""
+        self._lower_continue(node)
+        reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=reg, operands=[self.NONE_LITERAL])
+        return reg
+
+    def _lower_break_as_expr(self, node) -> str:
+        """Lower break in expression position."""
+        self._lower_break(node)
+        reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=reg, operands=[self.NONE_LITERAL])
+        return reg
 
     # -- closure expression ------------------------------------------------
 

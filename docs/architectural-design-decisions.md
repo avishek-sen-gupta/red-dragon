@@ -322,3 +322,29 @@ No VM prerequisites were needed — floats, division, string comparison, and boo
 | **Total** | | **79** | **150** | **20** | **2370** | **2540** |
 
 Combined with Rosetta, the full suite reaches 4242 tests.
+
+---
+
+### ADR-026: Exercism expansion — grains, isogram, nth-prime, resistor-color + Rust expression-position loops (2026-02-28)
+
+**Context:** The Exercism suite covered 10 exercises (2540 tests). Broader construct coverage was needed for exponentiation via loops, large integer arithmetic (2^63), zero-argument function calls, nested while loops with continue, case-insensitive character comparison via helper functions, trial division primality testing, and string-to-integer if-chain mapping. During implementation, a Rust frontend gap was discovered: `while_expression`, `loop_expression`, `for_expression`, `continue_expression`, and `break_expression` appeared only in `_STMT_DISPATCH` but not in `_EXPR_DISPATCH`, causing `SYMBOLIC unsupported` when these constructs appeared in expression position (e.g., as the last expression in an `if` body block, which `_lower_block_expr` treats as an expression).
+
+**Decision:** Add four exercises:
+- **grains** (8 cases) — multi-property (`square`/`total`) with 2 functions per solution. Tests exponentiation via repeated multiplication, large integers (square(64) = 2^63), and zero-argument function calls (`total()`).
+- **isogram** (14 cases) — boolean 1/0 return. Uses a `toLowerChar` helper with 26 if-statements for case-insensitive comparison. Tests nested while loops, `continue` in inner/outer loops, function composition, string indexing, and character equality.
+- **nth-prime** (3 cases, filtered from 5 — 10001st prime skipped for step count) — trial division with nested loops. Tests primality checking, conditional increment, and counting loops.
+- **resistor-color** (3 cases, colorCode property only — colors returns array, unsupported) — if-chain mapping 10 color names to codes 0-9.
+
+Additionally, fix the Rust frontend to register loop/break/continue node types in `_EXPR_DISPATCH` alongside their existing `_STMT_DISPATCH` entries. The expression-position handlers lower the construct as a statement, then return a unit-valued register (`NONE_LITERAL`).
+
+**Consequences:** 908 additional tests (257 grains + 437 isogram + 107 nth-prime + 107 resistor-color), bringing Exercism total to 3448 and overall to 5150 (plus 3 xfailed). The Rust frontend fix is not specific to isogram — it enables any Rust program that uses loops in expression position (e.g., `let x = while ... { ... };`), improving general Rust coverage.
+
+| Exercise | Constructs tested | Cases | Lowering | Cross-lang | Execution | Total |
+|----------|-------------------|-------|----------|------------|-----------|-------|
+| grains | exponentiation, large integers, zero-arg calls | 8 | 15 | 2 | 240 | 257 |
+| isogram | nested while, continue, toLowerChar helper | 14 | 15 | 2 | 420 | 437 |
+| nth-prime | trial division, nested loops, primality | 3 | 15 | 2 | 90 | 107 |
+| resistor-color | string-to-int if-chain, string equality | 3 | 15 | 2 | 90 | 107 |
+| **New total** | | **28** | **60** | **8** | **840** | **908** |
+
+Combined with previous exercises and Rosetta, the full suite reaches 5150 tests.
