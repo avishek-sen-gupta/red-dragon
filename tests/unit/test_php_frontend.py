@@ -997,9 +997,80 @@ enum Suit: string {
         assert "Diamonds" in field_names
 
 
+class TestPhpStringInterpolation:
+    def test_interpolation_basic(self):
+        """'Hello $name' should decompose into CONST + LOAD_VAR + BINOP '+'."""
+        ir = _parse_and_lower('<?php $x = "Hello $name"; ?>')
+        load_vars = _find_all(ir, Opcode.LOAD_VAR)
+        assert any("$name" in inst.operands for inst in load_vars)
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+    def test_interpolation_expression(self):
+        """'Hello {$arr[0]}' should produce LOAD_INDEX + BINOP '+'."""
+        ir = _parse_and_lower('<?php $x = "Hello {$arr[0]}"; ?>')
+        assert any(inst.opcode == Opcode.LOAD_INDEX for inst in ir)
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+    def test_interpolation_multiple(self):
+        """'$a and $b' should produce two LOAD_VAR and multiple BINOP '+'."""
+        ir = _parse_and_lower('<?php $x = "$a and $b"; ?>')
+        load_vars = _find_all(ir, Opcode.LOAD_VAR)
+        assert any("$a" in inst.operands for inst in load_vars)
+        assert any("$b" in inst.operands for inst in load_vars)
+        binops = _find_all(ir, Opcode.BINOP)
+        plus_ops = [b for b in binops if "+" in b.operands]
+        assert len(plus_ops) >= 2
+
+    def test_no_interpolation_is_const(self):
+        """Single-quoted 'hello' has no interpolation — remains CONST."""
+        ir = _parse_and_lower("<?php $x = 'hello'; ?>")
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("'hello'" in inst.operands for inst in consts)
+        # No concatenation binops for a plain string
+        binops = _find_all(ir, Opcode.BINOP)
+        assert not any("+" in inst.operands for inst in binops)
+
+
 class TestPhpHeredoc:
     def test_heredoc_basic(self):
         source = "<?php $s = <<<EOT\nhello world\nEOT; ?>"
         ir = _parse_and_lower(source)
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("$s" in inst.operands for inst in stores)
+
+    def test_heredoc_interpolation_basic(self):
+        """Heredoc with $var should decompose like encapsed_string."""
+        source = "<?php $s = <<<EOT\nHello $name\nEOT; ?>"
+        ir = _parse_and_lower(source)
+        load_vars = _find_all(ir, Opcode.LOAD_VAR)
+        assert any("$name" in inst.operands for inst in load_vars)
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+    def test_heredoc_interpolation_expression(self):
+        """Heredoc with {$arr[0]} should produce LOAD_INDEX + BINOP '+'."""
+        source = "<?php $s = <<<EOT\nHello {$arr[0]} world\nEOT; ?>"
+        ir = _parse_and_lower(source)
+        assert any(inst.opcode == Opcode.LOAD_INDEX for inst in ir)
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+    def test_heredoc_interpolation_multiple(self):
+        """Heredoc with multiple vars should concatenate all parts."""
+        source = "<?php $s = <<<EOT\n$a and $b\nEOT; ?>"
+        ir = _parse_and_lower(source)
+        load_vars = _find_all(ir, Opcode.LOAD_VAR)
+        assert any("$a" in inst.operands for inst in load_vars)
+        assert any("$b" in inst.operands for inst in load_vars)
+        binops = _find_all(ir, Opcode.BINOP)
+        plus_ops = [b for b in binops if "+" in b.operands]
+        assert len(plus_ops) >= 2
+
+    def test_heredoc_no_interpolation_is_const(self):
+        """Heredoc without variables should remain a single CONST."""
+        source = "<?php $s = <<<EOT\nhello world\nEOT; ?>"
+        ir = _parse_and_lower(source)
+        binops = _find_all(ir, Opcode.BINOP)
+        assert not any("+" in inst.operands for inst in binops)
