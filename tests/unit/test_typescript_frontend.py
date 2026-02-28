@@ -400,3 +400,37 @@ abstract class Base {
         assert any("Base" in inst.operands for inst in stores)
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 1
+
+
+class TestTypeScriptFieldDefinition:
+    def test_public_field_no_symbolic(self):
+        source = """\
+class Foo {
+    public name: string = "hello";
+}
+"""
+        instructions = _parse_ts(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any(
+            "public_field_definition" in str(inst.operands) for inst in symbolics
+        )
+
+    def test_public_field_store_var(self):
+        source = """\
+class Foo {
+    public count: number = 42;
+}
+"""
+        instructions = _parse_ts(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("count" in inst.operands for inst in stores)
+
+    def test_public_field_no_value(self):
+        source = """\
+class Foo {
+    public label: string;
+}
+"""
+        instructions = _parse_ts(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("label" in inst.operands for inst in stores)

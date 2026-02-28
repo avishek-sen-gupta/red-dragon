@@ -93,6 +93,7 @@ class CFrontend(BaseFrontend):
             "union_specifier": self._lower_union_def,
         }
         self._EXPR_DISPATCH["initializer_list"] = self._lower_initializer_list
+        self._EXPR_DISPATCH["initializer_pair"] = self._lower_initializer_pair
 
     # -- C: declaration ------------------------------------------------
 
@@ -787,6 +788,22 @@ class CFrontend(BaseFrontend):
             val_reg = self._lower_expr(elem)
             self._emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
         return arr_reg
+
+    # -- C: designated initializer pair ----------------------------------
+
+    def _lower_initializer_pair(self, node) -> str:
+        """Lower `.field = value` as lowering the value (field binding handled by parent)."""
+        designator = next(
+            (c for c in node.children if c.type == "field_designator"),
+            None,
+        )
+        value_node = next(
+            (c for c in node.children if c.is_named and c.type != "field_designator"),
+            None,
+        )
+        if value_node:
+            return self._lower_expr(value_node)
+        return self._lower_const_literal(node)
 
     # -- C: typedef (skip) ---------------------------------------------
 

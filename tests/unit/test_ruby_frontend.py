@@ -956,3 +956,51 @@ class TestRubyHeredocInterpolation:
         # No concatenation for plain heredocs
         concat_ops = [inst for inst in binops if inst.operands[0] == "+"]
         assert not concat_ops
+
+
+class TestRubyHashKeySymbol:
+    def test_hash_key_symbol_no_symbolic(self):
+        source = "h = { name: 'Alice' }"
+        instructions = _parse_ruby(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("hash_key_symbol" in str(inst.operands) for inst in symbolics)
+
+    def test_hash_key_symbol_lowered_as_const(self):
+        source = "h = { age: 30 }"
+        instructions = _parse_ruby(source)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("age" in str(inst.operands) for inst in consts)
+
+
+class TestRubySuper:
+    def test_super_no_args(self):
+        source = "def greet\n  super\nend"
+        instructions = _parse_ruby(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("super" in inst.operands for inst in calls)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("super" in str(inst.operands) for inst in symbolics)
+
+    def test_super_with_args(self):
+        source = "def init(x)\n  super(x, 1)\nend"
+        instructions = _parse_ruby(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        super_calls = [inst for inst in calls if "super" in inst.operands]
+        assert len(super_calls) >= 1
+
+
+class TestRubyYield:
+    def test_yield_no_args(self):
+        source = "def each\n  yield\nend"
+        instructions = _parse_ruby(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("yield" in inst.operands for inst in calls)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("yield" in str(inst.operands) for inst in symbolics)
+
+    def test_yield_with_args(self):
+        source = "def each\n  yield(item)\nend"
+        instructions = _parse_ruby(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        yield_calls = [inst for inst in calls if "yield" in inst.operands]
+        assert len(yield_calls) >= 1

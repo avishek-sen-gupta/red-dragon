@@ -78,6 +78,7 @@ class RustFrontend(BaseFrontend):
             "for_expression": self._lower_loop_as_expr,
             "continue_expression": self._lower_continue_as_expr,
             "break_expression": self._lower_break_as_expr,
+            "match_pattern": self._lower_paren,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,

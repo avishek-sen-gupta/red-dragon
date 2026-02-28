@@ -654,3 +654,18 @@ class TestCFrontendInitializerList:
         assert Opcode.NEW_ARRAY in opcodes
         store_indexes = _find_all(ir, Opcode.STORE_INDEX)
         assert len(store_indexes) >= 2
+
+
+class TestCInitializerPair:
+    def test_designated_initializer_no_symbolic(self):
+        source = "void f() { struct S s = {.x = 1, .y = 2}; }"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("initializer_pair" in str(inst.operands) for inst in symbolics)
+
+    def test_designated_initializer_lowers_values(self):
+        source = "void f() { struct S s = {.x = 10, .y = 20}; }"
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("10" in inst.operands for inst in consts)
+        assert any("20" in inst.operands for inst in consts)

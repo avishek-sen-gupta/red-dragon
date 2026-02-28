@@ -901,3 +901,17 @@ class TestCSharpIsPatternExpression:
         consts = _find_all(ir, Opcode.CONST)
         # Should have a CONST with the pattern type text
         assert any("int" in str(inst.operands) for inst in consts)
+
+
+class TestCSharpRecordDeclaration:
+    def test_record_no_symbolic(self):
+        source = "record Person { public string Name { get; set; } }"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("record_declaration" in str(inst.operands) for inst in symbolics)
+
+    def test_record_stores_class_name(self):
+        source = "record Point(int X, int Y);"
+        ir = _parse_and_lower(source)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("Point" in inst.operands for inst in stores)
