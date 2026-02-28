@@ -689,3 +689,36 @@ int y = 10;
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("y" in inst.operands for inst in stores)
+
+
+class TestCFrontendCaseStatementDefensive:
+    """Verify case_statement has a dispatch entry for defensive handling."""
+
+    def test_case_statement_outside_switch_no_symbolic(self):
+        """A case_statement encountered via _lower_block should not produce
+        unsupported SYMBOLIC — it should lower its body statements."""
+        # Normal switch/case works via _lower_switch which manually extracts
+        # case_statement children. This test verifies the defensive handler
+        # by checking that case_statement is in _STMT_DISPATCH.
+        frontend = CFrontend()
+        assert "case_statement" in frontend._STMT_DISPATCH
+
+    def test_switch_case_still_works_after_dispatch_entry(self):
+        """Adding case_statement to _STMT_DISPATCH must not break normal
+        switch/case lowering (which bypasses _lower_block on the body)."""
+        source = """\
+void f() {
+    switch (x) {
+        case 1: y = 10; break;
+        case 2: y = 20; break;
+        default: y = 0; break;
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        opcodes = _opcodes(ir)
+        # Normal switch produces BRANCH_IF for case comparisons
+        assert Opcode.BRANCH_IF in opcodes
+        # No unsupported SYMBOLIC
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)

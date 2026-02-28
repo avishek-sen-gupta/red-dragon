@@ -84,6 +84,7 @@ class CFrontend(BaseFrontend):
             "struct_specifier": self._lower_struct_def,
             "compound_statement": self._lower_block,
             "switch_statement": self._lower_switch,
+            "case_statement": self._lower_case_as_block,
             "goto_statement": self._lower_goto,
             "labeled_statement": self._lower_labeled_stmt,
             "break_statement": self._lower_break,
@@ -653,6 +654,20 @@ class CFrontend(BaseFrontend):
 
         self._break_target_stack.pop()
         self._emit(Opcode.LABEL, label=end_label)
+
+    def _lower_case_as_block(self, node):
+        """Defensive handler for case_statement encountered via _lower_block.
+
+        In normal flow, case_statement is consumed by _lower_switch which
+        manually extracts cases from the compound_statement body.  This
+        handler exists as a safety net: if a case_statement ever reaches
+        _lower_stmt (e.g., malformed AST), lower its body statements
+        instead of falling through to SYMBOLIC.
+        """
+        value_node = node.child_by_field_name("value")
+        for child in node.children:
+            if child.is_named and child != value_node:
+                self._lower_stmt(child)
 
     # -- C: goto / labeled statement / break / continue ----------------
 
