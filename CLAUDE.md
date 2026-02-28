@@ -56,6 +56,8 @@
 - Use a ports-and-adapter type architecture in your design decisions. Adhere to the tenet of "Functional Core, Imperative Shell".
 - When importing, use fully qualified module names. Do not use relative imports.
 - Favour one class per file, dataclass or otherwise.
+- If enums map to actual objects with behaviour (if they represent configurable functionalities, for example), resolve them into the actual executable objects as early on in the call chain as possible, and inject those objects as dependencies, not the enums.
+- For variables which can only take a fixed set of values (a set of strings, for example), use enums instead of strings.
 
 ## Code Review Patterns
 
