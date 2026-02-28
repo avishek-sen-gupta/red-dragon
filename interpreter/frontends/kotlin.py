@@ -57,6 +57,9 @@ class KotlinFrontend(BaseFrontend):
             "infix_expression": self._lower_infix_expr,
             "indexing_expression": self._lower_indexing_expr,
             "as_expression": self._lower_as_expr,
+            "while_statement": self._lower_loop_as_expr,
+            "for_statement": self._lower_loop_as_expr,
+            "do_while_statement": self._lower_loop_as_expr,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "property_declaration": self._lower_property_decl,
@@ -411,6 +414,13 @@ class KotlinFrontend(BaseFrontend):
         for child in children[:-1]:
             self._lower_stmt(child)
         return self._lower_expr(children[-1])
+
+    def _lower_loop_as_expr(self, node) -> str:
+        """Lower while/for/do-while in expression position (returns unit)."""
+        self._lower_stmt(node)
+        reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=reg, operands=[self.NONE_LITERAL])
+        return reg
 
     def _lower_control_body(self, body_node) -> str:
         """Lower control_structure_body or block, returning last expr reg."""
