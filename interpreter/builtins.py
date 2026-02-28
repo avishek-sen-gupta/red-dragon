@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from .constants import ARR_ADDR_PREFIX
 from .vm import VMState, Operators, _is_symbolic, _heap_addr
+from .vm_types import HeapObject
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 
@@ -95,6 +97,16 @@ def _builtin_min(args: list[Any], vm: VMState) -> Any:
     return _UNCOMPUTABLE
 
 
+def _builtin_array_of(args: list[Any], vm: VMState) -> Any:
+    """Create a heap-allocated array from arguments (arrayOf, intArrayOf, Array, etc.)."""
+    addr = f"{ARR_ADDR_PREFIX}{vm.symbolic_counter}"
+    vm.symbolic_counter += 1
+    fields = {str(i): val for i, val in enumerate(args)}
+    fields["length"] = len(args)
+    vm.heap[addr] = HeapObject(type_hint="array", fields=fields)
+    return addr
+
+
 class Builtins:
     """Table of built-in function implementations."""
 
@@ -109,4 +121,7 @@ class Builtins:
         "abs": _builtin_abs,
         "max": _builtin_max,
         "min": _builtin_min,
+        "arrayOf": _builtin_array_of,
+        "intArrayOf": _builtin_array_of,
+        "Array": _builtin_array_of,
     }
