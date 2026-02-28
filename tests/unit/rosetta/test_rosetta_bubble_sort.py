@@ -89,6 +89,7 @@ class M {
             i = i + 1;
         }
     }
+    static { bubbleSort(); }
 }
 """,
     "ruby": """\
@@ -168,6 +169,7 @@ class M {
             i = i + 1;
         }
     }
+    static int _init = bubbleSort();
 }
 """,
     "c": """\
@@ -189,6 +191,8 @@ void bubbleSort() {
         i = i + 1;
     }
 }
+
+int _init = bubbleSort();
 """,
     "cpp": """\
 int arr[5] = {5, 3, 8, 1, 2};
@@ -209,50 +213,48 @@ void bubbleSort() {
         i = i + 1;
     }
 }
+
+int _init = bubbleSort();
 """,
     "rust": """\
-fn main() {
-    let mut arr: [i32; 5] = [5, 3, 8, 1, 2];
-    let n: i32 = 5;
-    let mut i: i32 = 0;
-    while i < n {
-        let mut j: i32 = 0;
-        while j < n - 1 - i {
-            if arr[j] > arr[j + 1] {
-                let temp: i32 = arr[j];
-                arr[j] = arr[j + 1];
-                arr[j + 1] = temp;
-            }
-            j = j + 1;
+let mut arr: [i32; 5] = [5, 3, 8, 1, 2];
+let n: i32 = 5;
+let mut i: i32 = 0;
+while i < n {
+    let mut j: i32 = 0;
+    while j < n - 1 - i {
+        if arr[j] > arr[j + 1] {
+            let temp: i32 = arr[j];
+            arr[j] = arr[j + 1];
+            arr[j + 1] = temp;
         }
-        i = i + 1;
+        j = j + 1;
     }
+    i = i + 1;
 }
 """,
     "kotlin": """\
-fun main() {
-    var arr: IntArray = intArrayOf(5, 3, 8, 1, 2)
-    var n: Int = 5
-    var i: Int = 0
-    while (i < n) {
-        var j: Int = 0
-        while (j < n - 1 - i) {
-            if (arr[j] > arr[j + 1]) {
-                var temp: Int = arr[j]
-                arr[j] = arr[j + 1]
-                arr[j + 1] = temp
-            }
-            j = j + 1
+var arr: IntArray = intArrayOf(5, 3, 8, 1, 2)
+var n: Int = 5
+var i: Int = 0
+while (i < n) {
+    var j: Int = 0
+    while (j < n - 1 - i) {
+        if (arr[j] > arr[j + 1]) {
+            var temp: Int = arr[j]
+            arr[j] = arr[j + 1]
+            arr[j + 1] = temp
         }
-        i = i + 1
+        j = j + 1
     }
+    i = i + 1
 }
 """,
     "scala": """\
 object M {
-    def main(): Unit = {
-        var arr: Array[Int] = Array(5, 3, 8, 1, 2)
-        var n: Int = 5
+    var arr: Array[Int] = Array(5, 3, 8, 1, 2)
+    var n: Int = 5
+    def bubbleSort(): Unit = {
         var i: Int = 0
         while (i < n) {
             var j: Int = 0
@@ -267,6 +269,7 @@ object M {
             i = i + 1
         }
     }
+    val _init: Unit = bubbleSort()
 }
 """,
     "lua": """\
@@ -399,12 +402,11 @@ class TestBubbleSortCrossLanguage:
 # VM execution tests (parametrized over executable languages)
 # ---------------------------------------------------------------------------
 
-# Bubble sort executable set: languages where arr is at top-level scope
-# and accessible after execution. C/C++/Rust/Kotlin wrap logic in functions
-# not called from top level; Go/Java/C#/Scala inside main()/class.
-BUBBLE_SORT_EXECUTABLE_LANGUAGES: frozenset[str] = frozenset(
-    {"python", "javascript", "typescript", "ruby", "php", "lua"}
-)
+# Scala excluded: arr(j) syntax is indistinguishable from function call
+# without type inference, so array indexing doesn't work in the VM.
+BUBBLE_SORT_EXECUTABLE_LANGUAGES: frozenset[str] = STANDARD_EXECUTABLE_LANGUAGES - {
+    "scala"
+}
 EXPECTED_SORTED_ARRAY = [1, 2, 3, 5, 8]
 
 
