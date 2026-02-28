@@ -233,4 +233,33 @@ This document captures key architectural decisions made during the development o
 | difference-of-squares | while loop, accumulator, function composition | 9 | 15 | 2 | 270 | 287 |
 | **Total** | | **22** | **45** | **6** | **660** | **711** |
 
-Each exercise tests IR lowering quality, cross-language consistency, and VM execution correctness for every canonical test case. The file-based approach scales to additional exercises without growing test file size. The `exercism_harvest.py` script automates fetching new canonical data. Combined with Rosetta, the full suite reaches 2412 tests.
+Each exercise tests IR lowering quality, cross-language consistency, and VM execution correctness for every canonical test case. The file-based approach scales to additional exercises without growing test file size. The `exercism_harvest.py` script automates fetching new canonical data.
+
+---
+
+### ADR-023: String I/O support in Exercism suite — two-fer and hamming (2026-02-28)
+
+**Context:** The first 3 Exercism exercises (leap, collatz, difference-of-squares) are numeric-only. Adding string-handling exercises broadens construct coverage to string concatenation, indexing, and character comparison.
+
+**Decision:** Add two exercises that introduce string I/O:
+1. **two-fer** — tests string concatenation (`+`, `..`, `.` depending on language) and string literal passing.
+2. **hamming** — tests string indexing (`s[i]`), character comparison (`!=`), while loops, and multi-argument functions. Strand length is passed as an explicit third argument to avoid `len()` portability issues across languages.
+
+Three VM/infrastructure prerequisites were needed:
+- **Native string indexing** in `_handle_load_index` — when the resolved value is a raw Python `str` (not a heap reference) and the index is an `int`, return the character directly. Guards against false matches by checking the value is not in `vm.heap`.
+- **Native call-index** in `_handle_call_function` — Scala's `s1(i)` syntax lowers to `CALL_FUNCTION` rather than `LOAD_INDEX`. When the resolved function value is a raw string (not a VM internal reference) and there's exactly one `int` argument, treat it as indexing.
+- **PHP `.` concat operator** added to the VM `BINOP_TABLE`.
+- **Pascal single-quote string literals** in `_format_string` for argument substitution.
+
+**Consequences:** 274 additional tests (107 two-fer + 167 hamming), bringing Exercism total to 985 and overall to 2686. String handling is now verified end-to-end across all 15 languages with zero LLM calls.
+
+| Exercise | Constructs tested | Cases | Lowering | Cross-lang | Execution | Total |
+|----------|-------------------|-------|----------|------------|-----------|-------|
+| leap | modulo, boolean logic, short-circuit eval | 9 | 15 | 2 | 270 | 287 |
+| collatz-conjecture | while loop, conditional, integer division | 4 | 15 | 2 | 120 | 137 |
+| difference-of-squares | while loop, accumulator, function composition | 9 | 15 | 2 | 270 | 287 |
+| two-fer | string concatenation, string literals | 3 | 15 | 2 | 90 | 107 |
+| hamming | string indexing, character comparison, while loop | 5 | 15 | 2 | 150 | 167 |
+| **Total** | | **30** | **75** | **10** | **900** | **985** |
+
+Combined with Rosetta, the full suite reaches 2686 tests.

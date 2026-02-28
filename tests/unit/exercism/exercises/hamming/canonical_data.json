@@ -1,0 +1,54 @@
+{
+  "exercise": "hamming",
+  "cases": [
+    {
+      "uuid": "f6dcb64f-97b3-4207-8028-5e4ab4b7b9d4",
+      "description": "empty strands",
+      "property": "distance",
+      "input": { "strand1": "", "strand2": "" },
+      "expected": 0
+    },
+    {
+      "uuid": "54681314-eee2-439a-9db0-b0636c656156",
+      "description": "single letter identical strands",
+      "property": "distance",
+      "input": { "strand1": "A", "strand2": "A" },
+      "expected": 0
+    },
+    {
+      "uuid": "294479a3-a4c8-478f-8d63-6209815a827b",
+      "description": "single letter different strands",
+      "property": "distance",
+      "input": { "strand1": "G", "strand2": "T" },
+      "expected": 1
+    },
+    {
+      "uuid": "9bfe76c6-6b9b-4c56-b3e4-178db39f8c64",
+      "description": "long identical strands",
+      "property": "distance",
+      "input": { "strand1": "GGACTGAAATCTG", "strand2": "GGACTGAAATCTG" },
+      "expected": 0
+    },
+    {
+      "uuid": "cd2273a5-0580-4b5e-b28a-944a89d5afde",
+      "description": "long different strands",
+      "property": "distance",
+      "input": { "strand1": "GGACGGATTCTG", "strand2": "AGGACGGATTCT" },
+      "expected": 9
+    },
+    {
+      "uuid": "919f8ef0-b767-4ba1-80ef-9b1f20803cbf",
+      "description": "disallow first strand longer",
+      "property": "distance",
+      "input": { "strand1": "AATG", "strand2": "AAA" },
+      "expected": { "error": "strands must be of equal length" }
+    },
+    {
+      "uuid": "8652f0ce-7581-45e7-a36c-68f8ad9e6c5e",
+      "description": "disallow second strand longer",
+      "property": "distance",
+      "input": { "strand1": "ATA", "strand2": "AGTG" },
+      "expected": { "error": "strands must be of equal length" }
+    }
+  ]
+}

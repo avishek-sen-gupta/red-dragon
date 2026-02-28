@@ -355,6 +355,26 @@ def _handle_load_index(
     arr_val = _resolve_reg(vm, inst.operands[0])
     idx_val = _resolve_reg(vm, inst.operands[1])
     addr = _heap_addr(arr_val)
+
+    # Native string/list indexing — bypass heap for raw Python values.
+    # Only applies when the value is NOT a heap reference.
+    if isinstance(idx_val, int) and (addr not in vm.heap):
+        if isinstance(arr_val, list):
+            element = arr_val[idx_val]
+            return ExecutionResult.success(
+                StateUpdate(
+                    register_writes={inst.result_reg: _serialize_value(element)},
+                    reasoning=f"native index {arr_val!r}[{idx_val}] = {element!r}",
+                )
+            )
+        if isinstance(arr_val, str) and addr not in vm.heap:
+            element = arr_val[idx_val]
+            return ExecutionResult.success(
+                StateUpdate(
+                    register_writes={inst.result_reg: _serialize_value(element)},
+                    reasoning=f"native index {arr_val!r}[{idx_val}] = {element!r}",
+                )
+            )
     if addr and addr not in vm.heap:
         # Materialise a synthetic heap entry for symbolic arrays so that
         # repeated index accesses with the same key are deduplicated.
@@ -682,6 +702,24 @@ def _handle_call_function(
     if not func_val:
         # Unknown function — create symbolic representing the call result
         return _symbolic_call_result(func_name, args, inst, vm)
+
+    # 2b. Native string/list indexing — e.g. Scala s1(i) → s1[i]
+    # Exclude VM internal references (functions, classes, heap addresses).
+    if (
+        (
+            isinstance(func_val, list)
+            or (isinstance(func_val, str) and not func_val.startswith("<"))
+        )
+        and len(args) == 1
+        and isinstance(args[0], int)
+    ):
+        element = func_val[args[0]]
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: _serialize_value(element)},
+                reasoning=f"native call-index {func_name}({args[0]}) = {element!r}",
+            )
+        )
 
     # 3. Class constructor
     ctor_result = _try_class_constructor_call(
