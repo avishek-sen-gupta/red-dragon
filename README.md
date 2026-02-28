@@ -304,11 +304,11 @@ The **Exercism integration test suite** (`tests/unit/exercism/`) extends coverag
 | **reverse-string** | backward iteration, string indexing, string building char-by-char | 5 | 15 | 2 | 150 | **167** |
 | **rna-transcription** | character comparison, multi-branch if, string building, char mapping | 6 | 15 | 2 | 180 | **197** |
 | **perfect-numbers** | divisor loop, modulo, accumulator, three-way string return | 9 | 15 | 2 | 270 | **287** |
-| **triangle** | nested ifs, validity guards, 3-arg functions, multi-property boolean return | 18 | 15 | 2 | 540 | **557** |
+| **triangle** | nested ifs, validity guards, 3-arg functions, float sides, multi-property boolean return | 21 | 15 | 2 | 630 | **647** |
 | **space-age** | float division, float constants, string-to-number mapping, mixed args | 8 | 15 | 2 | 240 | **257** |
-| **Total** | | **76** | **150** | **20** | **2280** | **2450** |
+| **Total** | | **79** | **150** | **20** | **2370** | **2540** |
 
-Combined with the Rosetta suite, the project has **4152 tests** (4152 passed, 3 xfailed) — all with zero LLM calls.
+Combined with the Rosetta suite, the project has **4242 tests** (4242 passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 
