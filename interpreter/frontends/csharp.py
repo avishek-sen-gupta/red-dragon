@@ -47,7 +47,7 @@ class CSharpFrontend(BaseFrontend):
             "assignment_expression": self._lower_assignment_expr,
             "cast_expression": self._lower_cast_expr,
             "conditional_expression": self._lower_ternary,
-            "interpolated_string_expression": self._lower_const_literal,
+            "interpolated_string_expression": self._lower_csharp_interpolated_string,
             "type_identifier": self._lower_identifier,
             "predefined_type": self._lower_identifier,
             "typeof_expression": self._lower_typeof,
@@ -162,6 +162,51 @@ class CSharpFrontend(BaseFrontend):
             operands=[var_name, val_reg],
             node=node,
         )
+
+    # -- C#: interpolated string expression ------------------------------
+
+    def _lower_csharp_interpolated_string(self, node) -> str:
+        """Lower C# $\"...{expr}...\" into CONST + expr + BINOP '+' chain.
+
+        Known limitations:
+        - Format specifiers (``{x:F2}``) are silently discarded; the
+          ``interpolation_format_clause`` child is ignored.
+        - Alignment clauses (``{x,10}``) are silently discarded; the
+          ``interpolation_alignment_clause`` child is ignored.
+        Both are presentation-only and do not affect data-flow analysis.
+        """
+        has_interpolation = any(c.type == "interpolation" for c in node.children)
+        if not has_interpolation:
+            return self._lower_const_literal(node)
+
+        parts: list[str] = []
+        for child in node.children:
+            if child.type == "string_content":
+                frag_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.CONST,
+                    result_reg=frag_reg,
+                    operands=[self._node_text(child)],
+                    node=child,
+                )
+                parts.append(frag_reg)
+            elif child.type == "interpolation":
+                _INTERPOLATION_NOISE = frozenset(
+                    {
+                        "interpolation_brace",
+                        "interpolation_format_clause",
+                        "interpolation_alignment_clause",
+                    }
+                )
+                named = [
+                    c
+                    for c in child.children
+                    if c.is_named and c.type not in _INTERPOLATION_NOISE
+                ]
+                if named:
+                    parts.append(self._lower_expr(named[0]))
+            # skip: interpolation_start, ", punctuation
+        return self._lower_interpolated_string_parts(parts, node)
 
     # -- C#: invocation expression -------------------------------------
 

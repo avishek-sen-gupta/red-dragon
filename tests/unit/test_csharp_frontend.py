@@ -852,6 +852,39 @@ class TestCSharpTupleExpression:
         assert len(store_indices) >= 3
 
 
+class TestCSharpStringInterpolation:
+    def test_interpolation_basic(self):
+        """$"Hello {name}" should decompose into CONST + LOAD_VAR + BINOP '+'."""
+        ir = _parse_and_lower('var x = $"Hello {name}";')
+        load_vars = _find_all(ir, Opcode.LOAD_VAR)
+        assert any("name" in inst.operands for inst in load_vars)
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+    def test_interpolation_expression(self):
+        """$"Hello {x + 1}" should produce BINOP for the expression and BINOP '+' for concatenation."""
+        ir = _parse_and_lower('var y = $"Hello {x + 1}";')
+        binops = _find_all(ir, Opcode.BINOP)
+        plus_ops = [b for b in binops if "+" in b.operands]
+        assert len(plus_ops) >= 2  # one for x+1, one for string concat
+
+    def test_interpolation_multiple(self):
+        """$"{a} and {b}" should produce two LOAD_VAR and multiple BINOP '+'."""
+        ir = _parse_and_lower('var x = $"{a} and {b}";')
+        load_vars = _find_all(ir, Opcode.LOAD_VAR)
+        assert any("a" in inst.operands for inst in load_vars)
+        assert any("b" in inst.operands for inst in load_vars)
+        binops = _find_all(ir, Opcode.BINOP)
+        plus_ops = [b for b in binops if "+" in b.operands]
+        assert len(plus_ops) >= 2
+
+    def test_no_interpolation_is_const(self):
+        """Plain "hello" remains CONST — no interpolation."""
+        ir = _parse_and_lower('var x = "hello";')
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("hello" in str(inst.operands) for inst in consts)
+
+
 class TestCSharpIsPatternExpression:
     def test_is_pattern_basic(self):
         ir = _parse_and_lower("var r = x is int y;")
