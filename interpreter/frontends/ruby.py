@@ -15,11 +15,6 @@ logger = logging.getLogger(__name__)
 class RubyFrontend(BaseFrontend):
     """Lowers a Ruby tree-sitter AST into flattened TAC IR."""
 
-    NONE_LITERAL = "nil"
-    TRUE_LITERAL = "true"
-    FALSE_LITERAL = "false"
-    DEFAULT_RETURN_VALUE = "nil"
-
     ATTRIBUTE_NODE_TYPE = "call"
     ATTR_OBJECT_FIELD = "receiver"
     ATTR_ATTRIBUTE_FIELD = "method"
@@ -36,9 +31,9 @@ class RubyFrontend(BaseFrontend):
             "integer": self._lower_const_literal,
             "float": self._lower_const_literal,
             "string": self._lower_const_literal,
-            "true": self._lower_const_literal,
-            "false": self._lower_const_literal,
-            "nil": self._lower_const_literal,
+            "true": self._lower_canonical_true,
+            "false": self._lower_canonical_false,
+            "nil": self._lower_canonical_none,
             "binary": self._lower_binop,
             "call": self._lower_ruby_call,
             "parenthesized_expression": self._lower_paren,

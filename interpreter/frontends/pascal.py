@@ -74,11 +74,6 @@ _KEYWORD_NOISE: frozenset[str] = frozenset(
 class PascalFrontend(BaseFrontend):
     """Lowers a Pascal tree-sitter AST into flattened TAC IR."""
 
-    NONE_LITERAL = "nil"
-    TRUE_LITERAL = "true"
-    FALSE_LITERAL = "false"
-    DEFAULT_RETURN_VALUE = "nil"
-
     COMMENT_TYPES = frozenset({"comment"})
     NOISE_TYPES = _KEYWORD_NOISE
 
@@ -98,6 +93,9 @@ class PascalFrontend(BaseFrontend):
             "exprSubscript": self._lower_pascal_subscript,
             "exprUnary": self._lower_pascal_unary,
             "exprBrackets": self._lower_pascal_brackets,
+            "kTrue": self._lower_canonical_true,
+            "kFalse": self._lower_canonical_false,
+            "kNil": self._lower_canonical_none,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "root": self._lower_pascal_root,
@@ -170,22 +168,55 @@ class PascalFrontend(BaseFrontend):
                 self._lower_pascal_decl_var(child)
 
     def _lower_pascal_decl_var(self, node):
-        """Lower declVar — identifier : typeref — declare with nil default."""
+        """Lower declVar — identifier : type.
+
+        Array types emit NEW_ARRAY; scalar types default to NONE_LITERAL.
+        """
         id_node = next((c for c in node.children if c.type == "identifier"), None)
         if id_node is None:
             return
         var_name = self._node_text(id_node)
-        val_reg = self._fresh_reg()
-        self._emit(
-            Opcode.CONST,
-            result_reg=val_reg,
-            operands=[self.NONE_LITERAL],
+        type_node = next((c for c in node.children if c.type == "type"), None)
+        array_size = self._pascal_array_size(type_node) if type_node else 0
+        if array_size > 0:
+            size_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=size_reg, operands=[str(array_size)])
+            arr_reg = self._fresh_reg()
+            self._emit(
+                Opcode.NEW_ARRAY,
+                result_reg=arr_reg,
+                operands=["array", size_reg],
+                node=node,
+            )
+            self._emit(Opcode.STORE_VAR, operands=[var_name, arr_reg], node=node)
+        else:
+            val_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=val_reg,
+                operands=[self.NONE_LITERAL],
+            )
+            self._emit(Opcode.STORE_VAR, operands=[var_name, val_reg], node=node)
+
+    def _pascal_array_size(self, type_node) -> int:
+        """Extract array size from a Pascal type node containing declArray."""
+        decl_array = next(
+            (c for c in type_node.children if c.type == "declArray"), None
         )
-        self._emit(
-            Opcode.STORE_VAR,
-            operands=[var_name, val_reg],
-            node=node,
-        )
+        if decl_array is None:
+            return 0
+        range_node = next((c for c in decl_array.children if c.type == "range"), None)
+        if range_node is None:
+            return 0
+        nums = [c for c in range_node.children if c.type == "literalNumber"]
+        if len(nums) < 2:
+            return 0
+        try:
+            lo = int(self._node_text(nums[0]))
+            hi = int(self._node_text(nums[1]))
+            return hi - lo + 1
+        except ValueError:
+            return 0
 
     # -- Pascal: assignment (identifier := expression) -----------------------------
 

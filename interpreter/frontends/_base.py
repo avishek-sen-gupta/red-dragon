@@ -51,8 +51,8 @@ class BaseFrontend(Frontend):
     BLOCK_NODE_TYPES: frozenset[str] = frozenset()
 
     NONE_LITERAL: str = "None"
-    TRUE_LITERAL: str = "true"
-    FALSE_LITERAL: str = "false"
+    TRUE_LITERAL: str = "True"
+    FALSE_LITERAL: str = "False"
     DEFAULT_RETURN_VALUE: str = "None"
 
     COMMENT_TYPES: frozenset[str] = frozenset({"comment"})
@@ -196,6 +196,37 @@ class BaseFrontend(Frontend):
             node=node,
         )
         return reg
+
+    def _lower_canonical_none(self, node) -> str:
+        """Emit canonical ``CONST "None"`` for any language's null/nil/undefined."""
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST, result_reg=reg, operands=[self.NONE_LITERAL], node=node
+        )
+        return reg
+
+    def _lower_canonical_true(self, node) -> str:
+        """Emit canonical ``CONST "True"``."""
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST, result_reg=reg, operands=[self.TRUE_LITERAL], node=node
+        )
+        return reg
+
+    def _lower_canonical_false(self, node) -> str:
+        """Emit canonical ``CONST "False"``."""
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST, result_reg=reg, operands=[self.FALSE_LITERAL], node=node
+        )
+        return reg
+
+    def _lower_canonical_bool(self, node) -> str:
+        """Emit canonical ``CONST "True"`` or ``CONST "False"`` based on node text."""
+        text = self._node_text(node).strip().lower()
+        if text == "true":
+            return self._lower_canonical_true(node)
+        return self._lower_canonical_false(node)
 
     def _lower_identifier(self, node) -> str:
         reg = self._fresh_reg()
