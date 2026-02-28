@@ -30,7 +30,7 @@ class PhpFrontend(BaseFrontend):
             "integer": self._lower_const_literal,
             "float": self._lower_const_literal,
             "string": self._lower_const_literal,
-            "encapsed_string": self._lower_const_literal,
+            "encapsed_string": self._lower_php_encapsed_string,
             "boolean": self._lower_canonical_bool,
             "null": self._lower_canonical_none,
             "binary_expression": self._lower_binop,
@@ -57,7 +57,7 @@ class PhpFrontend(BaseFrontend):
             "scoped_property_access_expression": self._lower_php_scoped_property_access,
             "yield_expression": self._lower_php_yield,
             "reference_assignment_expression": self._lower_php_reference_assignment,
-            "heredoc": self._lower_const_literal,
+            "heredoc": self._lower_php_heredoc,
             "nowdoc": self._lower_const_literal,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
@@ -111,6 +111,61 @@ class PhpFrontend(BaseFrontend):
             node=node,
         )
         return reg
+
+    # -- PHP: interpolated strings (encapsed_string, heredoc) --------------------
+
+    _NON_INTERPOLATION_TYPES = frozenset({"string_content", "escape_sequence"})
+
+    def _lower_php_interpolated_children(self, children, node) -> str:
+        """Shared logic: decompose string_content / variable_name / expr children into CONST + BINOP '+'.
+
+        Used by both encapsed_string and heredoc_body.
+        NOTE: PHP ``dynamic_variable_name`` (``${$var}``) is not registered in
+        ``_EXPR_DISPATCH`` and falls back to SYMBOLIC — variable-variable
+        indirection cannot be statically lowered.
+        """
+        parts: list[str] = []
+        for child in children:
+            if child.type == "string_content":
+                frag_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.CONST,
+                    result_reg=frag_reg,
+                    operands=[self._node_text(child)],
+                    node=child,
+                )
+                parts.append(frag_reg)
+            elif child.type == "variable_name":
+                parts.append(self._lower_php_variable(child))
+            elif child.is_named:
+                parts.append(self._lower_expr(child))
+            # skip punctuation: ", {, }
+
+        return self._lower_interpolated_string_parts(parts, node)
+
+    def _lower_php_encapsed_string(self, node) -> str:
+        """Lower PHP double-quoted string, decomposing interpolation into CONST + LOAD_VAR + BINOP '+'."""
+        has_interpolation = any(
+            c.is_named and c.type not in self._NON_INTERPOLATION_TYPES
+            for c in node.children
+        )
+        if not has_interpolation:
+            return self._lower_const_literal(node)
+        return self._lower_php_interpolated_children(node.children, node)
+
+    def _lower_php_heredoc(self, node) -> str:
+        """Lower PHP heredoc (<<<EOT ... EOT), decomposing interpolation inside heredoc_body."""
+        body = next((c for c in node.children if c.type == "heredoc_body"), None)
+        if body is None:
+            return self._lower_const_literal(node)
+
+        has_interpolation = any(
+            c.is_named and c.type not in self._NON_INTERPOLATION_TYPES
+            for c in body.children
+        )
+        if not has_interpolation:
+            return self._lower_const_literal(node)
+        return self._lower_php_interpolated_children(body.children, node)
 
     # -- PHP: function call expression -----------------------------------------
 
