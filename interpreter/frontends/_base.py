@@ -187,6 +187,22 @@ class BaseFrontend(Frontend):
 
     # ── common expression lowerers ───────────────────────────────
 
+    def _lower_interpolated_string_parts(self, parts: list[str], node) -> str:
+        """Chain a list of string-part registers with BINOP '+' concatenation."""
+        if not parts:
+            return self._lower_const_literal(node)
+        result = parts[0]
+        for part in parts[1:]:
+            new_reg = self._fresh_reg()
+            self._emit(
+                Opcode.BINOP,
+                result_reg=new_reg,
+                operands=["+", result, part],
+                node=node,
+            )
+            result = new_reg
+        return result
+
     def _lower_const_literal(self, node) -> str:
         reg = self._fresh_reg()
         self._emit(

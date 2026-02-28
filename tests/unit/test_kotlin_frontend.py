@@ -631,3 +631,40 @@ val answer = x ?: 99
         vm, stats = execute_for_language("kotlin", source)
         assert extract_answer(vm, "kotlin") == 42
         assert stats.llm_calls == 0
+
+
+class TestKotlinStringInterpolation:
+    def test_interpolation_basic(self):
+        instructions = _parse_kotlin('"Hello $name"')
+        opcodes = _opcodes(instructions)
+        assert Opcode.LOAD_VAR in opcodes
+        assert Opcode.BINOP in opcodes
+        assert Opcode.SYMBOLIC not in opcodes
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("name" in inst.operands for inst in loads)
+
+    def test_interpolation_expression(self):
+        instructions = _parse_kotlin('"${x + 1}"')
+        opcodes = _opcodes(instructions)
+        assert Opcode.BINOP in opcodes
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+    def test_interpolation_multiple(self):
+        instructions = _parse_kotlin('"$a and $b"')
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        load_names = [inst.operands[0] for inst in loads]
+        assert "a" in load_names
+        assert "b" in load_names
+        binops = _find_all(instructions, Opcode.BINOP)
+        concat_ops = [inst for inst in binops if inst.operands[0] == "+"]
+        assert len(concat_ops) >= 2
+
+    def test_no_interpolation_is_const(self):
+        instructions = _parse_kotlin('"hello"')
+        consts = _find_all(instructions, Opcode.CONST)
+        assert len(consts) >= 1
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert not binops
