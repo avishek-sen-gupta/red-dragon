@@ -119,6 +119,7 @@ class PascalFrontend(BaseFrontend):
             "declType": self._lower_pascal_noop,
             "declTypes": self._lower_pascal_noop,
             "declUses": self._lower_pascal_noop,
+            "try": self._lower_pascal_try,
         }
 
     # -- Pascal: root / program structure ------------------------------------------
@@ -907,6 +908,14 @@ class PascalFrontend(BaseFrontend):
             operands=[var_name, val_reg],
             node=node,
         )
+
+    # -- Pascal: try/except/finally ------------------------------------------------
+
+    def _lower_pascal_try(self, node):
+        """Lower try/except/finally — lower all named children as statements."""
+        for child in node.children:
+            if child.is_named:
+                self._lower_stmt(child)
 
     # -- Pascal: type declarations (no-op) -----------------------------------------
 

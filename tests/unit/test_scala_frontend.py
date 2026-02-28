@@ -676,6 +676,62 @@ class TestScalaDestructuring:
         assert len(load_indices) >= 2
 
 
+class TestScalaCaseClassPattern:
+    def test_case_class_pattern_no_symbolic(self):
+        source = "object M { def f(s: Any) = s match { case Circle(r) => r } }"
+        instructions = _parse_scala(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("case_class_pattern" in str(inst.operands) for inst in symbolics)
+
+    def test_case_class_pattern_new_object(self):
+        source = "object M { def f(s: Any) = s match { case Circle(r) => r } }"
+        instructions = _parse_scala(source)
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("Circle" in str(inst.operands) for inst in new_objs)
+
+
+class TestScalaFunctionDeclaration:
+    def test_function_declaration_no_symbolic(self):
+        source = "trait Shape { def area(): Double }"
+        instructions = _parse_scala(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any(
+            "function_declaration" in str(inst.operands) for inst in symbolics
+        )
+
+    def test_function_declaration_stores(self):
+        source = "trait Shape { def area(): Double }"
+        instructions = _parse_scala(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("area" in inst.operands for inst in stores)
+
+
+class TestScalaTypedPattern:
+    def test_typed_pattern_no_symbolic(self):
+        source = "object M { def f(x: Any) = x match { case i: Int => i } }"
+        instructions = _parse_scala(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("typed_pattern" in str(inst.operands) for inst in symbolics)
+
+
+class TestScalaGuard:
+    def test_guard_no_symbolic(self):
+        source = "object M { def f(x: Int) = x match { case n if n > 0 => n } }"
+        instructions = _parse_scala(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:guard" in str(inst.operands) for inst in symbolics)
+
+
+class TestScalaTuplePatternMatch:
+    def test_tuple_pattern_no_symbolic(self):
+        source = "object M { def f(t: Any) = t match { case (a, b) => a } }"
+        instructions = _parse_scala(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any(
+            "unsupported:tuple_pattern" in str(inst.operands) for inst in symbolics
+        )
+
+
 class TestScalaOperatorIdentifier:
     def test_operator_identifier_no_symbolic(self):
         source = "object M { val x = List(1, 2, 3).reduce(_ + _) }"

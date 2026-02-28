@@ -642,6 +642,48 @@ class TestRustRangeExpression:
         assert any("range" in inst.operands for inst in calls)
 
 
+class TestRustTupleStructPattern:
+    def test_tuple_struct_pattern_no_symbolic(self):
+        source = "fn f(x: Option<i32>) { match x { Some(v) => v, None => 0 } }"
+        instructions = _parse_rust(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any(
+            "tuple_struct_pattern" in str(inst.operands) for inst in symbolics
+        )
+
+    def test_tuple_struct_pattern_const(self):
+        source = "fn f(x: Option<i32>) { match x { Some(v) => v, None => 0 } }"
+        instructions = _parse_rust(source)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("Some" in str(inst.operands) for inst in consts)
+
+
+class TestRustGenericFunction:
+    def test_generic_function_no_symbolic(self):
+        source = 'fn f() { let x = "42".parse::<i32>(); }'
+        instructions = _parse_rust(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("generic_function" in str(inst.operands) for inst in symbolics)
+
+
+class TestRustLetCondition:
+    def test_let_condition_no_symbolic(self):
+        source = "fn f(x: Option<i32>) { if let Some(v) = x { v } }"
+        instructions = _parse_rust(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("let_condition" in str(inst.operands) for inst in symbolics)
+
+
+class TestRustStructPattern:
+    def test_struct_pattern_no_symbolic(self):
+        source = "fn f(p: Point) { match p { Point { x, y } => x + y } }"
+        instructions = _parse_rust(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any(
+            "unsupported:struct_pattern" in str(inst.operands) for inst in symbolics
+        )
+
+
 class TestRustMatchPatternUnwrap:
     def test_match_pattern_no_symbolic(self):
         source = "fn f() { match x { (1) => 2, _ => 0 } }"

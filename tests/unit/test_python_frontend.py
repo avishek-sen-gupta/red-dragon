@@ -1146,3 +1146,25 @@ class TestPythonExpressionList:
         instructions = _parse_python(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("expression_list" in str(inst.operands) for inst in symbolics)
+
+
+class TestPythonDictPattern:
+    def test_dict_pattern_no_symbolic(self):
+        source = 'match data:\n    case {"text": message}:\n        pass'
+        instructions = _parse_python(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("dict_pattern" in str(inst.operands) for inst in symbolics)
+
+    def test_dict_pattern_new_object(self):
+        source = 'match data:\n    case {"key": val}:\n        pass'
+        instructions = _parse_python(source)
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("dict_pattern" in str(inst.operands) for inst in new_objs)
+
+
+class TestPythonSplatPattern:
+    def test_splat_pattern_no_symbolic(self):
+        source = "match items:\n    case [first, *rest]:\n        pass"
+        instructions = _parse_python(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("splat_pattern" in str(inst.operands) for inst in symbolics)

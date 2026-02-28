@@ -79,6 +79,10 @@ class RustFrontend(BaseFrontend):
             "continue_expression": self._lower_continue_as_expr,
             "break_expression": self._lower_break_as_expr,
             "match_pattern": self._lower_paren,
+            "tuple_struct_pattern": self._lower_tuple_struct_pattern,
+            "generic_function": self._lower_generic_function,
+            "let_condition": self._lower_let_condition,
+            "struct_pattern": self._lower_struct_pattern_expr,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -1050,3 +1054,114 @@ class RustFrontend(BaseFrontend):
                 operands=[self._node_text(target), val_reg],
                 node=parent_node,
             )
+
+    # -- Rust: tuple_struct_pattern (e.g., Message::Write(text)) ---------------
+
+    def _lower_tuple_struct_pattern(self, node) -> str:
+        """Lower tuple_struct_pattern like Some(x) or Message::Write(text).
+
+        Emits CONST for the variant name, then STORE_VAR for each inner binding.
+        """
+        type_node = next(
+            (
+                c
+                for c in node.children
+                if c.type in ("identifier", "scoped_identifier", "type_identifier")
+            ),
+            None,
+        )
+        variant_name = (
+            self._node_text(type_node) if type_node else self._node_text(node)
+        )
+        variant_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=variant_reg,
+            operands=[variant_name],
+            node=node,
+        )
+        # Extract inner bindings (identifiers inside parentheses)
+        inner_ids = [
+            c
+            for c in node.children
+            if c.is_named
+            and c.type not in ("identifier", "scoped_identifier", "type_identifier")
+        ]
+        for i, child in enumerate(inner_ids):
+            child_reg = self._lower_expr(child)
+            idx_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            self._emit(
+                Opcode.STORE_INDEX,
+                operands=[variant_reg, idx_reg, child_reg],
+            )
+        return variant_reg
+
+    # -- Rust: generic_function (turbofish syntax) -----------------------------
+
+    def _lower_generic_function(self, node) -> str:
+        """Lower a.parse::<i32>() → strip type params, lower as identifier."""
+        named_children = [c for c in node.children if c.is_named]
+        if named_children:
+            return self._lower_expr(named_children[0])
+        return self._lower_const_literal(node)
+
+    # -- Rust: let_condition (if let / while let) ------------------------------
+
+    def _lower_let_condition(self, node) -> str:
+        """Lower `let Some(val) = opt` → lower value, destructure pattern, return cond."""
+        pattern_node = node.child_by_field_name("pattern")
+        value_node = node.child_by_field_name("value")
+        val_reg = self._lower_expr(value_node) if value_node else self._fresh_reg()
+
+        if pattern_node:
+            pattern_reg = self._lower_expr(pattern_node)
+            cond_reg = self._fresh_reg()
+            self._emit(
+                Opcode.BINOP,
+                result_reg=cond_reg,
+                operands=["==", val_reg, pattern_reg],
+                node=node,
+            )
+            return cond_reg
+        return val_reg
+
+    # -- Rust: struct_pattern as expression ------------------------------------
+
+    def _lower_struct_pattern_expr(self, node) -> str:
+        """Lower struct_pattern like Message::Move { x, y } as pattern value."""
+        type_node = next(
+            (
+                c
+                for c in node.children
+                if c.type in ("type_identifier", "scoped_type_identifier")
+            ),
+            None,
+        )
+        type_name = self._node_text(type_node) if type_node else self._node_text(node)
+        obj_reg = self._fresh_reg()
+        self._emit(
+            Opcode.NEW_OBJECT,
+            result_reg=obj_reg,
+            operands=[f"struct_pattern:{type_name}"],
+            node=node,
+        )
+        # Extract field bindings
+        field_patterns = [c for c in node.children if c.type == "field_pattern"]
+        for fp in field_patterns:
+            name_node = next(
+                (
+                    ch
+                    for ch in fp.children
+                    if ch.type in ("field_identifier", "shorthand_field_identifier")
+                ),
+                None,
+            )
+            if name_node:
+                field_name = self._node_text(name_node)
+                key_reg = self._fresh_reg()
+                self._emit(Opcode.CONST, result_reg=key_reg, operands=[field_name])
+                val_reg = self._fresh_reg()
+                self._emit(Opcode.CONST, result_reg=val_reg, operands=[field_name])
+                self._emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
+        return obj_reg

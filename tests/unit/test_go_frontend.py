@@ -839,6 +839,26 @@ class TestGoVarDeclarationMultiName:
         assert "z" in store_names
 
 
+class TestGoReceiveStatement:
+    def test_receive_statement_no_symbolic(self):
+        source = (
+            "package main\nfunc f() {\n  ch := make(chan int)\n"
+            "  select {\n  case v := <-ch:\n    _ = v\n  }\n}"
+        )
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("receive_statement" in str(inst.operands) for inst in symbolics)
+
+    def test_receive_statement_chan_recv(self):
+        source = (
+            "package main\nfunc f() {\n  ch := make(chan int)\n"
+            "  select {\n  case v := <-ch:\n    _ = v\n  }\n}"
+        )
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("chan_recv" in inst.operands for inst in calls)
+
+
 class TestGoChannelType:
     def test_channel_type_no_symbolic(self):
         source = "package main\nfunc f() { var ch chan int }"

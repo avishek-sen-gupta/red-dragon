@@ -34,6 +34,7 @@ class CSharpFrontend(BaseFrontend):
             "character_literal": self._lower_const_literal,
             "verbatim_string_literal": self._lower_const_literal,
             "constant_pattern": self._lower_const_literal,
+            "declaration_pattern": self._lower_declaration_pattern,
             "boolean_literal": self._lower_canonical_bool,
             "null_literal": self._lower_canonical_none,
             "this_expression": self._lower_identifier,
@@ -95,6 +96,7 @@ class CSharpFrontend(BaseFrontend):
             "event_declaration": self._lower_event_decl,
             "record_declaration": self._lower_class_def,
             "record_struct_declaration": self._lower_class_def,
+            "variable_declaration": self._lower_variable_declaration,
         }
         self._EXPR_DISPATCH["await_expression"] = self._lower_await_expr
         self._EXPR_DISPATCH["switch_expression"] = self._lower_switch_expr
@@ -488,6 +490,27 @@ class CSharpFrontend(BaseFrontend):
         if children:
             return self._lower_expr(children[0])
         return self._lower_const_literal(node)
+
+    # -- C#: declaration_pattern (pattern matching) ----------------------
+
+    def _lower_declaration_pattern(self, node) -> str:
+        """Lower `int i` declaration pattern → CONST type + STORE_VAR binding."""
+        named_children = [c for c in node.children if c.is_named]
+        type_node = named_children[0] if named_children else None
+        designation = named_children[1] if len(named_children) > 1 else None
+
+        type_reg = self._fresh_reg()
+        type_name = self._node_text(type_node) if type_node else "Object"
+        self._emit(Opcode.CONST, result_reg=type_reg, operands=[type_name])
+
+        if designation:
+            var_name = self._node_text(designation)
+            self._emit(
+                Opcode.STORE_VAR,
+                operands=[var_name, type_reg],
+                node=node,
+            )
+        return type_reg
 
     # -- C#: lambda ----------------------------------------------------
 
