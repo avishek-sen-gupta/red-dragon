@@ -348,3 +348,27 @@ Additionally, fix the Rust frontend to register loop/break/continue node types i
 | **New total** | | **28** | **60** | **8** | **840** | **908** |
 
 Combined with previous exercises and Rosetta, the full suite reaches 5150 tests.
+
+---
+
+### ADR-027: Exercism expansion — pangram, bob, luhn, acronym (2026-02-28)
+
+**Context:** The Exercism suite covered 14 exercises (3448 tests, 5150 total). Further construct coverage was needed for: string variable indexing (using local string variables as lookup tables), two-pass string validation with right-to-left traversal, multi-branch string classification, word boundary detection, and `toUpperChar`/`charToDigit` helper patterns.
+
+**Decision:** Add four exercises:
+- **pangram** (11 cases) — boolean 1/0 return. Uses `toLowerChar` helper + nested loops: outer loop over 26 letters in a local `"abcdefghijklmnopqrstuvwxyz"` string, inner loop scanning the sentence. Early exit via `si = n` when letter found to reduce VM step count. Tests string variable indexing, nested loops, and case-insensitive comparison.
+- **bob** (22 cases, filtered from 26 — 4 cases with tab/newline/carriage return removed since VM cannot represent escape sequences in string literals) — string return. Uses `isUpperChar` and `isLowerChar` helpers (26 if-statements each returning 1/0). Classifies input as silence, yelling question, yelling, question, or default. Pascal excluded from execution tests due to apostrophe in response "Calm down, I know what I'm doing!" triggering ADR-024 limitation.
+- **luhn** (22 cases) — boolean 1/0 return. Uses `charToDigit` helper (10 if-statements mapping digit characters to integers, -1 for non-digits). Two-pass algorithm: first pass validates characters and counts digits, second pass computes Luhn checksum right-to-left with every-other-digit doubling. Tests modulo arithmetic, right-to-left iteration, conditional doubling.
+- **acronym** (9 cases) — string return. Uses `toUpperChar` helper (26 if-statements mapping lowercase to uppercase). Detects word boundaries (space, hyphen, underscore are separators; apostrophe, comma, period are NOT). Pascal excluded from execution tests due to apostrophe in "Halley's Comet" input (ADR-024).
+
+**Consequences:** 1926 additional tests (347 pangram + 633 bob + 677 luhn + 269 acronym), bringing Exercism total to 5374 and overall to 7076 (plus 3 xfailed). Two exercises (bob, acronym) exclude Pascal from execution tests, but Pascal lowering and cross-language consistency tests still run for all 15 languages.
+
+| Exercise | Constructs tested | Cases | Lowering | Cross-lang | Execution | Total |
+|----------|-------------------|-------|----------|------------|-----------|-------|
+| pangram | toLowerChar, string indexing, nested loops | 11 | 15 | 2 | 330 | 347 |
+| bob | isUpperChar/isLowerChar, string classification | 22 | 15 | 2 | 616 | 633 |
+| luhn | charToDigit, two-pass validation, modulo | 22 | 15 | 2 | 660 | 677 |
+| acronym | toUpperChar, word boundary, string building | 9 | 15 | 2 | 252 | 269 |
+| **New total** | | **64** | **60** | **8** | **1858** | **1926** |
+
+Combined with previous exercises and Rosetta, the full suite reaches 7076 tests.
