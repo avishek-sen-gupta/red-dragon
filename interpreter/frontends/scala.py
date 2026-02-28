@@ -57,7 +57,8 @@ class ScalaFrontend(BaseFrontend):
             "wildcard": self._lower_wildcard,
             "tuple_expression": self._lower_tuple_expr,
             "string_literal": self._lower_const_literal,
-            "interpolated_string": self._lower_const_literal,
+            "interpolated_string_expression": self._lower_scala_interpolated_string,
+            "interpolated_string": self._lower_scala_interpolated_string_body,
             "lambda_expression": self._lower_lambda_expr,
             "instance_expression": self._lower_new_expr,
             "generic_type": self._lower_symbolic_node,
@@ -95,6 +96,67 @@ class ScalaFrontend(BaseFrontend):
             "do_while_expression": self._lower_do_while,
             "type_definition": lambda _: None,
         }
+
+    # -- string interpolation ----------------------------------------------
+
+    def _lower_scala_interpolated_string(self, node) -> str:
+        """Lower interpolated_string_expression: s"..." / f"..." / raw"..."."""
+        interp_string = next(
+            (c for c in node.children if c.type == "interpolated_string"),
+            None,
+        )
+        if interp_string is None:
+            return self._lower_const_literal(node)
+        return self._lower_scala_interpolated_string_body(interp_string)
+
+    def _lower_scala_interpolated_string_body(self, node) -> str:
+        """Lower interpolated_string, extracting literal gaps and interpolation children."""
+        interpolations = [c for c in node.children if c.type == "interpolation"]
+        if not interpolations:
+            return self._lower_const_literal(node)
+
+        parts: list[str] = []
+        # Literal fragments are byte-range gaps between children (not AST nodes).
+        # Walk children in order, emitting CONST for gaps and lowering interpolations.
+        content_start = node.start_byte + 1  # skip opening "
+        content_end = node.end_byte - 1  # skip closing "
+
+        for child in node.children:
+            if child.type == '"':
+                continue
+            if child.type == "interpolation":
+                # Emit literal gap before this interpolation
+                gap_text = self._source[content_start : child.start_byte].decode(
+                    "utf-8"
+                )
+                if gap_text:
+                    frag_reg = self._fresh_reg()
+                    self._emit(
+                        Opcode.CONST,
+                        result_reg=frag_reg,
+                        operands=[gap_text],
+                        node=node,
+                    )
+                    parts.append(frag_reg)
+                # Lower the interpolation expression
+                named = [c for c in child.children if c.is_named]
+                if named:
+                    parts.append(self._lower_expr(named[0]))
+                content_start = child.end_byte
+
+        # Trailing literal after last interpolation
+        trailing = self._source[content_start:content_end].decode("utf-8")
+        if trailing:
+            frag_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=frag_reg,
+                operands=[trailing],
+                node=node,
+            )
+            parts.append(frag_reg)
+
+        return self._lower_interpolated_string_parts(parts, node)
 
     # -- val / var definition ----------------------------------------------
 

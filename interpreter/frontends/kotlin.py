@@ -25,7 +25,7 @@ class KotlinFrontend(BaseFrontend):
             "integer_literal": self._lower_const_literal,
             "long_literal": self._lower_const_literal,
             "real_literal": self._lower_const_literal,
-            "string_literal": self._lower_const_literal,
+            "string_literal": self._lower_kotlin_string_literal,
             "boolean_literal": self._lower_canonical_bool,
             "null_literal": self._lower_canonical_none,
             "additive_expression": self._lower_binop,
@@ -260,6 +260,37 @@ class KotlinFrontend(BaseFrontend):
                 self._lower_companion_object(child)
             else:
                 self._lower_stmt(child)
+
+    # -- string interpolation ----------------------------------------------
+
+    def _lower_kotlin_string_literal(self, node) -> str:
+        """Lower Kotlin string literal, decomposing $var / ${expr} interpolation."""
+        has_interpolation = any(
+            c.type in ("interpolated_identifier", "interpolated_expression")
+            for c in node.children
+        )
+        if not has_interpolation:
+            return self._lower_const_literal(node)
+
+        parts: list[str] = []
+        for child in node.children:
+            if child.type == "string_content":
+                frag_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.CONST,
+                    result_reg=frag_reg,
+                    operands=[self._node_text(child)],
+                    node=child,
+                )
+                parts.append(frag_reg)
+            elif child.type == "interpolated_identifier":
+                parts.append(self._lower_identifier(child))
+            elif child.type == "interpolated_expression":
+                named = [c for c in child.children if c.is_named]
+                if named:
+                    parts.append(self._lower_expr(named[0]))
+            # skip punctuation: ", $, ${, }
+        return self._lower_interpolated_string_parts(parts, node)
 
     # -- call expression ---------------------------------------------------
 

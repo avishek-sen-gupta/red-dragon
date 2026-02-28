@@ -30,7 +30,7 @@ class RubyFrontend(BaseFrontend):
             "constant": self._lower_identifier,
             "integer": self._lower_const_literal,
             "float": self._lower_const_literal,
-            "string": self._lower_const_literal,
+            "string": self._lower_ruby_string,
             "true": self._lower_canonical_true,
             "false": self._lower_canonical_false,
             "nil": self._lower_canonical_none,
@@ -119,6 +119,32 @@ class RubyFrontend(BaseFrontend):
         reg = self._fresh_reg()
         self._emit(Opcode.CONST, result_reg=reg, operands=[self.DEFAULT_RETURN_VALUE])
         return reg
+
+    # -- Ruby: string interpolation --------------------------------------------
+
+    def _lower_ruby_string(self, node) -> str:
+        """Lower Ruby string, decomposing interpolation into CONST + LOAD_VAR + BINOP '+'."""
+        has_interpolation = any(c.type == "interpolation" for c in node.children)
+        if not has_interpolation:
+            return self._lower_const_literal(node)
+
+        parts: list[str] = []
+        for child in node.children:
+            if child.type == "string_content":
+                frag_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.CONST,
+                    result_reg=frag_reg,
+                    operands=[self._node_text(child)],
+                    node=child,
+                )
+                parts.append(frag_reg)
+            elif child.type == "interpolation":
+                named = [c for c in child.children if c.is_named]
+                if named:
+                    parts.append(self._lower_expr(named[0]))
+            # skip punctuation: ", #{, }
+        return self._lower_interpolated_string_parts(parts, node)
 
     # -- Ruby: call lowering ---------------------------------------------------
 
