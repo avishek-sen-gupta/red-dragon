@@ -69,6 +69,7 @@ class PythonFrontend(BaseFrontend):
             "list_splat": self._lower_splat_expr,
             "dictionary_splat": self._lower_splat_expr,
             "expression_list": self._lower_tuple_literal,
+            "dotted_name": self._lower_identifier,
             "dict_pattern": self._lower_dict_pattern,
             "splat_pattern": self._lower_splat_expr,
         }

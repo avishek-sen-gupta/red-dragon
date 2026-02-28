@@ -60,6 +60,12 @@ _KEYWORD_NOISE: frozenset[str] = frozenset(
         "kAdd",
         "kEq",
         "kConst",
+        "kTry",
+        "kExcept",
+        "kFinally",
+        "kOn",
+        "kRaise",
+        "kWith",
         ";",
         ":",
         ",",
@@ -96,6 +102,9 @@ class PascalFrontend(BaseFrontend):
             "kTrue": self._lower_canonical_true,
             "kFalse": self._lower_canonical_false,
             "kNil": self._lower_canonical_none,
+            "range": self._lower_pascal_range,
+            "inherited": self._lower_pascal_inherited_expr,
+            "typeref": self._lower_const_literal,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "root": self._lower_pascal_root,
@@ -120,6 +129,10 @@ class PascalFrontend(BaseFrontend):
             "declTypes": self._lower_pascal_noop,
             "declUses": self._lower_pascal_noop,
             "try": self._lower_pascal_try,
+            "exceptionHandler": self._lower_pascal_exception_handler,
+            "raise": self._lower_pascal_raise,
+            "with": self._lower_pascal_with,
+            "inherited": self._lower_pascal_inherited_stmt,
         }
 
     # -- Pascal: root / program structure ------------------------------------------
@@ -916,6 +929,103 @@ class PascalFrontend(BaseFrontend):
         for child in node.children:
             if child.is_named:
                 self._lower_stmt(child)
+
+    # -- Pascal: type declarations (no-op) -----------------------------------------
+
+    # -- Pascal: exception handler (on E: Exception do ...) ----------------------
+
+    def _lower_pascal_exception_handler(self, node):
+        """Lower `on E: Exception do statement` — extract variable, lower body."""
+        id_node = next((c for c in node.children if c.type == "identifier"), None)
+        if id_node:
+            var_name = self._node_text(id_node)
+            reg = self._fresh_reg()
+            self._emit(
+                Opcode.SYMBOLIC,
+                result_reg=reg,
+                operands=[f"{constants.PARAM_PREFIX}{var_name}"],
+                node=id_node,
+            )
+            self._emit(
+                Opcode.STORE_VAR, operands=[var_name, f"%{self._reg_counter - 1}"]
+            )
+        # Lower body statements
+        named_children = [
+            c for c in node.children if c.is_named and c.type not in _KEYWORD_NOISE
+        ]
+        for child in named_children:
+            if child.type != "identifier":
+                self._lower_stmt(child)
+
+    # -- Pascal: raise (throw equivalent) ------------------------------------------
+
+    def _lower_pascal_raise(self, node):
+        """Lower `raise Exception.Create('oops');` as THROW."""
+        named_children = [
+            c for c in node.children if c.is_named and c.type not in _KEYWORD_NOISE
+        ]
+        if named_children:
+            val_reg = self._lower_expr(named_children[0])
+        else:
+            val_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=val_reg,
+                operands=[self.DEFAULT_RETURN_VALUE],
+            )
+        self._emit(Opcode.THROW, operands=[val_reg], node=node)
+
+    # -- Pascal: range expression (4..10) ------------------------------------------
+
+    def _lower_pascal_range(self, node) -> str:
+        """Lower `4..10` as CALL_FUNCTION('range', lo, hi)."""
+        nums = [c for c in node.children if c.is_named and c.type not in _KEYWORD_NOISE]
+        arg_regs = [self._lower_expr(c) for c in nums]
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["range"] + arg_regs,
+            node=node,
+        )
+        return reg
+
+    # -- Pascal: with statement (with P do ...) ------------------------------------
+
+    def _lower_pascal_with(self, node):
+        """Lower `with P do statement` — lower object then body."""
+        named_children = [
+            c for c in node.children if c.is_named and c.type not in _KEYWORD_NOISE
+        ]
+        if len(named_children) >= 2:
+            self._lower_expr(named_children[0])
+            self._lower_stmt(named_children[-1])
+        elif named_children:
+            self._lower_stmt(named_children[0])
+
+    # -- Pascal: inherited call ------------------------------------------------
+
+    def _lower_pascal_inherited_expr(self, node) -> str:
+        """Lower `inherited Create` as CALL_FUNCTION('inherited', method)."""
+        named_children = [
+            c for c in node.children if c.is_named and c.type not in _KEYWORD_NOISE
+        ]
+        if named_children:
+            method_name = self._node_text(named_children[0])
+        else:
+            method_name = "inherited"
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["inherited", method_name],
+            node=node,
+        )
+        return reg
+
+    def _lower_pascal_inherited_stmt(self, node):
+        """Lower `inherited Create` as statement."""
+        self._lower_pascal_inherited_expr(node)
 
     # -- Pascal: type declarations (no-op) -----------------------------------------
 

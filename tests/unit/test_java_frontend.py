@@ -776,3 +776,36 @@ class TestJavaSwitchExpression:
         instructions = _parse_java(source)
         loads = _find_all(instructions, Opcode.LOAD_VAR)
         assert any("__switch_result" in inst.operands[0] for inst in loads)
+
+
+class TestJavaExpressionStatementInSwitch:
+    def test_expression_statement_in_switch_expression(self):
+        """expression_statement inside switch expression should not produce unsupported SYMBOLIC."""
+        source = 'class M { String m(int day) { return switch (day) { case 1 -> "work"; default -> "rest"; }; } }'
+        instructions = _parse_java(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_expression_statement_switch_multiple_cases(self):
+        source = 'class M { String m(int x) { return switch (x) { case 1 -> "a"; case 2 -> "b"; default -> "c"; }; } }'
+        instructions = _parse_java(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+
+class TestJavaThrowStatementInSwitch:
+    def test_throw_statement_in_switch_expression(self):
+        """throw_statement inside switch expression should not produce unsupported SYMBOLIC."""
+        source = """\
+class M {
+    String m(int x) {
+        return switch (x) {
+            case 1 -> "one";
+            default -> throw new IllegalArgumentException("bad");
+        };
+    }
+}
+"""
+        instructions = _parse_java(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)

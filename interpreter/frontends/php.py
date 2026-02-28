@@ -60,6 +60,11 @@ class PhpFrontend(BaseFrontend):
             "heredoc": self._lower_php_heredoc,
             "nowdoc": self._lower_const_literal,
             "relative_scope": self._lower_identifier,
+            "dynamic_variable_name": self._lower_php_dynamic_variable,
+            "include_expression": self._lower_php_include,
+            "nullsafe_member_call_expression": self._lower_php_nullsafe_method_call,
+            "require_once_expression": self._lower_php_include,
+            "variadic_unpacking": self._lower_php_variadic_unpacking,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -91,6 +96,7 @@ class PhpFrontend(BaseFrontend):
             "use_declaration": self._lower_php_use_declaration,
             "namespace_use_declaration": self._lower_php_namespace_use_declaration,
             "enum_case": self._lower_php_enum_case,
+            "global_declaration": self._lower_php_global_declaration,
         }
 
     # -- PHP: compound statement (block with braces) ---------------------------
@@ -1458,3 +1464,95 @@ class PhpFrontend(BaseFrontend):
                 operands=["self", case_name, val_reg],
                 node=node,
             )
+
+    # -- PHP: dynamic variable name ($$x / ${x}) --------------------------
+
+    def _lower_php_dynamic_variable(self, node) -> str:
+        """Lower `${x}` — unwrap to inner variable_name or expression."""
+        named_children = [c for c in node.children if c.is_named]
+        if named_children:
+            return self._lower_expr(named_children[0])
+        return self._lower_const_literal(node)
+
+    # -- PHP: include / require_once expressions ---------------------------
+
+    def _lower_php_include(self, node) -> str:
+        """Lower `include 'file.php'` / `require_once 'file.php'` as CALL_FUNCTION."""
+        keyword = node.type.replace("_expression", "")
+        named_children = [c for c in node.children if c.is_named]
+        arg_reg = (
+            self._lower_expr(named_children[0]) if named_children else self._fresh_reg()
+        )
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=[keyword, arg_reg],
+            node=node,
+        )
+        return reg
+
+    # -- PHP: nullsafe member call ($user?->method()) ----------------------
+
+    def _lower_php_nullsafe_method_call(self, node) -> str:
+        """Lower `$obj?->method(args)` like regular method call."""
+        obj_node = node.child_by_field_name("object")
+        name_node = node.child_by_field_name("name")
+        args_node = node.child_by_field_name("arguments")
+
+        obj_reg = self._lower_expr(obj_node) if obj_node else self._fresh_reg()
+        method_name = self._node_text(name_node) if name_node else "__unknown"
+        arg_regs = (
+            [
+                self._lower_expr(c)
+                for c in args_node.children
+                if c.is_named and c.type not in ("(", ")", ",")
+            ]
+            if args_node
+            else []
+        )
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_METHOD,
+            result_reg=reg,
+            operands=[obj_reg, method_name] + arg_regs,
+            node=node,
+        )
+        return reg
+
+    # -- PHP: variadic unpacking (...$arr) ---------------------------------
+
+    def _lower_php_variadic_unpacking(self, node) -> str:
+        """Lower `...$arr` as CALL_FUNCTION('spread', inner)."""
+        named_children = [c for c in node.children if c.is_named]
+        inner_reg = (
+            self._lower_expr(named_children[0]) if named_children else self._fresh_reg()
+        )
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["spread", inner_reg],
+            node=node,
+        )
+        return reg
+
+    # -- PHP: global declaration -------------------------------------------
+
+    def _lower_php_global_declaration(self, node):
+        """Lower `global $config;` — STORE_VAR for each variable."""
+        for child in node.children:
+            if child.type == "variable_name":
+                var_name = self._node_text(child)
+                reg = self._fresh_reg()
+                self._emit(
+                    Opcode.LOAD_VAR,
+                    result_reg=reg,
+                    operands=[var_name],
+                    node=child,
+                )
+                self._emit(
+                    Opcode.STORE_VAR,
+                    operands=[var_name, reg],
+                    node=node,
+                )

@@ -748,3 +748,62 @@ class TestScalaArguments:
         instructions = _parse_scala(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("arguments" in str(inst.operands) for inst in symbolics)
+
+
+class TestScalaCaseBlock:
+    def test_case_block_no_unsupported(self):
+        """case block in match should not produce unsupported SYMBOLIC."""
+        source = """\
+object M {
+    val r = x match {
+        case 1 => "one"
+        case 2 => "two"
+        case _ => "other"
+    }
+}
+"""
+        instructions = _parse_scala(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_case_block_produces_branches(self):
+        source = """\
+object M {
+    val r = x match {
+        case 1 => "one"
+        case _ => "other"
+    }
+}
+"""
+        instructions = _parse_scala(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes or Opcode.BRANCH in opcodes
+
+
+class TestScalaInfixPattern:
+    def test_infix_pattern_no_unsupported(self):
+        """list match { case head :: tail => head } should not produce unsupported SYMBOLIC."""
+        source = """\
+object M {
+    def f(list: Any) = list match {
+        case head :: tail => head
+        case _ => null
+    }
+}
+"""
+        instructions = _parse_scala(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_infix_pattern_with_nested(self):
+        source = """\
+object M {
+    def f(xs: Any) = xs match {
+        case a :: b :: Nil => a
+        case _ => 0
+    }
+}
+"""
+        instructions = _parse_scala(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)

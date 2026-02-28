@@ -37,6 +37,8 @@ class TypeScriptFrontend(JavaScriptFrontend):
                 "import_statement": lambda _: None,
                 "abstract_class_declaration": self._lower_class_def,
                 "public_field_definition": self._lower_ts_field_definition,
+                "abstract_method_signature": self._lower_ts_abstract_method,
+                "internal_module": self._lower_ts_internal_module,
             }
         )
 
@@ -200,3 +202,42 @@ class TypeScriptFrontend(JavaScriptFrontend):
         for child in node.children:
             if child.is_named and child.type != "export":
                 self._lower_stmt(child)
+
+    # ── TS: abstract method signature ────────────────────────────
+
+    def _lower_ts_abstract_method(self, node):
+        """Lower `abstract speak(): string` as a function stub."""
+        name_node = node.child_by_field_name("name")
+        func_name = self._node_text(name_node) if name_node else "__abstract"
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
+        self._emit(Opcode.LABEL, label=func_label)
+
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[self.DEFAULT_RETURN_VALUE],
+        )
+        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        func_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+    # ── TS: internal module (namespace) ──────────────────────────
+
+    def _lower_ts_internal_module(self, node):
+        """Lower `namespace Geometry { ... }` — descend into body."""
+        body_node = node.child_by_field_name("body")
+        if body_node:
+            self._lower_block(body_node)

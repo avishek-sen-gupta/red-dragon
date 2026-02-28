@@ -1090,3 +1090,87 @@ class TestPhpRelativeScope:
         ir = _parse_and_lower(source)
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("relative_scope" in str(inst.operands) for inst in symbolics)
+
+
+class TestPhpDynamicVariableName:
+    def test_dynamic_variable_name_no_unsupported(self):
+        """$$var should not produce unsupported SYMBOLIC."""
+        source = "<?php $name = 'x'; $$name = 10; ?>"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_dynamic_variable_name_read(self):
+        source = "<?php $x = $$name; ?>"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+
+class TestPhpGlobalDeclaration:
+    def test_global_declaration_no_unsupported(self):
+        """global $x, $y; should not produce unsupported SYMBOLIC."""
+        source = "<?php function f() { global $x, $y; return $x + $y; } ?>"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+
+class TestPhpIncludeExpression:
+    def test_include_expression_no_unsupported(self):
+        """include 'file.php' should not produce unsupported SYMBOLIC."""
+        source = "<?php include 'helpers.php'; ?>"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_include_produces_call(self):
+        source = "<?php include 'config.php'; ?>"
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("include" in inst.operands for inst in calls)
+
+
+class TestPhpNullsafeMemberCallExpression:
+    def test_nullsafe_member_call_no_unsupported(self):
+        """$obj?->method() should not produce unsupported SYMBOLIC."""
+        source = "<?php $x = $obj?->getName(); ?>"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_nullsafe_member_call_produces_call_method(self):
+        source = "<?php $result = $user?->getProfile(); ?>"
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_METHOD)
+        assert any("getProfile" in inst.operands for inst in calls)
+
+
+class TestPhpRequireOnceExpression:
+    def test_require_once_no_unsupported(self):
+        """require_once 'file.php' should not produce unsupported SYMBOLIC."""
+        source = "<?php require_once 'autoload.php'; ?>"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_require_once_produces_call(self):
+        source = "<?php require_once 'bootstrap.php'; ?>"
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("require_once" in inst.operands for inst in calls)
+
+
+class TestPhpVariadicUnpacking:
+    def test_variadic_unpacking_no_unsupported(self):
+        """foo(...$args) should not produce unsupported SYMBOLIC."""
+        source = "<?php $result = array_merge(...$arrays); ?>"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_variadic_unpacking_in_call(self):
+        source = "<?php foo(...$args); ?>"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)

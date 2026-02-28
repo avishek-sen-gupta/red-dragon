@@ -70,6 +70,7 @@ class CFrontend(BaseFrontend):
             "concatenated_string": self._lower_const_literal,
             "type_identifier": self._lower_identifier,
             "compound_literal_expression": self._lower_compound_literal,
+            "preproc_arg": self._lower_const_literal,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -91,6 +92,7 @@ class CFrontend(BaseFrontend):
             "type_definition": self._lower_typedef,
             "enum_specifier": self._lower_enum_def,
             "union_specifier": self._lower_union_def,
+            "preproc_function_def": self._lower_preproc_function_def,
         }
         self._EXPR_DISPATCH["initializer_list"] = self._lower_initializer_list
         self._EXPR_DISPATCH["initializer_pair"] = self._lower_initializer_pair
@@ -806,6 +808,46 @@ class CFrontend(BaseFrontend):
         return self._lower_const_literal(node)
 
     # -- C: typedef (skip) ---------------------------------------------
+
+    def _lower_preproc_function_def(self, node):
+        """Lower `#define MAX(a, b) ((a) > (b) ? (a) : (b))` as function stub."""
+        name_node = node.child_by_field_name("name")
+        value_node = node.child_by_field_name("value")
+        func_name = self._node_text(name_node) if name_node else "__macro"
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
+        self._emit(Opcode.LABEL, label=func_label)
+
+        # Lower parameters from preproc_params child if present
+        params_node = node.child_by_field_name("parameters")
+        if params_node:
+            self._lower_c_params(params_node)
+
+        if value_node:
+            val_reg = self._lower_expr(value_node)
+            self._emit(Opcode.RETURN, operands=[val_reg])
+        else:
+            none_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=none_reg,
+                operands=[self.DEFAULT_RETURN_VALUE],
+            )
+            self._emit(Opcode.RETURN, operands=[none_reg])
+
+        self._emit(Opcode.LABEL, label=end_label)
+
+        func_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
 
     def _lower_typedef(self, node):
         """Lower type_definition as CONST type_name -> STORE_VAR alias.
