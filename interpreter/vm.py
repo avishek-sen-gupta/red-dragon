@@ -176,6 +176,7 @@ class Operators:
         "<<": lambda a, b: a << b,
         ">>": lambda a, b: a >> b,
         "..": lambda a, b: str(a) + str(b),
+        ".": lambda a, b: str(a) + str(b),
         "===": lambda a, b: a == b,
         "?:": lambda a, b: a if a is not None else b,
     }

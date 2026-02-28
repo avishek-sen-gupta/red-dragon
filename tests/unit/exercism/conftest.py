@@ -146,6 +146,9 @@ def _format_bool(value: bool, language: str) -> str:
 
 
 def _format_string(value: str, language: str) -> str:
+    if language == "pascal":
+        escaped = value.replace("'", "''")
+        return f"'{escaped}'"
     escaped = value.replace("\\", "\\\\").replace('"', '\\"')
     return f'"{escaped}"'
 
