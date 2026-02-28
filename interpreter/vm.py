@@ -118,11 +118,11 @@ def _resolve_reg(vm: VMState, operand: str) -> Any:
 
 def _parse_const(raw: str) -> Any:
     """Parse a constant literal string into a Python value."""
-    if raw == "None":
+    if raw in ("None", "null"):
         return None
-    if raw == "True":
+    if raw in ("True", "true"):
         return True
-    if raw == "False":
+    if raw in ("False", "false"):
         return False
     try:
         return int(raw)
@@ -176,6 +176,8 @@ class Operators:
         "<<": lambda a, b: a << b,
         ">>": lambda a, b: a >> b,
         "..": lambda a, b: str(a) + str(b),
+        "===": lambda a, b: a == b,
+        "?:": lambda a, b: a if a is not None else b,
     }
 
     @classmethod
@@ -201,6 +203,10 @@ class Operators:
                 return ~operand
             if op == "#":
                 return len(operand)
+            if op == "!":
+                return not operand
+            if op == "!!":
+                return operand
         except Exception:
             pass
         return cls.UNCOMPUTABLE

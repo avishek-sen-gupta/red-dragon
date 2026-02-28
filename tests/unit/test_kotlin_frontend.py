@@ -6,6 +6,7 @@ from tree_sitter_language_pack import get_parser
 
 from interpreter.frontends.kotlin import KotlinFrontend
 from interpreter.ir import IRInstruction, Opcode
+from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
 def _parse_kotlin(source: str) -> list[IRInstruction]:
@@ -596,3 +597,37 @@ class TestKotlinAsExpression:
         instructions = _parse_kotlin("fun main() { val x = y as Int }")
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("as_expression" in str(inst.operands) for inst in symbolics)
+
+
+class TestKotlinOperatorExecution:
+    """VM execution tests for Kotlin-specific operators."""
+
+    def test_not_null_assertion(self):
+        source = """\
+fun identity(x: Int): Int {
+    return x!!
+}
+
+val answer = identity(42)
+"""
+        vm, stats = execute_for_language("kotlin", source)
+        assert extract_answer(vm, "kotlin") == 42
+        assert stats.llm_calls == 0
+
+    def test_elvis_with_null(self):
+        source = """\
+val x: Int? = null
+val answer = x ?: 99
+"""
+        vm, stats = execute_for_language("kotlin", source)
+        assert extract_answer(vm, "kotlin") == 99
+        assert stats.llm_calls == 0
+
+    def test_elvis_with_non_null(self):
+        source = """\
+val x: Int? = 42
+val answer = x ?: 99
+"""
+        vm, stats = execute_for_language("kotlin", source)
+        assert extract_answer(vm, "kotlin") == 42
+        assert stats.llm_calls == 0

@@ -6,6 +6,7 @@ from tree_sitter_language_pack import get_parser
 
 from interpreter.frontends.ruby import RubyFrontend
 from interpreter.ir import IRInstruction, Opcode
+from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
 def _parse_ruby(source: str) -> list[IRInstruction]:
@@ -850,3 +851,31 @@ end
         instructions = _parse_ruby(source)
         opcodes = _opcodes(instructions)
         assert Opcode.RETURN in opcodes
+
+
+class TestRubyOperatorExecution:
+    """VM execution tests for Ruby-specific operators."""
+
+    def test_logical_not_operator(self):
+        source = """\
+def negate(x)
+    return !x
+end
+
+answer = negate(false)
+"""
+        vm, stats = execute_for_language("ruby", source)
+        assert extract_answer(vm, "ruby") is True
+        assert stats.llm_calls == 0
+
+    def test_logical_not_truthy(self):
+        source = """\
+def negate(x)
+    return !x
+end
+
+answer = negate(true)
+"""
+        vm, stats = execute_for_language("ruby", source)
+        assert extract_answer(vm, "ruby") is False
+        assert stats.llm_calls == 0

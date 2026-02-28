@@ -6,6 +6,7 @@ from tree_sitter_language_pack import get_parser
 
 from interpreter.frontends.javascript import JavaScriptFrontend
 from interpreter.ir import IRInstruction, Opcode
+from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
 def _parse_js(source: str) -> list[IRInstruction]:
@@ -814,3 +815,39 @@ class TestJavaScriptExportStatement:
         assert any("Foo" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
+
+
+class TestJavaScriptOperatorExecution:
+    """VM execution tests for JavaScript-specific operators."""
+
+    def test_strict_equality_in_switch(self):
+        source = """\
+function classify(x) {
+    switch(x) {
+        case 1: return "one";
+        case 2: return "two";
+        default: return "other";
+    }
+}
+
+let answer = classify(2);
+"""
+        vm, stats = execute_for_language("javascript", source)
+        assert extract_answer(vm, "javascript") == "two"
+        assert stats.llm_calls == 0
+
+    def test_strict_equality_switch_default(self):
+        source = """\
+function classify(x) {
+    switch(x) {
+        case 1: return "one";
+        case 2: return "two";
+        default: return "other";
+    }
+}
+
+let answer = classify(99);
+"""
+        vm, stats = execute_for_language("javascript", source)
+        assert extract_answer(vm, "javascript") == "other"
+        assert stats.llm_calls == 0
