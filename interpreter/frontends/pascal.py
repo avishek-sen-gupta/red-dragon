@@ -86,6 +86,7 @@ class PascalFrontend(BaseFrontend):
 
     def __init__(self):
         super().__init__()
+        self._current_function_name: str = ""
         self._EXPR_DISPATCH: dict[str, Callable] = {
             "identifier": self._lower_identifier,
             "literalNumber": self._lower_const_literal,
@@ -238,11 +239,18 @@ class PascalFrontend(BaseFrontend):
                     node=node,
                 )
         else:
-            self._emit(
-                Opcode.STORE_VAR,
-                operands=[self._node_text(target), val_reg],
-                node=node,
-            )
+            target_name = self._node_text(target)
+            if (
+                self._current_function_name
+                and target_name == self._current_function_name
+            ):
+                self._emit(Opcode.RETURN, operands=[val_reg], node=node)
+            else:
+                self._emit(
+                    Opcode.STORE_VAR,
+                    operands=[target_name, val_reg],
+                    node=node,
+                )
 
     # -- Pascal: binary expression -------------------------------------------------
 
@@ -497,9 +505,20 @@ class PascalFrontend(BaseFrontend):
     # -- Pascal: procedure/function definition -------------------------------------
 
     def _lower_pascal_proc(self, node):
-        """Lower defProc/declProc — contains kFunction/kProcedure, identifier, declArgs, type, block."""
-        id_node = next((c for c in node.children if c.type == "identifier"), None)
-        args_node = next((c for c in node.children if c.type == "declArgs"), None)
+        """Lower defProc/declProc — contains kFunction/kProcedure, identifier, declArgs, type, block.
+
+        For ``defProc`` nodes the identifier and declArgs live inside a
+        nested ``declProc`` child; for standalone ``declProc`` nodes they
+        are direct children.
+        """
+        decl_node = next((c for c in node.children if c.type == "declProc"), None)
+        search_node = decl_node if decl_node else node
+        id_node = next(
+            (c for c in search_node.children if c.type == "identifier"), None
+        )
+        args_node = next(
+            (c for c in search_node.children if c.type == "declArgs"), None
+        )
         body_node = next((c for c in node.children if c.type == "block"), None)
 
         func_name = self._node_text(id_node) if id_node else "__anon"
@@ -512,8 +531,11 @@ class PascalFrontend(BaseFrontend):
         if args_node:
             self._lower_pascal_params(args_node)
 
+        prev_func_name = self._current_function_name
+        self._current_function_name = func_name
         if body_node:
             self._lower_pascal_block(body_node)
+        self._current_function_name = prev_func_name
 
         none_reg = self._fresh_reg()
         self._emit(
@@ -553,21 +575,26 @@ class PascalFrontend(BaseFrontend):
                 )
 
     def _lower_pascal_single_param(self, child):
-        """Lower a single declArg — extract identifier name."""
-        id_node = next((c for c in child.children if c.type == "identifier"), None)
-        if id_node is None:
-            return
-        pname = self._node_text(id_node)
-        self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=self._fresh_reg(),
-            operands=[f"{constants.PARAM_PREFIX}{pname}"],
-            node=child,
-        )
-        self._emit(
-            Opcode.STORE_VAR,
-            operands=[pname, f"%{self._reg_counter - 1}"],
-        )
+        """Lower a single declArg — extract all identifier names.
+
+        Pascal allows multiple identifiers sharing a type in one declArg,
+        e.g. ``a, b: integer``.  Only direct ``identifier`` children are
+        parameter names; the type identifier is nested inside ``type > typeref``.
+        """
+        for id_node in child.children:
+            if id_node.type != "identifier":
+                continue
+            pname = self._node_text(id_node)
+            self._emit(
+                Opcode.SYMBOLIC,
+                result_reg=self._fresh_reg(),
+                operands=[f"{constants.PARAM_PREFIX}{pname}"],
+                node=child,
+            )
+            self._emit(
+                Opcode.STORE_VAR,
+                operands=[pname, f"%{self._reg_counter - 1}"],
+            )
 
     # -- Pascal: dot access (obj.field) --------------------------------------------
 
