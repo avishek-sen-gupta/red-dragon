@@ -705,8 +705,7 @@ class JavaFrontend(BaseFrontend):
 
         self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
-        if body_node:
-            self._lower_class_body(body_node)
+        deferred = self._lower_class_body(body_node) if body_node else []
         self._emit(Opcode.LABEL, label=end_label)
 
         cls_reg = self._fresh_reg()
@@ -718,6 +717,9 @@ class JavaFrontend(BaseFrontend):
             ],
         )
         self._emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+
+        for child in deferred:
+            self._lower_deferred_class_child(child)
 
     # ── Java: record declaration ──────────────────────────────────
 
@@ -734,8 +736,7 @@ class JavaFrontend(BaseFrontend):
 
         self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
-        if body_node:
-            self._lower_class_body(body_node)
+        deferred = self._lower_class_body(body_node) if body_node else []
         self._emit(Opcode.LABEL, label=end_label)
 
         cls_reg = self._fresh_reg()
@@ -748,22 +749,44 @@ class JavaFrontend(BaseFrontend):
         )
         self._emit(Opcode.STORE_VAR, operands=[record_name, cls_reg])
 
-    def _lower_class_body(self, node):
+        for child in deferred:
+            self._lower_deferred_class_child(child)
+
+    _CLASS_BODY_METHOD_TYPES = frozenset(
+        {"method_declaration", "constructor_declaration"}
+    )
+    _CLASS_BODY_SKIP_TYPES = frozenset({"modifiers", "marker_annotation", "annotation"})
+
+    def _lower_class_body(self, node) -> list:
+        """Collect all meaningful class-body children for top-level hoisting.
+
+        Returns children partitioned as methods first, then field initializers
+        and other statements, so that function refs are registered before
+        the field initializers that call them.
+        """
+        methods: list = []
+        rest: list = []
         for child in node.children:
-            if child.type == "method_declaration":
-                self._lower_method_decl(child)
-            elif child.type == "constructor_declaration":
-                self._lower_constructor_decl(child)
-            elif child.type == "field_declaration":
-                self._lower_field_decl(child)
-            elif child.type == "static_initializer":
-                self._lower_static_initializer(child)
-            elif child.is_named and child.type not in (
-                "modifiers",
-                "marker_annotation",
-                "annotation",
-            ):
-                self._lower_stmt(child)
+            if child.type in self._CLASS_BODY_SKIP_TYPES or not child.is_named:
+                continue
+            elif child.type in self._CLASS_BODY_METHOD_TYPES:
+                methods.append(child)
+            else:
+                rest.append(child)
+        return methods + rest
+
+    def _lower_deferred_class_child(self, child):
+        """Lower a single deferred class-body child at top level."""
+        if child.type == "method_declaration":
+            self._lower_method_decl(child)
+        elif child.type == "constructor_declaration":
+            self._lower_constructor_decl(child)
+        elif child.type == "field_declaration":
+            self._lower_field_decl(child)
+        elif child.type == "static_initializer":
+            self._lower_static_initializer(child)
+        else:
+            self._lower_stmt(child)
 
     def _lower_constructor_decl(self, node):
         name_node = node.child_by_field_name("name")
