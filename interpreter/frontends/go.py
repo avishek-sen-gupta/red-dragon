@@ -451,12 +451,19 @@ class GoFrontend(BaseFrontend):
 
     # -- Go: function declaration ----------------------------------------------
 
+    _GO_MAIN_FUNC_NAME = "main"
+
     def _lower_go_func_decl(self, node):
         name_node = node.child_by_field_name("name")
         params_node = node.child_by_field_name("parameters")
         body_node = node.child_by_field_name("body")
 
         func_name = self._node_text(name_node) if name_node else "__anon"
+
+        if func_name == self._GO_MAIN_FUNC_NAME:
+            self._lower_go_main_hoisted(body_node)
+            return
+
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
@@ -485,6 +492,16 @@ class GoFrontend(BaseFrontend):
             ],
         )
         self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+    def _lower_go_main_hoisted(self, body_node):
+        """Hoist func main() body to top level so its locals land in frame 0.
+
+        Go's ``func main()`` is the program entry point.  Rather than
+        wrapping it in a function definition (which the VM would skip),
+        we emit its statements directly on the top-level path.
+        """
+        if body_node:
+            self._lower_go_block(body_node)
 
     # -- Go: method declaration ------------------------------------------------
 

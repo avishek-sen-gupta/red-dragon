@@ -112,8 +112,7 @@ def assert_cross_language_consistency(
 # ---------------------------------------------------------------------------
 
 # Languages excluded from all execution tests (structural barriers):
-#   Go: `answer` inside `main()`, which isn't auto-called from `entry`
-EXCLUDED_EXECUTION_LANGUAGES: frozenset[str] = frozenset({"go"})
+EXCLUDED_EXECUTION_LANGUAGES: frozenset[str] = frozenset()
 
 STANDARD_EXECUTABLE_LANGUAGES: frozenset[str] = frozenset(
     {
@@ -131,6 +130,7 @@ STANDARD_EXECUTABLE_LANGUAGES: frozenset[str] = frozenset(
         "csharp",
         "scala",
         "pascal",
+        "go",
     }
 )
 
