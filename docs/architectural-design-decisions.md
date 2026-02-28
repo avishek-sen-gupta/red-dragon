@@ -211,3 +211,17 @@ This document captures key architectural decisions made during the development o
 **Decision:** Add `count_opcodes(instructions) -> dict[str, int]` as a pure function in `interpreter/ir_stats.py`, and `ir_stats(source, language, ...) -> dict[str, int]` as an API wrapper in `interpreter/api.py` that calls `lower_source` then `count_opcodes`.
 
 **Consequences:** The pure function is independently testable and usable by programmatic consumers who already have an instruction list. The API wrapper composes with the existing `lower_source` pipeline. No new dependencies introduced.
+
+---
+
+### ADR-022: Exercism integration test suite with file-based solutions and argument substitution (2026-02-28)
+
+**Context:** The Rosetta cross-language test suite (8 algorithms x 15 languages = 464 tests) verifies frontend correctness via IR lowering and VM execution, but each algorithm is tested with only a single input. Exercism's problem-specifications repo provides 5-15 canonical test inputs per exercise, offering significantly more coverage per algorithm.
+
+**Decision:** Integrate Exercism exercises as a second test suite (`tests/unit/exercism/`). Key design choices:
+1. **Solutions as separate files** — Unlike Rosetta's inline `PROGRAMS` dict, each language solution is a separate file under `exercises/<name>/solutions/`. This avoids massive test files and makes solutions individually editable.
+2. **Argument substitution via regex** — A `build_program()` helper finds the `answer = f(default_arg)` invocation line and substitutes new arguments for each canonical test case, supporting varied assignment forms (=, :=, : type =).
+3. **Property-to-function mapping** — For multi-function exercises (difference-of-squares), canonical property names map to language-appropriate function names, with a `default_function_name` parameter enabling function name substitution.
+4. **Reuse Rosetta conftest** — All shared helpers (`parse_for_language`, `execute_for_language`, `extract_answer`, `assert_clean_lowering`, `assert_cross_language_consistency`) are imported from the Rosetta conftest.
+
+**Consequences:** 711 additional tests from 3 exercises (leap, collatz-conjecture, difference-of-squares) across 15 languages. Each exercise tests IR lowering quality, cross-language consistency, and VM execution correctness for every canonical test case. The file-based approach scales to additional exercises without growing test file size. The `exercism_harvest.py` script automates fetching new canonical data.

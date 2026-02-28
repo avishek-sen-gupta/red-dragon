@@ -1,0 +1,167 @@
+"""Exercism test: difference of squares across all 15 deterministic frontends.
+
+Uses canonical test data from Exercism problem-specifications.
+Each language solution is a separate file under
+exercises/difference_of_squares/solutions/.
+
+Three functions per solution: squareOfSum, sumOfSquares, differenceOfSquares.
+The canonical test cases cover all three properties; the execution test
+substitutes the correct function call via build_program().
+"""
+
+import pytest
+
+from interpreter.frontends import SUPPORTED_DETERMINISTIC_LANGUAGES
+from interpreter.ir import Opcode
+
+from tests.unit.rosetta.conftest import (
+    parse_for_language,
+    assert_clean_lowering,
+    assert_cross_language_consistency,
+    execute_for_language,
+    extract_answer,
+    STANDARD_EXECUTABLE_LANGUAGES,
+)
+
+from tests.unit.exercism.conftest import (
+    load_solution,
+    load_canonical_cases,
+    build_program,
+)
+
+EXERCISE = "difference_of_squares"
+
+SNAKE_CASE_LANGUAGES = frozenset({"python", "ruby", "rust"})
+
+# Map canonical property name -> (snake_case_fn, camelCase_fn)
+PROPERTY_FUNCTIONS: dict[str, tuple[str, str]] = {
+    "squareOfSum": ("square_of_sum", "squareOfSum"),
+    "sumOfSquares": ("sum_of_squares", "sumOfSquares"),
+    "differenceOfSquares": ("difference_of_squares", "differenceOfSquares"),
+}
+
+# The default function in each solution file
+DEFAULT_FN_SNAKE = "difference_of_squares"
+DEFAULT_FN_CAMEL = "differenceOfSquares"
+
+
+def _function_name(language: str, canonical_property: str) -> str:
+    """Return the function name for *language* and canonical *property*."""
+    snake, camel = PROPERTY_FUNCTIONS[canonical_property]
+    return snake if language in SNAKE_CASE_LANGUAGES else camel
+
+
+def _default_function_name(language: str) -> str:
+    """Return the default function name in the solution file for *language*."""
+    return DEFAULT_FN_SNAKE if language in SNAKE_CASE_LANGUAGES else DEFAULT_FN_CAMEL
+
+
+SOLUTIONS: dict[str, str] = {
+    lang: load_solution(EXERCISE, lang)
+    for lang in sorted(STANDARD_EXECUTABLE_LANGUAGES)
+}
+
+CANONICAL_CASES: list[dict] = load_canonical_cases(EXERCISE)
+
+REQUIRED_OPCODES: set[Opcode] = {
+    Opcode.RETURN,
+    Opcode.BINOP,
+    Opcode.CALL_FUNCTION,
+}
+
+MIN_INSTRUCTIONS = 15
+
+
+# ---------------------------------------------------------------------------
+# Per-language lowering tests
+# ---------------------------------------------------------------------------
+
+
+class TestDiffSquaresLowering:
+    @pytest.fixture(params=sorted(SOLUTIONS.keys()), ids=lambda lang: lang)
+    def language_ir(self, request):
+        lang = request.param
+        ir = parse_for_language(lang, SOLUTIONS[lang])
+        return lang, ir
+
+    def test_clean_lowering(self, language_ir):
+        lang, ir = language_ir
+        assert_clean_lowering(
+            ir,
+            min_instructions=MIN_INSTRUCTIONS,
+            required_opcodes=REQUIRED_OPCODES,
+            language=lang,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Cross-language consistency tests
+# ---------------------------------------------------------------------------
+
+
+class TestDiffSquaresCrossLanguage:
+    @pytest.fixture(scope="class")
+    def all_results(self):
+        return {lang: parse_for_language(lang, SOLUTIONS[lang]) for lang in SOLUTIONS}
+
+    def test_all_languages_covered(self):
+        assert set(SOLUTIONS.keys()) == set(SUPPORTED_DETERMINISTIC_LANGUAGES)
+
+    def test_cross_language_consistency(self, all_results):
+        assert_cross_language_consistency(
+            all_results, required_opcodes=REQUIRED_OPCODES
+        )
+
+
+# ---------------------------------------------------------------------------
+# VM execution tests — parametrized by (language, canonical case)
+# ---------------------------------------------------------------------------
+
+
+def _case_id(case: dict) -> str:
+    return case["description"].replace(" ", "_")
+
+
+def _case_args(case: dict) -> list[object]:
+    return [case["input"]["number"]]
+
+
+EXECUTABLE_LANGUAGES: frozenset[str] = STANDARD_EXECUTABLE_LANGUAGES
+
+
+class TestDiffSquaresExecution:
+    @pytest.fixture(
+        params=[
+            (lang, case)
+            for lang in sorted(EXECUTABLE_LANGUAGES)
+            for case in CANONICAL_CASES
+        ],
+        ids=lambda pair: f"{pair[0]}-{_case_id(pair[1])}",
+        scope="class",
+    )
+    def execution_result(self, request):
+        lang, case = request.param
+        prop = case["property"]
+        fn_name = _function_name(lang, prop)
+        default_fn = _default_function_name(lang)
+        source = build_program(
+            SOLUTIONS[lang],
+            fn_name,
+            _case_args(case),
+            lang,
+            default_function_name=default_fn,
+        )
+        vm, stats = execute_for_language(lang, source, max_steps=5000)
+        expected = case["expected"]
+        return lang, vm, stats, expected, case["description"]
+
+    def test_correct_result(self, execution_result):
+        lang, vm, _stats, expected, desc = execution_result
+        answer = extract_answer(vm, lang)
+        assert answer == expected, f"[{lang}] {desc}: expected {expected}, got {answer}"
+
+    def test_zero_llm_calls(self, execution_result):
+        lang, _vm, stats, _expected, desc = execution_result
+        assert (
+            stats.llm_calls == 0
+        ), f"[{lang}] {desc}: expected 0 LLM calls, got {stats.llm_calls}"
