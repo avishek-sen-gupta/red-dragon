@@ -54,6 +54,7 @@ class RubyFrontend(BaseFrontend):
             "element_reference": self._lower_element_reference,
             "heredoc_beginning": self._lower_const_literal,
             "right_assignment_list": self._lower_list_literal,
+            "pattern": self._lower_ruby_pattern,
         }
         self._EXPR_DISPATCH["conditional"] = self._lower_ruby_conditional
         self._EXPR_DISPATCH["unary"] = self._lower_unop
@@ -92,6 +93,7 @@ class RubyFrontend(BaseFrontend):
             "module": self._lower_ruby_module,
             "super": self._lower_ruby_super_stmt,
             "yield": self._lower_ruby_yield_stmt,
+            "in": self._lower_ruby_in_clause,
         }
 
     # -- Ruby: element_reference (array indexing) --------------------------------
@@ -1248,3 +1250,25 @@ class RubyFrontend(BaseFrontend):
             ],
         )
         self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+    # -- Ruby: pattern node (case/in pattern matching) -------------------------
+
+    def _lower_ruby_pattern(self, node) -> str:
+        """Lower a `pattern` wrapper node by lowering its inner child."""
+        named_children = [c for c in node.children if c.is_named]
+        if named_children:
+            return self._lower_expr(named_children[0])
+        return self._lower_const_literal(node)
+
+    # -- Ruby: in clause (case/in pattern matching) ----------------------------
+
+    def _lower_ruby_in_clause(self, node):
+        """Lower `in pattern then body` clause — treated as a when-like arm."""
+        named_children = [
+            c for c in node.children if c.is_named and c.type not in ("then", "in")
+        ]
+        for child in named_children:
+            if child.type == "body_statement":
+                self._lower_block(child)
+            else:
+                self._lower_expr(child)

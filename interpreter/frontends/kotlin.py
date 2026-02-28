@@ -61,6 +61,7 @@ class KotlinFrontend(BaseFrontend):
             "while_statement": self._lower_loop_as_expr,
             "for_statement": self._lower_loop_as_expr,
             "do_while_statement": self._lower_loop_as_expr,
+            "type_test": self._lower_type_test,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "property_declaration": self._lower_property_decl,
@@ -1230,6 +1231,22 @@ class KotlinFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["range", start_reg, end_reg],
+            node=node,
+        )
+        return reg
+
+    # -- Kotlin: type_test (is Type in when) ----------------------------------
+
+    def _lower_type_test(self, node) -> str:
+        """Lower `is Type` as CONST(type_name) for pattern matching in when."""
+        named_children = [c for c in node.children if c.is_named]
+        type_node = named_children[0] if named_children else None
+        type_name = self._node_text(type_node) if type_node else self._node_text(node)
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=reg,
+            operands=[f"is:{type_name}"],
             node=node,
         )
         return reg

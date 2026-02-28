@@ -69,6 +69,8 @@ class PythonFrontend(BaseFrontend):
             "list_splat": self._lower_splat_expr,
             "dictionary_splat": self._lower_splat_expr,
             "expression_list": self._lower_tuple_literal,
+            "dict_pattern": self._lower_dict_pattern,
+            "splat_pattern": self._lower_splat_expr,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -1133,6 +1135,34 @@ class PythonFrontend(BaseFrontend):
             self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
             self._emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
         return arr_reg
+
+    # ── Python-specific: dict_pattern in match/case ─────────────────
+
+    def _lower_dict_pattern(self, node) -> str:
+        """Lower {"key": pattern, ...} in match/case as NEW_OBJECT with key/value pairs."""
+        obj_reg = self._fresh_reg()
+        self._emit(
+            Opcode.NEW_OBJECT,
+            result_reg=obj_reg,
+            operands=["dict_pattern"],
+            node=node,
+        )
+        pairs = [
+            c for c in node.children if c.is_named and c.type not in ("{", "}", ",")
+        ]
+        for pair in pairs:
+            named = [ch for ch in pair.children if ch.is_named]
+            if len(named) >= 2:
+                key_reg = self._lower_expr(named[0])
+                val_reg = self._lower_expr(named[1])
+                self._emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
+            elif len(named) == 1:
+                key_reg = self._lower_expr(named[0])
+                self._emit(
+                    Opcode.STORE_INDEX,
+                    operands=[obj_reg, key_reg, key_reg],
+                )
+        return obj_reg
 
     # ── Python-specific: case_pattern wrapper ──────────────────────
 

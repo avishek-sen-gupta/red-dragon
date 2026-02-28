@@ -54,6 +54,7 @@ class JavaFrontend(BaseFrontend):
             "class_literal": self._lower_class_literal,
             "super": self._lower_identifier,
             "scoped_identifier": self._lower_scoped_identifier,
+            "switch_expression": self._lower_java_switch_expr,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -619,6 +620,76 @@ class JavaFrontend(BaseFrontend):
 
         self._break_target_stack.pop()
         self._emit(Opcode.LABEL, label=end_label)
+
+    # ── Java: switch expression (as expr, returns value) ────────
+
+    def _lower_java_switch_expr(self, node) -> str:
+        """Lower switch expression as if/else chain, returning last arm value."""
+        cond_node = node.child_by_field_name("condition")
+        body_node = node.child_by_field_name("body")
+
+        subject_reg = self._lower_expr(cond_node) if cond_node else self._fresh_reg()
+        result_var = f"__switch_result_{self._label_counter}"
+        end_label = self._fresh_label("switch_end")
+
+        groups = (
+            [
+                c
+                for c in body_node.children
+                if c.type in ("switch_block_statement_group", "switch_rule")
+            ]
+            if body_node
+            else []
+        )
+
+        for group in groups:
+            label_node = next(
+                (c for c in group.children if c.type == "switch_label"), None
+            )
+            body_stmts = [
+                c for c in group.children if c.is_named and c.type != "switch_label"
+            ]
+
+            arm_label = self._fresh_label("case_arm")
+            next_label = self._fresh_label("case_next")
+
+            is_default = label_node is not None and not any(
+                c.is_named for c in label_node.children
+            )
+
+            if label_node and not is_default:
+                case_value = next((c for c in label_node.children if c.is_named), None)
+                if case_value:
+                    case_reg = self._lower_expr(case_value)
+                    cmp_reg = self._fresh_reg()
+                    self._emit(
+                        Opcode.BINOP,
+                        result_reg=cmp_reg,
+                        operands=["==", subject_reg, case_reg],
+                        node=group,
+                    )
+                    self._emit(
+                        Opcode.BRANCH_IF,
+                        operands=[cmp_reg],
+                        label=f"{arm_label},{next_label}",
+                    )
+                else:
+                    self._emit(Opcode.BRANCH, label=arm_label)
+            else:
+                self._emit(Opcode.BRANCH, label=arm_label)
+
+            self._emit(Opcode.LABEL, label=arm_label)
+            arm_result = self._fresh_reg()
+            for stmt in body_stmts:
+                arm_result = self._lower_expr(stmt)
+            self._emit(Opcode.STORE_VAR, operands=[result_var, arm_result])
+            self._emit(Opcode.BRANCH, label=end_label)
+            self._emit(Opcode.LABEL, label=next_label)
+
+        self._emit(Opcode.LABEL, label=end_label)
+        reg = self._fresh_reg()
+        self._emit(Opcode.LOAD_VAR, result_reg=reg, operands=[result_var])
+        return reg
 
     # ── Java: method declaration ─────────────────────────────────
 
