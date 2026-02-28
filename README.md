@@ -292,7 +292,7 @@ Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integrati
 
 The **Rosetta cross-language test suite** (`tests/unit/rosetta/`) implements 8 classic algorithms (factorial iterative/recursive, fibonacci, GCD, bubble sort, is-prime, fizzbuzz, interprocedural calls) in all 15 languages and verifies they all produce clean, structurally consistent IR — catching frontend gaps, degenerate lowerings, and cross-language inconsistencies. Each problem tests entry label presence, minimum instruction count, zero unsupported SYMBOLIC nodes, required opcode presence, operator spot-checks, and aggregate cross-language variance. Beyond IR lowering, **VM execution verification** runs 7 algorithms (all except fizzbuzz) through the VM across all 15 executable languages and asserts correct computed results (e.g. factorial=120, fib(10)=55, gcd(48,18)=6, sorted arrays, interprocedural double_add(3,4)=14) with zero LLM fallback calls — proving cross-language semantic correctness end-to-end. All frontends emit **canonical Python-form literals** (`"None"`, `"True"`, `"False"`) in IR CONST operands — language-native forms (`nil`, `null`, `undefined`, `NULL`, `true`, `false`) are canonicalized at lowering time so the VM's `_parse_const()` handles a single canonical set. Built-in array constructors (`arrayOf`, `intArrayOf`, `Array`) enable heap-allocated array creation for Kotlin/Scala programs.
 
-The **Exercism integration test suite** (`tests/unit/exercism/`) extends coverage by pulling canonical test data from [Exercism's problem-specifications](https://github.com/exercism/problem-specifications) and running solutions in all 15 languages. Each exercise has separate solution files per language and is parametrized across all canonical test cases — testing argument substitution, multi-case execution, and cross-language consistency. A `scripts/exercism_harvest.py` utility fetches new canonical data from GitHub.
+The **Exercism integration test suite** (`tests/unit/exercism/`) extends coverage by pulling canonical test data from [Exercism's problem-specifications](https://github.com/exercism/problem-specifications) and running solutions in all 15 languages. Each exercise has separate solution files per language and is parametrized across all canonical test cases — testing argument substitution, multi-case execution, and cross-language consistency. Exercises cover integer arithmetic, boolean logic, string operations, multi-property functions, floating-point division, and mixed-type arguments. A `scripts/exercism_harvest.py` utility fetches new canonical data from GitHub.
 
 | Exercise | Constructs tested | Cases | Lowering | Cross-lang | Execution | Total |
 |----------|-------------------|-------|----------|------------|-----------|-------|
@@ -304,9 +304,11 @@ The **Exercism integration test suite** (`tests/unit/exercism/`) extends coverag
 | **reverse-string** | backward iteration, string indexing, string building char-by-char | 5 | 15 | 2 | 150 | **167** |
 | **rna-transcription** | character comparison, multi-branch if, string building, char mapping | 6 | 15 | 2 | 180 | **197** |
 | **perfect-numbers** | divisor loop, modulo, accumulator, three-way string return | 9 | 15 | 2 | 270 | **287** |
-| **Total** | | **50** | **120** | **16** | **1500** | **1636** |
+| **triangle** | nested ifs, validity guards, 3-arg functions, multi-property boolean return | 18 | 15 | 2 | 540 | **557** |
+| **space-age** | float division, float constants, string-to-number mapping, mixed args | 8 | 15 | 2 | 240 | **257** |
+| **Total** | | **76** | **150** | **20** | **2280** | **2450** |
 
-Combined with the Rosetta suite, the project has **3337 tests** (3337 passed, 2 xfailed) — all with zero LLM calls.
+Combined with the Rosetta suite, the project has **4152 tests** (4152 passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 

@@ -292,3 +292,33 @@ No VM prerequisites were needed — all required features (string indexing, stri
 | **Total** | | **50** | **120** | **16** | **1500** | **1636** |
 
 Combined with Rosetta, the full suite reaches 3337 tests.
+
+---
+
+### ADR-025: Exercism expansion — triangle and space-age (2026-02-28)
+
+**Context:** The Exercism suite covered 8 exercises (1636 tests) focusing on numeric logic, string operations, and basic conditionals. Broader construct coverage was needed for compound boolean logic via nested ifs, validity guard clauses, 3-argument functions, floating-point division, float literal constants, and string-to-number mapping.
+
+**Decision:** Add two exercises:
+1. **triangle** — tests compound boolean logic using nested `if` statements (avoiding `and`/`&&` keywords), validity guard clauses (triangle inequality: `a + b <= c`, `b + c <= a`, `a + c <= b`), three separate functions per solution (`isEquilateral`, `isIsosceles`, `isScalene`), and 3-argument functions returning boolean-as-integer (1/0). Cases tagged with `"scenarios": ["floating-point"]` are filtered because the solutions use integer arithmetic. Uses the multi-property pattern from difference-of-squares.
+2. **space-age** — tests floating-point division, float literal constants (orbital period ratios), string equality comparison in an if-chain mapping planet names to ratios, and mixed string+integer arguments returning a float result. The error case (`"Sun"`) is auto-filtered by `load_canonical_cases`. Float comparison uses tolerance of 0.01. Ruby solution avoids parenthesized expression `(31557600.0 * ratio)` by using a temporary variable, as the Ruby frontend emits `SYMBOLIC unsupported:parenthesized_statements` for grouped expressions.
+
+No VM prerequisites were needed — floats, division, string comparison, and boolean returns were already in place.
+
+**Consequences:** 814 additional tests (557 triangle + 257 space-age), bringing Exercism total to 2450 (plus 1 xfail) and overall to 4152 (plus 3 xfailed).
+
+| Exercise | Constructs tested | Cases | Lowering | Cross-lang | Execution | Total |
+|----------|-------------------|-------|----------|------------|-----------|-------|
+| leap | modulo, boolean logic, short-circuit eval | 9 | 15 | 2 | 270 | 287 |
+| collatz-conjecture | while loop, conditional, integer division | 4 | 15 | 2 | 120 | 137 |
+| difference-of-squares | while loop, accumulator, function composition | 9 | 15 | 2 | 270 | 287 |
+| two-fer | string concatenation, string literals | 3 | 15 | 2 | 90 | 107 |
+| hamming | string indexing, character comparison, while loop | 5 | 15 | 2 | 150 | 167 |
+| reverse-string | backward iteration, string building char-by-char | 5 | 15 | 2 | 150 | 167 |
+| rna-transcription | character comparison, multi-branch if, char mapping | 6 | 15 | 2 | 180 | 197 |
+| perfect-numbers | divisor loop, modulo, accumulator, three-way string return | 9 | 15 | 2 | 270 | 287 |
+| triangle | nested ifs, validity guards, 3-arg functions, multi-property | 18 | 15 | 2 | 540 | 557 |
+| space-age | float division, float constants, string-to-number mapping | 8 | 15 | 2 | 240 | 257 |
+| **Total** | | **76** | **150** | **20** | **2280** | **2450** |
+
+Combined with Rosetta, the full suite reaches 4152 tests.
