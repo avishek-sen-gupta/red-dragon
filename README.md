@@ -97,16 +97,16 @@ Control flow constructs (if/else, while, for, for-of/foreach, switch, break/cont
 |----------|---------------------|
 | **Python** | list/dict/set comprehensions (including nested), generator expressions, with statements, decorators, lambdas, yield/await, assert, import/from-import, walrus operator (`:=`), match statements (3.10+), delete, slicing, f-string interpolation, list patterns |
 | **JS/TS** | destructuring, for-of/for-in loops, switch, do-while, new expressions, template string substitutions, regex literals, spread/sequence/yield/await expressions, function expressions, class static blocks, labeled statements, abstract classes (TS), import/export statements |
-| **Ruby** | symbols, ranges, regex, lambdas, string/symbol arrays (`%w`/`%i`), case/when, modules, global/class variables, heredocs, if/unless/while/until modifiers, ternary operator, unary operators, `self`, singleton classes/methods, element reference (array indexing), string interpolation (`"Hello #{expr}"`) |
+| **Ruby** | symbols, ranges, regex, lambdas, string/symbol arrays (`%w`/`%i`), case/when, modules, global/class variables, heredocs, if/unless/while/until modifiers, ternary operator, unary operators, `self`, singleton classes/methods, element reference (array indexing), string interpolation (`"Hello #{expr}"`), heredoc interpolation (`<<~HEREDOC\nHello #{expr}\nHEREDOC`) |
 | **PHP** | switch, do-while, match expressions, arrow functions, scoped calls (`Class::method`), namespaces, interfaces, traits, enums, static variables, goto/labels, anonymous functions (closures), null-safe access (`?->`), class constant access, property declarations, yield, heredoc/nowdoc, string interpolation (`"Hello $name"` / `"Hello {$expr}"` / heredoc interpolation) |
 | **Java** | records, instanceof, method references (`Type::method`), lambdas, class literals (`Type.class`), do-while, assert, labeled statements, synchronized blocks, static initializers, explicit constructor invocations (`super()`/`this()`), annotation type declarations, scoped identifiers (`java.lang.System`) |
 | **C#** | await, yield, switch expressions (C# 8), lock, using statements, checked/fixed blocks, events, typeof, is-check, property declarations, lambdas, null-conditional access (`?.`), local functions, tuples, is-pattern expressions, array initializer expressions, string interpolation (`$"Hello {expr}"` — format specifiers and alignment clauses are discarded as presentation-only) |
 | **C** | pointer dereference/address-of, sizeof, compound literals, struct/union/enum definitions, initializer lists, goto/labels, typedef, char literals |
 | **C++** | field initializer lists, delete expressions, enum class, array subscript expressions |
-| **Kotlin** | do-while, object declarations (singletons), companion objects, enum classes, not-null assertion (`!!`), is-check, type aliases, elvis operator (`?:`), infix expressions, indexing expressions, type casts (`as`), conjunction/disjunction expressions, hex literals, string interpolation (`"$name"` / `"${expr}"`) |
+| **Kotlin** | do-while, object declarations (singletons), companion objects, enum classes, not-null assertion (`!!`), is-check, type aliases, elvis operator (`?:`), infix expressions, indexing expressions, type casts (`as`), conjunction/disjunction expressions, hex literals, string interpolation (`"$name"` / `"${expr}"`), multi-variable destructuring (`val (a, b) = pair`) |
 | **Go** | defer, go, switch/type-switch/select, channel send/receive, slices, type assertions, func literals, labeled statements, const declarations, goto |
-| **Rust** | traits, enums, const/static/type items, try (`?`), await, async blocks, mod/unsafe blocks, type casts (`as`), scoped identifiers (`HashMap::new`) |
-| **Scala** | for-comprehensions, traits, case classes, lazy vals, do-while, type definitions, `new` expressions, throw expressions, string interpolation (`s"$name"` / `s"${expr}"`) |
+| **Rust** | traits, enums, const/static/type items, try (`?`), await, async blocks, mod/unsafe blocks, type casts (`as`), scoped identifiers (`HashMap::new`), tuple destructuring (`let (a, b) = expr`), struct destructuring (`let Point { x, y } = p`) |
+| **Scala** | for-comprehensions, traits, case classes, lazy vals, do-while, type definitions, `new` expressions, throw expressions, string interpolation (`s"$name"` / `s"${expr}"`), tuple destructuring (`val (a, b) = expr`) |
 | **Lua** | anonymous functions, varargs, goto/labels |
 | **Pascal** | field access, array indexing, unary operators, case-of, repeat-until, set literals, const/type declarations, parenthesized expressions |
 
@@ -330,7 +330,7 @@ The **Exercism integration test suite** (`tests/unit/exercism/`) extends coverag
 | **acronym** | toUpperChar helper, word boundary detection, string building, separator classification | 9 | 15 | 2 | 252 | **269** |
 | **Total** | | **171** | **270** | **36** | **5068** | **5374** |
 
-Combined with the Rosetta suite, the project has **7117 tests** (7117 passed, 3 xfailed) — all with zero LLM calls.
+Combined with the Rosetta suite, the project has **7130 tests** (7130 passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 
