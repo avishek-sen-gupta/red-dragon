@@ -68,6 +68,7 @@ class PythonFrontend(BaseFrontend):
             "ellipsis": self._lower_const_literal,
             "list_splat": self._lower_splat_expr,
             "dictionary_splat": self._lower_splat_expr,
+            "expression_list": self._lower_tuple_literal,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,

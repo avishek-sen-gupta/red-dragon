@@ -70,6 +70,8 @@ class ScalaFrontend(BaseFrontend):
             "do_while_expression": self._lower_loop_as_expr,
             "break_expression": self._lower_break_as_expr,
             "continue_expression": self._lower_continue_as_expr,
+            "operator_identifier": self._lower_const_literal,
+            "arguments": self._lower_paren,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "val_definition": self._lower_val_def,

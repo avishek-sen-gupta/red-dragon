@@ -32,6 +32,8 @@ class CSharpFrontend(BaseFrontend):
             "real_literal": self._lower_const_literal,
             "string_literal": self._lower_const_literal,
             "character_literal": self._lower_const_literal,
+            "verbatim_string_literal": self._lower_const_literal,
+            "constant_pattern": self._lower_const_literal,
             "boolean_literal": self._lower_canonical_bool,
             "null_literal": self._lower_canonical_none,
             "this_expression": self._lower_identifier,

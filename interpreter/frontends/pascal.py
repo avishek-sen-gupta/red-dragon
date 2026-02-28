@@ -118,6 +118,7 @@ class PascalFrontend(BaseFrontend):
             "declConst": self._lower_pascal_decl_const,
             "declType": self._lower_pascal_noop,
             "declTypes": self._lower_pascal_noop,
+            "declUses": self._lower_pascal_noop,
         }
 
     # -- Pascal: root / program structure ------------------------------------------
