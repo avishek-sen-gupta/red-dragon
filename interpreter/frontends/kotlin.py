@@ -25,6 +25,7 @@ class KotlinFrontend(BaseFrontend):
             "integer_literal": self._lower_const_literal,
             "long_literal": self._lower_const_literal,
             "real_literal": self._lower_const_literal,
+            "character_literal": self._lower_const_literal,
             "string_literal": self._lower_kotlin_string_literal,
             "boolean_literal": self._lower_canonical_bool,
             "null_literal": self._lower_canonical_none,

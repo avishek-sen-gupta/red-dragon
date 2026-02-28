@@ -91,6 +91,8 @@ class CSharpFrontend(BaseFrontend):
             "fixed_statement": self._lower_fixed_stmt,
             "event_field_declaration": self._lower_event_field_decl,
             "event_declaration": self._lower_event_decl,
+            "record_declaration": self._lower_class_def,
+            "record_struct_declaration": self._lower_class_def,
         }
         self._EXPR_DISPATCH["await_expression"] = self._lower_await_expr
         self._EXPR_DISPATCH["switch_expression"] = self._lower_switch_expr

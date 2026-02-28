@@ -640,3 +640,17 @@ class TestRustRangeExpression:
         instructions = _parse_rust("fn main() { for i in 0..n {} }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("range" in inst.operands for inst in calls)
+
+
+class TestRustMatchPatternUnwrap:
+    def test_match_pattern_no_symbolic(self):
+        source = "fn f() { match x { (1) => 2, _ => 0 } }"
+        instructions = _parse_rust(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("match_pattern" in str(inst.operands) for inst in symbolics)
+
+    def test_match_pattern_lowers_inner(self):
+        source = "fn f() { match x { (y) => y + 1, _ => 0 } }"
+        instructions = _parse_rust(source)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("1" in inst.operands for inst in consts)

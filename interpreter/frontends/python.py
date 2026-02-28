@@ -65,6 +65,9 @@ class PythonFrontend(BaseFrontend):
             "string_start": self._lower_const_literal,
             "string_end": self._lower_const_literal,
             "type_conversion": self._lower_const_literal,
+            "ellipsis": self._lower_const_literal,
+            "list_splat": self._lower_splat_expr,
+            "dictionary_splat": self._lower_splat_expr,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,
@@ -838,6 +841,21 @@ class PythonFrontend(BaseFrontend):
             Opcode.CALL_FUNCTION,
             result_reg=reg,
             operands=["await"] + arg_regs,
+            node=node,
+        )
+        return reg
+
+    # ── Python-specific: splat / spread ─────────────────────────────
+
+    def _lower_splat_expr(self, node) -> str:
+        """Lower *expr (list_splat) or **expr (dictionary_splat) as CALL_FUNCTION('spread', inner)."""
+        named_children = [c for c in node.children if c.is_named]
+        arg_regs = [self._lower_expr(c) for c in named_children]
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=["spread"] + arg_regs,
             node=node,
         )
         return reg
