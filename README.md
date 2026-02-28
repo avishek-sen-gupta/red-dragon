@@ -306,9 +306,13 @@ The **Exercism integration test suite** (`tests/unit/exercism/`) extends coverag
 | **perfect-numbers** | divisor loop, modulo, accumulator, three-way string return | 9 | 15 | 2 | 270 | **287** |
 | **triangle** | nested ifs, validity guards, 3-arg functions, float sides, multi-property boolean return | 21 | 15 | 2 | 630 | **647** |
 | **space-age** | float division, float constants, string-to-number mapping, mixed args | 8 | 15 | 2 | 240 | **257** |
-| **Total** | | **79** | **150** | **20** | **2370** | **2540** |
+| **grains** | exponentiation via loop, large integers (2^63), zero-arg function calls, multi-property | 8 | 15 | 2 | 240 | **257** |
+| **isogram** | nested while loops, case-insensitive char comparison via helper, function composition, continue | 14 | 15 | 2 | 420 | **437** |
+| **nth-prime** | nested loops for trial division, primality testing, counting loop with inner check | 3 | 15 | 2 | 90 | **107** |
+| **resistor-color** | string-to-integer if-chain mapping, string equality | 3 | 15 | 2 | 90 | **107** |
+| **Total** | | **107** | **210** | **28** | **3210** | **3448** |
 
-Combined with the Rosetta suite, the project has **4242 tests** (4242 passed, 3 xfailed) — all with zero LLM calls.
+Combined with the Rosetta suite, the project has **5150 tests** (5150 passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 
