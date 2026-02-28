@@ -49,7 +49,7 @@ class RubyFrontend(BaseFrontend):
             "symbol_array": self._lower_ruby_word_array,
             "global_variable": self._lower_identifier,
             "class_variable": self._lower_identifier,
-            "heredoc_body": self._lower_const_literal,
+            "heredoc_body": self._lower_ruby_heredoc_body,
             "element_reference": self._lower_element_reference,
         }
         self._EXPR_DISPATCH["conditional"] = self._lower_ruby_conditional
@@ -144,6 +144,30 @@ class RubyFrontend(BaseFrontend):
                 if named:
                     parts.append(self._lower_expr(named[0]))
             # skip punctuation: ", #{, }
+        return self._lower_interpolated_string_parts(parts, node)
+
+    def _lower_ruby_heredoc_body(self, node) -> str:
+        """Lower Ruby heredoc body, decomposing interpolation like _lower_ruby_string."""
+        has_interpolation = any(c.type == "interpolation" for c in node.children)
+        if not has_interpolation:
+            return self._lower_const_literal(node)
+
+        parts: list[str] = []
+        for child in node.children:
+            if child.type == "heredoc_content":
+                frag_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.CONST,
+                    result_reg=frag_reg,
+                    operands=[self._node_text(child)],
+                    node=child,
+                )
+                parts.append(frag_reg)
+            elif child.type == "interpolation":
+                named = [c for c in child.children if c.is_named]
+                if named:
+                    parts.append(self._lower_expr(named[0]))
+            # skip heredoc_end and punctuation
         return self._lower_interpolated_string_parts(parts, node)
 
     # -- Ruby: call lowering ---------------------------------------------------

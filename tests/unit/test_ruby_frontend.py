@@ -917,3 +917,42 @@ class TestRubyStringInterpolation:
         assert len(consts) >= 1
         binops = _find_all(instructions, Opcode.BINOP)
         assert not binops
+
+
+class TestRubyHeredocInterpolation:
+    def test_heredoc_interpolation_basic(self):
+        source = "x = <<~HEREDOC\nHello #{name}\nHEREDOC"
+        instructions = _parse_ruby(source)
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("name" in inst.operands for inst in loads)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+    def test_heredoc_interpolation_expression(self):
+        source = "x = <<~HEREDOC\nValue: #{arr[0]}\nHEREDOC"
+        instructions = _parse_ruby(source)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BINOP in opcodes
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+    def test_heredoc_interpolation_multiple_vars(self):
+        source = "x = <<~HEREDOC\n#{a} and #{b}\nHEREDOC"
+        instructions = _parse_ruby(source)
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        load_names = [inst.operands[0] for inst in loads]
+        assert "a" in load_names
+        assert "b" in load_names
+        binops = _find_all(instructions, Opcode.BINOP)
+        concat_ops = [inst for inst in binops if inst.operands[0] == "+"]
+        assert len(concat_ops) >= 2
+
+    def test_heredoc_no_interpolation_fallback(self):
+        source = "x = <<~HEREDOC\nplain text\nHEREDOC"
+        instructions = _parse_ruby(source)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert len(consts) >= 1
+        binops = _find_all(instructions, Opcode.BINOP)
+        # No concatenation for plain heredocs
+        concat_ops = [inst for inst in binops if inst.operands[0] == "+"]
+        assert not concat_ops

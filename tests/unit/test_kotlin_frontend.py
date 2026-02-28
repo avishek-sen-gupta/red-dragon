@@ -668,3 +668,32 @@ class TestKotlinStringInterpolation:
         assert len(consts) >= 1
         binops = _find_all(instructions, Opcode.BINOP)
         assert not binops
+
+
+class TestKotlinDestructuring:
+    def test_destructure_two_elements(self):
+        instructions = _parse_kotlin("val (a, b) = pair")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "a" in store_names
+        assert "b" in store_names
+        load_indices = _find_all(instructions, Opcode.LOAD_INDEX)
+        assert len(load_indices) >= 2
+
+    def test_destructure_three_elements(self):
+        instructions = _parse_kotlin("val (x, y, z) = triple")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "x" in store_names
+        assert "y" in store_names
+        assert "z" in store_names
+        load_indices = _find_all(instructions, Opcode.LOAD_INDEX)
+        assert len(load_indices) >= 3
+
+    def test_destructure_with_usage(self):
+        source = "val (first, second) = getPair()\nprintln(first)"
+        instructions = _parse_kotlin(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "first" in store_names
+        assert "second" in store_names

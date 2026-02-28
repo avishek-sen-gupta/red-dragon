@@ -84,6 +84,15 @@ class KotlinFrontend(BaseFrontend):
     # -- property declaration ----------------------------------------------
 
     def _lower_property_decl(self, node):
+        multi_var_decl = next(
+            (c for c in node.children if c.type == "multi_variable_declaration"),
+            None,
+        )
+
+        if multi_var_decl is not None:
+            self._lower_multi_variable_destructure(multi_var_decl, node)
+            return
+
         var_decl = next(
             (c for c in node.children if c.type == "variable_declaration"),
             None,
@@ -107,6 +116,39 @@ class KotlinFrontend(BaseFrontend):
             operands=[var_name, val_reg],
             node=node,
         )
+
+    def _lower_multi_variable_destructure(self, multi_var_node, parent_node):
+        """Lower `val (a, b) = expr` — emit LOAD_INDEX + STORE_VAR per element."""
+        value_node = self._find_property_value(parent_node)
+        if value_node:
+            val_reg = self._lower_expr(value_node)
+        else:
+            val_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=val_reg,
+                operands=[self.NONE_LITERAL],
+            )
+
+        var_decls = [
+            c for c in multi_var_node.children if c.type == "variable_declaration"
+        ]
+        for i, var_decl in enumerate(var_decls):
+            var_name = self._extract_property_name(var_decl)
+            idx_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            elem_reg = self._fresh_reg()
+            self._emit(
+                Opcode.LOAD_INDEX,
+                result_reg=elem_reg,
+                operands=[val_reg, idx_reg],
+                node=var_decl,
+            )
+            self._emit(
+                Opcode.STORE_VAR,
+                operands=[var_name, elem_reg],
+                node=parent_node,
+            )
 
     def _extract_property_name(self, var_decl_node) -> str:
         """Extract name from variable_declaration -> simple_identifier."""
