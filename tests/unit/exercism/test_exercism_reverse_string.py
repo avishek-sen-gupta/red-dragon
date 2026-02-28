@@ -146,3 +146,59 @@ class TestReverseStringExecution:
         assert (
             stats.llm_calls == 0
         ), f"[{lang}] {desc}: expected 0 LLM calls, got {stats.llm_calls}"
+
+
+# ---------------------------------------------------------------------------
+# Known limitation: Pascal apostrophe escaping
+# ---------------------------------------------------------------------------
+
+_APOSTROPHE_CASE: dict = next(
+    case
+    for case in load_canonical_cases(EXERCISE)
+    if "'" in case["input"]["value"] and "unicode" not in case.get("scenarios", [])
+)
+
+
+class TestPascalApostropheLimitation:
+    """Document that Pascal's '' escape does not round-trip through _parse_const.
+
+    Pascal string literals escape apostrophes by doubling them: 'I''m hungry!'
+    The VM's _parse_const strips the outer quotes (raw[1:-1]) but does not
+    un-escape inner doubled quotes, so the stored string contains '' instead
+    of ' and has the wrong length.  This causes reverse-string to produce
+    incorrect output for inputs containing apostrophes.
+
+    All other 14 languages handle this case correctly because they use
+    double-quoted strings where apostrophes need no escaping.
+    """
+
+    @pytest.mark.xfail(
+        reason=(
+            "_parse_const does not un-escape Pascal '' → ' inside "
+            "single-quoted string literals (ADR-024)"
+        ),
+        strict=True,
+    )
+    def test_pascal_apostrophe_reverse(self):
+        """Reversing "I'm hungry!" should yield "!yrgnuh m'I" in Pascal."""
+        fn_name = _function_name("pascal")
+        source = build_program(
+            SOLUTIONS["pascal"], fn_name, _case_args(_APOSTROPHE_CASE), "pascal"
+        )
+        vm, _stats = execute_for_language("pascal", source, max_steps=5000)
+        answer = extract_answer(vm, "pascal")
+        assert answer == _APOSTROPHE_CASE["expected"]
+
+    def test_non_pascal_languages_handle_apostrophe(self):
+        """All non-Pascal languages correctly reverse strings with apostrophes."""
+        non_pascal = sorted(lang for lang in EXECUTABLE_LANGUAGES if lang != "pascal")
+        for lang in non_pascal:
+            fn_name = _function_name(lang)
+            source = build_program(
+                SOLUTIONS[lang], fn_name, _case_args(_APOSTROPHE_CASE), lang
+            )
+            vm, _stats = execute_for_language(lang, source, max_steps=5000)
+            answer = extract_answer(vm, lang)
+            assert (
+                answer == _APOSTROPHE_CASE["expected"]
+            ), f"[{lang}] expected {_APOSTROPHE_CASE['expected']!r}, got {answer!r}"
