@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class KotlinFrontend(BaseFrontend):
     """Lowers a Kotlin tree-sitter AST into flattened TAC IR."""
 
-    COMMENT_TYPES = frozenset({"comment", "multiline_comment"})
+    COMMENT_TYPES = frozenset({"comment", "multiline_comment", "line_comment"})
     NOISE_TYPES = frozenset({"\n"})
 
     def __init__(self):

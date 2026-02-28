@@ -760,3 +760,17 @@ class TestKotlinCharacterLiteral:
         instructions = _parse_kotlin(source)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("'Z'" in str(inst.operands) for inst in consts)
+
+
+class TestKotlinLineComment:
+    def test_line_comment_not_symbolic(self):
+        source = "// this is a comment\nval x = 1"
+        instructions = _parse_kotlin(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("line_comment" in str(inst.operands) for inst in symbolics)
+
+    def test_line_comment_filtered(self):
+        source = "val x = 1 // inline comment\nval y = 2"
+        instructions = _parse_kotlin(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("line_comment" in str(inst.operands) for inst in symbolics)

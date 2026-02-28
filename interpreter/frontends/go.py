@@ -45,6 +45,9 @@ class GoFrontend(BaseFrontend):
             "type_assertion_expression": self._lower_type_assertion,
             "slice_expression": self._lower_slice_expr,
             "func_literal": self._lower_func_literal,
+            "channel_type": self._lower_const_literal,
+            "slice_type": self._lower_const_literal,
+            "expression_list": self._lower_const_literal,
         }
         self._STMT_DISPATCH: dict[str, Callable] = {
             "expression_statement": self._lower_expression_statement,

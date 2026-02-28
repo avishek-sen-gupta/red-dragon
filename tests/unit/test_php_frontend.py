@@ -1074,3 +1074,19 @@ class TestPhpHeredoc:
         ir = _parse_and_lower(source)
         binops = _find_all(ir, Opcode.BINOP)
         assert not any("+" in inst.operands for inst in binops)
+
+
+class TestPhpRelativeScope:
+    def test_relative_scope_no_symbolic(self):
+        source = "<?php class Foo { public function bar() { return self::VALUE; } } ?>"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("relative_scope" in str(inst.operands) for inst in symbolics)
+
+    def test_static_scope_no_symbolic(self):
+        source = (
+            "<?php class Foo { public function bar() { return static::create(); } } ?>"
+        )
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("relative_scope" in str(inst.operands) for inst in symbolics)
