@@ -12,7 +12,7 @@
 - **Lowers** to a universal flattened three-address code IR (~19 opcodes) with structured source location traceability (every IR instruction from deterministic frontends carries its originating AST span; LLM frontends lack AST nodes and produce `NO_SOURCE_LOCATION`) — the LLM frontend uses the LLM as a **compiler frontend**, constrained by a formal IR schema with concrete patterns
 - **Builds** control flow graphs from IR instructions
 - **Analyses** data flow via iterative reaching definitions, def-use chains, and variable dependency graphs
-- **Executes** programs symbolically via a deterministic VM — tracking data flow through incomplete programs with missing imports or unknown externals entirely without LLM calls
+- **Executes** programs symbolically via a deterministic VM — tracking data flow through incomplete programs with missing imports or unknown externals entirely without LLM calls — with a configurable **LLM plausible-value resolver** that can replace symbolic placeholders with concrete values for unresolved function/method calls
 
 ## How it works
 
@@ -176,6 +176,20 @@ When the interpreter encounters incomplete information (missing imports, unknown
 
 This means data flow through programs with missing dependencies is traced entirely deterministically with **0 LLM calls**.
 
+### Configurable unresolved call resolution
+
+When the VM encounters a call to an unresolved function (e.g., `math.sqrt(16)`), the default behavior creates symbolic values that propagate through subsequent computation. The `UnresolvedCallStrategy` enum controls this:
+
+- **`SYMBOLIC`** (default) — creates symbolic placeholders: `math.sqrt(16) → sym_N`, subsequent `sym_N + 1 → sym_M` (precision death)
+- **`LLM`** — makes a lightweight LLM call to get a plausible concrete value: `math.sqrt(16) → 4.0`, subsequent `4.0 + 1 = 5.0` (precision preserved), with support for side effects via `heap_writes`/`var_writes`
+
+```python
+from interpreter.run import run
+from interpreter.run_types import UnresolvedCallStrategy
+
+vm = run(source, language="python", unresolved_call_strategy=UnresolvedCallStrategy.LLM)
+```
+
 ## Dataflow analysis
 
 Iterative intraprocedural analysis on the CFG: **reaching definitions**, **def-use chains**, and **variable dependency graphs** (transitive closure).
@@ -316,7 +330,7 @@ The **Exercism integration test suite** (`tests/unit/exercism/`) extends coverag
 | **acronym** | toUpperChar helper, word boundary detection, string building, separator classification | 9 | 15 | 2 | 252 | **269** |
 | **Total** | | **171** | **270** | **36** | **5068** | **5374** |
 
-Combined with the Rosetta suite, the project has **7076 tests** (7076 passed, 3 xfailed) — all with zero LLM calls.
+Combined with the Rosetta suite, the project has **7093 tests** (7076 passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 

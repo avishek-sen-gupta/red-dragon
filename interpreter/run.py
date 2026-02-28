@@ -13,6 +13,11 @@ from .frontend import get_frontend
 from .cfg import CFG, build_cfg
 from .registry import build_registry, _parse_class_ref, FunctionRegistry
 from .executor import _try_execute_locally
+from .unresolved_call import (
+    SymbolicResolver,
+    LLMPlausibleResolver,
+    UnresolvedCallResolver,
+)
 from .vm import (
     VMState,
     SymbolicValue,
@@ -27,12 +32,26 @@ from .run_types import (
     VMConfig,
     ExecutionStats,
     PipelineStats,
+    UnresolvedCallStrategy,
 )  # noqa: F401 — re-exported for backwards compatibility
 from .trace_types import TraceStep, ExecutionTrace
 from .backend import get_backend
 from . import constants
 
 logger = logging.getLogger(__name__)
+
+
+def _create_resolver(config: VMConfig) -> UnresolvedCallResolver:
+    """Create the appropriate call resolver based on config."""
+    if config.unresolved_call_strategy == UnresolvedCallStrategy.LLM:
+        from .llm_client import get_llm_client
+
+        llm_client = get_llm_client(provider=config.backend)
+        return LLMPlausibleResolver(
+            llm_client=llm_client,
+            source_language=config.source_language,
+        )
+    return SymbolicResolver()
 
 
 class _StopExecution:
@@ -170,6 +189,7 @@ def execute_cfg(
     vm.call_stack.append(StackFrame(function_name=constants.MAIN_FRAME_NAME))
 
     llm = get_backend(config.backend)
+    call_resolver = _create_resolver(config)
     current_label = entry
     ip = 0
     llm_calls = 0
@@ -206,6 +226,7 @@ def execute_cfg(
             registry=registry,
             current_label=current_label,
             ip=ip,
+            call_resolver=call_resolver,
         )
         used_llm = False
         if result.handled:
@@ -285,6 +306,7 @@ def execute_cfg_traced(
     initial_state = copy.deepcopy(vm)
 
     llm = get_backend(config.backend)
+    call_resolver = _create_resolver(config)
     current_label = entry
     ip = 0
     llm_calls = 0
@@ -322,6 +344,7 @@ def execute_cfg_traced(
             registry=registry,
             current_label=current_label,
             ip=ip,
+            call_resolver=call_resolver,
         )
         used_llm = False
         if result.handled:
@@ -402,6 +425,7 @@ def run(
     verbose: bool = False,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
     llm_client: Any = None,
+    unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC,
 ) -> VMState:
     """End-to-end: parse → lower → CFG → LLM interpret.
 
@@ -414,6 +438,7 @@ def run(
         verbose: Print IR, CFG, and step-by-step info.
         frontend_type: "deterministic" (tree-sitter) or "llm".
         llm_client: Pre-built LLMClient for DI/testing (used by LLM frontend).
+        unresolved_call_strategy: Resolution strategy for unknown calls.
     """
     pipeline_start = time.perf_counter()
     stats = PipelineStats(
@@ -483,7 +508,13 @@ def run(
     stats.registry_classes = len(registry.classes)
 
     # 5. Execute via extract
-    vm_config = VMConfig(backend=backend, max_steps=max_steps, verbose=verbose)
+    vm_config = VMConfig(
+        backend=backend,
+        max_steps=max_steps,
+        verbose=verbose,
+        source_language=language,
+        unresolved_call_strategy=unresolved_call_strategy,
+    )
     exec_start = time.perf_counter()
     vm, exec_stats = execute_cfg(cfg, entry, registry, vm_config)
     stats.execution_time = time.perf_counter() - exec_start

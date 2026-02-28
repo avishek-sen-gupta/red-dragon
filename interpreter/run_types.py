@@ -3,6 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
+
+
+class UnresolvedCallStrategy(Enum):
+    """Strategy for resolving calls to unknown functions/methods."""
+
+    SYMBOLIC = "symbolic"
+    LLM = "llm"
 
 
 @dataclass(frozen=True)
@@ -12,6 +20,8 @@ class VMConfig:
     backend: str = "claude"
     max_steps: int = 100
     verbose: bool = False
+    unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC
+    source_language: str = ""
 
 
 @dataclass

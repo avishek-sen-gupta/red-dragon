@@ -372,3 +372,24 @@ Combined with previous exercises and Rosetta, the full suite reaches 5150 tests.
 | **New total** | | **64** | **60** | **8** | **1858** | **1926** |
 
 Combined with previous exercises and Rosetta, the full suite reaches 7076 tests.
+
+---
+
+### ADR-028: Configurable LLM plausible-value resolver for unresolved function calls (2026-02-28)
+
+**Context:** When the VM encounters a call to an unresolved function (e.g., `math.sqrt(16)` where `math` is an unresolved import), it creates a `SymbolicValue` placeholder. This symbolic value propagates through all subsequent computation — `sym_N + 1 → sym_M` — causing "precision death" where concrete values degrade into entirely symbolic expressions. For programs with many stdlib calls, this makes the execution trace uninformative.
+
+**Decision:** Introduce a ports-and-adapters `UnresolvedCallResolver` ABC with two implementations:
+
+1. **`SymbolicResolver`** — extracts the existing `_symbolic_call_result`/`_symbolic_method_result` logic into a proper class (default, preserves current behavior)
+2. **`LLMPlausibleResolver`** — makes a lightweight LLM call with a focused prompt to get plausible concrete return values, with support for side effects via `heap_writes`/`var_writes` in the response
+
+The resolver is injected through the existing `**kwargs` chain: `VMConfig → execute_cfg → _try_execute_locally → LocalExecutor.execute → handler`. An `UnresolvedCallStrategy` enum (`SYMBOLIC` | `LLM`) on `VMConfig` controls which resolver is instantiated.
+
+Side effects use the existing `StateUpdate` format (heap_writes/var_writes) rather than generating IR — the LLM already speaks this mutation language, and `apply_update()` handles it natively.
+
+**Consequences:**
+- Default behavior unchanged (symbolic strategy)
+- LLM mode eliminates precision death for stdlib calls — e.g., `math.sqrt(16) → 4.0`, `4.0 + 1 = 5.0` computed locally
+- Fallback to symbolic on LLM failure (network errors, invalid JSON)
+- 17 new unit tests covering both resolvers, side effects, fallback, and prompt construction
