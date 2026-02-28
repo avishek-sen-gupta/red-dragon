@@ -161,28 +161,15 @@ class ScalaFrontend(BaseFrontend):
     # -- val / var definition ----------------------------------------------
 
     def _lower_val_def(self, node):
-        pattern_node = node.child_by_field_name("pattern")
-        value_node = node.child_by_field_name("value")
-        var_name = self._extract_pattern_name(pattern_node)
-        if value_node:
-            val_reg = self._lower_expr(value_node)
-        else:
-            val_reg = self._fresh_reg()
-            self._emit(
-                Opcode.CONST,
-                result_reg=val_reg,
-                operands=[self.NONE_LITERAL],
-            )
-        self._emit(
-            Opcode.STORE_VAR,
-            operands=[var_name, val_reg],
-            node=node,
-        )
+        self._lower_val_or_var_def(node)
 
     def _lower_var_def(self, node):
+        self._lower_val_or_var_def(node)
+
+    def _lower_val_or_var_def(self, node):
+        """Shared logic for val_definition and var_definition, with tuple destructuring."""
         pattern_node = node.child_by_field_name("pattern")
         value_node = node.child_by_field_name("value")
-        var_name = self._extract_pattern_name(pattern_node)
         if value_node:
             val_reg = self._lower_expr(value_node)
         else:
@@ -192,11 +179,40 @@ class ScalaFrontend(BaseFrontend):
                 result_reg=val_reg,
                 operands=[self.NONE_LITERAL],
             )
-        self._emit(
-            Opcode.STORE_VAR,
-            operands=[var_name, val_reg],
-            node=node,
-        )
+
+        if pattern_node is not None and pattern_node.type == "tuple_pattern":
+            self._lower_scala_tuple_destructure(pattern_node, val_reg, node)
+        else:
+            var_name = self._extract_pattern_name(pattern_node)
+            self._emit(
+                Opcode.STORE_VAR,
+                operands=[var_name, val_reg],
+                node=node,
+            )
+
+    def _lower_scala_tuple_destructure(self, pattern_node, val_reg: str, parent_node):
+        """Lower `val (a, b) = expr` — emit LOAD_INDEX + STORE_VAR per element."""
+        named_children = [
+            c
+            for c in pattern_node.children
+            if c.type not in ("(", ")", ",") and c.is_named
+        ]
+        for i, child in enumerate(named_children):
+            var_name = self._extract_pattern_name(child)
+            idx_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            elem_reg = self._fresh_reg()
+            self._emit(
+                Opcode.LOAD_INDEX,
+                result_reg=elem_reg,
+                operands=[val_reg, idx_reg],
+                node=child,
+            )
+            self._emit(
+                Opcode.STORE_VAR,
+                operands=[var_name, elem_reg],
+                node=parent_node,
+            )
 
     def _extract_pattern_name(self, pattern_node) -> str:
         """Extract name from a pattern node (identifier, typed_pattern, etc.)."""

@@ -644,3 +644,33 @@ class TestScalaStringInterpolation:
         # No BINOP for plain string
         binops = _find_all(instructions, Opcode.BINOP)
         assert not binops
+
+
+class TestScalaDestructuring:
+    def test_val_tuple_destructure_two_elements(self):
+        instructions = _parse_scala("object M { val (a, b) = getPair() }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "a" in store_names
+        assert "b" in store_names
+        load_indices = _find_all(instructions, Opcode.LOAD_INDEX)
+        assert len(load_indices) >= 2
+
+    def test_val_tuple_destructure_three_elements(self):
+        instructions = _parse_scala("object M { val (x, y, z) = getTriple() }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "x" in store_names
+        assert "y" in store_names
+        assert "z" in store_names
+        load_indices = _find_all(instructions, Opcode.LOAD_INDEX)
+        assert len(load_indices) >= 3
+
+    def test_var_tuple_destructure(self):
+        instructions = _parse_scala("object M { var (first, second) = split() }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "first" in store_names
+        assert "second" in store_names
+        load_indices = _find_all(instructions, Opcode.LOAD_INDEX)
+        assert len(load_indices) >= 2

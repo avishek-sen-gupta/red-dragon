@@ -590,3 +590,33 @@ class TestRustScopedIdentifier:
         assert any("v" in inst.operands for inst in stores)
         loads = _find_all(instructions, Opcode.LOAD_VAR)
         assert any("Option::None" in inst.operands for inst in loads)
+
+
+class TestRustDestructuring:
+    def test_tuple_destructure_two_elements(self):
+        instructions = _parse_rust("fn main() { let (a, b) = get_pair(); }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "a" in store_names
+        assert "b" in store_names
+        load_indices = _find_all(instructions, Opcode.LOAD_INDEX)
+        assert len(load_indices) >= 2
+
+    def test_tuple_destructure_three_elements(self):
+        instructions = _parse_rust("fn main() { let (x, y, z) = get_triple(); }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "x" in store_names
+        assert "y" in store_names
+        assert "z" in store_names
+        load_indices = _find_all(instructions, Opcode.LOAD_INDEX)
+        assert len(load_indices) >= 3
+
+    def test_struct_destructure(self):
+        instructions = _parse_rust("fn main() { let Point { x, y } = point; }")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "x" in store_names
+        assert "y" in store_names
+        load_fields = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert len(load_fields) >= 2
