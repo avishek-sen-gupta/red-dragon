@@ -26,7 +26,10 @@ from .vm import (
 )
 from .registry import FunctionRegistry, _parse_func_ref, _parse_class_ref
 from .builtins import Builtins
+from .unresolved_call import UnresolvedCallResolver, SymbolicResolver
 from . import constants
+
+_DEFAULT_RESOLVER = SymbolicResolver()
 
 logger = logging.getLogger(__name__)
 
@@ -50,48 +53,6 @@ def _symbolic_type_hint(val: Any) -> str:
     if isinstance(val, dict) and val.get("__symbolic__"):
         return val.get("type_hint", "")
     return ""
-
-
-def _symbolic_call_result(
-    func_name: str,
-    args: list[Any],
-    inst: IRInstruction,
-    vm: VMState,
-) -> ExecutionResult:
-    """Create a symbolic value representing the result of an unknown function call."""
-    args_desc = ", ".join(_symbolic_name(a) for a in args)
-    sym = vm.fresh_symbolic(hint=f"{func_name}({args_desc})")
-    sym.constraints = [f"{func_name}({args_desc})"]
-    logger.debug("Unknown function %s — creating symbolic %s", func_name, sym.name)
-    return ExecutionResult.success(
-        StateUpdate(
-            register_writes={inst.result_reg: sym.to_dict()},
-            reasoning=f"unknown function {func_name}({args_desc}) → symbolic {sym.name}",
-        )
-    )
-
-
-def _symbolic_method_result(
-    obj_desc: str,
-    method_name: str,
-    args: list[Any],
-    inst: IRInstruction,
-    vm: VMState,
-) -> ExecutionResult:
-    """Create a symbolic value representing the result of an unknown method call."""
-    args_desc = ", ".join(_symbolic_name(a) for a in args)
-    call_desc = f"{obj_desc}.{method_name}({args_desc})"
-    sym = vm.fresh_symbolic(hint=call_desc)
-    sym.constraints = [call_desc]
-    logger.debug(
-        "Unknown method %s.%s — creating symbolic %s", obj_desc, method_name, sym.name
-    )
-    return ExecutionResult.success(
-        StateUpdate(
-            register_writes={inst.result_reg: sym.to_dict()},
-            reasoning=f"unknown method {call_desc} → symbolic {sym.name}",
-        )
-    )
 
 
 # ── Opcode handlers ─────────────────────────────────────────────
@@ -682,6 +643,7 @@ def _handle_call_function(
     cfg: CFG,
     registry: FunctionRegistry,
     current_label: str,
+    call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
     **kwargs: Any,
 ) -> ExecutionResult:
     func_name = inst.operands[0]
@@ -700,8 +662,8 @@ def _handle_call_function(
             func_val = f.local_vars[func_name]
             break
     if not func_val:
-        # Unknown function — create symbolic representing the call result
-        return _symbolic_call_result(func_name, args, inst, vm)
+        # Unknown function — resolve via configured strategy
+        return call_resolver.resolve_call(func_name, args, inst, vm)
 
     # 2b. Native string/list indexing — e.g. Scala s1(i) → s1[i]
     # Exclude VM internal references (functions, classes, heap addresses).
@@ -735,8 +697,8 @@ def _handle_call_function(
     if user_result.handled:
         return user_result
 
-    # 5. Not a recognized function ref — create symbolic
-    return _symbolic_call_result(func_name, args, inst, vm)
+    # 5. Not a recognized function ref — resolve via configured strategy
+    return call_resolver.resolve_call(func_name, args, inst, vm)
 
 
 def _handle_call_method(
@@ -745,6 +707,7 @@ def _handle_call_method(
     cfg: CFG,
     registry: FunctionRegistry,
     current_label: str,
+    call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
     **kwargs: Any,
 ) -> ExecutionResult:
     obj_val = _resolve_reg(vm, inst.operands[0])
@@ -758,15 +721,15 @@ def _handle_call_method(
         type_hint = vm.heap[addr].type_hint or ""
 
     if not type_hint or type_hint not in registry.class_methods:
-        # Unknown object type — create symbolic for method call result
+        # Unknown object type — resolve via configured strategy
         obj_desc = _symbolic_name(obj_val)
-        return _symbolic_method_result(obj_desc, method_name, args, inst, vm)
+        return call_resolver.resolve_method(obj_desc, method_name, args, inst, vm)
 
     methods = registry.class_methods[type_hint]
     func_label = methods.get(method_name, "")
     if not func_label or func_label not in cfg.blocks:
-        # Known type but unknown method — create symbolic
-        return _symbolic_method_result(type_hint, method_name, args, inst, vm)
+        # Known type but unknown method — resolve via configured strategy
+        return call_resolver.resolve_method(type_hint, method_name, args, inst, vm)
 
     params = registry.func_params.get(func_label, [])
     new_vars: dict[str, Any] = {}
@@ -794,24 +757,17 @@ def _handle_call_method(
 
 
 def _handle_call_unknown(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction,
+    vm: VMState,
+    call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
+    **kwargs: Any,
 ) -> ExecutionResult:
-    """Handle CALL_UNKNOWN — dynamic call target, create symbolic result."""
+    """Handle CALL_UNKNOWN — dynamic call target, resolve via configured strategy."""
     target_val = _resolve_reg(vm, inst.operands[0])
     arg_regs = inst.operands[1:]
     args = [_resolve_reg(vm, a) for a in arg_regs]
     target_desc = _symbolic_name(target_val)
-    args_desc = ", ".join(_symbolic_name(a) for a in args)
-    call_desc = f"{target_desc}({args_desc})"
-    sym = vm.fresh_symbolic(hint=call_desc)
-    sym.constraints = [call_desc]
-    logger.debug("Unknown call target %s — creating symbolic %s", target_desc, sym.name)
-    return ExecutionResult.success(
-        StateUpdate(
-            register_writes={inst.result_reg: sym.to_dict()},
-            reasoning=f"unknown call {call_desc} → symbolic {sym.name}",
-        )
-    )
+    return call_resolver.resolve_call(target_desc, args, inst, vm)
 
 
 # ── Dispatch table and entry point ──────────────────────────────
@@ -851,6 +807,7 @@ class LocalExecutor:
         registry: FunctionRegistry,
         current_label: str = "",
         ip: int = 0,
+        call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
     ) -> ExecutionResult:
         handler = cls.DISPATCH.get(inst.opcode)
         if not handler:
@@ -862,6 +819,7 @@ class LocalExecutor:
             registry=registry,
             current_label=current_label,
             ip=ip,
+            call_resolver=call_resolver,
         )
 
 
@@ -872,10 +830,13 @@ def _try_execute_locally(
     registry: FunctionRegistry,
     current_label: str = "",
     ip: int = 0,
+    call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
 ) -> ExecutionResult:
     """Try to execute an instruction without the LLM.
 
     Returns an ExecutionResult indicating whether the instruction was
     handled locally, and the StateUpdate if so.
     """
-    return LocalExecutor.execute(inst, vm, cfg, registry, current_label, ip)
+    return LocalExecutor.execute(
+        inst, vm, cfg, registry, current_label, ip, call_resolver
+    )
