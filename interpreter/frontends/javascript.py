@@ -12,11 +12,6 @@ from .. import constants
 class JavaScriptFrontend(BaseFrontend):
     """Lowers a JavaScript tree-sitter AST into flattened TAC IR."""
 
-    NONE_LITERAL = "undefined"
-    TRUE_LITERAL = "true"
-    FALSE_LITERAL = "false"
-    DEFAULT_RETURN_VALUE = "undefined"
-
     ATTRIBUTE_NODE_TYPE = "member_expression"
     ATTR_OBJECT_FIELD = "object"
     ATTR_ATTRIBUTE_FIELD = "property"
@@ -39,10 +34,10 @@ class JavaScriptFrontend(BaseFrontend):
             "string": self._lower_const_literal,
             "template_string": self._lower_template_string,
             "template_substitution": self._lower_template_substitution,
-            "true": self._lower_const_literal,
-            "false": self._lower_const_literal,
-            "null": self._lower_const_literal,
-            "undefined": self._lower_const_literal,
+            "true": self._lower_canonical_true,
+            "false": self._lower_canonical_false,
+            "null": self._lower_canonical_none,
+            "undefined": self._lower_canonical_none,
             "binary_expression": self._lower_binop,
             "augmented_assignment_expression": self._lower_binop,
             "unary_expression": self._lower_unop,

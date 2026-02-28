@@ -171,9 +171,9 @@ class TestPascalVariableDeclarations:
         assert Opcode.STORE_VAR in opcodes
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
-        # The var decl should initialize x to nil
+        # The var decl should initialize x to None (canonical nil)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("nil" in inst.operands for inst in consts)
+        assert any("None" in inst.operands for inst in consts)
 
     def test_var_declaration_then_assignment(self):
         instructions = _parse_pascal("program M; var x: Integer; begin x := 42; end.")

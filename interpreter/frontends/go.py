@@ -15,11 +15,6 @@ logger = logging.getLogger(__name__)
 class GoFrontend(BaseFrontend):
     """Lowers a Go tree-sitter AST into flattened TAC IR."""
 
-    NONE_LITERAL = "nil"
-    TRUE_LITERAL = "true"
-    FALSE_LITERAL = "false"
-    DEFAULT_RETURN_VALUE = "nil"
-
     ATTRIBUTE_NODE_TYPE = "selector_expression"
     ATTR_OBJECT_FIELD = "operand"
     ATTR_ATTRIBUTE_FIELD = "field"
@@ -35,9 +30,9 @@ class GoFrontend(BaseFrontend):
             "float_literal": self._lower_const_literal,
             "interpreted_string_literal": self._lower_const_literal,
             "raw_string_literal": self._lower_const_literal,
-            "true": self._lower_const_literal,
-            "false": self._lower_const_literal,
-            "nil": self._lower_const_literal,
+            "true": self._lower_canonical_true,
+            "false": self._lower_canonical_false,
+            "nil": self._lower_canonical_none,
             "binary_expression": self._lower_binop,
             "unary_expression": self._lower_unop,
             "call_expression": self._lower_go_call,
