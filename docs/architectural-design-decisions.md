@@ -393,3 +393,153 @@ Side effects use the existing `StateUpdate` format (heap_writes/var_writes) rath
 - LLM mode eliminates precision death for stdlib calls — e.g., `math.sqrt(16) → 4.0`, `4.0 + 1 = 5.0` computed locally
 - Fallback to symbolic on LLM failure (network errors, invalid JSON)
 - 17 new unit tests covering both resolvers, side effects, fallback, and prompt construction
+
+---
+
+### ADR-029: COBOL support via ProLeap parser bridge, byte-addressed memory regions, and language-agnostic IR extensions (2026-03-02)
+
+**Context:** RedDragon supports 15 languages via tree-sitter deterministic frontends and any language via LLM frontends. Adding COBOL support for reverse engineering legacy code requires:
+1. A proper COBOL parser (tree-sitter's COBOL grammar is insufficient for production COBOL)
+2. Modelling COBOL's byte-level memory layout (PIC clauses, REDEFINES, COMP-3 packed decimal, zoned decimal, EBCDIC encoding)
+3. Modelling COBOL's paragraph-based control flow (PERFORM, SECTION/PARAGRAPH, not function-based)
+
+The existing IR has no concept of byte-addressed memory — `LOAD_FIELD`/`STORE_FIELD` are name-based and each field is independent. COBOL's REDEFINES means two data items alias the same bytes, so writing through one field must be visible when reading through another. The smojol project (`~/code/smojol`) already implements a full COBOL byte-level memory model in Java with `MemoryRegion`, `RangeMemoryAccess`, `DataTypeSpec` subclasses (zoned decimal, COMP-3, alphanumeric), and REDEFINES-as-overlapping-views.
+
+**Decision:** A multi-part design spanning the Java bridge, IR extensions, VM extensions, COBOL type system, and COBOL frontend.
+
+#### Part 1: ProLeap parser bridge (Java subprocess)
+
+Use [proleap-cobol-parser](https://github.com/uwol/proleap-cobol-parser) (ANTLR4-based, JDK 17, Maven) via a subprocess bridge. A thin Java CLI (`proleap-bridge`) wraps ProLeap and serialises **both** the AST (syntax tree) and ASG (Abstract Semantic Graph) to JSON on stdout. The ASG provides resolved PERFORM targets, data item hierarchies, REDEFINES chains, variable references, PIC clauses, and EXEC SQL/CICS/SQLIMS nodes.
+
+The Python side defines an abstract `CobolParser` port with a `ProLeapCobolParser` adapter that invokes the subprocess and parses the JSON output. This follows the existing ports-and-adapters pattern (cf. `ParserFactory` for tree-sitter, `LLMClient` for LLM providers).
+
+```
+CobolParser (ABC)                    ← Python port
+    ↑
+ProLeapCobolParser                   ← adapter: subprocess → JSON → Python dicts
+    ↓
+proleap-bridge.jar                   ← thin Java CLI wrapper
+    ↓
+ProLeap COBOL Parser (Java library)  ← ANTLR4 grammar, AST + ASG
+```
+
+#### Part 2: Language-agnostic byte-addressed memory (3 new IR opcodes)
+
+Add three new opcodes to the IR that provide raw byte-addressed memory operations. These are **language-agnostic** — not COBOL-specific. A C frontend could use them for `struct` layouts; a binary protocol parser could use them for packet fields.
+
+| Opcode | Operands | Description |
+|--------|----------|-------------|
+| `ALLOC_REGION` | `size` (literal) | Allocate a zeroed byte region of `size` bytes, return region address |
+| `WRITE_REGION` | `region_reg`, `offset_reg`, `length` (literal), `value_reg` | Write `value_reg` bytes into region at byte offset |
+| `LOAD_REGION` | `region_reg`, `offset_reg`, `length` (literal) | Read bytes from region at byte offset, return as value |
+
+Key design choices:
+- **Offset is a register** (can be computed at runtime for OCCURS/table indexing via BINOP arithmetic)
+- **Length is a literal** (known from PIC clause at compile time)
+- **No encoding/decoding in the VM** — the VM moves raw bytes. Type-aware encoding (zoned decimal, COMP-3, alphanumeric, EBCDIC) is performed by **synthetic IR functions** emitted by the COBOL frontend. The VM never knows about COBOL data types.
+
+The VM adds a `regions: dict[str, bytearray]` store alongside the existing `heap: dict[str, HeapObject]`. Region addresses use a `"rgn_"` prefix to distinguish from heap addresses.
+
+#### Part 3: COBOL type encoding/decoding as synthetic IR functions
+
+The COBOL frontend emits encoding/decoding functions into the IR during DATA DIVISION lowering. These functions contain the logic ported from smojol's `DataTypeSpec` subclasses:
+
+| Synthetic function | Ports from smojol | Purpose |
+|---|---|---|
+| `__cobol_encode_alpha` | `AlphanumericDataTypeSpec.set()` | String → EBCDIC bytes, right-padded |
+| `__cobol_decode_alpha` | `AlphanumericDataTypeSpec.readPublic()` | EBCDIC bytes → string |
+| `__cobol_encode_zoned` | `ZonedDecimalDataTypeSpec.set()` | Number → zoned decimal bytes (sign nibble) |
+| `__cobol_decode_zoned` | `ZonedDecimalDataTypeSpec.readFormatted()` | Zoned decimal bytes → number |
+| `__cobol_encode_comp3` | `Comp3DataTypeSpec.set()` | Number → packed BCD bytes (sign nibble) |
+| `__cobol_decode_comp3` | `Comp3DataTypeSpec.readFormatted()` | Packed BCD bytes → number |
+
+These are emitted as standard IR function definitions (using existing `BRANCH`/`LABEL`/`CALL_FUNCTION`/`RETURN` opcodes). The VM executes them like any other function — no COBOL-specific code in the VM.
+
+However, since these functions manipulate individual bytes and nibbles, the IR also needs **byte-level builtins** (language-agnostic, not COBOL-specific):
+
+| Builtin | Purpose |
+|---|---|
+| `byte_get_nibble(byte, position)` | Extract high/low nibble from a byte |
+| `byte_set_nibble(byte, position, value)` | Set high/low nibble in a byte |
+| `byte_from_int(n)` | Integer (0-255) → byte |
+| `int_from_byte(b)` | Byte → integer (0-255) |
+| `bytes_to_string(bytes)` | Byte array → string (ASCII) |
+| `string_to_bytes(s)` | String → byte array (ASCII) |
+| `ebcdic_to_ascii(byte)` | Single byte EBCDIC → ASCII conversion |
+| `ascii_to_ebcdic(byte)` | Single byte ASCII → EBCDIC conversion |
+
+The EBCDIC conversion tables are ported from smojol's `ByteConverter` (256-entry static lookup tables).
+
+#### Part 4: COBOL-specific lowering
+
+The COBOL frontend (`CobolFrontend`, a direct `Frontend` subclass — not `BaseFrontend`) consumes the ProLeap ASG and lowers COBOL constructs as follows:
+
+**DATA DIVISION:**
+- Each `01`-level record → `ALLOC_REGION` with total byte size computed from PIC clauses
+- Each elementary item → a (region, offset, length, encoding) tuple tracked at lowering time
+- REDEFINES → no special handling; the redefined item shares the same region and overlapping (offset, length) range. Writing through one field and reading through another **just works** because they address the same bytes.
+- OCCURS → repeated items at computed offsets; variable indexing uses BINOP to compute `(index - 1) * element_size`
+- 88-level conditions → lowered as `LOAD_REGION` + `BINOP ==` comparisons against permitted values
+
+**PROCEDURE DIVISION (Strategy 2 — paragraphs as inline blocks):**
+- Each paragraph/section → `LABEL paragraph_name` ... instructions ... `LABEL end_paragraph_name`
+- `PERFORM X` → `BRANCH X` + (at end of X) `BRANCH return_point`. This preserves COBOL's flat control flow model with goto-with-return semantics.
+- `PERFORM X THRU Y` → same, but covers the range of paragraphs from X to Y
+- `PERFORM VARYING` → C-style for loop pattern (init → condition → body → update → branch back)
+- `EVALUATE` → if/else chain (same pattern as JavaScript `switch`)
+- `IF/ELSE` → standard `BRANCH_IF` pattern
+
+**MOVE/COMPUTE/arithmetic:**
+- `MOVE X TO Y` → `LOAD_REGION` (decode X) + `CALL_FUNCTION __cobol_encode_<type>` + `WRITE_REGION` (to Y's offset)
+- `COMPUTE X = expr` → lower expression to BINOP chain + encode + write
+- `ADD X TO Y` → `LOAD_REGION` both + `BINOP +` + encode + `WRITE_REGION`
+- Group MOVE → `LOAD_REGION` raw bytes from source group + `WRITE_REGION` to target group (same byte count, raw copy)
+
+**EXEC SQL/CICS/SQLIMS:**
+- ProLeap's ASG has dedicated metamodel packages (`execsql/`, `execcics/`, `execsqlims/`) for these
+- Lowered as `SYMBOLIC "EXEC_SQL:<sql_text>"` with host variable references extracted from the ASG and emitted as `LOAD_REGION` before the SYMBOLIC instruction, establishing def-use chains from COBOL variables into the SQL statement
+
+#### Part 5: Testing strategy
+
+**Phase 1 — Type system (no parser dependency):**
+Test the COBOL encoding/decoding logic independently, ported from smojol's test suite and extended:
+
+| smojol test file | Tests to port | Coverage |
+|---|---|---|
+| `DataTypesTest.java` | 30+ tests | Zoned decimal (signed/unsigned), COMP-3 (read/write/arithmetic), alphanumeric (padding/truncation), decimal alignment, sign handling, table indexing, overflow, zero handling, empty string defaults |
+| `DataTypeRedefinitionsTest.java` | 2+ tests | REDEFINES as overlapping byte views (read numeric as alpha, read through smaller alias) |
+| `DataLayoutBuilderTest.java` | 6 tests | PIC string parsing (simple/complex alphanumeric, numeric with repetition, signed) |
+| `DataTypeParserTest.java` | 3 tests | ANTLR PIC clause parsing for numeric/alphanumeric formats |
+
+Additional RedDragon-specific tests:
+- Encoding/decoding round-trips for all type combinations
+- REDEFINES with 3+ overlapping views
+- Nested REDEFINES (A REDEFINES B, C REDEFINES B)
+- OCCURS with variable index computation
+- Group MOVE across differently-structured records
+- EBCDIC ↔ ASCII conversion tables (full 256-byte verification)
+- Symbolic value propagation through `ALLOC_REGION`/`WRITE_REGION`/`LOAD_REGION`
+- Byte-level builtins (nibble get/set, byte↔int, string↔bytes)
+
+**Phase 2 — IR opcodes and VM:**
+Test `ALLOC_REGION`, `WRITE_REGION`, `LOAD_REGION` at the VM level with hand-crafted IR. No COBOL frontend needed — just raw byte operations verified against expected byte patterns.
+
+**Phase 3 — COBOL frontend lowering:**
+Test the full pipeline: COBOL source → ProLeap bridge → ASG → IR → CFG → execution. Uses the ProLeap bridge subprocess.
+
+**Consequences:**
+
+Benefits:
+- Full COBOL support including REDEFINES, COMP-3, zoned decimal, EBCDIC, OCCURS, 88-levels, EXEC SQL/CICS
+- Byte-addressed memory is language-agnostic — reusable for C structs, binary protocols, etc.
+- No COBOL-specific code in the VM — all encoding/decoding logic is in the IR as synthetic functions
+- REDEFINES falls out for free from byte-addressed memory (overlapping offset/length ranges on the same region)
+- Dataflow analysis works unchanged — `WRITE_REGION`/`LOAD_REGION` define and use registers like any other instruction
+- Smojol's battle-tested type encoding logic is ported with its test cases as a baseline
+
+Trade-offs:
+- JDK 17 required at runtime for the ProLeap bridge subprocess
+- JVM startup latency (~1-2s per parse invocation); acceptable for analysis workloads, upgradeable to a persistent process later
+- More verbose IR per data access (every field read/write has an encoding/decoding function call wrapped around it)
+- Byte-level builtins (nibble manipulation, EBCDIC tables) add ~8 new entries to the builtins table
+- COBOL paragraphs as inline blocks (Strategy 2) produces larger CFGs than the function-based alternative, but preserves COBOL's actual execution model
