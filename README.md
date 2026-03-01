@@ -51,17 +51,12 @@ poetry install
 
 ### ProLeap COBOL Bridge (optional)
 
-The COBOL frontend requires the ProLeap bridge JAR (JDK 17+, Maven):
+The COBOL frontend requires the ProLeap bridge JAR (JDK 17+, Maven). ProLeap is vendored as a git submodule:
 
 ```bash
-cd proleap-bridge && mvn clean package -q
+git submodule update --init                # fetch the ProLeap submodule
+cd proleap-bridge && ./build.sh            # builds ProLeap + bridge in one step
 # Produces: target/proleap-bridge-0.1.0-shaded.jar
-```
-
-Set the JAR path (or let it default to `proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar`):
-
-```bash
-export PROLEAP_BRIDGE_JAR=proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar
 ```
 
 Standalone usage (pipe COBOL source or pass file path):
@@ -70,13 +65,6 @@ Standalone usage (pipe COBOL source or pass file path):
 cat myprogram.cbl | java -jar proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar
 java -jar proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar myprogram.cbl
 java -jar proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar -format TANDEM myprogram.cbl
-```
-
-**Note:** The bridge requires a source-built ProLeap (the 4.0.0 Maven Central artifact has a stale grammar that fails on ADD/SUBTRACT). Build ProLeap from source first:
-
-```bash
-git clone https://github.com/uwol/proleap-cobol-parser.git /tmp/proleap-cobol-parser
-cd /tmp/proleap-cobol-parser && mvn clean install -DskipTests -q
 ```
 
 Set your API key for the LLM backend (only needed for `--frontend llm` or when execution encounters symbolic values):
