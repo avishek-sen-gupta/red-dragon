@@ -16,6 +16,7 @@ from .vm import (
     StateUpdate,
     HeapWrite,
     NewObject,
+    RegionWrite,
     ExecutionResult,
     Operators,
     _serialize_value,
@@ -481,6 +482,108 @@ def _handle_unop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionRe
     )
 
 
+# ── Region handlers ──────────────────────────────────────────────
+
+
+def _handle_alloc_region(
+    inst: IRInstruction, vm: VMState, **kwargs: Any
+) -> ExecutionResult:
+    """ALLOC_REGION: operands[0] = size literal. Allocate a zeroed byte region."""
+    size = _resolve_reg(vm, inst.operands[0])
+    if _is_symbolic(size):
+        sym = vm.fresh_symbolic(hint="region_addr")
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: sym.to_dict()},
+                reasoning=f"alloc_region(symbolic size) → {sym.name}",
+            )
+        )
+    addr = f"{constants.REGION_ADDR_PREFIX}{vm.symbolic_counter}"
+    vm.symbolic_counter += 1
+    return ExecutionResult.success(
+        StateUpdate(
+            new_regions={addr: int(size)},
+            register_writes={inst.result_reg: addr},
+            reasoning=f"alloc_region({size}) → {addr}",
+        )
+    )
+
+
+def _handle_write_region(
+    inst: IRInstruction, vm: VMState, **kwargs: Any
+) -> ExecutionResult:
+    """WRITE_REGION: operands = [region_reg, offset_reg, length_literal, value_reg].
+
+    Write bytes from value_reg (a list[int]) into the region at the given offset.
+    """
+    region_addr = _resolve_reg(vm, inst.operands[0])
+    offset = _resolve_reg(vm, inst.operands[1])
+    length = inst.operands[2]
+    value = _resolve_reg(vm, inst.operands[3])
+
+    if _is_symbolic(region_addr) or _is_symbolic(offset) or _is_symbolic(value):
+        return ExecutionResult.success(
+            StateUpdate(
+                reasoning=f"write_region(symbolic args) — no-op",
+            )
+        )
+
+    data = list(value)[: int(length)] if isinstance(value, (list, bytes)) else []
+    return ExecutionResult.success(
+        StateUpdate(
+            region_writes=[
+                RegionWrite(
+                    region_addr=str(region_addr),
+                    offset=int(offset),
+                    data=data,
+                )
+            ],
+            reasoning=f"write_region({region_addr}, offset={offset}, len={length})",
+        )
+    )
+
+
+def _handle_load_region(
+    inst: IRInstruction, vm: VMState, **kwargs: Any
+) -> ExecutionResult:
+    """LOAD_REGION: operands = [region_reg, offset_reg, length_literal].
+
+    Read bytes from the region and return as list[int].
+    """
+    region_addr = _resolve_reg(vm, inst.operands[0])
+    offset = _resolve_reg(vm, inst.operands[1])
+    length = inst.operands[2]
+
+    if _is_symbolic(region_addr) or _is_symbolic(offset):
+        sym = vm.fresh_symbolic(hint=f"region_load")
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: sym.to_dict()},
+                reasoning=f"load_region(symbolic) → {sym.name}",
+            )
+        )
+
+    addr_str = str(region_addr)
+    if addr_str not in vm.regions:
+        sym = vm.fresh_symbolic(hint=f"region_load({addr_str})")
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: sym.to_dict()},
+                reasoning=f"load_region({addr_str}) — unknown region → {sym.name}",
+            )
+        )
+
+    start = int(offset)
+    end = start + int(length)
+    data = list(vm.regions[addr_str][start:end])
+    return ExecutionResult.success(
+        StateUpdate(
+            register_writes={inst.result_reg: data},
+            reasoning=f"load_region({addr_str}, offset={start}, len={length}) = {data}",
+        )
+    )
+
+
 # ── Call helpers ─────────────────────────────────────────────────
 
 
@@ -796,6 +899,9 @@ class LocalExecutor:
         Opcode.CALL_FUNCTION: _handle_call_function,
         Opcode.CALL_METHOD: _handle_call_method,
         Opcode.CALL_UNKNOWN: _handle_call_unknown,
+        Opcode.ALLOC_REGION: _handle_alloc_region,
+        Opcode.WRITE_REGION: _handle_write_region,
+        Opcode.LOAD_REGION: _handle_load_region,
     }
 
     @classmethod

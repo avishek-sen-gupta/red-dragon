@@ -85,6 +85,7 @@ class VMState:
     path_conditions: list[str] = field(default_factory=list)
     symbolic_counter: int = 0
     closures: dict[str, ClosureEnvironment] = field(default_factory=dict)
+    regions: dict[str, bytearray] = field(default_factory=dict)
 
     def fresh_symbolic(self, hint: str = "") -> SymbolicValue:
         name = f"sym_{self.symbolic_counter}"
@@ -106,6 +107,10 @@ class VMState:
             result["closures"] = {
                 label: env.to_dict() for label, env in self.closures.items()
             }
+        if self.regions:
+            result["regions"] = {
+                addr: list(data) for addr, data in self.regions.items()
+            }
         return result
 
 
@@ -123,6 +128,12 @@ class NewObject(BaseModel):
     type_hint: str | None = None
 
 
+class RegionWrite(BaseModel):
+    region_addr: str
+    offset: int
+    data: list[int]
+
+
 class StackFramePush(BaseModel):
     function_name: str
     return_label: str | None = None
@@ -135,6 +146,8 @@ class StateUpdate(BaseModel):
     var_writes: dict[str, Any] = {}
     heap_writes: list[HeapWrite] = []
     new_objects: list[NewObject] = []
+    region_writes: list[RegionWrite] = []
+    new_regions: dict[str, int] = {}
     next_label: str | None = None
     call_push: StackFramePush | None = None
     call_pop: bool = False

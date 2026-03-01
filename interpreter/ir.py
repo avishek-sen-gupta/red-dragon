@@ -31,6 +31,10 @@ class Opcode(str, Enum):
     THROW = "THROW"
     # Special
     SYMBOLIC = "SYMBOLIC"
+    # Region operations (byte-addressed memory)
+    ALLOC_REGION = "ALLOC_REGION"
+    WRITE_REGION = "WRITE_REGION"
+    LOAD_REGION = "LOAD_REGION"
     # Labels (pseudo-instruction)
     LABEL = "LABEL"
 

@@ -7,6 +7,7 @@ from typing import Any
 from .constants import ARR_ADDR_PREFIX
 from .vm import VMState, Operators, _is_symbolic, _heap_addr
 from .vm_types import HeapObject
+from .cobol.byte_builtins import BYTE_BUILTINS
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 
@@ -124,4 +125,5 @@ class Builtins:
         "arrayOf": _builtin_array_of,
         "intArrayOf": _builtin_array_of,
         "Array": _builtin_array_of,
+        **BYTE_BUILTINS,
     }
