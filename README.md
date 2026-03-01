@@ -49,6 +49,31 @@ Requires Python >= 3.10 and [Poetry](https://python-poetry.org/).
 poetry install
 ```
 
+### ProLeap COBOL Bridge (optional)
+
+The COBOL frontend requires the ProLeap bridge JAR (JDK 17+, Maven):
+
+```bash
+cd proleap-bridge && mvn clean package -q
+# Produces: target/proleap-bridge-0.1.0-shaded.jar
+```
+
+Set the JAR path (or let it default to `proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar`):
+
+```bash
+export PROLEAP_BRIDGE_JAR=proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar
+```
+
+Standalone usage (pipe COBOL source or pass file path):
+
+```bash
+cat myprogram.cbl | java -jar proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar
+java -jar proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar myprogram.cbl
+java -jar proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar -format TANDEM myprogram.cbl
+```
+
+**Known limitation:** ProLeap 4.0.0 fails to parse standalone `ADD` and `SUBTRACT` statements (parser grammar bug). Use `COMPUTE` as a workaround for arithmetic operations.
+
 Set your API key for the LLM backend (only needed for `--frontend llm` or when execution encounters symbolic values):
 
 ```bash
