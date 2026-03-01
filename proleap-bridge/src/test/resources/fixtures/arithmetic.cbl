@@ -2,9 +2,9 @@
        PROGRAM-ID. ARITHMETIC.
        DATA DIVISION.
        WORKING-STORAGE SECTION.
-       77  WS-TOTAL          PIC 9(5) VALUE 100.
+       77 WS-TOTAL PIC 9(5) VALUE 100.
        PROCEDURE DIVISION.
        MAIN-PARA.
-           COMPUTE WS-TOTAL = WS-TOTAL + 50.
-           COMPUTE WS-TOTAL = WS-TOTAL - 25.
+           ADD 50 TO WS-TOTAL.
+           SUBTRACT 25 FROM WS-TOTAL.
            STOP RUN.
