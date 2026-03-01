@@ -11,6 +11,7 @@ FUNC_REF_TEMPLATE = "<function:{name}@{label}>"
 CLASS_REF_TEMPLATE = "<class:{name}@{label}>"
 
 OBJ_ADDR_PREFIX = "obj_"
+REGION_ADDR_PREFIX = "rgn_"
 ARR_ADDR_PREFIX = "arr_"
 ENV_ID_PREFIX = "env_"
 

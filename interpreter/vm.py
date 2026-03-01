@@ -12,6 +12,7 @@ from .vm_types import (  # noqa: F401 — re-exported for backwards compatibilit
     VMState,
     HeapWrite,
     NewObject,
+    RegionWrite,
     StackFramePush,
     StateUpdate,
     ExecutionResult,
@@ -22,6 +23,16 @@ from .vm_types import (  # noqa: F401 — re-exported for backwards compatibilit
 def apply_update(vm: VMState, update: StateUpdate):
     """Mechanically apply a StateUpdate to the VM."""
     frame = vm.current_frame
+
+    # New regions
+    for addr, size in update.new_regions.items():
+        vm.regions[addr] = bytearray(size)
+
+    # Region writes
+    for rw in update.region_writes:
+        vm.regions[rw.region_addr][rw.offset : rw.offset + len(rw.data)] = bytes(
+            rw.data
+        )
 
     # New objects
     for obj in update.new_objects:
