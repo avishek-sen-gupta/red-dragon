@@ -451,7 +451,14 @@ def run(
 
     # 1. Parse + Lower
     t0 = time.perf_counter()
-    if frontend_type in (constants.FRONTEND_LLM, constants.FRONTEND_CHUNKED_LLM):
+    if language == "cobol" or frontend_type == constants.FRONTEND_COBOL:
+        # COBOL frontend: skip tree-sitter, use ProLeap bridge
+        frontend = get_frontend(language, frontend_type=constants.FRONTEND_COBOL)
+        t1 = time.perf_counter()
+        stats.parse_time = t1 - t0
+        instructions = frontend.lower(None, source.encode("utf-8"))
+        stats.lower_time = time.perf_counter() - t1
+    elif frontend_type in (constants.FRONTEND_LLM, constants.FRONTEND_CHUNKED_LLM):
         # LLM frontend: skip tree-sitter, send source directly
         frontend = get_frontend(
             language,
