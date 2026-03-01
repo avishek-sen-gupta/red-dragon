@@ -440,35 +440,39 @@ Key design choices:
 
 The VM adds a `regions: dict[str, bytearray]` store alongside the existing `heap: dict[str, HeapObject]`. Region addresses use a `"rgn_"` prefix to distinguish from heap addresses.
 
-#### Part 3: COBOL type encoding/decoding as synthetic IR functions
+#### Part 3: COBOL type encoding/decoding as pure IR functions
 
-The COBOL frontend emits encoding/decoding functions into the IR during DATA DIVISION lowering. These functions contain the logic ported from smojol's `DataTypeSpec` subclasses:
+The COBOL frontend emits encoding/decoding as **pure IR functions** composed from primitive builtins and standard IR opcodes (arithmetic, `CALL_FUNCTION`, `RETURN`). These functions are NOT native Python builtins — they are generated IR instruction sequences. Python reference implementations in `interpreter/cobol/` serve as ground-truth for validation and are used by `ir_encoders.py` builders to emit equivalent IR.
 
-| Synthetic function | Ports from smojol | Purpose |
+| IR function builder | Reference impl | Purpose |
 |---|---|---|
-| `__cobol_encode_alpha` | `AlphanumericDataTypeSpec.set()` | String → EBCDIC bytes, right-padded |
-| `__cobol_decode_alpha` | `AlphanumericDataTypeSpec.readPublic()` | EBCDIC bytes → string |
-| `__cobol_encode_zoned` | `ZonedDecimalDataTypeSpec.set()` | Number → zoned decimal bytes (sign nibble) |
-| `__cobol_decode_zoned` | `ZonedDecimalDataTypeSpec.readFormatted()` | Zoned decimal bytes → number |
-| `__cobol_encode_comp3` | `Comp3DataTypeSpec.set()` | Number → packed BCD bytes (sign nibble) |
-| `__cobol_decode_comp3` | `Comp3DataTypeSpec.readFormatted()` | Packed BCD bytes → number |
+| `build_encode_alphanumeric_ir()` | `alphanumeric.encode_alphanumeric()` | String → EBCDIC bytes, right-padded |
+| `build_decode_alphanumeric_ir()` | `alphanumeric.decode_alphanumeric()` | EBCDIC bytes → string |
+| `build_encode_zoned_ir()` | `zoned_decimal.encode_zoned()` | Digit list → zoned decimal bytes (sign nibble) |
+| `build_decode_zoned_ir()` | `zoned_decimal.decode_zoned()` | Zoned decimal bytes → number |
+| `build_encode_comp3_ir()` | `comp3.encode_comp3()` | Digit list → packed BCD bytes (sign nibble) |
+| `build_decode_comp3_ir()` | `comp3.decode_comp3()` | Packed BCD bytes → number |
 
-These are emitted as standard IR function definitions (using existing `BRANCH`/`LABEL`/`CALL_FUNCTION`/`RETURN` opcodes). The VM executes them like any other function — no COBOL-specific code in the VM.
+IR functions are specialized for compile-time-known PIC parameters (total_digits, decimal_digits) — matching how COBOL compilers work. The generated IR is straight-line code with unrolled loops (digit counts are always compile-time constants from PIC clauses).
 
-However, since these functions manipulate individual bytes and nibbles, the IR also needs **byte-level builtins** (language-agnostic, not COBOL-specific):
+Only **~12 primitive byte-manipulation builtins** are registered as native Python in `Builtins.TABLE`. These are the atoms from which all encoding/decoding IR is composed:
 
-| Builtin | Purpose |
-|---|---|
-| `byte_get_nibble(byte, position)` | Extract high/low nibble from a byte |
-| `byte_set_nibble(byte, position, value)` | Set high/low nibble in a byte |
-| `byte_from_int(n)` | Integer (0-255) → byte |
-| `int_from_byte(b)` | Byte → integer (0-255) |
-| `bytes_to_string(bytes)` | Byte array → string (ASCII) |
-| `string_to_bytes(s)` | String → byte array (ASCII) |
-| `ebcdic_to_ascii(byte)` | Single byte EBCDIC → ASCII conversion |
-| `ascii_to_ebcdic(byte)` | Single byte ASCII → EBCDIC conversion |
+| Builtin | Signature | Purpose |
+|---|---|---|
+| `__nibble_get` | `(byte_val, position)` | Extract high/low nibble from a byte |
+| `__nibble_set` | `(byte_val, position, nibble)` | Set high/low nibble, return new byte |
+| `__byte_from_int` | `(value)` | Clamp/mask integer to 0-255 |
+| `__int_from_byte` | `(byte_val)` | Identity (semantic clarity in IR) |
+| `__bytes_to_string` | `(byte_list, encoding)` | Decode byte list to string ("ascii"/"ebcdic") |
+| `__string_to_bytes` | `(string, encoding)` | Encode string to byte list ("ascii"/"ebcdic") |
+| `__list_get` | `(lst, index)` | Get element at index |
+| `__list_set` | `(lst, index, value)` | Return new list with element replaced |
+| `__list_len` | `(lst)` | Return list length |
+| `__list_slice` | `(lst, start, end)` | Return sublist [start:end] |
+| `__list_concat` | `(lst1, lst2)` | Concatenate two lists |
+| `__make_list` | `(size, fill)` | Create list of `size` elements, all set to `fill` |
 
-The EBCDIC conversion tables are ported from smojol's `ByteConverter` (256-entry static lookup tables).
+The `__bytes_to_string`/`__string_to_bytes` builtins handle EBCDIC encoding internally (using the ported `ByteConverter` lookup tables) when `encoding="ebcdic"`. The EBCDIC table is an implementation detail, not exposed as a builtin.
 
 #### Part 4: COBOL-specific lowering
 
