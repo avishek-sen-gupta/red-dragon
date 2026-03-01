@@ -72,7 +72,12 @@ java -jar proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar myprogram.cbl
 java -jar proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar -format TANDEM myprogram.cbl
 ```
 
-**Known limitation:** ProLeap 4.0.0 fails to parse standalone `ADD` and `SUBTRACT` statements (parser grammar bug). Use `COMPUTE` as a workaround for arithmetic operations.
+**Note:** The bridge requires a source-built ProLeap (the 4.0.0 Maven Central artifact has a stale grammar that fails on ADD/SUBTRACT). Build ProLeap from source first:
+
+```bash
+git clone https://github.com/uwol/proleap-cobol-parser.git /tmp/proleap-cobol-parser
+cd /tmp/proleap-cobol-parser && mvn clean install -DskipTests -q
+```
 
 Set your API key for the LLM backend (only needed for `--frontend llm` or when execution encounters symbolic values):
 
