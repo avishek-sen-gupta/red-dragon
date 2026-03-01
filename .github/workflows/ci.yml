@@ -50,5 +50,9 @@ jobs:
           distribution: temurin
           java-version: "17"
           cache: maven
+      - name: Build ProLeap from source
+        run: |
+          git clone --depth 1 https://github.com/uwol/proleap-cobol-parser.git /tmp/proleap-cobol-parser
+          cd /tmp/proleap-cobol-parser && mvn clean install -DskipTests -q
       - name: Build and test
         run: mvn clean package -q

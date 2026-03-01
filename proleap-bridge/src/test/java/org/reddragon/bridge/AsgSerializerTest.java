@@ -125,28 +125,27 @@ public class AsgSerializerTest {
     }
 
     @Test
-    public void testArithmetic_computeStatements() throws Exception {
+    public void testArithmetic_addAndSubtract() throws Exception {
         JsonObject asg = parseFixture("arithmetic.cbl");
         JsonObject mainPara = findParagraph(asg.getAsJsonArray("paragraphs"), "MAIN-PARA");
         JsonArray stmts = mainPara.getAsJsonArray("statements");
 
         assertTrue("Should have at least 3 statements", stmts.size() >= 3);
-        // ProLeap 4.0.0 bug: ADD/SUBTRACT fail to parse, using COMPUTE instead
-        assertStatementType(stmts, 0, "COMPUTE");
-        assertStatementType(stmts, 1, "COMPUTE");
+        assertStatementType(stmts, 0, "ADD");
+        assertStatementType(stmts, 1, "SUBTRACT");
         assertLastStatementType(stmts, "STOP_RUN");
     }
 
     @Test
-    public void testArithmetic_computeOperands() throws Exception {
+    public void testArithmetic_addOperands() throws Exception {
         JsonObject asg = parseFixture("arithmetic.cbl");
         JsonObject mainPara = findParagraph(asg.getAsJsonArray("paragraphs"), "MAIN-PARA");
         JsonArray stmts = mainPara.getAsJsonArray("statements");
-        JsonObject computeStmt = stmts.get(0).getAsJsonObject();
+        JsonObject addStmt = stmts.get(0).getAsJsonObject();
 
-        assertTrue("COMPUTE should have operands", computeStmt.has("operands"));
-        JsonArray operands = computeStmt.getAsJsonArray("operands");
-        assertTrue("COMPUTE should have at least 1 operand", operands.size() >= 1);
+        assertTrue("ADD should have operands", addStmt.has("operands"));
+        JsonArray operands = addStmt.getAsJsonArray("operands");
+        assertEquals("ADD should have 2 operands (from + to)", 2, operands.size());
     }
 
     // ── DataFieldSerializer unit tests ───────────────────────────────────
