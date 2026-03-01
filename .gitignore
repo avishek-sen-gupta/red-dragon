@@ -8,3 +8,7 @@ build/
 .mypy_cache/
 .pytest_cache/
 .idea/
+
+# Java / Maven
+proleap-bridge/target/
+proleap-bridge/dependency-reduced-pom.xml
