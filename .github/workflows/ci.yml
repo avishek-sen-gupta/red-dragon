@@ -52,7 +52,5 @@ jobs:
           distribution: temurin
           java-version: "17"
           cache: maven
-      - name: Build ProLeap from submodule
-        run: cd proleap-cobol-parser && mvn clean install -DskipTests -q
       - name: Build and test
-        run: mvn clean package -q
+        run: ./build.sh
