@@ -1,0 +1,3 @@
+[submodule "proleap-bridge/proleap-cobol-parser"]
+	path = proleap-bridge/proleap-cobol-parser
+	url = https://github.com/uwol/proleap-cobol-parser.git

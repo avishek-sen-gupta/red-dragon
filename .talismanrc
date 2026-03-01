@@ -43,3 +43,5 @@ fileignoreconfig:
   checksum: efaf908db416b12a9a806869b9887ceaccbd6f9edc90d1a0c7524aadf30babec
 - filename: tests/unit/test_ebcdic_table.py
   checksum: 595c9407a1b640cde9d4a91805e24f7307867cc57434f1095032319e5be3da75
+- filename: proleap-bridge/proleap-cobol-parser
+  checksum: 2300b7b98efd38a6d8900c8c10158fba247fe300f7d50043bb8374a1cd4a8ab1
