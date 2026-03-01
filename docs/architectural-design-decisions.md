@@ -545,5 +545,46 @@ Trade-offs:
 - JDK 17 required at runtime for the ProLeap bridge subprocess
 - JVM startup latency (~1-2s per parse invocation); acceptable for analysis workloads, upgradeable to a persistent process later
 - More verbose IR per data access (every field read/write has an encoding/decoding function call wrapped around it)
-- Byte-level builtins (nibble manipulation, EBCDIC tables) add ~8 new entries to the builtins table
+- Byte-level builtins (nibble manipulation, EBCDIC tables) add ~14 new entries to the builtins table
 - COBOL paragraphs as inline blocks (Strategy 2) produces larger CFGs than the function-based alternative, but preserves COBOL's actual execution model
+
+#### Part 6: Phase 2 Implementation — Python-side COBOL Frontend (2026-03-02)
+
+Phase 2 implemented the COBOL frontend that consumes ProLeap JSON ASG and lowers it to RedDragon IR.
+
+**JSON ASG Contract** (`interpreter/cobol/asg_types.py`):
+Frozen dataclasses with `from_dict`/`to_dict` round-trip serialization:
+- `CobolField` — DATA DIVISION items (level, PIC, USAGE, offset, VALUE, REDEFINES, children)
+- `CobolStatement` — PROCEDURE DIVISION statements (type, operands, children, condition)
+- `CobolParagraph`, `CobolSection` — structural containers
+- `CobolASG` — top-level ASG (data_fields, sections, paragraphs)
+
+**PIC Clause Parser** (`interpreter/cobol/pic_parser.py`):
+ANTLR4-based parser ported from smojol's `CobolDataTypes.g4`/`CobolDataTypesLexer.g4`:
+- `parse_pic(pic, usage) -> CobolTypeDescriptor` — parses PIC strings like `S9(5)V99`, `X(8)`
+- ANTLR visitor walks the parse tree to extract sign, integer digits, decimal digits, alphanumeric length
+- `usage` parameter overrides category: `"COMP-3"` → `COMP3`, `"DISPLAY"` → `ZONED_DECIMAL`
+- Grammar `superClass` option and `@lexer::members` block removed for Python compatibility
+
+**Data Layout Builder** (`interpreter/cobol/data_layout.py`):
+Pure function `build_data_layout(fields) -> DataLayout`:
+- Recursively flattens `CobolField` trees into `FieldLayout` maps
+- Computes byte lengths via `parse_pic` + `CobolTypeDescriptor.byte_length`
+- REDEFINES fields share offsets and do NOT increase parent group size
+
+**CobolFrontend** (`interpreter/cobol/cobol_frontend.py`):
+Direct `Frontend` subclass (not `BaseFrontend`), implementing `lower(tree, source) -> list[IRInstruction]`:
+- **Data Division lowering:** `ALLOC_REGION` for total record size, encode initial VALUE clauses via inline IR
+- **Procedure Division lowering:** Statement-by-statement dispatch for MOVE, ADD, SUBTRACT, MULTIPLY, DIVIDE, IF, PERFORM, DISPLAY, STOP_RUN, GOTO, EVALUATE
+- **Inline IR:** Encoding/decoding IR from `ir_encoders.py` is inlined (not called as functions) — register mapping handles parameter passing
+- **Condition lowering:** Simple pattern matching on "field OP value" strings from the ASG
+- Two new builtins (`__cobol_prepare_digits`, `__cobol_prepare_sign`) handle runtime string-to-digits conversion for MOVE targets
+
+**Subprocess Bridge** (`interpreter/cobol/cobol_parser.py`, `subprocess_runner.py`):
+- `CobolParser` ABC, `ProLeapCobolParser` adapter (subprocess → JSON → `CobolASG`)
+- `SubprocessRunner` ABC, `RealSubprocessRunner` (production), testable via DI
+- Bridge JAR path configurable via `PROLEAP_BRIDGE_JAR` environment variable
+
+**Integration:** Added `FRONTEND_COBOL` constant and `"cobol"` branch in `get_frontend()` and `run()`.
+
+**Testing:** 65 new unit tests covering ASG round-trip, PIC parsing (16 cases), data layout (8 cases), frontend lowering (16 cases), parser bridge (5 cases), and end-to-end fixture tests (9 cases). All 7502 tests pass.

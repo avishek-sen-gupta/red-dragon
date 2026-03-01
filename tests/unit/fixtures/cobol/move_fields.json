@@ -1,0 +1,28 @@
+{
+    "data_fields": [
+        {
+            "name": "WS-SRC",
+            "level": 77,
+            "pic": "9(3)",
+            "usage": "DISPLAY",
+            "offset": 0,
+            "value": "123"
+        },
+        {
+            "name": "WS-DST",
+            "level": 77,
+            "pic": "9(3)",
+            "usage": "DISPLAY",
+            "offset": 0
+        }
+    ],
+    "paragraphs": [
+        {
+            "name": "MAIN-PARA",
+            "statements": [
+                {"type": "MOVE", "operands": ["WS-SRC", "WS-DST"]},
+                {"type": "STOP_RUN"}
+            ]
+        }
+    ]
+}

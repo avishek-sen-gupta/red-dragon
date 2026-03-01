@@ -1,0 +1,22 @@
+{
+    "data_fields": [
+        {
+            "name": "WS-TOTAL",
+            "level": 77,
+            "pic": "9(5)",
+            "usage": "DISPLAY",
+            "offset": 0,
+            "value": "100"
+        }
+    ],
+    "paragraphs": [
+        {
+            "name": "MAIN-PARA",
+            "statements": [
+                {"type": "ADD", "operands": ["50", "WS-TOTAL"]},
+                {"type": "SUBTRACT", "operands": ["25", "WS-TOTAL"]},
+                {"type": "STOP_RUN"}
+            ]
+        }
+    ]
+}

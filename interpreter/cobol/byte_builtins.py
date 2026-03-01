@@ -213,6 +213,56 @@ def _builtin_make_list(args: list[Any], vm: Any) -> Any:
     return [fill] * size
 
 
+def _builtin_cobol_prepare_digits(args: list[Any], vm: Any) -> Any:
+    """Prepare digit list from a string value for COBOL numeric encoding.
+
+    Args: [value_str: str, total_digits: int, decimal_digits: int, signed: bool]
+    Returns: list[int] of digit values (0-9)
+    """
+    if len(args) < 4 or any(_is_symbolic(a) for a in args):
+        return _UNCOMPUTABLE
+    value_str, total_digits, decimal_digits, signed = (
+        args[0],
+        args[1],
+        args[2],
+        args[3],
+    )
+    if not isinstance(value_str, str) or not isinstance(total_digits, int):
+        return _UNCOMPUTABLE
+
+    from interpreter.cobol.data_filters import align_decimal, left_adjust
+
+    clean = value_str.lstrip("+-")
+    if decimal_digits > 0:
+        integer_digits = total_digits - decimal_digits
+        digit_str = align_decimal(clean, integer_digits, decimal_digits)
+    else:
+        digit_str = left_adjust(clean.replace(".", ""), total_digits)
+
+    return [int(ch) if ch.isdigit() else 0 for ch in digit_str]
+
+
+def _builtin_cobol_prepare_sign(args: list[Any], vm: Any) -> Any:
+    """Compute sign nibble from a string value for COBOL numeric encoding.
+
+    Args: [value_str: str, signed: bool]
+    Returns: int (sign nibble: 0x0F unsigned, 0x0C positive, 0x0D negative)
+    """
+    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+        return _UNCOMPUTABLE
+    value_str, signed = args[0], args[1]
+    if not isinstance(value_str, str):
+        return _UNCOMPUTABLE
+    if not signed:
+        return 0x0F
+    negative = value_str.startswith("-")
+    clean = value_str.lstrip("+-").replace(".", "")
+    has_nonzero = any(ch != "0" for ch in clean if ch.isdigit())
+    if negative and has_nonzero:
+        return 0x0D
+    return 0x0C
+
+
 BYTE_BUILTINS: dict[str, Any] = {
     "__nibble_get": _builtin_nibble_get,
     "__nibble_set": _builtin_nibble_set,
@@ -226,4 +276,6 @@ BYTE_BUILTINS: dict[str, Any] = {
     "__list_slice": _builtin_list_slice,
     "__list_concat": _builtin_list_concat,
     "__make_list": _builtin_make_list,
+    "__cobol_prepare_digits": _builtin_cobol_prepare_digits,
+    "__cobol_prepare_sign": _builtin_cobol_prepare_sign,
 }

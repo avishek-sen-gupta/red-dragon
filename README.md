@@ -8,7 +8,7 @@
 
 **RedDragon** is a multi-language source code analysis toolkit that:
 
-- **Parses** source in 15 languages via tree-sitter, or any language via LLM-based lowering (including chunked lowering for large files)
+- **Parses** source in 15 languages via tree-sitter, COBOL via ProLeap parser bridge, or any language via LLM-based lowering (including chunked lowering for large files)
 - **Lowers** to a universal flattened three-address code IR (~22 opcodes, including 3 byte-addressed memory region opcodes) with structured source location traceability (every IR instruction from deterministic frontends carries its originating AST span; LLM frontends lack AST nodes and produce `NO_SOURCE_LOCATION`) — the LLM frontend uses the LLM as a **compiler frontend**, constrained by a formal IR schema with concrete patterns
 - **Builds** control flow graphs from IR instructions
 - **Analyses** data flow via iterative reaching definitions, def-use chains, and variable dependency graphs
@@ -19,10 +19,12 @@
 ```mermaid
 flowchart TD
     SRC[Source Code] --> DET["tree-sitter<br>15 languages"]
+    SRC --> COBOL["ProLeap Bridge<br>COBOL"]
     SRC --> LLM["LLM Frontend<br>any language"]
     SRC --> CHUNK["Chunked LLM<br>chunk → LLM × N → renumber → reassemble"]
 
     DET --> IR[Flattened TAC IR]
+    COBOL --> IR
     LLM --> IR
     CHUNK --> IR
 
@@ -65,7 +67,8 @@ poetry run python interpreter.py myfile.py --cfg-only     # inspect CFG only
 poetry run python interpreter.py example.js -l javascript  # non-Python source
 poetry run python interpreter.py myfile.py -f llm -v       # LLM frontend
 poetry run python interpreter.py myfile.py -f chunked_llm  # chunked LLM frontend
-poetry run python interpreter.py example.cob -l cobol -f llm  # unsupported language via LLM
+poetry run python interpreter.py example.cob -l cobol         # COBOL via ProLeap bridge
+export PROLEAP_BRIDGE_JAR=/path/to/bridge.jar                 # optional: custom bridge JAR path
 poetry run python interpreter.py myfile.py --mermaid        # output CFG as Mermaid flowchart
 poetry run python interpreter.py myfile.py --mermaid --function foo  # CFG for a single function
 ```
@@ -76,7 +79,7 @@ poetry run python interpreter.py myfile.py --mermaid --function foo  # CFG for a
 | `-l` | Source language (default: `python`) |
 | `-b` | LLM backend: `claude`, `openai`, `ollama`, `huggingface` (default: `claude`) |
 | `-n` | Maximum interpretation steps (default: 100) |
-| `-f` | Frontend: `deterministic`, `llm`, `chunked_llm` (default: `deterministic`) |
+| `-f` | Frontend: `deterministic`, `llm`, `chunked_llm`, `cobol` (default: `deterministic`) |
 | `--ir-only` | Print the IR and exit |
 | `--cfg-only` | Print the CFG and exit |
 | `--mermaid` | Output CFG as a Mermaid flowchart diagram and exit |
@@ -113,6 +116,10 @@ Control flow constructs (if/else, while, for, for-of/foreach, switch, break/cont
 </details>
 
 All constructs above produce real IR for proper data-flow analysis. All 15 frontends have **zero unsupported SYMBOLIC instructions** on the two-pass audit suite (`scripts/audit_all_frontends.py`), which combines dispatch-table coverage analysis (comparing AST node types against frontend dispatch tables with block-reachability classification) and runtime SYMBOLIC detection. For unlisted languages, use `--frontend llm`.
+
+### COBOL frontend
+
+The COBOL frontend uses the [ProLeap COBOL Parser](https://github.com/uwol/proleap-cobol-parser) via a subprocess bridge (requires JDK 17). It lowers DATA DIVISION fields to byte-addressed memory regions (`ALLOC_REGION`/`WRITE_REGION`/`LOAD_REGION`) with PIC-driven encoding/decoding (zoned decimal, COMP-3, alphanumeric/EBCDIC), and PROCEDURE DIVISION statements (MOVE, ADD, SUBTRACT, MULTIPLY, DIVIDE, IF, PERFORM, DISPLAY, STOP RUN, GO TO, EVALUATE) to standard IR. REDEFINES works automatically through overlapping byte offsets on shared regions.
 
 ## Example: CFG
 
@@ -330,7 +337,7 @@ The **Exercism integration test suite** (`tests/unit/exercism/`) extends coverag
 | **acronym** | toUpperChar helper, word boundary detection, string building, separator classification | 9 | 15 | 2 | 252 | **269** |
 | **Total** | | **171** | **270** | **36** | **5068** | **5374** |
 
-Combined with the Rosetta suite, the project has **7268 tests** (7268 passed, 3 xfailed) — all with zero LLM calls.
+Combined with the Rosetta suite and the COBOL frontend tests (65 tests covering ASG round-trip, PIC parsing, data layout, frontend lowering, parser bridge, and end-to-end fixture tests), the project has **7502 tests** (7502 passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 

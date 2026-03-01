@@ -1,0 +1,21 @@
+{
+    "data_fields": [
+        {
+            "name": "WS-MSG",
+            "level": 77,
+            "pic": "X(11)",
+            "usage": "DISPLAY",
+            "offset": 0,
+            "value": "HELLO WORLD"
+        }
+    ],
+    "paragraphs": [
+        {
+            "name": "MAIN-PARA",
+            "statements": [
+                {"type": "DISPLAY", "operands": ["WS-MSG"]},
+                {"type": "STOP_RUN"}
+            ]
+        }
+    ]
+}

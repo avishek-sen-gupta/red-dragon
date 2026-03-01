@@ -35,6 +35,17 @@ def get_frontend(
     Returns:
         A Frontend instance.
     """
+    if frontend_type == constants.FRONTEND_COBOL:
+        import os
+
+        from .cobol.cobol_frontend import CobolFrontend
+        from .cobol.cobol_parser import ProLeapCobolParser
+        from .cobol.subprocess_runner import RealSubprocessRunner
+
+        bridge_jar = os.environ.get("PROLEAP_BRIDGE_JAR", "proleap-bridge.jar")
+        parser = ProLeapCobolParser(RealSubprocessRunner(), bridge_jar)
+        return CobolFrontend(parser)
+
     if frontend_type == constants.FRONTEND_DETERMINISTIC:
         from .frontends import get_deterministic_frontend
 
