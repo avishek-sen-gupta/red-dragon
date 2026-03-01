@@ -30,45 +30,29 @@ RedDragon is a **multi-language symbolic code interpreter**. It parses source co
 
 The core design principle: **execute as much as possible deterministically (0 LLM calls), and only fall back to an LLM oracle when the interpreter encounters truly unknown values**. For programs with concrete inputs and no missing dependencies, the entire execution is deterministic.
 
-```
-                         ┌──────────────────────────────────────────┐
-                         │              Source Code                 │
-                         │        (Python, JS, Java, ...)           │
-                         └────────────────┬─────────────────────────┘
-                                          │
-                    ┌─────────────────────┼─────────────────────┐
-                    ▼                     ▼                     ▼
-           ┌────────────────┐   ┌────────────────┐   ┌─────────────────┐
-           │  tree-sitter   │   │  LLM Frontend  │   │ Chunked LLM     │
-           │  15 languages  │   │  any language   │   │ chunk→LLM×N     │
-           └───────┬────────┘   └───────┬────────┘   └────────┬────────┘
-                   │                    │                      │
-                   └────────────────────┼──────────────────────┘
-                                        ▼
-                              ┌─────────────────┐
-                              │  Flattened IR    │
-                              │  (~20 opcodes)   │
-                              └────────┬────────┘
-                                       │
-                          ┌────────────┼────────────┐
-                          ▼            ▼            ▼
-                   ┌────────────┐ ┌────────┐ ┌───────────────┐
-                   │ Build CFG  │ │Registry│ │  Dataflow     │
-                   │            │ │        │ │  Analysis     │
-                   └─────┬──────┘ └───┬────┘ └───────────────┘
-                         │            │
-                         ▼            ▼
-                    ┌──────────────────────┐
-                    │   Symbolic VM        │
-                    │ ┌──────────────────┐ │
-                    │ │ Local Executor   │ │  ← handles all 19 opcodes
-                    │ └───────┬──────────┘ │
-                    │         │ not handled │
-                    │         ▼            │
-                    │ ┌──────────────────┐ │
-                    │ │ LLM Oracle       │ │  ← fallback only
-                    │ └──────────────────┘ │
-                    └──────────────────────┘
+```mermaid
+flowchart TD
+    src["Source Code\n(Python, JS, Java, ...)"]
+    ts["tree-sitter\n15 languages"]
+    llm["LLM Frontend\nany language"]
+    chunked["Chunked LLM\nchunk→LLM×N"]
+    ir["Flattened IR\n(~20 opcodes)"]
+    cfg["Build CFG"]
+    reg["Registry"]
+    df["Dataflow Analysis"]
+
+    src --> ts & llm & chunked
+    ts & llm & chunked --> ir
+    ir --> cfg & reg & df
+
+    subgraph VM ["Symbolic VM"]
+        exec["Local Executor\n← handles all 19 opcodes"]
+        oracle["LLM Oracle\n← fallback only"]
+        exec -- "not handled" --> oracle
+    end
+
+    cfg --> VM
+    reg --> VM
 ```
 
 ---
@@ -260,26 +244,28 @@ Functions and classes use structured labels defined in `interpreter/constants.py
 
 ### Visual: CFG for an if/else
 
+Source:
+```python
+if x > 0:
+    label = "pos"
+else:
+    label = "neg"
+return label
 ```
-Source:                          CFG:
-  if x > 0:                     ┌──────────────────────┐
-      label = "pos"             │ entry                │
-  else:                         │ LOAD x, CONST 0      │
-      label = "neg"             │ BINOP >, BRANCH_IF   │
-  return label                  └──────┬───────┬───────┘
-                                   T   │       │ F
-                                ┌──────▼──┐ ┌──▼──────┐
-                                │if_true  │ │if_false │
-                                │CONST pos│ │CONST neg│
-                                │STORE    │ │STORE    │
-                                └────┬────┘ └────┬────┘
-                                     │           │
-                                     ▼           ▼
-                                ┌──────────────────────┐
-                                │ merge                │
-                                │ LOAD_VAR label       │
-                                │ RETURN               │
-                                └──────────────────────┘
+
+CFG:
+
+```mermaid
+flowchart TD
+    entry["entry\nLOAD x, CONST 0\nBINOP >, BRANCH_IF"]
+    if_true["if_true\nCONST pos\nSTORE"]
+    if_false["if_false\nCONST neg\nSTORE"]
+    merge["merge\nLOAD_VAR label\nRETURN"]
+
+    entry -- "T" --> if_true
+    entry -- "F" --> if_false
+    if_true --> merge
+    if_false --> merge
 ```
 
 ---
@@ -405,15 +391,21 @@ for step in range(max_steps):
 
     instruction = block.instructions[ip]
     if instruction is LABEL: ip++; continue ─── skip pseudo-instructions
+```
 
-    ┌─────────────────────────────────────┐
-    │ result = _try_execute_locally(...)   │ ← try deterministic execution
-    │ if result.handled:                   │
-    │     update = result.update           │
-    │ else:                                │
-    │     update = llm.interpret(inst, vm) │ ← LLM fallback
-    └─────────────────────────────────────┘
+```mermaid
+flowchart TD
+    try["result = _try_execute_locally(...)"]
+    handled{{"result.handled?"}}
+    local["update = result.update"]
+    fallback["update = llm.interpret(inst, vm)\n← LLM fallback"]
 
+    try --> handled
+    handled -- "yes" --> local
+    handled -- "no" --> fallback
+```
+
+```
     apply_update(vm, update)                ─── mutate VM state
 
     handle control flow:
@@ -818,24 +810,20 @@ def make_counter():
     def get():
         return count            ← reads shared env
     return (increment, get)
-
-                     ┌───────────────────┐
-                     │ ClosureEnvironment │
-                     │ env_0             │
-                     │ bindings:         │
-                     │   count = 0       │ ← shared mutable state
-                     └────────┬──────────┘
-                         ┌────┴────┐
-                         │         │
-                  ┌──────▼─────┐  ┌▼──────────┐
-                  │ increment  │  │ get        │
-                  │ #closure_1 │  │ #closure_2 │
-                  │ env → env_0│  │ env → env_0│
-                  └────────────┘  └────────────┘
-
-After increment():  env_0.bindings["count"] = 1
-After get():        reads env_0.bindings["count"] → 1
 ```
+
+```mermaid
+flowchart TD
+    env["ClosureEnvironment env_0\nbindings:\n  count = 0\n← shared mutable state"]
+    inc["increment\n#closure_1\nenv → env_0"]
+    get["get\n#closure_2\nenv → env_0"]
+
+    env --> inc
+    env --> get
+```
+
+After `increment()`:  `env_0.bindings["count"] = 1`
+After `get()`:        reads `env_0.bindings["count"] → 1`
 
 ---
 
@@ -1073,26 +1061,20 @@ interpreter/
 
 ### Dependency flow
 
-```
-ir.py ← constants.py
-  ↑
-cfg_types.py ← ir.py, constants.py
-  ↑
-cfg.py ← cfg_types.py, ir.py, constants.py
-  ↑
-vm_types.py ← (standalone, pydantic only)
-  ↑
-vm.py ← vm_types.py
-  ↑
-registry.py ← ir.py, cfg.py, constants.py
-  ↑
-builtins.py ← vm.py
-  ↑
-executor.py ← ir.py, cfg.py, vm.py, registry.py, builtins.py, constants.py
-  ↑
-backend.py ← ir.py, vm.py, llm_client.py
-  ↑
-run.py ← (everything above)
+```mermaid
+flowchart BT
+    constants["constants.py"]
+    ir["ir.py"] --> constants
+    cfg_types["cfg_types.py"] --> ir & constants
+    cfg["cfg.py"] --> cfg_types & ir & constants
+    vm_types["vm_types.py\n(standalone, pydantic only)"]
+    vm["vm.py"] --> vm_types
+    registry["registry.py"] --> ir & cfg & constants
+    builtins["builtins.py"] --> vm
+    executor["executor.py"] --> ir & cfg & vm & registry & builtins & constants
+    llm_client["llm_client.py"]
+    backend["backend.py"] --> ir & vm & llm_client
+    run["run.py"] --> executor & backend
 ```
 
 The new `*_types.py` files are **pure data** with no business-logic imports, ensuring they sit at the bottom of the dependency graph with zero risk of circular imports.

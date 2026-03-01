@@ -34,31 +34,29 @@ The frontend subsystem converts source code in any language into a universal fla
 
 All three produce the same `list[IRInstruction]` output, making the downstream VM, CFG, and dataflow analysis completely frontend-agnostic.
 
-```
-                    ┌─────────────────────────┐
-                    │     get_frontend()       │  ← factory
-                    │  interpreter/frontend.py │
-                    └────────┬────────────────┘
-              ┌──────────────┼──────────────────┐
-              ▼              ▼                   ▼
-     ┌────────────┐  ┌─────────────┐  ┌──────────────────┐
-     │Deterministic│  │ LLMFrontend │  │ChunkedLLMFrontend│
-     │(BaseFrontend│  │             │  │                  │
-     │ subclass)   │  │ llm_frontend│  │ chunked_llm_     │
-     │             │  │   .py       │  │  frontend.py     │
-     │ 15 language │  │             │  │                  │
-     │ frontends/  │  │  LLMClient  │  │  ChunkExtractor  │
-     └──────┬──────┘  └──────┬──────┘  │  IRRenumberer    │
-            │                │         │  wraps LLMFrontend│
-            ▼                ▼         └────────┬─────────┘
-     tree-sitter AST    LLM API call            │
-     → recursive         → JSON parse           ▼
-       descent                            chunk → LLM × N
-                                          → renumber → merge
-            │                │                   │
-            └────────────────┼───────────────────┘
-                             ▼
-                    list[IRInstruction]
+```mermaid
+flowchart TD
+    factory["get_frontend()\ninterpreter/frontend.py\n← factory"]
+
+    det["Deterministic\n(BaseFrontend subclass)\n15 language frontends/"]
+    llm["LLMFrontend\nllm_frontend.py\nLLMClient"]
+    chunked["ChunkedLLMFrontend\nchunked_llm_frontend.py\nChunkExtractor, IRRenumberer\nwraps LLMFrontend"]
+
+    factory --> det & llm & chunked
+
+    det_impl["tree-sitter AST\n→ recursive descent"]
+    llm_impl["LLM API call\n→ JSON parse"]
+    chunked_impl["chunk → LLM × N\n→ renumber → merge"]
+
+    det --> det_impl
+    llm --> llm_impl
+    chunked --> chunked_impl
+
+    ir["list[IRInstruction]"]
+
+    det_impl --> ir
+    llm_impl --> ir
+    chunked_impl --> ir
 ```
 
 ---
@@ -285,20 +283,31 @@ def lower(self, tree, source: bytes) -> list[IRInstruction]:
 
 ### Dispatch flow
 
-```
-_lower_block(node)
-  │
-  ├─ If node.type is in _STMT_DISPATCH → call handler directly
-  │
-  └─ Otherwise → iterate node.children:
-       └─ _lower_stmt(child)
-            │
-            ├─ Skip comments and noise nodes
-            ├─ If child.type in _STMT_DISPATCH → call handler
-            └─ Fallback: _lower_expr(child)
-                 │
-                 ├─ If child.type in _EXPR_DISPATCH → call handler → return register
-                 └─ Fallback: emit SYMBOLIC "unsupported:<type>" → return register
+```mermaid
+flowchart TD
+    lb["_lower_block(node)"]
+    stmt_match{"node.type in\n_STMT_DISPATCH?"}
+    handler1["call handler directly"]
+    iterate["iterate node.children"]
+    ls["_lower_stmt(child)"]
+    skip["Skip comments\nand noise nodes"]
+    stmt_match2{"child.type in\n_STMT_DISPATCH?"}
+    handler2["call handler"]
+    le["_lower_expr(child)"]
+    expr_match{"child.type in\n_EXPR_DISPATCH?"}
+    handler3["call handler\n→ return register"]
+    symbolic["emit SYMBOLIC\nunsupported:type\n→ return register"]
+
+    lb --> stmt_match
+    stmt_match -- "yes" --> handler1
+    stmt_match -- "no" --> iterate --> ls
+    ls --> skip
+    ls --> stmt_match2
+    stmt_match2 -- "yes" --> handler2
+    stmt_match2 -- "no (fallback)" --> le
+    le --> expr_match
+    expr_match -- "yes" --> handler3
+    expr_match -- "no (fallback)" --> symbolic
 ```
 
 The **fallback to SYMBOLIC** is a critical design decision: unknown constructs produce a `SYMBOLIC` instruction with a descriptive hint rather than crashing. This enables graceful degradation — the VM can still execute the rest of the program symbolically.
@@ -329,20 +338,18 @@ BaseFrontend provides reusable handlers that most languages share:
 
 `_lower_call_impl()` (`interpreter/frontends/_base.py:265`) distinguishes three call patterns by inspecting the function node's AST type:
 
-```
-call expression
-├── func_node is attribute/member_expression → CALL_METHOD
-│   obj_reg = lower(object)
-│   method = text(attribute)
-│   → CALL_METHOD obj_reg method arg1 arg2 ...
-│
-├── func_node is identifier → CALL_FUNCTION
-│   func_name = text(identifier)
-│   → CALL_FUNCTION func_name arg1 arg2 ...
-│
-└── func_node is anything else → CALL_UNKNOWN
-    target_reg = lower(func_node)
-    → CALL_UNKNOWN target_reg arg1 arg2 ...
+```mermaid
+flowchart TD
+    call["call expression"]
+    check{"func_node type?"}
+    attr["CALL_METHOD\nobj_reg = lower(object)\nmethod = text(attribute)\n→ CALL_METHOD obj_reg method arg1 arg2 ..."]
+    ident["CALL_FUNCTION\nfunc_name = text(identifier)\n→ CALL_FUNCTION func_name arg1 arg2 ..."]
+    other["CALL_UNKNOWN\ntarget_reg = lower(func_node)\n→ CALL_UNKNOWN target_reg arg1 arg2 ..."]
+
+    call --> check
+    check -- "attribute /\nmember_expression" --> attr
+    check -- "identifier" --> ident
+    check -- "anything else" --> other
 ```
 
 ### Common statement lowerers
@@ -519,23 +526,16 @@ def lower(self, tree, source):
 
 ### Response parsing pipeline
 
-```
-LLM response (raw text)
-    │
-    ▼
-_strip_markdown_fences()     ← handles ```json...``` wrapping
-    │
-    ▼
-json.loads()                  ← parse JSON array
-    │
-    ▼
-_parse_single_instruction()   ← per item: validate opcode, build IRInstruction
-    │
-    ▼
-_validate_ir()                ← ensure non-empty, auto-prepend entry label if missing
-    │
-    ▼
-list[IRInstruction]
+```mermaid
+flowchart TD
+    raw["LLM response (raw text)"]
+    strip["_strip_markdown_fences()\n← handles json fences wrapping"]
+    parse["json.loads()\n← parse JSON array"]
+    single["_parse_single_instruction()\n← per item: validate opcode,\nbuild IRInstruction"]
+    validate["_validate_ir()\n← ensure non-empty,\nauto-prepend entry label if missing"]
+    result["list[IRInstruction]"]
+
+    raw --> strip --> parse --> single --> validate --> result
 ```
 
 `_validate_ir()` (`interpreter/llm_frontend.py:229`) is forgiving — if the LLM omits the entry label, it logs a warning and prepends one automatically:
