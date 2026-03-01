@@ -25,30 +25,16 @@ This document describes the design of the dataflow analysis subsystem — iterat
 
 The dataflow analysis subsystem (`interpreter/dataflow.py`, ~430 lines) implements a classic **intraprocedural** analysis pipeline on the CFG:
 
-```
-CFG (BasicBlocks + edges)
-        │
-        ▼
-┌───────────────────────┐
-│ 1. Collect definitions│  ← every point where a variable/register is assigned
-└───────────┬───────────┘
-            ▼
-┌───────────────────────┐
-│ 2. Reaching defs      │  ← worklist fixpoint: which defs reach each block?
-│    (GEN/KILL/IN/OUT)  │
-└───────────┬───────────┘
-            ▼
-┌───────────────────────┐
-│ 3. Def-use chains     │  ← link each use to the definition(s) it reads
-└───────────┬───────────┘
-            ▼
-┌───────────────────────┐
-│ 4. Dependency graph   │  ← named-variable → named-variable dependencies
-│    (transitive close) │     (traces through register chains)
-└───────────────────────┘
-            │
-            ▼
-      DataflowResult
+```mermaid
+flowchart TD
+    CFG["CFG (BasicBlocks + edges)"]
+    S1["1. Collect definitions\n← every point where a variable/register is assigned"]
+    S2["2. Reaching defs (GEN/KILL/IN/OUT)\n← worklist fixpoint: which defs reach each block?"]
+    S3["3. Def-use chains\n← link each use to the definition(s) it reads"]
+    S4["4. Dependency graph (transitive close)\n← named-variable → named-variable dependencies\n(traces through register chains)"]
+    DR["DataflowResult"]
+
+    CFG --> S1 --> S2 --> S3 --> S4 --> DR
 ```
 
 The analysis is **forward**, **may** (over-approximate), and **intraprocedural** (single function/module scope). It operates on the same `BasicBlock`/`CFG` structures and `IRInstruction` objects used by the VM.
@@ -316,23 +302,17 @@ Convergence is capped at `DATAFLOW_MAX_ITERATIONS = 1000` (`interpreter/constant
 
 ### Visual: reaching definitions on a diamond CFG
 
-```
-         ┌──────────┐
-         │  entry    │  reach_out = {x@entry}
-         │ x = 10   │
-         └────┬─────┘
-         ┌────┴─────┐
-    ┌────▼────┐ ┌───▼─────┐
-    │if_true  │ │if_false │
-    │ x = 20  │ │ y = 30  │
-    │         │ │         │
-    └────┬────┘ └───┬─────┘
-         └────┬─────┘
-         ┌────▼─────┐
-         │  merge   │  reach_in = {x@entry, x@if_true, y@if_false}
-         │ use(x)   │  ← x has TWO reaching defs!
-         │ use(y)   │  ← y has ONE reaching def
-         └──────────┘
+```mermaid
+flowchart TD
+    entry["entry\nx = 10\nreach_out = {x@entry}"]
+    if_true["if_true\nx = 20"]
+    if_false["if_false\ny = 30"]
+    merge["merge\nuse(x) ← x has TWO reaching defs!\nuse(y) ← y has ONE reaching def\nreach_in = {x@entry, x@if_true, y@if_false}"]
+
+    entry --> if_true
+    entry --> if_false
+    if_true --> merge
+    if_false --> merge
 ```
 
 ---
@@ -612,43 +592,17 @@ def process_order(price, quantity, tax_rate, has_discount):
 
 ### CFG
 
-```
-┌─────────────────────────────────┐
-│ func_process_order_0            │
-│ %0=SYMBOLIC param:price         │  defs: {%0}
-│ STORE_VAR price %0              │  defs: {price}, uses: {%0}
-│ %1=SYMBOLIC param:quantity      │  defs: {%1}
-│ STORE_VAR quantity %1           │  defs: {quantity}
-│ %2=SYMBOLIC param:tax_rate      │  defs: {%2}
-│ STORE_VAR tax_rate %2           │  defs: {tax_rate}
-│ %3=SYMBOLIC param:has_discount  │  defs: {%3}
-│ STORE_VAR has_discount %3       │  defs: {has_discount}
-│ %4=LOAD_VAR price               │  defs: {%4}, uses: {price}
-│ %5=LOAD_VAR quantity            │  defs: {%5}, uses: {quantity}
-│ %6=BINOP * %4 %5               │  defs: {%6}, uses: {%4, %5}
-│ STORE_VAR subtotal %6           │  defs: {subtotal}, uses: {%6}
-│ %7=LOAD_VAR subtotal            │  defs: {%7}, uses: {subtotal}
-│ %8=LOAD_VAR tax_rate            │  defs: {%8}, uses: {tax_rate}
-│ %9=BINOP * %7 %8               │  defs: {%9}, uses: {%7, %8}
-│ STORE_VAR tax %9                │  defs: {tax}, uses: {%9}
-│ %10=LOAD_VAR has_discount       │  defs: {%10}, uses: {has_discount}
-│ BRANCH_IF %10                   │  uses: {%10}
-└──────────┬──────────┬───────────┘
-     T     │          │ F
-┌──────────▼───┐  ┌───▼──────────┐
-│ if_true      │  │ if_false     │
-│ ...discount  │  │ ...total =   │
-│ STORE_VAR    │  │   subtotal   │
-│   discount   │  │   + tax      │
-│ STORE_VAR    │  │              │
-│   total      │  │              │
-└──────┬───────┘  └──────┬───────┘
-       └────────┬────────┘
-       ┌────────▼────────┐
-       │ merge           │
-       │ LOAD_VAR total  │  ← total has 2 reaching defs!
-       │ RETURN          │
-       └─────────────────┘
+```mermaid
+flowchart TD
+    entry["func_process_order_0\n%0=SYMBOLIC param:price → defs: {%0}\nSTORE_VAR price %0 → defs: {price}, uses: {%0}\n%1=SYMBOLIC param:quantity → defs: {%1}\nSTORE_VAR quantity %1 → defs: {quantity}\n...\nSTORE_VAR subtotal %6 → defs: {subtotal}\nSTORE_VAR tax %9 → defs: {tax}\n%10=LOAD_VAR has_discount\nBRANCH_IF %10"]
+    if_true["if_true\n...discount\nSTORE_VAR discount\nSTORE_VAR total"]
+    if_false["if_false\n...total = subtotal + tax"]
+    merge["merge\nLOAD_VAR total ← total has 2 reaching defs!\nRETURN"]
+
+    entry -- "T" --> if_true
+    entry -- "F" --> if_false
+    if_true --> merge
+    if_false --> merge
 ```
 
 ### Reaching definitions at merge
