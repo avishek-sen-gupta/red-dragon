@@ -81,6 +81,7 @@ class CobolStatement:
     operands: list = field(default_factory=list)
     children: list[CobolStatement] = field(default_factory=list)
     condition: str = ""
+    thru: str = ""
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolStatement:
@@ -89,6 +90,7 @@ class CobolStatement:
             operands=data.get("operands", []),
             children=[CobolStatement.from_dict(c) for c in data.get("children", [])],
             condition=data.get("condition", ""),
+            thru=data.get("thru", ""),
         )
 
     def to_dict(self) -> dict:
@@ -99,6 +101,8 @@ class CobolStatement:
             result["children"] = [c.to_dict() for c in self.children]
         if self.condition:
             result["condition"] = self.condition
+        if self.thru:
+            result["thru"] = self.thru
         return result
 
 

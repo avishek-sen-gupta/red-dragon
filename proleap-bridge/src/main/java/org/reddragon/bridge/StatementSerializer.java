@@ -253,8 +253,14 @@ public final class StatementSerializer {
 
         PerformProcedureStatement procStmt = stmt.getPerformProcedureStatement();
         if (procStmt != null) {
-            for (Call call : procStmt.getCalls()) {
-                operands.add(extractCallName(call));
+            List<Call> calls = procStmt.getCalls();
+            if (!calls.isEmpty()) {
+                // First call is the start paragraph
+                operands.add(extractCallName(calls.get(0)));
+            }
+            // If there are >= 2 calls, last call is the THRU paragraph
+            if (calls.size() >= 2) {
+                obj.addProperty("thru", extractCallName(calls.get(calls.size() - 1)));
             }
         }
 

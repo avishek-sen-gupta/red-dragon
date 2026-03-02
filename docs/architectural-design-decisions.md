@@ -588,3 +588,48 @@ Direct `Frontend` subclass (not `BaseFrontend`), implementing `lower(tree, sourc
 **Integration:** Added `FRONTEND_COBOL` constant and `"cobol"` branch in `get_frontend()` and `run()`.
 
 **Testing:** 65 new unit tests covering ASG round-trip, PIC parsing (16 cases), data layout (8 cases), frontend lowering (16 cases), parser bridge (5 cases), and end-to-end fixture tests (9 cases). All 7502 tests pass.
+
+---
+
+### ADR-030: COBOL PERFORM semantics via named continuations (2026-03-02)
+
+**Context:** COBOL's `PERFORM X` transfers control to paragraph X and implicitly returns when execution reaches the end of that paragraph. `PERFORM X THRU Y` executes paragraphs X through Y by fall-through and returns after Y completes. The prior implementation (ADR-029) emitted a bare `BRANCH` with no return mechanism — execution would branch to the target paragraph but never return to the caller.
+
+Three design alternatives were considered:
+
+- **A1: Call stack** — Use `CALL_FUNCTION`/`RETURN` to model PERFORM as a function call. Rejected because COBOL paragraphs are not functions: overlapping PERFORM ranges, fall-through between paragraphs, and PERFORM THRU semantics don't fit a strict call/return model.
+- **A2: Inline duplication** — Copy paragraph body at every PERFORM site. Rejected because it duplicates code, breaks shared labels, and doesn't handle PERFORM THRU or overlapping ranges.
+- **A3: Named continuations** — Add two generic VM opcodes that implement a named continuation table. The COBOL frontend uses these to faithfully emulate PERFORM return semantics.
+
+**Decision:** Adopt A3 — named continuations via two new opcodes:
+
+| Opcode | Operands | Semantics |
+|--------|----------|-----------|
+| `SET_CONTINUATION` | `[name, label]` | Write `name → label` into the continuation table. Overwrites any existing entry (last-writer-wins). |
+| `RESUME_CONTINUATION` | `[name]` | If `name` is set: branch to its label and clear the entry. If not set: no-op (fall through). |
+
+**COBOL frontend lowering:**
+
+Every paragraph emits `RESUME_CONTINUATION("para_{name}_end")` at its boundary. This is a no-op during sequential execution (the name is not set). When a PERFORM targets this paragraph, the caller first sets the continuation, then branches:
+
+```
+SET_CONTINUATION ["para_X_end", "perform_return_N"]
+BRANCH para_X
+LABEL perform_return_N
+```
+
+For `PERFORM X THRU Y`, the continuation is keyed to Y's end — intermediate paragraphs' `RESUME_CONTINUATION` calls are no-ops since the name doesn't match.
+
+**CFG treatment:** `RESUME_CONTINUATION` is a block terminator (it may branch dynamically). The CFG builder emits a fall-through edge only — the branch target is dynamic and cannot be statically resolved. `SET_CONTINUATION` is a regular (non-terminating) instruction.
+
+**Consequences:**
+
+Benefits:
+- Faithful COBOL PERFORM semantics including PERFORM THRU, overlapping ranges, and last-writer-wins for degenerate cases
+- Language-agnostic opcodes — reusable for any language with similar "perform and return" control flow (e.g., Fortran computed GO TO, PL/I ON-units)
+- No changes to the call stack — paragraphs remain inline code, not functions
+- PERFORM THRU falls out naturally from keying the continuation to the THRU endpoint
+
+Trade-offs:
+- Dynamic branch targets in RESUME_CONTINUATION mean the CFG cannot statically wire return edges — static analysis sees only the fall-through path. Future work can trace SET_CONTINUATION instructions to wire additional edges.
+- The continuation table adds a small state footprint to the VM (one dict entry per active PERFORM)
