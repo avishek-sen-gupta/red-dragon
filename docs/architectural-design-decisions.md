@@ -754,3 +754,26 @@ Benefits:
 4. **CANCEL** — Program state invalidation. No-op for static analysis since it has no data-flow effect in a single-program context.
 
 **Consequences:** Coverage increased from 20/51 to 24/51 HANDLED (47%). CALL enables data-flow tracking through subprogram boundaries (symbolically). Test count increased from 7647 to 7662 (15 new tests).
+
+### ADR-036: Injectable I/O provider for COBOL ACCEPT, READ, WRITE, OPEN, CLOSE (2026-03-02)
+
+**Context:** 5 of the remaining 27 unhandled COBOL statement types are I/O operations (ACCEPT, READ, WRITE, OPEN, CLOSE). These require external data sources (files, console) that don't exist during static analysis. The codebase already has a pluggable strategy pattern for unresolved calls (`UnresolvedCallResolver` ABC with symbolic/LLM implementations, injected via `VMConfig`).
+
+**Decision:** Implement an injectable I/O provider system following the same ports-and-adapters pattern:
+
+1. **Provider ABC** (`CobolIOProvider` in `interpreter/cobol/io_provider.py`) with a single `handle_call(func_name, args)` entry point. Two implementations: `NullIOProvider` (returns `UNCOMPUTABLE` for all calls — default) and `StubIOProvider` (returns queued test data for ACCEPT, manages stub file records for READ/WRITE/OPEN/CLOSE). A `_COBOL_IO_DISPATCH` dict maps `__cobol_*` function names to abstract method names, keeping the routing declarative.
+
+2. **Direct provider dispatch in executor** — in `_handle_call_function`, before builtins, check `vm.io_provider` for `__cobol_*`-prefixed function names. If the provider returns a concrete value, use it; if `UNCOMPUTABLE`, fall through to symbolic wrapping. This keeps the executor language-agnostic (no COBOL knowledge, just checks for a provider).
+
+3. **CALL_FUNCTION lowering** — all 5 I/O statements lower to `CALL_FUNCTION` with `__cobol_*` names (`__cobol_accept`, `__cobol_open_file`, `__cobol_close_file`, `__cobol_read_record`, `__cobol_write_record`). This reuses existing executor dispatch — no new opcodes needed.
+
+4. **Injection via VMConfig** — `io_provider` field added to both `VMConfig` (frozen config) and `VMState` (runtime state), wired in `execute_cfg`.
+
+5. **Audit classification** — I/O types are classified as `HANDLED_STUB` (not `HANDLED`) in the audit matrix, marking them as functional but dependent on an external provider for concrete execution. This distinguishes them from fully deterministic statement types.
+
+**Alternatives considered:**
+- Registering `__cobol_*` functions as builtins in `byte_builtins.py` — rejected because I/O operations are inherently side-effectful and external; builtins are for deterministic computation
+- Adding new IR opcodes (READ_FILE, WRITE_FILE, etc.) — rejected because CALL_FUNCTION reuses existing executor dispatch and keeps I/O operations visible in data-flow analysis as regular function calls
+- Making provider methods per-operation (separate `accept()`, `read()`, etc. on VMState) — rejected because a single `handle_call()` entry point is cleaner and language-agnostic
+
+**Consequences:** Coverage increased from 24/51 to 29/51 (24 HANDLED + 5 HANDLED_STUB = 57%). The provider system enables concrete execution of I/O-heavy COBOL programs with injected test data. Test count increased from 7662 to 7714 (52 new tests).

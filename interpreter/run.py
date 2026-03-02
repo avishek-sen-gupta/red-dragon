@@ -187,6 +187,7 @@ def execute_cfg(
 
     vm = VMState()
     vm.call_stack.append(StackFrame(function_name=constants.MAIN_FRAME_NAME))
+    vm.io_provider = config.io_provider
 
     llm = get_backend(config.backend)
     call_resolver = _create_resolver(config)
@@ -303,6 +304,7 @@ def execute_cfg_traced(
 
     vm = VMState()
     vm.call_stack.append(StackFrame(function_name=constants.MAIN_FRAME_NAME))
+    vm.io_provider = config.io_provider
     initial_state = copy.deepcopy(vm)
 
     llm = get_backend(config.backend)
