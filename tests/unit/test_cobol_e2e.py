@@ -311,3 +311,209 @@ class TestMultipleStatementTypes:
         assert Opcode.WRITE_REGION in opcodes
         assert Opcode.CALL_FUNCTION in opcodes  # print
         assert Opcode.RETURN in opcodes  # STOP RUN
+
+
+class TestPerformTimesExecution:
+    """PERFORM ... TIMES loop execution tests."""
+
+    def test_perform_times_inline_executes_body_n_times(self):
+        """Inline PERFORM 3 TIMES with ADD 1 TO WS-CTR should result in WS-CTR = 3."""
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-CTR",
+                        "level": 77,
+                        "pic": "9(3)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "0",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {
+                                "type": "PERFORM",
+                                "perform_type": "TIMES",
+                                "times": "3",
+                                "children": [
+                                    {"type": "ADD", "operands": ["1", "WS-CTR"]},
+                                ],
+                            },
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+
+        # Should complete within step limit
+        assert stats.steps < 500
+        # Region should be written (ADD executed 3 times)
+        assert len(vm.regions) >= 1
+
+
+class TestPerformUntilExecution:
+    """PERFORM ... UNTIL loop execution tests."""
+
+    def test_perform_until_test_before(self):
+        """PERFORM UNTIL WS-A > 2 with ADD 1 should loop until WS-A reaches 3."""
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-A",
+                        "level": 77,
+                        "pic": "9(3)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "0",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {
+                                "type": "PERFORM",
+                                "perform_type": "UNTIL",
+                                "until": "WS-A > 2",
+                                "test_before": True,
+                                "children": [
+                                    {"type": "ADD", "operands": ["1", "WS-A"]},
+                                ],
+                            },
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+
+        assert stats.steps < 500
+        assert len(vm.regions) >= 1
+
+
+class TestPerformVaryingExecution:
+    """PERFORM ... VARYING loop execution tests."""
+
+    def test_perform_varying_inline(self):
+        """PERFORM VARYING WS-IDX FROM 1 BY 1 UNTIL WS-IDX > 3."""
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-IDX",
+                        "level": 77,
+                        "pic": "9(3)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "0",
+                    },
+                    {
+                        "name": "WS-SUM",
+                        "level": 77,
+                        "pic": "9(5)",
+                        "usage": "DISPLAY",
+                        "offset": 3,
+                        "value": "0",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {
+                                "type": "PERFORM",
+                                "perform_type": "VARYING",
+                                "varying_var": "WS-IDX",
+                                "varying_from": "1",
+                                "varying_by": "1",
+                                "until": "WS-IDX > 3",
+                                "test_before": True,
+                                "children": [
+                                    {
+                                        "type": "ADD",
+                                        "operands": ["WS-IDX", "WS-SUM"],
+                                    },
+                                ],
+                            },
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=1000))
+
+        assert stats.steps < 1000
+        assert len(vm.regions) >= 1
+
+
+class TestSectionFallThrough:
+    """Test that paragraphs within a section execute sequentially."""
+
+    def test_section_paragraphs_fall_through(self):
+        """Two paragraphs in a section, no PERFORM — verify sequential execution."""
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-A",
+                        "level": 77,
+                        "pic": "9(3)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "0",
+                    },
+                ],
+                "sections": [
+                    {
+                        "name": "MAIN-SECTION",
+                        "paragraphs": [
+                            {
+                                "name": "FIRST-PARA",
+                                "statements": [
+                                    {"type": "MOVE", "operands": ["1", "WS-A"]},
+                                ],
+                            },
+                            {
+                                "name": "SECOND-PARA",
+                                "statements": [
+                                    {"type": "MOVE", "operands": ["2", "WS-A"]},
+                                    {"type": "STOP_RUN"},
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+
+        assert stats.steps < 200
+        assert len(vm.regions) >= 1

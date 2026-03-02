@@ -28,6 +28,15 @@ import io.proleap.cobol.asg.metamodel.procedure.multiply.MultiplyStatement;
 import io.proleap.cobol.asg.metamodel.procedure.perform.PerformStatement;
 import io.proleap.cobol.asg.metamodel.procedure.perform.PerformInlineStatement;
 import io.proleap.cobol.asg.metamodel.procedure.perform.PerformProcedureStatement;
+import io.proleap.cobol.asg.metamodel.procedure.perform.ByPhrase;
+import io.proleap.cobol.asg.metamodel.procedure.perform.FromPhrase;
+import io.proleap.cobol.asg.metamodel.procedure.perform.PerformType;
+import io.proleap.cobol.asg.metamodel.procedure.perform.TestClause;
+import io.proleap.cobol.asg.metamodel.procedure.perform.Times;
+import io.proleap.cobol.asg.metamodel.procedure.perform.Until;
+import io.proleap.cobol.asg.metamodel.procedure.perform.Varying;
+import io.proleap.cobol.asg.metamodel.procedure.perform.VaryingClause;
+import io.proleap.cobol.asg.metamodel.procedure.perform.VaryingPhrase;
 import io.proleap.cobol.asg.metamodel.procedure.stop.StopStatement;
 import io.proleap.cobol.asg.metamodel.procedure.subtract.SubtractStatement;
 import io.proleap.cobol.asg.metamodel.procedure.subtract.SubtractFromStatement;
@@ -262,6 +271,7 @@ public final class StatementSerializer {
             if (calls.size() >= 2) {
                 obj.addProperty("thru", extractCallName(calls.get(calls.size() - 1)));
             }
+            serializePerformType(procStmt.getPerformType(), obj);
         }
 
         if (operands.size() > 0) {
@@ -269,14 +279,109 @@ public final class StatementSerializer {
         }
 
         PerformInlineStatement inlineStmt = stmt.getPerformInlineStatement();
-        if (inlineStmt != null && inlineStmt.getStatements() != null) {
-            JsonArray children = serializeStatements(inlineStmt.getStatements());
-            if (children.size() > 0) {
-                obj.add("children", children);
+        if (inlineStmt != null) {
+            serializePerformType(inlineStmt.getPerformType(), obj);
+            if (inlineStmt.getStatements() != null) {
+                JsonArray children = serializeStatements(inlineStmt.getStatements());
+                if (children.size() > 0) {
+                    obj.add("children", children);
+                }
             }
         }
 
         return obj;
+    }
+
+    /**
+     * Serializes PerformType (TIMES / UNTIL / VARYING) fields into the statement JSON.
+     */
+    private static void serializePerformType(PerformType pt, JsonObject obj) {
+        if (pt == null) {
+            return;
+        }
+
+        try {
+            PerformType.PerformTypeType typeType = pt.getPerformTypeType();
+            if (typeType == null) {
+                return;
+            }
+
+            if (typeType == PerformType.PerformTypeType.TIMES) {
+                obj.addProperty("perform_type", "TIMES");
+                Times times = pt.getTimes();
+                if (times != null && times.getTimesValueStmt() != null) {
+                    obj.addProperty("times", extractValueStmtText(times.getTimesValueStmt()));
+                }
+            } else if (typeType == PerformType.PerformTypeType.UNTIL) {
+                obj.addProperty("perform_type", "UNTIL");
+                Until until = pt.getUntil();
+                if (until != null) {
+                    serializeUntilFields(until, obj);
+                }
+                serializeTestClause(pt, obj);
+            } else if (typeType == PerformType.PerformTypeType.VARYING) {
+                obj.addProperty("perform_type", "VARYING");
+                Varying varying = pt.getVarying();
+                if (varying != null) {
+                    VaryingClause vc = varying.getVaryingClause();
+                    if (vc != null && vc.getVaryingPhrase() != null) {
+                        VaryingPhrase vp = vc.getVaryingPhrase();
+                        if (vp.getVaryingValueStmt() != null) {
+                            obj.addProperty("varying_var", extractValueStmtText(vp.getVaryingValueStmt()));
+                        }
+                        if (vp.getFrom() != null && vp.getFrom().getFromValueStmt() != null) {
+                            obj.addProperty("varying_from", extractValueStmtText(vp.getFrom().getFromValueStmt()));
+                        }
+                        if (vp.getBy() != null && vp.getBy().getByValueStmt() != null) {
+                            obj.addProperty("varying_by", extractValueStmtText(vp.getBy().getByValueStmt()));
+                        }
+                        if (vp.getUntil() != null) {
+                            serializeUntilFields(vp.getUntil(), obj);
+                        }
+                    }
+                }
+                serializeTestClause(pt, obj);
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract PerformType: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Serializes Until condition fields into the JSON object.
+     */
+    private static void serializeUntilFields(Until until, JsonObject obj) {
+        if (until.getCondition() != null && until.getCondition().getCtx() != null) {
+            obj.addProperty("until", insertSpaces(until.getCondition().getCtx().getText()));
+        }
+    }
+
+    /**
+     * Serializes test clause (TEST BEFORE / TEST AFTER) from a PerformType.
+     */
+    private static void serializeTestClause(PerformType pt, JsonObject obj) {
+        try {
+            // Check until's test clause first, then varying's
+            Until until = pt.getUntil();
+            TestClause tc = null;
+            if (until != null) {
+                tc = until.getTestClause();
+            }
+            if (tc == null) {
+                Varying varying = pt.getVarying();
+                if (varying != null) {
+                    tc = varying.getTestClause();
+                }
+            }
+            if (tc != null && tc.getTestClauseType() != null) {
+                boolean testBefore = (tc.getTestClauseType() == TestClause.TestClauseType.BEFORE);
+                obj.addProperty("test_before", testBefore);
+            } else {
+                obj.addProperty("test_before", true); // COBOL default: TEST BEFORE
+            }
+        } catch (Exception e) {
+            obj.addProperty("test_before", true);
+        }
     }
 
     private static JsonObject serializeDisplay(DisplayStatement stmt) {
