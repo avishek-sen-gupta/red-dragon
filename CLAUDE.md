@@ -33,6 +33,7 @@
 
 - Use `pytest` with fixtures for test setup
 - Do not patch with `unittest.mock.patch`. Use proper dependency injection, and then inject mock objects.
+- You may not modify tests unless you're absolutely certain that the test change is valid for the behaviour you are verifying.
 - Use `tmp_path` fixture for filesystem tests
 - Tests requiring external repos (mojo-lsp, smojol) are integration tests
 - When fixing tests, do not blindly change test assertions to make the test pass. Only modify assertions once you are sure that the actual code output is actually valid according to the context.
@@ -42,6 +43,7 @@
 ## Programming Patterns
 
 - Use proper dependency injection for interfaces to external systems like Neo4J, OS, and File I/O. Do not hardcode importing the concrete modules in these cases. This applies especially to I/O or nondeterministic modules (eg: clock libraries, GUID libraries, etc.).
+- For every bug you fix, make sure you have a test that fails without the bug fix. If you don't have a test that fails without the bug fix, write one.
 - Minimise and/or avoid mutation.
 - STOP USING FOR LOOPS WITH MUTATIONS IN THEM. JUST STOP.
 - Write your code aggressively in the Functional Programming style, but balance it with readability. Avoid for loops where list comprehensions, map, filter, reduce, etc. can be used.
