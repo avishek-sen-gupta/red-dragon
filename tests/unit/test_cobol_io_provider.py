@@ -37,6 +37,23 @@ class TestNullIOProvider:
             is _UNCOMPUTABLE
         )
 
+    def test_rewrite_returns_uncomputable(self):
+        provider = NullIOProvider()
+        assert (
+            provider.handle_call("__cobol_rewrite_record", ["F1", "DATA"])
+            is _UNCOMPUTABLE
+        )
+
+    def test_start_returns_uncomputable(self):
+        provider = NullIOProvider()
+        assert (
+            provider.handle_call("__cobol_start_file", ["F1", "KEY1"]) is _UNCOMPUTABLE
+        )
+
+    def test_delete_returns_uncomputable(self):
+        provider = NullIOProvider()
+        assert provider.handle_call("__cobol_delete_record", ["F1"]) is _UNCOMPUTABLE
+
     def test_unknown_func_returns_uncomputable(self):
         provider = NullIOProvider()
         assert provider.handle_call("__cobol_bogus", []) is _UNCOMPUTABLE
@@ -101,6 +118,34 @@ class TestStubIOProvider:
     def test_unknown_func_returns_uncomputable(self):
         provider = StubIOProvider()
         assert provider.handle_call("__cobol_bogus", []) is _UNCOMPUTABLE
+
+    def test_rewrite_replaces_last_written(self):
+        provider = StubIOProvider()
+        provider.handle_call("__cobol_write_record", ["F1", "OLD"])
+        result = provider.handle_call("__cobol_rewrite_record", ["F1", "NEW"])
+        assert result == "NEW"
+        assert provider.get_file("F1").written == ["NEW"]
+
+    def test_rewrite_appends_when_no_prior_writes(self):
+        provider = StubIOProvider()
+        result = provider.handle_call("__cobol_rewrite_record", ["F1", "DATA"])
+        assert result == "DATA"
+        assert provider.get_file("F1").written == ["DATA"]
+
+    def test_start_returns_zero(self):
+        provider = StubIOProvider()
+        result = provider.handle_call("__cobol_start_file", ["F1", "KEY1"])
+        assert result == 0
+
+    def test_delete_removes_first_record(self):
+        provider = StubIOProvider(files={"F1": {"records": ["REC1", "REC2"]}})
+        result = provider.handle_call("__cobol_delete_record", ["F1"])
+        assert result == "REC1"
+        assert provider.get_file("F1").records == ["REC2"]
+
+    def test_delete_returns_uncomputable_when_no_records(self):
+        provider = StubIOProvider(files={"F1": {"records": []}})
+        assert provider.handle_call("__cobol_delete_record", ["F1"]) is _UNCOMPUTABLE
 
     def test_get_file_creates_stub(self):
         provider = StubIOProvider()

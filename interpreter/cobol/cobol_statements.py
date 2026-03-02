@@ -73,6 +73,9 @@ CobolStatementType = Union[
     "CloseStatement",
     "ReadStatement",
     "WriteStatement",
+    "RewriteStatement",
+    "StartStatement",
+    "DeleteStatement",
 ]
 
 
@@ -743,6 +746,62 @@ class WriteStatement:
         return result
 
 
+@dataclass(frozen=True)
+class RewriteStatement:
+    """REWRITE record-name [FROM field]."""
+
+    record_name: str = ""
+    from_field: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> RewriteStatement:
+        return cls(
+            record_name=data.get("record_name", ""),
+            from_field=data.get("from_field", ""),
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {"type": "REWRITE", "record_name": self.record_name}
+        if self.from_field:
+            result["from_field"] = self.from_field
+        return result
+
+
+@dataclass(frozen=True)
+class StartStatement:
+    """START file-name [KEY condition]."""
+
+    file_name: str = ""
+    key: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> StartStatement:
+        return cls(
+            file_name=data.get("file_name", ""),
+            key=data.get("key", ""),
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {"type": "START", "file_name": self.file_name}
+        if self.key:
+            result["key"] = self.key
+        return result
+
+
+@dataclass(frozen=True)
+class DeleteStatement:
+    """DELETE file-name [RECORD]."""
+
+    file_name: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> DeleteStatement:
+        return cls(file_name=data.get("file_name", ""))
+
+    def to_dict(self) -> dict:
+        return {"type": "DELETE", "file_name": self.file_name}
+
+
 def _parse_perform_spec(
     data: dict,
 ) -> PerformTimesSpec | PerformUntilSpec | PerformVaryingSpec | None:
@@ -859,6 +918,9 @@ _DISPATCH_TABLE: dict[str, type] = {
     "CLOSE": CloseStatement,
     "READ": ReadStatement,
     "WRITE": WriteStatement,
+    "REWRITE": RewriteStatement,
+    "START": StartStatement,
+    "DELETE": DeleteStatement,
 }
 
 

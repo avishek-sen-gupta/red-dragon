@@ -777,3 +777,23 @@ Benefits:
 - Making provider methods per-operation (separate `accept()`, `read()`, etc. on VMState) — rejected because a single `handle_call()` entry point is cleaner and language-agnostic
 
 **Consequences:** Coverage increased from 24/51 to 29/51 (24 HANDLED + 5 HANDLED_STUB = 57%). The provider system enables concrete execution of I/O-heavy COBOL programs with injected test data. Test count increased from 7662 to 7714 (52 new tests).
+
+---
+
+### ADR-037: REWRITE, START, DELETE — file I/O extensions via existing provider pattern (2026-03-02)
+
+**Context:** 3 additional COBOL file I/O statement types (REWRITE, START, DELETE) were not yet handled in the pipeline. All three follow the same I/O provider pattern established in ADR-036 for ACCEPT, READ, WRITE, OPEN, CLOSE.
+
+**Decision:** Extend all three layers (bridge, dataclass, frontend lowering) and the I/O provider with REWRITE, START, DELETE using the existing pattern:
+
+1. **Java bridge** — `serializeRewrite` extracts `getRecordCall()` and optional `getFrom().getFromCall()`. `serializeStart` extracts `getFileCall()` and optional `getKey().getComparisonCall()`. `serializeDelete` extracts `getFileCall()`.
+
+2. **Python dataclasses** — `RewriteStatement(record_name, from_field)` mirrors `WriteStatement`. `StartStatement(file_name, key)` mirrors `ReadStatement` with a key field. `DeleteStatement(file_name)` is minimal.
+
+3. **Frontend lowering** — All three emit `CALL_FUNCTION` with `__cobol_rewrite_record`, `__cobol_start_file`, `__cobol_delete_record` respectively, following the same pattern as `_lower_write`/`_lower_read`.
+
+4. **I/O provider** — Three new entries in `_COBOL_IO_DISPATCH`. `NullIOProvider` returns `UNCOMPUTABLE`. `StubIOProvider`: REWRITE replaces last written record, START is a no-op (returns 0), DELETE removes the first queued record.
+
+5. **Audit** — REWRITE, START, DELETE added to `BRIDGE_SERIALIZED_TYPES`, `_BRIDGE_TO_DISPATCH`, `_LOWERED_TYPES`, and `_IO_STUB_TYPES`.
+
+**Consequences:** Coverage increased from 29/51 to 32/51 (24 HANDLED + 8 HANDLED_STUB = 63%). No new opcodes or architectural changes required — the provider pattern from ADR-036 scaled cleanly to three additional I/O operations.
