@@ -459,3 +459,319 @@ class TestCombinedProgram:
         assert _decode_zoned_unsigned(region, 12, 4) == 3
         # WS-FLAG = 1 (12 > 10 is true)
         assert _decode_zoned_unsigned(region, 16, 4) == 1
+
+
+# ---------------------------------------------------------------------------
+# Additional statement type coverage
+# ---------------------------------------------------------------------------
+
+
+class TestInitialize:
+    def test_initialize_resets_numeric_to_zero(self):
+        """INITIALIZE resets a numeric PIC 9 field to zero."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-INIT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A PIC 9(4) VALUE 123.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INITIALIZE WS-A.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 0
+
+    def test_initialize_resets_alphanumeric_to_spaces(self):
+        """INITIALIZE resets a PIC X field to EBCDIC spaces (0x40)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-INIT2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-B PIC X(5) VALUE "HELLO".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INITIALIZE WS-B.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # All 5 bytes should be EBCDIC space (0x40)
+        assert list(region[:5]) == [0x40] * 5
+
+    def test_initialize_multiple_fields(self):
+        """INITIALIZE resets multiple fields in one statement."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-INIT3.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A PIC 9(4) VALUE 99.",
+                '77 WS-B PIC X(3) VALUE "XYZ".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INITIALIZE WS-A WS-B.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 0
+        assert list(region[4:7]) == [0x40] * 3
+
+
+class TestSetStatement:
+    def test_set_to(self):
+        """SET field TO literal assigns the value."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SET-TO.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-IDX PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SET WS-IDX TO 5.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 5
+
+    def test_set_up_by(self):
+        """SET field UP BY increments the value."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SET-UP.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-IDX PIC 9(4) VALUE 10.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SET WS-IDX UP BY 3.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 13
+
+    def test_set_down_by(self):
+        """SET field DOWN BY decrements the value."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SET-DN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-IDX PIC 9(4) VALUE 10.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SET WS-IDX DOWN BY 4.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 6
+
+    def test_set_to_then_up_by(self):
+        """SET TO followed by SET UP BY accumulates correctly."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SET-COMBO.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-IDX PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SET WS-IDX TO 5.",
+                "    SET WS-IDX UP BY 3.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 4) == 8
+
+
+class TestSearchStatement:
+    def test_search_finds_match(self):
+        """SEARCH WHEN condition finds the matching index."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SEARCH.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-IDX PIC 9(4) VALUE 1.",
+                "77 WS-FOUND PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SEARCH WS-IDX VARYING WS-IDX",
+                "        AT END MOVE 99 TO WS-FOUND",
+                "        WHEN WS-IDX = 3",
+                "            MOVE 1 TO WS-FOUND.",
+                "    STOP RUN.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        # WS-IDX should be 3 (the matching value)
+        assert _decode_zoned_unsigned(region, 0, 4) == 3
+        # WS-FOUND should be 1 (WHEN branch executed)
+        assert _decode_zoned_unsigned(region, 4, 4) == 1
+
+    @pytest.mark.xfail(reason="SEARCH AT END not yet implemented in frontend")
+    def test_search_at_end(self):
+        """SEARCH AT END fires when no WHEN matches within bound."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SEARCH2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-IDX PIC 9(4) VALUE 1.",
+                "77 WS-FOUND PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SEARCH WS-IDX VARYING WS-IDX",
+                "        AT END MOVE 99 TO WS-FOUND",
+                "        WHEN WS-IDX = 9999",
+                "            MOVE 1 TO WS-FOUND.",
+                "    STOP RUN.",
+            ],
+            max_steps=5000,
+        )
+        region = _first_region(vm)
+        # No match found — AT END should execute
+        assert _decode_zoned_unsigned(region, 4, 4) == 99
+
+
+class TestInspectTallying:
+    def test_inspect_tallying_all(self):
+        """INSPECT TALLYING FOR ALL counts all occurrences of a character."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-TALLY.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-DATA PIC X(10) VALUE "ABCABCABC ".',
+                "77 WS-COUNT PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    INSPECT WS-DATA TALLYING WS-COUNT",
+                '        FOR ALL "A".',
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # "ABCABCABC " has 3 occurrences of "A"
+        assert _decode_zoned_unsigned(region, 10, 4) == 3
+
+
+class TestInspectReplacing:
+    def test_inspect_replacing_all(self):
+        """INSPECT REPLACING ALL substitutes all occurrences."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REPL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-DATA PIC X(5) VALUE "AABAA".',
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                '    INSPECT WS-DATA REPLACING ALL "A" BY "B".',
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # All A's (EBCDIC 0xC1) should become B's (EBCDIC 0xC2)
+        # "AABAA" → "BBBBB" (B at 0xC2 in all 5 positions)
+        assert list(region[:5]) == [0xC2] * 5
+
+
+class TestCallStatement:
+    def test_call_does_not_crash(self):
+        """CALL to external program is symbolic — verify pipeline doesn't crash."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-CALL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A PIC 9(4) VALUE 10.",
+                "77 WS-B PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 42 TO WS-B.",
+                '    CALL "SUBPROG" USING WS-A.',
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # MOVE 42 before CALL should persist
+        assert _decode_zoned_unsigned(region, 4, 4) == 42
+        # WS-A unchanged (CALL is symbolic, doesn't modify memory)
+        assert _decode_zoned_unsigned(region, 0, 4) == 10
+
+
+class TestStringStatement:
+    def test_string_concatenation(self):
+        """STRING concatenates fields into target."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-STRCAT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-A PIC X(3) VALUE "ABC".',
+                '77 WS-B PIC X(3) VALUE "DEF".',
+                "77 WS-OUT PIC X(6) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STRING WS-A DELIMITED BY SIZE",
+                "           WS-B DELIMITED BY SIZE",
+                "           INTO WS-OUT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # EBCDIC: A=C1, B=C2, C=C3, D=C4, E=C5, F=C6
+        expected = [0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6]
+        assert list(region[6:12]) == expected
+
+
+class TestUnstringStatement:
+    def test_unstring_splits_by_space(self):
+        """UNSTRING splits a string into parts by delimiter."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-UNSTR.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '77 WS-FULL PIC X(11) VALUE "HELLO WORLD".',
+                "77 WS-FIRST PIC X(5) VALUE SPACES.",
+                "77 WS-LAST PIC X(5) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    UNSTRING WS-FULL DELIMITED BY SPACES",
+                "        INTO WS-FIRST WS-LAST.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-FIRST (offset 11, 5 bytes) should be EBCDIC "HELLO"
+        expected_hello = [0xC8, 0xC5, 0xD3, 0xD3, 0xD6]
+        assert list(region[11:16]) == expected_hello
+        # WS-LAST (offset 16, 5 bytes) should be EBCDIC "WORLD"
+        expected_world = [0xE6, 0xD6, 0xD9, 0xD3, 0xC4]
+        assert list(region[16:21]) == expected_world
