@@ -62,6 +62,32 @@ class TestParseStatementDispatch:
         assert len(stmt.children) == 1
         assert isinstance(stmt.children[0], DisplayStatement)
 
+    def test_if_with_else(self):
+        stmt = parse_statement(
+            {
+                "type": "IF",
+                "condition": "WS-A > 0",
+                "children": [{"type": "DISPLAY", "operands": ["YES"]}],
+                "else_children": [{"type": "DISPLAY", "operands": ["NO"]}],
+            }
+        )
+        assert isinstance(stmt, IfStatement)
+        assert len(stmt.children) == 1
+        assert len(stmt.else_children) == 1
+        assert isinstance(stmt.else_children[0], DisplayStatement)
+        assert stmt.else_children[0].operand == "NO"
+
+    def test_if_without_else_has_empty_else_children(self):
+        stmt = parse_statement(
+            {
+                "type": "IF",
+                "condition": "WS-A > 0",
+                "children": [{"type": "DISPLAY", "operands": ["YES"]}],
+            }
+        )
+        assert isinstance(stmt, IfStatement)
+        assert stmt.else_children == []
+
     def test_evaluate(self):
         stmt = parse_statement(
             {
@@ -226,6 +252,15 @@ class TestRoundTrip:
             "type": "IF",
             "condition": "WS-A > 0",
             "children": [{"type": "DISPLAY", "operands": ["YES"]}],
+        }
+        assert self._round_trip(data) == data
+
+    def test_if_else_round_trip(self):
+        data = {
+            "type": "IF",
+            "condition": "WS-A > 0",
+            "children": [{"type": "DISPLAY", "operands": ["YES"]}],
+            "else_children": [{"type": "DISPLAY", "operands": ["NO"]}],
         }
         assert self._round_trip(data) == data
 
