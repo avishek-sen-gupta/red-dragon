@@ -13,8 +13,13 @@ import io.proleap.cobol.asg.metamodel.procedure.compute.ComputeStatement;
 import io.proleap.cobol.asg.metamodel.procedure.compute.Store;
 import io.proleap.cobol.asg.metamodel.procedure.display.DisplayStatement;
 import io.proleap.cobol.asg.metamodel.procedure.display.Operand;
-import io.proleap.cobol.asg.metamodel.procedure.divide.DivideStatement;
+import io.proleap.cobol.asg.metamodel.procedure.divide.DivideByGivingStatement;
+import io.proleap.cobol.asg.metamodel.procedure.divide.DivideIntoGivingStatement;
 import io.proleap.cobol.asg.metamodel.procedure.divide.DivideIntoStatement;
+import io.proleap.cobol.asg.metamodel.procedure.divide.DivideStatement;
+import io.proleap.cobol.asg.metamodel.procedure.divide.Giving;
+import io.proleap.cobol.asg.metamodel.procedure.divide.GivingPhrase;
+import io.proleap.cobol.asg.metamodel.procedure.divide.Into;
 import io.proleap.cobol.asg.metamodel.procedure.evaluate.EvaluateStatement;
 import io.proleap.cobol.asg.metamodel.procedure.evaluate.WhenPhrase;
 import io.proleap.cobol.asg.metamodel.procedure.gotostmt.GoToStatement;
@@ -24,6 +29,7 @@ import io.proleap.cobol.asg.metamodel.procedure.ifstmt.Else;
 import io.proleap.cobol.asg.metamodel.procedure.move.MoveStatement;
 import io.proleap.cobol.asg.metamodel.procedure.move.MoveToStatement;
 import io.proleap.cobol.asg.metamodel.procedure.move.MoveToSendingArea;
+import io.proleap.cobol.asg.metamodel.procedure.multiply.ByOperand;
 import io.proleap.cobol.asg.metamodel.procedure.multiply.MultiplyStatement;
 import io.proleap.cobol.asg.metamodel.procedure.perform.PerformStatement;
 import io.proleap.cobol.asg.metamodel.procedure.perform.PerformInlineStatement;
@@ -165,9 +171,22 @@ public final class StatementSerializer {
         JsonObject obj = newStatement("MULTIPLY");
         JsonArray operands = new JsonArray();
         try {
+            // Source operand: the value being multiplied (e.g., WS-A in MULTIPLY WS-A BY WS-RESULT)
             ValueStmt operandVs = stmt.getOperandValueStmt();
             if (operandVs != null) {
                 operands.add(extractValueStmtText(operandVs));
+            }
+
+            // Target operand(s): the BY variable(s) that receive the result
+            // MULTIPLY WS-A BY WS-RESULT => WS-RESULT = WS-RESULT * WS-A
+            io.proleap.cobol.asg.metamodel.procedure.multiply.ByPhrase byPhrase = stmt.getByPhrase();
+            if (byPhrase != null) {
+                for (ByOperand byOp : byPhrase.getByOperands()) {
+                    Call targetCall = byOp.getOperandCall();
+                    if (targetCall != null) {
+                        operands.add(extractCallName(targetCall));
+                    }
+                }
             }
         } catch (Exception e) {
             LOG.fine("Could not extract MULTIPLY operands: " + e.getMessage());
@@ -180,9 +199,22 @@ public final class StatementSerializer {
         JsonObject obj = newStatement("DIVIDE");
         JsonArray operands = new JsonArray();
         try {
+            // Source operand: the divisor (e.g., WS-B in DIVIDE WS-B INTO WS-RESULT)
             ValueStmt operandVs = stmt.getOperandValueStmt();
             if (operandVs != null) {
                 operands.add(extractValueStmtText(operandVs));
+            }
+
+            // Target operand(s): the INTO variable(s) that receive the result
+            // DIVIDE WS-B INTO WS-RESULT => WS-RESULT = WS-RESULT / WS-B
+            DivideIntoStatement intoStmt = stmt.getDivideIntoStatement();
+            if (intoStmt != null) {
+                for (Into into : intoStmt.getIntos()) {
+                    Call targetCall = into.getGivingCall();
+                    if (targetCall != null) {
+                        operands.add(extractCallName(targetCall));
+                    }
+                }
             }
         } catch (Exception e) {
             LOG.fine("Could not extract DIVIDE operands: " + e.getMessage());

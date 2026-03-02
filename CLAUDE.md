@@ -2,6 +2,7 @@
 
 ## Workflow Rules
 
+- Do not ask for confirmations. Just proceed with implementation.
 - The workflow is Brainstorm -> Discuss Trade-offs of different designs -> Plan -> Write unit tests -> Implement -> Fix Tests -> Commit -> Refactor.
 - When brainstorming / planning, consider the follow parameters:
   - Whether there are any open source projects which perform similar functionality, so that you don't have to write new code for the task
