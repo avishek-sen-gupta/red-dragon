@@ -234,6 +234,56 @@ class TestProcedureDivisionLowering:
         branches = _find_opcodes(instructions, Opcode.BRANCH_IF)
         assert len(branches) >= 1
 
+    def test_if_else_produces_two_branches(self):
+        fields = [
+            CobolField(
+                name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="5"
+            ),
+        ]
+        stmts = [
+            IfStatement(
+                condition="WS-A > 0",
+                children=[DisplayStatement(operand="POSITIVE")],
+                else_children=[DisplayStatement(operand="NOT-POSITIVE")],
+            ),
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should have BRANCH_IF
+        branch_ifs = _find_opcodes(instructions, Opcode.BRANCH_IF)
+        assert len(branch_ifs) >= 1
+
+        # Should have two print calls (one for THEN, one for ELSE)
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        print_calls = [c for c in calls if c.operands and c.operands[0] == "print"]
+        assert len(print_calls) == 2
+
+        # Should have three labels: if_true, if_false, if_end
+        labels = _find_opcodes(instructions, Opcode.LABEL)
+        label_names = [inst.label for inst in labels]
+        assert any("if_true" in l for l in label_names)
+        assert any("if_false" in l for l in label_names)
+        assert any("if_end" in l for l in label_names)
+
+    def test_if_without_else_has_empty_false_branch(self):
+        fields = [
+            CobolField(
+                name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="5"
+            ),
+        ]
+        stmts = [
+            IfStatement(
+                condition="WS-A > 0",
+                children=[DisplayStatement(operand="ONLY-THEN")],
+            ),
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Only one print call (THEN branch only)
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        print_calls = [c for c in calls if c.operands and c.operands[0] == "print"]
+        assert len(print_calls) == 1
+
     def test_display_literal(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),

@@ -428,19 +428,27 @@ class CobolFrontend(Frontend):
         layout: DataLayout,
         region_reg: str,
     ) -> None:
-        """IF condition ... END-IF."""
+        """IF condition ... [ELSE ...] END-IF."""
         cond_reg = self._lower_condition(stmt.condition, layout, region_reg)
         true_label = self._fresh_label("if_true")
+        false_label = self._fresh_label("if_false")
         end_label = self._fresh_label("if_end")
 
         self._emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{true_label},{end_label}",
+            label=f"{true_label},{false_label}",
         )
 
+        # THEN branch
         self._emit(Opcode.LABEL, label=true_label)
         for child in stmt.children:
+            self._lower_statement(child, layout, region_reg)
+        self._emit(Opcode.BRANCH, label=end_label)
+
+        # ELSE branch (falls through to end_label if empty)
+        self._emit(Opcode.LABEL, label=false_label)
+        for child in stmt.else_children:
             self._lower_statement(child, layout, region_reg)
         self._emit(Opcode.BRANCH, label=end_label)
 

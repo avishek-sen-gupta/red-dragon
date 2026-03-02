@@ -355,7 +355,7 @@ The **Exercism integration test suite** (`tests/unit/exercism/`) extends coverag
 | **acronym** | toUpperChar helper, word boundary detection, string building, separator classification | 9 | 15 | 2 | 252 | **269** |
 | **Total** | | **171** | **270** | **36** | **5068** | **5374** |
 
-Combined with the Rosetta suite and the COBOL frontend tests (107 tests covering ASG round-trip, typed statement hierarchy, PIC parsing, data layout, frontend lowering, PERFORM loop variants, section PERFORM, parser bridge, and end-to-end fixture tests), the project has **7558 tests** (7558 passed, 3 xfailed) — all with zero LLM calls.
+Combined with the Rosetta suite and the COBOL frontend tests (107 tests covering ASG round-trip, typed statement hierarchy, PIC parsing, data layout, frontend lowering, PERFORM loop variants, section PERFORM, parser bridge, and end-to-end fixture tests), the project has **7565 tests** (7565 passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 

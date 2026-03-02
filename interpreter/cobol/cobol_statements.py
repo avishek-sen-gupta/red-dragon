@@ -103,22 +103,26 @@ class ArithmeticStatement:
 
 @dataclass(frozen=True)
 class IfStatement:
-    """IF condition ... END-IF."""
+    """IF condition ... [ELSE ...] END-IF."""
 
     condition: str
     children: list[CobolStatementType] = field(default_factory=list)
+    else_children: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> IfStatement:
         return cls(
             condition=data.get("condition", ""),
             children=[parse_statement(c) for c in data.get("children", [])],
+            else_children=[parse_statement(c) for c in data.get("else_children", [])],
         )
 
     def to_dict(self) -> dict:
         result: dict = {"type": "IF", "condition": self.condition}
         if self.children:
             result["children"] = [c.to_dict() for c in self.children]
+        if self.else_children:
+            result["else_children"] = [c.to_dict() for c in self.else_children]
         return result
 
 

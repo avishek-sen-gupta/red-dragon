@@ -313,6 +313,112 @@ class TestMultipleStatementTypes:
         assert Opcode.RETURN in opcodes  # STOP RUN
 
 
+class TestIfElseExecution:
+    """IF ... ELSE execution tests."""
+
+    def test_if_true_branch_taken(self):
+        """IF WS-A > 0 should take the THEN branch when WS-A = 5."""
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-A",
+                        "level": 77,
+                        "pic": "9(3)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "5",
+                    },
+                    {
+                        "name": "WS-RESULT",
+                        "level": 77,
+                        "pic": "9(3)",
+                        "usage": "DISPLAY",
+                        "offset": 3,
+                        "value": "0",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {
+                                "type": "IF",
+                                "condition": "WS-A > 0",
+                                "children": [
+                                    {"type": "MOVE", "operands": ["1", "WS-RESULT"]},
+                                ],
+                                "else_children": [
+                                    {"type": "MOVE", "operands": ["2", "WS-RESULT"]},
+                                ],
+                            },
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+        assert stats.steps < 200
+        assert len(vm.regions) >= 1
+
+    def test_if_false_branch_taken(self):
+        """IF WS-A > 10 should take the ELSE branch when WS-A = 5."""
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-A",
+                        "level": 77,
+                        "pic": "9(3)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "5",
+                    },
+                    {
+                        "name": "WS-RESULT",
+                        "level": 77,
+                        "pic": "9(3)",
+                        "usage": "DISPLAY",
+                        "offset": 3,
+                        "value": "0",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {
+                                "type": "IF",
+                                "condition": "WS-A > 10",
+                                "children": [
+                                    {"type": "MOVE", "operands": ["1", "WS-RESULT"]},
+                                ],
+                                "else_children": [
+                                    {"type": "MOVE", "operands": ["2", "WS-RESULT"]},
+                                ],
+                            },
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+        assert stats.steps < 200
+        assert len(vm.regions) >= 1
+
+
 class TestPerformTimesExecution:
     """PERFORM ... TIMES loop execution tests."""
 

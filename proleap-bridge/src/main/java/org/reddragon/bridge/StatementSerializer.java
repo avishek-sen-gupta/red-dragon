@@ -228,7 +228,6 @@ public final class StatementSerializer {
         }
 
         JsonArray children = new JsonArray();
-
         Then thenBlock = stmt.getThen();
         if (thenBlock != null && thenBlock.getStatements() != null) {
             for (Statement thenStmt : thenBlock.getStatements()) {
@@ -238,19 +237,22 @@ public final class StatementSerializer {
                 }
             }
         }
+        if (children.size() > 0) {
+            obj.add("children", children);
+        }
 
+        JsonArray elseChildren = new JsonArray();
         Else elseBlock = stmt.getElse();
         if (elseBlock != null && elseBlock.getStatements() != null) {
             for (Statement elseStmt : elseBlock.getStatements()) {
                 JsonObject child = serializeStatement(elseStmt);
                 if (child != null) {
-                    children.add(child);
+                    elseChildren.add(child);
                 }
             }
         }
-
-        if (children.size() > 0) {
-            obj.add("children", children);
+        if (elseChildren.size() > 0) {
+            obj.add("else_children", elseChildren);
         }
 
         return obj;
