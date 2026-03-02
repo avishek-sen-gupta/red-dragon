@@ -5,16 +5,26 @@ import pytest
 from interpreter.cobol.cobol_statements import (
     ArithmeticStatement,
     ComputeStatement,
+    ContinueStatement,
     DisplayStatement,
     EvaluateStatement,
+    ExitStatement,
     GotoStatement,
     IfStatement,
+    InitializeStatement,
+    InspectStatement,
     MoveStatement,
     PerformStatement,
     PerformTimesSpec,
     PerformUntilSpec,
     PerformVaryingSpec,
+    Replacing,
+    SetStatement,
     StopRunStatement,
+    StringSending,
+    StringStatement,
+    TallyingFor,
+    UnstringStatement,
     WhenOtherStatement,
     WhenStatement,
     parse_statement,
@@ -173,6 +183,105 @@ class TestParseStatementDispatch:
         assert isinstance(stmt, PerformStatement)
         assert stmt.target == ""
         assert len(stmt.children) == 1
+
+    def test_continue(self):
+        stmt = parse_statement({"type": "CONTINUE"})
+        assert isinstance(stmt, ContinueStatement)
+
+    def test_exit(self):
+        stmt = parse_statement({"type": "EXIT"})
+        assert isinstance(stmt, ExitStatement)
+
+    def test_initialize(self):
+        stmt = parse_statement({"type": "INITIALIZE", "operands": ["WS-A", "WS-B"]})
+        assert isinstance(stmt, InitializeStatement)
+        assert stmt.operands == ["WS-A", "WS-B"]
+
+    def test_set_to(self):
+        stmt = parse_statement(
+            {"type": "SET", "set_type": "TO", "targets": ["WS-IDX"], "values": ["5"]}
+        )
+        assert isinstance(stmt, SetStatement)
+        assert stmt.set_type == "TO"
+        assert stmt.targets == ["WS-IDX"]
+        assert stmt.values == ["5"]
+
+    def test_set_by_up(self):
+        stmt = parse_statement(
+            {
+                "type": "SET",
+                "set_type": "BY",
+                "by_type": "UP",
+                "targets": ["WS-IDX"],
+                "value": "1",
+            }
+        )
+        assert isinstance(stmt, SetStatement)
+        assert stmt.set_type == "BY"
+        assert stmt.by_type == "UP"
+        assert stmt.values == ["1"]
+
+    def test_string(self):
+        stmt = parse_statement(
+            {
+                "type": "STRING",
+                "sendings": [
+                    {"value": "WS-FIRST", "delimited_by": "SPACES"},
+                    {"value": "WS-LAST", "delimited_by": "SIZE"},
+                ],
+                "into": "WS-RESULT",
+            }
+        )
+        assert isinstance(stmt, StringStatement)
+        assert len(stmt.sendings) == 2
+        assert stmt.sendings[0].value == "WS-FIRST"
+        assert stmt.sendings[0].delimited_by == "SPACES"
+        assert stmt.into == "WS-RESULT"
+
+    def test_unstring(self):
+        stmt = parse_statement(
+            {
+                "type": "UNSTRING",
+                "source": "WS-FULL",
+                "delimited_by": "SPACES",
+                "into": ["WS-FIRST", "WS-LAST"],
+            }
+        )
+        assert isinstance(stmt, UnstringStatement)
+        assert stmt.source == "WS-FULL"
+        assert stmt.delimited_by == "SPACES"
+        assert stmt.into == ["WS-FIRST", "WS-LAST"]
+
+    def test_inspect_tallying(self):
+        stmt = parse_statement(
+            {
+                "type": "INSPECT",
+                "inspect_type": "TALLYING",
+                "source": "WS-DATA",
+                "tallying_target": "WS-COUNT",
+                "tallying_for": [{"mode": "ALL", "pattern": "A"}],
+            }
+        )
+        assert isinstance(stmt, InspectStatement)
+        assert stmt.inspect_type == "TALLYING"
+        assert stmt.tallying_target == "WS-COUNT"
+        assert len(stmt.tallying_for) == 1
+        assert stmt.tallying_for[0].mode == "ALL"
+
+    def test_inspect_replacing(self):
+        stmt = parse_statement(
+            {
+                "type": "INSPECT",
+                "inspect_type": "REPLACING",
+                "source": "WS-DATA",
+                "replacings": [{"mode": "ALL", "from": "A", "to": "B"}],
+            }
+        )
+        assert isinstance(stmt, InspectStatement)
+        assert stmt.inspect_type == "REPLACING"
+        assert len(stmt.replacings) == 1
+        assert stmt.replacings[0].from_pattern == "A"
+        assert stmt.replacings[0].to_pattern == "B"
 
     def test_unknown_type_raises(self):
         with pytest.raises(ValueError, match="Unknown COBOL statement type"):
@@ -358,5 +467,70 @@ class TestRoundTrip:
                     "children": [{"type": "DISPLAY", "operands": ["OTHER"]}],
                 },
             ],
+        }
+        assert self._round_trip(data) == data
+
+    def test_continue_round_trip(self):
+        data = {"type": "CONTINUE"}
+        assert self._round_trip(data) == data
+
+    def test_exit_round_trip(self):
+        data = {"type": "EXIT"}
+        assert self._round_trip(data) == data
+
+    def test_initialize_round_trip(self):
+        data = {"type": "INITIALIZE", "operands": ["WS-A", "WS-B"]}
+        assert self._round_trip(data) == data
+
+    def test_set_to_round_trip(self):
+        data = {"type": "SET", "set_type": "TO", "targets": ["WS-IDX"], "values": ["5"]}
+        assert self._round_trip(data) == data
+
+    def test_set_by_round_trip(self):
+        data = {
+            "type": "SET",
+            "set_type": "BY",
+            "targets": ["WS-IDX"],
+            "by_type": "UP",
+            "value": "1",
+        }
+        assert self._round_trip(data) == data
+
+    def test_string_round_trip(self):
+        data = {
+            "type": "STRING",
+            "sendings": [
+                {"value": "WS-FIRST", "delimited_by": "SPACES"},
+                {"value": "WS-LAST", "delimited_by": "SIZE"},
+            ],
+            "into": "WS-RESULT",
+        }
+        assert self._round_trip(data) == data
+
+    def test_unstring_round_trip(self):
+        data = {
+            "type": "UNSTRING",
+            "source": "WS-FULL",
+            "delimited_by": " ",
+            "into": ["WS-FIRST", "WS-LAST"],
+        }
+        assert self._round_trip(data) == data
+
+    def test_inspect_tallying_round_trip(self):
+        data = {
+            "type": "INSPECT",
+            "inspect_type": "TALLYING",
+            "source": "WS-DATA",
+            "tallying_target": "WS-COUNT",
+            "tallying_for": [{"mode": "ALL", "pattern": "A"}],
+        }
+        assert self._round_trip(data) == data
+
+    def test_inspect_replacing_round_trip(self):
+        data = {
+            "type": "INSPECT",
+            "inspect_type": "REPLACING",
+            "source": "WS-DATA",
+            "replacings": [{"mode": "ALL", "from": "A", "to": "B"}],
         }
         assert self._round_trip(data) == data

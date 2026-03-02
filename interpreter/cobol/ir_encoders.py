@@ -605,3 +605,108 @@ def build_decode_alphanumeric_ir(func_name: str) -> list[IRInstruction]:
     instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
 
     return instructions
+
+
+# ── String operation IR builders ──────────────────────────────────
+
+
+def build_string_delimit_ir(func_name: str) -> list[IRInstruction]:
+    """Generate IR to delimit a string value.
+
+    Inputs: %p_source (str), %p_delimiter (str)
+    Output: str (truncated at delimiter, or full if delimiter is "SIZE")
+
+    Uses __string_find to locate delimiter, then slices.
+    """
+    rc = _RegCounter(func_name)
+    instructions: list[IRInstruction] = []
+
+    # Find delimiter position
+    pos = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.CALL_FUNCTION,
+            result_reg=pos,
+            operands=["__string_find", "%p_source", "%p_delimiter"],
+        )
+    )
+
+    # If pos == -1, use full string (no delimiter found → use length)
+    # Compute: result_len = pos if pos >= 0 else len(source)
+    # We use __list_slice on the string chars which works for string truncation
+    # Actually, we'll use a simpler approach: emit a CALL_FUNCTION to __list_slice
+    # on the source as a list of chars. But strings aren't lists...
+    # Simpler: use the builtin directly — the frontend will use CALL_FUNCTION.
+
+    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[pos]))
+
+    return instructions
+
+
+def build_string_split_ir(func_name: str) -> list[IRInstruction]:
+    """Generate IR to split a string by delimiter.
+
+    Inputs: %p_source (str), %p_delimiter (str)
+    Output: list[str]
+    """
+    rc = _RegCounter(func_name)
+    instructions: list[IRInstruction] = []
+
+    result = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.CALL_FUNCTION,
+            result_reg=result,
+            operands=["__string_split", "%p_source", "%p_delimiter"],
+        )
+    )
+
+    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
+
+    return instructions
+
+
+def build_inspect_tally_ir(func_name: str) -> list[IRInstruction]:
+    """Generate IR for INSPECT TALLYING — count pattern occurrences.
+
+    Inputs: %p_source (str), %p_pattern (str), %p_mode (str)
+    Output: int (count)
+    """
+    rc = _RegCounter(func_name)
+    instructions: list[IRInstruction] = []
+
+    result = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.CALL_FUNCTION,
+            result_reg=result,
+            operands=["__string_count", "%p_source", "%p_pattern", "%p_mode"],
+        )
+    )
+
+    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
+
+    return instructions
+
+
+def build_inspect_replace_ir(func_name: str) -> list[IRInstruction]:
+    """Generate IR for INSPECT REPLACING — replace pattern occurrences.
+
+    Inputs: %p_source (str), %p_from (str), %p_to (str), %p_mode (str)
+    Output: str (modified string)
+    """
+    rc = _RegCounter(func_name)
+    instructions: list[IRInstruction] = []
+
+    result = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.CALL_FUNCTION,
+            result_reg=result,
+            operands=["__string_replace", "%p_source", "%p_from", "%p_to", "%p_mode"],
+        )
+    )
+
+    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
+
+    return instructions

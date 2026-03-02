@@ -26,16 +26,23 @@ from interpreter.cobol.cobol_statements import (
     ArithmeticStatement,
     CobolStatementType,
     ComputeStatement,
+    ContinueStatement,
     DisplayStatement,
     EvaluateStatement,
+    ExitStatement,
     GotoStatement,
     IfStatement,
+    InitializeStatement,
+    InspectStatement,
     MoveStatement,
     PerformStatement,
     PerformTimesSpec,
     PerformUntilSpec,
     PerformVaryingSpec,
+    SetStatement,
     StopRunStatement,
+    StringStatement,
+    UnstringStatement,
     WhenOtherStatement,
     WhenStatement,
 )
@@ -48,6 +55,9 @@ from interpreter.cobol.ir_encoders import (
     build_encode_alphanumeric_ir,
     build_encode_comp3_ir,
     build_encode_zoned_ir,
+    build_inspect_replace_ir,
+    build_inspect_tally_ir,
+    build_string_split_ir,
 )
 from interpreter.cobol.data_filters import align_decimal, left_adjust
 from interpreter.frontend import Frontend
@@ -369,6 +379,20 @@ class CobolFrontend(Frontend):
             self._lower_goto(stmt, layout, region_reg)
         elif isinstance(stmt, EvaluateStatement):
             self._lower_evaluate(stmt, layout, region_reg)
+        elif isinstance(stmt, ContinueStatement):
+            self._lower_continue(stmt, layout, region_reg)
+        elif isinstance(stmt, ExitStatement):
+            self._lower_exit(stmt, layout, region_reg)
+        elif isinstance(stmt, InitializeStatement):
+            self._lower_initialize(stmt, layout, region_reg)
+        elif isinstance(stmt, SetStatement):
+            self._lower_set(stmt, layout, region_reg)
+        elif isinstance(stmt, StringStatement):
+            self._lower_string(stmt, layout, region_reg)
+        elif isinstance(stmt, UnstringStatement):
+            self._lower_unstring(stmt, layout, region_reg)
+        elif isinstance(stmt, InspectStatement):
+            self._lower_inspect(stmt, layout, region_reg)
         else:
             logger.warning("Unhandled COBOL statement type: %s", type(stmt).__name__)
 
@@ -857,6 +881,288 @@ class CobolFrontend(Frontend):
                     self._lower_statement(grandchild, layout, region_reg)
 
         self._emit(Opcode.LABEL, label=end_label)
+
+    # ── Tier 1: CONTINUE, EXIT, INITIALIZE, SET ────────────────────
+
+    def _lower_continue(
+        self,
+        stmt: ContinueStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """CONTINUE — no-op, emit nothing."""
+        pass
+
+    def _lower_exit(
+        self,
+        stmt: ExitStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """EXIT — no-op sentinel, emit nothing."""
+        pass
+
+    def _lower_initialize(
+        self,
+        stmt: InitializeStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """INITIALIZE field1 field2 — reset to type-appropriate defaults."""
+        for operand in stmt.operands:
+            if operand not in layout.fields:
+                logger.warning("INITIALIZE target %s not found in layout", operand)
+                continue
+            fl = layout.fields[operand]
+            td = fl.type_descriptor
+            if td.category == CobolDataCategory.ALPHANUMERIC:
+                default = " " * td.total_digits
+            else:
+                default = "0"
+            self._emit_field_encode(region_reg, fl, default)
+
+    def _lower_set(
+        self,
+        stmt: SetStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """SET target TO value / SET target UP|DOWN BY value."""
+        if stmt.set_type == "TO":
+            # SET target(s) TO value(s) — assign first value to all targets
+            value_str = stmt.values[0] if stmt.values else "0"
+            for target_name in stmt.targets:
+                if target_name not in layout.fields:
+                    logger.warning("SET target %s not found in layout", target_name)
+                    continue
+                target_fl = layout.fields[target_name]
+                value_str_reg = self._const_to_reg(str(value_str))
+                self._emit_encode_and_write(region_reg, target_fl, value_str_reg)
+        elif stmt.set_type == "BY":
+            # SET target UP|DOWN BY value — increment/decrement
+            step_val = stmt.values[0] if stmt.values else "1"
+            op = "+" if stmt.by_type == "UP" else "-"
+            for target_name in stmt.targets:
+                if target_name not in layout.fields:
+                    logger.warning("SET target %s not found in layout", target_name)
+                    continue
+                target_fl = layout.fields[target_name]
+                tgt_decoded = self._emit_decode_field(region_reg, target_fl)
+                step_reg = self._const_to_reg(self._parse_literal(step_val))
+                result_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.BINOP,
+                    result_reg=result_reg,
+                    operands=[op, tgt_decoded, step_reg],
+                )
+                result_str_reg = self._emit_to_string(result_reg)
+                self._emit_encode_and_write(region_reg, target_fl, result_str_reg)
+
+    # ── Tier 2: STRING, UNSTRING, INSPECT ─────────────────────────
+
+    def _lower_string(
+        self,
+        stmt: StringStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """STRING ... DELIMITED BY ... INTO target.
+
+        For each sending: decode source, apply delimiter truncation.
+        Concatenate all parts, encode and write to target.
+        """
+        part_regs: list[str] = []
+        for sending in stmt.sendings:
+            # Decode source field or use literal
+            if sending.value in layout.fields:
+                source_fl = layout.fields[sending.value]
+                decoded_reg = self._emit_decode_field(region_reg, source_fl)
+                src_str_reg = self._emit_to_string(decoded_reg)
+            else:
+                src_str_reg = self._const_to_reg(str(sending.value))
+
+            if sending.delimited_by == "SIZE":
+                # Use full string
+                part_regs.append(src_str_reg)
+            else:
+                # Truncate at delimiter
+                delim_reg = self._const_to_reg(str(sending.delimited_by))
+                find_pos = self._fresh_reg()
+                self._emit(
+                    Opcode.CALL_FUNCTION,
+                    result_reg=find_pos,
+                    operands=["__string_find", src_str_reg, delim_reg],
+                )
+                # Use CALL_FUNCTION to slice: if pos >= 0, take [0:pos], else full
+                # For simplicity, use __string_find result directly
+                # and call a helper. But we don't have a conditional slice builtin.
+                # We'll emit this as a CALL_FUNCTION to a string truncation builtin.
+                # Actually, let's keep it simple: COBOL STRING with delimiter
+                # truncates at the first occurrence. We can use __string_split
+                # and take the first element.
+                parts = self._fresh_reg()
+                self._emit(
+                    Opcode.CALL_FUNCTION,
+                    result_reg=parts,
+                    operands=["__string_split", src_str_reg, delim_reg],
+                )
+                first_part = self._fresh_reg()
+                self._emit(
+                    Opcode.CALL_FUNCTION,
+                    result_reg=first_part,
+                    operands=["__list_get", parts, 0],
+                )
+                part_regs.append(first_part)
+
+        # Concatenate all parts
+        if not part_regs:
+            concat_reg = self._const_to_reg("")
+        elif len(part_regs) == 1:
+            concat_reg = part_regs[0]
+        else:
+            parts_list_reg = self._const_to_reg(part_regs)
+            concat_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CALL_FUNCTION,
+                result_reg=concat_reg,
+                operands=["__string_concat", parts_list_reg],
+            )
+
+        # Write to target
+        if stmt.into and stmt.into in layout.fields:
+            target_fl = layout.fields[stmt.into]
+            self._emit_encode_and_write(region_reg, target_fl, concat_reg)
+        else:
+            logger.warning("STRING INTO target %s not found in layout", stmt.into)
+
+    def _lower_unstring(
+        self,
+        stmt: UnstringStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """UNSTRING source DELIMITED BY ... INTO targets.
+
+        Decode source, split by delimiter, write each part to target field.
+        """
+        # Decode source
+        if stmt.source in layout.fields:
+            source_fl = layout.fields[stmt.source]
+            decoded_reg = self._emit_decode_field(region_reg, source_fl)
+            src_str_reg = self._emit_to_string(decoded_reg)
+        else:
+            src_str_reg = self._const_to_reg(str(stmt.source))
+
+        # Split by delimiter
+        delim_reg = self._const_to_reg(str(stmt.delimited_by))
+        ir = build_string_split_ir(f"unstring_split_{stmt.source}")
+        parts_reg = self._inline_ir(
+            ir, {"%p_source": src_str_reg, "%p_delimiter": delim_reg}
+        )
+
+        # Write each part to corresponding target
+        for i, target_name in enumerate(stmt.into):
+            if target_name not in layout.fields:
+                logger.warning(
+                    "UNSTRING INTO target %s not found in layout", target_name
+                )
+                continue
+            target_fl = layout.fields[target_name]
+            idx_reg = self._const_to_reg(i)
+            part_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CALL_FUNCTION,
+                result_reg=part_reg,
+                operands=["__list_get", parts_reg, idx_reg],
+            )
+            self._emit_encode_and_write(region_reg, target_fl, part_reg)
+
+    def _lower_inspect(
+        self,
+        stmt: InspectStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """INSPECT source TALLYING|REPLACING ..."""
+        if stmt.source not in layout.fields:
+            logger.warning("INSPECT source %s not found in layout", stmt.source)
+            return
+        source_fl = layout.fields[stmt.source]
+        decoded_reg = self._emit_decode_field(region_reg, source_fl)
+        src_str_reg = self._emit_to_string(decoded_reg)
+
+        if stmt.inspect_type == "TALLYING":
+            self._lower_inspect_tallying(stmt, src_str_reg, layout, region_reg)
+        elif stmt.inspect_type == "REPLACING":
+            self._lower_inspect_replacing(
+                stmt, src_str_reg, source_fl, layout, region_reg
+            )
+
+    def _lower_inspect_tallying(
+        self,
+        stmt: InspectStatement,
+        src_str_reg: str,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """INSPECT TALLYING — count pattern occurrences and write to tally target."""
+        total_count_reg = self._const_to_reg(0)
+
+        for tally_for in stmt.tallying_for:
+            pattern_reg = self._const_to_reg(str(tally_for.pattern))
+            mode_reg = self._const_to_reg(tally_for.mode.lower())
+            ir = build_inspect_tally_ir(f"inspect_tally_{stmt.source}")
+            count_reg = self._inline_ir(
+                ir,
+                {
+                    "%p_source": src_str_reg,
+                    "%p_pattern": pattern_reg,
+                    "%p_mode": mode_reg,
+                },
+            )
+            new_total = self._fresh_reg()
+            self._emit(
+                Opcode.BINOP,
+                result_reg=new_total,
+                operands=["+", total_count_reg, count_reg],
+            )
+            total_count_reg = new_total
+
+        # Write total count to tally target
+        if stmt.tallying_target and stmt.tallying_target in layout.fields:
+            tally_fl = layout.fields[stmt.tallying_target]
+            count_str_reg = self._emit_to_string(total_count_reg)
+            self._emit_encode_and_write(region_reg, tally_fl, count_str_reg)
+
+    def _lower_inspect_replacing(
+        self,
+        stmt: InspectStatement,
+        src_str_reg: str,
+        source_fl: FieldLayout,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """INSPECT REPLACING — apply replacements and write back."""
+        current_str_reg = src_str_reg
+
+        for replacing in stmt.replacings:
+            from_reg = self._const_to_reg(str(replacing.from_pattern))
+            to_reg = self._const_to_reg(str(replacing.to_pattern))
+            mode_reg = self._const_to_reg(replacing.mode.lower())
+            ir = build_inspect_replace_ir(f"inspect_replace_{stmt.source}")
+            new_str_reg = self._inline_ir(
+                ir,
+                {
+                    "%p_source": current_str_reg,
+                    "%p_from": from_reg,
+                    "%p_to": to_reg,
+                    "%p_mode": mode_reg,
+                },
+            )
+            current_str_reg = new_str_reg
+
+        # Write modified string back to source field
+        self._emit_encode_and_write(region_reg, source_fl, current_str_reg)
 
     # ── Condition Lowering ─────────────────────────────────────────
 
