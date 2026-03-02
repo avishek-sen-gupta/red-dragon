@@ -55,6 +55,9 @@ from interpreter.cobol.cobol_statements import (
     WhenOtherStatement,
     WhenStatement,
     WriteStatement,
+    RewriteStatement,
+    StartStatement,
+    DeleteStatement,
 )
 from interpreter.cobol.cobol_types import CobolDataCategory
 from interpreter.cobol.data_layout import DataLayout, FieldLayout, build_data_layout
@@ -423,6 +426,12 @@ class CobolFrontend(Frontend):
             self._lower_read(stmt, layout, region_reg)
         elif isinstance(stmt, WriteStatement):
             self._lower_write(stmt, layout, region_reg)
+        elif isinstance(stmt, RewriteStatement):
+            self._lower_rewrite(stmt, layout, region_reg)
+        elif isinstance(stmt, StartStatement):
+            self._lower_start(stmt, layout, region_reg)
+        elif isinstance(stmt, DeleteStatement):
+            self._lower_delete(stmt, layout, region_reg)
         else:
             logger.warning("Unhandled COBOL statement type: %s", type(stmt).__name__)
 
@@ -1482,6 +1491,62 @@ class CobolFrontend(Frontend):
             operands=["__cobol_write_record", fn_reg, data_reg],
         )
         logger.info("WRITE %s FROM %s", stmt.record_name, stmt.from_field or "(none)")
+
+    def _lower_rewrite(
+        self,
+        stmt: RewriteStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """REWRITE record-name [FROM field] — rewrite record via __cobol_rewrite_record."""
+        if stmt.from_field and stmt.from_field in layout.fields:
+            from_fl = layout.fields[stmt.from_field]
+            decoded_reg = self._emit_decode_field(region_reg, from_fl)
+            data_reg = self._emit_to_string(decoded_reg)
+        else:
+            data_reg = self._const_to_reg(stmt.from_field or stmt.record_name)
+
+        fn_reg = self._const_to_reg(stmt.record_name)
+        result_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=result_reg,
+            operands=["__cobol_rewrite_record", fn_reg, data_reg],
+        )
+        logger.info("REWRITE %s FROM %s", stmt.record_name, stmt.from_field or "(none)")
+
+    def _lower_start(
+        self,
+        stmt: StartStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """START file-name [KEY ...] — position file via __cobol_start_file."""
+        fn_reg = self._const_to_reg(stmt.file_name)
+        key_reg = self._const_to_reg(stmt.key or "")
+        result_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=result_reg,
+            operands=["__cobol_start_file", fn_reg, key_reg],
+        )
+        logger.info("START %s KEY %s", stmt.file_name, stmt.key or "(none)")
+
+    def _lower_delete(
+        self,
+        stmt: DeleteStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """DELETE file-name — delete record via __cobol_delete_record."""
+        fn_reg = self._const_to_reg(stmt.file_name)
+        result_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=result_reg,
+            operands=["__cobol_delete_record", fn_reg],
+        )
+        logger.info("DELETE %s", stmt.file_name)
 
     # ── Condition Lowering ─────────────────────────────────────────
 
