@@ -278,12 +278,14 @@ All CLI pipelines are available as composable functions — no argparse required
 
 ```python
 from interpreter import lower_source, dump_ir, build_cfg_from_source, dump_cfg, dump_mermaid, extract_function_source, ir_stats
+from interpreter.constants import Language
 
-# Parse and lower to IR
-instructions = lower_source(source, language="python")
+# Parse and lower to IR (Language enum or raw string)
+instructions = lower_source(source, language=Language.PYTHON)
+instructions = lower_source(source, language="javascript")  # strings still accepted
 
 # Get IR as text
-ir_text = dump_ir(source, language="python")
+ir_text = dump_ir(source, language=Language.PYTHON)
 
 # Build a CFG (optionally scoped to a single function)
 cfg = build_cfg_from_source(source, function_name="my_func")
@@ -293,10 +295,10 @@ cfg_text = dump_cfg(source)
 mermaid = dump_mermaid(source, function_name="my_func")
 
 # Extract raw source text of a named function (recursive — finds methods and nested functions)
-fn_source = extract_function_source(source, "my_func", language="python")
+fn_source = extract_function_source(source, "my_func", language=Language.PYTHON)
 
 # Get opcode frequency counts
-stats = ir_stats(source, language="python")  # e.g. {"CONST": 3, "STORE_VAR": 2, "BINOP": 1}
+stats = ir_stats(source, language=Language.PYTHON)  # e.g. {"CONST": 3, "STORE_VAR": 2, "BINOP": 1}
 ```
 
 ### Standalone VM execution
@@ -308,7 +310,7 @@ from interpreter import execute_cfg, VMConfig
 from interpreter.cfg import build_cfg
 from interpreter.registry import build_registry
 
-instructions = lower_source(source, language="python")
+instructions = lower_source(source, language=Language.PYTHON)
 cfg = build_cfg(instructions)
 registry = build_registry(instructions, cfg)
 

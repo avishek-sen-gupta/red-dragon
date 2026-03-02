@@ -11,6 +11,7 @@ from ..frontend_observer import FrontendObserver, NullFrontendObserver
 from ..ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
 from ..parser import ParserFactory
 from .. import constants
+from ..constants import Language
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ class BaseFrontend(Frontend):
     def __init__(
         self,
         parser_factory: ParserFactory,
-        language: str,
+        language: Language,
         observer: FrontendObserver = NullFrontendObserver(),
     ):
         self._parser_factory = parser_factory

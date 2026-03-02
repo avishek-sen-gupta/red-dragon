@@ -5,32 +5,33 @@ from __future__ import annotations
 from typing import Callable
 
 from ._base import BaseFrontend
+from ..constants import Language
 from ..frontend_observer import FrontendObserver, NullFrontendObserver
 from ..parser import TreeSitterParserFactory
 from .python import PythonFrontend
 
 # Lazy imports to avoid loading all frontends at startup
-_FRONTEND_CLASSES: dict[str, str] = {
-    "python": "python.PythonFrontend",
-    "javascript": "javascript.JavaScriptFrontend",
-    "typescript": "typescript.TypeScriptFrontend",
-    "java": "java.JavaFrontend",
-    "ruby": "ruby.RubyFrontend",
-    "go": "go.GoFrontend",
-    "php": "php.PhpFrontend",
-    "csharp": "csharp.CSharpFrontend",
-    "c": "c.CFrontend",
-    "cpp": "cpp.CppFrontend",
-    "rust": "rust.RustFrontend",
-    "kotlin": "kotlin.KotlinFrontend",
-    "scala": "scala.ScalaFrontend",
-    "lua": "lua.LuaFrontend",
-    "pascal": "pascal.PascalFrontend",
+_FRONTEND_CLASSES: dict[Language, str] = {
+    Language.PYTHON: "python.PythonFrontend",
+    Language.JAVASCRIPT: "javascript.JavaScriptFrontend",
+    Language.TYPESCRIPT: "typescript.TypeScriptFrontend",
+    Language.JAVA: "java.JavaFrontend",
+    Language.RUBY: "ruby.RubyFrontend",
+    Language.GO: "go.GoFrontend",
+    Language.PHP: "php.PhpFrontend",
+    Language.CSHARP: "csharp.CSharpFrontend",
+    Language.C: "c.CFrontend",
+    Language.CPP: "cpp.CppFrontend",
+    Language.RUST: "rust.RustFrontend",
+    Language.KOTLIN: "kotlin.KotlinFrontend",
+    Language.SCALA: "scala.ScalaFrontend",
+    Language.LUA: "lua.LuaFrontend",
+    Language.PASCAL: "pascal.PascalFrontend",
 }
 
 
 def get_deterministic_frontend(
-    language: str,
+    language: Language,
     observer: FrontendObserver = NullFrontendObserver(),
 ) -> BaseFrontend:
     """Instantiate the deterministic frontend for *language*.
@@ -52,6 +53,7 @@ SUPPORTED_DETERMINISTIC_LANGUAGES: tuple[str, ...] = tuple(_FRONTEND_CLASSES.key
 
 __all__ = [
     "BaseFrontend",
+    "Language",
     "PythonFrontend",
     "get_deterministic_frontend",
     "SUPPORTED_DETERMINISTIC_LANGUAGES",

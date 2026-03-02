@@ -3,6 +3,7 @@
 import json
 import sys
 
+from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.run_types import UnresolvedCallStrategy
 from interpreter.vm_types import SymbolicValue, _serialize_value
@@ -40,7 +41,7 @@ def main():
     print("=" * 60)
     vm_sym = run(
         SOURCE,
-        language="python",
+        language=Language.PYTHON,
         verbose=True,
         unresolved_call_strategy=UnresolvedCallStrategy.SYMBOLIC,
     )
@@ -53,7 +54,7 @@ def main():
     print("=" * 60)
     vm_llm = run(
         SOURCE,
-        language="python",
+        language=Language.PYTHON,
         verbose=True,
         unresolved_call_strategy=UnresolvedCallStrategy.LLM,
     )
