@@ -138,6 +138,7 @@ _LOWERED_TYPES: frozenset[str] = frozenset(
         "SUBTRACT",
         "MULTIPLY",
         "DIVIDE",
+        "COMPUTE",
         "IF",
         "EVALUATE",
         "DISPLAY",
@@ -443,6 +444,7 @@ _COBOL_SAMPLE = """\
            SUBTRACT WS-B FROM WS-RESULT
            MULTIPLY WS-A BY WS-RESULT
            DIVIDE WS-B INTO WS-RESULT
+           COMPUTE WS-RESULT = WS-A + WS-B * 2
            DISPLAY WS-RESULT
 
            IF WS-A > WS-B

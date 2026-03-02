@@ -45,9 +45,8 @@ class TestClassifyType:
         assert _classify_type("CALL") == StatusCategory.BRIDGE_UNKNOWN
         assert _classify_type("READ") == StatusCategory.BRIDGE_UNKNOWN
 
-    def test_dispatch_missing_type(self):
-        # COMPUTE is bridge-serialised but not in dispatch table
-        assert _classify_type("COMPUTE") == StatusCategory.DISPATCH_MISSING
+    def test_compute_is_handled(self):
+        assert _classify_type("COMPUTE") == StatusCategory.HANDLED
 
     def test_all_proleap_types_classifiable(self):
         valid_statuses = {
@@ -82,10 +81,11 @@ class TestPass1Bridge:
 class TestPass2Dispatch:
     """Test Python dispatch table pass."""
 
-    def test_pass2_identifies_compute_as_missing(self):
+    def test_pass2_compute_is_handled(self):
         bridge_serialized = sorted(BRIDGE_SERIALIZED_TYPES)
         handled, missing = _run_pass2_dispatch(bridge_serialized)
-        assert "COMPUTE" in missing
+        assert "COMPUTE" in handled
+        assert "COMPUTE" not in missing
 
     def test_pass2_handled_types_exist_in_dispatch_table(self):
         bridge_serialized = sorted(BRIDGE_SERIALIZED_TYPES)
@@ -126,6 +126,6 @@ class TestRunAudit:
             BRIDGE_SERIALIZED_TYPES
         )
 
-    def test_run_audit_dispatch_missing_includes_compute(self):
+    def test_run_audit_no_dispatch_missing(self):
         result = run_audit()
-        assert "COMPUTE" in result.dispatch_missing
+        assert len(result.dispatch_missing) == 0

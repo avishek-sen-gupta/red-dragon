@@ -137,7 +137,7 @@ All constructs above produce real IR for proper data-flow analysis. All 15 front
 
 ### COBOL frontend
 
-The COBOL frontend uses the [ProLeap COBOL Parser](https://github.com/uwol/proleap-cobol-parser) via a subprocess bridge (requires JDK 17). It lowers DATA DIVISION fields to byte-addressed memory regions (`ALLOC_REGION`/`WRITE_REGION`/`LOAD_REGION`) with PIC-driven encoding/decoding (zoned decimal, COMP-3, alphanumeric/EBCDIC), and PROCEDURE DIVISION statements (MOVE, ADD, SUBTRACT, MULTIPLY, DIVIDE, IF, PERFORM, DISPLAY, STOP RUN, GO TO, EVALUATE) to standard IR. PERFORM semantics use named continuations (`SET_CONTINUATION`/`RESUME_CONTINUATION`) to implement paragraph-level call-and-return, including PERFORM THRU for paragraph ranges, PERFORM TIMES (counter-based loops), PERFORM UNTIL (condition-based loops with TEST BEFORE/AFTER), PERFORM VARYING (loop variable with FROM/BY/UNTIL), and section-level PERFORM (branching to a named section containing multiple paragraphs). All loop variants compose from existing opcodes (no new VM instructions). REDEFINES works automatically through overlapping byte offsets on shared regions.
+The COBOL frontend uses the [ProLeap COBOL Parser](https://github.com/uwol/proleap-cobol-parser) via a subprocess bridge (requires JDK 17). It lowers DATA DIVISION fields to byte-addressed memory regions (`ALLOC_REGION`/`WRITE_REGION`/`LOAD_REGION`) with PIC-driven encoding/decoding (zoned decimal, COMP-3, alphanumeric/EBCDIC), and PROCEDURE DIVISION statements (MOVE, ADD, SUBTRACT, MULTIPLY, DIVIDE, COMPUTE, IF, PERFORM, DISPLAY, STOP RUN, GO TO, EVALUATE) to standard IR. COMPUTE parses arbitrary arithmetic expressions with correct operator precedence and parentheses via a recursive-descent expression parser, supporting field references, numeric literals, and all four arithmetic operators, with multi-target assignment. PERFORM semantics use named continuations (`SET_CONTINUATION`/`RESUME_CONTINUATION`) to implement paragraph-level call-and-return, including PERFORM THRU for paragraph ranges, PERFORM TIMES (counter-based loops), PERFORM UNTIL (condition-based loops with TEST BEFORE/AFTER), PERFORM VARYING (loop variable with FROM/BY/UNTIL), and section-level PERFORM (branching to a named section containing multiple paragraphs). All loop variants compose from existing opcodes (no new VM instructions). REDEFINES works automatically through overlapping byte offsets on shared regions.
 
 ## Example: CFG
 
@@ -355,7 +355,7 @@ The **Exercism integration test suite** (`tests/unit/exercism/`) extends coverag
 | **acronym** | toUpperChar helper, word boundary detection, string building, separator classification | 9 | 15 | 2 | 252 | **269** |
 | **Total** | | **171** | **270** | **36** | **5068** | **5374** |
 
-Combined with the Rosetta suite and the COBOL frontend tests (107 tests covering ASG round-trip, typed statement hierarchy, PIC parsing, data layout, frontend lowering, PERFORM loop variants, section PERFORM, parser bridge, and end-to-end fixture tests), the project has **7581 tests** (7581 passed, 3 xfailed) — all with zero LLM calls.
+Combined with the Rosetta suite and the COBOL frontend tests (107 tests covering ASG round-trip, typed statement hierarchy, PIC parsing, data layout, frontend lowering, PERFORM loop variants, section PERFORM, parser bridge, and end-to-end fixture tests), the project has **7608 tests** (7608 passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 

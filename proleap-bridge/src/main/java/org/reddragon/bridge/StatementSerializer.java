@@ -45,6 +45,10 @@ import io.proleap.cobol.asg.metamodel.procedure.subtract.Subtrahend;
 import io.proleap.cobol.asg.metamodel.call.Call;
 import io.proleap.cobol.asg.metamodel.valuestmt.ValueStmt;
 
+import org.antlr.v4.runtime.CharStream;
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.misc.Interval;
+
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -189,27 +193,35 @@ public final class StatementSerializer {
 
     private static JsonObject serializeCompute(ComputeStatement stmt) {
         JsonObject obj = newStatement("COMPUTE");
-        JsonArray operands = new JsonArray();
 
-        // Extract arithmetic expression text
+        // Extract arithmetic expression as original source text (spaces preserved)
         try {
             if (stmt.getArithmeticExpression() != null && stmt.getArithmeticExpression().getCtx() != null) {
-                operands.add(stmt.getArithmeticExpression().getCtx().getText());
+                var ctx = stmt.getArithmeticExpression().getCtx();
+                Token start = ctx.getStart();
+                Token stop = ctx.getStop();
+                if (start != null && stop != null) {
+                    CharStream input = start.getInputStream();
+                    String exprText = input.getText(
+                            Interval.of(start.getStartIndex(), stop.getStopIndex()));
+                    obj.addProperty("expression", exprText.trim());
+                }
             }
         } catch (Exception e) {
             LOG.fine("Could not extract COMPUTE expression: " + e.getMessage());
         }
 
         // Extract target variables
+        JsonArray targets = new JsonArray();
         for (Store store : stmt.getStores()) {
             Call storeCall = store.getStoreCall();
             if (storeCall != null) {
-                operands.add(extractCallName(storeCall));
+                targets.add(extractCallName(storeCall));
             }
         }
 
-        if (operands.size() > 0) {
-            obj.add("operands", operands);
+        if (targets.size() > 0) {
+            obj.add("targets", targets);
         }
         return obj;
     }
