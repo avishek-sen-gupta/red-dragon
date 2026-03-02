@@ -5,7 +5,14 @@ from interpreter.cobol.asg_types import (
     CobolField,
     CobolParagraph,
     CobolSection,
-    CobolStatement,
+)
+from interpreter.cobol.cobol_statements import (
+    ArithmeticStatement,
+    DisplayStatement,
+    IfStatement,
+    MoveStatement,
+    StopRunStatement,
+    parse_statement,
 )
 
 
@@ -77,10 +84,11 @@ class TestCobolField:
 class TestCobolStatement:
     def test_move_statement(self):
         data = {"type": "MOVE", "operands": ["WS-A", "WS-B"]}
-        stmt = CobolStatement.from_dict(data)
-        assert stmt.type == "MOVE"
-        assert stmt.operands == ["WS-A", "WS-B"]
-        assert CobolStatement.from_dict(stmt.to_dict()) == stmt
+        stmt = parse_statement(data)
+        assert isinstance(stmt, MoveStatement)
+        assert stmt.source == "WS-A"
+        assert stmt.target == "WS-B"
+        assert parse_statement(stmt.to_dict()) == stmt
 
     def test_if_statement_with_children(self):
         data = {
@@ -90,17 +98,19 @@ class TestCobolStatement:
                 {"type": "DISPLAY", "operands": ["POSITIVE"]},
             ],
         }
-        stmt = CobolStatement.from_dict(data)
+        stmt = parse_statement(data)
+        assert isinstance(stmt, IfStatement)
         assert stmt.condition == "WS-A > 0"
         assert len(stmt.children) == 1
-        assert stmt.children[0].type == "DISPLAY"
-        assert CobolStatement.from_dict(stmt.to_dict()) == stmt
+        assert isinstance(stmt.children[0], DisplayStatement)
+        assert parse_statement(stmt.to_dict()) == stmt
 
     def test_add_statement(self):
         data = {"type": "ADD", "operands": ["WS-X", "WS-Y"]}
-        stmt = CobolStatement.from_dict(data)
-        assert stmt.type == "ADD"
-        assert CobolStatement.from_dict(stmt.to_dict()) == stmt
+        stmt = parse_statement(data)
+        assert isinstance(stmt, ArithmeticStatement)
+        assert stmt.op == "ADD"
+        assert parse_statement(stmt.to_dict()) == stmt
 
 
 class TestCobolParagraph:
