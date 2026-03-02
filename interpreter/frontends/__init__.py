@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Callable
 
 from ._base import BaseFrontend
+from ..frontend_observer import FrontendObserver, NullFrontendObserver
+from ..parser import TreeSitterParserFactory
 from .python import PythonFrontend
 
 # Lazy imports to avoid loading all frontends at startup
@@ -27,7 +29,10 @@ _FRONTEND_CLASSES: dict[str, str] = {
 }
 
 
-def get_deterministic_frontend(language: str) -> BaseFrontend:
+def get_deterministic_frontend(
+    language: str,
+    observer: FrontendObserver = NullFrontendObserver(),
+) -> BaseFrontend:
     """Instantiate the deterministic frontend for *language*.
 
     Raises ``ValueError`` if *language* has no registered frontend.
@@ -40,7 +45,7 @@ def get_deterministic_frontend(language: str) -> BaseFrontend:
 
     mod = importlib.import_module(f".{module_name}", package=__package__)
     cls = getattr(mod, class_name)
-    return cls()
+    return cls(TreeSitterParserFactory(), language, observer)
 
 
 SUPPORTED_DETERMINISTIC_LANGUAGES: tuple[str, ...] = tuple(_FRONTEND_CLASSES.keys())

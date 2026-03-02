@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Callable
 
 from ..frontend import Frontend
+from ..frontend_observer import FrontendObserver, NullFrontendObserver
 from ..ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
+from ..parser import ParserFactory
 from .. import constants
 
 logger = logging.getLogger(__name__)
@@ -64,7 +67,15 @@ class BaseFrontend(Frontend):
 
     # ── init ─────────────────────────────────────────────────────
 
-    def __init__(self):
+    def __init__(
+        self,
+        parser_factory: ParserFactory,
+        language: str,
+        observer: FrontendObserver = NullFrontendObserver(),
+    ):
+        self._parser_factory = parser_factory
+        self._language = language
+        self._observer = observer
         self._reg_counter: int = 0
         self._label_counter: int = 0
         self._instructions: list[IRInstruction] = []
@@ -125,7 +136,13 @@ class BaseFrontend(Frontend):
 
     # ── entry point ──────────────────────────────────────────────
 
-    def lower(self, tree, source: bytes) -> list[IRInstruction]:
+    def lower(self, source: bytes) -> list[IRInstruction]:
+        t0 = time.perf_counter()
+        parser = self._parser_factory.get_parser(self._language)
+        tree = parser.parse(source)
+        self._observer.on_parse(time.perf_counter() - t0)
+
+        t1 = time.perf_counter()
         self._reg_counter = 0
         self._label_counter = 0
         self._instructions = []
@@ -135,6 +152,7 @@ class BaseFrontend(Frontend):
         root = tree.root_node
         self._emit(Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)
         self._lower_block(root)
+        self._observer.on_lower(time.perf_counter() - t1)
         return self._instructions
 
     # ── dispatchers ──────────────────────────────────────────────

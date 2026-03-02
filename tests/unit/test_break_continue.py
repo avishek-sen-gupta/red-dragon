@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-import tree_sitter_language_pack
 
 from interpreter.frontends.c import CFrontend
 from interpreter.frontends.cpp import CppFrontend
@@ -17,13 +16,12 @@ from interpreter.frontends.php import PhpFrontend
 from interpreter.frontends.kotlin import KotlinFrontend
 from interpreter.frontends.csharp import CSharpFrontend
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.parser import TreeSitterParserFactory
 
 
 def _parse_and_lower(source: str, language: str, frontend) -> list[IRInstruction]:
-    parser = tree_sitter_language_pack.get_parser(language)
     source_bytes = source.encode("utf-8")
-    tree = parser.parse(source_bytes)
-    return frontend.lower(tree, source_bytes)
+    return frontend.lower(source_bytes)
 
 
 def _find_all(instructions: list[IRInstruction], opcode: Opcode) -> list[IRInstruction]:
@@ -47,7 +45,7 @@ class TestBreakInWhileLoop:
         ir = _parse_and_lower(
             "void f() { while (x) { break; } }",
             "c",
-            CFrontend(),
+            CFrontend(TreeSitterParserFactory(), "c"),
         )
         branches = _branches(ir)
         labels = _labels(ir)
@@ -60,7 +58,7 @@ class TestBreakInWhileLoop:
         ir = _parse_and_lower(
             "void f() { while (x) { continue; } }",
             "c",
-            CFrontend(),
+            CFrontend(TreeSitterParserFactory(), "c"),
         )
         branches = _branches(ir)
         labels = _labels(ir)
@@ -73,7 +71,7 @@ class TestBreakInWhileLoop:
         ir = _parse_and_lower(
             "void f() { while (x) { break; } }",
             "c",
-            CFrontend(),
+            CFrontend(TreeSitterParserFactory(), "c"),
         )
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         break_symbolics = [
@@ -85,7 +83,7 @@ class TestBreakInWhileLoop:
         ir = _parse_and_lower(
             "void f() { while (x) { continue; } }",
             "c",
-            CFrontend(),
+            CFrontend(TreeSitterParserFactory(), "c"),
         )
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         continue_symbolics = [
@@ -99,7 +97,7 @@ class TestBreakInForLoop:
         ir = _parse_and_lower(
             "void f() { for (int i = 0; i < 10; i++) { break; } }",
             "c",
-            CFrontend(),
+            CFrontend(TreeSitterParserFactory(), "c"),
         )
         branches = _branches(ir)
         labels = _labels(ir)
@@ -111,7 +109,7 @@ class TestBreakInForLoop:
         ir = _parse_and_lower(
             "void f() { for (int i = 0; i < 10; i++) { continue; } }",
             "c",
-            CFrontend(),
+            CFrontend(TreeSitterParserFactory(), "c"),
         )
         branches = _branches(ir)
         labels = _labels(ir)
@@ -126,7 +124,7 @@ class TestBreakInDoWhile:
         ir = _parse_and_lower(
             "void f() { do { break; } while (x); }",
             "c",
-            CFrontend(),
+            CFrontend(TreeSitterParserFactory(), "c"),
         )
         branches = _branches(ir)
         labels = _labels(ir)
@@ -138,7 +136,7 @@ class TestBreakInDoWhile:
         ir = _parse_and_lower(
             "void f() { do { continue; } while (x); }",
             "c",
-            CFrontend(),
+            CFrontend(TreeSitterParserFactory(), "c"),
         )
         branches = _branches(ir)
         labels = _labels(ir)
@@ -153,7 +151,7 @@ class TestNestedLoops:
         ir = _parse_and_lower(
             "void f() { while (a) { while (b) { break; } } }",
             "c",
-            CFrontend(),
+            CFrontend(TreeSitterParserFactory(), "c"),
         )
         labels = _labels(ir)
         branches = _branches(ir)
@@ -169,7 +167,7 @@ class TestNestedLoops:
         ir = _parse_and_lower(
             "void f() { while (a) { while (b) { continue; } } }",
             "c",
-            CFrontend(),
+            CFrontend(TreeSitterParserFactory(), "c"),
         )
         labels = _labels(ir)
         branches = _branches(ir)
@@ -184,7 +182,7 @@ class TestBreakOutsideLoop:
         ir = _parse_and_lower(
             "void f() { break; }",
             "c",
-            CFrontend(),
+            CFrontend(TreeSitterParserFactory(), "c"),
         )
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert any("break_outside_loop_or_switch" in str(s.operands) for s in symbolics)
@@ -193,7 +191,7 @@ class TestBreakOutsideLoop:
         ir = _parse_and_lower(
             "void f() { continue; }",
             "c",
-            CFrontend(),
+            CFrontend(TreeSitterParserFactory(), "c"),
         )
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert any("continue_outside_loop" in str(s.operands) for s in symbolics)
@@ -205,22 +203,34 @@ class TestBreakContinueMultipleLanguages:
     @pytest.mark.parametrize(
         "lang,frontend,source",
         [
-            ("c", CFrontend(), "void f() { while (x) { break; } }"),
-            ("cpp", CppFrontend(), "void f() { while (x) { break; } }"),
+            (
+                "c",
+                CFrontend(TreeSitterParserFactory(), "c"),
+                "void f() { while (x) { break; } }",
+            ),
+            (
+                "cpp",
+                CppFrontend(TreeSitterParserFactory(), "cpp"),
+                "void f() { while (x) { break; } }",
+            ),
             (
                 "javascript",
-                JavaScriptFrontend(),
+                JavaScriptFrontend(TreeSitterParserFactory(), "javascript"),
                 "function f() { while (x) { break; } }",
             ),
             (
                 "java",
-                JavaFrontend(),
+                JavaFrontend(TreeSitterParserFactory(), "java"),
                 "class T { void f() { while (x) { break; } } }",
             ),
-            ("go", GoFrontend(), "package main\nfunc f() { for x { break } }"),
+            (
+                "go",
+                GoFrontend(TreeSitterParserFactory(), "go"),
+                "package main\nfunc f() { for x { break } }",
+            ),
             (
                 "php",
-                PhpFrontend(),
+                PhpFrontend(TreeSitterParserFactory(), "php"),
                 "<?php while ($x) { break; } ?>",
             ),
         ],
@@ -240,22 +250,34 @@ class TestBreakContinueMultipleLanguages:
     @pytest.mark.parametrize(
         "lang,frontend,source",
         [
-            ("c", CFrontend(), "void f() { while (x) { continue; } }"),
-            ("cpp", CppFrontend(), "void f() { while (x) { continue; } }"),
+            (
+                "c",
+                CFrontend(TreeSitterParserFactory(), "c"),
+                "void f() { while (x) { continue; } }",
+            ),
+            (
+                "cpp",
+                CppFrontend(TreeSitterParserFactory(), "cpp"),
+                "void f() { while (x) { continue; } }",
+            ),
             (
                 "javascript",
-                JavaScriptFrontend(),
+                JavaScriptFrontend(TreeSitterParserFactory(), "javascript"),
                 "function f() { while (x) { continue; } }",
             ),
             (
                 "java",
-                JavaFrontend(),
+                JavaFrontend(TreeSitterParserFactory(), "java"),
                 "class T { void f() { while (x) { continue; } } }",
             ),
-            ("go", GoFrontend(), "package main\nfunc f() { for x { continue } }"),
+            (
+                "go",
+                GoFrontend(TreeSitterParserFactory(), "go"),
+                "package main\nfunc f() { for x { continue } }",
+            ),
             (
                 "php",
-                PhpFrontend(),
+                PhpFrontend(TreeSitterParserFactory(), "php"),
                 "<?php while ($x) { continue; } ?>",
             ),
         ],
@@ -276,7 +298,7 @@ class TestRubyBreakNext:
         ir = _parse_and_lower(
             "while x\n  break\nend",
             "ruby",
-            RubyFrontend(),
+            RubyFrontend(TreeSitterParserFactory(), "ruby"),
         )
         branches = _branches(ir)
         labels = _labels(ir)
@@ -288,7 +310,7 @@ class TestRubyBreakNext:
         ir = _parse_and_lower(
             "while x\n  next\nend",
             "ruby",
-            RubyFrontend(),
+            RubyFrontend(TreeSitterParserFactory(), "ruby"),
         )
         branches = _branches(ir)
         labels = _labels(ir)
@@ -302,7 +324,7 @@ class TestLuaBreak:
         ir = _parse_and_lower(
             "while x do\n  break\nend",
             "lua",
-            LuaFrontend(),
+            LuaFrontend(TreeSitterParserFactory(), "lua"),
         )
         branches = _branches(ir)
         labels = _labels(ir)
@@ -316,7 +338,7 @@ class TestRustBreakContinue:
         ir = _parse_and_lower(
             "fn f() { loop { break; } }",
             "rust",
-            RustFrontend(),
+            RustFrontend(TreeSitterParserFactory(), "rust"),
         )
         branches = _branches(ir)
         labels = _labels(ir)
@@ -328,7 +350,7 @@ class TestRustBreakContinue:
         ir = _parse_and_lower(
             "fn f() { loop { continue; } }",
             "rust",
-            RustFrontend(),
+            RustFrontend(TreeSitterParserFactory(), "rust"),
         )
         branches = _branches(ir)
         labels = _labels(ir)
@@ -342,7 +364,7 @@ class TestKotlinBreakContinue:
         ir = _parse_and_lower(
             "fun f() { while (x) { break } }",
             "kotlin",
-            KotlinFrontend(),
+            KotlinFrontend(TreeSitterParserFactory(), "kotlin"),
         )
         branches = _branches(ir)
         labels = _labels(ir)
@@ -354,7 +376,7 @@ class TestKotlinBreakContinue:
         ir = _parse_and_lower(
             "fun f() { while (x) { continue } }",
             "kotlin",
-            KotlinFrontend(),
+            KotlinFrontend(TreeSitterParserFactory(), "kotlin"),
         )
         branches = _branches(ir)
         labels = _labels(ir)

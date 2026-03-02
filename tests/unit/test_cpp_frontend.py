@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-from tree_sitter_language_pack import get_parser
-
 from interpreter.frontends.cpp import CppFrontend
+from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
 
 
 def _parse_cpp(source: str) -> list[IRInstruction]:
-    parser = get_parser("cpp")
-    tree = parser.parse(source.encode("utf-8"))
-    frontend = CppFrontend()
-    return frontend.lower(tree, source.encode("utf-8"))
+    frontend = CppFrontend(TreeSitterParserFactory(), "cpp")
+    return frontend.lower(source.encode("utf-8"))
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:

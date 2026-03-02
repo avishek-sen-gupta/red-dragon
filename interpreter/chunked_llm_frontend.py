@@ -258,11 +258,10 @@ class ChunkedLLMFrontend(Frontend):
         self._chunk_extractor = ChunkExtractor()
         self._renumberer = IRRenumberer()
 
-    def lower(self, tree: Any, source: bytes) -> list[IRInstruction]:
+    def lower(self, source: bytes) -> list[IRInstruction]:
         """Lower source code to IR by chunking and delegating to wrapped LLMFrontend.
 
         Args:
-            tree: Optional tree-sitter tree. If None, parses internally.
             source: Raw source code bytes.
 
         Returns:
@@ -270,9 +269,8 @@ class ChunkedLLMFrontend(Frontend):
         """
         source_bytes = source if isinstance(source, bytes) else source.encode("utf-8")
 
-        if tree is None:
-            parser = self._parser_factory.get_parser(self._language)
-            tree = parser.parse(source_bytes)
+        parser = self._parser_factory.get_parser(self._language)
+        tree = parser.parse(source_bytes)
 
         chunks = self._chunk_extractor.extract_chunks(
             tree, source_bytes, self._language
@@ -300,7 +298,7 @@ class ChunkedLLMFrontend(Frontend):
 
             try:
                 chunk_instructions = self._llm_frontend.lower(
-                    None, chunk.source_text.encode("utf-8")
+                    chunk.source_text.encode("utf-8")
                 )
             except (IRParsingError, Exception) as exc:
                 logger.warning(

@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
-import tree_sitter_language_pack
-
 from interpreter.frontends.c import CFrontend
+from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
 
 
 def _parse_and_lower(source: str) -> list[IRInstruction]:
-    parser = tree_sitter_language_pack.get_parser("c")
-    source_bytes = source.encode("utf-8")
-    tree = parser.parse(source_bytes)
-    frontend = CFrontend()
-    return frontend.lower(tree, source_bytes)
+    frontend = CFrontend(TreeSitterParserFactory(), "c")
+    return frontend.lower(source.encode("utf-8"))
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:
@@ -700,7 +696,7 @@ class TestCFrontendCaseStatementDefensive:
         # Normal switch/case works via _lower_switch which manually extracts
         # case_statement children. This test verifies the defensive handler
         # by checking that case_statement is in _STMT_DISPATCH.
-        frontend = CFrontend()
+        frontend = CFrontend(TreeSitterParserFactory(), "c")
         assert "case_statement" in frontend._STMT_DISPATCH
 
     def test_switch_case_still_works_after_dispatch_entry(self):

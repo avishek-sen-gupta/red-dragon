@@ -6,7 +6,9 @@ import logging
 from typing import Callable
 
 from .c import CFrontend
+from ..frontend_observer import FrontendObserver, NullFrontendObserver
 from ..ir import Opcode
+from ..parser import ParserFactory
 from .. import constants
 
 logger = logging.getLogger(__name__)
@@ -19,8 +21,13 @@ class CppFrontend(CFrontend):
     templates, new/delete, lambdas, and reference types.
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(
+        self,
+        parser_factory: ParserFactory,
+        language: str,
+        observer: FrontendObserver = NullFrontendObserver(),
+    ):
+        super().__init__(parser_factory, language, observer)
 
         # -- Add C++-specific expression handlers ----------------------
         self._EXPR_DISPATCH.update(

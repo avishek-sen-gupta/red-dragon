@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Callable
 
 from ._base import BaseFrontend
+from ..frontend_observer import FrontendObserver, NullFrontendObserver
 from ..ir import Opcode
+from ..parser import ParserFactory
 from .. import constants
 
 
@@ -26,8 +28,13 @@ class JavaScriptFrontend(BaseFrontend):
     COMMENT_TYPES = frozenset({"comment"})
     NOISE_TYPES = frozenset({"\n"})
 
-    def __init__(self):
-        super().__init__()
+    def __init__(
+        self,
+        parser_factory: ParserFactory,
+        language: str,
+        observer: FrontendObserver = NullFrontendObserver(),
+    ):
+        super().__init__(parser_factory, language, observer)
         self._EXPR_DISPATCH: dict[str, Callable] = {
             "identifier": self._lower_identifier,
             "number": self._lower_const_literal,

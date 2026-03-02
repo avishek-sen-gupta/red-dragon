@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-from tree_sitter_language_pack import get_parser
-
 from interpreter.frontends.javascript import JavaScriptFrontend
+from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
 def _parse_js(source: str) -> list[IRInstruction]:
-    parser = get_parser("javascript")
-    tree = parser.parse(source.encode("utf-8"))
-    frontend = JavaScriptFrontend()
-    return frontend.lower(tree, source.encode("utf-8"))
+    frontend = JavaScriptFrontend(TreeSitterParserFactory(), "javascript")
+    return frontend.lower(source.encode("utf-8"))
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:

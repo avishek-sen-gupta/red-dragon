@@ -6,7 +6,9 @@ import logging
 from typing import Callable
 
 from ._base import BaseFrontend
+from ..frontend_observer import FrontendObserver, NullFrontendObserver
 from ..ir import Opcode
+from ..parser import ParserFactory
 from .. import constants
 
 logger = logging.getLogger(__name__)
@@ -18,8 +20,13 @@ class KotlinFrontend(BaseFrontend):
     COMMENT_TYPES = frozenset({"comment", "multiline_comment", "line_comment"})
     NOISE_TYPES = frozenset({"\n"})
 
-    def __init__(self):
-        super().__init__()
+    def __init__(
+        self,
+        parser_factory: ParserFactory,
+        language: str,
+        observer: FrontendObserver = NullFrontendObserver(),
+    ):
+        super().__init__(parser_factory, language, observer)
         self._EXPR_DISPATCH: dict[str, Callable] = {
             "simple_identifier": self._lower_identifier,
             "integer_literal": self._lower_const_literal,

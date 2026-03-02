@@ -77,7 +77,7 @@ class TestDataDivisionLowering:
             ],
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
 
         allocs = _find_opcodes(instructions, Opcode.ALLOC_REGION)
         assert len(allocs) == 1
@@ -97,7 +97,7 @@ class TestDataDivisionLowering:
             ],
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
 
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) >= 1  # At least one WRITE_REGION for initial value
@@ -111,7 +111,7 @@ class TestDataDivisionLowering:
             ],
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
 
         labels = _find_opcodes(instructions, Opcode.LABEL)
         label_names = [inst.label for inst in labels]
@@ -138,7 +138,7 @@ class TestDataDivisionLowering:
             ],
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
 
         allocs = _find_opcodes(instructions, Opcode.ALLOC_REGION)
         assert allocs[0].operands[0] == 8  # 5 + 3
@@ -165,7 +165,7 @@ class TestDataDivisionLowering:
             ],
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
 
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) >= 2  # One for each field with a VALUE
@@ -182,7 +182,7 @@ class TestProcedureDivisionLowering:
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        return frontend.lower(None, b"")
+        return frontend.lower(b"")
 
     def test_move_literal_to_field(self):
         fields = [
@@ -390,7 +390,7 @@ class TestProcedureDivisionLowering:
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
 
         resume_conts = _find_opcodes(instructions, Opcode.RESUME_CONTINUATION)
         assert len(resume_conts) >= 1
@@ -426,7 +426,7 @@ class TestProcedureDivisionLowering:
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
 
         labels = _find_opcodes(instructions, Opcode.LABEL)
         label_names = [inst.label for inst in labels]
@@ -446,7 +446,7 @@ class TestComputeLowering:
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        return frontend.lower(None, b"")
+        return frontend.lower(b"")
 
     def test_compute_simple_addition(self):
         fields = [
@@ -598,7 +598,7 @@ class TestPerformLoopLowering:
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)] + paragraphs,
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        return frontend.lower(None, b"")
+        return frontend.lower(b"")
 
     def test_perform_times_inline_emits_counter_loop(self):
         fields = [
@@ -776,7 +776,7 @@ class TestSectionPerform:
             ],
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
 
         # Should branch to section_WORK-SECTION
         branches = _find_opcodes(instructions, Opcode.BRANCH)
@@ -813,7 +813,7 @@ class TestSectionPerform:
             ],
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
 
         resume_conts = _find_opcodes(instructions, Opcode.RESUME_CONTINUATION)
         resume_names = [inst.operands[0] for inst in resume_conts]
@@ -833,7 +833,7 @@ class TestTier1Lowering:
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        return frontend.lower(None, b"")
+        return frontend.lower(b"")
 
     def test_continue_emits_nothing(self):
         fields = [
@@ -985,7 +985,7 @@ class TestTier2Lowering:
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        return frontend.lower(None, b"")
+        return frontend.lower(b"")
 
     def test_string_produces_write_to_target(self):
         fields = [
@@ -1193,7 +1193,7 @@ class TestSearchLowering:
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        return frontend.lower(None, b"")
+        return frontend.lower(b"")
 
     def test_search_emits_loop_structure(self):
         """SEARCH should emit BRANCH_IF for bound check and WHEN conditions."""
@@ -1336,7 +1336,7 @@ class TestCallAlterEntryCancelLowering:
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        return frontend.lower(None, b"")
+        return frontend.lower(b"")
 
     def test_call_emits_call_function(self):
         """CALL should emit CALL_FUNCTION with program name."""

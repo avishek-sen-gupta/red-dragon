@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-from tree_sitter_language_pack import get_parser
-
 from interpreter.frontends.ruby import RubyFrontend
+from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
 def _parse_ruby(source: str) -> list[IRInstruction]:
-    parser = get_parser("ruby")
-    tree = parser.parse(source.encode("utf-8"))
-    frontend = RubyFrontend()
-    return frontend.lower(tree, source.encode("utf-8"))
+    frontend = RubyFrontend(TreeSitterParserFactory(), "ruby")
+    return frontend.lower(source.encode("utf-8"))
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:

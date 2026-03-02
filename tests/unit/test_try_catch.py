@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-import tree_sitter_language_pack
 
 from interpreter.frontends.python import PythonFrontend
 from interpreter.frontends.javascript import JavaScriptFrontend
@@ -16,13 +15,12 @@ from interpreter.frontends.kotlin import KotlinFrontend
 from interpreter.frontends.scala import ScalaFrontend
 from interpreter.frontends.ruby import RubyFrontend
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.parser import TreeSitterParserFactory
 
 
 def _parse_and_lower(source: str, language: str, frontend) -> list[IRInstruction]:
-    parser = tree_sitter_language_pack.get_parser(language)
     source_bytes = source.encode("utf-8")
-    tree = parser.parse(source_bytes)
-    return frontend.lower(tree, source_bytes)
+    return frontend.lower(source_bytes)
 
 
 def _find_all(instructions: list[IRInstruction], opcode: Opcode) -> list[IRInstruction]:
@@ -57,7 +55,7 @@ class TestBasicTryCatch:
         ir = _parse_and_lower(
             "try:\n    x = risky()\nexcept Exception as e:\n    y = handle(e)\n",
             "python",
-            PythonFrontend(),
+            PythonFrontend(TreeSitterParserFactory(), "python"),
         )
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
@@ -74,7 +72,7 @@ class TestBasicTryCatch:
         ir = _parse_and_lower(
             "try { let x = risky(); } catch (e) { let y = handle(e); }",
             "javascript",
-            JavaScriptFrontend(),
+            JavaScriptFrontend(TreeSitterParserFactory(), "javascript"),
         )
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
@@ -85,7 +83,7 @@ class TestBasicTryCatch:
         ir = _parse_and_lower(
             "class T { void m() { try { int x = risky(); } catch (Exception e) { handle(e); } } }",
             "java",
-            JavaFrontend(),
+            JavaFrontend(TreeSitterParserFactory(), "java"),
         )
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
@@ -95,7 +93,7 @@ class TestBasicTryCatch:
         ir = _parse_and_lower(
             "int main() { try { int x = risky(); } catch (const std::exception& e) { handle(); } }",
             "cpp",
-            CppFrontend(),
+            CppFrontend(TreeSitterParserFactory(), "cpp"),
         )
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
@@ -105,7 +103,7 @@ class TestBasicTryCatch:
         ir = _parse_and_lower(
             "try { int x = RiskyOp(); } catch (Exception e) { Handle(e); }",
             "csharp",
-            CSharpFrontend(),
+            CSharpFrontend(TreeSitterParserFactory(), "csharp"),
         )
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
@@ -115,7 +113,7 @@ class TestBasicTryCatch:
         ir = _parse_and_lower(
             "<?php try { $x = risky(); } catch (Exception $e) { handle($e); } ?>",
             "php",
-            PhpFrontend(),
+            PhpFrontend(TreeSitterParserFactory(), "php"),
         )
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
@@ -125,7 +123,7 @@ class TestBasicTryCatch:
         ir = _parse_and_lower(
             "fun f() { try { val x = risky() } catch (e: Exception) { handle(e) } }",
             "kotlin",
-            KotlinFrontend(),
+            KotlinFrontend(TreeSitterParserFactory(), "kotlin"),
         )
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
@@ -135,7 +133,7 @@ class TestBasicTryCatch:
         ir = _parse_and_lower(
             "begin\n  x = risky()\nrescue StandardError => e\n  handle(e)\nend\n",
             "ruby",
-            RubyFrontend(),
+            RubyFrontend(TreeSitterParserFactory(), "ruby"),
         )
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
@@ -150,7 +148,7 @@ class TestTryFinallyOnly:
         ir = _parse_and_lower(
             "try:\n    x = risky()\nfinally:\n    cleanup()\n",
             "python",
-            PythonFrontend(),
+            PythonFrontend(TreeSitterParserFactory(), "python"),
         )
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
@@ -166,7 +164,7 @@ class TestTryFinallyOnly:
         ir = _parse_and_lower(
             "try { risky(); } finally { cleanup(); }",
             "javascript",
-            JavaScriptFrontend(),
+            JavaScriptFrontend(TreeSitterParserFactory(), "javascript"),
         )
         labels = _labels(ir)
         assert any("try_finally" in l for l in labels)
@@ -175,7 +173,7 @@ class TestTryFinallyOnly:
         ir = _parse_and_lower(
             "class T { void m() { try { risky(); } finally { cleanup(); } } }",
             "java",
-            JavaFrontend(),
+            JavaFrontend(TreeSitterParserFactory(), "java"),
         )
         labels = _labels(ir)
         assert any("try_finally" in l for l in labels)
@@ -189,7 +187,7 @@ class TestTryCatchFinally:
         ir = _parse_and_lower(
             "try:\n    x = risky()\nexcept Exception as e:\n    handle(e)\nfinally:\n    cleanup()\n",
             "python",
-            PythonFrontend(),
+            PythonFrontend(TreeSitterParserFactory(), "python"),
         )
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
@@ -205,7 +203,7 @@ class TestTryCatchFinally:
         ir = _parse_and_lower(
             "try { risky(); } catch (e) { handle(e); } finally { cleanup(); }",
             "javascript",
-            JavaScriptFrontend(),
+            JavaScriptFrontend(TreeSitterParserFactory(), "javascript"),
         )
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
@@ -216,7 +214,7 @@ class TestTryCatchFinally:
         ir = _parse_and_lower(
             "try { Risky(); } catch (Exception e) { Handle(e); } finally { Cleanup(); }",
             "csharp",
-            CSharpFrontend(),
+            CSharpFrontend(TreeSitterParserFactory(), "csharp"),
         )
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
@@ -227,7 +225,7 @@ class TestTryCatchFinally:
         ir = _parse_and_lower(
             "<?php try { risky(); } catch (Exception $e) { handle($e); } finally { cleanup(); } ?>",
             "php",
-            PhpFrontend(),
+            PhpFrontend(TreeSitterParserFactory(), "php"),
         )
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
@@ -238,7 +236,7 @@ class TestTryCatchFinally:
         ir = _parse_and_lower(
             "begin\n  risky()\nrescue => e\n  handle(e)\nensure\n  cleanup()\nend\n",
             "ruby",
-            RubyFrontend(),
+            RubyFrontend(TreeSitterParserFactory(), "ruby"),
         )
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
@@ -266,7 +264,7 @@ class T {
 }
 """,
             "java",
-            JavaFrontend(),
+            JavaFrontend(TreeSitterParserFactory(), "java"),
         )
         labels = _labels(ir)
         assert any("catch_0" in l for l in labels)
@@ -286,7 +284,7 @@ try {
 }
 """,
             "csharp",
-            CSharpFrontend(),
+            CSharpFrontend(TreeSitterParserFactory(), "csharp"),
         )
         labels = _labels(ir)
         assert any("catch_0" in l for l in labels)
@@ -296,7 +294,7 @@ try {
         ir = _parse_and_lower(
             "<?php try { risky(); } catch (IOException $e) { handleIO($e); } catch (Exception $e) { handleGeneral($e); } ?>",
             "php",
-            PhpFrontend(),
+            PhpFrontend(TreeSitterParserFactory(), "php"),
         )
         labels = _labels(ir)
         assert any("catch_0" in l for l in labels)
@@ -306,7 +304,7 @@ try {
         ir = _parse_and_lower(
             "try:\n    risky()\nexcept ValueError as e:\n    handle_value(e)\nexcept Exception as e:\n    handle_general(e)\n",
             "python",
-            PythonFrontend(),
+            PythonFrontend(TreeSitterParserFactory(), "python"),
         )
         labels = _labels(ir)
         assert any("catch_0" in l for l in labels)
@@ -323,7 +321,7 @@ class TestCatchWithoutVariable:
         ir = _parse_and_lower(
             "int main() { try { risky(); } catch (...) { fallback(); } }",
             "cpp",
-            CppFrontend(),
+            CppFrontend(TreeSitterParserFactory(), "cpp"),
         )
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
@@ -349,7 +347,7 @@ class TestCatchWithoutVariable:
         ir = _parse_and_lower(
             "try:\n    risky()\nexcept:\n    handle()\n",
             "python",
-            PythonFrontend(),
+            PythonFrontend(TreeSitterParserFactory(), "python"),
         )
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
@@ -364,7 +362,7 @@ class TestPythonElseClause:
         ir = _parse_and_lower(
             "try:\n    risky()\nexcept Exception:\n    handle()\nelse:\n    success()\n",
             "python",
-            PythonFrontend(),
+            PythonFrontend(TreeSitterParserFactory(), "python"),
         )
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
@@ -375,7 +373,7 @@ class TestPythonElseClause:
         ir = _parse_and_lower(
             "try:\n    risky()\nexcept Exception:\n    handle()\nelse:\n    success()\nfinally:\n    cleanup()\n",
             "python",
-            PythonFrontend(),
+            PythonFrontend(TreeSitterParserFactory(), "python"),
         )
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
@@ -407,7 +405,7 @@ class T {
 }
 """,
             "java",
-            JavaFrontend(),
+            JavaFrontend(TreeSitterParserFactory(), "java"),
         )
         labels = _labels(ir)
         try_body_labels = [l for l in labels if "try_body" in l]
@@ -419,7 +417,7 @@ class T {
         ir = _parse_and_lower(
             "try:\n    try:\n        risky()\n    except ValueError:\n        inner()\nexcept Exception:\n    outer()\n",
             "python",
-            PythonFrontend(),
+            PythonFrontend(TreeSitterParserFactory(), "python"),
         )
         labels = _labels(ir)
         try_body_labels = [l for l in labels if "try_body" in l]
@@ -434,7 +432,7 @@ class TestCatchBodyLowered:
         ir = _parse_and_lower(
             "class T { void m() { try { risky(); } catch (Exception e) { handle(e); } } }",
             "java",
-            JavaFrontend(),
+            JavaFrontend(TreeSitterParserFactory(), "java"),
         )
         # The catch body should contain a CALL_FUNCTION for handle(e)
         calls = [i for i in ir if i.opcode == Opcode.CALL_FUNCTION]
@@ -445,7 +443,7 @@ class TestCatchBodyLowered:
         ir = _parse_and_lower(
             "try:\n    risky()\nexcept Exception as e:\n    handle(e)\n",
             "python",
-            PythonFrontend(),
+            PythonFrontend(TreeSitterParserFactory(), "python"),
         )
         calls = [i for i in ir if i.opcode == Opcode.CALL_FUNCTION]
         call_names = [i.operands[0] for i in calls]
@@ -461,32 +459,32 @@ class TestNoSymbolicPlaceholders:
         [
             (
                 "java",
-                JavaFrontend(),
+                JavaFrontend(TreeSitterParserFactory(), "java"),
                 "class T { void m() { try { risky(); } catch (Exception e) { handle(); } } }",
             ),
             (
                 "cpp",
-                CppFrontend(),
+                CppFrontend(TreeSitterParserFactory(), "cpp"),
                 "int main() { try { risky(); } catch (...) { handle(); } }",
             ),
             (
                 "csharp",
-                CSharpFrontend(),
+                CSharpFrontend(TreeSitterParserFactory(), "csharp"),
                 "try { Risky(); } catch (Exception e) { Handle(); }",
             ),
             (
                 "php",
-                PhpFrontend(),
+                PhpFrontend(TreeSitterParserFactory(), "php"),
                 "<?php try { risky(); } catch (Exception $e) { handle(); } ?>",
             ),
             (
                 "javascript",
-                JavaScriptFrontend(),
+                JavaScriptFrontend(TreeSitterParserFactory(), "javascript"),
                 "try { risky(); } catch (e) { handle(); }",
             ),
             (
                 "python",
-                PythonFrontend(),
+                PythonFrontend(TreeSitterParserFactory(), "python"),
                 "try:\n    risky()\nexcept Exception as e:\n    handle()\n",
             ),
         ],
@@ -514,37 +512,37 @@ class TestCrossLanguageTryCatch:
         [
             (
                 "python",
-                PythonFrontend(),
+                PythonFrontend(TreeSitterParserFactory(), "python"),
                 "try:\n    risky()\nexcept Exception:\n    handle()\n",
             ),
             (
                 "javascript",
-                JavaScriptFrontend(),
+                JavaScriptFrontend(TreeSitterParserFactory(), "javascript"),
                 "try { risky(); } catch (e) { handle(); }",
             ),
             (
                 "java",
-                JavaFrontend(),
+                JavaFrontend(TreeSitterParserFactory(), "java"),
                 "class T { void m() { try { risky(); } catch (Exception e) { handle(); } } }",
             ),
             (
                 "cpp",
-                CppFrontend(),
+                CppFrontend(TreeSitterParserFactory(), "cpp"),
                 "int main() { try { risky(); } catch (...) { handle(); } }",
             ),
             (
                 "csharp",
-                CSharpFrontend(),
+                CSharpFrontend(TreeSitterParserFactory(), "csharp"),
                 "try { Risky(); } catch (Exception e) { Handle(); }",
             ),
             (
                 "php",
-                PhpFrontend(),
+                PhpFrontend(TreeSitterParserFactory(), "php"),
                 "<?php try { risky(); } catch (Exception $e) { handle(); } ?>",
             ),
             (
                 "ruby",
-                RubyFrontend(),
+                RubyFrontend(TreeSitterParserFactory(), "ruby"),
                 "begin\n  risky()\nrescue => e\n  handle()\nend\n",
             ),
         ],

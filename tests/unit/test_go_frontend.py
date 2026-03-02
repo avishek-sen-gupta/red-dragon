@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
-import tree_sitter_language_pack
-
 from interpreter.frontends.go import GoFrontend
+from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
 
 
 def _parse_and_lower(source: str) -> list[IRInstruction]:
-    parser = tree_sitter_language_pack.get_parser("go")
-    source_bytes = source.encode("utf-8")
-    tree = parser.parse(source_bytes)
-    frontend = GoFrontend()
-    return frontend.lower(tree, source_bytes)
+    frontend = GoFrontend(TreeSitterParserFactory(), "go")
+    return frontend.lower(source.encode("utf-8"))
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:

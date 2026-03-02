@@ -320,7 +320,7 @@ def _run_pass3_runtime() -> tuple[list[str], bool]:
 
         parser = ProLeapCobolParser(RealSubprocessRunner(), bridge_jar)
         frontend = CobolFrontend(parser)
-        frontend.lower(None, _COBOL_SAMPLE.encode("utf-8"))
+        frontend.lower(_COBOL_SAMPLE.encode("utf-8"))
     except Exception as exc:
         logger.warning("Pass 3 runtime error: %s", exc)
     finally:

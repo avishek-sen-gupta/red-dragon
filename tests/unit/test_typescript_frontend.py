@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-from tree_sitter_language_pack import get_parser
-
 from interpreter.frontends.typescript import TypeScriptFrontend
+from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
 
 
 def _parse_ts(source: str) -> list[IRInstruction]:
-    parser = get_parser("typescript")
-    tree = parser.parse(source.encode("utf-8"))
-    frontend = TypeScriptFrontend()
-    return frontend.lower(tree, source.encode("utf-8"))
+    frontend = TypeScriptFrontend(TreeSitterParserFactory(), "typescript")
+    return frontend.lower(source.encode("utf-8"))
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:

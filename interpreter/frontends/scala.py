@@ -6,7 +6,9 @@ import logging
 from typing import Callable
 
 from ._base import BaseFrontend
+from ..frontend_observer import FrontendObserver, NullFrontendObserver
 from ..ir import Opcode
+from ..parser import ParserFactory
 from .. import constants
 
 logger = logging.getLogger(__name__)
@@ -32,8 +34,13 @@ class ScalaFrontend(BaseFrontend):
 
     BLOCK_NODE_TYPES = frozenset({"block"})
 
-    def __init__(self):
-        super().__init__()
+    def __init__(
+        self,
+        parser_factory: ParserFactory,
+        language: str,
+        observer: FrontendObserver = NullFrontendObserver(),
+    ):
+        super().__init__(parser_factory, language, observer)
         self._EXPR_DISPATCH: dict[str, Callable] = {
             "identifier": self._lower_identifier,
             "integer_literal": self._lower_const_literal,

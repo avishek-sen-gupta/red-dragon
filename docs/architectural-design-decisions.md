@@ -815,3 +815,23 @@ Benefits:
 **Consequences:** Full pipeline coverage from real COBOL source code. Bridge now correctly serializes MULTIPLY/DIVIDE GIVING and EVALUATE/WHEN/WHEN OTHER. Integration tests are self-contained (inline COBOL) and skip gracefully in CI without the JAR.
 
 **Update (2026-03-02):** Extended from 15 to 29 integration tests. Added coverage for INITIALIZE, SET (TO/UP BY/DOWN BY), SEARCH (WHEN match + AT END), INSPECT (TALLYING + REPLACING), CALL (symbolic), STRING (concatenation), and UNSTRING (splitting). Fixed two bugs discovered during expansion: (1) `_lower_string` stored register *names* as literal constants via `_const_to_reg(part_regs)` instead of folding pairwise — added `__string_concat_pair` builtin. (2) `_lower_unstring` passed COBOL figurative constant "SPACES" as literal text — added `_translate_cobol_figurative()` lookup. Full coverage matrix documented in `docs/frontend-design/cobol.md`.
+
+---
+
+### ADR-039: Internalise parsing in Frontend.lower() (2026-03-02)
+
+**Context:** `Frontend.lower(tree, source)` required callers to pre-parse source code with tree-sitter and pass the tree. This leaked parsing responsibility into orchestrators (`api.py`, `run.py`), forced every new frontend type (COBOL, LLM) to accept a `tree` parameter it ignored, and created three separate code paths in `run.py` for deterministic/LLM/COBOL frontends.
+
+**Decision:** Each frontend now owns its parsing. The signature changed from `lower(self, tree, source: bytes)` to `lower(self, source: bytes)`. Key changes:
+
+1. **`FrontendObserver` protocol** (`frontend_observer.py`) — timing callbacks `on_parse(duration)` and `on_lower(duration)` with a `NullFrontendObserver` default. Replaces the external timing that `run.py` previously performed around its own parse calls.
+
+2. **`BaseFrontend`** — constructor now accepts `(parser_factory: ParserFactory, language: str, observer)`. `lower()` calls `parser_factory.get_parser(language).parse(source)` internally, timing both phases via the observer.
+
+3. **All 15 language frontends** — constructors updated to accept and forward `(parser_factory, language, observer)`. Lua's redundant `lower()` override removed.
+
+4. **Non-deterministic frontends** — `CobolFrontend`, `LLMFrontend`, `ChunkedLLMFrontend` drop the `tree` parameter. `ChunkedLLMFrontend` always parses internally (removed the `if tree is None` branch).
+
+5. **Orchestrators** — `api.py:lower_source()` collapsed from three branches to a single `get_frontend(...).lower(source_bytes)`. `run.py:run()` uses a `_StatsObserver` and a single `get_frontend()` call, eliminating the three-branch dispatch.
+
+**Consequences:** Single uniform API for all frontend types. Orchestrators no longer need to know which frontends use tree-sitter. Adding a new frontend type only requires implementing `lower(source: bytes)`. Timing is handled internally via the observer pattern rather than externally in the orchestrator. Trade-off: each `BaseFrontend` subclass now carries a `parser_factory` and `language` field, adding constructor boilerplate.

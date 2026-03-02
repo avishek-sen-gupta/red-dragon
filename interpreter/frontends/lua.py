@@ -6,7 +6,9 @@ import logging
 from typing import Callable
 
 from ._base import BaseFrontend
+from ..frontend_observer import FrontendObserver, NullFrontendObserver
 from ..ir import Opcode
+from ..parser import ParserFactory
 from .. import constants
 
 logger = logging.getLogger(__name__)
@@ -37,8 +39,13 @@ class LuaFrontend(BaseFrontend):
         "#": "#",
     }
 
-    def __init__(self):
-        super().__init__()
+    def __init__(
+        self,
+        parser_factory: ParserFactory,
+        language: str,
+        observer: FrontendObserver = NullFrontendObserver(),
+    ):
+        super().__init__(parser_factory, language, observer)
         self._EXPR_DISPATCH: dict[str, Callable] = {
             "identifier": self._lower_identifier,
             "number": self._lower_const_literal,
@@ -76,21 +83,6 @@ class LuaFrontend(BaseFrontend):
             "goto_statement": self._lower_lua_goto,
             "label_statement": self._lower_lua_label,
         }
-
-    # -- Lua: entry point override --------------------------------------------------
-
-    def lower(self, tree, source: bytes):
-        """Override to handle Lua's chunk root node."""
-        self._reg_counter = 0
-        self._label_counter = 0
-        self._instructions = []
-        self._source = source
-        self._loop_stack = []
-        self._break_target_stack = []
-        root = tree.root_node
-        self._emit(Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)
-        self._lower_block(root)
-        return self._instructions
 
     # -- Lua: variable declaration (local x = expr) --------------------------------
 

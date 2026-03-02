@@ -8,8 +8,8 @@
 
 **RedDragon** is a multi-language source code analysis toolkit that:
 
-- **Parses** source in 15 languages via tree-sitter, COBOL via ProLeap parser bridge, or any language via LLM-based lowering (including chunked lowering for large files)
-- **Lowers** to a universal flattened three-address code IR (~24 opcodes, including 3 byte-addressed memory region opcodes and 2 named continuation opcodes) with structured source location traceability (every IR instruction from deterministic frontends carries its originating AST span; LLM frontends lack AST nodes and produce `NO_SOURCE_LOCATION`) — the LLM frontend uses the LLM as a **compiler frontend**, constrained by a formal IR schema with concrete patterns
+- **Parses and lowers** source in 15 languages via tree-sitter, COBOL via ProLeap parser bridge, or any language via LLM-based lowering (including chunked lowering for large files) — each frontend owns its parsing internally; callers only provide `source: bytes`
+- **Produces** a universal flattened three-address code IR (~24 opcodes, including 3 byte-addressed memory region opcodes and 2 named continuation opcodes) with structured source location traceability (every IR instruction from deterministic frontends carries its originating AST span; LLM frontends lack AST nodes and produce `NO_SOURCE_LOCATION`) — the LLM frontend uses the LLM as a **compiler frontend**, constrained by a formal IR schema with concrete patterns
 - **Builds** control flow graphs from IR instructions
 - **Analyses** data flow via iterative reaching definitions, def-use chains, and variable dependency graphs
 - **Executes** programs symbolically via a deterministic VM — tracking data flow through incomplete programs with missing imports or unknown externals entirely without LLM calls — with a configurable **LLM plausible-value resolver** that can replace symbolic placeholders with concrete values for unresolved function/method calls

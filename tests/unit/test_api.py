@@ -177,8 +177,8 @@ class FakeFrontend:
         self.instructions = instructions
         self.lower_calls: list[tuple] = []
 
-    def lower(self, tree, source_bytes):
-        self.lower_calls.append((tree, source_bytes))
+    def lower(self, source_bytes):
+        self.lower_calls.append((source_bytes,))
         return self.instructions
 
 
