@@ -1,6 +1,6 @@
 # COBOL Frontend
 
-> `interpreter/cobol/cobol_frontend.py` · Extends `Frontend` directly · ~1470 lines
+> `interpreter/cobol/cobol_frontend.py` · Extends `Frontend` directly · ~1590 lines
 
 ## Overview
 
@@ -42,7 +42,8 @@ The pipeline has three layers, each independently testable:
 | File | Purpose |
 |------|---------|
 | `cobol_frontend.py` | Main frontend: DATA DIVISION allocation, PROCEDURE DIVISION lowering |
-| `cobol_statements.py` | Typed statement hierarchy — 20 frozen dataclasses + union type |
+| `cobol_statements.py` | Typed statement hierarchy — 25 frozen dataclasses + union type |
+| `io_provider.py` | Injectable I/O provider: `CobolIOProvider` ABC, `NullIOProvider`, `StubIOProvider` |
 | `cobol_expression.py` | Recursive-descent expression parser for COMPUTE |
 | `cobol_parser.py` | Subprocess bridge to ProLeap JAR |
 | `asg_types.py` | `CobolASG`, `CobolSection`, `CobolParagraph`, `CobolField` |
@@ -77,7 +78,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 
 ## Statement Coverage
 
-24 of 51 ProLeap statement types are fully handled (bridge → dispatch → lowering):
+29 of 51 ProLeap statement types are handled (24 fully deterministic + 5 I/O stub via injectable provider):
 
 ### Arithmetic (6 types)
 
@@ -137,9 +138,21 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | `ENTRY 'name'` | `LABEL entry_name` (alternate subprogram entry point) |
 | `CANCEL prog` | No-op for static analysis (program state invalidation has no data-flow effect) |
 
-### Remaining 27 types
+### I/O (5 types — HANDLED_STUB)
 
-Not yet implemented in the bridge. Includes I/O (READ, WRITE, OPEN, CLOSE), communication (SEND, RECEIVE), embedded SQL (EXEC SQL), and less common statements (GENERATE, etc.).
+| Statement | IR Pattern |
+|---|---|
+| `ACCEPT var` | `CALL_FUNCTION __cobol_accept(device)` → encode result → `WRITE_REGION` to target field |
+| `OPEN mode file` | `CALL_FUNCTION __cobol_open_file(filename, mode)` per file |
+| `CLOSE file` | `CALL_FUNCTION __cobol_close_file(filename)` per file |
+| `READ file INTO var` | `CALL_FUNCTION __cobol_read_record(filename)` → encode → `WRITE_REGION` to INTO target |
+| `WRITE rec FROM var` | Decode FROM field → `CALL_FUNCTION __cobol_write_record(filename, data)` |
+
+I/O statements dispatch to an injectable `CobolIOProvider` (ABC in `io_provider.py`). `NullIOProvider` returns `UNCOMPUTABLE` (symbolic fallthrough). `StubIOProvider` returns queued test data for concrete execution without real files or console. Provider is injected via `VMConfig(io_provider=stub)`.
+
+### Remaining 22 types
+
+Not yet implemented in the bridge. Includes communication (SEND, RECEIVE), embedded SQL (EXEC SQL), and less common statements (GENERATE, DELETE, SORT, etc.).
 
 ## PERFORM Semantics
 
@@ -231,8 +244,9 @@ Output is a per-type coverage matrix showing HANDLED / DISPATCH_MISSING / NOT_LO
 
 Tests are in `tests/unit/test_cobol_*.py`:
 
-- **Statement hierarchy**: dispatch + round-trip for all 24 handled types
+- **Statement hierarchy**: dispatch + round-trip for all 29 handled types
 - **Frontend lowering**: per-statement IR verification (opcode presence, WRITE_REGION counts, loop structure)
+- **I/O provider**: NullIOProvider/StubIOProvider unit tests, executor integration tests (concrete/symbolic dispatch)
 - **PIC parsing**: `pic_parser.py` coverage
 - **Data layout**: offset/length computation
 - **Expression parser**: COMPUTE expression trees

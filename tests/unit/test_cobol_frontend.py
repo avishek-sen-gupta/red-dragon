@@ -9,12 +9,14 @@ from interpreter.cobol.asg_types import (
 )
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.cobol_statements import (
+    AcceptStatement,
     AlterStatement,
     AlterProceedTo,
     ArithmeticStatement,
     CallStatement,
     CallUsingParam,
     CancelStatement,
+    CloseStatement,
     CobolStatementType,
     ComputeStatement,
     ContinueStatement,
@@ -26,10 +28,12 @@ from interpreter.cobol.cobol_statements import (
     InitializeStatement,
     InspectStatement,
     MoveStatement,
+    OpenStatement,
     PerformStatement,
     PerformTimesSpec,
     PerformUntilSpec,
     PerformVaryingSpec,
+    ReadStatement,
     Replacing,
     SearchStatement,
     SearchWhen,
@@ -39,6 +43,7 @@ from interpreter.cobol.cobol_statements import (
     StringStatement,
     TallyingFor,
     UnstringStatement,
+    WriteStatement,
 )
 from interpreter.ir import IRInstruction, Opcode
 
@@ -1430,3 +1435,123 @@ class TestCallAlterEntryCancelLowering:
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
         assert len(writes) == 0
         assert len(calls) == 0
+
+    # ── I/O Statement Tests ──────────────────────────────────────────
+
+    def test_accept_emits_cobol_accept_call(self):
+        """ACCEPT should emit CALL_FUNCTION __cobol_accept."""
+        fields = [
+            CobolField(
+                name="WS-INPUT", level=77, pic="X(10)", usage="DISPLAY", offset=0
+            ),
+        ]
+        stmts = [AcceptStatement(target="WS-INPUT", from_device="CONSOLE")]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        accept_calls = [
+            c for c in calls if c.operands and c.operands[0] == "__cobol_accept"
+        ]
+        assert len(accept_calls) == 1
+
+    def test_accept_writes_to_target_field(self):
+        """ACCEPT with a target field should emit WRITE_REGION."""
+        fields = [
+            CobolField(
+                name="WS-INPUT", level=77, pic="X(10)", usage="DISPLAY", offset=0
+            ),
+        ]
+        stmts = [AcceptStatement(target="WS-INPUT")]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) >= 1
+
+    def test_open_emits_cobol_open_for_each_file(self):
+        """OPEN should emit CALL_FUNCTION __cobol_open_file for each file."""
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
+        ]
+        stmts = [OpenStatement(mode="INPUT", files=["FILE-A", "FILE-B"])]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        open_calls = [
+            c for c in calls if c.operands and c.operands[0] == "__cobol_open_file"
+        ]
+        assert len(open_calls) == 2
+
+    def test_close_emits_cobol_close_for_each_file(self):
+        """CLOSE should emit CALL_FUNCTION __cobol_close_file for each file."""
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
+        ]
+        stmts = [CloseStatement(files=["FILE-A", "FILE-B"])]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        close_calls = [
+            c for c in calls if c.operands and c.operands[0] == "__cobol_close_file"
+        ]
+        assert len(close_calls) == 2
+
+    def test_read_emits_cobol_read_record(self):
+        """READ should emit CALL_FUNCTION __cobol_read_record."""
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
+        ]
+        stmts = [ReadStatement(file_name="CUST-FILE")]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        read_calls = [
+            c for c in calls if c.operands and c.operands[0] == "__cobol_read_record"
+        ]
+        assert len(read_calls) == 1
+
+    def test_read_with_into_writes_to_field(self):
+        """READ INTO should write result to target field."""
+        fields = [
+            CobolField(
+                name="WS-RECORD", level=77, pic="X(10)", usage="DISPLAY", offset=0
+            ),
+        ]
+        stmts = [ReadStatement(file_name="CUST-FILE", into="WS-RECORD")]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) >= 1
+
+    def test_write_emits_cobol_write_record(self):
+        """WRITE should emit CALL_FUNCTION __cobol_write_record."""
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
+        ]
+        stmts = [WriteStatement(record_name="CUST-REC")]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        write_calls = [
+            c for c in calls if c.operands and c.operands[0] == "__cobol_write_record"
+        ]
+        assert len(write_calls) == 1
+
+    def test_write_from_field_decodes_source(self):
+        """WRITE FROM field should decode the source field."""
+        fields = [
+            CobolField(
+                name="WS-OUTPUT", level=77, pic="X(10)", usage="DISPLAY", offset=0
+            ),
+        ]
+        stmts = [WriteStatement(record_name="CUST-REC", from_field="WS-OUTPUT")]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should have LOAD_REGION for decoding the source field
+        loads = _find_opcodes(instructions, Opcode.LOAD_REGION)
+        assert len(loads) >= 1
+        # And a CALL_FUNCTION for __cobol_write_record
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        write_calls = [
+            c for c in calls if c.operands and c.operands[0] == "__cobol_write_record"
+        ]
+        assert len(write_calls) == 1

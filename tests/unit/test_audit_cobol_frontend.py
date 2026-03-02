@@ -41,8 +41,15 @@ class TestClassifyType:
         assert _classify_type("IF") == StatusCategory.HANDLED
 
     def test_bridge_unknown_type(self):
-        assert _classify_type("ACCEPT") == StatusCategory.BRIDGE_UNKNOWN
-        assert _classify_type("READ") == StatusCategory.BRIDGE_UNKNOWN
+        assert _classify_type("DELETE") == StatusCategory.BRIDGE_UNKNOWN
+        assert _classify_type("SORT") == StatusCategory.BRIDGE_UNKNOWN
+
+    def test_io_types_handled_stub(self):
+        assert _classify_type("ACCEPT") == StatusCategory.HANDLED_STUB
+        assert _classify_type("READ") == StatusCategory.HANDLED_STUB
+        assert _classify_type("WRITE") == StatusCategory.HANDLED_STUB
+        assert _classify_type("OPEN") == StatusCategory.HANDLED_STUB
+        assert _classify_type("CLOSE") == StatusCategory.HANDLED_STUB
 
     def test_call_is_handled(self):
         assert _classify_type("CALL") == StatusCategory.HANDLED
@@ -53,6 +60,7 @@ class TestClassifyType:
     def test_all_proleap_types_classifiable(self):
         valid_statuses = {
             StatusCategory.HANDLED,
+            StatusCategory.HANDLED_STUB,
             StatusCategory.BRIDGE_ONLY,
             StatusCategory.BRIDGE_UNKNOWN,
             StatusCategory.DISPATCH_MISSING,
