@@ -27,6 +27,7 @@ def build_cfg(instructions: list[IRInstruction]) -> CFG:
             Opcode.BRANCH_IF,
             Opcode.RETURN,
             Opcode.THROW,
+            Opcode.RESUME_CONTINUATION,
         ):
             if i + 1 < len(instructions):
                 block_starts.add(i + 1)
@@ -72,6 +73,11 @@ def build_cfg(instructions: list[IRInstruction]) -> CFG:
                 t = t.strip()
                 if t in cfg.blocks:
                     _add_edge(cfg, label, t)
+
+        elif last.opcode == Opcode.RESUME_CONTINUATION:
+            # Fall-through edge only; branch target is dynamic
+            if i + 1 < len(block_labels):
+                _add_edge(cfg, label, block_labels[i + 1])
 
         elif last.opcode in (Opcode.RETURN, Opcode.THROW):
             pass  # no successors
@@ -213,7 +219,7 @@ def _node_shape(block: BasicBlock, is_entry: bool) -> tuple[str, str]:
     if is_entry:
         return '(["', '"])'
     last = block.instructions[-1] if block.instructions else None
-    if last and last.opcode == Opcode.BRANCH_IF:
+    if last and last.opcode in (Opcode.BRANCH_IF, Opcode.RESUME_CONTINUATION):
         return '{"', '"}'
     if last and last.opcode in (Opcode.RETURN, Opcode.THROW):
         return '(["', '"])'

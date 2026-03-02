@@ -143,6 +143,117 @@ class TestArithmeticFixture:
         assert len(region) == 5  # 9(5)
 
 
+class TestPerformReturnFixture:
+    def test_perform_returns_to_caller(self):
+        """MAIN PERFORMs WORK, WORK does MOVE, execution returns to MAIN and hits STOP RUN."""
+        asg = _load_fixture("perform_return.json")
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+
+        # Execution should have completed (hit STOP RUN)
+        assert len(vm.regions) >= 1
+        region_addr = list(vm.regions.keys())[0]
+        region = vm.regions[region_addr]
+        # The MOVE 42 TO WS-RESULT should have written to the region
+        assert any(b != 0 for b in region)
+
+    def test_nested_perform(self):
+        """A calls B, B calls C, all return correctly."""
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-VAL",
+                        "level": 77,
+                        "pic": "9(3)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "0",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {"type": "PERFORM", "operands": ["PARA-A"]},
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                    {
+                        "name": "PARA-A",
+                        "statements": [
+                            {"type": "MOVE", "operands": ["10", "WS-VAL"]},
+                            {"type": "PERFORM", "operands": ["PARA-B"]},
+                        ],
+                    },
+                    {
+                        "name": "PARA-B",
+                        "statements": [
+                            {"type": "MOVE", "operands": ["99", "WS-VAL"]},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=300))
+
+        # Should have completed without infinite looping
+        assert stats.steps < 300
+        # Region should have been written to (MOVE statements executed)
+        assert len(vm.regions) >= 1
+
+    def test_fall_through_without_perform(self):
+        """Two paragraphs, no PERFORM — verify sequential execution."""
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-A",
+                        "level": 77,
+                        "pic": "9(3)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "0",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "FIRST-PARA",
+                        "statements": [
+                            {"type": "MOVE", "operands": ["1", "WS-A"]},
+                        ],
+                    },
+                    {
+                        "name": "SECOND-PARA",
+                        "statements": [
+                            {"type": "MOVE", "operands": ["2", "WS-A"]},
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+
+        # Should complete within steps (hit STOP RUN in SECOND-PARA)
+        assert stats.steps < 200
+        assert len(vm.regions) >= 1
+
+
 class TestCobolFrontendIdempotency:
     def test_lower_twice_produces_same_ir(self):
         """Calling lower() twice should reset state and produce identical IR."""

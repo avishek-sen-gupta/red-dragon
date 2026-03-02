@@ -482,6 +482,45 @@ def _handle_unop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionRe
     )
 
 
+# ── Continuation handlers ────────────────────────────────────────
+
+
+def _handle_set_continuation(
+    inst: IRInstruction, vm: VMState, **kwargs: Any
+) -> ExecutionResult:
+    """SET_CONTINUATION: operands = [name, label]. Write name → label into continuation table."""
+    name = inst.operands[0]
+    label = inst.operands[1]
+    return ExecutionResult.success(
+        StateUpdate(
+            continuation_writes={name: label},
+            reasoning=f"set_continuation {name} → {label}",
+        )
+    )
+
+
+def _handle_resume_continuation(
+    inst: IRInstruction, vm: VMState, **kwargs: Any
+) -> ExecutionResult:
+    """RESUME_CONTINUATION: operands = [name]. Branch to label if set, else fall through."""
+    name = inst.operands[0]
+    target = vm.continuations.get(name)
+    if target:
+        return ExecutionResult.success(
+            StateUpdate(
+                next_label=target,
+                continuation_clear=name,
+                reasoning=f"resume_continuation {name} → {target}",
+            )
+        )
+    return ExecutionResult.success(
+        StateUpdate(
+            continuation_clear=name,
+            reasoning=f"resume_continuation {name} (not set, fall through)",
+        )
+    )
+
+
 # ── Region handlers ──────────────────────────────────────────────
 
 
@@ -521,7 +560,15 @@ def _handle_write_region(
     length = inst.operands[2]
     value = _resolve_reg(vm, inst.operands[3])
 
-    if _is_symbolic(region_addr) or _is_symbolic(offset) or _is_symbolic(value):
+    has_symbolic_elements = isinstance(value, list) and any(
+        _is_symbolic(v) for v in value
+    )
+    if (
+        _is_symbolic(region_addr)
+        or _is_symbolic(offset)
+        or _is_symbolic(value)
+        or has_symbolic_elements
+    ):
         return ExecutionResult.success(
             StateUpdate(
                 reasoning=f"write_region(symbolic args) — no-op",
@@ -899,6 +946,8 @@ class LocalExecutor:
         Opcode.CALL_FUNCTION: _handle_call_function,
         Opcode.CALL_METHOD: _handle_call_method,
         Opcode.CALL_UNKNOWN: _handle_call_unknown,
+        Opcode.SET_CONTINUATION: _handle_set_continuation,
+        Opcode.RESUME_CONTINUATION: _handle_resume_continuation,
         Opcode.ALLOC_REGION: _handle_alloc_region,
         Opcode.WRITE_REGION: _handle_write_region,
         Opcode.LOAD_REGION: _handle_load_region,
