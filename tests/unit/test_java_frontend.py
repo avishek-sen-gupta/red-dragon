@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-from tree_sitter_language_pack import get_parser
-
 from interpreter.frontends.java import JavaFrontend
+from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
 
 
 def _parse_java(source: str) -> list[IRInstruction]:
-    parser = get_parser("java")
-    tree = parser.parse(source.encode("utf-8"))
-    frontend = JavaFrontend()
-    return frontend.lower(tree, source.encode("utf-8"))
+    frontend = JavaFrontend(TreeSitterParserFactory(), "java")
+    return frontend.lower(source.encode("utf-8"))
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:
@@ -718,7 +715,7 @@ class TestJavaScopedIdentifier:
 
     def test_scoped_identifier_dispatch_registered(self):
         """Verify scoped_identifier is registered in _EXPR_DISPATCH."""
-        frontend = JavaFrontend()
+        frontend = JavaFrontend(TreeSitterParserFactory(), "java")
         assert "scoped_identifier" in frontend._EXPR_DISPATCH
 
     def test_scoped_identifier_handler_emits_load_var(self):

@@ -8,8 +8,8 @@ import time
 from typing import Any
 
 from .ir import Opcode
-from .parser import Parser
 from .frontend import get_frontend
+from .frontend_observer import FrontendObserver
 from .cfg import CFG, build_cfg
 from .registry import build_registry, _parse_class_ref, FunctionRegistry
 from .executor import _try_execute_locally
@@ -452,36 +452,30 @@ def run(
     )
 
     # 1. Parse + Lower
-    t0 = time.perf_counter()
-    if language == "cobol" or frontend_type == constants.FRONTEND_COBOL:
-        # COBOL frontend: skip tree-sitter, use ProLeap bridge
-        frontend = get_frontend(language, frontend_type=constants.FRONTEND_COBOL)
-        t1 = time.perf_counter()
-        stats.parse_time = t1 - t0
-        instructions = frontend.lower(None, source.encode("utf-8"))
-        stats.lower_time = time.perf_counter() - t1
-    elif frontend_type in (constants.FRONTEND_LLM, constants.FRONTEND_CHUNKED_LLM):
-        # LLM frontend: skip tree-sitter, send source directly
-        frontend = get_frontend(
-            language,
-            frontend_type=frontend_type,
-            llm_provider=backend,
-            llm_client=llm_client,
-        )
-        t1 = time.perf_counter()
-        stats.parse_time = t1 - t0  # no parse step for LLM frontend
-        instructions = frontend.lower(None, source.encode("utf-8"))
-        stats.lower_time = time.perf_counter() - t1
-    else:
-        # Deterministic frontend: parse with tree-sitter first
-        from .parser import TreeSitterParserFactory
+    class _StatsObserver:
+        """Populates PipelineStats timing fields from frontend callbacks."""
 
-        tree = Parser(TreeSitterParserFactory()).parse(source, language)
-        t1 = time.perf_counter()
-        stats.parse_time = t1 - t0
-        frontend = get_frontend(language, frontend_type=frontend_type)
-        instructions = frontend.lower(tree, source.encode("utf-8"))
-        stats.lower_time = time.perf_counter() - t1
+        def __init__(self, target: PipelineStats):
+            self._target = target
+
+        def on_parse(self, duration: float) -> None:
+            self._target.parse_time = duration
+
+        def on_lower(self, duration: float) -> None:
+            self._target.lower_time = duration
+
+    resolved_frontend_type = (
+        constants.FRONTEND_COBOL if language == "cobol" else frontend_type
+    )
+    observer: FrontendObserver = _StatsObserver(stats)
+    frontend = get_frontend(
+        language,
+        frontend_type=resolved_frontend_type,
+        llm_provider=backend,
+        llm_client=llm_client,
+        observer=observer,
+    )
+    instructions = frontend.lower(source.encode("utf-8"))
 
     stats.ir_instruction_count = len(instructions)
     logger.info(

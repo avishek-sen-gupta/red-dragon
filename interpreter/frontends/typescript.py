@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Callable
 
 from .javascript import JavaScriptFrontend
+from ..frontend_observer import FrontendObserver, NullFrontendObserver
 from ..ir import Opcode
+from ..parser import ParserFactory
 from .. import constants
 
 
@@ -15,8 +17,13 @@ class TypeScriptFrontend(JavaScriptFrontend):
     COMMENT_TYPES = frozenset({"comment"})
     NOISE_TYPES = frozenset({"\n"})
 
-    def __init__(self):
-        super().__init__()
+    def __init__(
+        self,
+        parser_factory: ParserFactory,
+        language: str,
+        observer: FrontendObserver = NullFrontendObserver(),
+    ):
+        super().__init__(parser_factory, language, observer)
         # Additional TS expression types
         self._EXPR_DISPATCH.update(
             {

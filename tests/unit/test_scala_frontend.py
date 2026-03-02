@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 import pytest
-from tree_sitter_language_pack import get_parser
 
 from interpreter.frontends.scala import ScalaFrontend
+from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
 
 
 def _parse_scala(source: str) -> list[IRInstruction]:
-    parser = get_parser("scala")
-    tree = parser.parse(source.encode("utf-8"))
-    frontend = ScalaFrontend()
-    return frontend.lower(tree, source.encode("utf-8"))
+    frontend = ScalaFrontend(TreeSitterParserFactory(), "scala")
+    return frontend.lower(source.encode("utf-8"))
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:

@@ -132,7 +132,7 @@ def _lower_and_print(backend: str, show_cfg: bool):
     source_bytes = SAMPLE_SOURCE.encode("utf-8")
 
     t0 = time.perf_counter()
-    instructions = frontend.lower(None, source_bytes)
+    instructions = frontend.lower(source_bytes)
     elapsed = time.perf_counter() - t0
 
     _print_header("IR Output")
