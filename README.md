@@ -137,15 +137,16 @@ All constructs above produce real IR for proper data-flow analysis. All 15 front
 
 ### COBOL frontend
 
-The COBOL frontend uses the [ProLeap COBOL Parser](https://github.com/uwol/proleap-cobol-parser) via a subprocess bridge (requires JDK 17). It lowers DATA DIVISION fields to byte-addressed memory regions (`ALLOC_REGION`/`WRITE_REGION`/`LOAD_REGION`) with PIC-driven encoding/decoding (zoned decimal, COMP-3, alphanumeric/EBCDIC), and 19 of 51 PROCEDURE DIVISION statement types to standard IR:
+The COBOL frontend uses the [ProLeap COBOL Parser](https://github.com/uwol/proleap-cobol-parser) via a subprocess bridge (requires JDK 17). It lowers DATA DIVISION fields to byte-addressed memory regions with PIC-driven encoding/decoding, and **20 of 51** PROCEDURE DIVISION statement types to standard IR. See the [COBOL frontend design document](docs/frontend-design/cobol.md) for full details.
 
-- **Arithmetic:** MOVE, ADD, SUBTRACT, MULTIPLY, DIVIDE, COMPUTE (with recursive-descent expression parser supporting field references, numeric literals, operator precedence, parentheses, and multi-target assignment)
-- **Control flow:** IF/ELSE, EVALUATE/WHEN, PERFORM (simple, THRU, TIMES, UNTIL with TEST BEFORE/AFTER, VARYING with FROM/BY/UNTIL), GO TO, STOP RUN
-- **No-ops:** CONTINUE, EXIT
-- **Data manipulation:** INITIALIZE (resets fields to type-appropriate defaults — SPACES for alphanumeric, ZEROS for numeric), SET (TO assignment and UP/DOWN BY increment/decrement)
-- **String operations:** STRING (concatenation with DELIMITED BY), UNSTRING (splitting with DELIMITED BY), INSPECT (TALLYING for pattern counting, REPLACING for pattern substitution)
-
-PERFORM semantics use named continuations (`SET_CONTINUATION`/`RESUME_CONTINUATION`) to implement paragraph-level call-and-return, including section-level PERFORM. String operations use 5 low-level builtins (`__string_find`, `__string_split`, `__string_count`, `__string_replace`, `__string_concat`) composed into IR instruction sequences that remain visible to data-flow analysis. All variants compose from existing opcodes (no new VM instructions). REDEFINES works automatically through overlapping byte offsets on shared regions.
+| Category | Statements |
+|----------|-----------|
+| **Arithmetic** | MOVE, ADD, SUBTRACT, MULTIPLY, DIVIDE, COMPUTE |
+| **Control flow** | IF/ELSE, EVALUATE/WHEN, PERFORM (simple/THRU/TIMES/UNTIL/VARYING), GO TO, STOP RUN |
+| **No-ops** | CONTINUE, EXIT |
+| **Data manipulation** | INITIALIZE, SET (TO / UP BY / DOWN BY) |
+| **String operations** | STRING, UNSTRING, INSPECT (TALLYING / REPLACING) |
+| **Table operations** | SEARCH (linear, with VARYING index and AT END) |
 
 ## Example: CFG
 
@@ -337,39 +338,64 @@ poetry run pytest tests/integration/ -v  # integration tests only
 
 Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures (including mutation persistence and shared environments), symbolic execution, factory routing, and the composable API layer.
 
-The **Rosetta cross-language test suite** (`tests/unit/rosetta/`) implements 8 classic algorithms (factorial iterative/recursive, fibonacci, GCD, bubble sort, is-prime, fizzbuzz, interprocedural calls) in all 15 languages and verifies they all produce clean, structurally consistent IR — catching frontend gaps, degenerate lowerings, and cross-language inconsistencies. Each problem tests entry label presence, minimum instruction count, zero unsupported SYMBOLIC nodes, required opcode presence, operator spot-checks, and aggregate cross-language variance. Beyond IR lowering, **VM execution verification** runs 7 algorithms (all except fizzbuzz) through the VM across all 15 executable languages and asserts correct computed results (e.g. factorial=120, fib(10)=55, gcd(48,18)=6, sorted arrays, interprocedural double_add(3,4)=14) with zero LLM fallback calls — proving cross-language semantic correctness end-to-end. All frontends emit **canonical Python-form literals** (`"None"`, `"True"`, `"False"`) in IR CONST operands — language-native forms (`nil`, `null`, `undefined`, `NULL`, `true`, `false`) are canonicalized at lowering time so the VM's `_parse_const()` handles a single canonical set. Built-in array constructors (`arrayOf`, `intArrayOf`, `Array`) enable heap-allocated array creation for Kotlin/Scala programs.
+### Rosetta cross-language suite
 
-The **Exercism integration test suite** (`tests/unit/exercism/`) extends coverage by pulling canonical test data from [Exercism's problem-specifications](https://github.com/exercism/problem-specifications) and running solutions in all 15 languages. Each exercise has separate solution files per language and is parametrized across all canonical test cases — testing argument substitution, multi-case execution, and cross-language consistency. Exercises cover integer arithmetic, boolean logic, string operations, multi-property functions, floating-point division, and mixed-type arguments. A `scripts/exercism_harvest.py` utility fetches new canonical data from GitHub.
+The **Rosetta suite** (`tests/unit/rosetta/`) implements 8 classic algorithms in all 15 languages and verifies they all produce clean, structurally consistent IR. Each problem tests:
 
-| Exercise | Constructs tested | Cases | Lowering | Cross-lang | Execution | Total |
-|----------|-------------------|-------|----------|------------|-----------|-------|
-| **leap** | modulo, boolean logic, short-circuit eval | 9 | 15 | 2 | 270 | **287** |
-| **collatz-conjecture** | while loop, conditional, integer division | 4 | 15 | 2 | 120 | **137** |
-| **difference-of-squares** | while loop, accumulator, function composition | 9 (3 properties × 3) | 15 | 2 | 270 | **287** |
-| **two-fer** | string concatenation, string literals, function call with string arg/return | 3 | 15 | 2 | 90 | **107** |
-| **hamming** | string indexing, character comparison, while loop, counter, multi-arg functions | 5 | 15 | 2 | 150 | **167** |
-| **reverse-string** | backward iteration, string indexing, string building char-by-char | 5 | 15 | 2 | 150 | **167** |
-| **rna-transcription** | character comparison, multi-branch if, string building, char mapping | 6 | 15 | 2 | 180 | **197** |
-| **perfect-numbers** | divisor loop, modulo, accumulator, three-way string return | 9 | 15 | 2 | 270 | **287** |
-| **triangle** | nested ifs, validity guards, 3-arg functions, float sides, multi-property boolean return | 21 | 15 | 2 | 630 | **647** |
-| **space-age** | float division, float constants, string-to-number mapping, mixed args | 8 | 15 | 2 | 240 | **257** |
-| **grains** | exponentiation via loop, large integers (2^63), zero-arg function calls, multi-property | 8 | 15 | 2 | 240 | **257** |
-| **isogram** | nested while loops, case-insensitive char comparison via helper, function composition, continue | 14 | 15 | 2 | 420 | **437** |
-| **nth-prime** | nested loops for trial division, primality testing, counting loop with inner check | 3 | 15 | 2 | 90 | **107** |
-| **resistor-color** | string-to-integer if-chain mapping, string equality | 3 | 15 | 2 | 90 | **107** |
-| **pangram** | nested loops, toLowerChar helper, case-insensitive letter search, string variable indexing | 11 | 15 | 2 | 330 | **347** |
-| **bob** | isUpperChar/isLowerChar helpers, string classification, multi-branch string return, yelling/question detection | 22 | 15 | 2 | 616 | **633** |
-| **luhn** | charToDigit helper, two-pass validation, right-to-left traversal, modulo arithmetic | 22 | 15 | 2 | 660 | **677** |
-| **acronym** | toUpperChar helper, word boundary detection, string building, separator classification | 9 | 15 | 2 | 252 | **269** |
-| **Total** | | **171** | **270** | **36** | **5068** | **5374** |
+- Entry label presence and minimum instruction count
+- Zero unsupported `SYMBOLIC` nodes
+- Required opcode presence and operator spot-checks
+- Aggregate cross-language variance
 
-Combined with the Rosetta suite and the COBOL frontend tests (138 tests covering ASG round-trip, typed statement hierarchy, PIC parsing, data layout, frontend lowering, PERFORM loop variants, section PERFORM, CONTINUE/EXIT/INITIALIZE/SET/STRING/UNSTRING/INSPECT lowering, parser bridge, and end-to-end fixture tests), the project has **7639 tests** (7639 passed, 3 xfailed) — all with zero LLM calls.
+**VM execution verification** runs 7 algorithms through the VM across all 15 languages and asserts correct computed results (factorial=120, fib(10)=55, gcd(48,18)=6, sorted arrays, interprocedural double_add(3,4)=14) with zero LLM calls.
+
+All frontends emit **canonical Python-form literals** (`"None"`, `"True"`, `"False"`) — language-native forms (`nil`, `null`, `undefined`, `NULL`, `true`, `false`) are canonicalized at lowering time.
+
+### Exercism integration suite
+
+The **Exercism suite** (`tests/unit/exercism/`) pulls canonical test data from [Exercism's problem-specifications](https://github.com/exercism/problem-specifications) and runs solutions in all 15 languages. Each exercise is parametrized across all canonical test cases.
+
+<details>
+<summary><strong>Exercism exercise breakdown</strong> (click to expand)</summary>
+
+| Exercise | Constructs tested | Cases | Execution | Total |
+|----------|-------------------|-------|-----------|-------|
+| **leap** | modulo, boolean logic, short-circuit eval | 9 | 270 | **287** |
+| **collatz-conjecture** | while loop, conditional, integer division | 4 | 120 | **137** |
+| **difference-of-squares** | while loop, accumulator, function composition | 9 | 270 | **287** |
+| **two-fer** | string concatenation, string literals | 3 | 90 | **107** |
+| **hamming** | string indexing, character comparison, while loop | 5 | 150 | **167** |
+| **reverse-string** | backward iteration, string building | 5 | 150 | **167** |
+| **rna-transcription** | multi-branch if, char mapping | 6 | 180 | **197** |
+| **perfect-numbers** | divisor loop, three-way return | 9 | 270 | **287** |
+| **triangle** | nested ifs, validity guards, float sides | 21 | 630 | **647** |
+| **space-age** | float division, string-to-number mapping | 8 | 240 | **257** |
+| **grains** | exponentiation, large integers (2^63) | 8 | 240 | **257** |
+| **isogram** | nested while loops, case-insensitive comparison | 14 | 420 | **437** |
+| **nth-prime** | nested loops, trial division, primality testing | 3 | 90 | **107** |
+| **resistor-color** | string-to-integer mapping, string equality | 3 | 90 | **107** |
+| **pangram** | nested loops, letter search, toLowerChar helper | 11 | 330 | **347** |
+| **bob** | string classification, multi-branch return | 22 | 616 | **633** |
+| **luhn** | charToDigit helper, right-to-left traversal, modulo | 22 | 660 | **677** |
+| **acronym** | toUpperChar helper, word boundary detection | 9 | 252 | **269** |
+| **Total** | | **171** | **5068** | **5374** |
+
+</details>
+
+### COBOL frontend tests
+
+The COBOL test suite covers ASG round-trip, typed statement hierarchy (20 types), PIC parsing, data layout, frontend lowering, PERFORM loop variants, section PERFORM, SEARCH, STRING/UNSTRING/INSPECT lowering, parser bridge, and end-to-end fixture tests.
+
+### Test totals
+
+**7647 tests** (7647 passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 
 - **[VM Design Document](docs/notes-on-vm-design.md)** — Comprehensive technical deep-dive into the VM architecture: IR design, CFG construction, state model, execution engine, call dispatch, symbolic execution, closures, LLM fallback, dataflow analysis, and end-to-end worked examples with code references
 - **[Frontend Design Document](docs/notes-on-frontend-design.md)** — Frontend subsystem architecture: Frontend ABC contract, tree-sitter parser layer, BaseFrontend dispatch table engine, all 15 language-specific frontends, LLM frontend with prompt engineering, chunked LLM frontend with register renumbering, factory routing, and lowering patterns reference
-- **[Per-Language Frontend Design](docs/frontend-design/)** — Exhaustive per-language documentation of all 15 deterministic frontends: dispatch tables, overridden constants, language-specific lowering methods, canonical literal handling, and worked examples for each language
+- **[Per-Language Frontend Design](docs/frontend-design/)** — Exhaustive per-language documentation of all 15 deterministic frontends and the COBOL frontend: dispatch tables, overridden constants, language-specific lowering methods, canonical literal handling, and worked examples for each language
+- **[COBOL Frontend Design](docs/frontend-design/cobol.md)** — ProLeap bridge architecture, PIC-driven encoding, 20-statement coverage matrix, PERFORM continuation semantics, SEARCH/STRING/INSPECT lowering patterns
 - **[Dataflow Design Document](docs/notes-on-dataflow-design.md)** — Dataflow analysis architecture: reaching definitions via GEN/KILL worklist fixpoint, def-use chain extraction, variable dependency graph construction with transitive closure, integration with IR/CFG, worked examples, and complexity analysis
 - **[Architectural Decision Records](docs/architectural-design-decisions.md)** — Chronological log of key architectural decisions: IR design, deterministic VM, symbolic execution, closure semantics, LLM frontend strategy, dataflow analysis, modular package structure, and more
 

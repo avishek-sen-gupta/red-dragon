@@ -718,3 +718,23 @@ Benefits:
 - Skipping INSPECT REPLACING write-back — rejected because COBOL INSPECT modifies the source field in-place
 
 **Consequences:** Coverage increased from 12/51 to 19/51 HANDLED (37%), with 0 DISPATCH_MISSING. The string builtins are reusable for future string-related statements. Test count increased from 7608 to 7639 (31 new tests).
+
+### ADR-034: COBOL SEARCH statement — linear table search with loop-based IR lowering (2026-03-02)
+
+**Context:** SEARCH is a table lookup statement unique to COBOL. It iterates through a table (defined with OCCURS) using a VARYING index, testing WHEN conditions at each iteration, with an optional AT END clause for exhaustion. It does not require external I/O and is commonly found in production COBOL programs.
+
+**Decision:** Implement SEARCH across all three pipeline layers:
+
+1. **Bridge** (`serializeSearch`) — extracts table name, varying index, WHEN phrases (condition + child statements), and AT END phrases from ProLeap's `SearchStatement` ASG node
+2. **Dataclass** (`SearchStatement` + `SearchWhen`) — frozen dataclasses with recursive child statement parsing
+3. **Lowering** (`_lower_search`) — emits a counter-based loop with:
+   - Safety-bound counter (max 256 iterations) to prevent infinite loops in concrete execution
+   - WHEN condition chain: each WHEN is a `BRANCH_IF` — if true, execute body and jump to end; if false, fall through to next WHEN
+   - Index increment: if VARYING is specified, decode → increment → encode → write back
+   - AT END clause: executed when the bound is reached
+
+**Alternatives considered:**
+- Unbounded loop relying on table-size metadata — rejected because the SEARCH statement alone doesn't carry the OCCURS count; the table definition is in DATA DIVISION and would require cross-referencing data layout with procedure statements
+- Treating SEARCH as EVALUATE (no loop) — rejected because SEARCH semantics require index auto-increment between iterations
+
+**Consequences:** Coverage increased from 19/51 to 20/51 HANDLED (39%). The loop + WHEN chain pattern is reusable for SEARCH ALL (binary search) if implemented later. Test count increased from 7639 to 7647 (8 new tests).
