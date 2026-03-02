@@ -15,9 +15,17 @@ from interpreter.cobol.asg_types import (
     CobolParagraph,
     CobolSection,
 )
+from interpreter.cobol.cobol_expression import (
+    BinOpNode,
+    ExprNode,
+    FieldRefNode,
+    LiteralNode,
+    parse_expression,
+)
 from interpreter.cobol.cobol_statements import (
     ArithmeticStatement,
     CobolStatementType,
+    ComputeStatement,
     DisplayStatement,
     EvaluateStatement,
     GotoStatement,
@@ -347,6 +355,8 @@ class CobolFrontend(Frontend):
             self._lower_move(stmt, layout, region_reg)
         elif isinstance(stmt, ArithmeticStatement):
             self._lower_arithmetic(stmt, layout, region_reg)
+        elif isinstance(stmt, ComputeStatement):
+            self._lower_compute(stmt, layout, region_reg)
         elif isinstance(stmt, IfStatement):
             self._lower_if(stmt, layout, region_reg)
         elif isinstance(stmt, PerformStatement):
@@ -421,6 +431,60 @@ class CobolFrontend(Frontend):
             Opcode.WRITE_REGION,
             operands=[region_reg, offset_reg, target_fl.byte_length, encoded_reg],
         )
+
+    def _lower_compute(
+        self,
+        stmt: ComputeStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """COMPUTE target(s) = arithmetic-expression.
+
+        Parses the expression into a tree, walks it to emit IR, then
+        writes the result to each target field.
+        """
+        expr_tree = parse_expression(stmt.expression)
+        result_reg = self._lower_expr_node(expr_tree, layout, region_reg)
+
+        result_str_reg = self._emit_to_string(result_reg)
+        for target_name in stmt.targets:
+            if target_name not in layout.fields:
+                logger.warning("COMPUTE target %s not found in layout", target_name)
+                continue
+            target_fl = layout.fields[target_name]
+            encoded_reg = self._emit_encode_from_string(target_fl, result_str_reg)
+            offset_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=offset_reg, operands=[target_fl.offset])
+            self._emit(
+                Opcode.WRITE_REGION,
+                operands=[region_reg, offset_reg, target_fl.byte_length, encoded_reg],
+            )
+
+    def _lower_expr_node(
+        self,
+        node: ExprNode,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> str:
+        """Walk an expression tree node and emit IR. Returns result register."""
+        if isinstance(node, LiteralNode):
+            return self._const_to_reg(self._parse_literal(node.value))
+        if isinstance(node, FieldRefNode):
+            if node.name in layout.fields:
+                return self._emit_decode_field(region_reg, layout.fields[node.name])
+            return self._const_to_reg(self._parse_literal(node.name))
+        if isinstance(node, BinOpNode):
+            left_reg = self._lower_expr_node(node.left, layout, region_reg)
+            right_reg = self._lower_expr_node(node.right, layout, region_reg)
+            result_reg = self._fresh_reg()
+            self._emit(
+                Opcode.BINOP,
+                result_reg=result_reg,
+                operands=[node.op, left_reg, right_reg],
+            )
+            return result_reg
+        logger.warning("Unknown expression node type: %s", type(node).__name__)
+        return self._const_to_reg(0)
 
     def _lower_if(
         self,

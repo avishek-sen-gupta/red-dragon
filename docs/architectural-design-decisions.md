@@ -666,3 +666,28 @@ Benefits:
 Trade-offs:
 - Existing code constructing `CobolStatement` directly must migrate to the new types
 - `isinstance` dispatch in `_lower_statement` is slightly more verbose than dict dispatch
+
+---
+
+### ADR-032: COMPUTE statement support with recursive-descent expression parser (2026-03-02)
+
+**Context:** The COBOL `COMPUTE` statement assigns the result of an arbitrary arithmetic expression to one or more target variables (e.g., `COMPUTE WS-RESULT = WS-A + WS-B * 2`). Unlike simple arithmetic statements (ADD, SUBTRACT, etc.) which operate on two operands, COMPUTE requires parsing and evaluating full arithmetic expressions with operator precedence and parentheses.
+
+**Decision:** Implement COMPUTE end-to-end across all three pipeline layers:
+
+1. **Bridge** (`StatementSerializer.java`): Extract the expression with original source spacing preserved (using ANTLR `getInputStream().getText(Interval)` instead of `getText()`) to disambiguate COBOL hyphenated identifiers (e.g., `WS-A`) from subtraction. Emit structured JSON: `{"type": "COMPUTE", "expression": "WS-A + WS-B * 2", "targets": ["WS-RESULT"]}`.
+
+2. **Expression parser** (`cobol_expression.py`): Recursive-descent parser with frozen dataclass expression tree nodes (`LiteralNode`, `FieldRefNode`, `BinOpNode`). Standard two-level precedence: additive (`+`, `-`) and multiplicative (`*`, `/`), with parentheses. Regex tokenizer handles COBOL identifiers with hyphens, decimal literals, operators, and parentheses. All functions are pure (no mutation).
+
+3. **Frontend lowering** (`cobol_frontend.py`): Tree-walk the expression AST emitting IR — `LOAD_REGION` + decode for field references, `CONST` for literals, `BINOP` for operators. Result is converted to string and encoded/written to each target field via `_emit_encode_from_string`.
+
+**Alternatives considered:**
+- Parsing expression text without bridge changes (splitting on whitespace) — rejected because `getText()` strips spaces, making `WS-A+WS-B` ambiguous (identifier vs subtraction)
+- Emitting a structured expression tree from the bridge — more complex Java changes for marginal benefit; space-preserved text is sufficient for the recursive-descent parser
+- Reusing ArithmeticStatement for COMPUTE — rejected because COMPUTE has fundamentally different structure (expression string + multiple targets vs. single source + single target)
+
+Benefits:
+- Correct operator precedence and parenthesis handling
+- Multiple target assignment support (`COMPUTE A B = expr`)
+- Expression parser is independently testable (18 unit tests)
+- Closes the last DISPATCH_MISSING gap — all 12 bridge-serialised types now fully handled
