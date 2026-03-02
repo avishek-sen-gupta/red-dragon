@@ -9,11 +9,17 @@ from interpreter.cobol.asg_types import (
 )
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.cobol_statements import (
+    AlterStatement,
+    AlterProceedTo,
     ArithmeticStatement,
+    CallStatement,
+    CallUsingParam,
+    CancelStatement,
     CobolStatementType,
     ComputeStatement,
     ContinueStatement,
     DisplayStatement,
+    EntryStatement,
     ExitStatement,
     GotoStatement,
     IfStatement,
@@ -1307,3 +1313,120 @@ class TestSearchLowering:
         # Should emit BRANCH_IF for bound check + 2 WHEN conditions
         branches = _find_opcodes(instructions, Opcode.BRANCH_IF)
         assert len(branches) >= 3
+
+
+class TestCallAlterEntryCancelLowering:
+    """Tests for CALL, ALTER, ENTRY, CANCEL IR lowering."""
+
+    def _lower_with_field_and_stmts(
+        self,
+        fields: list[CobolField],
+        stmts: list[CobolStatementType],
+    ) -> list[IRInstruction]:
+        asg = CobolASG(
+            data_fields=fields,
+            paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        return frontend.lower(None, b"")
+
+    def test_call_emits_call_function(self):
+        """CALL should emit CALL_FUNCTION with program name."""
+        fields = [
+            CobolField(
+                name="WS-A",
+                level=77,
+                pic="9(3)",
+                usage="DISPLAY",
+                offset=0,
+                value="123",
+            ),
+        ]
+        stmts = [
+            CallStatement(
+                program="SUBPROG",
+                using=[CallUsingParam(name="WS-A", param_type="REFERENCE")],
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        subprog_calls = [c for c in calls if c.operands and c.operands[0] == "SUBPROG"]
+        assert len(subprog_calls) >= 1
+
+    def test_call_with_giving_writes_result(self):
+        """CALL with GIVING should write result to the giving field."""
+        fields = [
+            CobolField(
+                name="WS-A",
+                level=77,
+                pic="9(3)",
+                usage="DISPLAY",
+                offset=0,
+                value="1",
+            ),
+            CobolField(
+                name="WS-RESULT",
+                level=77,
+                pic="9(3)",
+                usage="DISPLAY",
+                offset=3,
+                value="0",
+            ),
+        ]
+        stmts = [
+            CallStatement(
+                program="CALC",
+                using=[CallUsingParam(name="WS-A")],
+                giving="WS-RESULT",
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should write back to WS-RESULT
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) >= 3  # 2 initial VALUES + GIVING write-back
+
+    def test_alter_emits_store_var(self):
+        """ALTER should emit STORE_VAR for the altered paragraph target."""
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
+        ]
+        stmts = [
+            AlterStatement(
+                proceed_tos=[AlterProceedTo(source="PARA-1", target="PARA-2")]
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        stores = _find_opcodes(instructions, Opcode.STORE_VAR)
+        alter_stores = [
+            s for s in stores if s.operands and "__alter_PARA-1" in str(s.operands[0])
+        ]
+        assert len(alter_stores) >= 1
+
+    def test_entry_emits_label(self):
+        """ENTRY should emit a LABEL for the alternate entry point."""
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
+        ]
+        stmts = [EntryStatement(entry_name="ALT-ENTRY")]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        labels = _find_opcodes(instructions, Opcode.LABEL)
+        entry_labels = [l for l in labels if l.label and "entry_ALT-ENTRY" in l.label]
+        assert len(entry_labels) >= 1
+
+    def test_cancel_emits_nothing(self):
+        """CANCEL should not emit any data-affecting instructions."""
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
+        ]
+        stmts = [CancelStatement(programs=["SUBPROG"])]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # No CALL_FUNCTION, no WRITE_REGION (beyond initial allocation)
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        assert len(writes) == 0
+        assert len(calls) == 0

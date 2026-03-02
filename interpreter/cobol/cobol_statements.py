@@ -64,6 +64,10 @@ CobolStatementType = Union[
     "UnstringStatement",
     "InspectStatement",
     "SearchStatement",
+    "CallStatement",
+    "AlterStatement",
+    "EntryStatement",
+    "CancelStatement",
 ]
 
 
@@ -519,6 +523,123 @@ class SearchStatement:
         return result
 
 
+@dataclass(frozen=True)
+class CallUsingParam:
+    """A single USING parameter in a CALL statement."""
+
+    name: str
+    param_type: str = "REFERENCE"  # REFERENCE, CONTENT, or VALUE
+
+    @classmethod
+    def from_dict(cls, data: dict) -> CallUsingParam:
+        return cls(
+            name=data.get("name", ""),
+            param_type=data.get("type", "REFERENCE"),
+        )
+
+    def to_dict(self) -> dict:
+        return {"name": self.name, "type": self.param_type}
+
+
+@dataclass(frozen=True)
+class CallStatement:
+    """CALL 'program' [USING params] [GIVING target]."""
+
+    program: str = ""
+    using: list[CallUsingParam] = field(default_factory=list)
+    giving: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> CallStatement:
+        return cls(
+            program=data.get("program", ""),
+            using=[CallUsingParam.from_dict(p) for p in data.get("using", [])],
+            giving=data.get("giving", ""),
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {"type": "CALL", "program": self.program}
+        if self.using:
+            result["using"] = [p.to_dict() for p in self.using]
+        if self.giving:
+            result["giving"] = self.giving
+        return result
+
+
+@dataclass(frozen=True)
+class AlterProceedTo:
+    """A single source → target mapping in ALTER."""
+
+    source: str
+    target: str
+
+    @classmethod
+    def from_dict(cls, data: dict) -> AlterProceedTo:
+        return cls(
+            source=data.get("source", ""),
+            target=data.get("target", ""),
+        )
+
+    def to_dict(self) -> dict:
+        return {"source": self.source, "target": self.target}
+
+
+@dataclass(frozen=True)
+class AlterStatement:
+    """ALTER para-1 TO PROCEED TO para-2."""
+
+    proceed_tos: list[AlterProceedTo] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> AlterStatement:
+        return cls(
+            proceed_tos=[
+                AlterProceedTo.from_dict(p) for p in data.get("proceed_tos", [])
+            ],
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {"type": "ALTER"}
+        if self.proceed_tos:
+            result["proceed_tos"] = [p.to_dict() for p in self.proceed_tos]
+        return result
+
+
+@dataclass(frozen=True)
+class EntryStatement:
+    """ENTRY 'name' [USING params]."""
+
+    entry_name: str = ""
+    using: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> EntryStatement:
+        return cls(
+            entry_name=data.get("entry_name", ""),
+            using=data.get("using", []),
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {"type": "ENTRY", "entry_name": self.entry_name}
+        if self.using:
+            result["using"] = self.using
+        return result
+
+
+@dataclass(frozen=True)
+class CancelStatement:
+    """CANCEL program-name(s)."""
+
+    programs: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> CancelStatement:
+        return cls(programs=data.get("programs", []))
+
+    def to_dict(self) -> dict:
+        return {"type": "CANCEL", "programs": self.programs}
+
+
 def _parse_perform_spec(
     data: dict,
 ) -> PerformTimesSpec | PerformUntilSpec | PerformVaryingSpec | None:
@@ -626,6 +747,10 @@ _DISPATCH_TABLE: dict[str, type] = {
     "UNSTRING": UnstringStatement,
     "INSPECT": InspectStatement,
     "SEARCH": SearchStatement,
+    "CALL": CallStatement,
+    "ALTER": AlterStatement,
+    "ENTRY": EntryStatement,
+    "CANCEL": CancelStatement,
 }
 
 

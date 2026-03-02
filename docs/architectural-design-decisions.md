@@ -738,3 +738,19 @@ Benefits:
 - Treating SEARCH as EVALUATE (no loop) — rejected because SEARCH semantics require index auto-increment between iterations
 
 **Consequences:** Coverage increased from 19/51 to 20/51 HANDLED (39%). The loop + WHEN chain pattern is reusable for SEARCH ALL (binary search) if implemented later. Test count increased from 7639 to 7647 (8 new tests).
+
+### ADR-035: Symbolic CALL, ALTER, ENTRY, CANCEL — inter-program and dynamic control flow (2026-03-02)
+
+**Context:** CALL is the most commonly used inter-program statement in production COBOL. ALTER, ENTRY, and CANCEL are low-effort additions that don't require I/O.
+
+**Decision:** Implement all four across the three-layer pipeline:
+
+1. **CALL** — Symbolic subprogram invocation. Extracts program name (`getProgramValueStmt`), USING parameters with BY REFERENCE/CONTENT/VALUE types, and GIVING target. Lowers to `CALL_FUNCTION` with decoded parameter registers. The called program is treated as an unresolved external — same pattern as unresolved function calls in tree-sitter frontends. GIVING writes the symbolic return value back to the target field. Full cross-program resolution (LINKAGE SECTION mapping, BY REFERENCE memory sharing) is deferred to a future multi-program analysis pass.
+
+2. **ALTER** — Dynamic GO TO retargeting. `ALTER PARA-1 TO PROCEED TO PARA-2` emits `STORE_VAR __alter_PARA-1 = "para_PARA-2"`. This captures the data flow of the retargeting for analysis, even though actual dynamic branch resolution isn't implemented.
+
+3. **ENTRY** — Alternate subprogram entry point. Emits a `LABEL entry_<name>` so the entry point is visible in the CFG.
+
+4. **CANCEL** — Program state invalidation. No-op for static analysis since it has no data-flow effect in a single-program context.
+
+**Consequences:** Coverage increased from 20/51 to 24/51 HANDLED (47%). CALL enables data-flow tracking through subprogram boundaries (symbolically). Test count increased from 7647 to 7662 (15 new tests).
