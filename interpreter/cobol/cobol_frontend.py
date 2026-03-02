@@ -14,7 +14,22 @@ from interpreter.cobol.asg_types import (
     CobolASG,
     CobolParagraph,
     CobolSection,
-    CobolStatement,
+)
+from interpreter.cobol.cobol_statements import (
+    ArithmeticStatement,
+    CobolStatementType,
+    DisplayStatement,
+    EvaluateStatement,
+    GotoStatement,
+    IfStatement,
+    MoveStatement,
+    PerformStatement,
+    PerformTimesSpec,
+    PerformUntilSpec,
+    PerformVaryingSpec,
+    StopRunStatement,
+    WhenOtherStatement,
+    WhenStatement,
 )
 from interpreter.cobol.cobol_types import CobolDataCategory
 from interpreter.cobol.data_layout import DataLayout, FieldLayout, build_data_layout
@@ -282,6 +297,12 @@ class CobolFrontend(Frontend):
         region_reg: str,
     ) -> None:
         """Lower all sections and standalone paragraphs."""
+        # Build section → paragraph-names lookup for section-level PERFORM
+        self._section_paragraphs: dict[str, list[str]] = {
+            section.name: [p.name for p in section.paragraphs]
+            for section in asg.sections
+        }
+
         # Emit inline code for standalone paragraphs first
         for para in asg.paragraphs:
             self._lower_paragraph(para, layout, region_reg)
@@ -299,6 +320,11 @@ class CobolFrontend(Frontend):
         self._emit(Opcode.LABEL, label=f"section_{section.name}")
         for para in section.paragraphs:
             self._lower_paragraph(para, layout, region_reg)
+        # Emit section end continuation point so PERFORM SECTION works
+        self._emit(
+            Opcode.RESUME_CONTINUATION,
+            operands=[f"section_{section.name}_end"],
+        )
 
     def _lower_paragraph(
         self,
@@ -313,46 +339,44 @@ class CobolFrontend(Frontend):
 
     def _lower_statement(
         self,
-        stmt: CobolStatement,
+        stmt: CobolStatementType,
         layout: DataLayout,
         region_reg: str,
     ) -> None:
-        dispatch = {
-            "MOVE": self._lower_move,
-            "ADD": self._lower_arithmetic,
-            "SUBTRACT": self._lower_arithmetic,
-            "MULTIPLY": self._lower_arithmetic,
-            "DIVIDE": self._lower_arithmetic,
-            "IF": self._lower_if,
-            "PERFORM": self._lower_perform,
-            "DISPLAY": self._lower_display,
-            "STOP_RUN": self._lower_stop_run,
-            "GOTO": self._lower_goto,
-            "EVALUATE": self._lower_evaluate,
-        }
-        handler = dispatch.get(stmt.type)
-        if handler:
-            handler(stmt, layout, region_reg)
+        if isinstance(stmt, MoveStatement):
+            self._lower_move(stmt, layout, region_reg)
+        elif isinstance(stmt, ArithmeticStatement):
+            self._lower_arithmetic(stmt, layout, region_reg)
+        elif isinstance(stmt, IfStatement):
+            self._lower_if(stmt, layout, region_reg)
+        elif isinstance(stmt, PerformStatement):
+            self._lower_perform(stmt, layout, region_reg)
+        elif isinstance(stmt, DisplayStatement):
+            self._lower_display(stmt, layout, region_reg)
+        elif isinstance(stmt, StopRunStatement):
+            self._lower_stop_run(stmt, layout, region_reg)
+        elif isinstance(stmt, GotoStatement):
+            self._lower_goto(stmt, layout, region_reg)
+        elif isinstance(stmt, EvaluateStatement):
+            self._lower_evaluate(stmt, layout, region_reg)
         else:
-            logger.warning("Unhandled COBOL statement type: %s", stmt.type)
+            logger.warning("Unhandled COBOL statement type: %s", type(stmt).__name__)
 
     def _lower_move(
         self,
-        stmt: CobolStatement,
+        stmt: MoveStatement,
         layout: DataLayout,
         region_reg: str,
     ) -> None:
         """MOVE X TO Y: decode X, encode as Y's type, write to Y's region."""
-        source_operand = stmt.operands[0]
-        target_name = stmt.operands[1]
-        target_fl = layout.fields[target_name]
+        target_fl = layout.fields[stmt.target]
 
-        if isinstance(source_operand, str) and source_operand in layout.fields:
-            source_fl = layout.fields[source_operand]
+        if stmt.source in layout.fields:
+            source_fl = layout.fields[stmt.source]
             decoded_reg = self._emit_decode_field(region_reg, source_fl)
             value_str_reg = self._emit_to_string(decoded_reg)
         else:
-            value_str_reg = self._const_to_reg(str(source_operand))
+            value_str_reg = self._const_to_reg(str(stmt.source))
 
         encoded_reg = self._emit_encode_from_string(target_fl, value_str_reg)
 
@@ -365,24 +389,22 @@ class CobolFrontend(Frontend):
 
     def _lower_arithmetic(
         self,
-        stmt: CobolStatement,
+        stmt: ArithmeticStatement,
         layout: DataLayout,
         region_reg: str,
     ) -> None:
         """ADD/SUBTRACT/MULTIPLY/DIVIDE X TO/FROM/BY/INTO Y."""
-        source_operand = stmt.operands[0]
-        target_name = stmt.operands[1]
-        target_fl = layout.fields[target_name]
+        target_fl = layout.fields[stmt.target]
 
-        if isinstance(source_operand, str) and source_operand in layout.fields:
-            source_fl = layout.fields[source_operand]
+        if stmt.source in layout.fields:
+            source_fl = layout.fields[stmt.source]
             src_decoded = self._emit_decode_field(region_reg, source_fl)
         else:
-            src_decoded = self._const_to_reg(float(source_operand))
+            src_decoded = self._const_to_reg(float(stmt.source))
 
         tgt_decoded = self._emit_decode_field(region_reg, target_fl)
 
-        op = _ARITHMETIC_OPS[stmt.type]
+        op = _ARITHMETIC_OPS[stmt.op]
         result_reg = self._fresh_reg()
         self._emit(
             Opcode.BINOP,
@@ -402,7 +424,7 @@ class CobolFrontend(Frontend):
 
     def _lower_if(
         self,
-        stmt: CobolStatement,
+        stmt: IfStatement,
         layout: DataLayout,
         region_reg: str,
     ) -> None:
@@ -426,36 +448,280 @@ class CobolFrontend(Frontend):
 
     def _lower_perform(
         self,
-        stmt: CobolStatement,
+        stmt: PerformStatement,
         layout: DataLayout,
         region_reg: str,
     ) -> None:
-        """PERFORM paragraph-name [THRU paragraph-name]."""
-        if stmt.children:
-            # Inline PERFORM (PERFORM ... END-PERFORM)
+        """PERFORM paragraph-name [THRU paragraph-name] [TIMES|UNTIL|VARYING]."""
+        if stmt.children and stmt.spec is None:
+            # Simple inline PERFORM (no loop spec)
             for child in stmt.children:
                 self._lower_statement(child, layout, region_reg)
             return
 
-        para_name = stmt.operands[0]
-        thru_name = stmt.thru if stmt.thru else para_name
-        return_label = self._fresh_label("perform_return")
+        if stmt.target and stmt.spec is None:
+            # Simple procedure PERFORM (no loop spec)
+            self._emit_perform_branch(stmt, layout, region_reg)
+            return
 
+        # Loop variants
+        if isinstance(stmt.spec, PerformTimesSpec):
+            self._lower_perform_times(stmt, layout, region_reg)
+        elif isinstance(stmt.spec, PerformUntilSpec):
+            self._lower_perform_until(stmt, layout, region_reg)
+        elif isinstance(stmt.spec, PerformVaryingSpec):
+            self._lower_perform_varying(stmt, layout, region_reg)
+        else:
+            logger.warning("PERFORM with unknown spec: %s", stmt.spec)
+
+    def _resolve_perform_target(self, stmt: PerformStatement) -> tuple[str, str]:
+        """Resolve branch-target label and continuation-key label for PERFORM.
+
+        Returns (branch_label, continuation_key).
+        Handles both paragraph and section targets.
+        """
+        target = stmt.target
+        section_paras = getattr(self, "_section_paragraphs", {})
+
+        if target in section_paras:
+            # Section-level PERFORM
+            branch_label = f"section_{target}"
+            thru = stmt.thru
+            if thru and thru in section_paras:
+                continuation_key = f"section_{thru}_end"
+            else:
+                continuation_key = f"section_{target}_end"
+            return branch_label, continuation_key
+
+        # Paragraph-level PERFORM
+        thru_name = stmt.thru if stmt.thru else target
+        branch_label = f"para_{target}"
+        continuation_key = f"para_{thru_name}_end"
+        return branch_label, continuation_key
+
+    def _emit_perform_branch(
+        self,
+        stmt: PerformStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """Emit SET_CONTINUATION + BRANCH + return LABEL for a simple procedure PERFORM."""
+        branch_label, continuation_key = self._resolve_perform_target(stmt)
+        return_label = self._fresh_label("perform_return")
         self._emit(
             Opcode.SET_CONTINUATION,
-            operands=[f"para_{thru_name}_end", return_label],
+            operands=[continuation_key, return_label],
         )
-        self._emit(Opcode.BRANCH, label=f"para_{para_name}")
+        self._emit(Opcode.BRANCH, label=branch_label)
         self._emit(Opcode.LABEL, label=return_label)
+
+    def _lower_perform_body(
+        self,
+        stmt: PerformStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """Emit the body of a PERFORM loop — inline children or procedure branch."""
+        if stmt.children:
+            for child in stmt.children:
+                self._lower_statement(child, layout, region_reg)
+        elif stmt.target:
+            self._emit_perform_branch(stmt, layout, region_reg)
+
+    def _lower_perform_times(
+        self,
+        stmt: PerformStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """PERFORM ... TIMES — counter-based loop."""
+        spec = stmt.spec
+        assert isinstance(spec, PerformTimesSpec)
+
+        counter_var = self._fresh_label("__perform_ctr")
+        loop_label = self._fresh_label("perform_times_loop")
+        body_label = self._fresh_label("perform_times_body")
+        exit_label = self._fresh_label("perform_times_exit")
+
+        # Init counter = 0
+        zero_reg = self._const_to_reg(0)
+        self._emit(Opcode.STORE_VAR, operands=[counter_var, zero_reg])
+
+        # Resolve times value (literal or field)
+        if spec.times in layout.fields:
+            times_reg = self._emit_decode_field(region_reg, layout.fields[spec.times])
+        else:
+            times_reg = self._const_to_reg(self._parse_literal(spec.times))
+
+        # Loop header
+        self._emit(Opcode.LABEL, label=loop_label)
+        ctr_reg = self._fresh_reg()
+        self._emit(Opcode.LOAD_VAR, result_reg=ctr_reg, operands=[counter_var])
+        cond_reg = self._fresh_reg()
+        self._emit(
+            Opcode.BINOP,
+            result_reg=cond_reg,
+            operands=[">=", ctr_reg, times_reg],
+        )
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[cond_reg],
+            label=f"{exit_label},{body_label}",
+        )
+
+        # Body
+        self._emit(Opcode.LABEL, label=body_label)
+        self._lower_perform_body(stmt, layout, region_reg)
+
+        # Increment counter
+        ctr_reg2 = self._fresh_reg()
+        self._emit(Opcode.LOAD_VAR, result_reg=ctr_reg2, operands=[counter_var])
+        one_reg = self._const_to_reg(1)
+        inc_reg = self._fresh_reg()
+        self._emit(Opcode.BINOP, result_reg=inc_reg, operands=["+", ctr_reg2, one_reg])
+        self._emit(Opcode.STORE_VAR, operands=[counter_var, inc_reg])
+        self._emit(Opcode.BRANCH, label=loop_label)
+
+        self._emit(Opcode.LABEL, label=exit_label)
+
+    def _lower_perform_until(
+        self,
+        stmt: PerformStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """PERFORM ... UNTIL — condition-based loop."""
+        spec = stmt.spec
+        assert isinstance(spec, PerformUntilSpec)
+
+        loop_label = self._fresh_label("perform_until_loop")
+        body_label = self._fresh_label("perform_until_body")
+        exit_label = self._fresh_label("perform_until_exit")
+
+        if spec.test_before:
+            # TEST BEFORE: check condition first
+            self._emit(Opcode.LABEL, label=loop_label)
+            cond_reg = self._lower_condition(spec.condition, layout, region_reg)
+            self._emit(
+                Opcode.BRANCH_IF,
+                operands=[cond_reg],
+                label=f"{exit_label},{body_label}",
+            )
+            self._emit(Opcode.LABEL, label=body_label)
+            self._lower_perform_body(stmt, layout, region_reg)
+            self._emit(Opcode.BRANCH, label=loop_label)
+            self._emit(Opcode.LABEL, label=exit_label)
+        else:
+            # TEST AFTER: execute body first, then check condition
+            self._emit(Opcode.LABEL, label=loop_label)
+            self._lower_perform_body(stmt, layout, region_reg)
+            cond_reg = self._lower_condition(spec.condition, layout, region_reg)
+            self._emit(
+                Opcode.BRANCH_IF,
+                operands=[cond_reg],
+                label=f"{exit_label},{loop_label}",
+            )
+            self._emit(Opcode.LABEL, label=exit_label)
+
+    def _lower_perform_varying(
+        self,
+        stmt: PerformStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """PERFORM ... VARYING — counter variable loop with FROM/BY/UNTIL."""
+        spec = stmt.spec
+        assert isinstance(spec, PerformVaryingSpec)
+
+        loop_label = self._fresh_label("perform_varying_loop")
+        body_label = self._fresh_label("perform_varying_body")
+        exit_label = self._fresh_label("perform_varying_exit")
+
+        # Initialize varying variable: encode FROM value into field
+        if spec.varying_var in layout.fields:
+            varying_fl = layout.fields[spec.varying_var]
+            from_str_reg = self._const_to_reg(str(spec.varying_from))
+            self._emit_encode_and_write(region_reg, varying_fl, from_str_reg)
+
+        if spec.test_before:
+            # TEST BEFORE
+            self._emit(Opcode.LABEL, label=loop_label)
+            cond_reg = self._lower_condition(spec.condition, layout, region_reg)
+            self._emit(
+                Opcode.BRANCH_IF,
+                operands=[cond_reg],
+                label=f"{exit_label},{body_label}",
+            )
+            self._emit(Opcode.LABEL, label=body_label)
+            self._lower_perform_body(stmt, layout, region_reg)
+            self._emit_varying_increment(spec, layout, region_reg)
+            self._emit(Opcode.BRANCH, label=loop_label)
+            self._emit(Opcode.LABEL, label=exit_label)
+        else:
+            # TEST AFTER
+            self._emit(Opcode.LABEL, label=loop_label)
+            self._lower_perform_body(stmt, layout, region_reg)
+            self._emit_varying_increment(spec, layout, region_reg)
+            cond_reg = self._lower_condition(spec.condition, layout, region_reg)
+            self._emit(
+                Opcode.BRANCH_IF,
+                operands=[cond_reg],
+                label=f"{exit_label},{loop_label}",
+            )
+            self._emit(Opcode.LABEL, label=exit_label)
+
+    def _emit_varying_increment(
+        self,
+        spec: PerformVaryingSpec,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """Emit IR to increment the VARYING variable by the BY value."""
+        if spec.varying_var not in layout.fields:
+            logger.warning("VARYING variable %s not found in layout", spec.varying_var)
+            return
+
+        varying_fl = layout.fields[spec.varying_var]
+
+        # Decode current value
+        val_reg = self._emit_decode_field(region_reg, varying_fl)
+
+        # Add BY step
+        by_reg = self._const_to_reg(self._parse_literal(spec.varying_by))
+        new_val_reg = self._fresh_reg()
+        self._emit(
+            Opcode.BINOP,
+            result_reg=new_val_reg,
+            operands=["+", val_reg, by_reg],
+        )
+
+        # Encode back
+        new_str_reg = self._emit_to_string(new_val_reg)
+        self._emit_encode_and_write(region_reg, varying_fl, new_str_reg)
+
+    def _emit_encode_and_write(
+        self,
+        region_reg: str,
+        fl: FieldLayout,
+        value_str_reg: str,
+    ) -> None:
+        """Encode a string value and write it to the field's region slot."""
+        encoded_reg = self._emit_encode_from_string(fl, value_str_reg)
+        offset_reg = self._fresh_reg()
+        self._emit(Opcode.CONST, result_reg=offset_reg, operands=[fl.offset])
+        self._emit(
+            Opcode.WRITE_REGION,
+            operands=[region_reg, offset_reg, fl.byte_length, encoded_reg],
+        )
 
     def _lower_display(
         self,
-        stmt: CobolStatement,
+        stmt: DisplayStatement,
         layout: DataLayout,
         region_reg: str,
     ) -> None:
         """DISPLAY field-or-literal."""
-        operand = stmt.operands[0]
+        operand = stmt.operand
 
         if isinstance(operand, str) and operand in layout.fields:
             fl = layout.fields[operand]
@@ -472,7 +738,7 @@ class CobolFrontend(Frontend):
 
     def _lower_stop_run(
         self,
-        stmt: CobolStatement,
+        stmt: StopRunStatement,
         layout: DataLayout,
         region_reg: str,
     ) -> None:
@@ -483,17 +749,16 @@ class CobolFrontend(Frontend):
 
     def _lower_goto(
         self,
-        stmt: CobolStatement,
+        stmt: GotoStatement,
         layout: DataLayout,
         region_reg: str,
     ) -> None:
         """GO TO paragraph-name."""
-        para_name = stmt.operands[0]
-        self._emit(Opcode.BRANCH, label=f"para_{para_name}")
+        self._emit(Opcode.BRANCH, label=f"para_{stmt.target}")
 
     def _lower_evaluate(
         self,
-        stmt: CobolStatement,
+        stmt: EvaluateStatement,
         layout: DataLayout,
         region_reg: str,
     ) -> None:
@@ -501,7 +766,7 @@ class CobolFrontend(Frontend):
         end_label = self._fresh_label("eval_end")
 
         for child in stmt.children:
-            if child.type == "WHEN" and child.condition:
+            if isinstance(child, WhenStatement) and child.condition:
                 cond_reg = self._lower_condition(child.condition, layout, region_reg)
                 when_true = self._fresh_label("when_true")
                 when_false = self._fresh_label("when_false")
@@ -515,7 +780,7 @@ class CobolFrontend(Frontend):
                     self._lower_statement(grandchild, layout, region_reg)
                 self._emit(Opcode.BRANCH, label=end_label)
                 self._emit(Opcode.LABEL, label=when_false)
-            elif child.type == "WHEN_OTHER":
+            elif isinstance(child, WhenOtherStatement):
                 for grandchild in child.children:
                     self._lower_statement(grandchild, layout, region_reg)
 

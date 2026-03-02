@@ -1,0 +1,287 @@
+"""Tests for typed COBOL statement hierarchy — round-trip and dispatch."""
+
+import pytest
+
+from interpreter.cobol.cobol_statements import (
+    ArithmeticStatement,
+    DisplayStatement,
+    EvaluateStatement,
+    GotoStatement,
+    IfStatement,
+    MoveStatement,
+    PerformStatement,
+    PerformTimesSpec,
+    PerformUntilSpec,
+    PerformVaryingSpec,
+    StopRunStatement,
+    WhenOtherStatement,
+    WhenStatement,
+    parse_statement,
+)
+
+
+class TestParseStatementDispatch:
+    def test_move(self):
+        stmt = parse_statement({"type": "MOVE", "operands": ["123", "WS-A"]})
+        assert isinstance(stmt, MoveStatement)
+        assert stmt.source == "123"
+        assert stmt.target == "WS-A"
+
+    def test_add(self):
+        stmt = parse_statement({"type": "ADD", "operands": ["5", "WS-A"]})
+        assert isinstance(stmt, ArithmeticStatement)
+        assert stmt.op == "ADD"
+        assert stmt.source == "5"
+        assert stmt.target == "WS-A"
+
+    def test_subtract(self):
+        stmt = parse_statement({"type": "SUBTRACT", "operands": ["3", "WS-A"]})
+        assert isinstance(stmt, ArithmeticStatement)
+        assert stmt.op == "SUBTRACT"
+
+    def test_multiply(self):
+        stmt = parse_statement({"type": "MULTIPLY", "operands": ["2", "WS-A"]})
+        assert isinstance(stmt, ArithmeticStatement)
+        assert stmt.op == "MULTIPLY"
+
+    def test_divide(self):
+        stmt = parse_statement({"type": "DIVIDE", "operands": ["4", "WS-A"]})
+        assert isinstance(stmt, ArithmeticStatement)
+        assert stmt.op == "DIVIDE"
+
+    def test_if(self):
+        stmt = parse_statement(
+            {
+                "type": "IF",
+                "condition": "WS-A > 0",
+                "children": [{"type": "DISPLAY", "operands": ["POSITIVE"]}],
+            }
+        )
+        assert isinstance(stmt, IfStatement)
+        assert stmt.condition == "WS-A > 0"
+        assert len(stmt.children) == 1
+        assert isinstance(stmt.children[0], DisplayStatement)
+
+    def test_evaluate(self):
+        stmt = parse_statement(
+            {
+                "type": "EVALUATE",
+                "children": [
+                    {
+                        "type": "WHEN",
+                        "condition": "WS-A = 1",
+                        "children": [{"type": "DISPLAY", "operands": ["ONE"]}],
+                    },
+                    {
+                        "type": "WHEN_OTHER",
+                        "children": [{"type": "DISPLAY", "operands": ["OTHER"]}],
+                    },
+                ],
+            }
+        )
+        assert isinstance(stmt, EvaluateStatement)
+        assert len(stmt.children) == 2
+        assert isinstance(stmt.children[0], WhenStatement)
+        assert isinstance(stmt.children[1], WhenOtherStatement)
+
+    def test_display(self):
+        stmt = parse_statement({"type": "DISPLAY", "operands": ["HELLO"]})
+        assert isinstance(stmt, DisplayStatement)
+        assert stmt.operand == "HELLO"
+
+    def test_goto(self):
+        stmt = parse_statement({"type": "GOTO", "operands": ["OTHER-PARA"]})
+        assert isinstance(stmt, GotoStatement)
+        assert stmt.target == "OTHER-PARA"
+
+    def test_stop_run(self):
+        stmt = parse_statement({"type": "STOP_RUN"})
+        assert isinstance(stmt, StopRunStatement)
+
+    def test_perform_procedure(self):
+        stmt = parse_statement({"type": "PERFORM", "operands": ["WORK-PARA"]})
+        assert isinstance(stmt, PerformStatement)
+        assert stmt.target == "WORK-PARA"
+        assert stmt.thru == ""
+        assert stmt.spec is None
+
+    def test_perform_thru(self):
+        stmt = parse_statement(
+            {"type": "PERFORM", "operands": ["FIRST-PARA"], "thru": "LAST-PARA"}
+        )
+        assert isinstance(stmt, PerformStatement)
+        assert stmt.target == "FIRST-PARA"
+        assert stmt.thru == "LAST-PARA"
+
+    def test_perform_inline(self):
+        stmt = parse_statement(
+            {
+                "type": "PERFORM",
+                "children": [{"type": "DISPLAY", "operands": ["IN-LOOP"]}],
+            }
+        )
+        assert isinstance(stmt, PerformStatement)
+        assert stmt.target == ""
+        assert len(stmt.children) == 1
+
+    def test_unknown_type_raises(self):
+        with pytest.raises(ValueError, match="Unknown COBOL statement type"):
+            parse_statement({"type": "BOGUS"})
+
+
+class TestPerformSpecs:
+    def test_times_spec(self):
+        stmt = parse_statement(
+            {
+                "type": "PERFORM",
+                "operands": ["WORK-PARA"],
+                "perform_type": "TIMES",
+                "times": "5",
+            }
+        )
+        assert isinstance(stmt, PerformStatement)
+        assert isinstance(stmt.spec, PerformTimesSpec)
+        assert stmt.spec.times == "5"
+
+    def test_until_spec_test_before(self):
+        stmt = parse_statement(
+            {
+                "type": "PERFORM",
+                "operands": ["WORK-PARA"],
+                "perform_type": "UNTIL",
+                "until": "WS-A > 10",
+                "test_before": True,
+            }
+        )
+        assert isinstance(stmt.spec, PerformUntilSpec)
+        assert stmt.spec.condition == "WS-A > 10"
+        assert stmt.spec.test_before is True
+
+    def test_until_spec_test_after(self):
+        stmt = parse_statement(
+            {
+                "type": "PERFORM",
+                "operands": ["WORK-PARA"],
+                "perform_type": "UNTIL",
+                "until": "WS-A > 10",
+                "test_before": False,
+            }
+        )
+        assert isinstance(stmt.spec, PerformUntilSpec)
+        assert stmt.spec.test_before is False
+
+    def test_varying_spec(self):
+        stmt = parse_statement(
+            {
+                "type": "PERFORM",
+                "children": [{"type": "DISPLAY", "operands": ["LOOP"]}],
+                "perform_type": "VARYING",
+                "varying_var": "WS-IDX",
+                "varying_from": "1",
+                "varying_by": "1",
+                "until": "WS-IDX > 10",
+                "test_before": True,
+            }
+        )
+        assert isinstance(stmt.spec, PerformVaryingSpec)
+        assert stmt.spec.varying_var == "WS-IDX"
+        assert stmt.spec.varying_from == "1"
+        assert stmt.spec.varying_by == "1"
+        assert stmt.spec.condition == "WS-IDX > 10"
+
+    def test_no_perform_type_gives_none_spec(self):
+        stmt = parse_statement({"type": "PERFORM", "operands": ["WORK-PARA"]})
+        assert stmt.spec is None
+
+
+class TestRoundTrip:
+    """Each statement type round-trips through to_dict / parse_statement."""
+
+    def _round_trip(self, data: dict) -> dict:
+        stmt = parse_statement(data)
+        return stmt.to_dict()
+
+    def test_move_round_trip(self):
+        data = {"type": "MOVE", "operands": ["123", "WS-A"]}
+        assert self._round_trip(data) == data
+
+    def test_add_round_trip(self):
+        data = {"type": "ADD", "operands": ["5", "WS-A"]}
+        assert self._round_trip(data) == data
+
+    def test_display_round_trip(self):
+        data = {"type": "DISPLAY", "operands": ["HELLO"]}
+        assert self._round_trip(data) == data
+
+    def test_goto_round_trip(self):
+        data = {"type": "GOTO", "operands": ["PARA-X"]}
+        assert self._round_trip(data) == data
+
+    def test_stop_run_round_trip(self):
+        data = {"type": "STOP_RUN"}
+        assert self._round_trip(data) == data
+
+    def test_if_round_trip(self):
+        data = {
+            "type": "IF",
+            "condition": "WS-A > 0",
+            "children": [{"type": "DISPLAY", "operands": ["YES"]}],
+        }
+        assert self._round_trip(data) == data
+
+    def test_perform_procedure_round_trip(self):
+        data = {"type": "PERFORM", "operands": ["WORK-PARA"]}
+        assert self._round_trip(data) == data
+
+    def test_perform_thru_round_trip(self):
+        data = {"type": "PERFORM", "operands": ["FIRST"], "thru": "LAST"}
+        assert self._round_trip(data) == data
+
+    def test_perform_times_round_trip(self):
+        data = {
+            "type": "PERFORM",
+            "operands": ["WORK"],
+            "perform_type": "TIMES",
+            "times": "5",
+        }
+        assert self._round_trip(data) == data
+
+    def test_perform_until_round_trip(self):
+        data = {
+            "type": "PERFORM",
+            "operands": ["WORK"],
+            "perform_type": "UNTIL",
+            "until": "WS-A > 10",
+            "test_before": True,
+        }
+        assert self._round_trip(data) == data
+
+    def test_perform_varying_round_trip(self):
+        data = {
+            "type": "PERFORM",
+            "operands": ["WORK"],
+            "perform_type": "VARYING",
+            "varying_var": "WS-IDX",
+            "varying_from": "1",
+            "varying_by": "1",
+            "until": "WS-IDX > 10",
+            "test_before": True,
+        }
+        assert self._round_trip(data) == data
+
+    def test_evaluate_round_trip(self):
+        data = {
+            "type": "EVALUATE",
+            "children": [
+                {
+                    "type": "WHEN",
+                    "condition": "WS-A = 1",
+                    "children": [{"type": "DISPLAY", "operands": ["ONE"]}],
+                },
+                {
+                    "type": "WHEN_OTHER",
+                    "children": [{"type": "DISPLAY", "operands": ["OTHER"]}],
+                },
+            ],
+        }
+        assert self._round_trip(data) == data

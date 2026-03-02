@@ -4,6 +4,7 @@ import json
 
 from interpreter.cobol.asg_types import CobolASG
 from interpreter.cobol.cobol_parser import ProLeapCobolParser
+from interpreter.cobol.cobol_statements import DisplayStatement
 from interpreter.cobol.subprocess_runner import CobolParseError, SubprocessRunner
 
 import pytest
@@ -66,7 +67,7 @@ class TestProLeapCobolParser:
 
         asg = parser.parse(b"")
         assert len(asg.sections) == 1
-        assert asg.sections[0].paragraphs[0].statements[0].type == "DISPLAY"
+        assert isinstance(asg.sections[0].paragraphs[0].statements[0], DisplayStatement)
 
     def test_parse_error_raises(self):
         runner = FakeSubprocessRunner("", should_fail=True)

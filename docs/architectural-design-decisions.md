@@ -633,3 +633,36 @@ Benefits:
 Trade-offs:
 - Dynamic branch targets in RESUME_CONTINUATION mean the CFG cannot statically wire return edges — static analysis sees only the fall-through path. Future work can trace SET_CONTINUATION instructions to wire additional edges.
 - The continuation table adds a small state footprint to the VM (one dict entry per active PERFORM)
+
+---
+
+### ADR-031: Typed COBOL statement hierarchy, PERFORM loop variants, and section-level PERFORM (2026-03-02)
+
+**Context:** The `CobolStatement` class was a flat bag of optional fields (`operands`, `children`, `condition`, `thru`) shared across 10+ statement types. The Java bridge discarded `PerformType` information entirely, so PERFORM TIMES, UNTIL, and VARYING loops were silently dropped. Section-level PERFORM (where the target is a section containing multiple paragraphs) was also unsupported.
+
+**Decision:**
+
+1. **Typed statement hierarchy:** Replace `CobolStatement` with a discriminated union of frozen dataclasses (`MoveStatement`, `ArithmeticStatement`, `IfStatement`, `PerformStatement`, `DisplayStatement`, `GotoStatement`, `StopRunStatement`, `EvaluateStatement`, `WhenStatement`, `WhenOtherStatement`). Each type carries only its specific fields. A `parse_statement(dict)` function dispatches on the `type` discriminator.
+
+2. **PERFORM specs:** Three frozen dataclasses — `PerformTimesSpec`, `PerformUntilSpec`, `PerformVaryingSpec` — carried as an optional `spec` field on `PerformStatement`.
+
+3. **Java bridge PerformType serialization:** `serializePerformType()` extracts `PerformType` from both `PerformProcedureStatement` and `PerformInlineStatement`, emitting `perform_type`, `times`, `until`, `varying_var`, `varying_from`, `varying_by`, `test_before` JSON fields.
+
+4. **Loop lowering:** All three loop patterns compose from existing opcodes (no new VM opcodes):
+   - TIMES: `STORE_VAR` counter + `LOAD_VAR`/`BINOP >=`/`BRANCH_IF` loop
+   - UNTIL: condition `BRANCH_IF` loop (TEST BEFORE: check-then-body; TEST AFTER: body-then-check)
+   - VARYING: field init + condition loop + `BINOP +` increment + encode-back
+
+5. **Section-level PERFORM:** Frontend builds a `_section_paragraphs` lookup. When PERFORM target matches a section name, it branches to `section_X` and sets continuation at `section_X_end`. Sections emit `RESUME_CONTINUATION("section_X_end")` after their last paragraph.
+
+**Consequences:**
+
+Benefits:
+- Type safety: field access is checked at the type level (`stmt.source` vs `stmt.operands[0]`)
+- No new VM opcodes — loops compose from STORE_VAR/LOAD_VAR/BINOP/BRANCH_IF
+- Section PERFORM and paragraph PERFORM share the same continuation mechanism
+- Java bridge now preserves full PerformType information
+
+Trade-offs:
+- Existing code constructing `CobolStatement` directly must migrate to the new types
+- `isinstance` dispatch in `_lower_statement` is slightly more verbose than dict dispatch

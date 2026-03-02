@@ -6,9 +6,21 @@ from interpreter.cobol.asg_types import (
     CobolASG,
     CobolField,
     CobolParagraph,
-    CobolStatement,
 )
 from interpreter.cobol.cobol_frontend import CobolFrontend
+from interpreter.cobol.cobol_statements import (
+    ArithmeticStatement,
+    CobolStatementType,
+    DisplayStatement,
+    GotoStatement,
+    IfStatement,
+    MoveStatement,
+    PerformStatement,
+    PerformTimesSpec,
+    PerformUntilSpec,
+    PerformVaryingSpec,
+    StopRunStatement,
+)
 from interpreter.ir import IRInstruction, Opcode
 
 
@@ -136,7 +148,7 @@ class TestProcedureDivisionLowering:
     def _lower_with_field_and_stmts(
         self,
         fields: list[CobolField],
-        stmts: list[CobolStatement],
+        stmts: list[CobolStatementType],
     ) -> list[IRInstruction]:
         asg = CobolASG(
             data_fields=fields,
@@ -149,7 +161,7 @@ class TestProcedureDivisionLowering:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        stmts = [CobolStatement(type="MOVE", operands=["123", "WS-A"])]
+        stmts = [MoveStatement(source="123", target="WS-A")]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         # Should produce WRITE_REGION for the MOVE
@@ -168,7 +180,7 @@ class TestProcedureDivisionLowering:
             ),
             CobolField(name="WS-B", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        stmts = [CobolStatement(type="MOVE", operands=["WS-A", "WS-B"])]
+        stmts = [MoveStatement(source="WS-A", target="WS-B")]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         # Should produce LOAD_REGION (decode WS-A) + WRITE_REGION (encode to WS-B)
@@ -183,7 +195,7 @@ class TestProcedureDivisionLowering:
                 name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="10"
             ),
         ]
-        stmts = [CobolStatement(type="ADD", operands=["5", "WS-A"])]
+        stmts = [ArithmeticStatement(op="ADD", source="5", target="WS-A")]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         binops = _find_opcodes(instructions, Opcode.BINOP)
@@ -196,7 +208,7 @@ class TestProcedureDivisionLowering:
                 name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="10"
             ),
         ]
-        stmts = [CobolStatement(type="SUBTRACT", operands=["3", "WS-A"])]
+        stmts = [ArithmeticStatement(op="SUBTRACT", source="3", target="WS-A")]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         binops = _find_opcodes(instructions, Opcode.BINOP)
@@ -210,11 +222,10 @@ class TestProcedureDivisionLowering:
             ),
         ]
         stmts = [
-            CobolStatement(
-                type="IF",
+            IfStatement(
                 condition="WS-A > 0",
                 children=[
-                    CobolStatement(type="DISPLAY", operands=["POSITIVE"]),
+                    DisplayStatement(operand="POSITIVE"),
                 ],
             ),
         ]
@@ -227,7 +238,7 @@ class TestProcedureDivisionLowering:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        stmts = [CobolStatement(type="DISPLAY", operands=["HELLO WORLD"])]
+        stmts = [DisplayStatement(operand="HELLO WORLD")]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
@@ -240,7 +251,7 @@ class TestProcedureDivisionLowering:
                 name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="42"
             ),
         ]
-        stmts = [CobolStatement(type="DISPLAY", operands=["WS-A"])]
+        stmts = [DisplayStatement(operand="WS-A")]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         # Should LOAD_REGION to decode the field, then call print
@@ -254,7 +265,7 @@ class TestProcedureDivisionLowering:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        stmts = [CobolStatement(type="STOP_RUN")]
+        stmts = [StopRunStatement()]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         returns = _find_opcodes(instructions, Opcode.RETURN)
@@ -264,7 +275,7 @@ class TestProcedureDivisionLowering:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        stmts = [CobolStatement(type="GOTO", operands=["OTHER-PARA"])]
+        stmts = [GotoStatement(target="OTHER-PARA")]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         branches = _find_opcodes(instructions, Opcode.BRANCH)
@@ -277,7 +288,7 @@ class TestProcedureDivisionLowering:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        stmts = [CobolStatement(type="PERFORM", operands=["WORK-PARA"])]
+        stmts = [PerformStatement(target="WORK-PARA")]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         # Should emit SET_CONTINUATION before the BRANCH
@@ -295,7 +306,7 @@ class TestProcedureDivisionLowering:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        stmts = [CobolStatement(type="STOP_RUN")]
+        stmts = [StopRunStatement()]
 
         asg = CobolASG(
             data_fields=fields,
@@ -313,9 +324,7 @@ class TestProcedureDivisionLowering:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        stmts = [
-            CobolStatement(type="PERFORM", operands=["FIRST-PARA"], thru="LAST-PARA")
-        ]
+        stmts = [PerformStatement(target="FIRST-PARA", thru="LAST-PARA")]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
         set_conts = _find_opcodes(instructions, Opcode.SET_CONTINUATION)
@@ -333,7 +342,7 @@ class TestProcedureDivisionLowering:
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
-        stmts = [CobolStatement(type="STOP_RUN")]
+        stmts = [StopRunStatement()]
 
         asg = CobolASG(
             data_fields=fields,
@@ -345,3 +354,239 @@ class TestProcedureDivisionLowering:
         labels = _find_opcodes(instructions, Opcode.LABEL)
         label_names = [inst.label for inst in labels]
         assert "para_MAIN" in label_names
+
+
+class TestPerformLoopLowering:
+    """Tests for PERFORM TIMES / UNTIL / VARYING IR lowering."""
+
+    def _lower_with_field_and_stmts(
+        self,
+        fields: list[CobolField],
+        stmts: list[CobolStatementType],
+        paragraphs: list[CobolParagraph] = [],
+    ) -> list[IRInstruction]:
+        asg = CobolASG(
+            data_fields=fields,
+            paragraphs=[CobolParagraph(name="MAIN", statements=stmts)] + paragraphs,
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        return frontend.lower(None, b"")
+
+    def test_perform_times_inline_emits_counter_loop(self):
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
+        ]
+        stmts = [
+            PerformStatement(
+                children=[DisplayStatement(operand="IN-LOOP")],
+                spec=PerformTimesSpec(times="3"),
+            ),
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should emit STORE_VAR (counter init), LOAD_VAR, BINOP >=, BRANCH_IF
+        store_vars = _find_opcodes(instructions, Opcode.STORE_VAR)
+        assert len(store_vars) >= 1  # counter init
+
+        load_vars = _find_opcodes(instructions, Opcode.LOAD_VAR)
+        assert len(load_vars) >= 1  # counter check
+
+        binops = _find_opcodes(instructions, Opcode.BINOP)
+        ge_ops = [b for b in binops if b.operands[0] == ">="]
+        assert len(ge_ops) >= 1  # counter >= times
+
+        branch_ifs = _find_opcodes(instructions, Opcode.BRANCH_IF)
+        assert len(branch_ifs) >= 1
+
+    def test_perform_times_procedure_emits_set_continuation_in_loop(self):
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
+        ]
+        stmts = [
+            PerformStatement(
+                target="WORK-PARA",
+                spec=PerformTimesSpec(times="2"),
+            ),
+        ]
+        paragraphs = [
+            CobolParagraph(
+                name="WORK-PARA",
+                statements=[DisplayStatement(operand="WORKING")],
+            ),
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts, paragraphs)
+
+        # Should have SET_CONTINUATION inside the loop
+        set_conts = _find_opcodes(instructions, Opcode.SET_CONTINUATION)
+        assert len(set_conts) >= 1
+
+        # Should have counter logic
+        store_vars = _find_opcodes(instructions, Opcode.STORE_VAR)
+        assert len(store_vars) >= 1
+
+    def test_perform_until_test_before_condition_first(self):
+        fields = [
+            CobolField(
+                name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="5"
+            ),
+        ]
+        stmts = [
+            PerformStatement(
+                children=[DisplayStatement(operand="LOOPING")],
+                spec=PerformUntilSpec(condition="WS-A > 10", test_before=True),
+            ),
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should have BRANCH_IF for condition check
+        branch_ifs = _find_opcodes(instructions, Opcode.BRANCH_IF)
+        assert len(branch_ifs) >= 1
+
+        # Should have comparison BINOP
+        binops = _find_opcodes(instructions, Opcode.BINOP)
+        gt_ops = [b for b in binops if b.operands[0] == ">"]
+        assert len(gt_ops) >= 1
+
+    def test_perform_until_test_after_body_first(self):
+        fields = [
+            CobolField(
+                name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="5"
+            ),
+        ]
+        stmts = [
+            PerformStatement(
+                children=[DisplayStatement(operand="LOOPING")],
+                spec=PerformUntilSpec(condition="WS-A > 10", test_before=False),
+            ),
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # For TEST AFTER, body comes before condition check
+        # Find the print call (body) and the BRANCH_IF (condition)
+        all_ops = [(i, inst.opcode) for i, inst in enumerate(instructions)]
+        print_indices = [
+            i
+            for i, inst in enumerate(instructions)
+            if inst.opcode == Opcode.CALL_FUNCTION
+            and inst.operands
+            and inst.operands[0] == "print"
+        ]
+        branch_if_indices = [
+            i for i, inst in enumerate(instructions) if inst.opcode == Opcode.BRANCH_IF
+        ]
+        # At least one of the print calls should come before the BRANCH_IF
+        assert any(
+            pi < bi for pi in print_indices for bi in branch_if_indices
+        ), "TEST AFTER should have body before condition"
+
+    def test_perform_varying_inline_emits_init_and_increment(self):
+        fields = [
+            CobolField(
+                name="WS-IDX",
+                level=77,
+                pic="9(3)",
+                usage="DISPLAY",
+                offset=0,
+                value="0",
+            ),
+        ]
+        stmts = [
+            PerformStatement(
+                children=[DisplayStatement(operand="VARYING-LOOP")],
+                spec=PerformVaryingSpec(
+                    varying_var="WS-IDX",
+                    varying_from="1",
+                    varying_by="1",
+                    condition="WS-IDX > 5",
+                    test_before=True,
+                ),
+            ),
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should have WRITE_REGION for init (FROM value) and for increment
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        # At least: initial field value + FROM init + increment encode back
+        assert len(writes) >= 2
+
+        # Should have BINOP + for increment
+        binops = _find_opcodes(instructions, Opcode.BINOP)
+        plus_ops = [b for b in binops if b.operands[0] == "+"]
+        assert len(plus_ops) >= 1
+
+
+class TestSectionPerform:
+    """Tests for section-level PERFORM."""
+
+    def test_perform_section_branches_to_section_label(self):
+        from interpreter.cobol.asg_types import CobolSection
+
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
+        ]
+        asg = CobolASG(
+            data_fields=fields,
+            paragraphs=[
+                CobolParagraph(
+                    name="MAIN",
+                    statements=[
+                        PerformStatement(target="WORK-SECTION"),
+                        StopRunStatement(),
+                    ],
+                ),
+            ],
+            sections=[
+                CobolSection(
+                    name="WORK-SECTION",
+                    paragraphs=[
+                        CobolParagraph(
+                            name="WORK-PARA",
+                            statements=[DisplayStatement(operand="IN-SECTION")],
+                        ),
+                    ],
+                ),
+            ],
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+
+        # Should branch to section_WORK-SECTION
+        branches = _find_opcodes(instructions, Opcode.BRANCH)
+        section_branches = [
+            b for b in branches if b.label and "section_WORK-SECTION" == b.label
+        ]
+        assert len(section_branches) >= 1
+
+        # Should set continuation at section end
+        set_conts = _find_opcodes(instructions, Opcode.SET_CONTINUATION)
+        section_conts = [
+            s for s in set_conts if s.operands[0] == "section_WORK-SECTION_end"
+        ]
+        assert len(section_conts) >= 1
+
+    def test_section_emits_end_resume_continuation(self):
+        from interpreter.cobol.asg_types import CobolSection
+
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
+        ]
+        asg = CobolASG(
+            data_fields=fields,
+            sections=[
+                CobolSection(
+                    name="MY-SECTION",
+                    paragraphs=[
+                        CobolParagraph(
+                            name="PARA-A",
+                            statements=[StopRunStatement()],
+                        ),
+                    ],
+                ),
+            ],
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+
+        resume_conts = _find_opcodes(instructions, Opcode.RESUME_CONTINUATION)
+        resume_names = [inst.operands[0] for inst in resume_conts]
+        assert "section_MY-SECTION_end" in resume_names

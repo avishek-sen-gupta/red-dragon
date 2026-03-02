@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from interpreter.cobol.cobol_statements import CobolStatementType, parse_statement
+
 
 @dataclass(frozen=True)
 class CobolField:
@@ -65,61 +67,17 @@ class CobolField:
 
 
 @dataclass(frozen=True)
-class CobolStatement:
-    """A COBOL PROCEDURE DIVISION statement.
-
-    Attributes:
-        type: Statement type ("MOVE", "ADD", "SUBTRACT", "MULTIPLY",
-              "DIVIDE", "IF", "PERFORM", "DISPLAY", "STOP_RUN",
-              "GOTO", "EVALUATE").
-        operands: Statement-specific operands (strings or dicts).
-        children: Nested statements (IF body, PERFORM body, etc.).
-        condition: Condition expression for IF/EVALUATE.
-    """
-
-    type: str
-    operands: list = field(default_factory=list)
-    children: list[CobolStatement] = field(default_factory=list)
-    condition: str = ""
-    thru: str = ""
-
-    @classmethod
-    def from_dict(cls, data: dict) -> CobolStatement:
-        return cls(
-            type=data["type"],
-            operands=data.get("operands", []),
-            children=[CobolStatement.from_dict(c) for c in data.get("children", [])],
-            condition=data.get("condition", ""),
-            thru=data.get("thru", ""),
-        )
-
-    def to_dict(self) -> dict:
-        result: dict = {"type": self.type}
-        if self.operands:
-            result["operands"] = self.operands
-        if self.children:
-            result["children"] = [c.to_dict() for c in self.children]
-        if self.condition:
-            result["condition"] = self.condition
-        if self.thru:
-            result["thru"] = self.thru
-        return result
-
-
-@dataclass(frozen=True)
 class CobolParagraph:
     """A COBOL paragraph — a named block of statements."""
 
     name: str
-    statements: list[CobolStatement] = field(default_factory=list)
+    statements: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolParagraph:
         return cls(
             name=data["name"],
-            statements=[
-                CobolStatement.from_dict(s) for s in data.get("statements", [])
-            ],
+            statements=[parse_statement(s) for s in data.get("statements", [])],
         )
 
     def to_dict(self) -> dict:
