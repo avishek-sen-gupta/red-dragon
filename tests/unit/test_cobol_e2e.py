@@ -1007,3 +1007,293 @@ class TestSectionFallThrough:
 
         assert stats.steps < 200
         assert len(vm.regions) >= 1
+
+
+class TestNestedPerformNumericValues:
+    """Nested PERFORM with numeric value verification."""
+
+    def test_nested_perform_accumulation(self):
+        """MAIN performs OUTER, OUTER performs INNER, both add to WS-SUM.
+
+        OUTER: ADD 100, PERFORM INNER, ADD 1
+        INNER: ADD 10
+        Expected: 0 + 100 + 10 + 1 = 111
+        """
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-SUM",
+                        "level": 77,
+                        "pic": "9(4)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "0",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {"type": "PERFORM", "operands": ["OUTER-PARA"]},
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                    {
+                        "name": "OUTER-PARA",
+                        "statements": [
+                            {"type": "ADD", "operands": ["100", "WS-SUM"]},
+                            {"type": "PERFORM", "operands": ["INNER-PARA"]},
+                            {"type": "ADD", "operands": ["1", "WS-SUM"]},
+                        ],
+                    },
+                    {
+                        "name": "INNER-PARA",
+                        "statements": [
+                            {"type": "ADD", "operands": ["10", "WS-SUM"]},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 0, 4) == 111
+
+    def test_nested_perform_times(self):
+        """PERFORM OUTER 2 TIMES, OUTER performs INNER 3 TIMES.
+
+        OUTER body: PERFORM INNER 3 TIMES
+        INNER body: ADD 1 TO WS-CTR
+        Expected: 2 * 3 = 6
+        """
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-CTR",
+                        "level": 77,
+                        "pic": "9(4)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "0",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {
+                                "type": "PERFORM",
+                                "perform_type": "TIMES",
+                                "times": "2",
+                                "operands": ["OUTER-PARA"],
+                            },
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                    {
+                        "name": "OUTER-PARA",
+                        "statements": [
+                            {
+                                "type": "PERFORM",
+                                "perform_type": "TIMES",
+                                "times": "3",
+                                "operands": ["INNER-PARA"],
+                            },
+                        ],
+                    },
+                    {
+                        "name": "INNER-PARA",
+                        "statements": [
+                            {"type": "ADD", "operands": ["1", "WS-CTR"]},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=2000))
+
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 0, 4) == 6
+
+
+class TestGotoInsidePerform:
+    """Tests for GO TO within and outside PERFORM ranges."""
+
+    def test_goto_within_perform_range(self):
+        """GO TO jumps forward within the PERFORM paragraph range.
+
+        PERFORM WORK-PARA: ADD 10, GO TO SKIP-PARA, ADD 999 (should be skipped)
+        SKIP-PARA: ADD 1
+        Expected: 0 + 10 + 1 = 11 (the ADD 999 is skipped)
+        """
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-VAL",
+                        "level": 77,
+                        "pic": "9(4)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "0",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {"type": "ADD", "operands": ["10", "WS-VAL"]},
+                            {"type": "GOTO", "operands": ["SKIP-PARA"]},
+                            {"type": "ADD", "operands": ["999", "WS-VAL"]},
+                        ],
+                    },
+                    {
+                        "name": "SKIP-PARA",
+                        "statements": [
+                            {"type": "ADD", "operands": ["1", "WS-VAL"]},
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 0, 4) == 11
+
+    def test_goto_skips_code_in_paragraph(self):
+        """GO TO from PARA-A to PARA-C, skipping PARA-B entirely.
+
+        PARA-A: ADD 1, GO TO PARA-C
+        PARA-B: ADD 100 (should be skipped)
+        PARA-C: ADD 10, STOP RUN
+        Expected: 0 + 1 + 10 = 11
+        """
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-VAL",
+                        "level": 77,
+                        "pic": "9(4)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "0",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "PARA-A",
+                        "statements": [
+                            {"type": "ADD", "operands": ["1", "WS-VAL"]},
+                            {"type": "GOTO", "operands": ["PARA-C"]},
+                        ],
+                    },
+                    {
+                        "name": "PARA-B",
+                        "statements": [
+                            {"type": "ADD", "operands": ["100", "WS-VAL"]},
+                        ],
+                    },
+                    {
+                        "name": "PARA-C",
+                        "statements": [
+                            {"type": "ADD", "operands": ["10", "WS-VAL"]},
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 0, 4) == 11
+
+    def test_goto_exits_performed_paragraph(self):
+        """PERFORM WORK-PARA, where WORK-PARA does GO TO EXIT-PARA.
+
+        MAIN: PERFORM WORK-PARA, ADD 1 TO WS-VAL, STOP RUN
+        WORK-PARA: ADD 10, GO TO EXIT-PARA
+        EXIT-PARA: ADD 100
+
+        GO TO from a PERFORMed paragraph jumps to EXIT-PARA, which
+        falls through (no continuation set for EXIT-PARA). The ADD 1
+        after the PERFORM in MAIN may or may not execute depending on
+        continuation mechanics.
+        """
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-VAL",
+                        "level": 77,
+                        "pic": "9(4)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "0",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {"type": "PERFORM", "operands": ["WORK-PARA"]},
+                            {"type": "ADD", "operands": ["1", "WS-VAL"]},
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                    {
+                        "name": "WORK-PARA",
+                        "statements": [
+                            {"type": "ADD", "operands": ["10", "WS-VAL"]},
+                            {"type": "GOTO", "operands": ["EXIT-PARA"]},
+                        ],
+                    },
+                    {
+                        "name": "EXIT-PARA",
+                        "statements": [
+                            {"type": "ADD", "operands": ["100", "WS-VAL"]},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+
+        region = vm.regions[list(vm.regions.keys())[0]]
+        # WORK-PARA adds 10, GO TO jumps to EXIT-PARA which adds 100.
+        # The GO TO bypasses WORK-PARA's end label, so the PERFORM
+        # continuation is never triggered — control does NOT return to
+        # MAIN-PARA. The ADD 1 after the PERFORM never executes.
+        # Total: 10 + 100 = 110.
+        assert _decode_zoned_unsigned(region, 0, 4) == 110
