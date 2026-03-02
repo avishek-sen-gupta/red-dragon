@@ -575,6 +575,289 @@ class TestPerformVaryingExecution:
         assert len(vm.regions) >= 1
 
 
+def _decode_zoned_unsigned(region: list[int], offset: int, length: int) -> int:
+    """Decode unsigned zoned decimal from a memory region.
+
+    Each byte is EBCDIC zoned: 0xF0=0, 0xF1=1, ..., 0xF9=9.
+    The digit is in the low nibble (b & 0x0F).
+    """
+    digits = [region[offset + i] & 0x0F for i in range(length)]
+    return sum(d * (10 ** (length - 1 - i)) for i, d in enumerate(digits))
+
+
+class TestNumericValueVerification:
+    """Verify that e2e execution produces correct numeric values in memory regions."""
+
+    def test_move_literal_value(self):
+        """MOVE 42 TO WS-A → WS-A should decode to 42."""
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-A",
+                        "level": 77,
+                        "pic": "9(3)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "0",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {"type": "MOVE", "operands": ["42", "WS-A"]},
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 0, 3) == 42
+
+    def test_add_two_values(self):
+        """WS-A=10, WS-B=5, ADD WS-A WS-B → WS-B should be 15."""
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-A",
+                        "level": 77,
+                        "pic": "9(4)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "10",
+                    },
+                    {
+                        "name": "WS-B",
+                        "level": 77,
+                        "pic": "9(4)",
+                        "usage": "DISPLAY",
+                        "offset": 4,
+                        "value": "5",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {"type": "ADD", "operands": ["WS-A", "WS-B"]},
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 0, 4) == 10  # WS-A unchanged
+        assert _decode_zoned_unsigned(region, 4, 4) == 15  # WS-B = 10 + 5
+
+    def test_subtract_values(self):
+        """WS-A=10, WS-B=3, SUBTRACT WS-B FROM WS-A → WS-A should be 7."""
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-A",
+                        "level": 77,
+                        "pic": "9(4)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "10",
+                    },
+                    {
+                        "name": "WS-B",
+                        "level": 77,
+                        "pic": "9(4)",
+                        "usage": "DISPLAY",
+                        "offset": 4,
+                        "value": "3",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {"type": "SUBTRACT", "operands": ["WS-B", "WS-A"]},
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 0, 4) == 7  # WS-A = 10 - 3
+
+    def test_add_literal_to_field(self):
+        """WS-A=0, ADD 25 TO WS-A → WS-A should be 25."""
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-A",
+                        "level": 77,
+                        "pic": "9(4)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "0",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {"type": "ADD", "operands": ["25", "WS-A"]},
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 0, 4) == 25
+
+    def test_perform_times_accumulation(self):
+        """PERFORM 3 TIMES with ADD 1 TO WS-CTR → WS-CTR should be 3."""
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-CTR",
+                        "level": 77,
+                        "pic": "9(4)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "0",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {
+                                "type": "PERFORM",
+                                "perform_type": "TIMES",
+                                "times": "3",
+                                "children": [
+                                    {"type": "ADD", "operands": ["1", "WS-CTR"]},
+                                ],
+                            },
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
+
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 0, 4) == 3
+
+    def test_initial_value_encoding(self):
+        """Initial VALUE 123 should encode correctly in the region."""
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-A",
+                        "level": 77,
+                        "pic": "9(4)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "123",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 0, 4) == 123
+
+    def test_multiple_adds_accumulate(self):
+        """WS-R=0, ADD 10 TO WS-R, ADD 5 TO WS-R → WS-R should be 15."""
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-R",
+                        "level": 77,
+                        "pic": "9(4)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "0",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {"type": "ADD", "operands": ["10", "WS-R"]},
+                            {"type": "ADD", "operands": ["5", "WS-R"]},
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 0, 4) == 15
+
+
 class TestSectionFallThrough:
     """Test that paragraphs within a section execute sequentially."""
 

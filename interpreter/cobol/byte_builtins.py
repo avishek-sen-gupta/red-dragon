@@ -227,7 +227,11 @@ def _builtin_cobol_prepare_digits(args: list[Any], vm: Any) -> Any:
         args[2],
         args[3],
     )
-    if not isinstance(value_str, str) or not isinstance(total_digits, int):
+    if not isinstance(total_digits, int):
+        return _UNCOMPUTABLE
+    if isinstance(value_str, (int, float)):
+        value_str = str(value_str)
+    if not isinstance(value_str, str):
         return _UNCOMPUTABLE
 
     from interpreter.cobol.data_filters import align_decimal, left_adjust
@@ -237,7 +241,8 @@ def _builtin_cobol_prepare_digits(args: list[Any], vm: Any) -> Any:
         integer_digits = total_digits - decimal_digits
         digit_str = align_decimal(clean, integer_digits, decimal_digits)
     else:
-        digit_str = left_adjust(clean.replace(".", ""), total_digits)
+        integer_part = clean.split(".")[0] if "." in clean else clean
+        digit_str = left_adjust(integer_part, total_digits)
 
     return [int(ch) if ch.isdigit() else 0 for ch in digit_str]
 
@@ -251,6 +256,8 @@ def _builtin_cobol_prepare_sign(args: list[Any], vm: Any) -> Any:
     if len(args) < 2 or any(_is_symbolic(a) for a in args):
         return _UNCOMPUTABLE
     value_str, signed = args[0], args[1]
+    if isinstance(value_str, (int, float)):
+        value_str = str(value_str)
     if not isinstance(value_str, str):
         return _UNCOMPUTABLE
     if not signed:

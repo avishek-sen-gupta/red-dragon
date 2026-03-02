@@ -13,6 +13,8 @@ from interpreter.cobol.byte_builtins import (
     _builtin_list_slice,
     _builtin_list_concat,
     _builtin_make_list,
+    _builtin_cobol_prepare_digits,
+    _builtin_cobol_prepare_sign,
     BYTE_BUILTINS,
 )
 from interpreter.vm import Operators
@@ -188,3 +190,155 @@ class TestByteBuiltinsRegistration:
 
         for name in BYTE_BUILTINS:
             assert name in Builtins.TABLE, f"{name} not in Builtins.TABLE"
+
+
+class TestCobolPrepareDigits:
+    """Tests for __cobol_prepare_digits numeric encoding."""
+
+    def test_integer_string_pic9_4(self):
+        """PIC 9(4), value '10' → [0, 0, 1, 0]."""
+        assert _builtin_cobol_prepare_digits(["10", 4, 0, False], None) == [0, 0, 1, 0]
+
+    def test_float_string_no_decimals(self):
+        """PIC 9(4), value '10.0' → [0, 0, 1, 0] (fractional part discarded)."""
+        assert _builtin_cobol_prepare_digits(["10.0", 4, 0, False], None) == [
+            0,
+            0,
+            1,
+            0,
+        ]
+
+    def test_float_string_large_value(self):
+        """PIC 9(4), value '105.0' → [0, 1, 0, 5]."""
+        assert _builtin_cobol_prepare_digits(["105.0", 4, 0, False], None) == [
+            0,
+            1,
+            0,
+            5,
+        ]
+
+    def test_float_string_zero(self):
+        """PIC 9(4), value '0.0' → [0, 0, 0, 0]."""
+        assert _builtin_cobol_prepare_digits(["0.0", 4, 0, False], None) == [0, 0, 0, 0]
+
+    def test_float_string_one(self):
+        """PIC 9(4), value '1.0' → [0, 0, 0, 1]."""
+        assert _builtin_cobol_prepare_digits(["1.0", 4, 0, False], None) == [0, 0, 0, 1]
+
+    def test_float_string_with_fractional_discarded(self):
+        """PIC 9(4), value '15.75' → [0, 0, 1, 5] (fractional part discarded)."""
+        assert _builtin_cobol_prepare_digits(["15.75", 4, 0, False], None) == [
+            0,
+            0,
+            1,
+            5,
+        ]
+
+    def test_integer_fills_all_digits(self):
+        """PIC 9(4), value '9999' → [9, 9, 9, 9]."""
+        assert _builtin_cobol_prepare_digits(["9999", 4, 0, False], None) == [
+            9,
+            9,
+            9,
+            9,
+        ]
+
+    def test_integer_zero(self):
+        """PIC 9(4), value '0' → [0, 0, 0, 0]."""
+        assert _builtin_cobol_prepare_digits(["0", 4, 0, False], None) == [0, 0, 0, 0]
+
+    def test_with_decimal_digits(self):
+        """PIC 9(2)V9(2), value '12.34' → [1, 2, 3, 4]."""
+        assert _builtin_cobol_prepare_digits(["12.34", 4, 2, False], None) == [
+            1,
+            2,
+            3,
+            4,
+        ]
+
+    def test_with_decimal_digits_padding(self):
+        """PIC 9(2)V9(2), value '5.1' → [0, 5, 1, 0]."""
+        assert _builtin_cobol_prepare_digits(["5.1", 4, 2, False], None) == [0, 5, 1, 0]
+
+    def test_signed_positive_strips_plus(self):
+        """Positive signed value strips '+' prefix."""
+        assert _builtin_cobol_prepare_digits(["+25", 4, 0, True], None) == [0, 0, 2, 5]
+
+    def test_signed_negative_strips_minus(self):
+        """Negative signed value strips '-' prefix."""
+        assert _builtin_cobol_prepare_digits(["-5", 4, 0, True], None) == [0, 0, 0, 5]
+
+    def test_signed_negative_float(self):
+        """Negative float value: '-5.0' → [0, 0, 0, 5]."""
+        assert _builtin_cobol_prepare_digits(["-5.0", 4, 0, True], None) == [0, 0, 0, 5]
+
+    def test_single_digit_pic(self):
+        """PIC 9, value '7' → [7]."""
+        assert _builtin_cobol_prepare_digits(["7", 1, 0, False], None) == [7]
+
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue(name="x")
+        assert _builtin_cobol_prepare_digits([sym, 4, 0, False], None) is _UNCOMPUTABLE
+
+    def test_too_few_args_returns_uncomputable(self):
+        assert _builtin_cobol_prepare_digits(["10", 4], None) is _UNCOMPUTABLE
+
+    def test_int_value_coerced_to_string(self):
+        """Integer 42 should be coerced to '42' and produce [0, 0, 4, 2]."""
+        assert _builtin_cobol_prepare_digits([42, 4, 0, False], None) == [0, 0, 4, 2]
+
+    def test_float_value_coerced_to_string(self):
+        """Float 10.0 should be coerced to '10.0' → fractional discarded → [0, 0, 1, 0]."""
+        assert _builtin_cobol_prepare_digits([10.0, 4, 0, False], None) == [0, 0, 1, 0]
+
+    def test_negative_int_coerced(self):
+        """Negative int -5 should be coerced to '-5' → [0, 0, 0, 5]."""
+        assert _builtin_cobol_prepare_digits([-5, 4, 0, True], None) == [0, 0, 0, 5]
+
+    def test_non_numeric_value_returns_uncomputable(self):
+        assert _builtin_cobol_prepare_digits([[], 4, 0, False], None) is _UNCOMPUTABLE
+
+
+class TestCobolPrepareSign:
+    """Tests for __cobol_prepare_sign numeric encoding."""
+
+    def test_unsigned_returns_0xf(self):
+        assert _builtin_cobol_prepare_sign(["10", False], None) == 0x0F
+
+    def test_signed_positive(self):
+        assert _builtin_cobol_prepare_sign(["10", True], None) == 0x0C
+
+    def test_signed_negative(self):
+        assert _builtin_cobol_prepare_sign(["-10", True], None) == 0x0D
+
+    def test_signed_negative_zero(self):
+        """Negative zero is treated as positive."""
+        assert _builtin_cobol_prepare_sign(["-0", True], None) == 0x0C
+
+    def test_signed_positive_with_plus(self):
+        assert _builtin_cobol_prepare_sign(["+5", True], None) == 0x0C
+
+    def test_signed_negative_float(self):
+        assert _builtin_cobol_prepare_sign(["-5.0", True], None) == 0x0D
+
+    def test_unsigned_negative_still_unsigned(self):
+        """Unsigned field ignores sign in value string."""
+        assert _builtin_cobol_prepare_sign(["-10", False], None) == 0x0F
+
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue(name="x")
+        assert _builtin_cobol_prepare_sign([sym, True], None) is _UNCOMPUTABLE
+
+    def test_too_few_args_returns_uncomputable(self):
+        assert _builtin_cobol_prepare_sign(["10"], None) is _UNCOMPUTABLE
+
+    def test_int_value_coerced(self):
+        """Integer 10 should be coerced to '10' → positive."""
+        assert _builtin_cobol_prepare_sign([10, True], None) == 0x0C
+
+    def test_negative_float_coerced(self):
+        """Float -5.0 should be coerced to '-5.0' → negative."""
+        assert _builtin_cobol_prepare_sign([-5.0, True], None) == 0x0D
+
+    def test_non_numeric_returns_uncomputable(self):
+        assert _builtin_cobol_prepare_sign([[], True], None) is _UNCOMPUTABLE
