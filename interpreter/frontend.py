@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
+from .constants import Language
 from .frontend_observer import FrontendObserver, NullFrontendObserver
 from .ir import IRInstruction
 from . import constants
@@ -20,7 +21,7 @@ from .frontends.python import PythonFrontend  # noqa: E402, F401
 
 
 def get_frontend(
-    language: str,
+    language: Language,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
     llm_provider: str = "claude",
     llm_client: Any = None,

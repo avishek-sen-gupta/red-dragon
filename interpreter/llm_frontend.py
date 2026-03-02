@@ -7,6 +7,7 @@ import logging
 import time
 from typing import Any
 
+from .constants import Language
 from .frontend import Frontend
 from .frontend_observer import FrontendObserver, NullFrontendObserver
 from .ir import NO_SOURCE_LOCATION, IRInstruction, Opcode
@@ -265,7 +266,7 @@ class LLMFrontend(Frontend):
     def __init__(
         self,
         llm_client: LLMClient,
-        language: str = "python",
+        language: Language = Language.PYTHON,
         max_tokens: int = DEFAULT_MAX_TOKENS,
         max_retries: int = DEFAULT_MAX_RETRIES,
         observer: FrontendObserver = NullFrontendObserver(),

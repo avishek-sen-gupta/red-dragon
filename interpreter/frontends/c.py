@@ -6,6 +6,7 @@ import logging
 from typing import Callable
 
 from ._base import BaseFrontend
+from ..constants import Language
 from ..frontend_observer import FrontendObserver, NullFrontendObserver
 from ..ir import Opcode
 from ..parser import ParserFactory
@@ -49,7 +50,7 @@ class CFrontend(BaseFrontend):
     def __init__(
         self,
         parser_factory: ParserFactory,
-        language: str,
+        language: Language,
         observer: FrontendObserver = NullFrontendObserver(),
     ):
         super().__init__(parser_factory, language, observer)
