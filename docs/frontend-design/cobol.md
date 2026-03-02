@@ -138,7 +138,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | `ENTRY 'name'` | `LABEL entry_name` (alternate subprogram entry point) |
 | `CANCEL prog` | No-op for static analysis (program state invalidation has no data-flow effect) |
 
-### I/O (5 types — HANDLED_STUB)
+### I/O (8 types — HANDLED_STUB)
 
 | Statement | IR Pattern |
 |---|---|
@@ -147,12 +147,15 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 | `CLOSE file` | `CALL_FUNCTION __cobol_close_file(filename)` per file |
 | `READ file INTO var` | `CALL_FUNCTION __cobol_read_record(filename)` → encode → `WRITE_REGION` to INTO target |
 | `WRITE rec FROM var` | Decode FROM field → `CALL_FUNCTION __cobol_write_record(filename, data)` |
+| `REWRITE rec FROM var` | Decode FROM field → `CALL_FUNCTION __cobol_rewrite_record(filename, data)` |
+| `START file KEY key` | `CALL_FUNCTION __cobol_start_file(filename, key)` |
+| `DELETE file` | `CALL_FUNCTION __cobol_delete_record(filename)` |
 
 I/O statements dispatch to an injectable `CobolIOProvider` (ABC in `io_provider.py`). `NullIOProvider` returns `UNCOMPUTABLE` (symbolic fallthrough). `StubIOProvider` returns queued test data for concrete execution without real files or console. Provider is injected via `VMConfig(io_provider=stub)`.
 
-### Remaining 22 types
+### Remaining 19 types
 
-Not yet implemented in the bridge. Includes communication (SEND, RECEIVE), embedded SQL (EXEC SQL), and less common statements (GENERATE, DELETE, SORT, etc.).
+Not yet implemented in the bridge. Includes communication (SEND, RECEIVE), embedded SQL (EXEC SQL), and less common statements (GENERATE, SORT, etc.).
 
 ## PERFORM Semantics
 

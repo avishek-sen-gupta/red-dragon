@@ -124,6 +124,9 @@ BRIDGE_SERIALIZED_TYPES: frozenset[str] = frozenset(
         "CLOSE",
         "READ",
         "WRITE",
+        "REWRITE",
+        "START",
+        "DELETE",
     }
 )
 
@@ -160,6 +163,9 @@ _BRIDGE_TO_DISPATCH: dict[str, str] = {
     "CLOSE": "CLOSE",
     "READ": "READ",
     "WRITE": "WRITE",
+    "REWRITE": "REWRITE",
+    "START": "START",
+    "DELETE": "DELETE",
 }
 
 # Types lowered by CobolFrontend._lower_statement (isinstance dispatch).
@@ -196,6 +202,9 @@ _LOWERED_TYPES: frozenset[str] = frozenset(
         "CLOSE",
         "READ",
         "WRITE",
+        "REWRITE",
+        "START",
+        "DELETE",
     }
 )
 
@@ -213,7 +222,9 @@ class StatusCategory:
 
 # Types that are fully handled but dispatch to an injectable I/O provider
 # rather than deterministic IR. Marked HANDLED_STUB to flag future expansion.
-_IO_STUB_TYPES: frozenset[str] = frozenset({"ACCEPT", "OPEN", "CLOSE", "READ", "WRITE"})
+_IO_STUB_TYPES: frozenset[str] = frozenset(
+    {"ACCEPT", "OPEN", "CLOSE", "READ", "WRITE", "REWRITE", "START", "DELETE"}
+)
 
 
 @dataclass(frozen=True)

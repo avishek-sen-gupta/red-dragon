@@ -11,6 +11,7 @@ from interpreter.cobol.cobol_statements import (
     CloseStatement,
     ComputeStatement,
     ContinueStatement,
+    DeleteStatement,
     DisplayStatement,
     EntryStatement,
     EvaluateStatement,
@@ -27,9 +28,11 @@ from interpreter.cobol.cobol_statements import (
     PerformVaryingSpec,
     ReadStatement,
     Replacing,
+    RewriteStatement,
     SearchStatement,
     SearchWhen,
     SetStatement,
+    StartStatement,
     StopRunStatement,
     StringSending,
     StringStatement,
@@ -434,6 +437,37 @@ class TestParseStatementDispatch:
         assert isinstance(stmt, WriteStatement)
         assert stmt.from_field == "WS-OUTPUT"
 
+    def test_rewrite_basic(self):
+        stmt = parse_statement({"type": "REWRITE", "record_name": "CUST-REC"})
+        assert isinstance(stmt, RewriteStatement)
+        assert stmt.record_name == "CUST-REC"
+        assert stmt.from_field == ""
+
+    def test_rewrite_with_from(self):
+        stmt = parse_statement(
+            {"type": "REWRITE", "record_name": "CUST-REC", "from_field": "WS-OUTPUT"}
+        )
+        assert isinstance(stmt, RewriteStatement)
+        assert stmt.from_field == "WS-OUTPUT"
+
+    def test_start_basic(self):
+        stmt = parse_statement({"type": "START", "file_name": "CUST-FILE"})
+        assert isinstance(stmt, StartStatement)
+        assert stmt.file_name == "CUST-FILE"
+        assert stmt.key == ""
+
+    def test_start_with_key(self):
+        stmt = parse_statement(
+            {"type": "START", "file_name": "CUST-FILE", "key": "CUST-ID"}
+        )
+        assert isinstance(stmt, StartStatement)
+        assert stmt.key == "CUST-ID"
+
+    def test_delete_basic(self):
+        stmt = parse_statement({"type": "DELETE", "file_name": "CUST-FILE"})
+        assert isinstance(stmt, DeleteStatement)
+        assert stmt.file_name == "CUST-FILE"
+
     def test_unknown_type_raises(self):
         with pytest.raises(ValueError, match="Unknown COBOL statement type"):
             parse_statement({"type": "BOGUS"})
@@ -763,4 +797,24 @@ class TestRoundTrip:
 
     def test_write_with_from_round_trip(self):
         data = {"type": "WRITE", "record_name": "CUST-REC", "from_field": "WS-OUTPUT"}
+        assert self._round_trip(data) == data
+
+    def test_rewrite_round_trip(self):
+        data = {"type": "REWRITE", "record_name": "CUST-REC"}
+        assert self._round_trip(data) == data
+
+    def test_rewrite_with_from_round_trip(self):
+        data = {"type": "REWRITE", "record_name": "CUST-REC", "from_field": "WS-OUTPUT"}
+        assert self._round_trip(data) == data
+
+    def test_start_round_trip(self):
+        data = {"type": "START", "file_name": "CUST-FILE"}
+        assert self._round_trip(data) == data
+
+    def test_start_with_key_round_trip(self):
+        data = {"type": "START", "file_name": "CUST-FILE", "key": "CUST-ID"}
+        assert self._round_trip(data) == data
+
+    def test_delete_round_trip(self):
+        data = {"type": "DELETE", "file_name": "CUST-FILE"}
         assert self._round_trip(data) == data

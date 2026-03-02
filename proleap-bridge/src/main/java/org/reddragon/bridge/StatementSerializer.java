@@ -75,6 +75,9 @@ import io.proleap.cobol.asg.metamodel.procedure.subtract.Minuend;
 import io.proleap.cobol.asg.metamodel.procedure.subtract.Subtrahend;
 import io.proleap.cobol.asg.metamodel.procedure.unstring.UnstringStatement;
 import io.proleap.cobol.asg.metamodel.procedure.write.WriteStatement;
+import io.proleap.cobol.asg.metamodel.procedure.delete.DeleteStatement;
+import io.proleap.cobol.asg.metamodel.procedure.rewrite.RewriteStatement;
+import io.proleap.cobol.asg.metamodel.procedure.start.StartStatement;
 import io.proleap.cobol.asg.metamodel.call.Call;
 import io.proleap.cobol.asg.metamodel.valuestmt.ValueStmt;
 
@@ -148,6 +151,9 @@ public final class StatementSerializer {
         if (stmtType == StatementTypeEnum.CLOSE) return serializeClose((CloseStatement) stmt);
         if (stmtType == StatementTypeEnum.READ) return serializeRead((ReadStatement) stmt);
         if (stmtType == StatementTypeEnum.WRITE) return serializeWrite((WriteStatement) stmt);
+        if (stmtType == StatementTypeEnum.REWRITE) return serializeRewrite((RewriteStatement) stmt);
+        if (stmtType == StatementTypeEnum.START) return serializeStart((StartStatement) stmt);
+        if (stmtType == StatementTypeEnum.DELETE) return serializeDelete((DeleteStatement) stmt);
 
         return serializeUnknown(stmtType);
     }
@@ -1004,6 +1010,50 @@ public final class StatementSerializer {
             }
         } catch (Exception e) {
             LOG.fine("Could not extract WRITE operands: " + e.getMessage());
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeRewrite(RewriteStatement stmt) {
+        JsonObject obj = newStatement("REWRITE");
+        try {
+            if (stmt.getRecordCall() != null) {
+                obj.addProperty("record_name", extractCallName(stmt.getRecordCall()));
+            }
+            io.proleap.cobol.asg.metamodel.procedure.rewrite.From from = stmt.getFrom();
+            if (from != null && from.getFromCall() != null) {
+                obj.addProperty("from_field", extractCallName(from.getFromCall()));
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract REWRITE operands: " + e.getMessage());
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeStart(StartStatement stmt) {
+        JsonObject obj = newStatement("START");
+        try {
+            if (stmt.getFileCall() != null) {
+                obj.addProperty("file_name", extractCallName(stmt.getFileCall()));
+            }
+            io.proleap.cobol.asg.metamodel.procedure.start.Key key = stmt.getKey();
+            if (key != null && key.getComparisonCall() != null) {
+                obj.addProperty("key", extractCallName(key.getComparisonCall()));
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract START operands: " + e.getMessage());
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeDelete(DeleteStatement stmt) {
+        JsonObject obj = newStatement("DELETE");
+        try {
+            if (stmt.getFileCall() != null) {
+                obj.addProperty("file_name", extractCallName(stmt.getFileCall()));
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract DELETE operands: " + e.getMessage());
         }
         return obj;
     }

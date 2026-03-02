@@ -44,6 +44,9 @@ from interpreter.cobol.cobol_statements import (
     TallyingFor,
     UnstringStatement,
     WriteStatement,
+    RewriteStatement,
+    StartStatement,
+    DeleteStatement,
 )
 from interpreter.ir import IRInstruction, Opcode
 
@@ -1555,3 +1558,45 @@ class TestCallAlterEntryCancelLowering:
             c for c in calls if c.operands and c.operands[0] == "__cobol_write_record"
         ]
         assert len(write_calls) == 1
+
+    def test_rewrite_emits_cobol_rewrite_record(self):
+        """REWRITE should emit CALL_FUNCTION __cobol_rewrite_record."""
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
+        ]
+        stmts = [RewriteStatement(record_name="CUST-REC")]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        rewrite_calls = [
+            c for c in calls if c.operands and c.operands[0] == "__cobol_rewrite_record"
+        ]
+        assert len(rewrite_calls) == 1
+
+    def test_start_emits_cobol_start_file(self):
+        """START should emit CALL_FUNCTION __cobol_start_file."""
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
+        ]
+        stmts = [StartStatement(file_name="CUST-FILE", key="CUST-ID")]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        start_calls = [
+            c for c in calls if c.operands and c.operands[0] == "__cobol_start_file"
+        ]
+        assert len(start_calls) == 1
+
+    def test_delete_emits_cobol_delete_record(self):
+        """DELETE should emit CALL_FUNCTION __cobol_delete_record."""
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(1)", usage="DISPLAY", offset=0),
+        ]
+        stmts = [DeleteStatement(file_name="CUST-FILE")]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        delete_calls = [
+            c for c in calls if c.operands and c.operands[0] == "__cobol_delete_record"
+        ]
+        assert len(delete_calls) == 1
