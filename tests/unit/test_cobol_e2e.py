@@ -65,7 +65,7 @@ class TestHelloWorldFixture:
     def test_produces_ir(self):
         asg = _load_fixture("hello_world.json")
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
 
         assert len(instructions) > 0
         labels = [i for i in instructions if i.opcode == Opcode.LABEL]
@@ -74,7 +74,7 @@ class TestHelloWorldFixture:
     def test_data_division_allocs_11_bytes(self):
         asg = _load_fixture("hello_world.json")
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
 
         allocs = [i for i in instructions if i.opcode == Opcode.ALLOC_REGION]
         assert len(allocs) == 1
@@ -84,7 +84,7 @@ class TestHelloWorldFixture:
         """Verify that the initial VALUE "HELLO WORLD" is written into the region."""
         asg = _load_fixture("hello_world.json")
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
 
         vm = _execute_straight_line(instructions)
 
@@ -103,7 +103,7 @@ class TestMoveFieldsFixture:
     def test_produces_load_and_write_region(self):
         asg = _load_fixture("move_fields.json")
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
 
         loads = [i for i in instructions if i.opcode == Opcode.LOAD_REGION]
         writes = [i for i in instructions if i.opcode == Opcode.WRITE_REGION]
@@ -113,7 +113,7 @@ class TestMoveFieldsFixture:
     def test_data_division_allocs_6_bytes(self):
         asg = _load_fixture("move_fields.json")
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
 
         allocs = [i for i in instructions if i.opcode == Opcode.ALLOC_REGION]
         assert allocs[0].operands[0] == 6  # 9(3) + 9(3) = 3 + 3
@@ -123,7 +123,7 @@ class TestArithmeticFixture:
     def test_produces_binops(self):
         asg = _load_fixture("arithmetic.json")
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
 
         binops = [i for i in instructions if i.opcode == Opcode.BINOP]
         ops = [b.operands[0] for b in binops]
@@ -134,7 +134,7 @@ class TestArithmeticFixture:
         """Verify initial VALUE "100" is correctly encoded as zoned decimal."""
         asg = _load_fixture("arithmetic.json")
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
 
         vm = _execute_straight_line(instructions)
 
@@ -148,7 +148,7 @@ class TestPerformReturnFixture:
         """MAIN PERFORMs WORK, WORK does MOVE, execution returns to MAIN and hits STOP RUN."""
         asg = _load_fixture("perform_return.json")
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -200,7 +200,7 @@ class TestPerformReturnFixture:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -243,7 +243,7 @@ class TestPerformReturnFixture:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -260,8 +260,8 @@ class TestCobolFrontendIdempotency:
         asg = _load_fixture("hello_world.json")
         frontend = CobolFrontend(_FakeParser(asg))
 
-        ir1 = frontend.lower(None, b"")
-        ir2 = frontend.lower(None, b"")
+        ir1 = frontend.lower(b"")
+        ir2 = frontend.lower(b"")
 
         assert len(ir1) == len(ir2)
         for i, (a, b) in enumerate(zip(ir1, ir2)):
@@ -304,7 +304,7 @@ class TestMultipleStatementTypes:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
 
         opcodes = {i.opcode for i in instructions}
         assert Opcode.ALLOC_REGION in opcodes
@@ -359,7 +359,7 @@ class TestIfElseExecution:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -410,7 +410,7 @@ class TestIfElseExecution:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -455,7 +455,7 @@ class TestPerformTimesExecution:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -504,7 +504,7 @@ class TestPerformUntilExecution:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -565,7 +565,7 @@ class TestPerformVaryingExecution:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -614,7 +614,7 @@ class TestNumericValueVerification:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -657,7 +657,7 @@ class TestNumericValueVerification:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -701,7 +701,7 @@ class TestNumericValueVerification:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -736,7 +736,7 @@ class TestNumericValueVerification:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -778,7 +778,7 @@ class TestNumericValueVerification:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -812,7 +812,7 @@ class TestNumericValueVerification:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -848,7 +848,7 @@ class TestNumericValueVerification:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -898,7 +898,7 @@ class TestNumericValueVerification:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -949,7 +949,7 @@ class TestNumericValueVerification:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -999,7 +999,7 @@ class TestSectionFallThrough:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -1057,7 +1057,7 @@ class TestNestedPerformNumericValues:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -1119,7 +1119,7 @@ class TestNestedPerformNumericValues:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -1171,7 +1171,7 @@ class TestGotoInsidePerform:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -1225,7 +1225,7 @@ class TestGotoInsidePerform:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
@@ -1284,7 +1284,7 @@ class TestGotoInsidePerform:
             }
         )
         frontend = CobolFrontend(_FakeParser(asg))
-        instructions = frontend.lower(None, b"")
+        instructions = frontend.lower(b"")
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 

@@ -24,6 +24,8 @@ from . import constants
 
 logger = logging.getLogger(__name__)
 
+# Parser/TreeSitterParserFactory still imported for extract_function_source()
+
 _FUNCTION_NODE_TYPES: frozenset[str] = frozenset(
     {
         "function_definition",
@@ -54,21 +56,8 @@ def lower_source(
         A list of IR instructions.
     """
     logger.info("Lowering source (%s, frontend=%s)", language, frontend_type)
-    if frontend_type in (constants.FRONTEND_LLM, constants.FRONTEND_CHUNKED_LLM):
-        frontend = get_frontend(
-            language,
-            frontend_type=frontend_type,
-            llm_provider=backend,
-        )
-        return frontend.lower(None, source.encode("utf-8"))
-
-    if frontend_type == constants.FRONTEND_COBOL:
-        frontend = get_frontend(language, frontend_type=frontend_type)
-        return frontend.lower(None, source.encode("utf-8"))
-
-    tree = Parser(TreeSitterParserFactory()).parse(source, language)
-    frontend = get_frontend(language)
-    return frontend.lower(tree, source.encode("utf-8"))
+    frontend = get_frontend(language, frontend_type=frontend_type, llm_provider=backend)
+    return frontend.lower(source.encode("utf-8"))
 
 
 def dump_ir(

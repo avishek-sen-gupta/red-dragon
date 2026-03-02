@@ -206,7 +206,7 @@ class TestLLMFrontend:
     def test_lower_sends_correct_prompt(self):
         fake = FakeLLMClient(response=SIMPLE_IR_JSON)
         frontend = LLMFrontend(fake, language="python")
-        result = frontend.lower(None, b"x = 42")
+        result = frontend.lower(b"x = 42")
 
         assert len(fake.calls) == 1
         call = fake.calls[0]
@@ -218,7 +218,7 @@ class TestLLMFrontend:
     def test_lower_with_different_language(self):
         fake = FakeLLMClient(response=SIMPLE_IR_JSON)
         frontend = LLMFrontend(fake, language="javascript")
-        frontend.lower(None, b"let x = 42;")
+        frontend.lower(b"let x = 42;")
 
         assert "javascript" in fake.calls[0]["user_message"]
         assert "let x = 42;" in fake.calls[0]["user_message"]
@@ -236,7 +236,7 @@ class TestLLMFrontend:
         )
         fake = FakeLLMClient(response=no_entry_json)
         frontend = LLMFrontend(fake, language="python")
-        result = frontend.lower(None, b"x = 1")
+        result = frontend.lower(b"x = 1")
 
         assert result[0].opcode == Opcode.LABEL
         assert result[0].label == "entry"
@@ -246,22 +246,14 @@ class TestLLMFrontend:
         fake = FakeLLMClient(response=SIMPLE_IR_JSON)
         frontend = LLMFrontend(fake, language="python")
         # Pass string instead of bytes
-        result = frontend.lower(None, "x = 42")
+        result = frontend.lower("x = 42")
         assert len(result) == 3
 
     def test_lower_raises_on_bad_response(self):
         fake = FakeLLMClient(response="not valid json")
         frontend = LLMFrontend(fake, language="python")
         with pytest.raises(IRParsingError):
-            frontend.lower(None, b"x = 42")
-
-    def test_tree_parameter_ignored(self):
-        """LLM frontend ignores the tree parameter."""
-        fake = FakeLLMClient(response=SIMPLE_IR_JSON)
-        frontend = LLMFrontend(fake, language="python")
-        sentinel = object()
-        result = frontend.lower(sentinel, b"x = 42")
-        assert len(result) == 3
+            frontend.lower(b"x = 42")
 
     def test_retry_succeeds_after_bad_json(self):
         """LLM returns bad JSON twice, then valid JSON on 3rd attempt."""
@@ -269,7 +261,7 @@ class TestLLMFrontend:
             responses=["not json", "still not json", SIMPLE_IR_JSON]
         )
         frontend = LLMFrontend(fake, language="python", max_retries=3)
-        result = frontend.lower(None, b"x = 42")
+        result = frontend.lower(b"x = 42")
 
         assert len(fake.calls) == 3
         assert len(result) == 3
@@ -281,7 +273,7 @@ class TestLLMFrontend:
         frontend = LLMFrontend(fake, language="python", max_retries=3)
 
         with pytest.raises(IRParsingError, match="Failed to parse"):
-            frontend.lower(None, b"x = 42")
+            frontend.lower(b"x = 42")
 
         assert len(fake.calls) == 3
 
@@ -289,7 +281,7 @@ class TestLLMFrontend:
         """Valid JSON on first attempt — no retries."""
         fake = FakeRetryLLMClient(responses=[SIMPLE_IR_JSON, "should not be called"])
         frontend = LLMFrontend(fake, language="python", max_retries=3)
-        result = frontend.lower(None, b"x = 42")
+        result = frontend.lower(b"x = 42")
 
         assert len(fake.calls) == 1
         assert len(result) == 3

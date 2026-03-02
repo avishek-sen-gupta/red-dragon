@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-from tree_sitter_language_pack import get_parser
-
 from interpreter.frontends.rust import RustFrontend
+from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
 
 
 def _parse_rust(source: str) -> list[IRInstruction]:
-    parser = get_parser("rust")
-    tree = parser.parse(source.encode("utf-8"))
-    frontend = RustFrontend()
-    return frontend.lower(tree, source.encode("utf-8"))
+    frontend = RustFrontend(TreeSitterParserFactory(), "rust")
+    return frontend.lower(source.encode("utf-8"))
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:

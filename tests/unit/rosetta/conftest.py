@@ -3,8 +3,6 @@
 import logging
 import statistics
 
-import tree_sitter_language_pack
-
 from interpreter.cfg import build_cfg
 from interpreter.frontends import (
     get_deterministic_frontend,
@@ -21,11 +19,8 @@ logger = logging.getLogger(__name__)
 
 def parse_for_language(language: str, source: str) -> list[IRInstruction]:
     """Parse *source* with tree-sitter and lower via the deterministic frontend."""
-    parser = tree_sitter_language_pack.get_parser(language)
-    source_bytes = source.encode("utf-8")
-    tree = parser.parse(source_bytes)
     frontend = get_deterministic_frontend(language)
-    return frontend.lower(tree, source_bytes)
+    return frontend.lower(source.encode("utf-8"))
 
 
 def opcodes(instructions: list[IRInstruction]) -> set[Opcode]:

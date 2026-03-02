@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
-import tree_sitter_language_pack
-
 from interpreter.frontends.php import PhpFrontend
+from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
 
 
 def _parse_and_lower(source: str) -> list[IRInstruction]:
-    parser = tree_sitter_language_pack.get_parser("php")
-    source_bytes = source.encode("utf-8")
-    tree = parser.parse(source_bytes)
-    frontend = PhpFrontend()
-    return frontend.lower(tree, source_bytes)
+    frontend = PhpFrontend(TreeSitterParserFactory(), "php")
+    return frontend.lower(source.encode("utf-8"))
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:

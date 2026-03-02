@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-from tree_sitter_language_pack import get_parser
-
 from interpreter.frontends.lua import LuaFrontend
+from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
 def _parse_lua(source: str) -> list[IRInstruction]:
-    parser = get_parser("lua")
-    tree = parser.parse(source.encode("utf-8"))
-    frontend = LuaFrontend()
-    return frontend.lower(tree, source.encode("utf-8"))
+    frontend = LuaFrontend(TreeSitterParserFactory(), "lua")
+    return frontend.lower(source.encode("utf-8"))
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:

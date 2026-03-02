@@ -74,6 +74,7 @@ from interpreter.cobol.ir_encoders import (
 )
 from interpreter.cobol.data_filters import align_decimal, left_adjust
 from interpreter.frontend import Frontend
+from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.ir import IRInstruction, Opcode
 
 logger = logging.getLogger(__name__)
@@ -114,17 +115,21 @@ class CobolFrontend(Frontend):
     produces IR instructions.
     """
 
-    def __init__(self, cobol_parser: Any):
+    def __init__(
+        self,
+        cobol_parser: Any,
+        observer: FrontendObserver = NullFrontendObserver(),
+    ):
         self._parser = cobol_parser
+        self._observer = observer
         self._reg_counter = 0
         self._label_counter = 0
         self._instructions: list[IRInstruction] = []
 
-    def lower(self, tree: Any, source: bytes) -> list[IRInstruction]:
+    def lower(self, source: bytes) -> list[IRInstruction]:
         """Lower COBOL source to IR via the ProLeap bridge.
 
         Args:
-            tree: Unused (COBOL does not use tree-sitter). Pass None.
             source: Raw COBOL source bytes.
 
         Returns:

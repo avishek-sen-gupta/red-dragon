@@ -330,7 +330,7 @@ class TestChunkedLLMFrontend:
     def test_single_function_file(self):
         source = "def foo():\n    return 1\n"
         frontend = self._make_frontend([_single_func_ir()])
-        result = frontend.lower(None, source.encode())
+        result = frontend.lower(source.encode())
         assert result[0].opcode == Opcode.LABEL
         assert result[0].label == "entry"
         # Should contain the function body instructions (renumbered)
@@ -341,7 +341,7 @@ class TestChunkedLLMFrontend:
     def test_two_functions_non_colliding_registers(self):
         source = "def foo():\n    return 1\n\ndef bar():\n    return 2\n"
         frontend = self._make_frontend([_single_func_ir(), _second_func_ir()])
-        result = frontend.lower(None, source.encode())
+        result = frontend.lower(source.encode())
         # Collect all result_reg values
         regs = [inst.result_reg for inst in result if inst.result_reg is not None]
         # All registers should be unique
@@ -350,7 +350,7 @@ class TestChunkedLLMFrontend:
     def test_two_functions_non_colliding_labels(self):
         source = "def foo():\n    return 1\n\ndef bar():\n    return 2\n"
         frontend = self._make_frontend([_single_func_ir(), _second_func_ir()])
-        result = frontend.lower(None, source.encode())
+        result = frontend.lower(source.encode())
         # Collect all LABEL labels
         labels = [
             inst.label for inst in result if inst.opcode == Opcode.LABEL and inst.label
@@ -361,7 +361,7 @@ class TestChunkedLLMFrontend:
     def test_single_entry_label(self):
         source = "def foo():\n    return 1\n\ndef bar():\n    return 2\n"
         frontend = self._make_frontend([_single_func_ir(), _second_func_ir()])
-        result = frontend.lower(None, source.encode())
+        result = frontend.lower(source.encode())
         entry_labels = [
             inst
             for inst in result
@@ -373,7 +373,7 @@ class TestChunkedLLMFrontend:
         source = "def foo():\n    return 1\n\ndef bar():\n    return 2\n"
         # First chunk succeeds, second returns invalid JSON
         frontend = self._make_frontend([_single_func_ir(), "NOT VALID JSON AT ALL"])
-        result = frontend.lower(None, source.encode())
+        result = frontend.lower(source.encode())
         symbolic_instructions = [
             inst
             for inst in result
@@ -383,11 +383,10 @@ class TestChunkedLLMFrontend:
         assert len(symbolic_instructions) == 1
         assert "chunk_error:bar" in str(symbolic_instructions[0].operands)
 
-    def test_tree_none_triggers_internal_parse(self):
+    def test_internal_parse(self):
         source = "def foo():\n    return 1\n"
         frontend = self._make_frontend([_single_func_ir()])
-        # Pass tree=None — should parse internally
-        result = frontend.lower(None, source.encode())
+        result = frontend.lower(source.encode())
         assert len(result) > 1
         assert result[0].opcode == Opcode.LABEL
         assert result[0].label == "entry"

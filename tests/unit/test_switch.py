@@ -2,19 +2,16 @@
 
 from __future__ import annotations
 
-import tree_sitter_language_pack
-
 from interpreter.frontends.c import CFrontend
 from interpreter.frontends.cpp import CppFrontend
 from interpreter.frontends.java import JavaFrontend
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.parser import TreeSitterParserFactory
 
 
 def _parse_and_lower(source: str, language: str, frontend) -> list[IRInstruction]:
-    parser = tree_sitter_language_pack.get_parser(language)
     source_bytes = source.encode("utf-8")
-    tree = parser.parse(source_bytes)
-    return frontend.lower(tree, source_bytes)
+    return frontend.lower(source_bytes)
 
 
 def _find_all(instructions: list[IRInstruction], opcode: Opcode) -> list[IRInstruction]:
@@ -45,7 +42,7 @@ class TestCSwitchLowering:
             }
             """,
             "c",
-            CFrontend(),
+            CFrontend(TreeSitterParserFactory(), "c"),
         )
         binops = _find_all(ir, Opcode.BINOP)
         eq_ops = [b for b in binops if "==" in b.operands]
@@ -62,7 +59,7 @@ class TestCSwitchLowering:
             }
             """,
             "c",
-            CFrontend(),
+            CFrontend(TreeSitterParserFactory(), "c"),
         )
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         switch_symbolics = [
@@ -80,7 +77,7 @@ class TestCSwitchLowering:
             }
             """,
             "c",
-            CFrontend(),
+            CFrontend(TreeSitterParserFactory(), "c"),
         )
         labels = _labels(ir)
         assert any("switch_end" in l for l in labels)
@@ -100,7 +97,7 @@ class TestCSwitchLowering:
             }
             """,
             "c",
-            CFrontend(),
+            CFrontend(TreeSitterParserFactory(), "c"),
         )
         labels = _labels(ir)
         branches = _branches(ir)
@@ -124,7 +121,7 @@ class TestCSwitchLowering:
             }
             """,
             "c",
-            CFrontend(),
+            CFrontend(TreeSitterParserFactory(), "c"),
         )
         # Should have BINOP == for case 1, unconditional BRANCH for default
         binops = _find_all(ir, Opcode.BINOP)
@@ -140,7 +137,7 @@ class TestCSwitchLowering:
             }
             """,
             "c",
-            CFrontend(),
+            CFrontend(TreeSitterParserFactory(), "c"),
         )
         labels = _labels(ir)
         assert any("switch_end" in l for l in labels)
@@ -158,7 +155,7 @@ class TestCppSwitchInheritsC:
             }
             """,
             "cpp",
-            CppFrontend(),
+            CppFrontend(TreeSitterParserFactory(), "cpp"),
         )
         binops = _find_all(ir, Opcode.BINOP)
         eq_ops = [b for b in binops if "==" in b.operands]
@@ -183,7 +180,7 @@ class TestJavaSwitchLowering:
             }
             """,
             "java",
-            JavaFrontend(),
+            JavaFrontend(TreeSitterParserFactory(), "java"),
         )
         binops = _find_all(ir, Opcode.BINOP)
         eq_ops = [b for b in binops if "==" in b.operands]
@@ -204,7 +201,7 @@ class TestJavaSwitchLowering:
             }
             """,
             "java",
-            JavaFrontend(),
+            JavaFrontend(TreeSitterParserFactory(), "java"),
         )
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         switch_symbolics = [

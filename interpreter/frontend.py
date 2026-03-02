@@ -5,13 +5,14 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
+from .frontend_observer import FrontendObserver, NullFrontendObserver
 from .ir import IRInstruction
 from . import constants
 
 
 class Frontend(ABC):
     @abstractmethod
-    def lower(self, tree, source: bytes) -> list[IRInstruction]: ...
+    def lower(self, source: bytes) -> list[IRInstruction]: ...
 
 
 # Backward-compatibility re-export: code that imports PythonFrontend from here still works.
@@ -23,6 +24,7 @@ def get_frontend(
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
     llm_provider: str = "claude",
     llm_client: Any = None,
+    observer: FrontendObserver = NullFrontendObserver(),
 ) -> Frontend:
     """Build a frontend for the given language.
 
@@ -31,6 +33,7 @@ def get_frontend(
         frontend_type: "deterministic" (tree-sitter based) or "llm".
         llm_provider: LLM provider name when frontend_type="llm".
         llm_client: Pre-built LLMClient for DI/testing (skips factory).
+        observer: Timing observer for parse/lower phases.
 
     Returns:
         A Frontend instance.
@@ -44,12 +47,12 @@ def get_frontend(
 
         bridge_jar = os.environ.get("PROLEAP_BRIDGE_JAR", "proleap-bridge.jar")
         parser = ProLeapCobolParser(RealSubprocessRunner(), bridge_jar)
-        return CobolFrontend(parser)
+        return CobolFrontend(parser, observer=observer)
 
     if frontend_type == constants.FRONTEND_DETERMINISTIC:
         from .frontends import get_deterministic_frontend
 
-        return get_deterministic_frontend(language)
+        return get_deterministic_frontend(language, observer=observer)
 
     if frontend_type in (constants.FRONTEND_LLM, constants.FRONTEND_CHUNKED_LLM):
         from .llm_client import LLMClient, get_llm_client
@@ -67,7 +70,10 @@ def get_frontend(
             max_tokens = 8192
 
         inner_frontend = LLMFrontend(
-            resolved_client, language=language, max_tokens=max_tokens
+            resolved_client,
+            language=language,
+            max_tokens=max_tokens,
+            observer=observer,
         )
 
         if frontend_type == constants.FRONTEND_CHUNKED_LLM:

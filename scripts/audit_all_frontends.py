@@ -2899,10 +2899,8 @@ def classify_by_block_reachability(
 
 def run_symbolic_check(frontend, source: str, ts_language: str) -> list[dict]:
     """Lower source through frontend and collect unsupported SYMBOLIC entries."""
-    parser = tree_sitter_language_pack.get_parser(ts_language)
     source_bytes = source.encode("utf-8")
-    tree = parser.parse(source_bytes)
-    instructions = frontend.lower(tree, source_bytes)
+    instructions = frontend.lower(source_bytes)
 
     lines = source.split("\n")
     return [

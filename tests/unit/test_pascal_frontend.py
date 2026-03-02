@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-from tree_sitter_language_pack import get_parser
-
 from interpreter.frontends.pascal import PascalFrontend
+from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
 
 
 def _parse_pascal(source: str) -> list[IRInstruction]:
-    parser = get_parser("pascal")
-    tree = parser.parse(source.encode("utf-8"))
-    frontend = PascalFrontend()
-    return frontend.lower(tree, source.encode("utf-8"))
+    frontend = PascalFrontend(TreeSitterParserFactory(), "pascal")
+    return frontend.lower(source.encode("utf-8"))
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:

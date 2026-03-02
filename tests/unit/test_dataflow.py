@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from tree_sitter_language_pack import get_parser
-
 from interpreter.cfg import BasicBlock, CFG, build_cfg
 from interpreter.dataflow import (
     BlockDataflowFacts,
@@ -23,6 +21,7 @@ from interpreter.dataflow import (
 )
 from interpreter.frontends.python import PythonFrontend
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.parser import TreeSitterParserFactory
 from interpreter import constants
 
 
@@ -43,10 +42,8 @@ def _build_simple_cfg(ir_instructions: list[IRInstruction]) -> CFG:
 
 def _parse_python_to_cfg(source: str) -> CFG:
     """End-to-end: Python source -> IR -> CFG."""
-    parser = get_parser("python")
-    tree = parser.parse(source.encode("utf-8"))
-    frontend = PythonFrontend()
-    ir = frontend.lower(tree, source.encode("utf-8"))
+    frontend = PythonFrontend(TreeSitterParserFactory(), "python")
+    ir = frontend.lower(source.encode("utf-8"))
     return build_cfg(ir)
 
 
