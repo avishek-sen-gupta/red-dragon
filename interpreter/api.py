@@ -62,6 +62,10 @@ def lower_source(
         )
         return frontend.lower(None, source.encode("utf-8"))
 
+    if frontend_type == constants.FRONTEND_COBOL:
+        frontend = get_frontend(language, frontend_type=frontend_type)
+        return frontend.lower(None, source.encode("utf-8"))
+
     tree = Parser(TreeSitterParserFactory()).parse(source, language)
     frontend = get_frontend(language)
     return frontend.lower(tree, source.encode("utf-8"))
