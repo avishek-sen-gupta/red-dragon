@@ -273,16 +273,59 @@ class TestProcedureDivisionLowering:
         ]
         assert len(goto_branches) >= 1
 
-    def test_perform_produces_branch(self):
+    def test_perform_produces_set_continuation_and_branch(self):
         fields = [
             CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
         ]
         stmts = [CobolStatement(type="PERFORM", operands=["WORK-PARA"])]
         instructions = self._lower_with_field_and_stmts(fields, stmts)
 
+        # Should emit SET_CONTINUATION before the BRANCH
+        set_conts = _find_opcodes(instructions, Opcode.SET_CONTINUATION)
+        assert len(set_conts) >= 1
+        assert set_conts[0].operands[0] == "para_WORK-PARA_end"
+
         branches = _find_opcodes(instructions, Opcode.BRANCH)
         perform_branches = [
             b for b in branches if b.label and "para_WORK-PARA" in b.label
+        ]
+        assert len(perform_branches) >= 1
+
+    def test_paragraph_boundary_emits_resume_continuation(self):
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
+        ]
+        stmts = [CobolStatement(type="STOP_RUN")]
+
+        asg = CobolASG(
+            data_fields=fields,
+            paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+
+        resume_conts = _find_opcodes(instructions, Opcode.RESUME_CONTINUATION)
+        assert len(resume_conts) >= 1
+        resume_names = [inst.operands[0] for inst in resume_conts]
+        assert "para_MAIN_end" in resume_names
+
+    def test_perform_thru_sets_continuation_at_thru_endpoint(self):
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
+        ]
+        stmts = [
+            CobolStatement(type="PERFORM", operands=["FIRST-PARA"], thru="LAST-PARA")
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        set_conts = _find_opcodes(instructions, Opcode.SET_CONTINUATION)
+        assert len(set_conts) >= 1
+        # Continuation should be keyed to the THRU paragraph's end, not the start
+        assert set_conts[0].operands[0] == "para_LAST-PARA_end"
+
+        branches = _find_opcodes(instructions, Opcode.BRANCH)
+        perform_branches = [
+            b for b in branches if b.label and "para_FIRST-PARA" in b.label
         ]
         assert len(perform_branches) >= 1
 

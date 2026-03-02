@@ -86,6 +86,7 @@ class VMState:
     symbolic_counter: int = 0
     closures: dict[str, ClosureEnvironment] = field(default_factory=dict)
     regions: dict[str, bytearray] = field(default_factory=dict)
+    continuations: dict[str, str] = field(default_factory=dict)
 
     def fresh_symbolic(self, hint: str = "") -> SymbolicValue:
         name = f"sym_{self.symbolic_counter}"
@@ -111,6 +112,8 @@ class VMState:
             result["regions"] = {
                 addr: list(data) for addr, data in self.regions.items()
             }
+        if self.continuations:
+            result["continuations"] = dict(self.continuations)
         return result
 
 
@@ -148,6 +151,8 @@ class StateUpdate(BaseModel):
     new_objects: list[NewObject] = []
     region_writes: list[RegionWrite] = []
     new_regions: dict[str, int] = {}
+    continuation_writes: dict[str, str] = {}
+    continuation_clear: str = ""
     next_label: str | None = None
     call_push: StackFramePush | None = None
     call_pop: bool = False

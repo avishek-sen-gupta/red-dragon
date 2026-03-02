@@ -35,6 +35,9 @@ class Opcode(str, Enum):
     ALLOC_REGION = "ALLOC_REGION"
     WRITE_REGION = "WRITE_REGION"
     LOAD_REGION = "LOAD_REGION"
+    # Continuation operations (named return points)
+    SET_CONTINUATION = "SET_CONTINUATION"
+    RESUME_CONTINUATION = "RESUME_CONTINUATION"
     # Labels (pseudo-instruction)
     LABEL = "LABEL"
 

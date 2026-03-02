@@ -309,6 +309,7 @@ class CobolFrontend(Frontend):
         self._emit(Opcode.LABEL, label=f"para_{para.name}")
         for stmt in para.statements:
             self._lower_statement(stmt, layout, region_reg)
+        self._emit(Opcode.RESUME_CONTINUATION, operands=[f"para_{para.name}_end"])
 
     def _lower_statement(
         self,
@@ -429,7 +430,7 @@ class CobolFrontend(Frontend):
         layout: DataLayout,
         region_reg: str,
     ) -> None:
-        """PERFORM paragraph-name."""
+        """PERFORM paragraph-name [THRU paragraph-name]."""
         if stmt.children:
             # Inline PERFORM (PERFORM ... END-PERFORM)
             for child in stmt.children:
@@ -437,8 +438,13 @@ class CobolFrontend(Frontend):
             return
 
         para_name = stmt.operands[0]
+        thru_name = stmt.thru if stmt.thru else para_name
         return_label = self._fresh_label("perform_return")
 
+        self._emit(
+            Opcode.SET_CONTINUATION,
+            operands=[f"para_{thru_name}_end", return_label],
+        )
         self._emit(Opcode.BRANCH, label=f"para_{para_name}")
         self._emit(Opcode.LABEL, label=return_label)
 

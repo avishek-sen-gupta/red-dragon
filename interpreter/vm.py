@@ -34,6 +34,14 @@ def apply_update(vm: VMState, update: StateUpdate):
             rw.data
         )
 
+    # Continuation writes
+    for name, label in update.continuation_writes.items():
+        vm.continuations[name] = label
+
+    # Continuation clear (fired by RESUME_CONTINUATION)
+    if update.continuation_clear:
+        vm.continuations.pop(update.continuation_clear, None)
+
     # New objects
     for obj in update.new_objects:
         vm.heap[obj.addr] = HeapObject(type_hint=obj.type_hint)

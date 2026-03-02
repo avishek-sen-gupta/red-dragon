@@ -1,0 +1,27 @@
+{
+    "data_fields": [
+        {
+            "name": "WS-RESULT",
+            "level": 77,
+            "pic": "9(3)",
+            "usage": "DISPLAY",
+            "offset": 0,
+            "value": "0"
+        }
+    ],
+    "paragraphs": [
+        {
+            "name": "MAIN-PARA",
+            "statements": [
+                {"type": "PERFORM", "operands": ["WORK-PARA"]},
+                {"type": "STOP_RUN"}
+            ]
+        },
+        {
+            "name": "WORK-PARA",
+            "statements": [
+                {"type": "MOVE", "operands": ["42", "WS-RESULT"]}
+            ]
+        }
+    ]
+}

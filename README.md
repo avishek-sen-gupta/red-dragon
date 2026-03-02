@@ -9,7 +9,7 @@
 **RedDragon** is a multi-language source code analysis toolkit that:
 
 - **Parses** source in 15 languages via tree-sitter, COBOL via ProLeap parser bridge, or any language via LLM-based lowering (including chunked lowering for large files)
-- **Lowers** to a universal flattened three-address code IR (~22 opcodes, including 3 byte-addressed memory region opcodes) with structured source location traceability (every IR instruction from deterministic frontends carries its originating AST span; LLM frontends lack AST nodes and produce `NO_SOURCE_LOCATION`) — the LLM frontend uses the LLM as a **compiler frontend**, constrained by a formal IR schema with concrete patterns
+- **Lowers** to a universal flattened three-address code IR (~24 opcodes, including 3 byte-addressed memory region opcodes and 2 named continuation opcodes) with structured source location traceability (every IR instruction from deterministic frontends carries its originating AST span; LLM frontends lack AST nodes and produce `NO_SOURCE_LOCATION`) — the LLM frontend uses the LLM as a **compiler frontend**, constrained by a formal IR schema with concrete patterns
 - **Builds** control flow graphs from IR instructions
 - **Analyses** data flow via iterative reaching definitions, def-use chains, and variable dependency graphs
 - **Executes** programs symbolically via a deterministic VM — tracking data flow through incomplete programs with missing imports or unknown externals entirely without LLM calls — with a configurable **LLM plausible-value resolver** that can replace symbolic placeholders with concrete values for unresolved function/method calls
@@ -137,7 +137,7 @@ All constructs above produce real IR for proper data-flow analysis. All 15 front
 
 ### COBOL frontend
 
-The COBOL frontend uses the [ProLeap COBOL Parser](https://github.com/uwol/proleap-cobol-parser) via a subprocess bridge (requires JDK 17). It lowers DATA DIVISION fields to byte-addressed memory regions (`ALLOC_REGION`/`WRITE_REGION`/`LOAD_REGION`) with PIC-driven encoding/decoding (zoned decimal, COMP-3, alphanumeric/EBCDIC), and PROCEDURE DIVISION statements (MOVE, ADD, SUBTRACT, MULTIPLY, DIVIDE, IF, PERFORM, DISPLAY, STOP RUN, GO TO, EVALUATE) to standard IR. REDEFINES works automatically through overlapping byte offsets on shared regions.
+The COBOL frontend uses the [ProLeap COBOL Parser](https://github.com/uwol/proleap-cobol-parser) via a subprocess bridge (requires JDK 17). It lowers DATA DIVISION fields to byte-addressed memory regions (`ALLOC_REGION`/`WRITE_REGION`/`LOAD_REGION`) with PIC-driven encoding/decoding (zoned decimal, COMP-3, alphanumeric/EBCDIC), and PROCEDURE DIVISION statements (MOVE, ADD, SUBTRACT, MULTIPLY, DIVIDE, IF, PERFORM, DISPLAY, STOP RUN, GO TO, EVALUATE) to standard IR. PERFORM semantics use named continuations (`SET_CONTINUATION`/`RESUME_CONTINUATION`) to implement paragraph-level call-and-return, including PERFORM THRU for paragraph ranges. REDEFINES works automatically through overlapping byte offsets on shared regions.
 
 ## Example: CFG
 
@@ -187,7 +187,7 @@ result = factorial(5)
 Final state: result = 120  (67 steps, 0 LLM calls)
 ```
 
-The VM also handles classes with heap allocation, method dispatch, field access, closures with shared mutable environments (capture-by-reference — mutations inside closures persist across calls and are visible to sibling closures from the same scope), byte-addressed memory regions (`ALLOC_REGION`/`WRITE_REGION`/`LOAD_REGION` for COBOL-style REDEFINES overlays), and builtins (`len`, `range`, `print`, `int`, `str`, byte-manipulation primitives, etc.) — all deterministically. The interpreter's execution engine is split into focused modules: `interpreter/vm_types.py` (VM data types), `interpreter/cfg_types.py` (CFG data types), `interpreter/run_types.py` (pipeline config/stats types), `interpreter/registry.py` (function/class registry), `interpreter/builtins.py` (built-in function table), `interpreter/executor.py` (opcode handlers and dispatch), and `interpreter/cobol/` (COBOL type system, EBCDIC tables, and IR encoder/decoder builders).
+The VM also handles classes with heap allocation, method dispatch, field access, closures with shared mutable environments (capture-by-reference — mutations inside closures persist across calls and are visible to sibling closures from the same scope), byte-addressed memory regions (`ALLOC_REGION`/`WRITE_REGION`/`LOAD_REGION` for COBOL-style REDEFINES overlays), named continuations (`SET_CONTINUATION`/`RESUME_CONTINUATION` for COBOL PERFORM return semantics), and builtins (`len`, `range`, `print`, `int`, `str`, byte-manipulation primitives, etc.) — all deterministically. The interpreter's execution engine is split into focused modules: `interpreter/vm_types.py` (VM data types), `interpreter/cfg_types.py` (CFG data types), `interpreter/run_types.py` (pipeline config/stats types), `interpreter/registry.py` (function/class registry), `interpreter/builtins.py` (built-in function table), `interpreter/executor.py` (opcode handlers and dispatch), and `interpreter/cobol/` (COBOL type system, EBCDIC tables, and IR encoder/decoder builders).
 
 ## Symbolic data flow
 
@@ -355,7 +355,7 @@ The **Exercism integration test suite** (`tests/unit/exercism/`) extends coverag
 | **acronym** | toUpperChar helper, word boundary detection, string building, separator classification | 9 | 15 | 2 | 252 | **269** |
 | **Total** | | **171** | **270** | **36** | **5068** | **5374** |
 
-Combined with the Rosetta suite and the COBOL frontend tests (65 tests covering ASG round-trip, PIC parsing, data layout, frontend lowering, parser bridge, and end-to-end fixture tests), the project has **7502 tests** (7502 passed, 3 xfailed) — all with zero LLM calls.
+Combined with the Rosetta suite and the COBOL frontend tests (65 tests covering ASG round-trip, PIC parsing, data layout, frontend lowering, parser bridge, and end-to-end fixture tests), the project has **7516 tests** (7516 passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 
