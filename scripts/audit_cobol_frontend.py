@@ -115,6 +115,10 @@ BRIDGE_SERIALIZED_TYPES: frozenset[str] = frozenset(
         "UNSTRING",
         "INSPECT",
         "SEARCH",
+        "CALL",
+        "ALTER",
+        "ENTRY",
+        "CANCEL",
     }
 )
 
@@ -142,6 +146,10 @@ _BRIDGE_TO_DISPATCH: dict[str, str] = {
     "UNSTRING": "UNSTRING",
     "INSPECT": "INSPECT",
     "SEARCH": "SEARCH",
+    "CALL": "CALL",
+    "ALTER": "ALTER",
+    "ENTRY": "ENTRY",
+    "CANCEL": "CANCEL",
 }
 
 # Types lowered by CobolFrontend._lower_statement (isinstance dispatch).
@@ -169,6 +177,10 @@ _LOWERED_TYPES: frozenset[str] = frozenset(
         "UNSTRING",
         "INSPECT",
         "SEARCH",
+        "CALL",
+        "ALTER",
+        "ENTRY",
+        "CANCEL",
     }
 )
 

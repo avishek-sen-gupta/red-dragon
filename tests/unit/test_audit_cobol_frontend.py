@@ -42,8 +42,10 @@ class TestClassifyType:
 
     def test_bridge_unknown_type(self):
         assert _classify_type("ACCEPT") == StatusCategory.BRIDGE_UNKNOWN
-        assert _classify_type("CALL") == StatusCategory.BRIDGE_UNKNOWN
         assert _classify_type("READ") == StatusCategory.BRIDGE_UNKNOWN
+
+    def test_call_is_handled(self):
+        assert _classify_type("CALL") == StatusCategory.HANDLED
 
     def test_compute_is_handled(self):
         assert _classify_type("COMPUTE") == StatusCategory.HANDLED

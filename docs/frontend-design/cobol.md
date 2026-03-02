@@ -1,6 +1,6 @@
 # COBOL Frontend
 
-> `interpreter/cobol/cobol_frontend.py` · Extends `Frontend` directly · ~1394 lines
+> `interpreter/cobol/cobol_frontend.py` · Extends `Frontend` directly · ~1470 lines
 
 ## Overview
 
@@ -77,7 +77,7 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 
 ## Statement Coverage
 
-20 of 51 ProLeap statement types are fully handled (bridge → dispatch → lowering):
+24 of 51 ProLeap statement types are fully handled (bridge → dispatch → lowering):
 
 ### Arithmetic (6 types)
 
@@ -128,9 +128,18 @@ Encoding/decoding is performed via composable IR instruction builders in `ir_enc
 |---|---|
 | `SEARCH` | Loop with bound check, WHEN condition chain (`BRANCH_IF` per clause), VARYING index increment, AT END fallthrough |
 
-### Remaining 31 types
+### Inter-program (4 types)
 
-Not yet implemented in the bridge. Includes I/O (READ, WRITE, OPEN, CLOSE), communication (SEND, RECEIVE), embedded SQL (EXEC SQL), and less common statements (ALTER, ENTRY, GENERATE, etc.).
+| Statement | IR Pattern |
+|---|---|
+| `CALL 'prog' USING params` | Decode USING params → `CALL_FUNCTION` with program name (symbolic, unresolved). GIVING writes result back. |
+| `ALTER para-1 TO PROCEED TO para-2` | `STORE_VAR __alter_source = target_label` (captures data flow of dynamic retargeting) |
+| `ENTRY 'name'` | `LABEL entry_name` (alternate subprogram entry point) |
+| `CANCEL prog` | No-op for static analysis (program state invalidation has no data-flow effect) |
+
+### Remaining 27 types
+
+Not yet implemented in the bridge. Includes I/O (READ, WRITE, OPEN, CLOSE), communication (SEND, RECEIVE), embedded SQL (EXEC SQL), and less common statements (GENERATE, etc.).
 
 ## PERFORM Semantics
 
@@ -222,7 +231,7 @@ Output is a per-type coverage matrix showing HANDLED / DISPATCH_MISSING / NOT_LO
 
 Tests are in `tests/unit/test_cobol_*.py`:
 
-- **Statement hierarchy**: dispatch + round-trip for all 20 handled types
+- **Statement hierarchy**: dispatch + round-trip for all 24 handled types
 - **Frontend lowering**: per-statement IR verification (opcode presence, WRITE_REGION counts, loop structure)
 - **PIC parsing**: `pic_parser.py` coverage
 - **Data layout**: offset/length computation

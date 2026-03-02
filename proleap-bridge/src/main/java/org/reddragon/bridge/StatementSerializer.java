@@ -35,6 +35,12 @@ import io.proleap.cobol.asg.metamodel.procedure.inspect.InspectStatement;
 import io.proleap.cobol.asg.metamodel.procedure.inspect.ReplacingAllLeading;
 import io.proleap.cobol.asg.metamodel.procedure.inspect.ReplacingAllLeadings;
 import io.proleap.cobol.asg.metamodel.procedure.search.SearchStatement;
+import io.proleap.cobol.asg.metamodel.procedure.alter.AlterStatement;
+import io.proleap.cobol.asg.metamodel.procedure.alter.ProceedTo;
+import io.proleap.cobol.asg.metamodel.procedure.call.CallStatement;
+import io.proleap.cobol.asg.metamodel.procedure.call.UsingParameter;
+import io.proleap.cobol.asg.metamodel.procedure.cancel.CancelStatement;
+import io.proleap.cobol.asg.metamodel.procedure.entry.EntryStatement;
 import io.proleap.cobol.asg.metamodel.procedure.move.MoveStatement;
 import io.proleap.cobol.asg.metamodel.procedure.move.MoveToStatement;
 import io.proleap.cobol.asg.metamodel.procedure.move.MoveToSendingArea;
@@ -128,6 +134,10 @@ public final class StatementSerializer {
         if (stmtType == StatementTypeEnum.UNSTRING) return serializeUnstring((UnstringStatement) stmt);
         if (stmtType == StatementTypeEnum.INSPECT) return serializeInspect((InspectStatement) stmt);
         if (stmtType == StatementTypeEnum.SEARCH) return serializeSearch((SearchStatement) stmt);
+        if (stmtType == StatementTypeEnum.CALL) return serializeCall((CallStatement) stmt);
+        if (stmtType == StatementTypeEnum.ALTER) return serializeAlter((AlterStatement) stmt);
+        if (stmtType == StatementTypeEnum.ENTRY) return serializeEntry((EntryStatement) stmt);
+        if (stmtType == StatementTypeEnum.CANCEL) return serializeCancel((CancelStatement) stmt);
 
         return serializeUnknown(stmtType);
     }
@@ -744,6 +754,120 @@ public final class StatementSerializer {
             }
         } catch (Exception e) {
             LOG.fine("Could not extract SEARCH operands: " + e.getMessage());
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeCall(CallStatement stmt) {
+        JsonObject obj = newStatement("CALL");
+        try {
+            // Program name
+            if (stmt.getProgramValueStmt() != null) {
+                String progName = extractValueStmtText(stmt.getProgramValueStmt());
+                // Strip quotes from literal program names (e.g., 'SUBPROG' -> SUBPROG)
+                progName = progName.replaceAll("^['\"]|['\"]$", "");
+                obj.addProperty("program", progName);
+            }
+            // USING parameters
+            if (stmt.getUsingPhrase() != null && stmt.getUsingPhrase().getUsingParameters() != null) {
+                JsonArray params = new JsonArray();
+                for (UsingParameter param : stmt.getUsingPhrase().getUsingParameters()) {
+                    JsonObject paramObj = new JsonObject();
+                    String paramType = "REFERENCE"; // default
+                    if (param.getParameterType() != null) {
+                        paramType = param.getParameterType().name();
+                    }
+                    paramObj.addProperty("type", paramType);
+                    // Extract the actual operand name from the appropriate phrase
+                    String paramName = "";
+                    if (param.getByReferencePhrase() != null && param.getByReferencePhrase().getByReferences() != null
+                            && !param.getByReferencePhrase().getByReferences().isEmpty()) {
+                        ValueStmt vs = param.getByReferencePhrase().getByReferences().get(0).getValueStmt();
+                        paramName = extractValueStmtText(vs);
+                    } else if (param.getByContentPhrase() != null && param.getByContentPhrase().getByContents() != null
+                            && !param.getByContentPhrase().getByContents().isEmpty()) {
+                        ValueStmt vs = param.getByContentPhrase().getByContents().get(0).getValueStmt();
+                        paramName = extractValueStmtText(vs);
+                    } else if (param.getByValuePhrase() != null && param.getByValuePhrase().getByValues() != null
+                            && !param.getByValuePhrase().getByValues().isEmpty()) {
+                        ValueStmt vs = param.getByValuePhrase().getByValues().get(0).getValueStmt();
+                        paramName = extractValueStmtText(vs);
+                    }
+                    paramObj.addProperty("name", paramName);
+                    params.add(paramObj);
+                }
+                obj.add("using", params);
+            }
+            // GIVING
+            if (stmt.getGivingPhrase() != null && stmt.getGivingPhrase().getGivingCall() != null) {
+                obj.addProperty("giving", extractCallName(stmt.getGivingPhrase().getGivingCall()));
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract CALL operands: " + e.getMessage());
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeAlter(AlterStatement stmt) {
+        JsonObject obj = newStatement("ALTER");
+        try {
+            if (stmt.getProceedTos() != null) {
+                JsonArray proceeds = new JsonArray();
+                for (ProceedTo pt : stmt.getProceedTos()) {
+                    JsonObject ptObj = new JsonObject();
+                    if (pt.getSourceCall() != null) {
+                        ptObj.addProperty("source", extractCallName(pt.getSourceCall()));
+                    }
+                    if (pt.getTargetCall() != null) {
+                        ptObj.addProperty("target", extractCallName(pt.getTargetCall()));
+                    }
+                    proceeds.add(ptObj);
+                }
+                obj.add("proceed_tos", proceeds);
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract ALTER operands: " + e.getMessage());
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeEntry(EntryStatement stmt) {
+        JsonObject obj = newStatement("ENTRY");
+        try {
+            if (stmt.getEntryValueStmt() != null) {
+                String entryName = extractValueStmtText(stmt.getEntryValueStmt());
+                entryName = entryName.replaceAll("^['\"]|['\"]$", "");
+                obj.addProperty("entry_name", entryName);
+            }
+            if (stmt.getUsingCalls() != null && !stmt.getUsingCalls().isEmpty()) {
+                JsonArray usingArr = new JsonArray();
+                for (Call call : stmt.getUsingCalls()) {
+                    usingArr.add(extractCallName(call));
+                }
+                obj.add("using", usingArr);
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract ENTRY operands: " + e.getMessage());
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeCancel(CancelStatement stmt) {
+        JsonObject obj = newStatement("CANCEL");
+        try {
+            if (stmt.getCancelCalls() != null) {
+                JsonArray programs = new JsonArray();
+                for (io.proleap.cobol.asg.metamodel.procedure.cancel.CancelCall cc : stmt.getCancelCalls()) {
+                    if (cc.getValueStmt() != null) {
+                        String name = extractValueStmtText(cc.getValueStmt());
+                        name = name.replaceAll("^['\"]|['\"]$", "");
+                        programs.add(name);
+                    }
+                }
+                obj.add("programs", programs);
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract CANCEL operands: " + e.getMessage());
         }
         return obj;
     }
