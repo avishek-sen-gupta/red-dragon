@@ -25,6 +25,8 @@ from interpreter.cobol.cobol_statements import (
     PerformUntilSpec,
     PerformVaryingSpec,
     Replacing,
+    SearchStatement,
+    SearchWhen,
     SetStatement,
     StopRunStatement,
     StringSending,
@@ -1162,3 +1164,146 @@ class TestTier2Lowering:
         # Should write back to source field
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) >= 2  # initial VALUE + REPLACING write-back
+
+
+class TestSearchLowering:
+    """Tests for SEARCH IR lowering."""
+
+    def _lower_with_field_and_stmts(
+        self,
+        fields: list[CobolField],
+        stmts: list[CobolStatementType],
+    ) -> list[IRInstruction]:
+        asg = CobolASG(
+            data_fields=fields,
+            paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        return frontend.lower(None, b"")
+
+    def test_search_emits_loop_structure(self):
+        """SEARCH should emit BRANCH_IF for bound check and WHEN conditions."""
+        fields = [
+            CobolField(
+                name="WS-IDX",
+                level=77,
+                pic="9(3)",
+                usage="DISPLAY",
+                offset=0,
+                value="1",
+            ),
+            CobolField(
+                name="WS-VAL",
+                level=77,
+                pic="X(5)",
+                usage="DISPLAY",
+                offset=3,
+                value="HELLO",
+            ),
+        ]
+        stmts = [
+            SearchStatement(
+                table="WS-TABLE",
+                varying="WS-IDX",
+                whens=[
+                    SearchWhen(
+                        condition="WS-IDX = 5",
+                        children=[DisplayStatement(operand="FOUND")],
+                    )
+                ],
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should emit BRANCH_IF for the bound check + WHEN condition
+        branches = _find_opcodes(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2  # bound check + at least one WHEN
+
+        # Should emit BRANCH for loop-back and exit
+        jumps = _find_opcodes(instructions, Opcode.BRANCH)
+        assert len(jumps) >= 1
+
+        # Should emit labels for loop structure
+        labels = _find_opcodes(instructions, Opcode.LABEL)
+        label_names = [inst.label for inst in labels]
+        assert any("search_loop" in name for name in label_names)
+        assert any("search_end" in name for name in label_names)
+
+    def test_search_with_varying_increments_index(self):
+        """SEARCH VARYING should emit decode/increment/encode for the index."""
+        fields = [
+            CobolField(
+                name="WS-IDX",
+                level=77,
+                pic="9(3)",
+                usage="DISPLAY",
+                offset=0,
+                value="1",
+            ),
+        ]
+        stmts = [
+            SearchStatement(
+                table="WS-TABLE",
+                varying="WS-IDX",
+                whens=[SearchWhen(condition="WS-IDX = 5")],
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should write back the incremented index
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) >= 2  # initial VALUE + index increment write
+
+    def test_search_at_end_emits_statements(self):
+        """AT END clause should emit its child statements."""
+        fields = [
+            CobolField(
+                name="WS-IDX",
+                level=77,
+                pic="9(3)",
+                usage="DISPLAY",
+                offset=0,
+                value="1",
+            ),
+        ]
+        stmts = [
+            SearchStatement(
+                table="WS-TABLE",
+                whens=[SearchWhen(condition="WS-IDX = 5")],
+                at_end=[DisplayStatement(operand="NOT FOUND")],
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # AT END should produce CALL_FUNCTION for DISPLAY (uses "print")
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        print_calls = [c for c in calls if c.operands and c.operands[0] == "print"]
+        assert len(print_calls) >= 1
+
+    def test_search_multiple_whens(self):
+        """Multiple WHEN clauses should each get a BRANCH_IF."""
+        fields = [
+            CobolField(
+                name="WS-IDX",
+                level=77,
+                pic="9(3)",
+                usage="DISPLAY",
+                offset=0,
+                value="1",
+            ),
+        ]
+        stmts = [
+            SearchStatement(
+                table="WS-TABLE",
+                varying="WS-IDX",
+                whens=[
+                    SearchWhen(condition="WS-IDX = 3"),
+                    SearchWhen(condition="WS-IDX = 7"),
+                ],
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should emit BRANCH_IF for bound check + 2 WHEN conditions
+        branches = _find_opcodes(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 3

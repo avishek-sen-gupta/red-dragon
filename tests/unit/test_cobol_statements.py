@@ -19,6 +19,8 @@ from interpreter.cobol.cobol_statements import (
     PerformUntilSpec,
     PerformVaryingSpec,
     Replacing,
+    SearchStatement,
+    SearchWhen,
     SetStatement,
     StopRunStatement,
     StringSending,
@@ -283,6 +285,39 @@ class TestParseStatementDispatch:
         assert stmt.replacings[0].from_pattern == "A"
         assert stmt.replacings[0].to_pattern == "B"
 
+    def test_search_basic(self):
+        stmt = parse_statement(
+            {
+                "type": "SEARCH",
+                "table": "WS-TABLE",
+                "varying": "WS-IDX",
+                "whens": [
+                    {
+                        "condition": "WS-IDX = 5",
+                        "children": [{"type": "DISPLAY", "operands": ["FOUND"]}],
+                    }
+                ],
+            }
+        )
+        assert isinstance(stmt, SearchStatement)
+        assert stmt.table == "WS-TABLE"
+        assert stmt.varying == "WS-IDX"
+        assert len(stmt.whens) == 1
+        assert stmt.whens[0].condition == "WS-IDX = 5"
+        assert len(stmt.whens[0].children) == 1
+
+    def test_search_with_at_end(self):
+        stmt = parse_statement(
+            {
+                "type": "SEARCH",
+                "table": "WS-TABLE",
+                "whens": [{"condition": "WS-A = 1"}],
+                "at_end": [{"type": "DISPLAY", "operands": ["NOT FOUND"]}],
+            }
+        )
+        assert isinstance(stmt, SearchStatement)
+        assert len(stmt.at_end) == 1
+
     def test_unknown_type_raises(self):
         with pytest.raises(ValueError, match="Unknown COBOL statement type"):
             parse_statement({"type": "BOGUS"})
@@ -532,5 +567,28 @@ class TestRoundTrip:
             "inspect_type": "REPLACING",
             "source": "WS-DATA",
             "replacings": [{"mode": "ALL", "from": "A", "to": "B"}],
+        }
+        assert self._round_trip(data) == data
+
+    def test_search_round_trip(self):
+        data = {
+            "type": "SEARCH",
+            "table": "WS-TABLE",
+            "varying": "WS-IDX",
+            "whens": [
+                {
+                    "condition": "WS-IDX = 5",
+                    "children": [{"type": "DISPLAY", "operands": ["FOUND"]}],
+                }
+            ],
+        }
+        assert self._round_trip(data) == data
+
+    def test_search_with_at_end_round_trip(self):
+        data = {
+            "type": "SEARCH",
+            "table": "WS-TABLE",
+            "whens": [{"condition": "WS-A = 1"}],
+            "at_end": [{"type": "DISPLAY", "operands": ["NOT FOUND"]}],
         }
         assert self._round_trip(data) == data

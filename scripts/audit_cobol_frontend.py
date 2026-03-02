@@ -114,6 +114,7 @@ BRIDGE_SERIALIZED_TYPES: frozenset[str] = frozenset(
         "STRING",
         "UNSTRING",
         "INSPECT",
+        "SEARCH",
     }
 )
 
@@ -140,6 +141,7 @@ _BRIDGE_TO_DISPATCH: dict[str, str] = {
     "STRING": "STRING",
     "UNSTRING": "UNSTRING",
     "INSPECT": "INSPECT",
+    "SEARCH": "SEARCH",
 }
 
 # Types lowered by CobolFrontend._lower_statement (isinstance dispatch).
@@ -166,6 +168,7 @@ _LOWERED_TYPES: frozenset[str] = frozenset(
         "STRING",
         "UNSTRING",
         "INSPECT",
+        "SEARCH",
     }
 )
 
@@ -515,6 +518,11 @@ _COBOL_SAMPLE = """\
            INSPECT WS-NAME TALLYING WS-TALLY
                    FOR ALL 'L'
            INSPECT WS-NAME REPLACING ALL 'L' BY 'R'
+
+           SEARCH WS-TABLE
+               WHEN WS-IDX = 5
+                   DISPLAY 'FOUND'
+           END-SEARCH
 
            GO TO EXIT-PARA.
 

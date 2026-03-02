@@ -34,6 +34,7 @@ import io.proleap.cobol.asg.metamodel.procedure.inspect.AllLeadingPhrase;
 import io.proleap.cobol.asg.metamodel.procedure.inspect.InspectStatement;
 import io.proleap.cobol.asg.metamodel.procedure.inspect.ReplacingAllLeading;
 import io.proleap.cobol.asg.metamodel.procedure.inspect.ReplacingAllLeadings;
+import io.proleap.cobol.asg.metamodel.procedure.search.SearchStatement;
 import io.proleap.cobol.asg.metamodel.procedure.move.MoveStatement;
 import io.proleap.cobol.asg.metamodel.procedure.move.MoveToStatement;
 import io.proleap.cobol.asg.metamodel.procedure.move.MoveToSendingArea;
@@ -126,6 +127,7 @@ public final class StatementSerializer {
         if (stmtType == StatementTypeEnum.STRING) return serializeString((StringStatement) stmt);
         if (stmtType == StatementTypeEnum.UNSTRING) return serializeUnstring((UnstringStatement) stmt);
         if (stmtType == StatementTypeEnum.INSPECT) return serializeInspect((InspectStatement) stmt);
+        if (stmtType == StatementTypeEnum.SEARCH) return serializeSearch((SearchStatement) stmt);
 
         return serializeUnknown(stmtType);
     }
@@ -697,6 +699,51 @@ public final class StatementSerializer {
             }
         } catch (Exception e) {
             LOG.fine("Could not extract INSPECT operands: " + e.getMessage());
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeSearch(SearchStatement stmt) {
+        JsonObject obj = newStatement("SEARCH");
+        try {
+            // Table being searched
+            if (stmt.getDataCall() != null) {
+                obj.addProperty("table", extractCallName(stmt.getDataCall()));
+            }
+
+            // VARYING index variable (optional)
+            if (stmt.getVaryingPhrase() != null && stmt.getVaryingPhrase().getDataCall() != null) {
+                obj.addProperty("varying", extractCallName(stmt.getVaryingPhrase().getDataCall()));
+            }
+
+            // WHEN clauses
+            JsonArray whens = new JsonArray();
+            for (io.proleap.cobol.asg.metamodel.procedure.search.WhenPhrase when : stmt.getWhenPhrases()) {
+                JsonObject whenObj = new JsonObject();
+                // Extract condition text
+                if (when.getCondition() != null && when.getCondition().getCtx() != null) {
+                    whenObj.addProperty("condition", insertSpaces(when.getCondition().getCtx().getText()));
+                }
+                // Serialize child statements
+                if (when.getStatements() != null && !when.getStatements().isEmpty()) {
+                    JsonArray children = serializeStatements(when.getStatements());
+                    if (children.size() > 0) {
+                        whenObj.add("children", children);
+                    }
+                }
+                whens.add(whenObj);
+            }
+            obj.add("whens", whens);
+
+            // AT END clause
+            if (stmt.getAtEndPhrase() != null && stmt.getAtEndPhrase().getStatements() != null) {
+                JsonArray atEndChildren = serializeStatements(stmt.getAtEndPhrase().getStatements());
+                if (atEndChildren.size() > 0) {
+                    obj.add("at_end", atEndChildren);
+                }
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract SEARCH operands: " + e.getMessage());
         }
         return obj;
     }
