@@ -137,7 +137,7 @@ All constructs above produce real IR for proper data-flow analysis. All 15 front
 
 ### COBOL frontend
 
-The COBOL frontend uses the [ProLeap COBOL Parser](https://github.com/uwol/proleap-cobol-parser) via a subprocess bridge (requires JDK 17). It lowers DATA DIVISION fields to byte-addressed memory regions with PIC-driven encoding/decoding, and **24 of 51** PROCEDURE DIVISION statement types to standard IR. See the [COBOL frontend design document](docs/frontend-design/cobol.md) for full details.
+The COBOL frontend uses the [ProLeap COBOL Parser](https://github.com/uwol/proleap-cobol-parser) via a subprocess bridge (requires JDK 17). It lowers DATA DIVISION fields to byte-addressed memory regions with PIC-driven encoding/decoding, and **29 of 51** PROCEDURE DIVISION statement types to standard IR (24 fully handled + 5 I/O stub types). See the [COBOL frontend design document](docs/frontend-design/cobol.md) for full details.
 
 | Category | Statements |
 |----------|-----------|
@@ -148,6 +148,7 @@ The COBOL frontend uses the [ProLeap COBOL Parser](https://github.com/uwol/prole
 | **String operations** | STRING, UNSTRING, INSPECT (TALLYING / REPLACING) |
 | **Table operations** | SEARCH (linear, with VARYING index and AT END) |
 | **Inter-program** | CALL (symbolic, with USING/GIVING parameter passing), ENTRY, ALTER |
+| **I/O (stub)** | ACCEPT, READ, WRITE, OPEN, CLOSE — via injectable `CobolIOProvider` |
 
 ## Example: CFG
 
@@ -385,11 +386,11 @@ The **Exercism suite** (`tests/unit/exercism/`) pulls canonical test data from [
 
 ### COBOL frontend tests
 
-The COBOL test suite covers ASG round-trip, typed statement hierarchy (24 types), PIC parsing, data layout, frontend lowering, PERFORM loop variants, section PERFORM, SEARCH, STRING/UNSTRING/INSPECT, CALL/ALTER/ENTRY/CANCEL lowering, parser bridge, and end-to-end fixture tests.
+The COBOL test suite covers ASG round-trip, typed statement hierarchy (29 types), PIC parsing, data layout, frontend lowering, PERFORM loop variants, section PERFORM, SEARCH, STRING/UNSTRING/INSPECT, CALL/ALTER/ENTRY/CANCEL lowering, I/O provider (NullIOProvider/StubIOProvider with executor integration), parser bridge, and end-to-end fixture tests.
 
 ### Test totals
 
-**7662 tests** (7662 passed, 3 xfailed) — all with zero LLM calls.
+**7714 tests** (7714 passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 

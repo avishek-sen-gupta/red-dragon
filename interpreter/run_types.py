@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 
 class UnresolvedCallStrategy(Enum):
@@ -22,6 +23,9 @@ class VMConfig:
     verbose: bool = False
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC
     source_language: str = ""
+    io_provider: Any = (
+        None  # Optional CobolIOProvider — Any to avoid COBOL import in core VM
+    )
 
 
 @dataclass

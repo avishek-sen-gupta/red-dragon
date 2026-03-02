@@ -3,10 +3,12 @@
 import pytest
 
 from interpreter.cobol.cobol_statements import (
+    AcceptStatement,
     AlterStatement,
     ArithmeticStatement,
     CallStatement,
     CancelStatement,
+    CloseStatement,
     ComputeStatement,
     ContinueStatement,
     DisplayStatement,
@@ -18,10 +20,12 @@ from interpreter.cobol.cobol_statements import (
     InitializeStatement,
     InspectStatement,
     MoveStatement,
+    OpenStatement,
     PerformStatement,
     PerformTimesSpec,
     PerformUntilSpec,
     PerformVaryingSpec,
+    ReadStatement,
     Replacing,
     SearchStatement,
     SearchWhen,
@@ -33,6 +37,7 @@ from interpreter.cobol.cobol_statements import (
     UnstringStatement,
     WhenOtherStatement,
     WhenStatement,
+    WriteStatement,
     parse_statement,
 )
 
@@ -377,6 +382,58 @@ class TestParseStatementDispatch:
         assert isinstance(stmt, CancelStatement)
         assert stmt.programs == ["SUBPROG"]
 
+    def test_accept_basic(self):
+        stmt = parse_statement({"type": "ACCEPT", "target": "WS-INPUT"})
+        assert isinstance(stmt, AcceptStatement)
+        assert stmt.target == "WS-INPUT"
+        assert stmt.from_device == "CONSOLE"
+
+    def test_accept_with_device(self):
+        stmt = parse_statement(
+            {"type": "ACCEPT", "target": "WS-DATE", "from_device": "DATE"}
+        )
+        assert isinstance(stmt, AcceptStatement)
+        assert stmt.from_device == "DATE"
+
+    def test_open(self):
+        stmt = parse_statement(
+            {"type": "OPEN", "mode": "INPUT", "files": ["CUST-FILE", "ORDER-FILE"]}
+        )
+        assert isinstance(stmt, OpenStatement)
+        assert stmt.mode == "INPUT"
+        assert stmt.files == ["CUST-FILE", "ORDER-FILE"]
+
+    def test_close(self):
+        stmt = parse_statement({"type": "CLOSE", "files": ["CUST-FILE", "ORDER-FILE"]})
+        assert isinstance(stmt, CloseStatement)
+        assert stmt.files == ["CUST-FILE", "ORDER-FILE"]
+
+    def test_read_basic(self):
+        stmt = parse_statement({"type": "READ", "file_name": "CUST-FILE"})
+        assert isinstance(stmt, ReadStatement)
+        assert stmt.file_name == "CUST-FILE"
+        assert stmt.into == ""
+
+    def test_read_with_into(self):
+        stmt = parse_statement(
+            {"type": "READ", "file_name": "CUST-FILE", "into": "WS-RECORD"}
+        )
+        assert isinstance(stmt, ReadStatement)
+        assert stmt.into == "WS-RECORD"
+
+    def test_write_basic(self):
+        stmt = parse_statement({"type": "WRITE", "record_name": "CUST-REC"})
+        assert isinstance(stmt, WriteStatement)
+        assert stmt.record_name == "CUST-REC"
+        assert stmt.from_field == ""
+
+    def test_write_with_from(self):
+        stmt = parse_statement(
+            {"type": "WRITE", "record_name": "CUST-REC", "from_field": "WS-OUTPUT"}
+        )
+        assert isinstance(stmt, WriteStatement)
+        assert stmt.from_field == "WS-OUTPUT"
+
     def test_unknown_type_raises(self):
         with pytest.raises(ValueError, match="Unknown COBOL statement type"):
             parse_statement({"type": "BOGUS"})
@@ -674,4 +731,36 @@ class TestRoundTrip:
 
     def test_cancel_round_trip(self):
         data = {"type": "CANCEL", "programs": ["SUBPROG"]}
+        assert self._round_trip(data) == data
+
+    def test_accept_round_trip(self):
+        data = {"type": "ACCEPT", "target": "WS-INPUT"}
+        assert self._round_trip(data) == data
+
+    def test_accept_with_device_round_trip(self):
+        data = {"type": "ACCEPT", "target": "WS-DATE", "from_device": "DATE"}
+        assert self._round_trip(data) == data
+
+    def test_open_round_trip(self):
+        data = {"type": "OPEN", "mode": "INPUT", "files": ["CUST-FILE"]}
+        assert self._round_trip(data) == data
+
+    def test_close_round_trip(self):
+        data = {"type": "CLOSE", "files": ["CUST-FILE", "ORDER-FILE"]}
+        assert self._round_trip(data) == data
+
+    def test_read_round_trip(self):
+        data = {"type": "READ", "file_name": "CUST-FILE"}
+        assert self._round_trip(data) == data
+
+    def test_read_with_into_round_trip(self):
+        data = {"type": "READ", "file_name": "CUST-FILE", "into": "WS-RECORD"}
+        assert self._round_trip(data) == data
+
+    def test_write_round_trip(self):
+        data = {"type": "WRITE", "record_name": "CUST-REC"}
+        assert self._round_trip(data) == data
+
+    def test_write_with_from_round_trip(self):
+        data = {"type": "WRITE", "record_name": "CUST-REC", "from_field": "WS-OUTPUT"}
         assert self._round_trip(data) == data

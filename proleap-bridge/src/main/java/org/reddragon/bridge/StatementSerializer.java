@@ -34,12 +34,16 @@ import io.proleap.cobol.asg.metamodel.procedure.inspect.AllLeadingPhrase;
 import io.proleap.cobol.asg.metamodel.procedure.inspect.InspectStatement;
 import io.proleap.cobol.asg.metamodel.procedure.inspect.ReplacingAllLeading;
 import io.proleap.cobol.asg.metamodel.procedure.inspect.ReplacingAllLeadings;
+import io.proleap.cobol.asg.metamodel.procedure.open.OpenStatement;
+import io.proleap.cobol.asg.metamodel.procedure.read.ReadStatement;
 import io.proleap.cobol.asg.metamodel.procedure.search.SearchStatement;
 import io.proleap.cobol.asg.metamodel.procedure.alter.AlterStatement;
 import io.proleap.cobol.asg.metamodel.procedure.alter.ProceedTo;
 import io.proleap.cobol.asg.metamodel.procedure.call.CallStatement;
 import io.proleap.cobol.asg.metamodel.procedure.call.UsingParameter;
+import io.proleap.cobol.asg.metamodel.procedure.accept.AcceptStatement;
 import io.proleap.cobol.asg.metamodel.procedure.cancel.CancelStatement;
+import io.proleap.cobol.asg.metamodel.procedure.close.CloseStatement;
 import io.proleap.cobol.asg.metamodel.procedure.entry.EntryStatement;
 import io.proleap.cobol.asg.metamodel.procedure.move.MoveStatement;
 import io.proleap.cobol.asg.metamodel.procedure.move.MoveToStatement;
@@ -70,6 +74,7 @@ import io.proleap.cobol.asg.metamodel.procedure.subtract.SubtractFromStatement;
 import io.proleap.cobol.asg.metamodel.procedure.subtract.Minuend;
 import io.proleap.cobol.asg.metamodel.procedure.subtract.Subtrahend;
 import io.proleap.cobol.asg.metamodel.procedure.unstring.UnstringStatement;
+import io.proleap.cobol.asg.metamodel.procedure.write.WriteStatement;
 import io.proleap.cobol.asg.metamodel.call.Call;
 import io.proleap.cobol.asg.metamodel.valuestmt.ValueStmt;
 
@@ -138,6 +143,11 @@ public final class StatementSerializer {
         if (stmtType == StatementTypeEnum.ALTER) return serializeAlter((AlterStatement) stmt);
         if (stmtType == StatementTypeEnum.ENTRY) return serializeEntry((EntryStatement) stmt);
         if (stmtType == StatementTypeEnum.CANCEL) return serializeCancel((CancelStatement) stmt);
+        if (stmtType == StatementTypeEnum.ACCEPT) return serializeAccept((AcceptStatement) stmt);
+        if (stmtType == StatementTypeEnum.OPEN) return serializeOpen((OpenStatement) stmt);
+        if (stmtType == StatementTypeEnum.CLOSE) return serializeClose((CloseStatement) stmt);
+        if (stmtType == StatementTypeEnum.READ) return serializeRead((ReadStatement) stmt);
+        if (stmtType == StatementTypeEnum.WRITE) return serializeWrite((WriteStatement) stmt);
 
         return serializeUnknown(stmtType);
     }
@@ -868,6 +878,132 @@ public final class StatementSerializer {
             }
         } catch (Exception e) {
             LOG.fine("Could not extract CANCEL operands: " + e.getMessage());
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeAccept(AcceptStatement stmt) {
+        JsonObject obj = newStatement("ACCEPT");
+        try {
+            if (stmt.getAcceptCall() != null) {
+                obj.addProperty("target", extractCallName(stmt.getAcceptCall()));
+            }
+            // FROM device — AcceptStatement.AcceptType distinguishes
+            // DATE/DAY/TIME vs. environment name vs. mnemonic.
+            // For simplicity, default to CONSOLE (user input).
+            if (stmt.getAcceptType() != null) {
+                obj.addProperty("from_device", stmt.getAcceptType().name());
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract ACCEPT operands: " + e.getMessage());
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeOpen(OpenStatement stmt) {
+        JsonObject obj = newStatement("OPEN");
+        try {
+            JsonArray files = new JsonArray();
+            String mode = "";
+
+            // INPUT files
+            List<io.proleap.cobol.asg.metamodel.procedure.open.InputPhrase> inputPhrases = stmt.getInputPhrases();
+            if (inputPhrases != null && !inputPhrases.isEmpty()) {
+                mode = "INPUT";
+                inputPhrases.stream()
+                    .flatMap(ip -> ip.getInputs().stream())
+                    .map(io.proleap.cobol.asg.metamodel.procedure.open.Input::getFileCall)
+                    .filter(c -> c != null)
+                    .map(StatementSerializer::extractCallName)
+                    .forEach(files::add);
+            }
+
+            // OUTPUT files
+            List<io.proleap.cobol.asg.metamodel.procedure.open.OutputPhrase> outputPhrases = stmt.getOutputPhrases();
+            if (outputPhrases != null && !outputPhrases.isEmpty()) {
+                mode = "OUTPUT";
+                outputPhrases.stream()
+                    .flatMap(op -> op.getOutputs().stream())
+                    .map(io.proleap.cobol.asg.metamodel.procedure.open.Output::getFileCall)
+                    .filter(c -> c != null)
+                    .map(StatementSerializer::extractCallName)
+                    .forEach(files::add);
+            }
+
+            // I-O files
+            List<io.proleap.cobol.asg.metamodel.procedure.open.InputOutputPhrase> ioPhrases = stmt.getInputOutputPhrases();
+            if (ioPhrases != null && !ioPhrases.isEmpty()) {
+                mode = "I-O";
+                ioPhrases.stream()
+                    .flatMap(iop -> iop.getFileCalls().stream())
+                    .map(StatementSerializer::extractCallName)
+                    .forEach(files::add);
+            }
+
+            // EXTEND files
+            List<io.proleap.cobol.asg.metamodel.procedure.open.ExtendPhrase> extendPhrases = stmt.getExtendPhrases();
+            if (extendPhrases != null && !extendPhrases.isEmpty()) {
+                mode = "EXTEND";
+                extendPhrases.stream()
+                    .flatMap(ep -> ep.getFileCalls().stream())
+                    .map(StatementSerializer::extractCallName)
+                    .forEach(files::add);
+            }
+
+            obj.addProperty("mode", mode);
+            obj.add("files", files);
+        } catch (Exception e) {
+            LOG.fine("Could not extract OPEN operands: " + e.getMessage());
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeClose(CloseStatement stmt) {
+        JsonObject obj = newStatement("CLOSE");
+        try {
+            JsonArray files = new JsonArray();
+            if (stmt.getCloseFiles() != null) {
+                stmt.getCloseFiles().stream()
+                    .map(io.proleap.cobol.asg.metamodel.procedure.close.CloseFile::getFileCall)
+                    .filter(c -> c != null)
+                    .map(StatementSerializer::extractCallName)
+                    .forEach(files::add);
+            }
+            obj.add("files", files);
+        } catch (Exception e) {
+            LOG.fine("Could not extract CLOSE operands: " + e.getMessage());
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeRead(ReadStatement stmt) {
+        JsonObject obj = newStatement("READ");
+        try {
+            if (stmt.getFileCall() != null) {
+                obj.addProperty("file_name", extractCallName(stmt.getFileCall()));
+            }
+            io.proleap.cobol.asg.metamodel.procedure.read.Into into = stmt.getInto();
+            if (into != null && into.getIntoCall() != null) {
+                obj.addProperty("into", extractCallName(into.getIntoCall()));
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract READ operands: " + e.getMessage());
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeWrite(WriteStatement stmt) {
+        JsonObject obj = newStatement("WRITE");
+        try {
+            if (stmt.getRecordCall() != null) {
+                obj.addProperty("record_name", extractCallName(stmt.getRecordCall()));
+            }
+            io.proleap.cobol.asg.metamodel.procedure.write.From from = stmt.getFrom();
+            if (from != null && from.getFromValueStmt() != null) {
+                obj.addProperty("from_field", extractValueStmtText(from.getFromValueStmt()));
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract WRITE operands: " + e.getMessage());
         }
         return obj;
     }

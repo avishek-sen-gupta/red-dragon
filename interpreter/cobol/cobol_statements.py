@@ -68,6 +68,11 @@ CobolStatementType = Union[
     "AlterStatement",
     "EntryStatement",
     "CancelStatement",
+    "AcceptStatement",
+    "OpenStatement",
+    "CloseStatement",
+    "ReadStatement",
+    "WriteStatement",
 ]
 
 
@@ -640,6 +645,104 @@ class CancelStatement:
         return {"type": "CANCEL", "programs": self.programs}
 
 
+# ── I/O Statement types ─────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class AcceptStatement:
+    """ACCEPT target [FROM device]."""
+
+    target: str = ""
+    from_device: str = "CONSOLE"
+
+    @classmethod
+    def from_dict(cls, data: dict) -> AcceptStatement:
+        return cls(
+            target=data.get("target", ""),
+            from_device=data.get("from_device", "CONSOLE"),
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {"type": "ACCEPT", "target": self.target}
+        if self.from_device != "CONSOLE":
+            result["from_device"] = self.from_device
+        return result
+
+
+@dataclass(frozen=True)
+class OpenStatement:
+    """OPEN mode file1 file2 ..."""
+
+    mode: str = ""  # INPUT, OUTPUT, I-O, EXTEND
+    files: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> OpenStatement:
+        return cls(
+            mode=data.get("mode", ""),
+            files=data.get("files", []),
+        )
+
+    def to_dict(self) -> dict:
+        return {"type": "OPEN", "mode": self.mode, "files": list(self.files)}
+
+
+@dataclass(frozen=True)
+class CloseStatement:
+    """CLOSE file1 file2 ..."""
+
+    files: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> CloseStatement:
+        return cls(files=data.get("files", []))
+
+    def to_dict(self) -> dict:
+        return {"type": "CLOSE", "files": list(self.files)}
+
+
+@dataclass(frozen=True)
+class ReadStatement:
+    """READ file-name [INTO target]."""
+
+    file_name: str = ""
+    into: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> ReadStatement:
+        return cls(
+            file_name=data.get("file_name", ""),
+            into=data.get("into", ""),
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {"type": "READ", "file_name": self.file_name}
+        if self.into:
+            result["into"] = self.into
+        return result
+
+
+@dataclass(frozen=True)
+class WriteStatement:
+    """WRITE record-name [FROM field]."""
+
+    record_name: str = ""
+    from_field: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> WriteStatement:
+        return cls(
+            record_name=data.get("record_name", ""),
+            from_field=data.get("from_field", ""),
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {"type": "WRITE", "record_name": self.record_name}
+        if self.from_field:
+            result["from_field"] = self.from_field
+        return result
+
+
 def _parse_perform_spec(
     data: dict,
 ) -> PerformTimesSpec | PerformUntilSpec | PerformVaryingSpec | None:
@@ -751,6 +854,11 @@ _DISPATCH_TABLE: dict[str, type] = {
     "ALTER": AlterStatement,
     "ENTRY": EntryStatement,
     "CANCEL": CancelStatement,
+    "ACCEPT": AcceptStatement,
+    "OPEN": OpenStatement,
+    "CLOSE": CloseStatement,
+    "READ": ReadStatement,
+    "WRITE": WriteStatement,
 }
 
 

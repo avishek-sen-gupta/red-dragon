@@ -23,10 +23,12 @@ from interpreter.cobol.cobol_expression import (
     parse_expression,
 )
 from interpreter.cobol.cobol_statements import (
+    AcceptStatement,
     AlterStatement,
     ArithmeticStatement,
     CallStatement,
     CancelStatement,
+    CloseStatement,
     CobolStatementType,
     ComputeStatement,
     ContinueStatement,
@@ -39,10 +41,12 @@ from interpreter.cobol.cobol_statements import (
     InitializeStatement,
     InspectStatement,
     MoveStatement,
+    OpenStatement,
     PerformStatement,
     PerformTimesSpec,
     PerformUntilSpec,
     PerformVaryingSpec,
+    ReadStatement,
     SearchStatement,
     SetStatement,
     StopRunStatement,
@@ -50,6 +54,7 @@ from interpreter.cobol.cobol_statements import (
     UnstringStatement,
     WhenOtherStatement,
     WhenStatement,
+    WriteStatement,
 )
 from interpreter.cobol.cobol_types import CobolDataCategory
 from interpreter.cobol.data_layout import DataLayout, FieldLayout, build_data_layout
@@ -408,6 +413,16 @@ class CobolFrontend(Frontend):
             self._lower_entry(stmt, layout, region_reg)
         elif isinstance(stmt, CancelStatement):
             self._lower_cancel(stmt, layout, region_reg)
+        elif isinstance(stmt, AcceptStatement):
+            self._lower_accept(stmt, layout, region_reg)
+        elif isinstance(stmt, OpenStatement):
+            self._lower_open(stmt, layout, region_reg)
+        elif isinstance(stmt, CloseStatement):
+            self._lower_close(stmt, layout, region_reg)
+        elif isinstance(stmt, ReadStatement):
+            self._lower_read(stmt, layout, region_reg)
+        elif isinstance(stmt, WriteStatement):
+            self._lower_write(stmt, layout, region_reg)
         else:
             logger.warning("Unhandled COBOL statement type: %s", type(stmt).__name__)
 
@@ -1364,6 +1379,109 @@ class CobolFrontend(Frontend):
         """
         for prog in stmt.programs:
             logger.info("CANCEL %s (no-op for static analysis)", prog)
+
+    # ── I/O Statements ───────────────────────────────────────────
+
+    def _lower_accept(
+        self,
+        stmt: AcceptStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """ACCEPT target [FROM device] — read input via __cobol_accept."""
+        device_reg = self._const_to_reg(stmt.from_device)
+        result_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=result_reg,
+            operands=["__cobol_accept", device_reg],
+        )
+        # Write result to target field if it exists in layout
+        if stmt.target and stmt.target in layout.fields:
+            target_fl = layout.fields[stmt.target]
+            str_reg = self._emit_to_string(result_reg)
+            self._emit_encode_and_write(region_reg, target_fl, str_reg)
+        logger.info("ACCEPT %s FROM %s", stmt.target, stmt.from_device)
+
+    def _lower_open(
+        self,
+        stmt: OpenStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """OPEN mode file1 file2 ... — open files via __cobol_open_file."""
+        for filename in stmt.files:
+            fn_reg = self._const_to_reg(filename)
+            mode_reg = self._const_to_reg(stmt.mode)
+            result_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CALL_FUNCTION,
+                result_reg=result_reg,
+                operands=["__cobol_open_file", fn_reg, mode_reg],
+            )
+            logger.info("OPEN %s %s", stmt.mode, filename)
+
+    def _lower_close(
+        self,
+        stmt: CloseStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """CLOSE file1 file2 ... — close files via __cobol_close_file."""
+        for filename in stmt.files:
+            fn_reg = self._const_to_reg(filename)
+            result_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CALL_FUNCTION,
+                result_reg=result_reg,
+                operands=["__cobol_close_file", fn_reg],
+            )
+            logger.info("CLOSE %s", filename)
+
+    def _lower_read(
+        self,
+        stmt: ReadStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """READ file-name [INTO target] — read record via __cobol_read_record."""
+        fn_reg = self._const_to_reg(stmt.file_name)
+        result_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=result_reg,
+            operands=["__cobol_read_record", fn_reg],
+        )
+        # Write result to INTO target field if specified
+        if stmt.into and stmt.into in layout.fields:
+            target_fl = layout.fields[stmt.into]
+            str_reg = self._emit_to_string(result_reg)
+            self._emit_encode_and_write(region_reg, target_fl, str_reg)
+        logger.info("READ %s INTO %s", stmt.file_name, stmt.into or "(none)")
+
+    def _lower_write(
+        self,
+        stmt: WriteStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """WRITE record-name [FROM field] — write record via __cobol_write_record."""
+        # Determine the data to write: FROM field if specified, otherwise record-name
+        if stmt.from_field and stmt.from_field in layout.fields:
+            from_fl = layout.fields[stmt.from_field]
+            decoded_reg = self._emit_decode_field(region_reg, from_fl)
+            data_reg = self._emit_to_string(decoded_reg)
+        else:
+            data_reg = self._const_to_reg(stmt.from_field or stmt.record_name)
+
+        fn_reg = self._const_to_reg(stmt.record_name)
+        result_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=result_reg,
+            operands=["__cobol_write_record", fn_reg, data_reg],
+        )
+        logger.info("WRITE %s FROM %s", stmt.record_name, stmt.from_field or "(none)")
 
     # ── Condition Lowering ─────────────────────────────────────────
 

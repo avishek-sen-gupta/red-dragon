@@ -87,6 +87,9 @@ class VMState:
     closures: dict[str, ClosureEnvironment] = field(default_factory=dict)
     regions: dict[str, bytearray] = field(default_factory=dict)
     continuations: dict[str, str] = field(default_factory=dict)
+    io_provider: Any = (
+        None  # Optional CobolIOProvider — Any to avoid COBOL import in core VM
+    )
 
     def fresh_symbolic(self, hint: str = "") -> SymbolicValue:
         name = f"sym_{self.symbolic_counter}"

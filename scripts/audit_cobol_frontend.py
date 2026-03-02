@@ -119,6 +119,11 @@ BRIDGE_SERIALIZED_TYPES: frozenset[str] = frozenset(
         "ALTER",
         "ENTRY",
         "CANCEL",
+        "ACCEPT",
+        "OPEN",
+        "CLOSE",
+        "READ",
+        "WRITE",
     }
 )
 
@@ -150,6 +155,11 @@ _BRIDGE_TO_DISPATCH: dict[str, str] = {
     "ALTER": "ALTER",
     "ENTRY": "ENTRY",
     "CANCEL": "CANCEL",
+    "ACCEPT": "ACCEPT",
+    "OPEN": "OPEN",
+    "CLOSE": "CLOSE",
+    "READ": "READ",
+    "WRITE": "WRITE",
 }
 
 # Types lowered by CobolFrontend._lower_statement (isinstance dispatch).
@@ -181,6 +191,11 @@ _LOWERED_TYPES: frozenset[str] = frozenset(
         "ALTER",
         "ENTRY",
         "CANCEL",
+        "ACCEPT",
+        "OPEN",
+        "CLOSE",
+        "READ",
+        "WRITE",
     }
 )
 
@@ -189,10 +204,16 @@ class StatusCategory:
     """Coverage status categories for the audit matrix."""
 
     HANDLED = "HANDLED"
+    HANDLED_STUB = "HANDLED_STUB"
     BRIDGE_ONLY = "BRIDGE_ONLY"
     DISPATCH_MISSING = "DISPATCH_MISSING"
     NOT_LOWERED = "NOT_LOWERED"
     BRIDGE_UNKNOWN = "BRIDGE_UNKNOWN"
+
+
+# Types that are fully handled but dispatch to an injectable I/O provider
+# rather than deterministic IR. Marked HANDLED_STUB to flag future expansion.
+_IO_STUB_TYPES: frozenset[str] = frozenset({"ACCEPT", "OPEN", "CLOSE", "READ", "WRITE"})
 
 
 @dataclass(frozen=True)
@@ -222,6 +243,9 @@ def _classify_type(proleap_type: str) -> str:
 
     if dispatch_key not in _LOWERED_TYPES:
         return StatusCategory.NOT_LOWERED
+
+    if proleap_type in _IO_STUB_TYPES:
+        return StatusCategory.HANDLED_STUB
 
     return StatusCategory.HANDLED
 
@@ -406,10 +430,12 @@ def _print_coverage_matrix(result: CobolAuditResult) -> None:
     print(separator)
 
     # Summary
+    handled = status_counts.get(StatusCategory.HANDLED, 0)
+    handled_stub = status_counts.get(StatusCategory.HANDLED_STUB, 0)
     print(f"\nTotal ProLeap statement types: {result.total_proleap_types}")
-    print(
-        f"  HANDLED (full pipeline):     {status_counts.get(StatusCategory.HANDLED, 0)}"
-    )
+    print(f"  HANDLED (full pipeline):     {handled}")
+    print(f"  HANDLED_STUB (I/O provider): {handled_stub}")
+    print(f"  Total handled:               {handled + handled_stub}")
     print(
         f"  BRIDGE_ONLY (serialised):    {status_counts.get(StatusCategory.BRIDGE_ONLY, 0)}"
     )

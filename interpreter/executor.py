@@ -800,6 +800,29 @@ def _handle_call_function(
     arg_regs = inst.operands[1:]
     args = [_resolve_reg(vm, a) for a in arg_regs]
 
+    # 0. Try I/O provider (for __cobol_* calls)
+    if (
+        vm.io_provider
+        and isinstance(func_name, str)
+        and func_name.startswith("__cobol_")
+    ):
+        result = vm.io_provider.handle_call(func_name, args)
+        if result is not Operators.UNCOMPUTABLE:
+            return ExecutionResult.success(
+                StateUpdate(
+                    register_writes={inst.result_reg: _serialize_value(result)},
+                    reasoning=f"io_provider {func_name}({args!r}) = {result!r}",
+                )
+            )
+        # UNCOMPUTABLE — fall through to symbolic wrapping
+        sym = vm.fresh_symbolic(hint=f"{func_name}(…)")
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: sym.to_dict()},
+                reasoning=f"io_provider {func_name} → symbolic (uncomputable)",
+            )
+        )
+
     # 1. Try builtins
     builtin_result = _try_builtin_call(func_name, args, inst, vm)
     if builtin_result.handled:
