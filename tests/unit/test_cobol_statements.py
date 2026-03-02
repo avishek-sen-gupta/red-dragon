@@ -4,6 +4,7 @@ import pytest
 
 from interpreter.cobol.cobol_statements import (
     ArithmeticStatement,
+    ComputeStatement,
     DisplayStatement,
     EvaluateStatement,
     GotoStatement,
@@ -48,6 +49,29 @@ class TestParseStatementDispatch:
         stmt = parse_statement({"type": "DIVIDE", "operands": ["4", "WS-A"]})
         assert isinstance(stmt, ArithmeticStatement)
         assert stmt.op == "DIVIDE"
+
+    def test_compute(self):
+        stmt = parse_statement(
+            {
+                "type": "COMPUTE",
+                "expression": "WS-A + WS-B * 2",
+                "targets": ["WS-RESULT"],
+            }
+        )
+        assert isinstance(stmt, ComputeStatement)
+        assert stmt.expression == "WS-A + WS-B * 2"
+        assert stmt.targets == ["WS-RESULT"]
+
+    def test_compute_multiple_targets(self):
+        stmt = parse_statement(
+            {
+                "type": "COMPUTE",
+                "expression": "100 - WS-A",
+                "targets": ["WS-C", "WS-D"],
+            }
+        )
+        assert isinstance(stmt, ComputeStatement)
+        assert len(stmt.targets) == 2
 
     def test_if(self):
         stmt = parse_statement(
@@ -261,6 +285,22 @@ class TestRoundTrip:
             "condition": "WS-A > 0",
             "children": [{"type": "DISPLAY", "operands": ["YES"]}],
             "else_children": [{"type": "DISPLAY", "operands": ["NO"]}],
+        }
+        assert self._round_trip(data) == data
+
+    def test_compute_round_trip(self):
+        data = {
+            "type": "COMPUTE",
+            "expression": "WS-A + WS-B * 2",
+            "targets": ["WS-RESULT"],
+        }
+        assert self._round_trip(data) == data
+
+    def test_compute_multiple_targets_round_trip(self):
+        data = {
+            "type": "COMPUTE",
+            "expression": "(WS-A + WS-B) * 100",
+            "targets": ["WS-C", "WS-D"],
         }
         assert self._round_trip(data) == data
 

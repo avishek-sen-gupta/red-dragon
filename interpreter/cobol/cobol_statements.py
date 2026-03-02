@@ -47,6 +47,7 @@ PerformSpec = Union[PerformTimesSpec, PerformUntilSpec, PerformVaryingSpec]
 CobolStatementType = Union[
     "MoveStatement",
     "ArithmeticStatement",
+    "ComputeStatement",
     "IfStatement",
     "EvaluateStatement",
     "DisplayStatement",
@@ -99,6 +100,27 @@ class ArithmeticStatement:
 
     def to_dict(self) -> dict:
         return {"type": self.op, "operands": [self.source, self.target]}
+
+
+@dataclass(frozen=True)
+class ComputeStatement:
+    """COMPUTE target = arithmetic-expression."""
+
+    expression: str  # e.g. "WS-A + WS-B * 2"
+    targets: list[str] = field(default_factory=list)  # target variable names
+
+    @classmethod
+    def from_dict(cls, data: dict) -> ComputeStatement:
+        return cls(
+            expression=data.get("expression", ""),
+            targets=data.get("targets", []),
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {"type": "COMPUTE", "expression": self.expression}
+        if self.targets:
+            result["targets"] = list(self.targets)
+        return result
 
 
 @dataclass(frozen=True)
@@ -317,6 +339,7 @@ _DISPATCH_TABLE: dict[str, type] = {
     "SUBTRACT": ArithmeticStatement,
     "MULTIPLY": ArithmeticStatement,
     "DIVIDE": ArithmeticStatement,
+    "COMPUTE": ComputeStatement,
     "IF": IfStatement,
     "EVALUATE": EvaluateStatement,
     "DISPLAY": DisplayStatement,

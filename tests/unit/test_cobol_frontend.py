@@ -11,6 +11,7 @@ from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.cobol_statements import (
     ArithmeticStatement,
     CobolStatementType,
+    ComputeStatement,
     DisplayStatement,
     GotoStatement,
     IfStatement,
@@ -404,6 +405,157 @@ class TestProcedureDivisionLowering:
         labels = _find_opcodes(instructions, Opcode.LABEL)
         label_names = [inst.label for inst in labels]
         assert "para_MAIN" in label_names
+
+
+class TestComputeLowering:
+    """Tests for COMPUTE statement IR lowering."""
+
+    def _lower_with_field_and_stmts(
+        self,
+        fields: list[CobolField],
+        stmts: list[CobolStatementType],
+    ) -> list[IRInstruction]:
+        asg = CobolASG(
+            data_fields=fields,
+            paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        return frontend.lower(None, b"")
+
+    def test_compute_simple_addition(self):
+        fields = [
+            CobolField(
+                name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="10"
+            ),
+            CobolField(
+                name="WS-B", level=77, pic="9(3)", usage="DISPLAY", offset=3, value="5"
+            ),
+            CobolField(
+                name="WS-RESULT",
+                level=77,
+                pic="9(3)",
+                usage="DISPLAY",
+                offset=6,
+                value="0",
+            ),
+        ]
+        stmts = [ComputeStatement(expression="WS-A + WS-B", targets=["WS-RESULT"])]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        binops = _find_opcodes(instructions, Opcode.BINOP)
+        add_ops = [b for b in binops if b.operands[0] == "+"]
+        assert len(add_ops) >= 1
+
+        # Should decode both fields
+        loads = _find_opcodes(instructions, Opcode.LOAD_REGION)
+        assert len(loads) >= 2  # WS-A and WS-B
+
+        # Should write to WS-RESULT
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) >= 1
+
+    def test_compute_with_precedence(self):
+        """COMPUTE WS-RESULT = WS-A + WS-B * 2 → WS-A + (WS-B * 2)."""
+        fields = [
+            CobolField(
+                name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="10"
+            ),
+            CobolField(
+                name="WS-B", level=77, pic="9(3)", usage="DISPLAY", offset=3, value="5"
+            ),
+            CobolField(
+                name="WS-RESULT",
+                level=77,
+                pic="9(3)",
+                usage="DISPLAY",
+                offset=6,
+                value="0",
+            ),
+        ]
+        stmts = [ComputeStatement(expression="WS-A + WS-B * 2", targets=["WS-RESULT"])]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # The WRITE_REGION for the target comes after expr evaluation.
+        # The expression BINOPs (the last 2 before the str conversion) should be * then +.
+        # Extract the last 2 BINOPs with arithmetic operators before the final CALL_FUNCTION "str".
+        all_binops = _find_opcodes(instructions, Opcode.BINOP)
+        arith_ops = [
+            b.operands[0] for b in all_binops if b.operands[0] in ("+", "-", "*", "/")
+        ]
+        # Last two arithmetic BINOPs are from the expression: * (higher prec) then +
+        assert arith_ops[-2:] == ["*", "+"]
+
+    def test_compute_with_parentheses(self):
+        """COMPUTE WS-RESULT = (WS-A + WS-B) * 3 → + before *."""
+        fields = [
+            CobolField(
+                name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="10"
+            ),
+            CobolField(
+                name="WS-B", level=77, pic="9(3)", usage="DISPLAY", offset=3, value="5"
+            ),
+            CobolField(
+                name="WS-RESULT",
+                level=77,
+                pic="9(3)",
+                usage="DISPLAY",
+                offset=6,
+                value="0",
+            ),
+        ]
+        stmts = [
+            ComputeStatement(expression="(WS-A + WS-B) * 3", targets=["WS-RESULT"])
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # The expression BINOPs should be + then * (parentheses override precedence)
+        all_binops = _find_opcodes(instructions, Opcode.BINOP)
+        arith_ops = [
+            b.operands[0] for b in all_binops if b.operands[0] in ("+", "-", "*", "/")
+        ]
+        # Last two arithmetic BINOPs: + (inside parens, evaluated first) then *
+        assert arith_ops[-2:] == ["+", "*"]
+
+    def test_compute_multiple_targets(self):
+        """COMPUTE writes result to all target fields."""
+        fields = [
+            CobolField(
+                name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="10"
+            ),
+            CobolField(
+                name="WS-C", level=77, pic="9(3)", usage="DISPLAY", offset=3, value="0"
+            ),
+            CobolField(
+                name="WS-D", level=77, pic="9(3)", usage="DISPLAY", offset=6, value="0"
+            ),
+        ]
+        stmts = [ComputeStatement(expression="WS-A * 5", targets=["WS-C", "WS-D"])]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should have WRITE_REGION for initial values (3 fields) + 2 COMPUTE targets
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert (
+            len(writes) >= 4
+        )  # 2 initial values (WS-A has value, C and D have "0") + 2 targets
+
+    def test_compute_literal_expression(self):
+        """COMPUTE with only literals (no field references)."""
+        fields = [
+            CobolField(
+                name="WS-RESULT",
+                level=77,
+                pic="9(3)",
+                usage="DISPLAY",
+                offset=0,
+                value="0",
+            ),
+        ]
+        stmts = [ComputeStatement(expression="10 + 5", targets=["WS-RESULT"])]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        binops = _find_opcodes(instructions, Opcode.BINOP)
+        add_ops = [b for b in binops if b.operands[0] == "+"]
+        assert len(add_ops) >= 1
 
 
 class TestPerformLoopLowering:
