@@ -857,6 +857,107 @@ class TestNumericValueVerification:
         region = vm.regions[list(vm.regions.keys())[0]]
         assert _decode_zoned_unsigned(region, 0, 4) == 15
 
+    def test_paragraph_perform_times_accumulation(self):
+        """PERFORM ADD-PARA 3 TIMES with ADD 10 TO WS-SUM → WS-SUM should be 30.
+
+        Tests paragraph-level PERFORM TIMES (not inline) to verify the loop
+        counter works correctly when the body is a separate paragraph.
+        """
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-SUM",
+                        "level": 77,
+                        "pic": "9(4)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "0",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {
+                                "type": "PERFORM",
+                                "perform_type": "TIMES",
+                                "times": "3",
+                                "operands": ["ADD-PARA"],
+                            },
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                    {
+                        "name": "ADD-PARA",
+                        "statements": [
+                            {"type": "ADD", "operands": ["10", "WS-SUM"]},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=1000))
+
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 0, 4) == 30
+
+    def test_move_then_perform_times_accumulation(self):
+        """MOVE 100 TO WS-SUM, then PERFORM ADD-PARA 3 TIMES adding 10 → WS-SUM should be 130.
+
+        Tests that MOVE literal followed by paragraph PERFORM TIMES produces
+        correct cumulative result, requiring sufficient step budget.
+        """
+        asg = CobolASG.from_dict(
+            {
+                "data_fields": [
+                    {
+                        "name": "WS-SUM",
+                        "level": 77,
+                        "pic": "9(4)",
+                        "usage": "DISPLAY",
+                        "offset": 0,
+                        "value": "0",
+                    },
+                ],
+                "paragraphs": [
+                    {
+                        "name": "MAIN-PARA",
+                        "statements": [
+                            {"type": "MOVE", "operands": ["100", "WS-SUM"]},
+                            {
+                                "type": "PERFORM",
+                                "perform_type": "TIMES",
+                                "times": "3",
+                                "operands": ["ADD-PARA"],
+                            },
+                            {"type": "STOP_RUN"},
+                        ],
+                    },
+                    {
+                        "name": "ADD-PARA",
+                        "statements": [
+                            {"type": "ADD", "operands": ["10", "WS-SUM"]},
+                        ],
+                    },
+                ],
+            }
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(None, b"")
+        cfg = build_cfg(instructions)
+        registry = build_registry(instructions, cfg)
+
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=1000))
+
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 0, 4) == 130
+
 
 class TestSectionFallThrough:
     """Test that paragraphs within a section execute sequentially."""
