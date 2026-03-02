@@ -1,0 +1,492 @@
+"""COBOL frontend coverage audit — three-pass analysis of the ProLeap pipeline.
+
+Architecture
+------------
+The COBOL pipeline has three layers where coverage gaps can occur:
+
+1. **Bridge** (StatementSerializer.java): ProLeap recognises 51 statement
+   types (StatementTypeEnum). Only a subset are fully serialised; the rest
+   fall through to serializeUnknown() which emits a bare {"type": "..."}.
+
+2. **Python dispatch** (cobol_statements._DISPATCH_TABLE): Maps JSON type
+   strings to typed dataclasses. Unknown types raise ValueError.
+
+3. **Frontend lowering** (cobol_frontend._lower_statement): isinstance
+   dispatch to _lower_* methods. Unhandled types log a warning.
+
+This script audits all three layers and produces a per-type coverage matrix.
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import sys
+from dataclasses import dataclass, field
+
+# Ensure project root is on sys.path so imports resolve.
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+from interpreter.cobol.cobol_statements import _DISPATCH_TABLE  # noqa: E402
+
+logger = logging.getLogger(__name__)
+
+# ── ProLeap StatementTypeEnum — all 51 types ─────────────────────
+
+PROLEAP_STATEMENT_TYPES: frozenset[str] = frozenset(
+    {
+        "ACCEPT",
+        "ADD",
+        "ALTER",
+        "CALL",
+        "CANCEL",
+        "CLOSE",
+        "COMPUTE",
+        "CONTINUE",
+        "DELETE",
+        "DISABLE",
+        "DISPLAY",
+        "DIVIDE",
+        "ENABLE",
+        "ENTRY",
+        "EVALUATE",
+        "EXEC_CICS",
+        "EXEC_SQL",
+        "EXEC_SQL_IMS",
+        "EXIT",
+        "GENERATE",
+        "GO_TO",
+        "IF",
+        "INITIALIZE",
+        "INITIATE",
+        "INSPECT",
+        "MERGE",
+        "MOVE",
+        "MULTIPLY",
+        "OPEN",
+        "PERFORM",
+        "PURGE",
+        "READ",
+        "RECEIVE",
+        "RELEASE",
+        "RETURN",
+        "REWRITE",
+        "SEARCH",
+        "SEND",
+        "SET",
+        "SORT",
+        "START",
+        "STOP",
+        "STRING",
+        "SUBTRACT",
+        "TERMINATE",
+        "UNSTRING",
+        "USE",
+        "WHEN",
+        "WHEN_OTHER",
+        "WRITE",
+        "XML",
+    }
+)
+
+# Types that the Java bridge fully serialises (with operands, children, etc.)
+# as opposed to the bare {"type": "..."} skeleton from serializeUnknown().
+BRIDGE_SERIALIZED_TYPES: frozenset[str] = frozenset(
+    {
+        "MOVE",
+        "ADD",
+        "SUBTRACT",
+        "MULTIPLY",
+        "DIVIDE",
+        "COMPUTE",
+        "IF",
+        "PERFORM",
+        "DISPLAY",
+        "STOP",
+        "GO_TO",
+        "EVALUATE",
+    }
+)
+
+# Mapping from bridge JSON type strings to Python dispatch table keys.
+# Most are identity; a few differ (bridge emits GO_TO / STOP, dispatch
+# expects GOTO / STOP_RUN).
+_BRIDGE_TO_DISPATCH: dict[str, str] = {
+    "MOVE": "MOVE",
+    "ADD": "ADD",
+    "SUBTRACT": "SUBTRACT",
+    "MULTIPLY": "MULTIPLY",
+    "DIVIDE": "DIVIDE",
+    "COMPUTE": "COMPUTE",
+    "IF": "IF",
+    "PERFORM": "PERFORM",
+    "DISPLAY": "DISPLAY",
+    "STOP": "STOP_RUN",
+    "GO_TO": "GOTO",
+    "EVALUATE": "EVALUATE",
+}
+
+# Types lowered by CobolFrontend._lower_statement (isinstance dispatch).
+# WhenStatement and WhenOtherStatement are lowered inside _lower_evaluate,
+# not through _lower_statement directly, so they are not listed here.
+_LOWERED_TYPES: frozenset[str] = frozenset(
+    {
+        "MOVE",
+        "ADD",
+        "SUBTRACT",
+        "MULTIPLY",
+        "DIVIDE",
+        "IF",
+        "EVALUATE",
+        "DISPLAY",
+        "GOTO",
+        "STOP_RUN",
+        "PERFORM",
+    }
+)
+
+
+class StatusCategory:
+    """Coverage status categories for the audit matrix."""
+
+    HANDLED = "HANDLED"
+    BRIDGE_ONLY = "BRIDGE_ONLY"
+    DISPATCH_MISSING = "DISPATCH_MISSING"
+    NOT_LOWERED = "NOT_LOWERED"
+    BRIDGE_UNKNOWN = "BRIDGE_UNKNOWN"
+
+
+@dataclass(frozen=True)
+class CobolAuditResult:
+    """Result of the three-pass COBOL frontend audit."""
+
+    total_proleap_types: int
+    bridge_serialized: list[str] = field(default_factory=list)
+    bridge_unknown: list[str] = field(default_factory=list)
+    dispatch_handled: list[str] = field(default_factory=list)
+    dispatch_missing: list[str] = field(default_factory=list)
+    lowered_types: list[str] = field(default_factory=list)
+    not_lowered: list[str] = field(default_factory=list)
+    runtime_warnings: list[str] = field(default_factory=list)
+    runtime_available: bool = False
+
+
+def _classify_type(proleap_type: str) -> str:
+    """Classify a single ProLeap statement type through the three layers."""
+    bridge_key = proleap_type
+    if bridge_key not in BRIDGE_SERIALIZED_TYPES:
+        return StatusCategory.BRIDGE_UNKNOWN
+
+    dispatch_key = _BRIDGE_TO_DISPATCH.get(bridge_key, bridge_key)
+    if dispatch_key not in _DISPATCH_TABLE:
+        return StatusCategory.DISPATCH_MISSING
+
+    if dispatch_key not in _LOWERED_TYPES:
+        return StatusCategory.NOT_LOWERED
+
+    return StatusCategory.HANDLED
+
+
+def _run_pass1_bridge(sorted_types: list[str]) -> tuple[list[str], list[str]]:
+    """Pass 1: Bridge serialisation coverage (static)."""
+    bridge_serialized = sorted(t for t in sorted_types if t in BRIDGE_SERIALIZED_TYPES)
+    bridge_unknown = sorted(t for t in sorted_types if t not in BRIDGE_SERIALIZED_TYPES)
+    return bridge_serialized, bridge_unknown
+
+
+def _run_pass2_dispatch(
+    bridge_serialized: list[str],
+) -> tuple[list[str], list[str]]:
+    """Pass 2: Python dispatch table coverage (static)."""
+    dispatch_keys = set(_DISPATCH_TABLE.keys())
+    dispatch_handled = sorted(
+        _BRIDGE_TO_DISPATCH[t]
+        for t in bridge_serialized
+        if _BRIDGE_TO_DISPATCH.get(t, t) in dispatch_keys
+    )
+    dispatch_missing = sorted(
+        t
+        for t in bridge_serialized
+        if _BRIDGE_TO_DISPATCH.get(t, t) not in dispatch_keys
+    )
+    return dispatch_handled, dispatch_missing
+
+
+def _run_pass3_runtime() -> tuple[list[str], bool]:
+    """Pass 3: Runtime lowering check (requires bridge JAR).
+
+    Returns (list of warning types, whether runtime was available).
+    """
+    default_jar = os.path.join(
+        _PROJECT_ROOT,
+        "proleap-bridge",
+        "target",
+        "proleap-bridge-0.1.0-shaded.jar",
+    )
+    bridge_jar = os.environ.get("PROLEAP_BRIDGE_JAR", default_jar)
+
+    if not os.path.isfile(bridge_jar):
+        logger.info(
+            "Bridge JAR not found at %s — skipping Pass 3 (runtime)", bridge_jar
+        )
+        return [], False
+
+    logger.info("Bridge JAR found at %s — running Pass 3 (runtime)", bridge_jar)
+
+    captured_warnings: list[str] = []
+    handler = _WarningCapture(captured_warnings)
+    cobol_logger = logging.getLogger("interpreter.cobol.cobol_frontend")
+    cobol_logger.addHandler(handler)
+    cobol_logger.setLevel(logging.WARNING)
+
+    try:
+        from interpreter.cobol.cobol_parser import ProLeapCobolParser
+        from interpreter.cobol.subprocess_runner import RealSubprocessRunner
+        from interpreter.cobol.cobol_frontend import CobolFrontend
+
+        parser = ProLeapCobolParser(RealSubprocessRunner(), bridge_jar)
+        frontend = CobolFrontend(parser)
+        frontend.lower(None, _COBOL_SAMPLE.encode("utf-8"))
+    except Exception as exc:
+        logger.warning("Pass 3 runtime error: %s", exc)
+    finally:
+        cobol_logger.removeHandler(handler)
+
+    return captured_warnings, True
+
+
+class _WarningCapture(logging.Handler):
+    """Logging handler that captures 'Unhandled COBOL statement type' warnings."""
+
+    def __init__(self, captured: list[str]):
+        super().__init__(level=logging.WARNING)
+        self._captured = captured
+
+    def emit(self, record: logging.LogRecord) -> None:
+        msg = record.getMessage()
+        if "Unhandled COBOL statement type" in msg:
+            # Extract the type name from the message
+            self._captured.append(msg.split(":")[-1].strip())
+
+
+def run_audit() -> CobolAuditResult:
+    """Execute the full three-pass audit and return results."""
+    sorted_types = sorted(PROLEAP_STATEMENT_TYPES)
+
+    logger.info("=== Pass 1: Bridge serialisation coverage ===")
+    bridge_serialized, bridge_unknown = _run_pass1_bridge(sorted_types)
+    logger.info(
+        "  Fully serialised: %d, Unknown/skeleton: %d",
+        len(bridge_serialized),
+        len(bridge_unknown),
+    )
+
+    logger.info("=== Pass 2: Python dispatch table coverage ===")
+    dispatch_handled, dispatch_missing = _run_pass2_dispatch(bridge_serialized)
+    logger.info(
+        "  Dispatch handled: %d, Dispatch missing: %d",
+        len(dispatch_handled),
+        len(dispatch_missing),
+    )
+
+    lowered = sorted(_LOWERED_TYPES)
+    not_lowered = sorted(d for d in dispatch_handled if d not in _LOWERED_TYPES)
+
+    logger.info("=== Pass 3: Runtime lowering check ===")
+    runtime_warnings, runtime_available = _run_pass3_runtime()
+
+    return CobolAuditResult(
+        total_proleap_types=len(PROLEAP_STATEMENT_TYPES),
+        bridge_serialized=bridge_serialized,
+        bridge_unknown=bridge_unknown,
+        dispatch_handled=dispatch_handled,
+        dispatch_missing=dispatch_missing,
+        lowered_types=lowered,
+        not_lowered=not_lowered,
+        runtime_warnings=runtime_warnings,
+        runtime_available=runtime_available,
+    )
+
+
+def _print_coverage_matrix(result: CobolAuditResult) -> None:
+    """Print the per-type coverage matrix to stdout."""
+    sorted_types = sorted(PROLEAP_STATEMENT_TYPES)
+
+    col_widths = {
+        "type": 16,
+        "bridge": 10,
+        "dispatch": 12,
+        "lowered": 10,
+        "status": 18,
+    }
+    header = (
+        f"{'ProLeap Type':<{col_widths['type']}} "
+        f"{'Bridge':<{col_widths['bridge']}} "
+        f"{'Py Dispatch':<{col_widths['dispatch']}} "
+        f"{'Lowered':<{col_widths['lowered']}} "
+        f"{'Status':<{col_widths['status']}}"
+    )
+    separator = "-" * len(header)
+
+    print("\n" + separator)
+    print("COBOL Frontend Coverage Audit")
+    print(separator)
+    print(header)
+    print(separator)
+
+    status_counts: dict[str, int] = {}
+    for proleap_type in sorted_types:
+        status = _classify_type(proleap_type)
+        status_counts[status] = status_counts.get(status, 0) + 1
+
+        bridge_ok = proleap_type in BRIDGE_SERIALIZED_TYPES
+        dispatch_key = _BRIDGE_TO_DISPATCH.get(proleap_type, proleap_type)
+        dispatch_ok = dispatch_key in _DISPATCH_TABLE
+        lowered_ok = dispatch_key in _LOWERED_TYPES
+
+        bridge_mark = "YES" if bridge_ok else "no"
+        dispatch_mark = (
+            "YES"
+            if (bridge_ok and dispatch_ok)
+            else ("n/a" if not bridge_ok else "MISSING")
+        )
+        lowered_mark = (
+            "YES"
+            if (dispatch_ok and lowered_ok)
+            else ("n/a" if not dispatch_ok else "MISSING")
+        )
+
+        print(
+            f"{proleap_type:<{col_widths['type']}} "
+            f"{bridge_mark:<{col_widths['bridge']}} "
+            f"{dispatch_mark:<{col_widths['dispatch']}} "
+            f"{lowered_mark:<{col_widths['lowered']}} "
+            f"{status:<{col_widths['status']}}"
+        )
+
+    print(separator)
+
+    # Summary
+    print(f"\nTotal ProLeap statement types: {result.total_proleap_types}")
+    print(
+        f"  HANDLED (full pipeline):     {status_counts.get(StatusCategory.HANDLED, 0)}"
+    )
+    print(
+        f"  BRIDGE_ONLY (serialised):    {status_counts.get(StatusCategory.BRIDGE_ONLY, 0)}"
+    )
+    print(
+        f"  DISPATCH_MISSING:            {status_counts.get(StatusCategory.DISPATCH_MISSING, 0)}"
+    )
+    print(
+        f"  NOT_LOWERED:                 {status_counts.get(StatusCategory.NOT_LOWERED, 0)}"
+    )
+    print(
+        f"  BRIDGE_UNKNOWN (skeleton):   {status_counts.get(StatusCategory.BRIDGE_UNKNOWN, 0)}"
+    )
+
+    if result.dispatch_missing:
+        print(f"\nDispatch gaps (bridge serialises but Python cannot parse):")
+        for t in result.dispatch_missing:
+            print(f"  - {t}")
+
+    if result.not_lowered:
+        print(f"\nLowering gaps (parsed but not lowered to IR):")
+        for t in result.not_lowered:
+            print(f"  - {t}")
+
+    if result.bridge_unknown:
+        print(
+            f"\nBridge gaps ({len(result.bridge_unknown)} types use skeleton serialisation):"
+        )
+        for t in result.bridge_unknown:
+            print(f"  - {t}")
+
+    # Pass 3 results
+    if result.runtime_available:
+        if result.runtime_warnings:
+            print(
+                f"\nRuntime warnings ({len(result.runtime_warnings)} unhandled at lowering):"
+            )
+            for w in result.runtime_warnings:
+                print(f"  - {w}")
+        else:
+            print(
+                "\nRuntime: no unhandled statement warnings (all exercised types lowered successfully)"
+            )
+    else:
+        print("\nRuntime: skipped (bridge JAR not available)")
+
+    print(separator + "\n")
+
+
+# ── COBOL sample source for Pass 3 ───────────────────────────────
+
+_COBOL_SAMPLE = """\
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. AUDIT-SAMPLE.
+
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       01 WS-A        PIC 9(4) VALUE 10.
+       01 WS-B        PIC 9(4) VALUE 5.
+       01 WS-RESULT   PIC 9(4) VALUE 0.
+       01 WS-NAME     PIC X(10) VALUE 'HELLO'.
+       01 WS-COUNTER  PIC 9(4) VALUE 0.
+       01 WS-FLAG     PIC 9(1) VALUE 1.
+
+       PROCEDURE DIVISION.
+       MAIN-PARA.
+           MOVE WS-A TO WS-RESULT
+           ADD WS-B TO WS-RESULT
+           SUBTRACT WS-B FROM WS-RESULT
+           MULTIPLY WS-A BY WS-RESULT
+           DIVIDE WS-B INTO WS-RESULT
+           DISPLAY WS-RESULT
+
+           IF WS-A > WS-B
+               DISPLAY 'A IS BIGGER'
+           ELSE
+               DISPLAY 'B IS BIGGER'
+           END-IF
+
+           EVALUATE TRUE
+               WHEN WS-FLAG = 1
+                   DISPLAY 'FLAG IS ONE'
+               WHEN OTHER
+                   DISPLAY 'FLAG IS OTHER'
+           END-EVALUATE
+
+           PERFORM LOOP-PARA
+
+           PERFORM LOOP-PARA 3 TIMES
+
+           PERFORM LOOP-PARA
+               UNTIL WS-COUNTER > 5
+
+           PERFORM VARYING WS-COUNTER FROM 1 BY 1
+               UNTIL WS-COUNTER > 3
+               DISPLAY WS-COUNTER
+           END-PERFORM
+
+           GO TO EXIT-PARA.
+
+       LOOP-PARA.
+           ADD 1 TO WS-COUNTER
+           DISPLAY WS-COUNTER.
+
+       EXIT-PARA.
+           STOP RUN.
+"""
+
+
+def main() -> None:
+    """Entry point — run audit and print results."""
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    result = run_audit()
+    _print_coverage_matrix(result)
+
+
+if __name__ == "__main__":
+    main()
