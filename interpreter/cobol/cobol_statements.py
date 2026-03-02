@@ -56,6 +56,13 @@ CobolStatementType = Union[
     "PerformStatement",
     "WhenStatement",
     "WhenOtherStatement",
+    "ContinueStatement",
+    "ExitStatement",
+    "InitializeStatement",
+    "SetStatement",
+    "StringStatement",
+    "UnstringStatement",
+    "InspectStatement",
 ]
 
 
@@ -249,6 +256,219 @@ class StopRunStatement:
         return {"type": "STOP_RUN"}
 
 
+@dataclass(frozen=True)
+class ContinueStatement:
+    """CONTINUE — no-op sentinel."""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> ContinueStatement:
+        return cls()
+
+    def to_dict(self) -> dict:
+        return {"type": "CONTINUE"}
+
+
+@dataclass(frozen=True)
+class ExitStatement:
+    """EXIT — no-op sentinel at paragraph end."""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> ExitStatement:
+        return cls()
+
+    def to_dict(self) -> dict:
+        return {"type": "EXIT"}
+
+
+@dataclass(frozen=True)
+class InitializeStatement:
+    """INITIALIZE field1 field2 ... — reset fields to type-appropriate defaults."""
+
+    operands: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> InitializeStatement:
+        return cls(operands=data.get("operands", []))
+
+    def to_dict(self) -> dict:
+        return {"type": "INITIALIZE", "operands": list(self.operands)}
+
+
+@dataclass(frozen=True)
+class SetStatement:
+    """SET target TO value / SET target UP|DOWN BY value."""
+
+    set_type: str  # "TO" or "BY"
+    targets: list[str] = field(default_factory=list)
+    values: list[str] = field(default_factory=list)
+    by_type: str = ""  # "UP" or "DOWN" (only for BY)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> SetStatement:
+        return cls(
+            set_type=data.get("set_type", ""),
+            targets=data.get("targets", []),
+            values=(
+                data.get("values", [data.get("value", "")])
+                if data.get("set_type") == "TO"
+                else [data.get("value", "")]
+            ),
+            by_type=data.get("by_type", ""),
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {
+            "type": "SET",
+            "set_type": self.set_type,
+            "targets": list(self.targets),
+        }
+        if self.set_type == "TO":
+            result["values"] = list(self.values)
+        else:
+            result["by_type"] = self.by_type
+            result["value"] = self.values[0] if self.values else ""
+        return result
+
+
+# ── String operation nested types ─────────────────────────────────
+
+
+@dataclass(frozen=True)
+class StringSending:
+    """A single sending phrase in a STRING statement."""
+
+    value: str
+    delimited_by: str  # e.g. "SIZE", "SPACES", or a literal
+
+    @classmethod
+    def from_dict(cls, data: dict) -> StringSending:
+        return cls(
+            value=data.get("value", ""),
+            delimited_by=data.get("delimited_by", "SIZE"),
+        )
+
+    def to_dict(self) -> dict:
+        return {"value": self.value, "delimited_by": self.delimited_by}
+
+
+@dataclass(frozen=True)
+class StringStatement:
+    """STRING ... DELIMITED BY ... INTO target."""
+
+    sendings: list[StringSending] = field(default_factory=list)
+    into: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> StringStatement:
+        return cls(
+            sendings=[StringSending.from_dict(s) for s in data.get("sendings", [])],
+            into=data.get("into", ""),
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "type": "STRING",
+            "sendings": [s.to_dict() for s in self.sendings],
+            "into": self.into,
+        }
+
+
+@dataclass(frozen=True)
+class UnstringStatement:
+    """UNSTRING source DELIMITED BY ... INTO targets."""
+
+    source: str = ""
+    delimited_by: str = ""
+    into: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> UnstringStatement:
+        return cls(
+            source=data.get("source", ""),
+            delimited_by=data.get("delimited_by", ""),
+            into=data.get("into", []),
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "type": "UNSTRING",
+            "source": self.source,
+            "delimited_by": self.delimited_by,
+            "into": list(self.into),
+        }
+
+
+@dataclass(frozen=True)
+class TallyingFor:
+    """A single tallying pattern in INSPECT TALLYING."""
+
+    mode: str  # "ALL", "LEADING", "CHARACTERS"
+    pattern: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> TallyingFor:
+        return cls(mode=data.get("mode", ""), pattern=data.get("pattern", ""))
+
+    def to_dict(self) -> dict:
+        return {"mode": self.mode, "pattern": self.pattern}
+
+
+@dataclass(frozen=True)
+class Replacing:
+    """A single replacing item in INSPECT REPLACING."""
+
+    mode: str  # "ALL", "LEADING", "FIRST"
+    from_pattern: str = ""
+    to_pattern: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict) -> Replacing:
+        return cls(
+            mode=data.get("mode", ""),
+            from_pattern=data.get("from", ""),
+            to_pattern=data.get("to", ""),
+        )
+
+    def to_dict(self) -> dict:
+        return {"mode": self.mode, "from": self.from_pattern, "to": self.to_pattern}
+
+
+@dataclass(frozen=True)
+class InspectStatement:
+    """INSPECT source TALLYING|REPLACING ..."""
+
+    inspect_type: str = ""  # "TALLYING" or "REPLACING"
+    source: str = ""
+    tallying_target: str = ""
+    tallying_for: list[TallyingFor] = field(default_factory=list)
+    replacings: list[Replacing] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> InspectStatement:
+        return cls(
+            inspect_type=data.get("inspect_type", ""),
+            source=data.get("source", ""),
+            tallying_target=data.get("tallying_target", ""),
+            tallying_for=[
+                TallyingFor.from_dict(t) for t in data.get("tallying_for", [])
+            ],
+            replacings=[Replacing.from_dict(r) for r in data.get("replacings", [])],
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {
+            "type": "INSPECT",
+            "inspect_type": self.inspect_type,
+            "source": self.source,
+        }
+        if self.inspect_type == "TALLYING":
+            result["tallying_target"] = self.tallying_target
+            result["tallying_for"] = [t.to_dict() for t in self.tallying_for]
+        elif self.inspect_type == "REPLACING":
+            result["replacings"] = [r.to_dict() for r in self.replacings]
+        return result
+
+
 def _parse_perform_spec(
     data: dict,
 ) -> PerformTimesSpec | PerformUntilSpec | PerformVaryingSpec | None:
@@ -348,6 +568,13 @@ _DISPATCH_TABLE: dict[str, type] = {
     "PERFORM": PerformStatement,
     "WHEN": WhenStatement,
     "WHEN_OTHER": WhenOtherStatement,
+    "CONTINUE": ContinueStatement,
+    "EXIT": ExitStatement,
+    "INITIALIZE": InitializeStatement,
+    "SET": SetStatement,
+    "STRING": StringStatement,
+    "UNSTRING": UnstringStatement,
+    "INSPECT": InspectStatement,
 }
 
 

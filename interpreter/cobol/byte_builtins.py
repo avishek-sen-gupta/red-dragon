@@ -263,6 +263,114 @@ def _builtin_cobol_prepare_sign(args: list[Any], vm: Any) -> Any:
     return 0x0C
 
 
+def _builtin_string_find(args: list[Any], vm: Any) -> Any:
+    """Find first occurrence of needle in source string.
+
+    Args: [source: str, needle: str]
+    Returns: int index (-1 if not found)
+    """
+    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+        return _UNCOMPUTABLE
+    source, needle = args[0], args[1]
+    if not isinstance(source, str) or not isinstance(needle, str):
+        return _UNCOMPUTABLE
+    return source.find(needle)
+
+
+def _builtin_string_split(args: list[Any], vm: Any) -> Any:
+    """Split source string by delimiter.
+
+    Args: [source: str, delimiter: str]
+    Returns: list[str]
+    """
+    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+        return _UNCOMPUTABLE
+    source, delimiter = args[0], args[1]
+    if not isinstance(source, str) or not isinstance(delimiter, str):
+        return _UNCOMPUTABLE
+    if not delimiter:
+        return [source]
+    return source.split(delimiter)
+
+
+def _builtin_string_count(args: list[Any], vm: Any) -> Any:
+    """Count occurrences of pattern in source string.
+
+    Args: [source: str, pattern: str, mode: str ("all"/"leading"/"characters")]
+    Returns: int
+    """
+    if len(args) < 3 or any(_is_symbolic(a) for a in args):
+        return _UNCOMPUTABLE
+    source, pattern, mode = args[0], args[1], args[2]
+    if (
+        not isinstance(source, str)
+        or not isinstance(pattern, str)
+        or not isinstance(mode, str)
+    ):
+        return _UNCOMPUTABLE
+    if mode == "all":
+        return source.count(pattern) if pattern else 0
+    if mode == "leading":
+        count = 0
+        pos = 0
+        while pos <= len(source) - len(pattern) and pattern:
+            if source[pos : pos + len(pattern)] == pattern:
+                count += 1
+                pos += len(pattern)
+            else:
+                break
+        return count
+    if mode == "characters":
+        return len(source)
+    return _UNCOMPUTABLE
+
+
+def _builtin_string_replace(args: list[Any], vm: Any) -> Any:
+    """Replace occurrences of pattern in source string.
+
+    Args: [source: str, from_pat: str, to_pat: str, mode: str ("all"/"leading"/"first")]
+    Returns: str
+    """
+    if len(args) < 4 or any(_is_symbolic(a) for a in args):
+        return _UNCOMPUTABLE
+    source, from_pat, to_pat, mode = args[0], args[1], args[2], args[3]
+    if (
+        not isinstance(source, str)
+        or not isinstance(from_pat, str)
+        or not isinstance(to_pat, str)
+        or not isinstance(mode, str)
+    ):
+        return _UNCOMPUTABLE
+    if not from_pat:
+        return source
+    if mode == "all":
+        return source.replace(from_pat, to_pat)
+    if mode == "first":
+        return source.replace(from_pat, to_pat, 1)
+    if mode == "leading":
+        result = source
+        while result.startswith(from_pat):
+            result = to_pat + result[len(from_pat) :]
+        return result
+    return _UNCOMPUTABLE
+
+
+def _builtin_string_concat(args: list[Any], vm: Any) -> Any:
+    """Concatenate a list of strings.
+
+    Args: [parts: list[str]]
+    Returns: str
+    """
+    if len(args) < 1 or _is_symbolic(args[0]):
+        return _UNCOMPUTABLE
+    parts = args[0]
+    if not isinstance(parts, list):
+        return _UNCOMPUTABLE
+    if any(_is_symbolic(p) for p in parts):
+        return _UNCOMPUTABLE
+    return "".join(str(p) for p in parts)
+
+
 BYTE_BUILTINS: dict[str, Any] = {
     "__nibble_get": _builtin_nibble_get,
     "__nibble_set": _builtin_nibble_set,
@@ -278,4 +386,9 @@ BYTE_BUILTINS: dict[str, Any] = {
     "__make_list": _builtin_make_list,
     "__cobol_prepare_digits": _builtin_cobol_prepare_digits,
     "__cobol_prepare_sign": _builtin_cobol_prepare_sign,
+    "__string_find": _builtin_string_find,
+    "__string_split": _builtin_string_split,
+    "__string_count": _builtin_string_count,
+    "__string_replace": _builtin_string_replace,
+    "__string_concat": _builtin_string_concat,
 }

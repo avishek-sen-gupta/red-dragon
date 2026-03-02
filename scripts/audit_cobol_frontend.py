@@ -107,6 +107,13 @@ BRIDGE_SERIALIZED_TYPES: frozenset[str] = frozenset(
         "STOP",
         "GO_TO",
         "EVALUATE",
+        "CONTINUE",
+        "EXIT",
+        "INITIALIZE",
+        "SET",
+        "STRING",
+        "UNSTRING",
+        "INSPECT",
     }
 )
 
@@ -126,6 +133,13 @@ _BRIDGE_TO_DISPATCH: dict[str, str] = {
     "STOP": "STOP_RUN",
     "GO_TO": "GOTO",
     "EVALUATE": "EVALUATE",
+    "CONTINUE": "CONTINUE",
+    "EXIT": "EXIT",
+    "INITIALIZE": "INITIALIZE",
+    "SET": "SET",
+    "STRING": "STRING",
+    "UNSTRING": "UNSTRING",
+    "INSPECT": "INSPECT",
 }
 
 # Types lowered by CobolFrontend._lower_statement (isinstance dispatch).
@@ -145,6 +159,13 @@ _LOWERED_TYPES: frozenset[str] = frozenset(
         "GOTO",
         "STOP_RUN",
         "PERFORM",
+        "CONTINUE",
+        "EXIT",
+        "INITIALIZE",
+        "SET",
+        "STRING",
+        "UNSTRING",
+        "INSPECT",
     }
 )
 
@@ -436,6 +457,11 @@ _COBOL_SAMPLE = """\
        01 WS-NAME     PIC X(10) VALUE 'HELLO'.
        01 WS-COUNTER  PIC 9(4) VALUE 0.
        01 WS-FLAG     PIC 9(1) VALUE 1.
+       01 WS-IDX      PIC 9(4) VALUE 0.
+       01 WS-FIRST    PIC X(10) VALUE SPACES.
+       01 WS-LAST     PIC X(10) VALUE SPACES.
+       01 WS-FULL     PIC X(20) VALUE 'JOHN DOE'.
+       01 WS-TALLY    PIC 9(4) VALUE 0.
 
        PROCEDURE DIVISION.
        MAIN-PARA.
@@ -472,6 +498,24 @@ _COBOL_SAMPLE = """\
                DISPLAY WS-COUNTER
            END-PERFORM
 
+           CONTINUE
+
+           INITIALIZE WS-RESULT WS-NAME
+
+           SET WS-IDX TO 5
+           SET WS-IDX UP BY 1
+
+           STRING WS-FIRST DELIMITED BY SPACES
+                  WS-LAST  DELIMITED BY SIZE
+                  INTO WS-FULL
+
+           UNSTRING WS-FULL DELIMITED BY SPACES
+                    INTO WS-FIRST WS-LAST
+
+           INSPECT WS-NAME TALLYING WS-TALLY
+                   FOR ALL 'L'
+           INSPECT WS-NAME REPLACING ALL 'L' BY 'R'
+
            GO TO EXIT-PARA.
 
        LOOP-PARA.
@@ -479,6 +523,7 @@ _COBOL_SAMPLE = """\
            DISPLAY WS-COUNTER.
 
        EXIT-PARA.
+           EXIT.
            STOP RUN.
 """
 

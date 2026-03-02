@@ -691,3 +691,30 @@ Benefits:
 - Multiple target assignment support (`COMPUTE A B = expr`)
 - Expression parser is independently testable (18 unit tests)
 - Closes the last DISPATCH_MISSING gap — all 12 bridge-serialised types now fully handled
+
+---
+
+### ADR-033: COBOL Tier 1 + Tier 2 statement expansion — CONTINUE, EXIT, INITIALIZE, SET, STRING, UNSTRING, INSPECT (2026-03-02)
+
+**Context:** The COBOL frontend audit showed 12/51 statement types HANDLED and 39 BRIDGE_UNKNOWN. To increase coverage toward production COBOL programs, we prioritised two tiers: Tier 1 (quick-win no-ops and simple assignment) and Tier 2 (high-value string operations found in most production COBOL).
+
+**Decision:** Implement 7 new statement types across the three-layer pipeline (bridge → dataclass → lowering):
+
+**Tier 1 — Quick Wins:**
+1. **CONTINUE** — no-op sentinel, emits nothing in IR
+2. **EXIT** — no-op paragraph-end sentinel, emits nothing in IR
+3. **INITIALIZE** — resets fields to type-appropriate defaults (SPACES for alphanumeric, ZEROS for numeric) using existing `_emit_field_encode` infrastructure
+4. **SET** — two forms: TO (assign value) and BY (UP/DOWN increment/decrement), reusing arithmetic patterns from ADD/SUBTRACT
+
+**Tier 2 — String Operations:**
+5. **STRING** — concatenates delimited sending fields into a target; uses `__string_split` + `__list_get` for delimiter truncation, `__string_concat` for assembly
+6. **UNSTRING** — splits a source field by delimiter and distributes parts to target fields; uses `__string_split` IR builder
+7. **INSPECT** — two sub-forms: TALLYING (counts pattern occurrences via `__string_count`) and REPLACING (substitutes patterns via `__string_replace`)
+
+**String operation architecture:** Added 5 new low-level builtins to `byte_builtins.py` (`__string_find`, `__string_split`, `__string_count`, `__string_replace`, `__string_concat`) and 4 IR instruction builders to `ir_encoders.py`. The builtins are atomic operations that produce SYMBOLIC values for symbolic inputs (same pattern as all existing builtins). The IR builders compose builtins into `list[IRInstruction]` for inline expansion at lowering sites.
+
+**Alternatives considered:**
+- Implementing string ops as single CALL_FUNCTION instructions — rejected because multi-step operations (decode → process → encode) need to be visible to data-flow analysis as separate IR instructions
+- Skipping INSPECT REPLACING write-back — rejected because COBOL INSPECT modifies the source field in-place
+
+**Consequences:** Coverage increased from 12/51 to 19/51 HANDLED (37%), with 0 DISPATCH_MISSING. The string builtins are reusable for future string-related statements. Test count increased from 7608 to 7639 (31 new tests).
