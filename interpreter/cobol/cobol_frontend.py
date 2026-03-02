@@ -466,7 +466,11 @@ class CobolFrontend(Frontend):
         layout: DataLayout,
         region_reg: str,
     ) -> None:
-        """ADD/SUBTRACT/MULTIPLY/DIVIDE X TO/FROM/BY/INTO Y."""
+        """ADD/SUBTRACT/MULTIPLY/DIVIDE X TO/FROM/BY/INTO Y [GIVING Z]."""
+        if stmt.giving:
+            self._lower_arithmetic_giving(stmt, layout, region_reg)
+            return
+
         target_fl = layout.fields[stmt.target]
 
         if stmt.source in layout.fields:
@@ -494,6 +498,51 @@ class CobolFrontend(Frontend):
             Opcode.WRITE_REGION,
             operands=[region_reg, offset_reg, target_fl.byte_length, encoded_reg],
         )
+
+    def _lower_arithmetic_giving(
+        self,
+        stmt: ArithmeticStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """MULTIPLY/DIVIDE X BY/INTO Y GIVING Z — result stored in Z, not Y.
+
+        operands[0] = first operand, operands[1] = second operand.
+        For MULTIPLY X BY Y GIVING Z: result = X * Y, stored in Z.
+        For DIVIDE X BY Y GIVING Z: result = X / Y, stored in Z.
+        """
+
+        def _decode_operand(name: str) -> str:
+            if name in layout.fields:
+                return self._emit_decode_field(region_reg, layout.fields[name])
+            return self._const_to_reg(float(name))
+
+        left_reg = _decode_operand(stmt.source)
+        right_reg = _decode_operand(stmt.target)
+
+        op = _ARITHMETIC_OPS[stmt.op]
+        result_reg = self._fresh_reg()
+        self._emit(
+            Opcode.BINOP,
+            result_reg=result_reg,
+            operands=[op, left_reg, right_reg],
+        )
+
+        for giving_name in stmt.giving:
+            giving_fl = layout.fields[giving_name]
+            result_str_reg = self._emit_to_string(result_reg)
+            encoded_reg = self._emit_encode_from_string(giving_fl, result_str_reg)
+            offset_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=offset_reg, operands=[giving_fl.offset])
+            self._emit(
+                Opcode.WRITE_REGION,
+                operands=[
+                    region_reg,
+                    offset_reg,
+                    giving_fl.byte_length,
+                    encoded_reg,
+                ],
+            )
 
     def _lower_compute(
         self,
@@ -897,12 +946,22 @@ class CobolFrontend(Frontend):
         layout: DataLayout,
         region_reg: str,
     ) -> None:
-        """EVALUATE (lowered as chain of BRANCH_IF)."""
+        """EVALUATE subject WHEN value ... (lowered as chain of BRANCH_IF).
+
+        When subject is present, each WHEN condition is a value to compare
+        against the subject (e.g., EVALUATE WS-A / WHEN 1 → WS-A = 1).
+        Without subject, conditions are standalone boolean expressions.
+        """
         end_label = self._fresh_label("eval_end")
 
         for child in stmt.children:
             if isinstance(child, WhenStatement) and child.condition:
-                cond_reg = self._lower_condition(child.condition, layout, region_reg)
+                # Build the full condition: "subject = value" or standalone
+                if stmt.subject:
+                    full_condition = f"{stmt.subject} = {child.condition}"
+                else:
+                    full_condition = child.condition
+                cond_reg = self._lower_condition(full_condition, layout, region_reg)
                 when_true = self._fresh_label("when_true")
                 when_false = self._fresh_label("when_false")
                 self._emit(

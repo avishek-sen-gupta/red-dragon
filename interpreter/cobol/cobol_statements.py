@@ -103,11 +103,16 @@ class MoveStatement:
 
 @dataclass(frozen=True)
 class ArithmeticStatement:
-    """ADD/SUBTRACT/MULTIPLY/DIVIDE source TO/FROM/BY/INTO target."""
+    """ADD/SUBTRACT/MULTIPLY/DIVIDE source TO/FROM/BY/INTO target.
+
+    For GIVING forms (MULTIPLY X BY Y GIVING Z), operands holds [X, Y]
+    and giving holds [Z].  The result (X * Y) is stored in Z, not in Y.
+    """
 
     op: str  # "ADD" | "SUBTRACT" | "MULTIPLY" | "DIVIDE"
     source: str
     target: str
+    giving: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> ArithmeticStatement:
@@ -116,10 +121,14 @@ class ArithmeticStatement:
             op=data["type"],
             source=operands[0] if len(operands) > 0 else "",
             target=operands[1] if len(operands) > 1 else "",
+            giving=data.get("giving", []),
         )
 
     def to_dict(self) -> dict:
-        return {"type": self.op, "operands": [self.source, self.target]}
+        result: dict = {"type": self.op, "operands": [self.source, self.target]}
+        if self.giving:
+            result["giving"] = list(self.giving)
+        return result
 
 
 @dataclass(frozen=True)
@@ -210,18 +219,22 @@ class WhenOtherStatement:
 
 @dataclass(frozen=True)
 class EvaluateStatement:
-    """EVALUATE ... WHEN ... END-EVALUATE."""
+    """EVALUATE subject WHEN ... END-EVALUATE."""
 
+    subject: str = ""
     children: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> EvaluateStatement:
         return cls(
+            subject=data.get("subject", ""),
             children=[parse_statement(c) for c in data.get("children", [])],
         )
 
     def to_dict(self) -> dict:
         result: dict = {"type": "EVALUATE"}
+        if self.subject:
+            result["subject"] = self.subject
         if self.children:
             result["children"] = [c.to_dict() for c in self.children]
         return result

@@ -797,3 +797,19 @@ Benefits:
 5. **Audit** — REWRITE, START, DELETE added to `BRIDGE_SERIALIZED_TYPES`, `_BRIDGE_TO_DISPATCH`, `_LOWERED_TYPES`, and `_IO_STUB_TYPES`.
 
 **Consequences:** Coverage increased from 29/51 to 32/51 (24 HANDLED + 8 HANDLED_STUB = 63%). No new opcodes or architectural changes required — the provider pattern from ADR-036 scaled cleanly to three additional I/O operations.
+
+---
+
+### ADR-038: COBOL integration tests and bridge/frontend fixes for GIVING and EVALUATE/WHEN (2026-03-02)
+
+**Context:** All existing COBOL e2e tests used `_FakeParser` with hand-crafted JSON — they never exercised the ProLeap Java bridge. Additionally, the bridge had two serialization gaps: (1) MULTIPLY/DIVIDE GIVING forms produced empty targets, and (2) EVALUATE/WHEN flattened all children without preserving WHEN conditions or the EVALUATE subject.
+
+**Decision:** Three-part fix:
+
+1. **Bridge fixes** — `serializeMultiply`/`serializeDivide` now check `getMultiplyType()`/`getDivideType()` and handle BY_GIVING/INTO_GIVING/BY_GIVING forms by extracting the GIVING phrase targets into a `"giving"` JSON array. `serializeEvaluate` now extracts the EVALUATE subject via `getSelect().getSelectValueStmt()`, serializes each `WhenPhrase` as a `WHEN` child with a `"condition"` field extracted from `When.getCondition().getValue().getValueStmt()`, and handles `WhenOther` as a `WHEN_OTHER` child.
+
+2. **Python frontend** — `ArithmeticStatement` gains a `giving: list[str]` field. `_lower_arithmetic` dispatches to `_lower_arithmetic_giving` when `giving` is non-empty, computing `source OP target` and storing in each giving field. `EvaluateStatement` gains a `subject: str` field. `_lower_evaluate` constructs `"subject = value"` conditions when subject is present.
+
+3. **Integration tests** — `tests/integration/test_cobol_programs.py` with 15 tests covering the full pipeline (source → ProLeap bridge → ASG → IR → CFG → VM). Tests skip when the bridge JAR is absent. COBOL FIXED format source is generated via a `_to_fixed()` helper.
+
+**Consequences:** Full pipeline coverage from real COBOL source code. Bridge now correctly serializes MULTIPLY/DIVIDE GIVING and EVALUATE/WHEN/WHEN OTHER. Integration tests are self-contained (inline COBOL) and skip gracefully in CI without the JAR.

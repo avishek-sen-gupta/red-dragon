@@ -221,20 +221,44 @@ public final class StatementSerializer {
         JsonObject obj = newStatement("MULTIPLY");
         JsonArray operands = new JsonArray();
         try {
-            // Source operand: the value being multiplied (e.g., WS-A in MULTIPLY WS-A BY WS-RESULT)
+            // Source operand: the value being multiplied
             ValueStmt operandVs = stmt.getOperandValueStmt();
             if (operandVs != null) {
                 operands.add(extractValueStmtText(operandVs));
             }
 
-            // Target operand(s): the BY variable(s) that receive the result
-            // MULTIPLY WS-A BY WS-RESULT => WS-RESULT = WS-RESULT * WS-A
-            io.proleap.cobol.asg.metamodel.procedure.multiply.ByPhrase byPhrase = stmt.getByPhrase();
-            if (byPhrase != null) {
-                for (ByOperand byOp : byPhrase.getByOperands()) {
-                    Call targetCall = byOp.getOperandCall();
-                    if (targetCall != null) {
-                        operands.add(extractCallName(targetCall));
+            MultiplyStatement.MultiplyType multiplyType = stmt.getMultiplyType();
+
+            if (multiplyType == MultiplyStatement.MultiplyType.BY_GIVING) {
+                // MULTIPLY X BY Y GIVING Z
+                // operand = X (source), giving_operand = Y, giving_result = Z
+                io.proleap.cobol.asg.metamodel.procedure.multiply.GivingPhrase givingPhrase = stmt.getGivingPhrase();
+                if (givingPhrase != null) {
+                    io.proleap.cobol.asg.metamodel.procedure.multiply.GivingOperand givingOp = givingPhrase.getGivingOperand();
+                    if (givingOp != null && givingOp.getOperandValueStmt() != null) {
+                        operands.add(extractValueStmtText(givingOp.getOperandValueStmt()));
+                    }
+                    // GIVING targets
+                    JsonArray givingTargets = new JsonArray();
+                    for (io.proleap.cobol.asg.metamodel.procedure.multiply.GivingResult gr : givingPhrase.getGivingResults()) {
+                        Call resultCall = gr.getResultCall();
+                        if (resultCall != null) {
+                            givingTargets.add(extractCallName(resultCall));
+                        }
+                    }
+                    if (givingTargets.size() > 0) {
+                        obj.add("giving", givingTargets);
+                    }
+                }
+            } else {
+                // MULTIPLY X BY Y (in-place: Y = Y * X)
+                io.proleap.cobol.asg.metamodel.procedure.multiply.ByPhrase byPhrase = stmt.getByPhrase();
+                if (byPhrase != null) {
+                    for (ByOperand byOp : byPhrase.getByOperands()) {
+                        Call targetCall = byOp.getOperandCall();
+                        if (targetCall != null) {
+                            operands.add(extractCallName(targetCall));
+                        }
                     }
                 }
             }
@@ -249,20 +273,65 @@ public final class StatementSerializer {
         JsonObject obj = newStatement("DIVIDE");
         JsonArray operands = new JsonArray();
         try {
-            // Source operand: the divisor (e.g., WS-B in DIVIDE WS-B INTO WS-RESULT)
+            // Source operand (the divisor or dividend depending on form)
             ValueStmt operandVs = stmt.getOperandValueStmt();
             if (operandVs != null) {
                 operands.add(extractValueStmtText(operandVs));
             }
 
-            // Target operand(s): the INTO variable(s) that receive the result
-            // DIVIDE WS-B INTO WS-RESULT => WS-RESULT = WS-RESULT / WS-B
-            DivideIntoStatement intoStmt = stmt.getDivideIntoStatement();
-            if (intoStmt != null) {
-                for (Into into : intoStmt.getIntos()) {
-                    Call targetCall = into.getGivingCall();
-                    if (targetCall != null) {
-                        operands.add(extractCallName(targetCall));
+            DivideStatement.DivideType divideType = stmt.getDivideType();
+
+            if (divideType == DivideStatement.DivideType.INTO_GIVING) {
+                // DIVIDE X INTO Y GIVING Z => Z = Y / X
+                DivideIntoGivingStatement intoGiving = stmt.getDivideIntoGivingStatement();
+                if (intoGiving != null) {
+                    if (intoGiving.getIntoValueStmt() != null) {
+                        operands.add(extractValueStmtText(intoGiving.getIntoValueStmt()));
+                    }
+                    GivingPhrase gp = intoGiving.getGivingPhrase();
+                    if (gp != null) {
+                        JsonArray givingTargets = new JsonArray();
+                        for (Giving g : gp.getGivings()) {
+                            Call givingCall = g.getGivingCall();
+                            if (givingCall != null) {
+                                givingTargets.add(extractCallName(givingCall));
+                            }
+                        }
+                        if (givingTargets.size() > 0) {
+                            obj.add("giving", givingTargets);
+                        }
+                    }
+                }
+            } else if (divideType == DivideStatement.DivideType.BY_GIVING) {
+                // DIVIDE X BY Y GIVING Z => Z = X / Y
+                DivideByGivingStatement byGiving = stmt.getDivideByGivingStatement();
+                if (byGiving != null) {
+                    if (byGiving.getByValueStmt() != null) {
+                        operands.add(extractValueStmtText(byGiving.getByValueStmt()));
+                    }
+                    GivingPhrase gp = byGiving.getGivingPhrase();
+                    if (gp != null) {
+                        JsonArray givingTargets = new JsonArray();
+                        for (Giving g : gp.getGivings()) {
+                            Call givingCall = g.getGivingCall();
+                            if (givingCall != null) {
+                                givingTargets.add(extractCallName(givingCall));
+                            }
+                        }
+                        if (givingTargets.size() > 0) {
+                            obj.add("giving", givingTargets);
+                        }
+                    }
+                }
+            } else {
+                // DIVIDE X INTO Y (in-place: Y = Y / X)
+                DivideIntoStatement intoStmt = stmt.getDivideIntoStatement();
+                if (intoStmt != null) {
+                    for (Into into : intoStmt.getIntos()) {
+                        Call targetCall = into.getGivingCall();
+                        if (targetCall != null) {
+                            operands.add(extractCallName(targetCall));
+                        }
                     }
                 }
             }
@@ -521,13 +590,59 @@ public final class StatementSerializer {
         JsonArray children = new JsonArray();
 
         try {
-            for (WhenPhrase when : stmt.getWhenPhrases()) {
-                if (when.getStatements() != null) {
-                    JsonArray whenStmts = serializeStatements(when.getStatements());
-                    for (int i = 0; i < whenStmts.size(); i++) {
-                        children.add(whenStmts.get(i));
+            // Extract the EVALUATE subject (e.g., WS-A in EVALUATE WS-A)
+            io.proleap.cobol.asg.metamodel.procedure.evaluate.Select select = stmt.getSelect();
+            if (select != null && select.getSelectValueStmt() != null) {
+                obj.addProperty("subject", extractValueStmtText(select.getSelectValueStmt()));
+            }
+
+            // Each WhenPhrase maps to a WHEN branch with condition + statements
+            for (WhenPhrase whenPhrase : stmt.getWhenPhrases()) {
+                // Extract the condition from the When objects
+                List<io.proleap.cobol.asg.metamodel.procedure.evaluate.When> whens = whenPhrase.getWhens();
+                String conditionText = "";
+                if (whens != null && !whens.isEmpty()) {
+                    io.proleap.cobol.asg.metamodel.procedure.evaluate.When firstWhen = whens.get(0);
+                    io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition cond = firstWhen.getCondition();
+                    if (cond != null) {
+                        io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType ct = cond.getConditionType();
+                        if (ct == io.proleap.cobol.asg.metamodel.procedure.evaluate.Condition.ConditionType.ANY) {
+                            conditionText = "ANY";
+                        } else if (cond.getValue() != null && cond.getValue().getValueStmt() != null) {
+                            conditionText = extractValueStmtText(cond.getValue().getValueStmt());
+                        } else if (cond.getConditionValueStmt() != null) {
+                            conditionText = extractValueStmtText(cond.getConditionValueStmt());
+                        } else if (cond.getCtx() != null) {
+                            conditionText = cond.getCtx().getText();
+                        }
                     }
                 }
+
+                JsonObject whenObj = newStatement("WHEN");
+                if (!conditionText.isEmpty()) {
+                    whenObj.addProperty("condition", conditionText);
+                }
+
+                // Nested statements
+                if (whenPhrase.getStatements() != null && !whenPhrase.getStatements().isEmpty()) {
+                    JsonArray whenStmts = serializeStatements(whenPhrase.getStatements());
+                    if (whenStmts.size() > 0) {
+                        whenObj.add("children", whenStmts);
+                    }
+                }
+
+                children.add(whenObj);
+            }
+
+            // WHEN OTHER
+            io.proleap.cobol.asg.metamodel.procedure.evaluate.WhenOther whenOther = stmt.getWhenOther();
+            if (whenOther != null && whenOther.getStatements() != null && !whenOther.getStatements().isEmpty()) {
+                JsonObject whenOtherObj = newStatement("WHEN_OTHER");
+                JsonArray otherStmts = serializeStatements(whenOther.getStatements());
+                if (otherStmts.size() > 0) {
+                    whenOtherObj.add("children", otherStmts);
+                }
+                children.add(whenOtherObj);
             }
         } catch (Exception e) {
             LOG.fine("Could not extract EVALUATE children: " + e.getMessage());

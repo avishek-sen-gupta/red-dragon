@@ -388,9 +388,13 @@ The **Exercism suite** (`tests/unit/exercism/`) pulls canonical test data from [
 
 The COBOL test suite covers ASG round-trip, typed statement hierarchy (32 types), PIC parsing, data layout, frontend lowering, PERFORM loop variants, section PERFORM, SEARCH, STRING/UNSTRING/INSPECT, CALL/ALTER/ENTRY/CANCEL lowering, I/O provider (NullIOProvider/StubIOProvider with REWRITE/START/DELETE and executor integration), parser bridge, and end-to-end fixture tests.
 
+### COBOL integration tests
+
+The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercises the full pipeline from real `.cbl` source code through the ProLeap Java bridge, ASG construction, IR lowering, CFG building, and VM execution. 15 tests cover initial values, ADD/SUBTRACT, MULTIPLY/DIVIDE (including GIVING), COMPUTE, MOVE, IF/ELSE, PERFORM TIMES/UNTIL/VARYING, nested PERFORM, GO TO, EVALUATE/WHEN, and string moves. Tests skip gracefully when the ProLeap bridge JAR is not available.
+
 ### Test totals
 
-**7714 tests** (7714 passed, 3 xfailed) — all with zero LLM calls.
+**7796 tests** (7781 unit + 15 integration passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 
