@@ -12,15 +12,25 @@ from interpreter.cobol.cobol_statements import (
     ArithmeticStatement,
     CobolStatementType,
     ComputeStatement,
+    ContinueStatement,
     DisplayStatement,
+    ExitStatement,
     GotoStatement,
     IfStatement,
+    InitializeStatement,
+    InspectStatement,
     MoveStatement,
     PerformStatement,
     PerformTimesSpec,
     PerformUntilSpec,
     PerformVaryingSpec,
+    Replacing,
+    SetStatement,
     StopRunStatement,
+    StringSending,
+    StringStatement,
+    TallyingFor,
+    UnstringStatement,
 )
 from interpreter.ir import IRInstruction, Opcode
 
@@ -792,3 +802,363 @@ class TestSectionPerform:
         resume_conts = _find_opcodes(instructions, Opcode.RESUME_CONTINUATION)
         resume_names = [inst.operands[0] for inst in resume_conts]
         assert "section_MY-SECTION_end" in resume_names
+
+
+class TestTier1Lowering:
+    """Tests for CONTINUE, EXIT, INITIALIZE, SET IR lowering."""
+
+    def _lower_with_field_and_stmts(
+        self,
+        fields: list[CobolField],
+        stmts: list[CobolStatementType],
+    ) -> list[IRInstruction]:
+        asg = CobolASG(
+            data_fields=fields,
+            paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        return frontend.lower(None, b"")
+
+    def test_continue_emits_nothing(self):
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
+        ]
+        stmts = [ContinueStatement()]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Only infrastructure instructions (LABEL, ALLOC_REGION, RESUME_CONTINUATION)
+        # No CALL_FUNCTION, no WRITE_REGION for CONTINUE itself
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) == 0
+
+    def test_exit_emits_nothing(self):
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
+        ]
+        stmts = [ExitStatement()]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) == 0
+
+    def test_initialize_numeric_field(self):
+        fields = [
+            CobolField(
+                name="WS-A",
+                level=77,
+                pic="9(3)",
+                usage="DISPLAY",
+                offset=0,
+                value="123",
+            ),
+        ]
+        stmts = [InitializeStatement(operands=["WS-A"])]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should produce WRITE_REGION: initial value + INITIALIZE reset
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) >= 2  # initial VALUE + INITIALIZE
+
+    def test_initialize_alphanumeric_field(self):
+        fields = [
+            CobolField(
+                name="WS-NAME",
+                level=77,
+                pic="X(5)",
+                usage="DISPLAY",
+                offset=0,
+                value="HELLO",
+            ),
+        ]
+        stmts = [InitializeStatement(operands=["WS-NAME"])]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) >= 2  # initial VALUE + INITIALIZE
+
+    def test_initialize_multiple_fields(self):
+        fields = [
+            CobolField(
+                name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0, value="1"
+            ),
+            CobolField(
+                name="WS-B",
+                level=77,
+                pic="X(5)",
+                usage="DISPLAY",
+                offset=3,
+                value="ABC",
+            ),
+        ]
+        stmts = [InitializeStatement(operands=["WS-A", "WS-B"])]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) >= 4  # 2 initial values + 2 INITIALIZE resets
+
+    def test_set_to_produces_write(self):
+        fields = [
+            CobolField(
+                name="WS-IDX",
+                level=77,
+                pic="9(3)",
+                usage="DISPLAY",
+                offset=0,
+                value="0",
+            ),
+        ]
+        stmts = [SetStatement(set_type="TO", targets=["WS-IDX"], values=["5"])]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) >= 2  # initial VALUE + SET TO
+
+    def test_set_by_up_produces_binop_plus(self):
+        fields = [
+            CobolField(
+                name="WS-IDX",
+                level=77,
+                pic="9(3)",
+                usage="DISPLAY",
+                offset=0,
+                value="5",
+            ),
+        ]
+        stmts = [
+            SetStatement(set_type="BY", targets=["WS-IDX"], values=["1"], by_type="UP")
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        binops = _find_opcodes(instructions, Opcode.BINOP)
+        plus_ops = [b for b in binops if b.operands[0] == "+"]
+        assert len(plus_ops) >= 1
+
+    def test_set_by_down_produces_binop_minus(self):
+        fields = [
+            CobolField(
+                name="WS-IDX",
+                level=77,
+                pic="9(3)",
+                usage="DISPLAY",
+                offset=0,
+                value="5",
+            ),
+        ]
+        stmts = [
+            SetStatement(
+                set_type="BY", targets=["WS-IDX"], values=["1"], by_type="DOWN"
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        binops = _find_opcodes(instructions, Opcode.BINOP)
+        minus_ops = [b for b in binops if b.operands[0] == "-"]
+        assert len(minus_ops) >= 1
+
+
+class TestTier2Lowering:
+    """Tests for STRING, UNSTRING, INSPECT IR lowering."""
+
+    def _lower_with_field_and_stmts(
+        self,
+        fields: list[CobolField],
+        stmts: list[CobolStatementType],
+    ) -> list[IRInstruction]:
+        asg = CobolASG(
+            data_fields=fields,
+            paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        return frontend.lower(None, b"")
+
+    def test_string_produces_write_to_target(self):
+        fields = [
+            CobolField(
+                name="WS-FIRST",
+                level=77,
+                pic="X(5)",
+                usage="DISPLAY",
+                offset=0,
+                value="JOHN",
+            ),
+            CobolField(
+                name="WS-LAST",
+                level=77,
+                pic="X(5)",
+                usage="DISPLAY",
+                offset=5,
+                value="DOE",
+            ),
+            CobolField(
+                name="WS-RESULT",
+                level=77,
+                pic="X(10)",
+                usage="DISPLAY",
+                offset=10,
+            ),
+        ]
+        stmts = [
+            StringStatement(
+                sendings=[
+                    StringSending(value="WS-FIRST", delimited_by="SIZE"),
+                    StringSending(value="WS-LAST", delimited_by="SIZE"),
+                ],
+                into="WS-RESULT",
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should produce WRITE_REGION for the STRING result
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) >= 1
+
+    def test_string_with_delimiter_calls_split(self):
+        fields = [
+            CobolField(
+                name="WS-SRC",
+                level=77,
+                pic="X(10)",
+                usage="DISPLAY",
+                offset=0,
+                value="HELLO",
+            ),
+            CobolField(
+                name="WS-OUT",
+                level=77,
+                pic="X(10)",
+                usage="DISPLAY",
+                offset=10,
+            ),
+        ]
+        stmts = [
+            StringStatement(
+                sendings=[
+                    StringSending(value="WS-SRC", delimited_by=" "),
+                ],
+                into="WS-OUT",
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should use __string_split for delimiter handling
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        split_calls = [
+            c for c in calls if c.operands and c.operands[0] == "__string_split"
+        ]
+        assert len(split_calls) >= 1
+
+    def test_unstring_produces_split_and_writes(self):
+        fields = [
+            CobolField(
+                name="WS-FULL",
+                level=77,
+                pic="X(20)",
+                usage="DISPLAY",
+                offset=0,
+                value="JOHN DOE",
+            ),
+            CobolField(
+                name="WS-FIRST",
+                level=77,
+                pic="X(10)",
+                usage="DISPLAY",
+                offset=20,
+            ),
+            CobolField(
+                name="WS-LAST",
+                level=77,
+                pic="X(10)",
+                usage="DISPLAY",
+                offset=30,
+            ),
+        ]
+        stmts = [
+            UnstringStatement(
+                source="WS-FULL",
+                delimited_by=" ",
+                into=["WS-FIRST", "WS-LAST"],
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should produce __string_split call
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        split_calls = [
+            c for c in calls if c.operands and c.operands[0] == "__string_split"
+        ]
+        assert len(split_calls) >= 1
+
+        # Should produce WRITE_REGION for each INTO target
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) >= 2  # initial + 2 UNSTRING targets (initial has no value)
+
+    def test_inspect_tallying_produces_count_and_write(self):
+        fields = [
+            CobolField(
+                name="WS-DATA",
+                level=77,
+                pic="X(10)",
+                usage="DISPLAY",
+                offset=0,
+                value="ABCABC",
+            ),
+            CobolField(
+                name="WS-COUNT",
+                level=77,
+                pic="9(3)",
+                usage="DISPLAY",
+                offset=10,
+                value="0",
+            ),
+        ]
+        stmts = [
+            InspectStatement(
+                inspect_type="TALLYING",
+                source="WS-DATA",
+                tallying_target="WS-COUNT",
+                tallying_for=[TallyingFor(mode="ALL", pattern="A")],
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should use __string_count
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        count_calls = [
+            c for c in calls if c.operands and c.operands[0] == "__string_count"
+        ]
+        assert len(count_calls) >= 1
+
+        # Should produce WRITE_REGION for tally target
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) >= 1
+
+    def test_inspect_replacing_produces_replace_and_write(self):
+        fields = [
+            CobolField(
+                name="WS-DATA",
+                level=77,
+                pic="X(10)",
+                usage="DISPLAY",
+                offset=0,
+                value="AABAA",
+            ),
+        ]
+        stmts = [
+            InspectStatement(
+                inspect_type="REPLACING",
+                source="WS-DATA",
+                replacings=[Replacing(mode="ALL", from_pattern="A", to_pattern="B")],
+            )
+        ]
+        instructions = self._lower_with_field_and_stmts(fields, stmts)
+
+        # Should use __string_replace
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        replace_calls = [
+            c for c in calls if c.operands and c.operands[0] == "__string_replace"
+        ]
+        assert len(replace_calls) >= 1
+
+        # Should write back to source field
+        writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) >= 2  # initial VALUE + REPLACING write-back

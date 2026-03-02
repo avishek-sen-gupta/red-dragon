@@ -11,6 +11,7 @@ import io.proleap.cobol.asg.metamodel.procedure.add.From;
 import io.proleap.cobol.asg.metamodel.procedure.add.To;
 import io.proleap.cobol.asg.metamodel.procedure.compute.ComputeStatement;
 import io.proleap.cobol.asg.metamodel.procedure.compute.Store;
+import io.proleap.cobol.asg.metamodel.procedure.continuestmt.ContinueStatement;
 import io.proleap.cobol.asg.metamodel.procedure.display.DisplayStatement;
 import io.proleap.cobol.asg.metamodel.procedure.display.Operand;
 import io.proleap.cobol.asg.metamodel.procedure.divide.DivideByGivingStatement;
@@ -22,10 +23,17 @@ import io.proleap.cobol.asg.metamodel.procedure.divide.GivingPhrase;
 import io.proleap.cobol.asg.metamodel.procedure.divide.Into;
 import io.proleap.cobol.asg.metamodel.procedure.evaluate.EvaluateStatement;
 import io.proleap.cobol.asg.metamodel.procedure.evaluate.WhenPhrase;
+import io.proleap.cobol.asg.metamodel.procedure.exit.ExitStatement;
 import io.proleap.cobol.asg.metamodel.procedure.gotostmt.GoToStatement;
 import io.proleap.cobol.asg.metamodel.procedure.ifstmt.IfStatement;
 import io.proleap.cobol.asg.metamodel.procedure.ifstmt.Then;
 import io.proleap.cobol.asg.metamodel.procedure.ifstmt.Else;
+import io.proleap.cobol.asg.metamodel.procedure.initialize.InitializeStatement;
+import io.proleap.cobol.asg.metamodel.procedure.inspect.AllLeading;
+import io.proleap.cobol.asg.metamodel.procedure.inspect.AllLeadingPhrase;
+import io.proleap.cobol.asg.metamodel.procedure.inspect.InspectStatement;
+import io.proleap.cobol.asg.metamodel.procedure.inspect.ReplacingAllLeading;
+import io.proleap.cobol.asg.metamodel.procedure.inspect.ReplacingAllLeadings;
 import io.proleap.cobol.asg.metamodel.procedure.move.MoveStatement;
 import io.proleap.cobol.asg.metamodel.procedure.move.MoveToStatement;
 import io.proleap.cobol.asg.metamodel.procedure.move.MoveToSendingArea;
@@ -43,11 +51,18 @@ import io.proleap.cobol.asg.metamodel.procedure.perform.Until;
 import io.proleap.cobol.asg.metamodel.procedure.perform.Varying;
 import io.proleap.cobol.asg.metamodel.procedure.perform.VaryingClause;
 import io.proleap.cobol.asg.metamodel.procedure.perform.VaryingPhrase;
+import io.proleap.cobol.asg.metamodel.procedure.set.SetBy;
+import io.proleap.cobol.asg.metamodel.procedure.set.SetStatement;
+import io.proleap.cobol.asg.metamodel.procedure.set.SetTo;
 import io.proleap.cobol.asg.metamodel.procedure.stop.StopStatement;
+import io.proleap.cobol.asg.metamodel.procedure.string.DelimitedByPhrase;
+import io.proleap.cobol.asg.metamodel.procedure.string.Sendings;
+import io.proleap.cobol.asg.metamodel.procedure.string.StringStatement;
 import io.proleap.cobol.asg.metamodel.procedure.subtract.SubtractStatement;
 import io.proleap.cobol.asg.metamodel.procedure.subtract.SubtractFromStatement;
 import io.proleap.cobol.asg.metamodel.procedure.subtract.Minuend;
 import io.proleap.cobol.asg.metamodel.procedure.subtract.Subtrahend;
+import io.proleap.cobol.asg.metamodel.procedure.unstring.UnstringStatement;
 import io.proleap.cobol.asg.metamodel.call.Call;
 import io.proleap.cobol.asg.metamodel.valuestmt.ValueStmt;
 
@@ -104,6 +119,13 @@ public final class StatementSerializer {
         if (stmtType == StatementTypeEnum.STOP) return serializeStop((StopStatement) stmt);
         if (stmtType == StatementTypeEnum.GO_TO) return serializeGoTo((GoToStatement) stmt);
         if (stmtType == StatementTypeEnum.EVALUATE) return serializeEvaluate((EvaluateStatement) stmt);
+        if (stmtType == StatementTypeEnum.CONTINUE) return serializeContinue((ContinueStatement) stmt);
+        if (stmtType == StatementTypeEnum.EXIT) return serializeExit((ExitStatement) stmt);
+        if (stmtType == StatementTypeEnum.INITIALIZE) return serializeInitialize((InitializeStatement) stmt);
+        if (stmtType == StatementTypeEnum.SET) return serializeSet((SetStatement) stmt);
+        if (stmtType == StatementTypeEnum.STRING) return serializeString((StringStatement) stmt);
+        if (stmtType == StatementTypeEnum.UNSTRING) return serializeUnstring((UnstringStatement) stmt);
+        if (stmtType == StatementTypeEnum.INSPECT) return serializeInspect((InspectStatement) stmt);
 
         return serializeUnknown(stmtType);
     }
@@ -487,6 +509,195 @@ public final class StatementSerializer {
             obj.add("children", children);
         }
 
+        return obj;
+    }
+
+    private static JsonObject serializeContinue(ContinueStatement stmt) {
+        return newStatement("CONTINUE");
+    }
+
+    private static JsonObject serializeExit(ExitStatement stmt) {
+        return newStatement("EXIT");
+    }
+
+    private static JsonObject serializeInitialize(InitializeStatement stmt) {
+        JsonObject obj = newStatement("INITIALIZE");
+        JsonArray operands = new JsonArray();
+        try {
+            for (Call dataItemCall : stmt.getDataItemCalls()) {
+                operands.add(extractCallName(dataItemCall));
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract INITIALIZE operands: " + e.getMessage());
+        }
+        obj.add("operands", operands);
+        return obj;
+    }
+
+    private static JsonObject serializeSet(SetStatement stmt) {
+        JsonObject obj = newStatement("SET");
+        try {
+            SetStatement.SetType setType = stmt.getSetType();
+            if (setType == SetStatement.SetType.TO) {
+                obj.addProperty("set_type", "TO");
+                JsonArray targets = new JsonArray();
+                JsonArray values = new JsonArray();
+                for (SetTo setTo : stmt.getSetTos()) {
+                    for (io.proleap.cobol.asg.metamodel.procedure.set.To to : setTo.getTos()) {
+                        targets.add(extractCallName(to.getToCall()));
+                    }
+                    for (io.proleap.cobol.asg.metamodel.procedure.set.Value val : setTo.getValues()) {
+                        values.add(extractValueStmtText(val.getValueStmt()));
+                    }
+                }
+                obj.add("targets", targets);
+                obj.add("values", values);
+            } else if (setType == SetStatement.SetType.BY) {
+                obj.addProperty("set_type", "BY");
+                SetBy setBy = stmt.getSetBy();
+                if (setBy != null) {
+                    String byType = (setBy.getSetByType() == SetBy.SetByType.UP) ? "UP" : "DOWN";
+                    obj.addProperty("by_type", byType);
+                    JsonArray targets = new JsonArray();
+                    for (io.proleap.cobol.asg.metamodel.procedure.set.To to : setBy.getTos()) {
+                        targets.add(extractCallName(to.getToCall()));
+                    }
+                    obj.add("targets", targets);
+                    if (setBy.getBy() != null && setBy.getBy().getByValueStmt() != null) {
+                        obj.addProperty("value", extractValueStmtText(setBy.getBy().getByValueStmt()));
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract SET operands: " + e.getMessage());
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeString(StringStatement stmt) {
+        JsonObject obj = newStatement("STRING");
+        try {
+            JsonArray sendings = new JsonArray();
+            for (Sendings sending : stmt.getSendings()) {
+                JsonObject sendingObj = new JsonObject();
+                List<ValueStmt> valueStmts = sending.getSendingValueStmts();
+                if (!valueStmts.isEmpty()) {
+                    sendingObj.addProperty("value", extractValueStmtText(valueStmts.get(0)));
+                }
+                DelimitedByPhrase dbp = sending.getDelimitedByPhrase();
+                if (dbp != null) {
+                    DelimitedByPhrase.DelimitedByType dbType = dbp.getDelimitedByType();
+                    if (dbType == DelimitedByPhrase.DelimitedByType.SIZE) {
+                        sendingObj.addProperty("delimited_by", "SIZE");
+                    } else if (dbp.getCharactersValueStmt() != null) {
+                        sendingObj.addProperty("delimited_by",
+                                extractValueStmtText(dbp.getCharactersValueStmt()));
+                    }
+                }
+                sendings.add(sendingObj);
+            }
+            obj.add("sendings", sendings);
+            if (stmt.getIntoPhrase() != null && stmt.getIntoPhrase().getIntoCall() != null) {
+                obj.addProperty("into", extractCallName(stmt.getIntoPhrase().getIntoCall()));
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract STRING operands: " + e.getMessage());
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeUnstring(UnstringStatement stmt) {
+        JsonObject obj = newStatement("UNSTRING");
+        try {
+            if (stmt.getSending() != null && stmt.getSending().getSendingCall() != null) {
+                obj.addProperty("source", extractCallName(stmt.getSending().getSendingCall()));
+            }
+            // Delimiter
+            if (stmt.getSending() != null && stmt.getSending().getDelimitedByPhrase() != null) {
+                ValueStmt delimVs = stmt.getSending().getDelimitedByPhrase().getDelimitedByValueStmt();
+                if (delimVs != null) {
+                    obj.addProperty("delimited_by", extractValueStmtText(delimVs));
+                }
+            }
+            // INTO targets
+            if (stmt.getIntoPhrase() != null) {
+                JsonArray intoArr = new JsonArray();
+                for (io.proleap.cobol.asg.metamodel.procedure.unstring.Into into : stmt.getIntoPhrase().getIntos()) {
+                    if (into.getIntoCall() != null) {
+                        intoArr.add(extractCallName(into.getIntoCall()));
+                    }
+                }
+                obj.add("into", intoArr);
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract UNSTRING operands: " + e.getMessage());
+        }
+        return obj;
+    }
+
+    private static JsonObject serializeInspect(InspectStatement stmt) {
+        JsonObject obj = newStatement("INSPECT");
+        try {
+            if (stmt.getDataItemCall() != null) {
+                obj.addProperty("source", extractCallName(stmt.getDataItemCall()));
+            }
+            InspectStatement.InspectType inspType = stmt.getInspectType();
+            if (inspType == InspectStatement.InspectType.TALLYING) {
+                obj.addProperty("inspect_type", "TALLYING");
+                if (stmt.getTallying() != null) {
+                    JsonArray tallyingFor = new JsonArray();
+                    for (io.proleap.cobol.asg.metamodel.procedure.inspect.For forItem : stmt.getTallying().getFors()) {
+                        if (forItem.getTallyCountDataItemCall() != null) {
+                            obj.addProperty("tallying_target",
+                                    extractCallName(forItem.getTallyCountDataItemCall()));
+                        }
+                        for (AllLeadingPhrase alp : forItem.getAllLeadingPhrase()) {
+                            String mode = (alp.getAllLeadingsType() == AllLeadingPhrase.AllLeadingsType.ALL) ? "ALL" : "LEADING";
+                            for (AllLeading al : alp.getAllLeadings()) {
+                                JsonObject forObj = new JsonObject();
+                                forObj.addProperty("mode", mode);
+                                if (al.getPatternDataItemValueStmt() != null) {
+                                    forObj.addProperty("pattern",
+                                            extractValueStmtText(al.getPatternDataItemValueStmt()));
+                                }
+                                tallyingFor.add(forObj);
+                            }
+                        }
+                    }
+                    obj.add("tallying_for", tallyingFor);
+                }
+            } else if (inspType == InspectStatement.InspectType.REPLACING) {
+                obj.addProperty("inspect_type", "REPLACING");
+                if (stmt.getReplacing() != null) {
+                    JsonArray replacings = new JsonArray();
+                    for (ReplacingAllLeadings rals : stmt.getReplacing().getAllLeadings()) {
+                        String mode;
+                        switch (rals.getReplacingAllLeadingsType()) {
+                            case ALL: mode = "ALL"; break;
+                            case FIRST: mode = "FIRST"; break;
+                            case LEADING: mode = "LEADING"; break;
+                            default: mode = "ALL"; break;
+                        }
+                        for (ReplacingAllLeading ral : rals.getAllLeadings()) {
+                            JsonObject repObj = new JsonObject();
+                            repObj.addProperty("mode", mode);
+                            if (ral.getPatternDataItemValueStmt() != null) {
+                                repObj.addProperty("from",
+                                        extractValueStmtText(ral.getPatternDataItemValueStmt()));
+                            }
+                            if (ral.getBy() != null && ral.getBy().getByValueStmt() != null) {
+                                repObj.addProperty("to",
+                                        extractValueStmtText(ral.getBy().getByValueStmt()));
+                            }
+                            replacings.add(repObj);
+                        }
+                    }
+                    obj.add("replacings", replacings);
+                }
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract INSPECT operands: " + e.getMessage());
+        }
         return obj;
     }
 
