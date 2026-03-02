@@ -62,8 +62,9 @@ Each language subclass populates the dispatch tables with its grammar's node typ
 | [php.md](php.md) | `interpreter/frontends/php.py` | 1404 | PHP frontend -- namespaces, traits, match expressions |
 | [pascal.md](pascal.md) | `interpreter/frontends/pascal.py` | 914 | Pascal frontend -- begin/end blocks, procedure/function distinction |
 | [rust.md](rust.md) | `interpreter/frontends/rust.py` | 944 | Rust frontend -- let bindings, match, closures, impl blocks, macros |
+| [cobol.md](cobol.md) | `interpreter/cobol/cobol_frontend.py` | 1394 | COBOL frontend -- ProLeap bridge, byte-addressed regions, PIC encoding, 20 statement types |
 
-**Total**: 15,576 lines across 16 source files (base + 15 languages).
+**Total**: 16,970 lines across 17 source files (base + 15 languages + COBOL).
 
 ---
 

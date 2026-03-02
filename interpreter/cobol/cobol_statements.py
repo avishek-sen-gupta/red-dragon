@@ -63,6 +63,7 @@ CobolStatementType = Union[
     "StringStatement",
     "UnstringStatement",
     "InspectStatement",
+    "SearchStatement",
 ]
 
 
@@ -469,6 +470,55 @@ class InspectStatement:
         return result
 
 
+@dataclass(frozen=True)
+class SearchWhen:
+    """A WHEN clause inside a SEARCH statement."""
+
+    condition: str
+    children: list[CobolStatementType] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> SearchWhen:
+        return cls(
+            condition=data.get("condition", ""),
+            children=[parse_statement(c) for c in data.get("children", [])],
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {"condition": self.condition}
+        if self.children:
+            result["children"] = [c.to_dict() for c in self.children]
+        return result
+
+
+@dataclass(frozen=True)
+class SearchStatement:
+    """SEARCH table [VARYING index] WHEN condition ... [AT END ...]."""
+
+    table: str = ""
+    varying: str = ""
+    whens: list[SearchWhen] = field(default_factory=list)
+    at_end: list[CobolStatementType] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> SearchStatement:
+        return cls(
+            table=data.get("table", ""),
+            varying=data.get("varying", ""),
+            whens=[SearchWhen.from_dict(w) for w in data.get("whens", [])],
+            at_end=[parse_statement(c) for c in data.get("at_end", [])],
+        )
+
+    def to_dict(self) -> dict:
+        result: dict = {"type": "SEARCH", "table": self.table}
+        if self.varying:
+            result["varying"] = self.varying
+        result["whens"] = [w.to_dict() for w in self.whens]
+        if self.at_end:
+            result["at_end"] = [c.to_dict() for c in self.at_end]
+        return result
+
+
 def _parse_perform_spec(
     data: dict,
 ) -> PerformTimesSpec | PerformUntilSpec | PerformVaryingSpec | None:
@@ -575,6 +625,7 @@ _DISPATCH_TABLE: dict[str, type] = {
     "STRING": StringStatement,
     "UNSTRING": UnstringStatement,
     "INSPECT": InspectStatement,
+    "SEARCH": SearchStatement,
 }
 
 

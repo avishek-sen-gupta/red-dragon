@@ -39,6 +39,7 @@ from interpreter.cobol.cobol_statements import (
     PerformTimesSpec,
     PerformUntilSpec,
     PerformVaryingSpec,
+    SearchStatement,
     SetStatement,
     StopRunStatement,
     StringStatement,
@@ -393,6 +394,8 @@ class CobolFrontend(Frontend):
             self._lower_unstring(stmt, layout, region_reg)
         elif isinstance(stmt, InspectStatement):
             self._lower_inspect(stmt, layout, region_reg)
+        elif isinstance(stmt, SearchStatement):
+            self._lower_search(stmt, layout, region_reg)
         else:
             logger.warning("Unhandled COBOL statement type: %s", type(stmt).__name__)
 
@@ -1163,6 +1166,105 @@ class CobolFrontend(Frontend):
 
         # Write modified string back to source field
         self._emit_encode_and_write(region_reg, source_fl, current_str_reg)
+
+    # ── SEARCH ────────────────────────────────────────────────────
+
+    def _lower_search(
+        self,
+        stmt: SearchStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """SEARCH table VARYING index WHEN cond ... AT END ...
+
+        Emits a loop that tests each WHEN condition per iteration.
+        If a WHEN matches, executes its body and exits. Otherwise,
+        increments the varying index and loops. AT END fires when the
+        iteration counter reaches a safety bound (since table size is
+        not available from the statement alone).
+        """
+        loop_label = self._fresh_label("search_loop")
+        end_label = self._fresh_label("search_end")
+        at_end_label = self._fresh_label("search_at_end")
+        increment_label = self._fresh_label("search_incr")
+
+        # Safety-bound counter to prevent infinite loops in concrete execution
+        max_iterations = 256
+        counter_var = self._fresh_label("__search_ctr")
+        zero_reg = self._const_to_reg(0)
+        self._emit(Opcode.STORE_VAR, operands=[counter_var, zero_reg])
+
+        max_reg = self._const_to_reg(max_iterations)
+
+        # ── Loop header ──
+        self._emit(Opcode.LABEL, label=loop_label)
+
+        # Bound check: if counter >= max, branch to AT END
+        ctr_reg = self._fresh_reg()
+        self._emit(Opcode.LOAD_VAR, result_reg=ctr_reg, operands=[counter_var])
+        bound_cond = self._fresh_reg()
+        self._emit(
+            Opcode.BINOP,
+            result_reg=bound_cond,
+            operands=[">=", ctr_reg, max_reg],
+        )
+        body_label = self._fresh_label("search_body")
+        self._emit(
+            Opcode.BRANCH_IF,
+            operands=[bound_cond],
+            label=f"{at_end_label},{body_label}",
+        )
+
+        # ── WHEN chain ──
+        self._emit(Opcode.LABEL, label=body_label)
+        for when in stmt.whens:
+            if not when.condition:
+                continue
+            cond_reg = self._lower_condition(when.condition, layout, region_reg)
+            when_true = self._fresh_label("search_when_true")
+            when_next = self._fresh_label("search_when_next")
+            self._emit(
+                Opcode.BRANCH_IF,
+                operands=[cond_reg],
+                label=f"{when_true},{when_next}",
+            )
+            self._emit(Opcode.LABEL, label=when_true)
+            for child in when.children:
+                self._lower_statement(child, layout, region_reg)
+            self._emit(Opcode.BRANCH, label=end_label)
+            self._emit(Opcode.LABEL, label=when_next)
+
+        # ── No WHEN matched — increment and loop ──
+        self._emit(Opcode.BRANCH, label=increment_label)
+        self._emit(Opcode.LABEL, label=increment_label)
+
+        # Increment varying index field if present
+        if stmt.varying and stmt.varying in layout.fields:
+            varying_fl = layout.fields[stmt.varying]
+            decoded_reg = self._emit_decode_field(region_reg, varying_fl)
+            one_reg = self._const_to_reg(1)
+            inc_reg = self._fresh_reg()
+            self._emit(
+                Opcode.BINOP, result_reg=inc_reg, operands=["+", decoded_reg, one_reg]
+            )
+            str_reg = self._emit_to_string(inc_reg)
+            self._emit_encode_and_write(region_reg, varying_fl, str_reg)
+
+        # Increment safety counter
+        ctr_reg2 = self._fresh_reg()
+        self._emit(Opcode.LOAD_VAR, result_reg=ctr_reg2, operands=[counter_var])
+        one_ctr = self._const_to_reg(1)
+        inc_ctr = self._fresh_reg()
+        self._emit(Opcode.BINOP, result_reg=inc_ctr, operands=["+", ctr_reg2, one_ctr])
+        self._emit(Opcode.STORE_VAR, operands=[counter_var, inc_ctr])
+        self._emit(Opcode.BRANCH, label=loop_label)
+
+        # ── AT END ──
+        self._emit(Opcode.LABEL, label=at_end_label)
+        for child in stmt.at_end:
+            self._lower_statement(child, layout, region_reg)
+
+        self._emit(Opcode.LABEL, label=end_label)
 
     # ── Condition Lowering ─────────────────────────────────────────
 
