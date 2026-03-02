@@ -7,6 +7,7 @@ import logging
 import time
 from typing import Any
 
+from .constants import Language
 from .ir import Opcode
 from .frontend import get_frontend
 from .frontend_observer import FrontendObserver
@@ -420,7 +421,7 @@ def execute_cfg_traced(
 
 def run(
     source: str,
-    language: str = "python",
+    language: str | Language = Language.PYTHON,
     entry_point: str = "",
     backend: str = "claude",
     max_steps: int = 100,
@@ -442,12 +443,13 @@ def run(
         llm_client: Pre-built LLMClient for DI/testing (used by LLM frontend).
         unresolved_call_strategy: Resolution strategy for unknown calls.
     """
+    lang = Language(language)
     pipeline_start = time.perf_counter()
     stats = PipelineStats(
         source_bytes=len(source.encode("utf-8")),
         source_lines=source.count("\n")
         + (1 if source and not source.endswith("\n") else 0),
-        language=language,
+        language=lang,
         frontend_type=frontend_type,
     )
 
@@ -465,11 +467,11 @@ def run(
             self._target.lower_time = duration
 
     resolved_frontend_type = (
-        constants.FRONTEND_COBOL if language == "cobol" else frontend_type
+        constants.FRONTEND_COBOL if lang == Language.COBOL else frontend_type
     )
     observer: FrontendObserver = _StatsObserver(stats)
     frontend = get_frontend(
-        language,
+        lang,
         frontend_type=resolved_frontend_type,
         llm_provider=backend,
         llm_client=llm_client,
@@ -515,7 +517,7 @@ def run(
         backend=backend,
         max_steps=max_steps,
         verbose=verbose,
-        source_language=language,
+        source_language=lang,
         unresolved_call_strategy=unresolved_call_strategy,
     )
     exec_start = time.perf_counter()

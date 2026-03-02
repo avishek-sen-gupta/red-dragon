@@ -835,3 +835,21 @@ Benefits:
 5. **Orchestrators** — `api.py:lower_source()` collapsed from three branches to a single `get_frontend(...).lower(source_bytes)`. `run.py:run()` uses a `_StatsObserver` and a single `get_frontend()` call, eliminating the three-branch dispatch.
 
 **Consequences:** Single uniform API for all frontend types. Orchestrators no longer need to know which frontends use tree-sitter. Adding a new frontend type only requires implementing `lower(source: bytes)`. Timing is handled internally via the observer pattern rather than externally in the orchestrator. Trade-off: each `BaseFrontend` subclass now carries a `parser_factory` and `language` field, adding constructor boilerplate.
+
+---
+
+### ADR-040: Language StrEnum — bounded language parameter validation (2026-03-02)
+
+**Context:** Frontend constructors and API functions accepted `language: str`, an unbounded string that silently broke at runtime deep inside tree-sitter if misspelled (e.g., `"pythonn"` instead of `"python"`). There was no compile-time or construction-time validation of language names.
+
+**Decision:** Replace raw `language: str` with a `Language(StrEnum)` in `interpreter/constants.py`. Each member's value is the tree-sitter language name string (e.g., `Language.PYTHON = "python"`). Since `StrEnum` members *are* strings, they pass through to `tslp.get_parser(language)` without conversion — fully backward-compatible at runtime.
+
+- **Internal APIs** (`BaseFrontend`, `ParserFactory`, `get_frontend`, `get_deterministic_frontend`, all 15 frontend constructors, `LLMFrontend`, `ChunkedLLMFrontend`) use `Language` directly in their type signatures.
+- **Boundary APIs** (`api.py` functions, `run.py:run()`) accept `str | Language` and convert at the boundary via `Language(language)`, which raises `ValueError` for invalid language strings.
+- `SUPPORTED_DETERMINISTIC_LANGUAGES` is now derived from the enum: `tuple(lang.value for lang in Language if lang != Language.COBOL)`.
+
+**Alternatives considered:**
+- Plain string validation with an allow-list check — rejected because it duplicates the language list and provides no IDE/type-checker support.
+- Regular `Enum` (non-str) — rejected because it would require `.value` conversions everywhere tree-sitter expects a string; `StrEnum` eliminates this friction entirely.
+
+**Consequences:** Invalid language names are caught at construction time with a clear `ValueError` (`'pythonn' is not a valid Language`). IDE autocompletion lists all supported languages. All 7781 existing tests pass unchanged because `Language.PYTHON == "python"` is `True` and `StrEnum` members are accepted wherever `str` is expected.

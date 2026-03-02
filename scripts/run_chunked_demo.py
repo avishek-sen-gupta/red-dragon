@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from interpreter import constants
 from interpreter.cfg import build_cfg
 from interpreter.chunked_llm_frontend import ChunkedLLMFrontend, ChunkExtractor
+from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.parser import Parser, TreeSitterParserFactory
 
@@ -89,7 +90,7 @@ a_summary = alice.summary()
 b_summary = bob.summary()
 """
 
-LANGUAGE = "python"
+LANGUAGE = Language.PYTHON
 
 
 def _print_header(title: str):

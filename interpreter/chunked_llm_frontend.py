@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from .constants import Language
 from .frontend import Frontend
 from .ir import IRInstruction, Opcode
 from .llm_frontend import IRParsingError, LLMFrontend
@@ -250,7 +251,7 @@ class ChunkedLLMFrontend(Frontend):
         self,
         llm_frontend: LLMFrontend,
         parser_factory: ParserFactory,
-        language: str,
+        language: Language,
     ):
         self._llm_frontend = llm_frontend
         self._parser_factory = parser_factory

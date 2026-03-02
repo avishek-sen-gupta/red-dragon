@@ -12,6 +12,7 @@ from typing import Optional
 from tree_sitter import Node
 
 from .cfg import CFG, build_cfg, cfg_to_mermaid, extract_function_instructions
+from .constants import Language
 from .frontend import get_frontend
 from .ir import IRInstruction
 from .ir_stats import count_opcodes
@@ -40,7 +41,7 @@ _FUNCTION_NODE_TYPES: frozenset[str] = frozenset(
 
 def lower_source(
     source: str,
-    language: str = "python",
+    language: str | Language = Language.PYTHON,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
     backend: str = "claude",
 ) -> list[IRInstruction]:
@@ -55,14 +56,15 @@ def lower_source(
     Returns:
         A list of IR instructions.
     """
-    logger.info("Lowering source (%s, frontend=%s)", language, frontend_type)
-    frontend = get_frontend(language, frontend_type=frontend_type, llm_provider=backend)
+    lang = Language(language)
+    logger.info("Lowering source (%s, frontend=%s)", lang, frontend_type)
+    frontend = get_frontend(lang, frontend_type=frontend_type, llm_provider=backend)
     return frontend.lower(source.encode("utf-8"))
 
 
 def dump_ir(
     source: str,
-    language: str = "python",
+    language: str | Language = Language.PYTHON,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
     backend: str = "claude",
 ) -> str:
@@ -83,7 +85,7 @@ def dump_ir(
 
 def build_cfg_from_source(
     source: str,
-    language: str = "python",
+    language: str | Language = Language.PYTHON,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
     backend: str = "claude",
     function_name: str = "",
@@ -110,7 +112,7 @@ def build_cfg_from_source(
 
 def dump_cfg(
     source: str,
-    language: str = "python",
+    language: str | Language = Language.PYTHON,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
     backend: str = "claude",
     function_name: str = "",
@@ -133,7 +135,7 @@ def dump_cfg(
 
 def dump_mermaid(
     source: str,
-    language: str = "python",
+    language: str | Language = Language.PYTHON,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
     backend: str = "claude",
     function_name: str = "",
@@ -156,7 +158,7 @@ def dump_mermaid(
 
 def ir_stats(
     source: str,
-    language: str = "python",
+    language: str | Language = Language.PYTHON,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
     backend: str = "claude",
 ) -> dict[str, int]:
@@ -177,7 +179,7 @@ def ir_stats(
 
 def execute_traced(
     source: str,
-    language: str = "python",
+    language: str | Language = Language.PYTHON,
     function_name: str = "",
     entry_point: str = "",
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
@@ -238,7 +240,7 @@ def _find_function_node(node: Node, name: str) -> Optional[Node]:
 def extract_function_source(
     source: str,
     function_name: str,
-    language: str = "python",
+    language: str | Language = Language.PYTHON,
 ) -> str:
     """Extract the raw source text of a named function from source code.
 

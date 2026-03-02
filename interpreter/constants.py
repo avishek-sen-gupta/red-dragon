@@ -2,6 +2,35 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
+
+
+class Language(StrEnum):
+    """Bounded set of supported source languages.
+
+    Each member's value is the tree-sitter language name string, so
+    ``Language.PYTHON == "python"`` is ``True`` and members pass through
+    directly to ``tree_sitter_language_pack.get_parser()``.
+    """
+
+    PYTHON = "python"
+    JAVASCRIPT = "javascript"
+    TYPESCRIPT = "typescript"
+    JAVA = "java"
+    RUBY = "ruby"
+    GO = "go"
+    PHP = "php"
+    CSHARP = "csharp"
+    C = "c"
+    CPP = "cpp"
+    RUST = "rust"
+    KOTLIN = "kotlin"
+    SCALA = "scala"
+    LUA = "lua"
+    PASCAL = "pascal"
+    COBOL = "cobol"
+
+
 PARAM_PREFIX = "param:"
 
 FUNC_REF_PATTERN = r"<function:(\w+)@(\w+)(?:#(\w+))?>"
@@ -33,20 +62,6 @@ FRONTEND_LLM = "llm"
 FRONTEND_CHUNKED_LLM = "chunked_llm"
 FRONTEND_COBOL = "cobol"
 
-SUPPORTED_DETERMINISTIC_LANGUAGES: tuple[str, ...] = (
-    "python",
-    "javascript",
-    "typescript",
-    "java",
-    "ruby",
-    "go",
-    "php",
-    "csharp",
-    "c",
-    "cpp",
-    "rust",
-    "kotlin",
-    "scala",
-    "lua",
-    "pascal",
+SUPPORTED_DETERMINISTIC_LANGUAGES: tuple[str, ...] = tuple(
+    lang.value for lang in Language if lang != Language.COBOL
 )
