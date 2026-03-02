@@ -133,7 +133,7 @@ Control flow constructs (if/else, while, for, for-of/foreach, switch, break/cont
 
 </details>
 
-All constructs above produce real IR for proper data-flow analysis. All 15 frontends have **zero unsupported SYMBOLIC instructions** on the two-pass audit suite (`scripts/audit_all_frontends.py`), which combines dispatch-table coverage analysis (comparing AST node types against frontend dispatch tables with block-reachability classification) and runtime SYMBOLIC detection. For unlisted languages, use `--frontend llm`.
+All constructs above produce real IR for proper data-flow analysis. All 15 frontends have **zero unsupported SYMBOLIC instructions** on the two-pass audit suite (`scripts/audit_all_frontends.py`), which combines dispatch-table coverage analysis (comparing AST node types against frontend dispatch tables with block-reachability classification) and runtime SYMBOLIC detection. A separate COBOL-specific audit (`scripts/audit_cobol_frontend.py`) checks all three layers of the ProLeap pipeline (bridge serialisation, Python dispatch, frontend lowering) and produces a per-type coverage matrix across ProLeap's 51 statement types. For unlisted languages, use `--frontend llm`.
 
 ### COBOL frontend
 
@@ -355,7 +355,7 @@ The **Exercism integration test suite** (`tests/unit/exercism/`) extends coverag
 | **acronym** | toUpperChar helper, word boundary detection, string building, separator classification | 9 | 15 | 2 | 252 | **269** |
 | **Total** | | **171** | **270** | **36** | **5068** | **5374** |
 
-Combined with the Rosetta suite and the COBOL frontend tests (107 tests covering ASG round-trip, typed statement hierarchy, PIC parsing, data layout, frontend lowering, PERFORM loop variants, section PERFORM, parser bridge, and end-to-end fixture tests), the project has **7565 tests** (7565 passed, 3 xfailed) — all with zero LLM calls.
+Combined with the Rosetta suite and the COBOL frontend tests (107 tests covering ASG round-trip, typed statement hierarchy, PIC parsing, data layout, frontend lowering, PERFORM loop variants, section PERFORM, parser bridge, and end-to-end fixture tests), the project has **7581 tests** (7581 passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 
