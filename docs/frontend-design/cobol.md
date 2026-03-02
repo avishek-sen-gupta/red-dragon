@@ -245,6 +245,8 @@ Output is a per-type coverage matrix showing HANDLED / DISPATCH_MISSING / NOT_LO
 
 ## Test Coverage
 
+### Unit tests
+
 Tests are in `tests/unit/test_cobol_*.py`:
 
 - **Statement hierarchy**: dispatch + round-trip for all 29 handled types
@@ -255,3 +257,48 @@ Tests are in `tests/unit/test_cobol_*.py`:
 - **Expression parser**: COMPUTE expression trees
 - **PERFORM variants**: TIMES, UNTIL (TEST BEFORE/AFTER), VARYING
 - **End-to-end fixtures**: Full COBOL programs through the pipeline
+
+### Integration tests
+
+Full-pipeline tests in `tests/integration/test_cobol_programs.py` exercise real `.cbl` source → ProLeap bridge → ASG → IR → CFG → VM, verifying decoded memory values. Tests skip when the bridge JAR is absent.
+
+#### Coverage matrix
+
+| Statement type | Integration test | Verified behaviour |
+|---|---|---|
+| VALUE clauses (PIC 9) | `TestInitialValues` | Zoned decimal initial values decoded correctly |
+| ADD, SUBTRACT | `TestAddSubtract` | Multi-operand arithmetic |
+| MULTIPLY, DIVIDE | `TestMultiplyDivide` | GIVING clause writes result to third field |
+| COMPUTE | `TestComputeExpression` | Infix expression with operator precedence |
+| MOVE (numeric) | `TestMoveLiteral` | Literal → numeric field |
+| MOVE (alphanumeric) | `TestStringMove` | EBCDIC character encoding of PIC X fields |
+| IF / ELSE | `TestIfElseBranch` | Conditional branching with comparison |
+| EVALUATE / WHEN | `TestEvaluateWhen` | Multi-branch switch on subject value |
+| PERFORM TIMES | `TestPerformTimes` | Counted loop with paragraph call |
+| PERFORM UNTIL | `TestPerformUntil` | Condition-tested loop |
+| PERFORM VARYING | `TestPerformVarying` | FROM/BY/UNTIL loop accumulating a sum |
+| Nested PERFORM | `TestNestedPerform` | Paragraph calling another paragraph |
+| GO TO | `TestGotoSkipsParagraph`, `TestGotoExitsPerform` | Jump-over and escape-from-PERFORM semantics |
+| INITIALIZE | `TestInitialize` (3 tests) | Numeric → zero, alphanumeric → spaces, multi-field |
+| SET | `TestSetStatement` (4 tests) | SET TO, SET UP BY, SET DOWN BY, combined |
+| SEARCH / WHEN | `TestSearchStatement` (2 tests) | WHEN match found, AT END when no match |
+| INSPECT TALLYING | `TestInspectTallying` | FOR ALL character count |
+| INSPECT REPLACING | `TestInspectReplacing` | ALL character substitution |
+| CALL | `TestCallStatement` | Symbolic call doesn't crash surrounding code |
+| STRING | `TestStringStatement` | DELIMITED BY SIZE concatenation into PIC X target |
+| UNSTRING | `TestUnstringStatement` | DELIMITED BY SPACES splitting into multiple targets |
+| Combined program | `TestCombinedProgram` | Arithmetic + IF + PERFORM TIMES + GO TO |
+
+#### Not covered (with rationale)
+
+| Statement type | Reason not integration-tested |
+|---|---|
+| DISPLAY | Console output only — no memory side-effect to verify |
+| STOP RUN | Implicitly exercised by every test (terminates execution) |
+| CONTINUE | No-op — trivial, no observable effect |
+| EXIT | No-op — trivial, no observable effect |
+| ALTER | Modifies GO TO targets dynamically — **testable**, not yet written |
+| ENTRY | Alternate entry point — requires multi-program CALL support |
+| CANCEL | Cancels called subprogram — requires multi-program CALL support |
+| ACCEPT | Reads from stdin/system — requires I/O provider injection into `run()` |
+| OPEN, CLOSE, READ, WRITE, REWRITE, START, DELETE | File I/O — requires I/O provider injection into `run()` |
