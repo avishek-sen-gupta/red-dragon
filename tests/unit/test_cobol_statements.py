@@ -3,10 +3,14 @@
 import pytest
 
 from interpreter.cobol.cobol_statements import (
+    AlterStatement,
     ArithmeticStatement,
+    CallStatement,
+    CancelStatement,
     ComputeStatement,
     ContinueStatement,
     DisplayStatement,
+    EntryStatement,
     EvaluateStatement,
     ExitStatement,
     GotoStatement,
@@ -318,6 +322,61 @@ class TestParseStatementDispatch:
         assert isinstance(stmt, SearchStatement)
         assert len(stmt.at_end) == 1
 
+    def test_call_basic(self):
+        stmt = parse_statement(
+            {
+                "type": "CALL",
+                "program": "SUBPROG",
+                "using": [{"name": "WS-A", "type": "REFERENCE"}],
+            }
+        )
+        assert isinstance(stmt, CallStatement)
+        assert stmt.program == "SUBPROG"
+        assert len(stmt.using) == 1
+        assert stmt.using[0].name == "WS-A"
+        assert stmt.using[0].param_type == "REFERENCE"
+
+    def test_call_with_giving(self):
+        stmt = parse_statement(
+            {
+                "type": "CALL",
+                "program": "CALC",
+                "using": [
+                    {"name": "WS-A", "type": "CONTENT"},
+                    {"name": "WS-B", "type": "VALUE"},
+                ],
+                "giving": "WS-RESULT",
+            }
+        )
+        assert isinstance(stmt, CallStatement)
+        assert stmt.giving == "WS-RESULT"
+        assert len(stmt.using) == 2
+
+    def test_alter(self):
+        stmt = parse_statement(
+            {
+                "type": "ALTER",
+                "proceed_tos": [{"source": "PARA-1", "target": "PARA-2"}],
+            }
+        )
+        assert isinstance(stmt, AlterStatement)
+        assert len(stmt.proceed_tos) == 1
+        assert stmt.proceed_tos[0].source == "PARA-1"
+        assert stmt.proceed_tos[0].target == "PARA-2"
+
+    def test_entry(self):
+        stmt = parse_statement(
+            {"type": "ENTRY", "entry_name": "ALT-ENTRY", "using": ["WS-A"]}
+        )
+        assert isinstance(stmt, EntryStatement)
+        assert stmt.entry_name == "ALT-ENTRY"
+        assert stmt.using == ["WS-A"]
+
+    def test_cancel(self):
+        stmt = parse_statement({"type": "CANCEL", "programs": ["SUBPROG"]})
+        assert isinstance(stmt, CancelStatement)
+        assert stmt.programs == ["SUBPROG"]
+
     def test_unknown_type_raises(self):
         with pytest.raises(ValueError, match="Unknown COBOL statement type"):
             parse_statement({"type": "BOGUS"})
@@ -591,4 +650,28 @@ class TestRoundTrip:
             "whens": [{"condition": "WS-A = 1"}],
             "at_end": [{"type": "DISPLAY", "operands": ["NOT FOUND"]}],
         }
+        assert self._round_trip(data) == data
+
+    def test_call_round_trip(self):
+        data = {
+            "type": "CALL",
+            "program": "SUBPROG",
+            "using": [{"name": "WS-A", "type": "REFERENCE"}],
+            "giving": "WS-RESULT",
+        }
+        assert self._round_trip(data) == data
+
+    def test_alter_round_trip(self):
+        data = {
+            "type": "ALTER",
+            "proceed_tos": [{"source": "PARA-1", "target": "PARA-2"}],
+        }
+        assert self._round_trip(data) == data
+
+    def test_entry_round_trip(self):
+        data = {"type": "ENTRY", "entry_name": "ALT-ENTRY", "using": ["WS-A"]}
+        assert self._round_trip(data) == data
+
+    def test_cancel_round_trip(self):
+        data = {"type": "CANCEL", "programs": ["SUBPROG"]}
         assert self._round_trip(data) == data

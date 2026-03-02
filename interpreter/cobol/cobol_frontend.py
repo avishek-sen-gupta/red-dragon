@@ -23,11 +23,15 @@ from interpreter.cobol.cobol_expression import (
     parse_expression,
 )
 from interpreter.cobol.cobol_statements import (
+    AlterStatement,
     ArithmeticStatement,
+    CallStatement,
+    CancelStatement,
     CobolStatementType,
     ComputeStatement,
     ContinueStatement,
     DisplayStatement,
+    EntryStatement,
     EvaluateStatement,
     ExitStatement,
     GotoStatement,
@@ -396,6 +400,14 @@ class CobolFrontend(Frontend):
             self._lower_inspect(stmt, layout, region_reg)
         elif isinstance(stmt, SearchStatement):
             self._lower_search(stmt, layout, region_reg)
+        elif isinstance(stmt, CallStatement):
+            self._lower_call(stmt, layout, region_reg)
+        elif isinstance(stmt, AlterStatement):
+            self._lower_alter(stmt, layout, region_reg)
+        elif isinstance(stmt, EntryStatement):
+            self._lower_entry(stmt, layout, region_reg)
+        elif isinstance(stmt, CancelStatement):
+            self._lower_cancel(stmt, layout, region_reg)
         else:
             logger.warning("Unhandled COBOL statement type: %s", type(stmt).__name__)
 
@@ -1265,6 +1277,93 @@ class CobolFrontend(Frontend):
             self._lower_statement(child, layout, region_reg)
 
         self._emit(Opcode.LABEL, label=end_label)
+
+    # ── CALL, ALTER, ENTRY, CANCEL ────────────────────────────────
+
+    def _lower_call(
+        self,
+        stmt: CallStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """CALL 'program' USING params — symbolic subprogram invocation.
+
+        Emits CALL_FUNCTION with parameter registers. The called program
+        is treated as an unresolved external (same as unresolved function
+        calls in tree-sitter frontends).
+        """
+        # Build argument registers from USING params
+        arg_regs = [
+            (
+                self._emit_decode_field(region_reg, layout.fields[param.name])
+                if param.name in layout.fields
+                else self._const_to_reg(param.name)
+            )
+            for param in stmt.using
+        ]
+
+        # Emit symbolic call
+        result_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=result_reg,
+            operands=[stmt.program, *arg_regs],
+        )
+
+        # If GIVING, write the result back to the giving field
+        if stmt.giving and stmt.giving in layout.fields:
+            giving_fl = layout.fields[stmt.giving]
+            str_reg = self._emit_to_string(result_reg)
+            self._emit_encode_and_write(region_reg, giving_fl, str_reg)
+
+        logger.info("CALL %s with %d params (symbolic)", stmt.program, len(stmt.using))
+
+    def _lower_alter(
+        self,
+        stmt: AlterStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """ALTER para-1 TO PROCEED TO para-2 — dynamic GO TO retargeting.
+
+        Emits STORE_VAR to record the new branch target for each
+        altered paragraph. The actual GO TO resolution would need to
+        check this variable at branch time; for static analysis purposes,
+        the data flow from target name to the altered paragraph is
+        captured.
+        """
+        for pt in stmt.proceed_tos:
+            target_reg = self._const_to_reg(f"para_{pt.target}")
+            self._emit(Opcode.STORE_VAR, operands=[f"__alter_{pt.source}", target_reg])
+            logger.info("ALTER %s TO PROCEED TO %s", pt.source, pt.target)
+
+    def _lower_entry(
+        self,
+        stmt: EntryStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """ENTRY 'name' — alternate entry point for a subprogram.
+
+        Emits a LABEL so that external callers can branch to this point.
+        """
+        if stmt.entry_name:
+            self._emit(Opcode.LABEL, label=f"entry_{stmt.entry_name}")
+            logger.info("ENTRY %s", stmt.entry_name)
+
+    def _lower_cancel(
+        self,
+        stmt: CancelStatement,
+        layout: DataLayout,
+        region_reg: str,
+    ) -> None:
+        """CANCEL program — invalidates a previously-CALLed subprogram.
+
+        No-op for static analysis. The program state invalidation has
+        no data-flow effect in a single-program context.
+        """
+        for prog in stmt.programs:
+            logger.info("CANCEL %s (no-op for static analysis)", prog)
 
     # ── Condition Lowering ─────────────────────────────────────────
 
