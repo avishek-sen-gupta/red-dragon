@@ -85,6 +85,26 @@ _ARITHMETIC_OPS = {
     "DIVIDE": "/",
 }
 
+# COBOL figurative constants → Python string equivalents
+_COBOL_FIGURATIVE_CONSTANTS: dict[str, str] = {
+    "SPACE": " ",
+    "SPACES": " ",
+    "ZERO": "0",
+    "ZEROS": "0",
+    "ZEROES": "0",
+    "QUOTE": '"',
+    "QUOTES": '"',
+    "LOW-VALUE": "\x00",
+    "LOW-VALUES": "\x00",
+    "HIGH-VALUE": "\xff",
+    "HIGH-VALUES": "\xff",
+}
+
+
+def _translate_cobol_figurative(value: str) -> str:
+    """Translate COBOL figurative constants to their Python equivalents."""
+    return _COBOL_FIGURATIVE_CONSTANTS.get(value, value)
+
 
 class CobolFrontend(Frontend):
     """Lowers COBOL ASG (from ProLeap bridge) to RedDragon IR.
@@ -1083,8 +1103,10 @@ class CobolFrontend(Frontend):
                 # Use full string
                 part_regs.append(src_str_reg)
             else:
-                # Truncate at delimiter
-                delim_reg = self._const_to_reg(str(sending.delimited_by))
+                # Truncate at delimiter — translate figurative constants
+                delim_reg = self._const_to_reg(
+                    _translate_cobol_figurative(str(sending.delimited_by))
+                )
                 find_pos = self._fresh_reg()
                 self._emit(
                     Opcode.CALL_FUNCTION,
@@ -1112,19 +1134,21 @@ class CobolFrontend(Frontend):
                 )
                 part_regs.append(first_part)
 
-        # Concatenate all parts
+        # Concatenate all parts via pairwise fold
         if not part_regs:
             concat_reg = self._const_to_reg("")
         elif len(part_regs) == 1:
             concat_reg = part_regs[0]
         else:
-            parts_list_reg = self._const_to_reg(part_regs)
-            concat_reg = self._fresh_reg()
-            self._emit(
-                Opcode.CALL_FUNCTION,
-                result_reg=concat_reg,
-                operands=["__string_concat", parts_list_reg],
-            )
+            concat_reg = part_regs[0]
+            for next_reg in part_regs[1:]:
+                new_concat = self._fresh_reg()
+                self._emit(
+                    Opcode.CALL_FUNCTION,
+                    result_reg=new_concat,
+                    operands=["__string_concat_pair", concat_reg, next_reg],
+                )
+                concat_reg = new_concat
 
         # Write to target
         if stmt.into and stmt.into in layout.fields:
@@ -1151,8 +1175,9 @@ class CobolFrontend(Frontend):
         else:
             src_str_reg = self._const_to_reg(str(stmt.source))
 
-        # Split by delimiter
-        delim_reg = self._const_to_reg(str(stmt.delimited_by))
+        # Split by delimiter — translate COBOL figurative constants
+        delimiter = _translate_cobol_figurative(str(stmt.delimited_by))
+        delim_reg = self._const_to_reg(delimiter)
         ir = build_string_split_ir(f"unstring_split_{stmt.source}")
         parts_reg = self._inline_ir(
             ir, {"%p_source": src_str_reg, "%p_delimiter": delim_reg}

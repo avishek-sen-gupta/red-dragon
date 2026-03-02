@@ -378,6 +378,18 @@ def _builtin_string_concat(args: list[Any], vm: Any) -> Any:
     return "".join(str(p) for p in parts)
 
 
+def _builtin_string_concat_pair(args: list[Any], vm: Any) -> Any:
+    """Concatenate two strings.
+
+    Args: [left: str, right: str]
+    Returns: str
+    """
+    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+        return _UNCOMPUTABLE
+    left, right = args[0], args[1]
+    return str(left) + str(right)
+
+
 BYTE_BUILTINS: dict[str, Any] = {
     "__nibble_get": _builtin_nibble_get,
     "__nibble_set": _builtin_nibble_set,
@@ -398,4 +410,5 @@ BYTE_BUILTINS: dict[str, Any] = {
     "__string_count": _builtin_string_count,
     "__string_replace": _builtin_string_replace,
     "__string_concat": _builtin_string_concat,
+    "__string_concat_pair": _builtin_string_concat_pair,
 }
