@@ -627,7 +627,6 @@ class TestSearchStatement:
         # WS-FOUND should be 1 (WHEN branch executed)
         assert _decode_zoned_unsigned(region, 4, 4) == 1
 
-    @pytest.mark.xfail(reason="SEARCH AT END not yet implemented in frontend")
     def test_search_at_end(self):
         """SEARCH AT END fires when no WHEN matches within bound."""
         vm = _run_cobol(
@@ -646,7 +645,7 @@ class TestSearchStatement:
                 "            MOVE 1 TO WS-FOUND.",
                 "    STOP RUN.",
             ],
-            max_steps=5000,
+            max_steps=50000,
         )
         region = _first_region(vm)
         # No match found — AT END should execute
