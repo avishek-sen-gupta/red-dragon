@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from interpreter.cobol.condition_name_index import build_condition_index
 from interpreter.cobol.data_layout import DataLayout, build_data_layout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.cobol.field_resolution import (
@@ -91,13 +92,15 @@ class CobolFrontend(Frontend):
 
     def lower(self, source: bytes) -> list[IRInstruction]:
         """Lower COBOL source to IR via the ProLeap bridge."""
+        asg = self._parser.parse(source)
+        layout = build_data_layout(asg.data_fields)
+        condition_index = build_condition_index(layout.fields)
+
         self._ctx = EmitContext(
             dispatch_fn=dispatch_statement,
             observer=self._observer,
+            condition_index=condition_index,
         )
-
-        asg = self._parser.parse(source)
-        layout = build_data_layout(asg.data_fields)
 
         self._ctx.emit(Opcode.LABEL, label="entry")
 

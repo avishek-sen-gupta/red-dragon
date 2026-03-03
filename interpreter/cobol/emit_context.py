@@ -14,6 +14,7 @@ import logging
 from typing import Any, Callable
 
 from interpreter.cobol.cobol_types import CobolDataCategory
+from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_filters import align_decimal, left_adjust
 from interpreter.cobol.data_layout import DataLayout, FieldLayout
 from interpreter.cobol.field_resolution import (
@@ -47,9 +48,11 @@ class EmitContext:
         self,
         dispatch_fn: DispatchFn,
         observer: Any = None,
+        condition_index: ConditionNameIndex = ConditionNameIndex({}),
     ) -> None:
         self._dispatch_fn = dispatch_fn
         self._observer = observer
+        self._condition_index = condition_index
         self._instructions: list[IRInstruction] = []
         self._reg_counter: int = 0
         self._label_counter: int = 0
@@ -451,7 +454,9 @@ class EmitContext:
             lower_condition as _lower_condition,
         )
 
-        return _lower_condition(self, condition, layout, region_reg)
+        return _lower_condition(
+            self, condition, layout, region_reg, self._condition_index
+        )
 
     # ── Parse Literal ─────────────────────────────────────────────
 
