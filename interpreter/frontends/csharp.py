@@ -530,7 +530,8 @@ class CSharpFrontend(BaseFrontend):
 
     def _lower_lambda(self, node) -> str:
         """Lower C# lambda: (params) => expr or (params) => { body }."""
-        func_label = self._fresh_label("lambda")
+        func_name = f"__lambda_{self._label_counter}"
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label("lambda_end")
 
         self._emit(Opcode.BRANCH, label=end_label)
@@ -566,7 +567,9 @@ class CSharpFrontend(BaseFrontend):
         self._emit(
             Opcode.CONST,
             result_reg=ref_reg,
-            operands=[f"func:{func_label}"],
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
             node=node,
         )
         return ref_reg

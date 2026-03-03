@@ -49,6 +49,40 @@ answer = make_adder(10)
         assert vars_["answer"] == 15
 
 
+class TestLambdaFuncRef:
+    def test_csharp_lambda_produces_func_ref(self):
+        """C# lambda stored in variable should produce a proper FUNC_REF."""
+        source = """\
+class M {
+    static int make_adder(int x) {
+        var adder = (int y) => { return x + y; };
+        return adder(5);
+    }
+
+    static int answer = make_adder(10);
+}
+"""
+        vars_ = _run_program(source, Language.CSHARP)
+        assert vars_["answer"] == 15
+
+    def test_csharp_local_function_closure(self):
+        """C# local function capturing enclosing variable should produce correct result."""
+        source = """\
+class M {
+    static int make_adder(int x) {
+        int adder(int y) {
+            return x + y;
+        }
+        return adder(5);
+    }
+
+    static int answer = make_adder(10);
+}
+"""
+        vars_ = _run_program(source, Language.CSHARP)
+        assert vars_["answer"] == 15
+
+
 class TestCallUnknownOnFuncRef:
     def test_php_arrow_function_call(self):
         """PHP arrow function invoked via dynamic call should dispatch through FUNC_REF."""
