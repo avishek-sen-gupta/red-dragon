@@ -15,6 +15,10 @@ from interpreter.cobol.byte_builtins import (
     _builtin_make_list,
     _builtin_cobol_prepare_digits,
     _builtin_cobol_prepare_sign,
+    _builtin_int_to_binary_bytes,
+    _builtin_binary_bytes_to_int,
+    _builtin_float_to_bytes,
+    _builtin_bytes_to_float,
     BYTE_BUILTINS,
 )
 from interpreter.vm import Operators
@@ -342,3 +346,105 @@ class TestCobolPrepareSign:
 
     def test_non_numeric_returns_uncomputable(self):
         assert _builtin_cobol_prepare_sign([[], True], None) is _UNCOMPUTABLE
+
+
+class TestIntToBinaryBytes:
+    """Tests for __int_to_binary_bytes builtin."""
+
+    def test_positive_signed(self):
+        result = _builtin_int_to_binary_bytes([1234, 2, True], None)
+        assert result == list((1234).to_bytes(2, "big", signed=True))
+
+    def test_negative_signed(self):
+        result = _builtin_int_to_binary_bytes([-1234, 2, True], None)
+        assert result == list((-1234).to_bytes(2, "big", signed=True))
+
+    def test_unsigned(self):
+        result = _builtin_int_to_binary_bytes([1234, 2, False], None)
+        assert result == list((1234).to_bytes(2, "big", signed=False))
+
+    def test_four_bytes(self):
+        result = _builtin_int_to_binary_bytes([100000, 4, False], None)
+        assert result == list((100000).to_bytes(4, "big", signed=False))
+
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue(name="x")
+        assert _builtin_int_to_binary_bytes([sym, 2, True], None) is _UNCOMPUTABLE
+
+
+class TestBinaryBytesToInt:
+    """Tests for __binary_bytes_to_int builtin."""
+
+    def test_positive_signed(self):
+        data = list((1234).to_bytes(2, "big", signed=True))
+        assert _builtin_binary_bytes_to_int([data, True], None) == 1234
+
+    def test_negative_signed(self):
+        data = list((-1234).to_bytes(2, "big", signed=True))
+        assert _builtin_binary_bytes_to_int([data, True], None) == -1234
+
+    def test_unsigned(self):
+        data = list((1234).to_bytes(2, "big", signed=False))
+        assert _builtin_binary_bytes_to_int([data, False], None) == 1234
+
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue(name="x")
+        assert _builtin_binary_bytes_to_int([sym, True], None) is _UNCOMPUTABLE
+
+
+class TestFloatToBytes:
+    """Tests for __float_to_bytes builtin."""
+
+    def test_single_precision(self):
+        import struct
+
+        result = _builtin_float_to_bytes([3.14, 4], None)
+        assert result == list(struct.pack(">f", 3.14))
+
+    def test_double_precision(self):
+        import struct
+
+        result = _builtin_float_to_bytes([3.14, 8], None)
+        assert result == list(struct.pack(">d", 3.14))
+
+    def test_integer_coerced_to_float(self):
+        import struct
+
+        result = _builtin_float_to_bytes([42, 4], None)
+        assert result == list(struct.pack(">f", 42.0))
+
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue(name="x")
+        assert _builtin_float_to_bytes([sym, 4], None) is _UNCOMPUTABLE
+
+
+class TestBytesToFloat:
+    """Tests for __bytes_to_float builtin."""
+
+    def test_single_precision(self):
+        import struct
+
+        data = list(struct.pack(">f", 3.14))
+        result = _builtin_bytes_to_float([data, 4], None)
+        assert abs(result - 3.14) < 1e-5
+
+    def test_double_precision(self):
+        import struct
+
+        data = list(struct.pack(">d", 3.14))
+        result = _builtin_bytes_to_float([data, 8], None)
+        assert abs(result - 3.14) < 1e-10
+
+    def test_round_trip_single(self):
+        encoded = _builtin_float_to_bytes([42.0, 4], None)
+        decoded = _builtin_bytes_to_float([encoded, 4], None)
+        assert decoded == 42.0
+
+    def test_round_trip_double(self):
+        encoded = _builtin_float_to_bytes([42.0, 8], None)
+        decoded = _builtin_bytes_to_float([encoded, 8], None)
+        assert decoded == 42.0
+
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue(name="x")
+        assert _builtin_bytes_to_float([sym, 4], None) is _UNCOMPUTABLE

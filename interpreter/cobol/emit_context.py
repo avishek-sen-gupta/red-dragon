@@ -27,6 +27,10 @@ from interpreter.cobol.ir_encoders import (
     build_encode_alphanumeric_ir,
     build_encode_comp3_ir,
     build_encode_zoned_ir,
+    build_encode_binary_ir,
+    build_decode_binary_ir,
+    build_encode_float_ir,
+    build_decode_float_ir,
 )
 from interpreter.ir import IRInstruction, Opcode
 
@@ -246,6 +250,8 @@ class EmitContext:
         td = fl.type_descriptor
         if td.category == CobolDataCategory.ALPHANUMERIC:
             return self.emit_encode_alphanumeric(fl.name, value, td.total_digits)
+        if td.category in (CobolDataCategory.COMP1, CobolDataCategory.COMP2):
+            return self.emit_encode_float(fl.name, value, td)
         return self.emit_encode_numeric(fl.name, value, td)
 
     def emit_encode_alphanumeric(self, field_name: str, value: str, length: int) -> str:
@@ -255,6 +261,15 @@ class EmitContext:
 
         ir = build_encode_alphanumeric_ir(f"enc_alpha_{field_name}", length)
         return self.inline_ir(ir, {"%p_value": value_reg})
+
+    def emit_encode_float(self, field_name: str, value: str, td: Any) -> str:
+        """Emit inline float encoding IR for COMP-1/COMP-2. Returns result register."""
+        float_val = float(value)
+        value_reg = self.fresh_reg()
+        self.emit(Opcode.CONST, result_reg=value_reg, operands=[float_val])
+
+        ir = build_encode_float_ir(f"enc_float_{field_name}", td.byte_length)
+        return self.inline_ir(ir, {"%p_float_value": value_reg})
 
     def emit_encode_numeric(self, field_name: str, value: str, td: Any) -> str:
         """Emit inline numeric encoding IR. Returns result register."""
@@ -284,6 +299,13 @@ class EmitContext:
 
         if td.category == CobolDataCategory.ZONED_DECIMAL:
             ir = build_encode_zoned_ir(f"enc_zoned_{field_name}", td.total_digits)
+        elif td.category == CobolDataCategory.BINARY:
+            ir = build_encode_binary_ir(
+                f"enc_bin_{field_name}",
+                td.total_digits,
+                td.byte_length,
+                td.signed,
+            )
         else:
             ir = build_encode_comp3_ir(f"enc_comp3_{field_name}", td.total_digits)
 
@@ -311,6 +333,15 @@ class EmitContext:
             ir = build_decode_zoned_ir(
                 f"dec_zoned_{fl.name}", td.total_digits, td.decimal_digits
             )
+        elif td.category == CobolDataCategory.BINARY:
+            ir = build_decode_binary_ir(
+                f"dec_bin_{fl.name}",
+                td.byte_length,
+                td.decimal_digits,
+                td.signed,
+            )
+        elif td.category in (CobolDataCategory.COMP1, CobolDataCategory.COMP2):
+            ir = build_decode_float_ir(f"dec_float_{fl.name}", td.byte_length)
         else:
             ir = build_decode_comp3_ir(
                 f"dec_comp3_{fl.name}", td.total_digits, td.decimal_digits
@@ -336,6 +367,17 @@ class EmitContext:
         if td.category == CobolDataCategory.ALPHANUMERIC:
             ir = build_encode_alphanumeric_ir(f"enc_alpha_{fl.name}", td.total_digits)
             return self.inline_ir(ir, {"%p_value": value_str_reg})
+
+        if td.category in (CobolDataCategory.COMP1, CobolDataCategory.COMP2):
+            # Convert string to float, then encode
+            float_reg = self.fresh_reg()
+            self.emit(
+                Opcode.CALL_FUNCTION,
+                result_reg=float_reg,
+                operands=["float", value_str_reg],
+            )
+            ir = build_encode_float_ir(f"enc_float_{fl.name}", td.byte_length)
+            return self.inline_ir(ir, {"%p_float_value": float_reg})
 
         return self.emit_numeric_encode_from_string(fl, value_str_reg)
 
@@ -370,6 +412,13 @@ class EmitContext:
 
         if td.category == CobolDataCategory.ZONED_DECIMAL:
             ir = build_encode_zoned_ir(f"enc_zoned_{fl.name}", td.total_digits)
+        elif td.category == CobolDataCategory.BINARY:
+            ir = build_encode_binary_ir(
+                f"enc_bin_{fl.name}",
+                td.total_digits,
+                td.byte_length,
+                td.signed,
+            )
         else:
             ir = build_encode_comp3_ir(f"enc_comp3_{fl.name}", td.total_digits)
 

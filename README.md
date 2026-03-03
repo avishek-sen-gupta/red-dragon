@@ -396,7 +396,7 @@ The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercis
 
 ### Test totals
 
-**7905 tests** (7870 unit + 32 integration passed, 3 xfailed) — all with zero LLM calls.
+**7960 tests** (7925 unit + 32 integration passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 
