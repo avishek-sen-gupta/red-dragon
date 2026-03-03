@@ -146,6 +146,7 @@ def parse_pic(
     sign_leading: bool = False,
     sign_separate: bool = False,
     justified_right: bool = False,
+    blank_when_zero: bool = False,
 ) -> CobolTypeDescriptor:
     """Parse a COBOL PIC clause string into a CobolTypeDescriptor.
 
@@ -212,4 +213,5 @@ def parse_pic(
         signed=visitor.is_signed,
         sign_separate=sign_separate,
         sign_leading=sign_leading,
+        blank_when_zero=blank_when_zero,
     )

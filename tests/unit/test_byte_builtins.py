@@ -19,6 +19,7 @@ from interpreter.cobol.byte_builtins import (
     _builtin_binary_bytes_to_int,
     _builtin_float_to_bytes,
     _builtin_bytes_to_float,
+    _builtin_cobol_blank_when_zero,
     BYTE_BUILTINS,
 )
 from interpreter.vm import Operators
@@ -448,3 +449,47 @@ class TestBytesToFloat:
     def test_symbolic_returns_uncomputable(self):
         sym = SymbolicValue(name="x")
         assert _builtin_bytes_to_float([sym, 4], None) is _UNCOMPUTABLE
+
+
+class TestCobolBlankWhenZero:
+    """Tests for __cobol_blank_when_zero builtin."""
+
+    def test_zero_value_returns_spaces(self):
+        """When value is zero, return EBCDIC spaces (0x40)."""
+        encoded = [0xF0, 0xF0, 0xF0]
+        result = _builtin_cobol_blank_when_zero([encoded, "0", 3], None)
+        assert result == [0x40, 0x40, 0x40]
+
+    def test_non_zero_value_returns_encoded(self):
+        """When value is non-zero, return original encoded bytes."""
+        encoded = [0xF1, 0xF2, 0xF3]
+        result = _builtin_cobol_blank_when_zero([encoded, "123", 3], None)
+        assert result == [0xF1, 0xF2, 0xF3]
+
+    def test_zero_float_returns_spaces(self):
+        """Float zero (0.0) triggers blank replacement."""
+        encoded = [0xF0, 0xF0]
+        result = _builtin_cobol_blank_when_zero([encoded, "0.0", 2], None)
+        assert result == [0x40, 0x40]
+
+    def test_negative_zero_returns_spaces(self):
+        """Negative zero is still zero."""
+        encoded = [0xF0, 0xF0]
+        result = _builtin_cobol_blank_when_zero([encoded, "-0", 2], None)
+        assert result == [0x40, 0x40]
+
+    def test_non_numeric_string_returns_encoded(self):
+        """Non-numeric value string returns encoded bytes unchanged."""
+        encoded = [0xC1, 0xC2]
+        result = _builtin_cobol_blank_when_zero([encoded, "AB", 2], None)
+        assert result == [0xC1, 0xC2]
+
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue(name="x")
+        assert _builtin_cobol_blank_when_zero([sym, "0", 3], None) is _UNCOMPUTABLE
+
+    def test_too_few_args_returns_uncomputable(self):
+        assert _builtin_cobol_blank_when_zero([[0xF0], "0"], None) is _UNCOMPUTABLE
+
+    def test_registered_in_builtins(self):
+        assert "__cobol_blank_when_zero" in BYTE_BUILTINS
