@@ -29,6 +29,7 @@ from tests.unit.rosetta.conftest import (
     assert_clean_lowering,
     execute_for_language,
     extract_answer,
+    _var_name_for_language,
 )
 
 # ---------------------------------------------------------------------------
@@ -278,6 +279,62 @@ class TestNestedFunctionsExecution:
 # outer's frame is popped).
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Leaky inner-function scoping: Ruby, PHP, Lua
+# ---------------------------------------------------------------------------
+#
+# In Ruby, PHP, and Lua, inner functions leak to enclosing/global scope:
+#   - Ruby: `def inner(y)` inside `outer` defines a method on the default definee
+#   - PHP: nested `function inner($y)` becomes global after enclosing is called
+#   - Lua: `function inner(y)` without `local` assigns to global scope
+#
+# The VM enforces frame-based scoping, so `inner` becomes inaccessible after
+# `outer` returns (producing a SymbolicValue). These xfail tests document the
+# expected real-world behaviour and the VM's current limitation.
+# ---------------------------------------------------------------------------
+
+LEAKY_LANGUAGES: frozenset[str] = frozenset({"ruby", "php", "lua"})
+
+LEAKY_PROGRAMS: dict[str, str] = {
+    "ruby": """\
+def outer(x)
+    def inner(y)
+        return y * 2
+    end
+    return inner(x) + 5
+end
+
+result = outer(3)
+leaked = inner(3)
+""",
+    "php": """\
+<?php
+function outer($x) {
+    function inner($y) {
+        return $y * 2;
+    }
+    return inner($x) + 5;
+}
+
+$result = outer(3);
+$leaked = inner(3);
+?>
+""",
+    "lua": """\
+function outer(x)
+    function inner(y)
+        return y * 2
+    end
+    return inner(x) + 5
+end
+
+result = outer(3)
+leaked = inner(3)
+""",
+}
+
+EXPECTED_LEAKED_VALUE = 6
+
 SCOPED_LANGUAGES: frozenset[str] = frozenset(
     {"python", "javascript", "typescript", "rust", "go", "kotlin", "scala"}
 )
@@ -371,14 +428,15 @@ object M {
 EXPECTED_RESULT = 11
 
 
-def _extract_var(vm: VMState, var_name: str) -> object:
-    """Extract a variable from frame 0 locals (no PHP $ prefix needed)."""
+def _extract_var(vm: VMState, var_name: str, language: str = "") -> object:
+    """Extract a variable from frame 0 locals, handling PHP ``$`` prefix."""
+    name = _var_name_for_language(var_name, language)
     frame = vm.call_stack[0]
-    assert var_name in frame.local_vars, (
-        f"expected '{var_name}' in frame 0 locals, "
+    assert name in frame.local_vars, (
+        f"[{language}] expected '{name}' in frame 0 locals, "
         f"got: {sorted(frame.local_vars.keys())}"
     )
-    return frame.local_vars[var_name]
+    return frame.local_vars[name]
 
 
 class TestNestedFunctionScoping:
@@ -396,14 +454,14 @@ class TestNestedFunctionScoping:
 
     def test_inner_accessible_inside_outer(self, scoping_result):
         lang, vm, _stats = scoping_result
-        result = _extract_var(vm, "result")
+        result = _extract_var(vm, "result", lang)
         assert (
             result == EXPECTED_RESULT
         ), f"[{lang}] expected result={EXPECTED_RESULT}, got {result}"
 
     def test_inner_inaccessible_outside_outer(self, scoping_result):
         lang, vm, _stats = scoping_result
-        leaked = _extract_var(vm, "leaked")
+        leaked = _extract_var(vm, "leaked", lang)
         assert isinstance(leaked, SymbolicValue), (
             f"[{lang}] expected 'leaked' to be a SymbolicValue "
             f"(inner function not accessible outside outer), "
@@ -412,6 +470,62 @@ class TestNestedFunctionScoping:
 
     def test_zero_llm_calls(self, scoping_result):
         lang, _vm, stats = scoping_result
+        assert (
+            stats.llm_calls == 0
+        ), f"[{lang}] expected 0 LLM calls, got {stats.llm_calls}"
+
+
+# ---------------------------------------------------------------------------
+# Leaky inner-function scoping tests (Ruby, PHP, Lua)
+# ---------------------------------------------------------------------------
+#
+# These languages do NOT scope inner functions to the enclosing function.
+# In real execution, calling `inner(3)` from outside `outer` returns 6
+# (concrete). The VM enforces stricter frame-based scoping, so `inner`
+# becomes inaccessible after `outer` returns (producing a SymbolicValue).
+#
+# The xfail tests document the expected real-world behaviour and the VM's
+# current limitation.
+# ---------------------------------------------------------------------------
+
+
+class TestNestedFunctionLeakyScoping:
+    """Verify that leaky inner-function scoping is documented via xfail."""
+
+    @pytest.fixture(
+        params=sorted(LEAKY_LANGUAGES),
+        ids=lambda lang: lang,
+        scope="class",
+    )
+    def leaky_result(self, request):
+        lang = request.param
+        vm, stats = execute_for_language(lang, LEAKY_PROGRAMS[lang])
+        return lang, vm, stats
+
+    def test_inner_accessible_inside_outer(self, leaky_result):
+        lang, vm, _stats = leaky_result
+        result = _extract_var(vm, "result", lang)
+        assert (
+            result == EXPECTED_RESULT
+        ), f"[{lang}] expected result={EXPECTED_RESULT}, got {result}"
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "VM enforces frame-based scoping; in real Ruby/PHP/Lua, "
+            "inner functions leak to enclosing/global scope"
+        ),
+    )
+    def test_inner_leaks_outside_outer(self, leaky_result):
+        lang, vm, _stats = leaky_result
+        leaked = _extract_var(vm, "leaked", lang)
+        assert leaked == EXPECTED_LEAKED_VALUE, (
+            f"[{lang}] expected leaked={EXPECTED_LEAKED_VALUE} (concrete), "
+            f"got {type(leaked).__name__}: {leaked}"
+        )
+
+    def test_zero_llm_calls(self, leaky_result):
+        lang, _vm, stats = leaky_result
         assert (
             stats.llm_calls == 0
         ), f"[{lang}] expected 0 LLM calls, got {stats.llm_calls}"
