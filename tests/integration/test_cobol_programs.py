@@ -1226,3 +1226,57 @@ class TestLevel88InEvaluate:
         region = _first_region(vm)
         # WS-STATUS is 'I' → STATUS-INACTIVE is true → WS-R = 2
         assert _decode_zoned_unsigned(region, 1, 4) == 2
+
+
+class TestLevel88InPerformUntil:
+    def test_perform_until_condition_name(self):
+        """PERFORM ... UNTIL DONE-FLAG loops until the condition name is true."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-PUNTIL.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "05 WS-CTR PIC 9(4) VALUE 0.",
+                '   88 DONE-FLAG VALUE 5.',
+                "77 WS-SUM PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    PERFORM ADD-PARA UNTIL DONE-FLAG.",
+                "    STOP RUN.",
+                "ADD-PARA.",
+                "    ADD 1 TO WS-CTR.",
+                "    ADD WS-CTR TO WS-SUM.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        # Loops while WS-CTR != 5: adds 1+2+3+4+5 = 15
+        assert _decode_zoned_unsigned(region, 0, 4) == 5
+        assert _decode_zoned_unsigned(region, 4, 4) == 15
+
+    def test_perform_until_condition_name_already_true(self):
+        """PERFORM ... UNTIL DONE-FLAG does not execute when already true."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-PUNTL2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "05 WS-CTR PIC 9(4) VALUE 5.",
+                '   88 DONE-FLAG VALUE 5.',
+                "77 WS-SUM PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    PERFORM ADD-PARA UNTIL DONE-FLAG.",
+                "    STOP RUN.",
+                "ADD-PARA.",
+                "    ADD 1 TO WS-CTR.",
+                "    ADD WS-CTR TO WS-SUM.",
+            ],
+            max_steps=2000,
+        )
+        region = _first_region(vm)
+        # WS-CTR already 5 → DONE-FLAG is true → body never executes
+        assert _decode_zoned_unsigned(region, 0, 4) == 5
+        assert _decode_zoned_unsigned(region, 4, 4) == 0
