@@ -146,7 +146,7 @@ The COBOL frontend uses the [ProLeap COBOL Parser](https://github.com/uwol/prole
 | **No-ops** | CONTINUE, EXIT, CANCEL |
 | **Data manipulation** | INITIALIZE, SET (TO / UP BY / DOWN BY) |
 | **String operations** | STRING, UNSTRING, INSPECT (TALLYING / REPLACING) |
-| **Table operations** | SEARCH (linear, with VARYING index and AT END) |
+| **Table operations** | SEARCH (linear, with VARYING index and AT END), OCCURS (single-dimension arrays with literal/field subscripts) |
 | **Inter-program** | CALL (symbolic, with USING/GIVING parameter passing), ENTRY, ALTER |
 | **I/O (stub)** | ACCEPT, READ, WRITE, OPEN, CLOSE, REWRITE, START, DELETE — via injectable `CobolIOProvider` |
 
@@ -392,11 +392,11 @@ The COBOL test suite covers ASG round-trip, typed statement hierarchy (32 types)
 
 ### COBOL integration tests
 
-The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercises the full pipeline from real `.cbl` source code through the ProLeap Java bridge, ASG construction, IR lowering, CFG building, and VM execution. 29 tests cover initial values, ADD/SUBTRACT, MULTIPLY/DIVIDE (including GIVING), COMPUTE, MOVE, IF/ELSE, PERFORM TIMES/UNTIL/VARYING, nested PERFORM, GO TO, EVALUATE/WHEN, string moves, INITIALIZE, SET TO/UP BY/DOWN BY, SEARCH with WHEN, INSPECT TALLYING/REPLACING, CALL, STRING concatenation, and UNSTRING splitting. Tests skip gracefully when the ProLeap bridge JAR is not available.
+The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercises the full pipeline from real `.cbl` source code through the ProLeap Java bridge, ASG construction, IR lowering, CFG building, and VM execution. 32 tests cover initial values, ADD/SUBTRACT, MULTIPLY/DIVIDE (including GIVING), COMPUTE, MOVE, IF/ELSE, PERFORM TIMES/UNTIL/VARYING, nested PERFORM, GO TO, EVALUATE/WHEN, string moves, INITIALIZE, SET TO/UP BY/DOWN BY, SEARCH with WHEN, INSPECT TALLYING/REPLACING, CALL, STRING concatenation, UNSTRING splitting, and OCCURS (elementary MOVE, field subscript, PERFORM VARYING loop). Tests skip gracefully when the ProLeap bridge JAR is not available.
 
 ### Test totals
 
-**7812 tests** (7782 unit + 29 integration passed, 3 xfailed) — all with zero LLM calls.
+**7835 tests** (7801 unit + 32 integration passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 

@@ -21,7 +21,14 @@ logger = logging.getLogger(__name__)
 
 # Matches parentheses, operators, decimal numbers, and COBOL identifiers
 # (which may contain hyphens, e.g. WS-A, WS-TOTAL-AMOUNT).
-_TOKEN_RE = re.compile(r"[()]|[+\-*/]|[0-9]+(?:\.[0-9]+)?|[A-Za-z][A-Za-z0-9-]*")
+# Also captures subscripted field references like WS-TABLE(WS-IDX) as single tokens.
+_TOKEN_RE = re.compile(
+    r"[A-Za-z][A-Za-z0-9-]*\([A-Za-z0-9-]+\)"  # subscripted field: WS-TBL(IDX)
+    r"|[()]"  # plain parentheses
+    r"|[+\-*/]"  # operators
+    r"|[0-9]+(?:\.[0-9]+)?"  # decimal numbers
+    r"|[A-Za-z][A-Za-z0-9-]*"  # plain identifiers
+)
 
 _ADDITIVE_OPS = frozenset({"+", "-"})
 _MULTIPLICATIVE_OPS = frozenset({"*", "/"})

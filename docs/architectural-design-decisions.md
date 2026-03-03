@@ -853,3 +853,34 @@ Benefits:
 - Regular `Enum` (non-str) — rejected because it would require `.value` conversions everywhere tree-sitter expects a string; `StrEnum` eliminates this friction entirely.
 
 **Consequences:** Invalid language names are caught at construction time with a clear `ValueError` (`'pythonn' is not a valid Language`). IDE autocompletion lists all supported languages. All 7781 existing tests pass unchanged because `Language.PYTHON == "python"` is `True` and `StrEnum` members are accepted wherever `str` is expected.
+
+---
+
+### ADR-041: COBOL OCCURS (Table/Array) support — single-dimension with subscript resolution (2026-03-03)
+
+**Context:** COBOL OCCURS defines tables (arrays), fundamental to real COBOL programs and prerequisite for meaningful SEARCH operations. OCCURS was entirely unimplemented: the Java bridge ignored it, the Python data model had no concept of it, and the frontend couldn't handle subscripted field references like `WS-TABLE(WS-IDX)`.
+
+**Decision:** Implement single-dimension OCCURS with literal and field-based subscripts using three key design choices:
+
+1. **String-encoded subscripts:** Subscripted references stay as strings throughout the pipeline: `"WS-TABLE(WS-IDX)"`. This avoids changing 30+ statement dataclasses. The bridge constructs these strings from `TableCall.getSubscripts()`. The frontend parses them at resolution time via `_parse_subscript_notation()`.
+
+2. **Centralized offset resolution:** All field access funnels through `_resolve_field_ref()` which parses subscript notation, looks up the base FieldLayout, and for subscripted refs emits runtime offset arithmetic: `base + (index - 1) * element_size`. A `ResolvedFieldRef` dataclass carries both the element-level `FieldLayout` and the computed offset register.
+
+3. **Bridge-computed element_size:** The Java bridge emits `occurs` and `element_size` in the JSON. `computeByteLength()` was refactored into `computeElementSize()` (single element) and `computeByteLength()` (element × count). This keeps offset arithmetic correct because child offsets are relative to the first element.
+
+**Scope:** Single-dimension OCCURS with literal and field-based subscripts. Multi-dimensional OCCURS and OCCURS DEPENDING ON are out of scope.
+
+**Changes:**
+- `DataFieldSerializer.java`: Added `extractOccurs()`, `computeElementSize()`, emits `occurs` and `element_size` in JSON.
+- `StatementSerializer.java`: `extractCallName()` detects `TABLE_CALL`, unwraps subscripts into `"FIELD(SUBSCRIPT)"` notation.
+- `CobolField`: Added `occurs: int = 0` and `element_size: int = 0`.
+- `FieldLayout`: Added `occurs_count: int = 0` and `element_size: int = 0`.
+- `_compute_group_length()`: Multiplies by OCCURS count when > 0.
+- `CobolFrontend`: Added `_parse_subscript_notation()`, `ResolvedFieldRef`, `_resolve_field_ref()`, `_has_field()`. Updated `_emit_decode_field()`, `_emit_field_encode()`, `_emit_encode_and_write()` with optional `offset_reg`. Updated all ~29 field-access call sites.
+- `cobol_expression.py`: Extended `_TOKEN_RE` to capture `FIELD(SUBSCRIPT)` as single tokens.
+
+**Alternatives considered:**
+- Structured subscript objects in statement dataclasses — rejected because it would require changing 30+ frozen dataclasses and all their serialization logic for a feature that only affects field access resolution.
+- Distributed offset resolution at each call site — rejected in favour of centralized `_resolve_field_ref()` to avoid duplicating subscript arithmetic logic across 29 call sites.
+
+**Consequences:** 20 new unit tests and 3 new integration tests (elementary OCCURS, field subscript, PERFORM VARYING loop). All 7801 existing unit tests and 32 integration tests pass. COBOL programs can now define tables and access elements via literal or field-based subscripts.
