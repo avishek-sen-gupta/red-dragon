@@ -111,12 +111,11 @@ b = c()
         assert vars_["a"] == 1
         assert vars_["b"] == 2
 
-    def test_two_closures_share_state(self):
-        """Two closures from the same factory share one environment.
+    def test_accumulator_persists_mutations(self):
+        """An accumulator closure persists mutations across calls.
 
-        We test this by creating a factory that returns one closure, then
-        calling the counter twice and verifying the shared env persists the
-        mutation — the second call sees the first call's write.
+        Each call sees the effect of previous calls on the shared ``total``
+        variable.
         """
         source = """\
 def make_accumulator(start):
