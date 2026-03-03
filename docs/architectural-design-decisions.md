@@ -1084,3 +1084,13 @@ Also fixed Ruby's `raise` to emit `THROW` instead of `CALL_FUNCTION`.
 **Decision:** Create a 6-language Rosetta test that verifies genuine destructuring lowering by asserting the IR contains `LOAD_INDEX` opcodes (the IR pattern all destructuring methods emit). This is not a full 15-language test — the `assert_cross_language_consistency` helper is not used. Cross-language checks are custom and scoped to the 6 participating languages. VM execution verifies `answer == 15` with 0 LLM calls.
 
 **Consequences:** The destructuring code path is verified end-to-end for 6 languages (IR emission + VM execution). The test explicitly documents which languages have destructuring support and which do not, serving as a living inventory. All 8292 tests pass.
+
+---
+
+### ADR-053: Rosetta nested functions test — 10-language subset (2026-03-03)
+
+**Context:** The original nested functions test (commit `593c58e`, reverted in `44620d5`) used sibling functions for 12/15 languages — it didn't actually test nested function definitions. Only 10 of the 15 deterministic frontends support genuine nested function definitions: Python, JavaScript, TypeScript, Rust, Lua, Ruby, Go, Kotlin, Scala, PHP. The remaining 5 (C, C++, Java, C#, Pascal) lack nested function syntax.
+
+**Decision:** Create a 10-language Rosetta test that verifies genuine nested function lowering by asserting the IR contains a `func_inner` or `func___anon` label nested inside the outer function body — proving the inner function was lowered as a nested definition, not a sibling. The test uses `outer(x)` containing `inner(y) → y * 2`, returning `inner(x) + 5`, with `answer = outer(3) → 11`. The `assert_cross_language_consistency` helper is not used (it requires all 15 languages). Cross-language checks are custom and scoped to the 10 participating languages.
+
+**Consequences:** Nested function lowering is verified end-to-end for 10 languages (IR structure + VM execution producing `answer == 11` with 0 LLM calls). The test explicitly documents which languages support nested function definitions and which do not. All 8334 tests pass.
