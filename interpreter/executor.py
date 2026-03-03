@@ -421,8 +421,7 @@ def _handle_try_push(
 
 
 def _handle_try_pop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
-    if vm.exception_stack:
-        vm.exception_stack.pop()
+    vm.exception_stack.pop()
     return ExecutionResult.success(StateUpdate(reasoning="pop exception handler"))
 
 
@@ -741,9 +740,8 @@ def _try_class_constructor_call(
 
     params = registry.func_params.get(init_label, [])
     new_vars: dict[str, Any] = {}
-    # Detect whether the first parameter is an explicit self/this reference
-    self_params = frozenset({"self", "this"})
-    has_explicit_self = bool(params) and params[0] in self_params
+    # Python emits self as explicit first param; Java/C++/C# do not
+    has_explicit_self = bool(params) and params[0] == "self"
     if has_explicit_self:
         # Python-style: first param is self/this, rest are constructor args
         new_vars[params[0]] = addr
