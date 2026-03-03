@@ -933,10 +933,67 @@ class PascalFrontend(BaseFrontend):
     # -- Pascal: try/except/finally ------------------------------------------------
 
     def _lower_pascal_try(self, node):
-        """Lower try/except/finally — lower all named children as statements."""
+        """Lower try/except/finally using base class _lower_try_catch.
+
+        Pascal AST structure:
+          try → kTry, statements (body), kExcept|kFinally,
+                exceptionHandler* (catch), statements? (finally), kEnd
+        """
+        body_node, catch_clauses, finally_node = self._extract_pascal_try_parts(node)
+        self._lower_try_catch(node, body_node, catch_clauses, finally_node)
+
+    def _extract_pascal_try_parts(self, node):
+        """Extract body, catch clauses, and finally from a Pascal try node."""
+        body_node = None
+        catch_clauses = []
+        finally_node = None
+        in_except = False
+        in_finally = False
+
         for child in node.children:
-            if child.is_named:
-                self._lower_stmt(child)
+            if child.type == "kExcept":
+                in_except = True
+                in_finally = False
+                continue
+            if child.type == "kFinally":
+                in_finally = True
+                in_except = False
+                continue
+            if child.type in ("kTry", "kEnd", ";"):
+                continue
+
+            if not in_except and not in_finally and child.type == "statements":
+                body_node = child
+            elif in_except and child.type == "exceptionHandler":
+                id_node = next(
+                    (c for c in child.children if c.type == "identifier"), None
+                )
+                type_node = next(
+                    (c for c in child.children if c.type == "typeref"), None
+                )
+                # The handler body is everything after kDo
+                body_children = [
+                    c
+                    for c in child.children
+                    if c.is_named
+                    and c.type not in ("identifier", "typeref")
+                    and c.type not in _KEYWORD_NOISE
+                ]
+                # Use the first non-identifier/non-typeref named child as body
+                handler_body = body_children[0] if body_children else None
+                catch_clauses.append(
+                    {
+                        "body": handler_body,
+                        "variable": self._node_text(id_node) if id_node else None,
+                        "type": (
+                            self._node_text(type_node) if type_node else "Exception"
+                        ),
+                    }
+                )
+            elif in_finally and child.type == "statements":
+                finally_node = child
+
+        return body_node, catch_clauses, finally_node
 
     # -- Pascal: type declarations (no-op) -----------------------------------------
 
