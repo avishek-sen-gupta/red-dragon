@@ -6,6 +6,7 @@ Language-agnostic — no COBOL-specific logic here.
 
 from __future__ import annotations
 
+import struct
 from typing import Any
 
 from interpreter.cobol.ebcdic_table import EbcdicTable
@@ -390,6 +391,65 @@ def _builtin_string_concat_pair(args: list[Any], vm: Any) -> Any:
     return str(left) + str(right)
 
 
+def _builtin_int_to_binary_bytes(args: list[Any], vm: Any) -> Any:
+    """Pack signed/unsigned integer as big-endian binary bytes.
+
+    Args: [value: int, byte_count: int, signed: bool]
+    Returns: list[int]
+    """
+    if len(args) < 3 or any(_is_symbolic(a) for a in args):
+        return _UNCOMPUTABLE
+    value, byte_count, signed = args[0], args[1], args[2]
+    if not isinstance(value, int) or not isinstance(byte_count, int):
+        return _UNCOMPUTABLE
+    return list(value.to_bytes(byte_count, "big", signed=bool(signed)))
+
+
+def _builtin_binary_bytes_to_int(args: list[Any], vm: Any) -> Any:
+    """Unpack big-endian binary bytes as signed/unsigned integer.
+
+    Args: [byte_list: list[int], signed: bool]
+    Returns: int
+    """
+    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+        return _UNCOMPUTABLE
+    byte_list, signed = args[0], args[1]
+    if not isinstance(byte_list, list):
+        return _UNCOMPUTABLE
+    return int.from_bytes(bytes(byte_list), "big", signed=bool(signed))
+
+
+def _builtin_float_to_bytes(args: list[Any], vm: Any) -> Any:
+    """Pack IEEE 754 float to big-endian bytes.
+
+    Args: [value: float|int, byte_count: int (4 or 8)]
+    Returns: list[int]
+    """
+    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+        return _UNCOMPUTABLE
+    value, byte_count = args[0], args[1]
+    if not isinstance(value, (int, float)) or not isinstance(byte_count, int):
+        return _UNCOMPUTABLE
+    fmt = ">f" if byte_count == 4 else ">d"
+    return list(struct.pack(fmt, float(value)))
+
+
+def _builtin_bytes_to_float(args: list[Any], vm: Any) -> Any:
+    """Unpack big-endian IEEE 754 bytes to float.
+
+    Args: [byte_list: list[int], byte_count: int (4 or 8)]
+    Returns: float
+    """
+    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+        return _UNCOMPUTABLE
+    byte_list, byte_count = args[0], args[1]
+    if not isinstance(byte_list, list) or not isinstance(byte_count, int):
+        return _UNCOMPUTABLE
+    fmt = ">f" if byte_count == 4 else ">d"
+    (result,) = struct.unpack(fmt, bytes(byte_list))
+    return float(result)
+
+
 BYTE_BUILTINS: dict[str, Any] = {
     "__nibble_get": _builtin_nibble_get,
     "__nibble_set": _builtin_nibble_set,
@@ -411,4 +471,8 @@ BYTE_BUILTINS: dict[str, Any] = {
     "__string_replace": _builtin_string_replace,
     "__string_concat": _builtin_string_concat,
     "__string_concat_pair": _builtin_string_concat_pair,
+    "__int_to_binary_bytes": _builtin_int_to_binary_bytes,
+    "__binary_bytes_to_int": _builtin_binary_bytes_to_int,
+    "__float_to_bytes": _builtin_float_to_bytes,
+    "__bytes_to_float": _builtin_bytes_to_float,
 }

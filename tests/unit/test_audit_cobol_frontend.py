@@ -210,16 +210,16 @@ class TestDataDivisionClassify:
             == DataDivisionStatus.HANDLED
         )
 
-    def test_comp_is_bridge_only(self):
+    def test_comp_is_handled(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.CLAUSE_USAGE_COMP.value)
-            == DataDivisionStatus.BRIDGE_ONLY
+            == DataDivisionStatus.HANDLED
         )
 
-    def test_comp1_is_bridge_only(self):
+    def test_comp1_is_handled(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.CLAUSE_USAGE_COMP1.value)
-            == DataDivisionStatus.BRIDGE_ONLY
+            == DataDivisionStatus.HANDLED
         )
 
     def test_sign_is_not_extracted(self):

@@ -20,9 +20,20 @@ from interpreter.cobol.ir_encoders import (
     build_decode_comp3_ir,
     build_encode_alphanumeric_ir,
     build_decode_alphanumeric_ir,
+    build_encode_binary_ir,
+    build_decode_binary_ir,
+    build_encode_float_ir,
+    build_decode_float_ir,
 )
 from interpreter.cobol.zoned_decimal import encode_zoned, decode_zoned
 from interpreter.cobol.comp3 import encode_comp3, decode_comp3
+from interpreter.cobol.binary import encode_binary, decode_binary
+from interpreter.cobol.float_encoding import (
+    encode_comp1,
+    decode_comp1,
+    encode_comp2,
+    decode_comp2,
+)
 from interpreter.cobol.alphanumeric import encode_alphanumeric, decode_alphanumeric
 from interpreter.cobol.data_filters import align_decimal, left_adjust
 
@@ -313,3 +324,195 @@ class TestAlphanumericRoundTripIR:
         decoded = _execute_ir(dec_ir, {"%p_data": encoded})
 
         assert decoded == "20260301"
+
+
+def _byte_count_for_digits(total_digits: int) -> int:
+    """Determine byte count from total digit positions."""
+    if total_digits <= 4:
+        return 2
+    if total_digits <= 9:
+        return 4
+    return 8
+
+
+class TestEncodeBinaryIR:
+    """Validate IR binary encoder against reference implementation."""
+
+    def _run_encode(
+        self,
+        value: str,
+        total_digits: int,
+        decimal_digits: int,
+        signed: bool,
+    ) -> list[int]:
+        digits, negative = _prepare_zoned_digits(value, total_digits, decimal_digits)
+        has_nonzero = any(d != 0 for d in digits)
+        sign_nib = _sign_nibble(signed, negative, has_nonzero)
+        byte_count = _byte_count_for_digits(total_digits)
+
+        ir = build_encode_binary_ir(
+            "enc_bin", total_digits=total_digits, byte_count=byte_count, signed=signed
+        )
+        return _execute_ir(ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+
+    def test_unsigned_small(self):
+        ir_result = self._run_encode("1234", 4, 0, signed=False)
+        ref_result = encode_binary("1234", 4, 0, signed=False)
+        assert bytes(ir_result) == ref_result
+
+    def test_signed_positive(self):
+        ir_result = self._run_encode("1234", 4, 0, signed=True)
+        ref_result = encode_binary("1234", 4, 0, signed=True)
+        assert bytes(ir_result) == ref_result
+
+    def test_signed_negative(self):
+        ir_result = self._run_encode("-1234", 4, 0, signed=True)
+        ref_result = encode_binary("-1234", 4, 0, signed=True)
+        assert bytes(ir_result) == ref_result
+
+    def test_medium_integer(self):
+        ir_result = self._run_encode("12345", 5, 0, signed=False)
+        ref_result = encode_binary("12345", 5, 0, signed=False)
+        assert bytes(ir_result) == ref_result
+
+    def test_zero(self):
+        ir_result = self._run_encode("0", 4, 0, signed=False)
+        ref_result = encode_binary("0", 4, 0, signed=False)
+        assert bytes(ir_result) == ref_result
+
+
+class TestDecodeBinaryIR:
+    """Validate IR binary decoder against reference implementation."""
+
+    def _run_decode(
+        self, data: bytes, byte_count: int, decimal_digits: int, signed: bool
+    ) -> float:
+        ir = build_decode_binary_ir(
+            "dec_bin",
+            byte_count=byte_count,
+            decimal_digits=decimal_digits,
+            signed=signed,
+        )
+        return _execute_ir(ir, {"%p_data": list(data)})
+
+    def test_unsigned_small(self):
+        data = (1234).to_bytes(2, "big", signed=False)
+        assert self._run_decode(data, 2, 0, signed=False) == decode_binary(
+            data, 0, signed=False
+        )
+
+    def test_signed_negative(self):
+        data = (-1234).to_bytes(2, "big", signed=True)
+        assert self._run_decode(data, 2, 0, signed=True) == decode_binary(
+            data, 0, signed=True
+        )
+
+    def test_with_decimal(self):
+        data = (12345).to_bytes(4, "big", signed=False)
+        assert self._run_decode(data, 4, 2, signed=False) == decode_binary(
+            data, 2, signed=False
+        )
+
+
+class TestBinaryRoundTripIR:
+    """Encode via IR, decode via IR — full round trip."""
+
+    def test_round_trip_unsigned(self):
+        digits = [1, 2, 3, 4]
+        sign_nib = 0x0F
+        byte_count = 2
+
+        enc_ir = build_encode_binary_ir(
+            "enc", total_digits=4, byte_count=byte_count, signed=False
+        )
+        encoded = _execute_ir(enc_ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+
+        dec_ir = build_decode_binary_ir(
+            "dec", byte_count=byte_count, decimal_digits=0, signed=False
+        )
+        decoded = _execute_ir(dec_ir, {"%p_data": encoded})
+
+        assert decoded == 1234.0
+
+    def test_round_trip_signed_negative(self):
+        digits = [0, 0, 4, 2]
+        sign_nib = 0x0D
+        byte_count = 2
+
+        enc_ir = build_encode_binary_ir(
+            "enc", total_digits=4, byte_count=byte_count, signed=True
+        )
+        encoded = _execute_ir(enc_ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+
+        dec_ir = build_decode_binary_ir(
+            "dec", byte_count=byte_count, decimal_digits=0, signed=True
+        )
+        decoded = _execute_ir(dec_ir, {"%p_data": encoded})
+
+        assert decoded == -42.0
+
+
+class TestEncodeFloatIR:
+    """Validate IR float encoder against reference implementation."""
+
+    def test_comp1_encode(self):
+        ir = build_encode_float_ir("enc_f", byte_count=4)
+        ir_result = _execute_ir(ir, {"%p_float_value": 3.14})
+        ref_result = encode_comp1("3.14")
+        assert bytes(ir_result) == ref_result
+
+    def test_comp2_encode(self):
+        ir = build_encode_float_ir("enc_f", byte_count=8)
+        ir_result = _execute_ir(ir, {"%p_float_value": 3.14})
+        ref_result = encode_comp2("3.14")
+        assert bytes(ir_result) == ref_result
+
+    def test_comp1_zero(self):
+        ir = build_encode_float_ir("enc_f", byte_count=4)
+        ir_result = _execute_ir(ir, {"%p_float_value": 0.0})
+        ref_result = encode_comp1("0")
+        assert bytes(ir_result) == ref_result
+
+    def test_comp2_negative(self):
+        ir = build_encode_float_ir("enc_f", byte_count=8)
+        ir_result = _execute_ir(ir, {"%p_float_value": -100.5})
+        ref_result = encode_comp2("-100.5")
+        assert bytes(ir_result) == ref_result
+
+
+class TestDecodeFloatIR:
+    """Validate IR float decoder against reference implementation."""
+
+    def test_comp1_decode(self):
+        data = list(encode_comp1("3.14"))
+        ir = build_decode_float_ir("dec_f", byte_count=4)
+        ir_result = _execute_ir(ir, {"%p_data": data})
+        assert abs(ir_result - decode_comp1(bytes(data))) < 1e-5
+
+    def test_comp2_decode(self):
+        data = list(encode_comp2("3.14"))
+        ir = build_decode_float_ir("dec_f", byte_count=8)
+        ir_result = _execute_ir(ir, {"%p_data": data})
+        assert abs(ir_result - decode_comp2(bytes(data))) < 1e-10
+
+
+class TestFloatRoundTripIR:
+    """Encode via IR, decode via IR — full round trip for floats."""
+
+    def test_comp1_round_trip(self):
+        enc_ir = build_encode_float_ir("enc", byte_count=4)
+        encoded = _execute_ir(enc_ir, {"%p_float_value": 42.0})
+
+        dec_ir = build_decode_float_ir("dec", byte_count=4)
+        decoded = _execute_ir(dec_ir, {"%p_data": encoded})
+
+        assert decoded == 42.0
+
+    def test_comp2_round_trip(self):
+        enc_ir = build_encode_float_ir("enc", byte_count=8)
+        encoded = _execute_ir(enc_ir, {"%p_float_value": 3.14159265358979})
+
+        dec_ir = build_decode_float_ir("dec", byte_count=8)
+        decoded = _execute_ir(dec_ir, {"%p_data": encoded})
+
+        assert abs(decoded - 3.14159265358979) < 1e-10
