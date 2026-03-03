@@ -137,7 +137,7 @@ All constructs above produce real IR for proper data-flow analysis. All 15 front
 
 ### COBOL frontend
 
-The COBOL frontend uses the [ProLeap COBOL Parser](https://github.com/uwol/proleap-cobol-parser) via a subprocess bridge (requires JDK 17). It lowers DATA DIVISION fields to byte-addressed memory regions with PIC-driven encoding/decoding, and **32 of 51** PROCEDURE DIVISION statement types to standard IR (24 fully handled + 8 I/O stub types). See the [COBOL frontend design document](docs/frontend-design/cobol.md) for full details.
+The COBOL frontend uses the [ProLeap COBOL Parser](https://github.com/uwol/proleap-cobol-parser) via a subprocess bridge (requires JDK 17). It lowers DATA DIVISION fields to byte-addressed memory regions with PIC-driven encoding/decoding, and **32 of 51** PROCEDURE DIVISION statement types to standard IR (24 fully handled + 8 I/O stub types). Internally, the frontend is decomposed into 14 focused modules (`emit_context`, `field_resolution`, `condition_lowering`, `statement_dispatch`, `lower_data_division`, `lower_procedure`, `lower_perform`, `lower_arithmetic`, `lower_string_inspect`, `lower_search`, `lower_call`, `lower_io`, `figurative_constants`) — `cobol_frontend.py` is a slim ~100-line orchestrator. See the [COBOL frontend design document](docs/frontend-design/cobol.md) for full details.
 
 | Category | Statements |
 |----------|-----------|
