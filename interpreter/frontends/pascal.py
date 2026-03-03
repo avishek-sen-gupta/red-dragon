@@ -96,6 +96,7 @@ class PascalFrontend(BaseFrontend):
     ):
         super().__init__(parser_factory, language, observer)
         self._current_function_name: str = ""
+        self._record_types: set[str] = set()
         self._EXPR_DISPATCH: dict[str, Callable] = {
             "identifier": self._lower_identifier,
             "literalNumber": self._lower_const_literal,
@@ -133,8 +134,8 @@ class PascalFrontend(BaseFrontend):
             "repeat": self._lower_pascal_repeat,
             "declConsts": self._lower_pascal_decl_consts,
             "declConst": self._lower_pascal_decl_const,
-            "declType": self._lower_pascal_noop,
-            "declTypes": self._lower_pascal_noop,
+            "declType": self._lower_pascal_decl_type,
+            "declTypes": self._lower_pascal_decl_types,
             "declUses": self._lower_pascal_noop,
             "try": self._lower_pascal_try,
             "exceptionHandler": self._lower_pascal_exception_handler,
@@ -213,12 +214,21 @@ class PascalFrontend(BaseFrontend):
             )
             self._emit(Opcode.STORE_VAR, operands=[var_name, arr_reg], node=node)
         else:
+            type_name = self._pascal_var_type_name(type_node) if type_node else ""
             val_reg = self._fresh_reg()
-            self._emit(
-                Opcode.CONST,
-                result_reg=val_reg,
-                operands=[self.NONE_LITERAL],
-            )
+            if type_name in self._record_types:
+                self._emit(
+                    Opcode.CALL_FUNCTION,
+                    result_reg=val_reg,
+                    operands=[type_name],
+                    node=node,
+                )
+            else:
+                self._emit(
+                    Opcode.CONST,
+                    result_reg=val_reg,
+                    operands=[self.NONE_LITERAL],
+                )
             self._emit(Opcode.STORE_VAR, operands=[var_name, val_reg], node=node)
 
     def _pascal_array_size(self, type_node) -> int:
@@ -240,6 +250,14 @@ class PascalFrontend(BaseFrontend):
             return hi - lo + 1
         except ValueError:
             return 0
+
+    def _pascal_var_type_name(self, type_node) -> str:
+        """Extract the type name from a Pascal type node (type > typeref > identifier)."""
+        typeref = next((c for c in type_node.children if c.type == "typeref"), None)
+        if typeref is None:
+            return ""
+        id_node = next((c for c in typeref.children if c.type == "identifier"), None)
+        return self._node_text(id_node) if id_node else ""
 
     # -- Pascal: assignment (identifier := expression) -----------------------------
 
@@ -292,6 +310,19 @@ class PascalFrontend(BaseFrontend):
                     operands=[self._node_text(target), val_reg],
                     node=node,
                 )
+        elif target.type == "exprDot":
+            dot_named = [
+                c
+                for c in target.children
+                if c.is_named and c.type not in _KEYWORD_NOISE
+            ]
+            obj_reg = self._lower_expr(dot_named[0])
+            field_name = self._node_text(dot_named[-1])
+            self._emit(
+                Opcode.STORE_FIELD,
+                operands=[obj_reg, field_name, val_reg],
+                node=node,
+            )
         else:
             target_name = self._node_text(target)
             if (
@@ -1095,8 +1126,46 @@ class PascalFrontend(BaseFrontend):
         """Lower `inherited Create` as statement."""
         self._lower_pascal_inherited_expr(node)
 
-    # -- Pascal: type declarations (no-op) -----------------------------------------
+    # -- Pascal: type declarations -------------------------------------------------
+
+    def _lower_pascal_decl_types(self, node):
+        """Lower declTypes — iterate individual declType children."""
+        for child in node.children:
+            if child.type == "declType":
+                self._lower_pascal_decl_type(child)
+
+    def _lower_pascal_decl_type(self, node):
+        """Lower declType — emit CLASS_REF for record types, skip others."""
+        id_node = next((c for c in node.children if c.type == "identifier"), None)
+        class_node = next((c for c in node.children if c.type == "declClass"), None)
+
+        if id_node is None or class_node is None:
+            return
+
+        # Only handle record types
+        has_record = any(c.type == "kRecord" for c in class_node.children)
+        if not has_record:
+            return
+
+        type_name = self._node_text(id_node)
+        self._record_types.add(type_name)
+        class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{type_name}")
+        end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{type_name}")
+
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
+        self._emit(Opcode.LABEL, label=class_label)
+        self._emit(Opcode.LABEL, label=end_label)
+
+        cls_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=cls_reg,
+            operands=[
+                constants.CLASS_REF_TEMPLATE.format(name=type_name, label=class_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[type_name, cls_reg])
 
     def _lower_pascal_noop(self, node):
-        """No-op handler for declType/declTypes — type declarations produce no IR."""
+        """No-op handler — skips nodes that produce no IR."""
         logger.debug("Skipping %s at %s (no-op)", node.type, self._source_loc(node))

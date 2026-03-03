@@ -1160,3 +1160,20 @@ Also fixed Ruby's `raise` to emit `THROW` instead of `CALL_FUNCTION`.
 **Decision:** Apply three frontend fixes and add a companion Rosetta test: (1) Fix Python `_lower_lambda` to use `FUNC_LABEL_PREFIX` in label generation and `FUNC_REF_TEMPLATE.format()` for the function reference, matching every other frontend; (2) Fix Kotlin `_lower_lambda_literal` to extract `lambda_parameters → variable_declaration → simple_identifier` as params (emitting `SYMBOLIC param:name` + `STORE_VAR`), and implicitly return the last expression in the `statements` body; (3) Fix Scala `_lower_lambda_expr` to extract `bindings → binding → identifier` as params, and implicitly return the last body expression. Add `test_rosetta_closures_lambda.py` exercising `make_adder(10)(5) = 15` for all 5 lambda-capable languages (Python, JS, TS, Kotlin, Scala) with clean lowering, cross-language consistency, and VM execution assertions.
 
 **Consequences:** Lambda/arrow closures now work correctly for Python, Kotlin, and Scala. The new Rosetta test provides 17 test cases covering the lambda form across 5 languages. The implicit-return-last-expression pattern in Kotlin and Scala lambdas matches the language semantics faithfully.
+
+---
+
+### ADR-061: Upgrade Rosetta classes test to genuine class/struct operations (2026-03-04)
+
+**Context:** `test_rosetta_classes.py` claimed to test "class instantiation, field access, and method calls" but 8 of 15 language programs (Java, C#, Scala, Kotlin, Go, C, C++, Pascal) used plain variable arithmetic with zero class/object operations. The VM itself was correct (Python proved this); all bugs were in the frontends.
+
+**Decision:** Fix 7 frontends and upgrade all 8 programs to genuine class/struct operations:
+
+- **Java/C#/Scala** (Phase 1): Methods didn't declare `this` as a parameter. The VM's `_handle_call_method` binds the receiver object to `params[0]`, so methods must have `SYMBOLIC param:this` + `STORE_VAR this` at their start. Added `_emit_this_param()` and `_has_static_modifier()` to each frontend, injecting `param:this` only for non-static methods. C# additionally needed `"this"` added to `_EXPR_DISPATCH` (tree-sitter produces node type `"this"`, not `"this_expression"`).
+- **Go/C/C++** (Phase 2): Go already worked; just upgraded the test program. C's `_lower_declaration` emitted `CONST None` for `struct Counter c;` — added `_extract_struct_type()` to detect `struct_specifier` and emit `CALL_FUNCTION Counter`. C++ extended this to also detect bare `type_identifier` nodes (C++ uses `Counter c;` without `struct` keyword).
+- **Kotlin** (Phase 3): Three bugs: (1) `_node_text(navigation_suffix)` returned `.count` with leading dot — added `_extract_nav_field_name()` to unwrap to inner `simple_identifier`; (2) assignment to `directly_assignable_expression` with `navigation_suffix` fell through to `STORE_VAR` — added explicit branch emitting `STORE_FIELD`; (3) no `param:this` injection for class methods.
+- **Pascal** (Phase 4): Three bugs: (1) `declType` was a no-op — added `_lower_pascal_decl_type` emitting `CLASS_REF` for record types; (2) record-typed variables emitted `CONST None` — track `_record_types` set and emit `CALL_FUNCTION` for allocation; (3) `exprDot` assignment targets fell through to `STORE_VAR "c.count"` — added `exprDot` branch in `_lower_pascal_assignment` emitting `STORE_FIELD`.
+
+Programs are organised in three tiers: Tier 1 (class with methods: Python, Java, C#, Kotlin, Scala), Tier 2 (object/struct field access: JS, TS, PHP, Ruby, Lua, Go, C, C++, Rust), Tier 3 (record field access: Pascal).
+
+**Consequences:** All 15 languages now exercise genuine class/struct/record operations. The test validates real field access and method dispatch rather than plain variable arithmetic. Seven frontends received targeted fixes that also benefit any future programs using these patterns.

@@ -108,27 +108,52 @@ class CFrontend(BaseFrontend):
 
     # -- C: declaration ------------------------------------------------
 
+    def _extract_struct_type(self, node) -> str:
+        """Return the struct type name if *node* has a struct_specifier, else ''."""
+        for child in node.children:
+            if child.type == "struct_specifier":
+                type_node = child.child_by_field_name("name")
+                if type_node is None:
+                    type_node = next(
+                        (c for c in child.children if c.type == "type_identifier"),
+                        None,
+                    )
+                if type_node:
+                    return self._node_text(type_node)
+        return ""
+
     def _lower_declaration(self, node):
         """Lower a C declaration: type declarator(s) with optional initializers."""
+        struct_type = self._extract_struct_type(node)
         for child in node.children:
             if child.type == "init_declarator":
-                self._lower_init_declarator(child)
+                self._lower_init_declarator(child, struct_type=struct_type)
             elif child.type == "identifier":
-                # Declaration without initializer: int x;
                 var_name = self._node_text(child)
-                val_reg = self._fresh_reg()
-                self._emit(
-                    Opcode.CONST,
-                    result_reg=val_reg,
-                    operands=[self.NONE_LITERAL],
-                )
+                if struct_type:
+                    # struct variable: allocate an object
+                    val_reg = self._fresh_reg()
+                    self._emit(
+                        Opcode.CALL_FUNCTION,
+                        result_reg=val_reg,
+                        operands=[struct_type],
+                        node=node,
+                    )
+                else:
+                    # Declaration without initializer: int x;
+                    val_reg = self._fresh_reg()
+                    self._emit(
+                        Opcode.CONST,
+                        result_reg=val_reg,
+                        operands=[self.NONE_LITERAL],
+                    )
                 self._emit(
                     Opcode.STORE_VAR,
                     operands=[var_name, val_reg],
                     node=node,
                 )
 
-    def _lower_init_declarator(self, node):
+    def _lower_init_declarator(self, node, struct_type: str = ""):
         """Lower init_declarator (fields: declarator, value)."""
         decl_node = node.child_by_field_name("declarator")
         value_node = node.child_by_field_name("value")
@@ -137,6 +162,14 @@ class CFrontend(BaseFrontend):
 
         if value_node:
             val_reg = self._lower_expr(value_node)
+        elif struct_type:
+            val_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CALL_FUNCTION,
+                result_reg=val_reg,
+                operands=[struct_type],
+                node=node,
+            )
         else:
             val_reg = self._fresh_reg()
             self._emit(
