@@ -335,6 +335,104 @@ class TestBuildDataLayoutSignClause:
         assert fl.byte_length == 5  # embedded, no extra byte
 
 
+class TestBuildDataLayoutRenames:
+    def test_simple_renames(self):
+        """Level 66 RENAMES single field — offset and length match the target."""
+        fields = [
+            CobolField(
+                name="WS-REC",
+                level=1,
+                pic="",
+                usage="DISPLAY",
+                offset=0,
+                children=[
+                    CobolField(
+                        name="WS-FIRST",
+                        level=5,
+                        pic="X(10)",
+                        usage="DISPLAY",
+                        offset=0,
+                    ),
+                    CobolField(
+                        name="WS-LAST",
+                        level=5,
+                        pic="X(10)",
+                        usage="DISPLAY",
+                        offset=10,
+                    ),
+                ],
+            ),
+            CobolField(
+                name="WS-ALIAS",
+                level=66,
+                pic="",
+                usage="DISPLAY",
+                offset=0,
+                renames_from="WS-FIRST",
+            ),
+        ]
+        layout = build_data_layout(fields)
+        fl = layout.fields["WS-ALIAS"]
+        assert fl.offset == 0
+        assert fl.byte_length == 10
+        assert fl.renames_from == "WS-FIRST"
+        assert fl.renames_thru == ""
+        # RENAMES does not increase total_bytes
+        assert layout.total_bytes == 20
+
+    def test_renames_thru(self):
+        """Level 66 RENAMES A THRU C — offset = A.offset, length spans through C."""
+        fields = [
+            CobolField(
+                name="WS-REC",
+                level=1,
+                pic="",
+                usage="DISPLAY",
+                offset=0,
+                children=[
+                    CobolField(
+                        name="WS-A",
+                        level=5,
+                        pic="X(5)",
+                        usage="DISPLAY",
+                        offset=0,
+                    ),
+                    CobolField(
+                        name="WS-B",
+                        level=5,
+                        pic="X(3)",
+                        usage="DISPLAY",
+                        offset=5,
+                    ),
+                    CobolField(
+                        name="WS-C",
+                        level=5,
+                        pic="X(7)",
+                        usage="DISPLAY",
+                        offset=8,
+                    ),
+                ],
+            ),
+            CobolField(
+                name="WS-SPAN",
+                level=66,
+                pic="",
+                usage="DISPLAY",
+                offset=0,
+                renames_from="WS-A",
+                renames_thru="WS-C",
+            ),
+        ]
+        layout = build_data_layout(fields)
+        fl = layout.fields["WS-SPAN"]
+        assert fl.offset == 0  # WS-A offset
+        assert fl.byte_length == 15  # 0 + 5 + 3 + 7 = 15 (through end of WS-C)
+        assert fl.renames_from == "WS-A"
+        assert fl.renames_thru == "WS-C"
+        # RENAMES does not increase total_bytes
+        assert layout.total_bytes == 15
+
+
 class TestBuildDataLayoutFieldValue:
     def test_field_with_initial_value(self):
         fields = [

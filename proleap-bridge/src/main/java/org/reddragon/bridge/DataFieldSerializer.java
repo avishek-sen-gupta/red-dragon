@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntry;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryCondition;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryGroup;
+import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryRename;
 import io.proleap.cobol.asg.metamodel.data.datadescription.OccursClause;
 import io.proleap.cobol.asg.metamodel.data.datadescription.JustifiedClause;
 import io.proleap.cobol.asg.metamodel.data.datadescription.SignClause;
@@ -60,6 +61,10 @@ public final class DataFieldSerializer {
                 if (!isRedefines) {
                     runningOffset += computeByteLength(group);
                 }
+            } else if (entry instanceof DataDescriptionEntryRename rename) {
+                JsonObject field = instance.serializeRename(rename);
+                fields.add(field);
+                // RENAMES does not allocate storage — no offset increment
             }
         }
         return fields;
@@ -141,6 +146,34 @@ public final class DataFieldSerializer {
     }
 
     /**
+     * Serializes a level-66 RENAMES entry to a CobolField JSON object.
+     * RENAMES does not allocate storage — offset is set to 0 (resolved in Python).
+     */
+    private JsonObject serializeRename(DataDescriptionEntryRename rename) {
+        JsonObject obj = new JsonObject();
+        String fieldName = disambiguateFiller(rename.getName());
+        obj.addProperty("name", fieldName);
+        obj.addProperty("level", 66);
+        obj.addProperty("pic", "");
+        obj.addProperty("usage", "DISPLAY");
+        obj.addProperty("offset", 0);
+
+        if (rename.getRenamesClause() != null) {
+            if (rename.getRenamesClause().getFrom() != null) {
+                obj.addProperty("renames_from",
+                        rename.getRenamesClause().getFrom().getName());
+            }
+            if (rename.getRenamesClause().getTo() != null) {
+                obj.addProperty("renames_thru",
+                        rename.getRenamesClause().getTo().getName());
+            }
+        }
+
+        LOG.fine("Serialized RENAMES field: " + fieldName);
+        return obj;
+    }
+
+    /**
      * Disambiguates FILLER field names by appending a sequential counter.
      * "FILLER" becomes "FILLER_1", "FILLER_2", etc.
      */
@@ -180,6 +213,10 @@ public final class DataFieldSerializer {
                 if (childGroup.getRedefinesClause() == null) {
                     childOffset += computeByteLength(childGroup);
                 }
+            } else if (child instanceof DataDescriptionEntryRename rename) {
+                JsonObject renameObj = serializeRename(rename);
+                childArray.add(renameObj);
+                // RENAMES does not allocate storage
             }
         }
         return childArray;

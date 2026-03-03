@@ -945,3 +945,19 @@ Benefits:
 - `audit_cobol_frontend.py`: All four features added to `DD_BRIDGE_EXTRACTED`, `DD_PYTHON_MODELLED`, `DD_FRONTEND_HANDLED`.
 
 **Consequences:** 35+ new unit tests covering all sign variants (leading/trailing, embedded/separate, encode/decode, round-trip), justified encoding (short/exact/over/empty), synchronized alignment, and OCCURS DEPENDING ON metadata propagation. Four features move from NOT_EXTRACTED to HANDLED in the DATA DIVISION audit. All existing tests pass unchanged.
+
+---
+
+### ADR-044: Level-66 RENAMES support — contiguous field aliasing (2026-03-03)
+
+**Context:** COBOL level-66 RENAMES creates an alternative name for a contiguous range of fields within a group. For example, `66 WS-FULL-NAME RENAMES WS-FIRST THRU WS-LAST` creates a field overlaying from WS-FIRST through WS-LAST. The DATA DIVISION audit showed ENTRY_RENAME_66 as NOT_EXTRACTED.
+
+**Decision:** Implement RENAMES as a read-only alias — no new storage allocation. The bridge extracts `renames_from` (the FROM field name) and optionally `renames_thru` (the TO field name for THRU syntax) from `DataDescriptionEntryRename`. The Python model carries these as string fields on `CobolField`. The data layout builder uses a two-pass approach: first pass flattens all non-RENAMES fields, second pass resolves RENAMES fields by looking up the from/thru fields in the already-computed layout map. Offset = from_field.offset. Byte length = (thru_field.offset + thru_field.byte_length) - from_field.offset. For simple RENAMES (no THRU), thru defaults to from. RENAMES fields are always typed as ALPHANUMERIC. RENAMES does NOT increase `total_bytes`.
+
+**Changes:**
+- `DataFieldSerializer.java`: Added `serializeRename()` method, `DataDescriptionEntryRename` handling in `serializeEntries()` and `serializeChildren()`.
+- `asg_types.py`: `CobolField` gains `renames_from`, `renames_thru` string fields.
+- `data_layout.py`: `FieldLayout` gains `renames_from`, `renames_thru`. New `_resolve_renames()` helper. `build_data_layout()` uses two-pass approach.
+- `audit_cobol_frontend.py`: `ENTRY_RENAME_66` added to all three coverage sets.
+
+**Consequences:** ENTRY_RENAME_66 moves from NOT_EXTRACTED to HANDLED. Six new unit tests verify round-trip serialization, layout resolution (simple and THRU), and audit classification. All existing tests pass unchanged.

@@ -267,6 +267,48 @@ class TestCobolField:
         assert field.sign_leading is False
         assert field.sign_separate is False
 
+    def test_field_with_renames_from(self):
+        data = {
+            "name": "WS-ALIAS",
+            "level": 66,
+            "pic": "",
+            "usage": "DISPLAY",
+            "offset": 0,
+            "renames_from": "WS-FIRST",
+        }
+        field = CobolField.from_dict(data)
+        assert field.renames_from == "WS-FIRST"
+        assert field.renames_thru == ""
+        assert CobolField.from_dict(field.to_dict()) == field
+
+    def test_field_with_renames_thru(self):
+        data = {
+            "name": "WS-FULL-NAME",
+            "level": 66,
+            "pic": "",
+            "usage": "DISPLAY",
+            "offset": 0,
+            "renames_from": "WS-FIRST",
+            "renames_thru": "WS-LAST",
+        }
+        field = CobolField.from_dict(data)
+        assert field.renames_from == "WS-FIRST"
+        assert field.renames_thru == "WS-LAST"
+        assert CobolField.from_dict(field.to_dict()) == field
+
+    def test_field_without_renames_defaults(self):
+        data = {
+            "name": "WS-NORMAL",
+            "level": 5,
+            "pic": "X(10)",
+            "offset": 0,
+        }
+        field = CobolField.from_dict(data)
+        assert field.renames_from == ""
+        assert field.renames_thru == ""
+        assert "renames_from" not in field.to_dict()
+        assert "renames_thru" not in field.to_dict()
+
 
 class TestCobolStatement:
     def test_move_statement(self):

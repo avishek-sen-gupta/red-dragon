@@ -137,7 +137,7 @@ All constructs above produce real IR for proper data-flow analysis. All 15 front
 
 ### COBOL frontend
 
-The COBOL frontend uses the [ProLeap COBOL Parser](https://github.com/uwol/proleap-cobol-parser) via a subprocess bridge (requires JDK 17). It lowers DATA DIVISION fields to byte-addressed memory regions with PIC-driven encoding/decoding, SIGN IS LEADING/TRAILING [SEPARATE CHARACTER] support, JUSTIFIED RIGHT alignment, SYNCHRONIZED natural word boundary alignment, OCCURS DEPENDING ON variable-length arrays, level-88 condition name expansion (single-value, multi-value OR, and THRU range conditions), FILLER field disambiguation, multi-value VALUE clauses, and **32 of 51** PROCEDURE DIVISION statement types to standard IR (24 fully handled + 8 I/O stub types). Internally, the frontend is decomposed into 16 focused modules (`emit_context`, `field_resolution`, `condition_lowering`, `condition_name`, `condition_name_index`, `statement_dispatch`, `lower_data_division`, `lower_procedure`, `lower_perform`, `lower_arithmetic`, `lower_string_inspect`, `lower_search`, `lower_call`, `lower_io`, `figurative_constants`, `data_layout`) — `cobol_frontend.py` is a slim ~100-line orchestrator. See the [COBOL frontend design document](docs/frontend-design/cobol.md) for full details.
+The COBOL frontend uses the [ProLeap COBOL Parser](https://github.com/uwol/proleap-cobol-parser) via a subprocess bridge (requires JDK 17). It lowers DATA DIVISION fields to byte-addressed memory regions with PIC-driven encoding/decoding, SIGN IS LEADING/TRAILING [SEPARATE CHARACTER] support, JUSTIFIED RIGHT alignment, SYNCHRONIZED natural word boundary alignment, OCCURS DEPENDING ON variable-length arrays, level-66 RENAMES field aliasing (simple and THRU range), level-88 condition name expansion (single-value, multi-value OR, and THRU range conditions), FILLER field disambiguation, multi-value VALUE clauses, and **32 of 51** PROCEDURE DIVISION statement types to standard IR (24 fully handled + 8 I/O stub types). Internally, the frontend is decomposed into 16 focused modules (`emit_context`, `field_resolution`, `condition_lowering`, `condition_name`, `condition_name_index`, `statement_dispatch`, `lower_data_division`, `lower_procedure`, `lower_perform`, `lower_arithmetic`, `lower_string_inspect`, `lower_search`, `lower_call`, `lower_io`, `figurative_constants`, `data_layout`) — `cobol_frontend.py` is a slim ~100-line orchestrator. See the [COBOL frontend design document](docs/frontend-design/cobol.md) for full details.
 
 | Category | Statements |
 |----------|-----------|
@@ -389,7 +389,7 @@ The **Exercism suite** (`tests/unit/exercism/`) pulls canonical test data from [
 
 ### COBOL frontend tests
 
-The COBOL test suite covers ASG round-trip, typed statement hierarchy (32 types), PIC parsing, data layout, frontend lowering, PERFORM loop variants, section PERFORM, SEARCH, STRING/UNSTRING/INSPECT, CALL/ALTER/ENTRY/CANCEL lowering, I/O provider (NullIOProvider/StubIOProvider with REWRITE/START/DELETE and executor integration), parser bridge, numeric encoding (COMP-3 packed BCD, COMP/BINARY big-endian two's complement, COMP-1/COMP-2 IEEE 754 floats), SIGN clause variants (leading/trailing, embedded/separate), JUSTIFIED RIGHT alignment, SYNCHRONIZED natural alignment, OCCURS DEPENDING ON metadata, level-88 condition name expansion (single-value, multi-value OR, THRU range, mixed discrete+range), condition name index, FILLER disambiguation, multi-value VALUE clauses, and end-to-end fixture tests.
+The COBOL test suite covers ASG round-trip, typed statement hierarchy (32 types), PIC parsing, data layout, frontend lowering, PERFORM loop variants, section PERFORM, SEARCH, STRING/UNSTRING/INSPECT, CALL/ALTER/ENTRY/CANCEL lowering, I/O provider (NullIOProvider/StubIOProvider with REWRITE/START/DELETE and executor integration), parser bridge, numeric encoding (COMP-3 packed BCD, COMP/BINARY big-endian two's complement, COMP-1/COMP-2 IEEE 754 floats), SIGN clause variants (leading/trailing, embedded/separate), JUSTIFIED RIGHT alignment, SYNCHRONIZED natural alignment, OCCURS DEPENDING ON metadata, level-66 RENAMES field aliasing (simple and THRU range), level-88 condition name expansion (single-value, multi-value OR, THRU range, mixed discrete+range), condition name index, FILLER disambiguation, multi-value VALUE clauses, and end-to-end fixture tests.
 
 ### COBOL integration tests
 
@@ -397,7 +397,7 @@ The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercis
 
 ### Test totals
 
-**8045 tests** (7994 unit + 48 integration passed, 3 xfailed) — all with zero LLM calls.
+**8051 tests** (8000 unit + 48 integration passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 
