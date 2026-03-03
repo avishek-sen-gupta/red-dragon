@@ -119,7 +119,7 @@ public final class DataFieldSerializer {
      * "FILLER" becomes "FILLER_1", "FILLER_2", etc.
      */
     private String disambiguateFiller(String name) {
-        if ("FILLER".equalsIgnoreCase(name)) {
+        if (name == null || "FILLER".equalsIgnoreCase(name)) {
             fillerCount++;
             return "FILLER_" + fillerCount;
         }
@@ -260,12 +260,19 @@ public final class DataFieldSerializer {
     public static int computeElementSize(DataDescriptionEntryGroup group) {
         List<DataDescriptionEntry> children = group.getDataDescriptionEntries();
         if (children != null && !children.isEmpty()) {
-            return children.stream()
+            // Only treat as group item if there are actual DataDescriptionEntryGroup children.
+            // Level-88 condition entries (DataDescriptionEntryCondition) are not real children
+            // for size purposes — they don't occupy storage.
+            List<DataDescriptionEntryGroup> groupChildren = children.stream()
                     .filter(c -> c instanceof DataDescriptionEntryGroup)
                     .map(c -> (DataDescriptionEntryGroup) c)
                     .filter(c -> c.getRedefinesClause() == null)
-                    .mapToInt(DataFieldSerializer::computeByteLength)
-                    .sum();
+                    .collect(java.util.stream.Collectors.toList());
+            if (!groupChildren.isEmpty()) {
+                return groupChildren.stream()
+                        .mapToInt(DataFieldSerializer::computeByteLength)
+                        .sum();
+            }
         }
         return computePicByteLength(extractPic(group), extractUsage(group));
     }
