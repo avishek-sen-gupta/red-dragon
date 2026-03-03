@@ -335,9 +335,10 @@ Functions compose hierarchically: `dump_ir` calls `lower_source`; `dump_cfg` and
 ## Testing
 
 ```bash
-poetry run pytest tests/ -v          # all tests
+poetry run pytest tests/ -v          # all tests (parallel by default via pytest-xdist)
 poetry run pytest tests/unit/ -v     # unit tests only
 poetry run pytest tests/integration/ -v  # integration tests only
+poetry run pytest tests/ -n 0 -v     # disable parallel execution
 ```
 
 Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures (including mutation persistence and shared environments), symbolic execution, factory routing, and the composable API layer.
