@@ -345,7 +345,7 @@ Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integrati
 
 ### Rosetta cross-language suite
 
-The **Rosetta suite** (`tests/unit/rosetta/`) implements 12 cross-language test sets (8 algorithms + closures + classes + exceptions + destructuring) and verifies they produce clean, structurally consistent IR. 11 sets cover all 15 languages; the destructuring set covers the 5 languages with dedicated destructuring lowering (Python, JavaScript, TypeScript, Rust, Scala). Each problem tests:
+The **Rosetta suite** (`tests/unit/rosetta/`) implements 12 cross-language test sets (8 algorithms + closures + classes + exceptions + destructuring) and verifies they produce clean, structurally consistent IR. 11 sets cover all 15 languages; the destructuring set covers the 6 languages with dedicated destructuring lowering (Python, JavaScript, TypeScript, Rust, Scala, Kotlin). Each problem tests:
 
 - Entry label presence and minimum instruction count
 - Zero unsupported `SYMBOLIC` nodes
@@ -397,7 +397,7 @@ The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercis
 
 ### Test totals
 
-**8288 tests** (8226 unit + 62 integration passed, 4 skipped, 3 xfailed) — all with zero LLM calls.
+**8292 tests** (8230 unit + 62 integration passed, 4 skipped, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 

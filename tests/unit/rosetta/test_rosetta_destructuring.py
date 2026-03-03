@@ -1,18 +1,16 @@
-"""Rosetta test: genuine destructuring across 5 languages with dedicated lowering.
+"""Rosetta test: genuine destructuring across 6 languages with dedicated lowering.
 
 Verifies that languages with dedicated destructuring lowering methods emit
 LOAD_INDEX opcodes — proving the destructuring code path was taken, not just
 manual array indexing.
 
-5 of the 15 deterministic frontends have destructuring lowering and are tested:
+6 of the 15 deterministic frontends have destructuring lowering:
   Python       — _lower_tuple_unpack
   JavaScript   — _lower_array_destructure
   TypeScript   — inherited from JS
   Rust         — _lower_tuple_destructure
   Scala        — _lower_scala_tuple_destructure
-
-Kotlin is excluded for now (its _lower_multi_variable_destructure emits correct
-IR but listOf/arrayOf/Pair produce unresolved call_function in the VM).
+  Kotlin       — _lower_multi_variable_destructure (uses arrayOf builtin)
 
     a, b = [10, 5]   (or language equivalent)
     answer = a + b    → 15
@@ -31,7 +29,7 @@ from tests.unit.rosetta.conftest import (
 )
 
 # ---------------------------------------------------------------------------
-# Programs: destructuring in 5 languages with dedicated lowering
+# Programs: destructuring in 6 languages with dedicated lowering
 # ---------------------------------------------------------------------------
 
 PROGRAMS: dict[str, str] = {
@@ -56,6 +54,11 @@ object M {
   val (a, b) = (10, 5)
   val answer = a + b
 }
+""",
+    "kotlin": """\
+val arr = arrayOf(10, 5)
+val (a, b) = arr
+val answer = a + b
 """,
 }
 
@@ -99,7 +102,7 @@ class TestDestructuringLowering:
 
 
 # ---------------------------------------------------------------------------
-# Cross-language consistency tests (5 languages only)
+# Cross-language consistency tests (6 languages only)
 # ---------------------------------------------------------------------------
 
 
@@ -109,7 +112,7 @@ class TestDestructuringCrossLanguage:
         return {lang: parse_for_language(lang, PROGRAMS[lang]) for lang in PROGRAMS}
 
     def test_all_destructuring_languages_covered(self):
-        expected = {"python", "javascript", "typescript", "rust", "scala"}
+        expected = {"python", "javascript", "typescript", "rust", "scala", "kotlin"}
         assert set(PROGRAMS.keys()) == expected
 
     def test_cross_language_load_index(self, all_results):
@@ -122,7 +125,7 @@ class TestDestructuringCrossLanguage:
 
 
 # ---------------------------------------------------------------------------
-# VM execution tests (parametrized over 5 destructuring languages)
+# VM execution tests (parametrized over 6 destructuring languages)
 # ---------------------------------------------------------------------------
 
 
