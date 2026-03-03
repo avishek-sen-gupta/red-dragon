@@ -53,18 +53,25 @@ c.increment()
 answer = c.get_value()
 """,
     "javascript": """\
-let c = {count: 0};
-c.count = c.count + 1;
-c.count = c.count + 1;
-c.count = c.count + 1;
-let answer = c.count;
+class Counter {
+    constructor() { this.count = 0; }
+    increment() { this.count = this.count + 1; }
+    getValue() { return this.count; }
+}
+let c = new Counter();
+c.increment(); c.increment(); c.increment();
+let answer = c.getValue();
 """,
     "typescript": """\
-let c = {count: 0};
-c.count = c.count + 1;
-c.count = c.count + 1;
-c.count = c.count + 1;
-let answer: number = c.count;
+class Counter {
+    count: number;
+    constructor() { this.count = 0; }
+    increment(): void { this.count = this.count + 1; }
+    getValue(): number { return this.count; }
+}
+let c = new Counter();
+c.increment(); c.increment(); c.increment();
+let answer: number = c.getValue();
 """,
     "java": """\
 class Counter {
@@ -110,12 +117,15 @@ func main() {
 """,
     "php": """\
 <?php
-$c = new stdClass();
-$c->count = 0;
-$c->count = $c->count + 1;
-$c->count = $c->count + 1;
-$c->count = $c->count + 1;
-$answer = $c->count;
+class Counter {
+    public $count;
+    function __construct() { $this->count = 0; }
+    function increment() { $this->count = $this->count + 1; }
+    function getValue() { return $this->count; }
+}
+$c = new Counter();
+$c->increment(); $c->increment(); $c->increment();
+$answer = $c->getValue();
 ?>
 """,
     "csharp": """\

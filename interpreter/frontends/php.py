@@ -513,6 +513,22 @@ class PhpFrontend(BaseFrontend):
 
     # -- PHP: method declaration -----------------------------------------------
 
+    def _emit_this_param(self):
+        """Emit ``SYMBOLIC param:$this`` + ``STORE_VAR $this`` for instance methods."""
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=self._fresh_reg(),
+            operands=[f"{constants.PARAM_PREFIX}$this"],
+        )
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=["$this", f"%{self._reg_counter - 1}"],
+        )
+
+    def _has_static_modifier(self, node) -> bool:
+        """Return True if *node* has a ``static_modifier`` child."""
+        return any(c.type == "static_modifier" for c in node.children)
+
     def _lower_php_method_decl(self, node):
         name_node = node.child_by_field_name("name")
         params_node = node.child_by_field_name("parameters")
@@ -524,6 +540,9 @@ class PhpFrontend(BaseFrontend):
 
         self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
+
+        if not self._has_static_modifier(node):
+            self._emit_this_param()
 
         if params_node:
             self._lower_php_params(params_node)
@@ -764,20 +783,29 @@ class PhpFrontend(BaseFrontend):
     # -- PHP: object creation (new ClassName(...)) -----------------------------
 
     def _lower_php_object_creation(self, node) -> str:
+        """Lower ``new Foo(args)`` → NEW_OBJECT + CALL_METHOD('__construct')."""
         name_node = node.child_by_field_name("name")
         if name_node is None:
             name_node = next((c for c in node.children if c.type == "name"), None)
         args_node = next((c for c in node.children if c.type == "arguments"), None)
         arg_regs = self._extract_call_args_unwrap(args_node) if args_node else []
         type_name = self._node_text(name_node) if name_node else "Object"
-        reg = self._fresh_reg()
+
+        obj_reg = self._fresh_reg()
         self._emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=reg,
-            operands=[type_name] + arg_regs,
+            Opcode.NEW_OBJECT,
+            result_reg=obj_reg,
+            operands=[type_name],
             node=node,
         )
-        return reg
+        ctor_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CALL_METHOD,
+            result_reg=ctor_reg,
+            operands=[obj_reg, "__construct"] + arg_regs,
+            node=node,
+        )
+        return obj_reg
 
     # -- PHP: array creation ---------------------------------------------------
 

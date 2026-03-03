@@ -681,6 +681,22 @@ class JavaScriptFrontend(BaseFrontend):
         )
         self._emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
 
+    def _emit_this_param(self):
+        """Emit ``SYMBOLIC param:this`` + ``STORE_VAR this`` for instance methods."""
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=self._fresh_reg(),
+            operands=[f"{constants.PARAM_PREFIX}this"],
+        )
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=["this", f"%{self._reg_counter - 1}"],
+        )
+
+    def _has_static_modifier(self, node) -> bool:
+        """Return True if *node* has a ``static`` child token."""
+        return any(c.type == "static" for c in node.children)
+
     def _lower_method_def(self, node):
         name_node = node.child_by_field_name("name")
         params_node = node.child_by_field_name("parameters")
@@ -692,6 +708,9 @@ class JavaScriptFrontend(BaseFrontend):
 
         self._emit(Opcode.BRANCH, label=end_label)
         self._emit(Opcode.LABEL, label=func_label)
+
+        if not self._has_static_modifier(node):
+            self._emit_this_param()
 
         if params_node:
             self._lower_params(params_node)
