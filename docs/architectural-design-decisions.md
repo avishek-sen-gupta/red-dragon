@@ -1074,3 +1074,13 @@ Also fixed Ruby's `raise` to emit `THROW` instead of `CALL_FUNCTION`.
 3. **JavaScript `new` expression** (`_lower_new_expression` in `javascript.py`): Return the `NEW_OBJECT` register (object address) instead of the `CALL_METHOD` register (constructor return value).
 
 **Consequences:** Class instantiation now works for Java (constructor dispatched, `this` bound, fields set), C#, Scala, and JavaScript. Eight new unit tests verify class method registration (Java, C#, Scala), constructor dispatch, field setting, and object allocation. All 8266 tests pass.
+
+---
+
+### ADR-052: Rosetta destructuring test — 5-language subset (2026-03-03)
+
+**Context:** Previous Rosetta tests cover all 15 languages. Destructuring is a language-specific feature with dedicated lowering methods in only a subset of frontends: Python (`_lower_tuple_unpack`), JavaScript (`_lower_array_destructure`), TypeScript (inherited from JS), Rust (`_lower_tuple_destructure`), and Scala (`_lower_scala_tuple_destructure`). Kotlin has `_lower_multi_variable_destructure` but its collection constructors (`listOf`, `Pair`) are unresolved by the VM, so it is excluded for now.
+
+**Decision:** Create a 5-language Rosetta test that verifies genuine destructuring lowering by asserting the IR contains `LOAD_INDEX` opcodes (the IR pattern all destructuring methods emit). This is not a full 15-language test — the `assert_cross_language_consistency` helper is not used. Cross-language checks are custom and scoped to the 5 participating languages. VM execution verifies `answer == 15` with 0 LLM calls.
+
+**Consequences:** The destructuring code path is verified end-to-end for 5 languages (IR emission + VM execution). The test explicitly documents which languages have destructuring support and which do not, serving as a living inventory. All 8288 tests pass.
