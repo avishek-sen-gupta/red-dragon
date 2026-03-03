@@ -216,6 +216,67 @@ class TestBuildDataLayoutCompTypes:
         assert fl.byte_length == 2
 
 
+class TestBuildDataLayoutOccursDependingOn:
+    def test_occurs_depending_on_uses_max_storage(self):
+        """OCCURS DEPENDING ON allocates max (n) elements in layout."""
+        fields = [
+            CobolField(
+                name="WS-TABLE",
+                level=77,
+                pic="X(5)",
+                usage="DISPLAY",
+                offset=0,
+                occurs=10,
+                element_size=5,
+                occurs_depending_on="WS-COUNT",
+                occurs_min=1,
+            ),
+        ]
+        layout = build_data_layout(fields)
+        fl = layout.fields["WS-TABLE"]
+        assert fl.byte_length == 50  # 10 * 5 = max storage
+        assert fl.occurs_count == 10
+        assert fl.occurs_depending_on == "WS-COUNT"
+        assert fl.occurs_min == 1
+
+    def test_occurs_depending_on_propagated(self):
+        """OCCURS DEPENDING ON fields propagate through layout."""
+        fields = [
+            CobolField(
+                name="WS-REC",
+                level=1,
+                pic="",
+                usage="DISPLAY",
+                offset=0,
+                children=[
+                    CobolField(
+                        name="WS-COUNT",
+                        level=5,
+                        pic="9(3)",
+                        usage="DISPLAY",
+                        offset=0,
+                    ),
+                    CobolField(
+                        name="WS-ITEMS",
+                        level=5,
+                        pic="X(10)",
+                        usage="DISPLAY",
+                        offset=3,
+                        occurs=20,
+                        element_size=10,
+                        occurs_depending_on="WS-COUNT",
+                        occurs_min=1,
+                    ),
+                ],
+            ),
+        ]
+        layout = build_data_layout(fields)
+        fl = layout.fields["WS-ITEMS"]
+        assert fl.occurs_depending_on == "WS-COUNT"
+        assert fl.occurs_min == 1
+        assert fl.byte_length == 200  # 20 * 10
+
+
 class TestBuildDataLayoutSignClause:
     def test_sign_separate_adds_one_byte(self):
         """SIGN IS TRAILING SEPARATE adds 1 byte to zoned decimal storage."""
