@@ -23,18 +23,30 @@ jobs:
         run: poetry run black --check interpreter/ tests/
 
   test:
-    name: Deterministic frontend tests
+    name: Unit and integration tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Install dependencies
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Build ProLeap bridge JAR
+        working-directory: proleap-bridge
+        run: ./build.sh
+      - name: Install Python dependencies
         run: |
           pip install poetry
           poetry install
       - name: Run tests
+        env:
+          PROLEAP_BRIDGE_JAR: ${{ github.workspace }}/proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar
         run: poetry run pytest tests/ -v
 
   bridge:
