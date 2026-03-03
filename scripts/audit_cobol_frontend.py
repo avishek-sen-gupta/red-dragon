@@ -255,6 +255,7 @@ DD_BRIDGE_EXTRACTED: frozenset[str] = frozenset(
     {
         DataDivisionFeature.SECTION_WORKING_STORAGE.value,
         DataDivisionFeature.ENTRY_GROUP.value,
+        DataDivisionFeature.ENTRY_CONDITION_88.value,
         DataDivisionFeature.CLAUSE_PIC.value,
         DataDivisionFeature.CLAUSE_USAGE_DISPLAY.value,
         DataDivisionFeature.CLAUSE_USAGE_COMP3.value,
@@ -268,6 +269,7 @@ DD_BRIDGE_EXTRACTED: frozenset[str] = frozenset(
         DataDivisionFeature.CLAUSE_VALUE_MULTI.value,
         DataDivisionFeature.CLAUSE_REDEFINES.value,
         DataDivisionFeature.CLAUSE_OCCURS_FIXED.value,
+        DataDivisionFeature.CLAUSE_FILLER.value,
     }
 )
 
@@ -276,6 +278,7 @@ DD_PYTHON_MODELLED: frozenset[str] = frozenset(
     {
         DataDivisionFeature.SECTION_WORKING_STORAGE.value,
         DataDivisionFeature.ENTRY_GROUP.value,
+        DataDivisionFeature.ENTRY_CONDITION_88.value,
         DataDivisionFeature.CLAUSE_PIC.value,
         DataDivisionFeature.CLAUSE_USAGE_DISPLAY.value,
         DataDivisionFeature.CLAUSE_USAGE_COMP3.value,
@@ -284,8 +287,10 @@ DD_PYTHON_MODELLED: frozenset[str] = frozenset(
         DataDivisionFeature.CLAUSE_USAGE_COMP2.value,
         DataDivisionFeature.CLAUSE_USAGE_COMP5.value,
         DataDivisionFeature.CLAUSE_VALUE.value,
+        DataDivisionFeature.CLAUSE_VALUE_MULTI.value,
         DataDivisionFeature.CLAUSE_REDEFINES.value,
         DataDivisionFeature.CLAUSE_OCCURS_FIXED.value,
+        DataDivisionFeature.CLAUSE_FILLER.value,
     }
 )
 
@@ -294,6 +299,7 @@ DD_FRONTEND_HANDLED: frozenset[str] = frozenset(
     {
         DataDivisionFeature.SECTION_WORKING_STORAGE.value,
         DataDivisionFeature.ENTRY_GROUP.value,
+        DataDivisionFeature.ENTRY_CONDITION_88.value,
         DataDivisionFeature.CLAUSE_PIC.value,
         DataDivisionFeature.CLAUSE_USAGE_DISPLAY.value,
         DataDivisionFeature.CLAUSE_USAGE_COMP3.value,
@@ -302,8 +308,10 @@ DD_FRONTEND_HANDLED: frozenset[str] = frozenset(
         DataDivisionFeature.CLAUSE_USAGE_COMP2.value,
         DataDivisionFeature.CLAUSE_USAGE_COMP5.value,
         DataDivisionFeature.CLAUSE_VALUE.value,
+        DataDivisionFeature.CLAUSE_VALUE_MULTI.value,
         DataDivisionFeature.CLAUSE_REDEFINES.value,
         DataDivisionFeature.CLAUSE_OCCURS_FIXED.value,
+        DataDivisionFeature.CLAUSE_FILLER.value,
     }
 )
 
