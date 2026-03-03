@@ -246,6 +246,12 @@ class TestDataDivisionClassify:
             == DataDivisionStatus.HANDLED
         )
 
+    def test_rename_66_is_handled(self):
+        assert (
+            _classify_dd_feature(DataDivisionFeature.ENTRY_RENAME_66.value)
+            == DataDivisionStatus.HANDLED
+        )
+
     def test_linkage_is_not_extracted(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.SECTION_LINKAGE.value)
