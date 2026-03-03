@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntry;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryGroup;
+import io.proleap.cobol.asg.metamodel.data.datadescription.OccursClause;
 
 import java.util.List;
 import java.util.logging.Logger;
@@ -75,6 +76,13 @@ public final class DataFieldSerializer {
             obj.addProperty("redefines", redefines);
         }
 
+        int occursCount = extractOccurs(group);
+        if (occursCount > 0) {
+            obj.addProperty("occurs", occursCount);
+            int elementSize = computeElementSize(group);
+            obj.addProperty("element_size", elementSize);
+        }
+
         List<DataDescriptionEntry> children = group.getDataDescriptionEntries();
         if (children != null && !children.isEmpty()) {
             JsonArray childArray = serializeChildren(children);
@@ -140,6 +148,17 @@ public final class DataFieldSerializer {
      * Group items: sum of non-REDEFINES children.
      */
     public static int computeByteLength(DataDescriptionEntryGroup group) {
+        int baseLength = computeElementSize(group);
+        int occursCount = extractOccurs(group);
+        return (occursCount > 0) ? baseLength * occursCount : baseLength;
+    }
+
+    /**
+     * Computes the byte length of a single element (without OCCURS multiplier).
+     * For group items: sum of non-REDEFINES children.
+     * For elementary items: derived from PIC string.
+     */
+    public static int computeElementSize(DataDescriptionEntryGroup group) {
         List<DataDescriptionEntry> children = group.getDataDescriptionEntries();
         if (children != null && !children.isEmpty()) {
             return children.stream()
@@ -268,5 +287,24 @@ public final class DataFieldSerializer {
             LOG.fine("No REDEFINES clause for " + group.getName());
         }
         return "";
+    }
+
+    /**
+     * Extracts the OCCURS count from a data description entry.
+     * Returns 0 if no OCCURS clause is present.
+     */
+    private static int extractOccurs(DataDescriptionEntryGroup group) {
+        try {
+            List<OccursClause> occursClauses = group.getOccursClauses();
+            if (occursClauses != null && !occursClauses.isEmpty()) {
+                OccursClause clause = occursClauses.get(0);
+                if (clause.getFrom() != null && clause.getFrom().getCtx() != null) {
+                    return Integer.parseInt(clause.getFrom().getCtx().getText());
+                }
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract OCCURS for " + group.getName() + ": " + e.getMessage());
+        }
+        return 0;
     }
 }

@@ -38,6 +38,8 @@ class FieldLayout:
     byte_length: int
     redefines: str = ""
     value: str = ""
+    occurs_count: int = 0
+    element_size: int = 0
 
 
 @dataclass(frozen=True)
@@ -83,17 +85,31 @@ def _flatten_field(
             byte_length=group_length,
             redefines=cobol_field.redefines,
             value=cobol_field.value,
+            occurs_count=cobol_field.occurs,
+            element_size=cobol_field.element_size,
         )
         return child_layouts
 
+    element_byte_length = parse_pic(cobol_field.pic, cobol_field.usage).byte_length
+    total_byte_length = (
+        element_byte_length * cobol_field.occurs
+        if cobol_field.occurs > 0
+        else element_byte_length
+    )
     type_desc = parse_pic(cobol_field.pic, cobol_field.usage)
     accumulator[cobol_field.name] = FieldLayout(
         name=cobol_field.name,
         type_descriptor=type_desc,
         offset=absolute_offset,
-        byte_length=type_desc.byte_length,
+        byte_length=total_byte_length,
         redefines=cobol_field.redefines,
         value=cobol_field.value,
+        occurs_count=cobol_field.occurs,
+        element_size=(
+            cobol_field.element_size
+            if cobol_field.element_size > 0
+            else element_byte_length
+        ),
     )
     logger.debug(
         "Field %s: offset=%d, length=%d, type=%s",
@@ -109,15 +125,28 @@ def _compute_group_length(cobol_field: CobolField) -> int:
     """Compute the byte length of a group item from its children.
 
     REDEFINES children share the same offset and do NOT increase
-    the group's total size.
+    the group's total size. OCCURS fields multiply their element
+    size by the occurrence count.
     """
     if not cobol_field.children:
-        return parse_pic(cobol_field.pic, cobol_field.usage).byte_length
+        element_length = parse_pic(cobol_field.pic, cobol_field.usage).byte_length
+        return (
+            element_length * cobol_field.occurs
+            if cobol_field.occurs > 0
+            else element_length
+        )
 
     non_redefines_children = [
         child for child in cobol_field.children if not child.redefines
     ]
-    return sum(_compute_group_length(child) for child in non_redefines_children)
+    children_total = sum(
+        _compute_group_length(child) for child in non_redefines_children
+    )
+    return (
+        children_total * cobol_field.occurs
+        if cobol_field.occurs > 0
+        else children_total
+    )
 
 
 def build_data_layout(fields: list[CobolField]) -> DataLayout:
