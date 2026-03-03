@@ -341,7 +341,7 @@ poetry run pytest tests/integration/ -v  # integration tests only
 poetry run pytest tests/ -n 0 -v     # disable parallel execution
 ```
 
-Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures (including mutation persistence and shared environments, cross-language via Rosetta), class/object instantiation and field access (cross-language), exception handling structure (cross-language), symbolic execution, factory routing, and the composable API layer.
+Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures (including mutation persistence and accumulator semantics, cross-language via Rosetta), class/object instantiation and field access (cross-language), exception handling structure (cross-language), symbolic execution, factory routing, and the composable API layer.
 
 ### Rosetta cross-language suite
 
@@ -397,7 +397,7 @@ The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercis
 
 ### Test totals
 
-**8361 tests** (8299 unit + 62 integration passed, 4 skipped, 6 xfailed) — all with zero LLM calls.
+**8362 tests** (8300 unit + 62 integration passed, 4 skipped, 6 xfailed) — all with zero LLM calls.
 
 ## Documentation
 

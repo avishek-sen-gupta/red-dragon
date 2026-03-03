@@ -1,11 +1,18 @@
-"""Rosetta test: closures across all 15 deterministic frontends.
+"""Rosetta test: adder-factory arithmetic across all 15 deterministic frontends.
 
-Verifies that the VM can execute a program using closures — a factory
-function returns a nested function that captures a variable from the
-enclosing scope:
+Two tiers of programs compute the same result (answer = 15):
 
-    make_adder(x) → returns adder(y) → x + y
-    answer = make_adder(10)(5)  → 15
+  Tier 1 — Genuine closures (Python, JavaScript, TypeScript, Lua):
+      make_adder(x) returns a nested function adder(y) that captures x
+      from the enclosing scope.  answer = make_adder(10)(5)
+
+  Tier 2 — Function-call fallback (Java, Ruby, Go, PHP, C#, C, C++,
+      Rust, Kotlin, Scala, Pascal):
+      A plain two-argument function apply_adder(x, y) with no closure
+      semantics.  answer = apply_adder(10, 5)
+
+The test verifies that every frontend lowers to valid IR and that the VM
+produces the correct arithmetic result (15) for all 15 languages.
 """
 
 import pytest
@@ -25,9 +32,35 @@ from tests.unit.rosetta.conftest import (
 )
 
 # ---------------------------------------------------------------------------
-# Programs: closures (make_adder) in all 15 languages
-# Each defines make_adder(x) returning adder(y) → x + y,
-# then computes make_adder(10)(5) = 15.
+# Language tier classification
+# ---------------------------------------------------------------------------
+
+CLOSURE_LANGUAGES: frozenset[str] = frozenset(
+    {"python", "javascript", "typescript", "lua"}
+)
+FALLBACK_LANGUAGES: frozenset[str] = frozenset(
+    {
+        "java",
+        "ruby",
+        "go",
+        "php",
+        "csharp",
+        "c",
+        "cpp",
+        "rust",
+        "kotlin",
+        "scala",
+        "pascal",
+    }
+)
+
+# ---------------------------------------------------------------------------
+# Programs: adder-factory arithmetic in all 15 languages
+#
+# Tier 1 (CLOSURE_LANGUAGES): make_adder(x) returns adder(y) → x + y,
+#   invoked as make_adder(10)(5) = 15.
+# Tier 2 (FALLBACK_LANGUAGES): apply_adder(x, y) → x + y,
+#   invoked as apply_adder(10, 5) = 15.  No closure semantics.
 # ---------------------------------------------------------------------------
 
 PROGRAMS: dict[str, str] = {
@@ -222,6 +255,10 @@ class TestClosuresCrossLanguage:
 
     def test_all_languages_covered(self):
         assert set(PROGRAMS.keys()) == set(SUPPORTED_DETERMINISTIC_LANGUAGES)
+
+    def test_tier_constants_cover_all_programs(self):
+        """CLOSURE_LANGUAGES | FALLBACK_LANGUAGES must equal the full program set."""
+        assert CLOSURE_LANGUAGES | FALLBACK_LANGUAGES == set(PROGRAMS.keys())
 
     def test_cross_language_consistency(self, all_results):
         assert_cross_language_consistency(
