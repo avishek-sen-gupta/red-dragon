@@ -393,11 +393,11 @@ The COBOL test suite covers ASG round-trip, typed statement hierarchy (32 types)
 
 ### COBOL integration tests
 
-The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercises the full pipeline from real `.cbl` source code through the ProLeap Java bridge, ASG construction, IR lowering, CFG building, and VM execution. 55 tests cover initial values, ADD/SUBTRACT (including GIVING), MULTIPLY/DIVIDE (including GIVING), COMPUTE, MOVE, IF/ELSE, PERFORM TIMES/UNTIL/VARYING, nested PERFORM, GO TO, EVALUATE/WHEN, string moves, INITIALIZE, SET TO/UP BY/DOWN BY, SEARCH with WHEN, INSPECT TALLYING/REPLACING, CALL, STRING concatenation, UNSTRING splitting, OCCURS (elementary MOVE, field subscript, PERFORM VARYING loop), level-88 condition names (single/multi-value, THRU ranges, mixed discrete+range, true/false branches), EVALUATE TRUE with condition names, PERFORM UNTIL with condition names, and FILLER field disambiguation. Tests skip gracefully when the ProLeap bridge JAR is not available.
+The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercises the full pipeline from real `.cbl` source code through the ProLeap Java bridge, ASG construction, IR lowering, CFG building, and VM execution. 62 tests cover initial values, ADD/SUBTRACT (including GIVING), MULTIPLY/DIVIDE (including GIVING), COMPUTE, MOVE, IF/ELSE, PERFORM TIMES/UNTIL/VARYING, nested PERFORM, GO TO, EVALUATE/WHEN, string moves, INITIALIZE, SET TO/UP BY/DOWN BY, SEARCH with WHEN, INSPECT TALLYING/REPLACING, CALL, STRING concatenation, UNSTRING splitting, OCCURS (elementary MOVE, field subscript, PERFORM VARYING loop), level-88 condition names (single/multi-value, THRU ranges, mixed discrete+range, true/false branches), EVALUATE TRUE with condition names, PERFORM UNTIL with condition names, FILLER field disambiguation, and BLANK WHEN ZERO. A separate E2E feature suite (`test_cobol_e2e_features.py`) exercises multi-feature composition: all arithmetic forms in one program, control-flow composition, string operations, level-88 conditions, paragraph PERFORMs, OCCURS with subscripts, and BLANK WHEN ZERO. Tests skip gracefully when the ProLeap bridge JAR is not available.
 
 ### Test totals
 
-**8078 tests** (8020 unit + 55 integration passed, 3 xfailed) — all with zero LLM calls.
+**8082 tests** (8020 unit + 62 integration passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 
