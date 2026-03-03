@@ -198,7 +198,7 @@ def lower_evaluate(
 
     for child in stmt.children:
         if isinstance(child, WhenStatement) and child.condition:
-            if stmt.subject:
+            if stmt.subject and stmt.subject.upper() != "TRUE":
                 full_condition = f"{stmt.subject} = {child.condition}"
             else:
                 full_condition = child.condition

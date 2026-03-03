@@ -1016,3 +1016,213 @@ class TestFillerDisambiguation:
         # WS-A at 0 (4), FILLER_1 at 4 (5), WS-B at 9 (4),
         # FILLER_2 at 13 (3), WS-R at 16 (4)
         assert _decode_zoned_unsigned(region, 16, 4) == 30
+
+
+class TestLevel88ThruRange:
+    def test_thru_range_match(self):
+        """88 IN-RANGE VALUE 10 THRU 50 matches when field is 25."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-THRU1.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "05 WS-SCORE PIC 9(4) VALUE 25.",
+                "   88 IN-RANGE VALUE 10 THRU 50.",
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF IN-RANGE",
+                "        MOVE 1 TO WS-R",
+                "    ELSE",
+                "        MOVE 2 TO WS-R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # 25 is in [10, 50] → true → WS-R = 1
+        assert _decode_zoned_unsigned(region, 4, 4) == 1
+
+    def test_thru_range_no_match(self):
+        """88 IN-RANGE VALUE 10 THRU 50 fails when field is 75."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-THRU2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "05 WS-SCORE PIC 9(4) VALUE 75.",
+                "   88 IN-RANGE VALUE 10 THRU 50.",
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF IN-RANGE",
+                "        MOVE 1 TO WS-R",
+                "    ELSE",
+                "        MOVE 2 TO WS-R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # 75 is NOT in [10, 50] → false → WS-R = 2
+        assert _decode_zoned_unsigned(region, 4, 4) == 2
+
+    def test_thru_range_boundary_low(self):
+        """88 IN-RANGE VALUE 10 THRU 50 matches at exact lower bound."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-THRU3.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "05 WS-SCORE PIC 9(4) VALUE 10.",
+                "   88 IN-RANGE VALUE 10 THRU 50.",
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF IN-RANGE",
+                "        MOVE 1 TO WS-R",
+                "    ELSE",
+                "        MOVE 2 TO WS-R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # 10 is in [10, 50] → true → WS-R = 1
+        assert _decode_zoned_unsigned(region, 4, 4) == 1
+
+
+class TestLevel88MixedValues:
+    def test_mixed_discrete_and_thru(self):
+        """88 SPECIAL VALUE 5 10 THRU 20 99 matches when field is 15."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-MIX1.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "05 WS-CODE PIC 9(4) VALUE 15.",
+                "   88 SPECIAL VALUE 5 10 THRU 20 99.",
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF SPECIAL",
+                "        MOVE 1 TO WS-R",
+                "    ELSE",
+                "        MOVE 2 TO WS-R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # 15 is in [10, 20] range → true → WS-R = 1
+        assert _decode_zoned_unsigned(region, 4, 4) == 1
+
+    def test_mixed_discrete_match(self):
+        """88 SPECIAL VALUE 5 10 THRU 20 99 matches discrete value 99."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-MIX2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "05 WS-CODE PIC 9(4) VALUE 99.",
+                "   88 SPECIAL VALUE 5 10 THRU 20 99.",
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF SPECIAL",
+                "        MOVE 1 TO WS-R",
+                "    ELSE",
+                "        MOVE 2 TO WS-R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # 99 matches discrete value → true → WS-R = 1
+        assert _decode_zoned_unsigned(region, 4, 4) == 1
+
+    def test_mixed_no_match(self):
+        """88 SPECIAL VALUE 5 10 THRU 20 99 fails when field is 30."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-MIX3.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "05 WS-CODE PIC 9(4) VALUE 30.",
+                "   88 SPECIAL VALUE 5 10 THRU 20 99.",
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF SPECIAL",
+                "        MOVE 1 TO WS-R",
+                "    ELSE",
+                "        MOVE 2 TO WS-R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # 30 not in {5} or [10,20] or {99} → false → WS-R = 2
+        assert _decode_zoned_unsigned(region, 4, 4) == 2
+
+
+class TestLevel88InEvaluate:
+    def test_evaluate_true_with_condition_name(self):
+        """EVALUATE TRUE WHEN STATUS-ACTIVE selects the condition-name branch."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-EVAL88.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '05 WS-STATUS PIC X(1) VALUE "A".',
+                '   88 STATUS-ACTIVE VALUE "A".',
+                '   88 STATUS-INACTIVE VALUE "I".',
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    EVALUATE TRUE",
+                "        WHEN STATUS-ACTIVE",
+                "            MOVE 1 TO WS-R",
+                "        WHEN STATUS-INACTIVE",
+                "            MOVE 2 TO WS-R",
+                "    END-EVALUATE.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-STATUS is 'A' → STATUS-ACTIVE is true → WS-R = 1
+        assert _decode_zoned_unsigned(region, 1, 4) == 1
+
+    def test_evaluate_true_second_branch(self):
+        """EVALUATE TRUE WHEN ... selects the second condition-name branch."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-EVL882.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '05 WS-STATUS PIC X(1) VALUE "I".',
+                '   88 STATUS-ACTIVE VALUE "A".',
+                '   88 STATUS-INACTIVE VALUE "I".',
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    EVALUATE TRUE",
+                "        WHEN STATUS-ACTIVE",
+                "            MOVE 1 TO WS-R",
+                "        WHEN STATUS-INACTIVE",
+                "            MOVE 2 TO WS-R",
+                "    END-EVALUATE.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-STATUS is 'I' → STATUS-INACTIVE is true → WS-R = 2
+        assert _decode_zoned_unsigned(region, 1, 4) == 2
