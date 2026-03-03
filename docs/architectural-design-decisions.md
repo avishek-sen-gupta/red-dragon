@@ -981,3 +981,16 @@ Benefits:
 - `audit_cobol_frontend.py`: `CLAUSE_BLANK_WHEN_ZERO` added to all three coverage sets.
 
 **Consequences:** CLAUSE_BLANK_WHEN_ZERO moves from NOT_EXTRACTED to HANDLED. Twelve new unit tests cover round-trip serialization, type descriptor propagation, PIC parser integration, builtin function behaviour, data layout propagation, and audit classification. All existing tests pass unchanged.
+
+---
+
+### ADR-046: ADD/SUBTRACT GIVING clause support in bridge (2026-03-03)
+
+**Context:** `MULTIPLY ... GIVING` and `DIVIDE ... GIVING` already worked end-to-end, but `ADD ... TO ... GIVING` and `SUBTRACT ... FROM ... GIVING` crashed with `KeyError: ''` because the Java bridge's `serializeAdd()` and `serializeSubtract()` only handled the non-GIVING forms (`AddToStatement`, `SubtractFromStatement`), ignoring `AddToGivingStatement` and `SubtractFromGivingStatement`. The Python side (`lower_arithmetic_giving` in `lower_arithmetic.py`) already handles the `giving` list correctly for all four arithmetic ops.
+
+**Decision:** Bridge-only fix. Add `else if` branches in `serializeAdd()` and `serializeSubtract()` to handle the GIVING variants. For ADD: `getFroms()` and `getTos()` become operands, `getGivings()` becomes the `giving` JSON array. For SUBTRACT: the minuend goes first in operands (source), subtrahends second (target), because `lower_arithmetic_giving` computes `source op target`. The operand ordering is critical — `SUBTRACT X FROM Y GIVING Z` emits `operands=[Y, X]` so Python computes `Y - X`.
+
+**Changes:**
+- `StatementSerializer.java`: Added `AddToGivingStatement` branch in `serializeAdd()` and `SubtractFromGivingStatement` branch in `serializeSubtract()`. New imports: `AddToGivingStatement`, `ToGiving`, `SubtractFromGivingStatement`, `MinuendGiving`.
+
+**Consequences:** All four arithmetic GIVING forms (ADD, SUBTRACT, MULTIPLY, DIVIDE) now work end-to-end through the bridge. Four new integration tests and four new unit tests verify the round-trip and execution. All 8075 tests pass.
