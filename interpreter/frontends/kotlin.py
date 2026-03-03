@@ -807,24 +807,68 @@ class KotlinFrontend(BaseFrontend):
         self._emit(Opcode.BRANCH, label=end_label)
         self._emit(Opcode.LABEL, label=func_label)
 
-        # Lambda body children (skip braces)
+        # Extract lambda parameters: lambda_parameters → variable_declaration → simple_identifier
+        lambda_params_node = next(
+            (c for c in node.children if c.type == "lambda_parameters"),
+            None,
+        )
+        if lambda_params_node:
+            for child in lambda_params_node.children:
+                if child.type == "variable_declaration":
+                    id_node = next(
+                        (c for c in child.children if c.type == "simple_identifier"),
+                        None,
+                    )
+                    if id_node:
+                        pname = self._node_text(id_node)
+                        self._emit(
+                            Opcode.SYMBOLIC,
+                            result_reg=self._fresh_reg(),
+                            operands=[f"{constants.PARAM_PREFIX}{pname}"],
+                            node=child,
+                        )
+                        self._emit(
+                            Opcode.STORE_VAR,
+                            operands=[pname, f"%{self._reg_counter - 1}"],
+                        )
+
+        # Lambda body children (skip braces, arrow, lambda_parameters)
         body_children = [
             c
             for c in node.children
             if c.type not in ("{", "}", "->")
             and c.is_named
+            and c.type != "lambda_parameters"
             and c.type not in self.COMMENT_TYPES
         ]
-        for child in body_children:
-            self._lower_stmt(child)
+        # Kotlin lambdas implicitly return the last expression.
+        # If the body is a `statements` node, lower all but the last child
+        # as statements, then return the last expression's value.
+        last_returned = False
+        if len(body_children) == 1 and body_children[0].type == "statements":
+            stmts = [
+                c
+                for c in body_children[0].children
+                if c.is_named and c.type not in self.COMMENT_TYPES
+            ]
+            for stmt in stmts[:-1]:
+                self._lower_stmt(stmt)
+            if stmts:
+                last_reg = self._lower_expr(stmts[-1])
+                self._emit(Opcode.RETURN, operands=[last_reg])
+                last_returned = True
+        else:
+            for child in body_children:
+                self._lower_stmt(child)
 
-        none_reg = self._fresh_reg()
-        self._emit(
-            Opcode.CONST,
-            result_reg=none_reg,
-            operands=[self.DEFAULT_RETURN_VALUE],
-        )
-        self._emit(Opcode.RETURN, operands=[none_reg])
+        if not last_returned:
+            none_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=none_reg,
+                operands=[self.DEFAULT_RETURN_VALUE],
+            )
+            self._emit(Opcode.RETURN, operands=[none_reg])
         self._emit(Opcode.LABEL, label=end_label)
 
         reg = self._fresh_reg()
