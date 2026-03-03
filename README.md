@@ -388,7 +388,7 @@ The **Exercism suite** (`tests/unit/exercism/`) pulls canonical test data from [
 
 ### COBOL frontend tests
 
-The COBOL test suite covers ASG round-trip, typed statement hierarchy (32 types), PIC parsing, data layout, frontend lowering, PERFORM loop variants, section PERFORM, SEARCH, STRING/UNSTRING/INSPECT, CALL/ALTER/ENTRY/CANCEL lowering, I/O provider (NullIOProvider/StubIOProvider with REWRITE/START/DELETE and executor integration), parser bridge, and end-to-end fixture tests.
+The COBOL test suite covers ASG round-trip, typed statement hierarchy (32 types), PIC parsing, data layout, frontend lowering, PERFORM loop variants, section PERFORM, SEARCH, STRING/UNSTRING/INSPECT, CALL/ALTER/ENTRY/CANCEL lowering, I/O provider (NullIOProvider/StubIOProvider with REWRITE/START/DELETE and executor integration), parser bridge, numeric encoding (COMP-3 packed BCD, COMP/BINARY big-endian two's complement, COMP-1/COMP-2 IEEE 754 floats), and end-to-end fixture tests.
 
 ### COBOL integration tests
 
@@ -396,7 +396,7 @@ The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercis
 
 ### Test totals
 
-**7855 tests** (7820 unit + 32 integration passed, 3 xfailed) — all with zero LLM calls.
+**7905 tests** (7870 unit + 32 integration passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 
