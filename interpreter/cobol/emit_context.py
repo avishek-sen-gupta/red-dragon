@@ -25,9 +25,11 @@ from interpreter.cobol.ir_encoders import (
     build_decode_alphanumeric_ir,
     build_decode_comp3_ir,
     build_decode_zoned_ir,
+    build_decode_zoned_separate_ir,
     build_encode_alphanumeric_ir,
     build_encode_comp3_ir,
     build_encode_zoned_ir,
+    build_encode_zoned_separate_ir,
     build_encode_binary_ir,
     build_decode_binary_ir,
     build_encode_float_ir,
@@ -301,7 +303,18 @@ class EmitContext:
         self.emit(Opcode.CONST, result_reg=sign_reg, operands=[sign_nibble])
 
         if td.category == CobolDataCategory.ZONED_DECIMAL:
-            ir = build_encode_zoned_ir(f"enc_zoned_{field_name}", td.total_digits)
+            if td.sign_separate:
+                ir = build_encode_zoned_separate_ir(
+                    f"enc_zoned_sep_{field_name}",
+                    td.total_digits,
+                    sign_leading=td.sign_leading,
+                )
+            else:
+                ir = build_encode_zoned_ir(
+                    f"enc_zoned_{field_name}",
+                    td.total_digits,
+                    sign_leading=td.sign_leading,
+                )
         elif td.category == CobolDataCategory.BINARY:
             ir = build_encode_binary_ir(
                 f"enc_bin_{field_name}",
@@ -333,9 +346,20 @@ class EmitContext:
         if td.category == CobolDataCategory.ALPHANUMERIC:
             ir = build_decode_alphanumeric_ir(f"dec_alpha_{fl.name}")
         elif td.category == CobolDataCategory.ZONED_DECIMAL:
-            ir = build_decode_zoned_ir(
-                f"dec_zoned_{fl.name}", td.total_digits, td.decimal_digits
-            )
+            if td.sign_separate:
+                ir = build_decode_zoned_separate_ir(
+                    f"dec_zoned_sep_{fl.name}",
+                    td.total_digits,
+                    td.decimal_digits,
+                    sign_leading=td.sign_leading,
+                )
+            else:
+                ir = build_decode_zoned_ir(
+                    f"dec_zoned_{fl.name}",
+                    td.total_digits,
+                    td.decimal_digits,
+                    sign_leading=td.sign_leading,
+                )
         elif td.category == CobolDataCategory.BINARY:
             ir = build_decode_binary_ir(
                 f"dec_bin_{fl.name}",
@@ -414,7 +438,18 @@ class EmitContext:
         )
 
         if td.category == CobolDataCategory.ZONED_DECIMAL:
-            ir = build_encode_zoned_ir(f"enc_zoned_{fl.name}", td.total_digits)
+            if td.sign_separate:
+                ir = build_encode_zoned_separate_ir(
+                    f"enc_zoned_sep_{fl.name}",
+                    td.total_digits,
+                    sign_leading=td.sign_leading,
+                )
+            else:
+                ir = build_encode_zoned_ir(
+                    f"enc_zoned_{fl.name}",
+                    td.total_digits,
+                    sign_leading=td.sign_leading,
+                )
         elif td.category == CobolDataCategory.BINARY:
             ir = build_encode_binary_ir(
                 f"enc_bin_{fl.name}",

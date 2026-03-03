@@ -43,6 +43,8 @@ class FieldLayout:
     element_size: int = 0
     conditions: list[ConditionName] = field(default_factory=list)
     values: list[ConditionValue] = field(default_factory=list)
+    sign_separate: bool = False
+    sign_leading: bool = False
 
 
 @dataclass(frozen=True)
@@ -92,16 +94,23 @@ def _flatten_field(
             element_size=cobol_field.element_size,
             conditions=cobol_field.conditions,
             values=cobol_field.values,
+            sign_separate=cobol_field.sign_separate,
+            sign_leading=cobol_field.sign_leading,
         )
         return child_layouts
 
-    element_byte_length = parse_pic(cobol_field.pic, cobol_field.usage).byte_length
+    type_desc = parse_pic(
+        cobol_field.pic,
+        cobol_field.usage,
+        sign_leading=cobol_field.sign_leading,
+        sign_separate=cobol_field.sign_separate,
+    )
+    element_byte_length = type_desc.byte_length
     total_byte_length = (
         element_byte_length * cobol_field.occurs
         if cobol_field.occurs > 0
         else element_byte_length
     )
-    type_desc = parse_pic(cobol_field.pic, cobol_field.usage)
     accumulator[cobol_field.name] = FieldLayout(
         name=cobol_field.name,
         type_descriptor=type_desc,
@@ -117,6 +126,8 @@ def _flatten_field(
         ),
         conditions=cobol_field.conditions,
         values=cobol_field.values,
+        sign_separate=cobol_field.sign_separate,
+        sign_leading=cobol_field.sign_leading,
     )
     logger.debug(
         "Field %s: offset=%d, length=%d, type=%s",
