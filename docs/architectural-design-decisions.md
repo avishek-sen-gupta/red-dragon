@@ -1094,3 +1094,13 @@ Also fixed Ruby's `raise` to emit `THROW` instead of `CALL_FUNCTION`.
 **Decision:** Create a 10-language Rosetta test that verifies genuine nested function lowering by asserting the IR contains a `func_inner` or `func___anon` label nested inside the outer function body — proving the inner function was lowered as a nested definition, not a sibling. The test uses `outer(x)` containing `inner(y) → y * 2`, returning `inner(x) + 5`, with `answer = outer(3) → 11`. The `assert_cross_language_consistency` helper is not used (it requires all 15 languages). Cross-language checks are custom and scoped to the 10 participating languages.
 
 **Consequences:** Nested function lowering is verified end-to-end for 10 languages (IR structure + VM execution producing `answer == 11` with 0 LLM calls). The test explicitly documents which languages support nested function definitions and which do not. All 8334 tests pass.
+
+---
+
+### ADR-054: Rosetta nested function scoping test — 7-language subset (2026-03-03)
+
+**Context:** The existing nested functions test (ADR-053) verifies that inner functions work correctly when called from inside the outer function, but does not verify that inner functions are inaccessible from outside — a key scoping property. Of the 10 languages with nested function support, 7 have genuine inner-function scoping (inner is local to outer's scope): Python, JavaScript, TypeScript, Rust, Go, Kotlin, Scala. The remaining 3 (Ruby, PHP, Lua) leak inner functions to enclosing/global scope by language design, so testing inaccessibility would not reflect actual language semantics.
+
+**Decision:** Add a `TestNestedFunctionScoping` class to the existing nested functions test file, parametrized over the 7 scoped languages. Each program calls `outer(3)` (producing `result = 11`), then attempts `inner(3)` from outside. The VM's frame-based variable lookup naturally enforces scoping: `inner`'s function reference is stored via `STORE_VAR` inside `outer`'s frame, and when `outer` returns, its frame is popped, making `inner` unreachable. The test asserts that `leaked` is a `SymbolicValue` (symbolic resolution, not a concrete result), confirming 0 LLM calls.
+
+**Consequences:** Inner function scoping is verified for 7 languages (21 new tests: 7 languages × 3 assertions). The test documents the scoping semantics distinction between the 7 scoped languages and the 3 that leak. All 8355 tests pass.
