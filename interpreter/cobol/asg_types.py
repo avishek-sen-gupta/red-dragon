@@ -44,6 +44,8 @@ class CobolField:
     sign_separate: bool = False
     justified_right: bool = False
     synchronized: bool = False
+    occurs_depending_on: str = ""
+    occurs_min: int = 0
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolField:
@@ -65,6 +67,8 @@ class CobolField:
             sign_separate=sign_data.get("separate", False),
             justified_right=data.get("justified_right", False),
             synchronized=data.get("synchronized", False),
+            occurs_depending_on=data.get("occurs_depending_on", ""),
+            occurs_min=data.get("occurs_min", 0),
         )
 
     def to_dict(self) -> dict:
@@ -98,6 +102,10 @@ class CobolField:
             result["justified_right"] = True
         if self.synchronized:
             result["synchronized"] = True
+        if self.occurs_depending_on:
+            result["occurs_depending_on"] = self.occurs_depending_on
+        if self.occurs_min:
+            result["occurs_min"] = self.occurs_min
         return result
 
 
