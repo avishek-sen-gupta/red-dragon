@@ -469,7 +469,19 @@ class ScalaFrontend(BaseFrontend):
 
     # -- function definition -----------------------------------------------
 
-    def _lower_function_def(self, node):
+    def _emit_this_param(self):
+        """Emit ``SYMBOLIC param:this`` + ``STORE_VAR this`` for instance methods."""
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=self._fresh_reg(),
+            operands=[f"{constants.PARAM_PREFIX}this"],
+        )
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=["this", f"%{self._reg_counter - 1}"],
+        )
+
+    def _lower_function_def(self, node, inject_this: bool = False):
         name_node = node.child_by_field_name("name")
         params_node = node.child_by_field_name("parameters")
         body_node = node.child_by_field_name("body")
@@ -480,6 +492,9 @@ class ScalaFrontend(BaseFrontend):
 
         self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
+
+        if inject_this:
+            self._emit_this_param()
 
         if params_node:
             self._lower_scala_params(params_node)
@@ -548,7 +563,7 @@ class ScalaFrontend(BaseFrontend):
         self._emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
 
         if body_node:
-            self._lower_class_body_hoisted(body_node)
+            self._lower_class_body_hoisted(body_node, inject_this=True)
 
     # -- object definition (singleton) -------------------------------------
 
@@ -577,7 +592,7 @@ class ScalaFrontend(BaseFrontend):
         if body_node:
             self._lower_class_body_hoisted(body_node)
 
-    def _lower_class_body_hoisted(self, node):
+    def _lower_class_body_hoisted(self, node, inject_this: bool = False):
         """Hoist all class-body children to top level.
 
         Emits function definitions first (so their refs are registered),
@@ -593,7 +608,7 @@ class ScalaFrontend(BaseFrontend):
         functions = [c for c in children if c.type in self._CLASS_BODY_FUNC_TYPES]
         rest = [c for c in children if c.type not in self._CLASS_BODY_FUNC_TYPES]
         for child in functions:
-            self._lower_function_def(child)
+            self._lower_function_def(child, inject_this=inject_this)
         for child in rest:
             self._lower_stmt(child)
 

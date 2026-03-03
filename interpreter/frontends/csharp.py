@@ -46,6 +46,7 @@ class CSharpFrontend(BaseFrontend):
             "boolean_literal": self._lower_canonical_bool,
             "null_literal": self._lower_canonical_none,
             "this_expression": self._lower_identifier,
+            "this": self._lower_identifier,
             "binary_expression": self._lower_binop,
             "prefix_unary_expression": self._lower_unop,
             "postfix_unary_expression": self._lower_update_expr,
@@ -683,7 +684,26 @@ class CSharpFrontend(BaseFrontend):
 
     # -- C#: method declaration ----------------------------------------
 
-    def _lower_method_decl(self, node):
+    def _emit_this_param(self):
+        """Emit ``SYMBOLIC param:this`` + ``STORE_VAR this`` for instance methods."""
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=self._fresh_reg(),
+            operands=[f"{constants.PARAM_PREFIX}this"],
+        )
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=["this", f"%{self._reg_counter - 1}"],
+        )
+
+    def _has_static_modifier(self, node) -> bool:
+        """Return True if *node* has a ``static`` modifier."""
+        return any(
+            c.type == "modifier" and self._node_text(c) == "static"
+            for c in node.children
+        )
+
+    def _lower_method_decl(self, node, inject_this: bool = False):
         name_node = node.child_by_field_name("name")
         params_node = node.child_by_field_name("parameters")
         body_node = node.child_by_field_name("body")
@@ -694,6 +714,9 @@ class CSharpFrontend(BaseFrontend):
 
         self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
+
+        if inject_this:
+            self._emit_this_param()
 
         if params_node:
             self._lower_csharp_params(params_node)
@@ -827,7 +850,9 @@ class CSharpFrontend(BaseFrontend):
     def _lower_deferred_class_child(self, child):
         """Lower a single deferred class-body child at top level."""
         if child.type == "method_declaration":
-            self._lower_method_decl(child)
+            self._lower_method_decl(
+                child, inject_this=not self._has_static_modifier(child)
+            )
         elif child.type == "constructor_declaration":
             self._lower_constructor_decl(child)
         elif child.type == "field_declaration":

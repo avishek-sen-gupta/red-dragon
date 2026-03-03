@@ -346,6 +346,22 @@ class CppFrontend(CFrontend):
             return self._lower_expr(children[-1])
         return self._lower_const_literal(node)
 
+    # -- C++: struct/class type detection --------------------------------
+
+    def _extract_struct_type(self, node) -> str:
+        """Return struct/class type name from a declaration, or ''.
+
+        Extends the C version to also detect bare ``type_identifier``
+        nodes (``Counter c;`` without ``struct`` keyword).
+        """
+        result = super()._extract_struct_type(node)
+        if result:
+            return result
+        for child in node.children:
+            if child.type == "type_identifier":
+                return self._node_text(child)
+        return ""
+
     # -- C++: class specifier ------------------------------------------
 
     def _lower_class_specifier(self, node):

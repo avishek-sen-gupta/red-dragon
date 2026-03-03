@@ -197,7 +197,19 @@ class KotlinFrontend(BaseFrontend):
 
     # -- function declaration ----------------------------------------------
 
-    def _lower_function_decl(self, node):
+    def _emit_this_param(self):
+        """Emit ``SYMBOLIC param:this`` + ``STORE_VAR this`` for instance methods."""
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=self._fresh_reg(),
+            operands=[f"{constants.PARAM_PREFIX}this"],
+        )
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=["this", f"%{self._reg_counter - 1}"],
+        )
+
+    def _lower_function_decl(self, node, inject_this: bool = False):
         name_node = next(
             (c for c in node.children if c.type == "simple_identifier"),
             None,
@@ -217,6 +229,9 @@ class KotlinFrontend(BaseFrontend):
 
         self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
+
+        if inject_this:
+            self._emit_this_param()
 
         if params_node:
             self._lower_kotlin_params(params_node)
@@ -311,6 +326,8 @@ class KotlinFrontend(BaseFrontend):
                 continue
             if child.type == "companion_object":
                 self._lower_companion_object(child)
+            elif child.type == "function_declaration":
+                self._lower_function_decl(child, inject_this=True)
             else:
                 self._lower_stmt(child)
 
@@ -373,7 +390,7 @@ class KotlinFrontend(BaseFrontend):
             nav_children = [c for c in callee_node.children if c.is_named]
             if len(nav_children) >= 2:
                 obj_reg = self._lower_expr(nav_children[0])
-                method_name = self._node_text(nav_children[-1])
+                method_name = self._extract_nav_field_name(nav_children[-1])
                 reg = self._fresh_reg()
                 self._emit(
                     Opcode.CALL_METHOD,
@@ -422,12 +439,26 @@ class KotlinFrontend(BaseFrontend):
 
     # -- navigation expression (member access) -----------------------------
 
+    def _extract_nav_field_name(self, node) -> str:
+        """Extract the identifier name from a navigation_suffix or plain node.
+
+        ``navigation_suffix`` nodes include the leading dot in their text,
+        so we unwrap to the inner ``simple_identifier`` instead.
+        """
+        if node.type == "navigation_suffix":
+            id_node = next(
+                (c for c in node.children if c.type == "simple_identifier"), None
+            )
+            if id_node:
+                return self._node_text(id_node)
+        return self._node_text(node)
+
     def _lower_navigation_expr(self, node) -> str:
         named_children = [c for c in node.children if c.is_named]
         if len(named_children) < 2:
             return self._lower_const_literal(node)
         obj_reg = self._lower_expr(named_children[0])
-        field_name = self._node_text(named_children[-1])
+        field_name = self._extract_nav_field_name(named_children[-1])
         reg = self._fresh_reg()
         self._emit(
             Opcode.LOAD_FIELD,
@@ -898,7 +929,7 @@ class KotlinFrontend(BaseFrontend):
                     Opcode.STORE_FIELD,
                     operands=[
                         obj_reg,
-                        self._node_text(named_children[-1]),
+                        self._extract_nav_field_name(named_children[-1]),
                         val_reg,
                     ],
                     node=parent_node,
@@ -943,6 +974,10 @@ class KotlinFrontend(BaseFrontend):
                 (c for c in target.children if c.type == "indexing_suffix"),
                 None,
             )
+            nav_suffix = next(
+                (c for c in target.children if c.type == "navigation_suffix"),
+                None,
+            )
             if suffix_node:
                 id_node = next(
                     (c for c in target.children if c.type == "simple_identifier"),
@@ -958,6 +993,20 @@ class KotlinFrontend(BaseFrontend):
                 self._emit(
                     Opcode.STORE_INDEX,
                     operands=[obj_reg, idx_reg, val_reg],
+                    node=parent_node,
+                )
+            elif nav_suffix:
+                # Navigation assignment: this.field = val or obj.field = val
+                named_children = [c for c in target.children if c.is_named]
+                obj_node = next(
+                    (c for c in named_children if c.type != "navigation_suffix"),
+                    None,
+                )
+                obj_reg = self._lower_expr(obj_node) if obj_node else self._fresh_reg()
+                field_name = self._extract_nav_field_name(nav_suffix)
+                self._emit(
+                    Opcode.STORE_FIELD,
+                    operands=[obj_reg, field_name, val_reg],
                     node=parent_node,
                 )
             else:
