@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from interpreter.cobol.cobol_statements import CobolStatementType, parse_statement
+from interpreter.cobol.condition_name import ConditionName, ConditionValue
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,8 @@ class CobolField:
     children: list[CobolField] = field(default_factory=list)
     occurs: int = 0
     element_size: int = 0
+    conditions: list[ConditionName] = field(default_factory=list)
+    values: list[ConditionValue] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolField:
@@ -51,6 +54,8 @@ class CobolField:
             children=[CobolField.from_dict(c) for c in data.get("children", [])],
             occurs=data.get("occurs", 0),
             element_size=data.get("element_size", 0),
+            conditions=[ConditionName.from_dict(c) for c in data.get("conditions", [])],
+            values=[ConditionValue.from_dict(v) for v in data.get("values", [])],
         )
 
     def to_dict(self) -> dict:
@@ -71,6 +76,10 @@ class CobolField:
             result["occurs"] = self.occurs
         if self.element_size:
             result["element_size"] = self.element_size
+        if self.conditions:
+            result["conditions"] = [c.to_dict() for c in self.conditions]
+        if self.values:
+            result["values"] = [v.to_dict() for v in self.values]
         return result
 
 
