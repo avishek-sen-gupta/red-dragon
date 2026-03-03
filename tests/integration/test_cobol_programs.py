@@ -1280,3 +1280,63 @@ class TestLevel88InPerformUntil:
         # WS-CTR already 5 → DONE-FLAG is true → body never executes
         assert _decode_zoned_unsigned(region, 0, 4) == 5
         assert _decode_zoned_unsigned(region, 4, 4) == 0
+
+
+class TestBlankWhenZero:
+    def test_blank_when_zero_with_zero_value(self):
+        """BLANK WHEN ZERO field with VALUE 0 should be all EBCDIC spaces (0x40)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-BWZ.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-AMT PIC 9(4) BLANK WHEN ZERO VALUE 0.",
+                "77 WS-QTY PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-AMT has BLANK WHEN ZERO + VALUE 0 → all 4 bytes are EBCDIC space (0x40)
+        assert list(region[0:4]) == [0x40, 0x40, 0x40, 0x40]
+        # WS-QTY has no BLANK WHEN ZERO → normal zoned decimal zeros (0xF0)
+        assert _decode_zoned_unsigned(region, 4, 4) == 0
+
+    def test_blank_when_zero_with_nonzero_value(self):
+        """BLANK WHEN ZERO field with non-zero VALUE encodes normally."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-BWZ2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-AMT PIC 9(4) BLANK WHEN ZERO VALUE 42.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # Non-zero → normal zoned encoding, decodes to 42
+        assert _decode_zoned_unsigned(region, 0, 4) == 42
+
+    def test_blank_when_zero_after_move_to_zero(self):
+        """BLANK WHEN ZERO field becomes spaces after MOVE 0 at runtime."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-BWZ3.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-AMT PIC 9(4) BLANK WHEN ZERO VALUE 10.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 0 TO WS-AMT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # After MOVE 0, BLANK WHEN ZERO should produce spaces
+        assert list(region[0:4]) == [0x40, 0x40, 0x40, 0x40]
