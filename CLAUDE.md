@@ -2,7 +2,7 @@
 
 ## Workflow Rules
 
-- Do not ask for confirmations. Just proceed with implementation.
+- For each feature, treat it as an independent commit / push, with its own unit/integration/e2e testing.
 - The workflow is Brainstorm -> Discuss Trade-offs of different designs -> Plan -> Write unit tests -> Implement -> Fix Tests -> Commit -> Refactor.
 - When brainstorming / planning, consider the follow parameters:
   - Whether there are any open source projects which perform similar functionality, so that you don't have to write new code for the task
@@ -63,6 +63,7 @@
 - Favour one class per file, dataclass or otherwise.
 - If enums map to actual objects with behaviour (if they represent configurable functionalities, for example), resolve them into the actual executable objects as early on in the call chain as possible, and inject those objects as dependencies, not the enums.
 - For variables which can only take a fixed set of values (a set of strings, for example), use enums instead of strings.
+- Avoid using direct print statements, unless it's for one-off debugging. Use logging facilities.
 
 ## Code Review Patterns
 
