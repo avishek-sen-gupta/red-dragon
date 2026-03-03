@@ -2,14 +2,20 @@
 
 Two tiers of programs compute the same result (answer = 15):
 
-  Tier 1 — Genuine closures (Python, JavaScript, TypeScript, Lua):
+  Tier 1 — Genuine closures (Python, JavaScript, TypeScript, Lua, Go,
+      Kotlin, Scala):
       make_adder(x) returns a nested function adder(y) that captures x
       from the enclosing scope.  answer = make_adder(10)(5)
 
-  Tier 2 — Function-call fallback (Java, Ruby, Go, PHP, C#, C, C++,
-      Rust, Kotlin, Scala, Pascal):
+  Tier 2 — Function-call fallback (Java, Ruby, PHP, C#, C, C++, Rust,
+      Pascal):
       A plain two-argument function apply_adder(x, y) with no closure
       semantics.  answer = apply_adder(10, 5)
+
+Why some languages with nested function syntax remain in Tier 2:
+  - Rust: nested `fn` items are static and do not capture enclosing variables.
+  - Ruby: `def` inside another `def` does not capture outer locals.
+  - PHP: nested `function` does not capture without an explicit `use` clause.
 
 The test verifies that every frontend lowers to valid IR and that the VM
 produces the correct arithmetic result (15) for all 15 languages.
@@ -36,20 +42,17 @@ from tests.unit.rosetta.conftest import (
 # ---------------------------------------------------------------------------
 
 CLOSURE_LANGUAGES: frozenset[str] = frozenset(
-    {"python", "javascript", "typescript", "lua"}
+    {"python", "javascript", "typescript", "lua", "go", "kotlin", "scala"}
 )
 FALLBACK_LANGUAGES: frozenset[str] = frozenset(
     {
         "java",
         "ruby",
-        "go",
         "php",
         "csharp",
         "c",
         "cpp",
         "rust",
-        "kotlin",
-        "scala",
         "pascal",
     }
 )
@@ -57,9 +60,9 @@ FALLBACK_LANGUAGES: frozenset[str] = frozenset(
 # ---------------------------------------------------------------------------
 # Programs: adder-factory arithmetic in all 15 languages
 #
-# Tier 1 (CLOSURE_LANGUAGES): make_adder(x) returns adder(y) → x + y,
-#   invoked as make_adder(10)(5) = 15.
-# Tier 2 (FALLBACK_LANGUAGES): apply_adder(x, y) → x + y,
+# Tier 1 (CLOSURE_LANGUAGES — 7 languages): make_adder(x) returns
+#   adder(y) → x + y, invoked as make_adder(10)(5) = 15.
+# Tier 2 (FALLBACK_LANGUAGES — 8 languages): apply_adder(x, y) → x + y,
 #   invoked as apply_adder(10, 5) = 15.  No closure semantics.
 # ---------------------------------------------------------------------------
 
@@ -119,12 +122,16 @@ answer = make_adder(10)
     "go": """\
 package main
 
-func apply_adder(x int, y int) int {
-    return x + y
+func make_adder(x int) int {
+    adder := func(y int) int {
+        return x + y
+    }
+    return adder
 }
 
 func main() {
-    answer := apply_adder(10, 5)
+    add10 := make_adder(10)
+    answer := add10(5)
     _ = answer
 }
 """,
@@ -171,19 +178,27 @@ fn apply_adder(x: i32, y: i32) -> i32 {
 let answer = apply_adder(10, 5);
 """,
     "kotlin": """\
-fun make_adder(x: Int, y: Int): Int {
-    return x + y
+fun make_adder(x: Int): Int {
+    fun adder(y: Int): Int {
+        return x + y
+    }
+    return adder
 }
 
-val answer = make_adder(10, 5)
+val add10 = make_adder(10)
+val answer = add10(5)
 """,
     "scala": """\
 object M {
-    def make_adder(x: Int, y: Int): Int = {
-        return x + y
+    def make_adder(x: Int): Int = {
+        def adder(y: Int): Int = {
+            return x + y
+        }
+        return adder
     }
 
-    val answer = make_adder(10, 5)
+    val add10 = make_adder(10)
+    val answer = add10(5)
 }
 """,
     "lua": """\
