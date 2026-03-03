@@ -106,10 +106,11 @@ def _scan_classes(
             classes[cr.name] = cr.label
 
     # Second pass: identify class scopes and their methods.
-    # Methods may appear inside the class scope (Python) or after end_class
-    # (Java/C#/Scala where methods are hoisted). We use the class ref CONST
-    # (e.g., CONST <class:Dog@...>) that follows end_class to set in_class,
-    # so hoisted function refs are still associated with their class.
+    # Python emits methods inside the class scope (class_X ... end_class_X).
+    # Java/C#/Scala hoist methods after end_class_X (so they execute at top
+    # level for field initializers and static blocks). To handle both layouts,
+    # we keep in_class set after end_class — the next class_X label for a
+    # *different* class will reset it.
     in_class: str = ""
     for inst in instructions:
         if inst.opcode == Opcode.LABEL and inst.label:
@@ -130,15 +131,6 @@ def _scan_classes(
             fr = _parse_func_ref(str(inst.operands[0]))
             if fr.matched:
                 class_methods[in_class][fr.name] = fr.label
-                continue
-
-        # A class ref CONST (CONST <class:X@...>) sets in_class for hoisted methods
-        if inst.opcode == Opcode.CONST and inst.operands:
-            cr = _parse_class_ref(str(inst.operands[0]))
-            if cr.matched and cr.name in classes:
-                in_class = cr.name
-                if cr.name not in class_methods:
-                    class_methods[cr.name] = {}
 
     return classes, class_methods
 
