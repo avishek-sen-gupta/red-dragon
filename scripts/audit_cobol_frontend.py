@@ -269,6 +269,10 @@ DD_BRIDGE_EXTRACTED: frozenset[str] = frozenset(
         DataDivisionFeature.CLAUSE_VALUE_MULTI.value,
         DataDivisionFeature.CLAUSE_REDEFINES.value,
         DataDivisionFeature.CLAUSE_OCCURS_FIXED.value,
+        DataDivisionFeature.CLAUSE_OCCURS_DEPENDING.value,
+        DataDivisionFeature.CLAUSE_SIGN.value,
+        DataDivisionFeature.CLAUSE_JUSTIFIED.value,
+        DataDivisionFeature.CLAUSE_SYNCHRONIZED.value,
         DataDivisionFeature.CLAUSE_FILLER.value,
     }
 )
@@ -290,6 +294,10 @@ DD_PYTHON_MODELLED: frozenset[str] = frozenset(
         DataDivisionFeature.CLAUSE_VALUE_MULTI.value,
         DataDivisionFeature.CLAUSE_REDEFINES.value,
         DataDivisionFeature.CLAUSE_OCCURS_FIXED.value,
+        DataDivisionFeature.CLAUSE_OCCURS_DEPENDING.value,
+        DataDivisionFeature.CLAUSE_SIGN.value,
+        DataDivisionFeature.CLAUSE_JUSTIFIED.value,
+        DataDivisionFeature.CLAUSE_SYNCHRONIZED.value,
         DataDivisionFeature.CLAUSE_FILLER.value,
     }
 )
@@ -311,6 +319,10 @@ DD_FRONTEND_HANDLED: frozenset[str] = frozenset(
         DataDivisionFeature.CLAUSE_VALUE_MULTI.value,
         DataDivisionFeature.CLAUSE_REDEFINES.value,
         DataDivisionFeature.CLAUSE_OCCURS_FIXED.value,
+        DataDivisionFeature.CLAUSE_OCCURS_DEPENDING.value,
+        DataDivisionFeature.CLAUSE_SIGN.value,
+        DataDivisionFeature.CLAUSE_JUSTIFIED.value,
+        DataDivisionFeature.CLAUSE_SYNCHRONIZED.value,
         DataDivisionFeature.CLAUSE_FILLER.value,
     }
 )

@@ -911,3 +911,37 @@ Benefits:
 - `audit_cobol_frontend.py`: Added ENTRY_CONDITION_88, CLAUSE_FILLER, CLAUSE_VALUE_MULTI to all three coverage sets.
 
 **Consequences:** 18 new unit tests covering condition value/name construction, condition name index building, and condition lowering expansion (single-value, multi-value OR, THRU range, mixed, unknown passthrough). All 7958 unit tests and 32 integration tests pass. Three features move from NOT_EXTRACTED to HANDLED in the audit.
+
+---
+
+### ADR-043: Storage modifier clauses — SIGN, JUSTIFIED, SYNCHRONIZED, OCCURS DEPENDING ON (2026-03-03)
+
+**Context:** The DATA DIVISION audit showed four features at NOT_EXTRACTED: CLAUSE_SIGN, CLAUSE_JUSTIFIED, CLAUSE_SYNCHRONIZED, and CLAUSE_OCCURS_DEPENDING. All four have full ProLeap API support but required extraction in the Java bridge, modelling in Python, and (for SIGN and JUSTIFIED) new encoder/decoder IR variants. These clauses control how COBOL fields are physically stored in memory and are common in production programs.
+
+**Decision:** Implement all four clauses across the full pipeline (bridge → model → type system → layout → IR encoders → dispatch), each as a separate commit to maintain bisectability:
+
+1. **SIGN IS LEADING/TRAILING [SEPARATE CHARACTER]:** Controls where the sign lives in a zoned decimal field. Four combinations: trailing embedded (default — sign nibble in high nibble of last byte), leading embedded (sign nibble in first byte), trailing separate (sign as dedicated byte 0x4E/0x60 after digits, +1 byte), leading separate (sign byte before digits, +1 byte). New IR encoder/decoder variants: `build_encode_zoned_separate_ir()` and `build_decode_zoned_separate_ir()` for separate-sign fields, plus `sign_leading` parameter on existing zoned IR builders. `CobolTypeDescriptor.byte_length` adds +1 when `sign_separate` is True.
+
+2. **JUSTIFIED RIGHT:** Right-justifies alphanumeric fields (left-pads with spaces). New IR encoder: `build_encode_alphanumeric_justified_ir()` concatenates padding + input, then slices the last N bytes using `__list_len` for dynamic offset computation. No decoder changes needed — decoding is identical to left-justified.
+
+3. **SYNCHRONIZED:** Forces natural word boundary alignment for COMP/BINARY fields (2-byte for ≤4 digits, 4-byte for ≤9 digits, 8-byte for ≤18 digits). Handled entirely in the Java bridge's offset computation via `computeSyncAlignment()` — no Python-side encoder changes needed because the bridge emits correctly aligned offsets.
+
+4. **OCCURS DEPENDING ON:** `OCCURS m TO n DEPENDING ON counter-field` creates variable-length arrays. Bridge extracts `occurs_depending_on` (field name), `occurs` (max count from `getTo()`), and `occurs_min` (min count from `getFrom()`). Storage allocation uses max count. Python model and layout propagate the metadata for runtime bounds checking.
+
+**Key design choices:**
+- SIGN clause adds `sign_leading`/`sign_separate` booleans to `CobolTypeDescriptor`, `FieldLayout`, and `CobolField` — threaded through `parse_pic()` to the type descriptor at construction time.
+- EBCDIC sign byte encoding: `0x4E` for positive, `0x60` for negative (standard EBCDIC `+`/`-` characters), computed as `0x4E + is_neg * 0x12`.
+- SYNCHRONIZED alignment is bridge-only — the bridge rounds offsets up to natural boundaries and inserts implicit slack bytes. Python sees correct offsets without needing alignment logic.
+- OCCURS DEPENDING ON uses max allocation for storage layout (matching IBM behaviour) with min/max metadata for optional runtime bounds checking.
+
+**Changes:**
+- `DataFieldSerializer.java`: Added `extractSign()`, `extractJustified()`, `extractSynchronized()`, `computeSyncAlignment()`, alignment logic in `serializeChildren()`, `computeElementSize()` +1 byte for SEPARATE sign. Updated `extractOccurs()` for DEPENDING ON max/min.
+- `asg_types.py`: `CobolField` gains `sign_leading`, `sign_separate`, `justified_right`, `synchronized`, `occurs_depending_on`, `occurs_min`.
+- `cobol_types.py`: `CobolTypeDescriptor` gains `sign_separate`, `sign_leading`, `justified_right`. `byte_length` updated for SEPARATE.
+- `pic_parser.py`: `parse_pic()` accepts and propagates `sign_leading`, `sign_separate`, `justified_right`.
+- `data_layout.py`: `FieldLayout` gains `sign_separate`, `sign_leading`, `justified_right`, `occurs_depending_on`, `occurs_min`. `_flatten_field()` propagates all fields.
+- `ir_encoders.py`: New `build_encode_zoned_separate_ir()`, `build_decode_zoned_separate_ir()`, `build_encode_alphanumeric_justified_ir()`. Updated existing zoned builders with `sign_leading` param.
+- `emit_context.py`: Updated `emit_encode_numeric()`, `emit_decode_field()`, `emit_numeric_encode_from_string()`, `emit_encode_value()`, `emit_encode_alphanumeric()`, `emit_encode_from_string()` for sign and justified dispatch.
+- `audit_cobol_frontend.py`: All four features added to `DD_BRIDGE_EXTRACTED`, `DD_PYTHON_MODELLED`, `DD_FRONTEND_HANDLED`.
+
+**Consequences:** 35+ new unit tests covering all sign variants (leading/trailing, embedded/separate, encode/decode, round-trip), justified encoding (short/exact/over/empty), synchronized alignment, and OCCURS DEPENDING ON metadata propagation. Four features move from NOT_EXTRACTED to HANDLED in the DATA DIVISION audit. All existing tests pass unchanged.
