@@ -254,6 +254,8 @@ class EmitContext:
     def emit_encode_value(self, fl: FieldLayout, value: str) -> str:
         """Emit inline IR to encode a value per the field's type. Returns result register."""
         td = fl.type_descriptor
+        if td.blank_when_zero and self._is_zero_value(value):
+            return self._emit_ebcdic_spaces(fl.byte_length)
         if td.category == CobolDataCategory.ALPHANUMERIC:
             return self.emit_encode_alphanumeric(
                 fl.name, value, td.total_digits, justified_right=td.justified_right
@@ -261,6 +263,23 @@ class EmitContext:
         if td.category in (CobolDataCategory.COMP1, CobolDataCategory.COMP2):
             return self.emit_encode_float(fl.name, value, td)
         return self.emit_encode_numeric(fl.name, value, td)
+
+    def _is_zero_value(self, value: str) -> bool:
+        """Check if a literal value is numerically zero."""
+        try:
+            return float(value) == 0.0
+        except (ValueError, TypeError):
+            return False
+
+    def _emit_ebcdic_spaces(self, byte_length: int) -> str:
+        """Emit IR to create a list of EBCDIC spaces (0x40). Returns result register."""
+        result = self.fresh_reg()
+        self.emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=result,
+            operands=["__make_list", byte_length, 0x40],
+        )
+        return result
 
     def emit_encode_alphanumeric(
         self,
@@ -402,6 +421,24 @@ class EmitContext:
         )
         return result
 
+    def _emit_blank_when_zero_wrap(
+        self, encoded_reg: str, value_str_reg: str, byte_length: int
+    ) -> str:
+        """Wrap encoded bytes with BLANK WHEN ZERO check via builtin."""
+        result = self.fresh_reg()
+        length_reg = self.const_to_reg(byte_length)
+        self.emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=result,
+            operands=[
+                "__cobol_blank_when_zero",
+                encoded_reg,
+                value_str_reg,
+                length_reg,
+            ],
+        )
+        return result
+
     def emit_encode_from_string(self, fl: FieldLayout, value_str_reg: str) -> str:
         """Emit encoding IR from a string value register."""
         td = fl.type_descriptor
@@ -425,9 +462,19 @@ class EmitContext:
                 operands=["float", value_str_reg],
             )
             ir = build_encode_float_ir(f"enc_float_{fl.name}", td.byte_length)
-            return self.inline_ir(ir, {"%p_float_value": float_reg})
+            encoded = self.inline_ir(ir, {"%p_float_value": float_reg})
+            if td.blank_when_zero:
+                return self._emit_blank_when_zero_wrap(
+                    encoded, value_str_reg, fl.byte_length
+                )
+            return encoded
 
-        return self.emit_numeric_encode_from_string(fl, value_str_reg)
+        encoded = self.emit_numeric_encode_from_string(fl, value_str_reg)
+        if td.blank_when_zero:
+            return self._emit_blank_when_zero_wrap(
+                encoded, value_str_reg, fl.byte_length
+            )
+        return encoded
 
     def emit_numeric_encode_from_string(
         self, fl: FieldLayout, value_str_reg: str

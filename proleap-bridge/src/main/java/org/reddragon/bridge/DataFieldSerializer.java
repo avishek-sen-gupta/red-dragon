@@ -6,6 +6,7 @@ import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntry;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryCondition;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryGroup;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryRename;
+import io.proleap.cobol.asg.metamodel.data.datadescription.BlankWhenZeroClause;
 import io.proleap.cobol.asg.metamodel.data.datadescription.OccursClause;
 import io.proleap.cobol.asg.metamodel.data.datadescription.JustifiedClause;
 import io.proleap.cobol.asg.metamodel.data.datadescription.SignClause;
@@ -125,6 +126,10 @@ public final class DataFieldSerializer {
 
         if (extractSynchronized(group)) {
             obj.addProperty("synchronized", true);
+        }
+
+        if (extractBlankWhenZero(group)) {
+            obj.addProperty("blank_when_zero", true);
         }
 
         List<DataDescriptionEntry> children = group.getDataDescriptionEntries();
@@ -523,6 +528,20 @@ public final class DataFieldSerializer {
             return justifiedClause != null;
         } catch (Exception e) {
             LOG.fine("No JUSTIFIED clause for " + group.getName());
+        }
+        return false;
+    }
+
+    /**
+     * Extracts the BLANK WHEN ZERO clause from a data description entry.
+     * Returns true if BLANK WHEN ZERO is present.
+     */
+    private static boolean extractBlankWhenZero(DataDescriptionEntryGroup group) {
+        try {
+            BlankWhenZeroClause blankClause = group.getBlankWhenZeroClause();
+            return blankClause != null;
+        } catch (Exception e) {
+            LOG.fine("No BLANK WHEN ZERO clause for " + group.getName());
         }
         return false;
     }

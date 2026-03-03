@@ -113,6 +113,7 @@ def _flatten_field(
         sign_leading=cobol_field.sign_leading,
         sign_separate=cobol_field.sign_separate,
         justified_right=cobol_field.justified_right,
+        blank_when_zero=cobol_field.blank_when_zero,
     )
     element_byte_length = type_desc.byte_length
     total_byte_length = (

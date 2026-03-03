@@ -252,6 +252,12 @@ class TestDataDivisionClassify:
             == DataDivisionStatus.HANDLED
         )
 
+    def test_blank_when_zero_is_handled(self):
+        assert (
+            _classify_dd_feature(DataDivisionFeature.CLAUSE_BLANK_WHEN_ZERO.value)
+            == DataDivisionStatus.HANDLED
+        )
+
     def test_linkage_is_not_extracted(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.SECTION_LINKAGE.value)

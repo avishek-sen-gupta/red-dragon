@@ -177,3 +177,20 @@ class TestParsePicUsageOverride:
         result = parse_pic("", usage="COMP-2")
         assert result.category == CobolDataCategory.COMP2
         assert result.byte_length == 8
+
+
+class TestParsePicBlankWhenZero:
+    def test_blank_when_zero_propagated(self):
+        """BLANK WHEN ZERO flag is propagated to the type descriptor."""
+        result = parse_pic("9(5)", blank_when_zero=True)
+        assert result.blank_when_zero is True
+        assert result.category == CobolDataCategory.ZONED_DECIMAL
+
+    def test_blank_when_zero_false_by_default(self):
+        result = parse_pic("9(5)")
+        assert result.blank_when_zero is False
+
+    def test_blank_when_zero_not_on_alphanumeric(self):
+        """BLANK WHEN ZERO on alphanumeric is ignored (not propagated)."""
+        result = parse_pic("X(10)", blank_when_zero=True)
+        assert result.blank_when_zero is False  # alphanumeric path doesn't set it

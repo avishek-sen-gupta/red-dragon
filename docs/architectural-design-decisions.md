@@ -961,3 +961,23 @@ Benefits:
 - `audit_cobol_frontend.py`: `ENTRY_RENAME_66` added to all three coverage sets.
 
 **Consequences:** ENTRY_RENAME_66 moves from NOT_EXTRACTED to HANDLED. Six new unit tests verify round-trip serialization, layout resolution (simple and THRU), and audit classification. All existing tests pass unchanged.
+
+---
+
+### ADR-045: BLANK WHEN ZERO clause support (2026-03-03)
+
+**Context:** COBOL's `BLANK WHEN ZERO` clause specifies that a numeric field should display as all spaces when its value is zero. The DATA DIVISION audit showed CLAUSE_BLANK_WHEN_ZERO as NOT_EXTRACTED. This is a display-level semantic — storage size is unchanged, but the encoded bytes must be EBCDIC spaces (0x40) when the value is numerically zero.
+
+**Decision:** Implement BLANK WHEN ZERO across all three pipeline layers. The bridge extracts the clause from ProLeap's `BlankWhenZeroClause` API. The Python model carries `blank_when_zero: bool` on `CobolField` and propagates it through `parse_pic()` to `CobolTypeDescriptor`. The frontend uses two encoding strategies: (1) for literal values (`emit_encode_value`), a Python-level check short-circuits to EBCDIC spaces when the value is zero; (2) for runtime values (`emit_encode_from_string`), a `__cobol_blank_when_zero` builtin wraps the encoded result and replaces it with spaces if the value string is numerically zero. This avoids needing branching IR in the inline_ir path which only supports straight-line code.
+
+**Changes:**
+- `DataFieldSerializer.java`: Added `extractBlankWhenZero()` method emitting `blank_when_zero: true`.
+- `asg_types.py`: `CobolField` gains `blank_when_zero: bool`.
+- `cobol_types.py`: `CobolTypeDescriptor` gains `blank_when_zero: bool`.
+- `pic_parser.py`: `parse_pic()` accepts and propagates `blank_when_zero` parameter.
+- `data_layout.py`: `_flatten_field()` passes `blank_when_zero` to `parse_pic()`.
+- `byte_builtins.py`: New `_builtin_cobol_blank_when_zero` registered in `BYTE_BUILTINS`.
+- `emit_context.py`: `_is_zero_value()`, `_emit_ebcdic_spaces()`, `_emit_blank_when_zero_wrap()` helpers; both literal and runtime encode paths updated.
+- `audit_cobol_frontend.py`: `CLAUSE_BLANK_WHEN_ZERO` added to all three coverage sets.
+
+**Consequences:** CLAUSE_BLANK_WHEN_ZERO moves from NOT_EXTRACTED to HANDLED. Twelve new unit tests cover round-trip serialization, type descriptor propagation, PIC parser integration, builtin function behaviour, data layout propagation, and audit classification. All existing tests pass unchanged.

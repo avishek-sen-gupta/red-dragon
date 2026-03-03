@@ -48,6 +48,7 @@ class CobolField:
     occurs_min: int = 0
     renames_from: str = ""
     renames_thru: str = ""
+    blank_when_zero: bool = False
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolField:
@@ -73,6 +74,7 @@ class CobolField:
             occurs_min=data.get("occurs_min", 0),
             renames_from=data.get("renames_from", ""),
             renames_thru=data.get("renames_thru", ""),
+            blank_when_zero=data.get("blank_when_zero", False),
         )
 
     def to_dict(self) -> dict:
@@ -114,6 +116,8 @@ class CobolField:
             result["renames_from"] = self.renames_from
         if self.renames_thru:
             result["renames_thru"] = self.renames_thru
+        if self.blank_when_zero:
+            result["blank_when_zero"] = True
         return result
 
 
