@@ -1120,3 +1120,13 @@ Also fixed Ruby's `raise` to emit `THROW` instead of `CALL_FUNCTION`.
 **Decision:** (1) Rewrite the Rosetta closures module docstring and PROGRAMS comment block to honestly describe two tiers: "Tier 1 — Genuine closures" (4 languages) and "Tier 2 — Function-call fallback" (11 languages). Add `CLOSURE_LANGUAGES` and `FALLBACK_LANGUAGES` frozenset constants with an assertion that their union equals the full program set. (2) Rename `test_two_closures_share_state` to `test_accumulator_persists_mutations` with an accurate docstring.
 
 **Consequences:** Test documentation now accurately describes what each tier tests. One new test (`test_tier_constants_cover_all_programs`) ensures the tier classification stays in sync with the program set. All 8362 tests pass (8300 unit + 62 integration, 4 skipped, 6 xfailed).
+
+---
+
+### ADR-057: Upgrade Go, Kotlin, Scala to genuine closures in Rosetta test (2026-03-03)
+
+**Context:** ADR-056 established a two-tier classification for the Rosetta closures test: 4 languages with genuine closures and 11 with plain two-argument fallback functions. However, Go, Kotlin, and Scala all support nested functions that genuinely capture enclosing variables — Go via anonymous `func` literals, Kotlin via local `fun` declarations, and Scala via local `def` declarations. These three languages were unnecessarily in Tier 2.
+
+**Decision:** Upgrade Go, Kotlin, and Scala from Tier 2 (fallback) to Tier 1 (genuine closures). Each now implements `make_adder(x)` returning a nested function `adder(y)` that captures `x` from the enclosing scope, matching the pattern used by Python, JavaScript, TypeScript, and Lua. The remaining 8 languages stay as fallback: Java, C#, C, C++, Pascal (no nested functions), Rust (`fn` items don't capture), Ruby (`def` doesn't capture outer locals), and PHP (`function` doesn't capture without `use`).
+
+**Consequences:** Tier 1 grows from 4 to 7 languages; Tier 2 shrinks from 11 to 8. The test now exercises genuine closure semantics in every language that supports them. The docstring and comment block document why Rust, Ruby, and PHP remain in Tier 2 despite having nested function syntax.
