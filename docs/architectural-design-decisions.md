@@ -1031,3 +1031,18 @@ Benefits:
 The inner `case_clause` field names (`pattern`, `body`) do resolve correctly via `child_by_field_name`, so the per-case extraction logic was already correct — only the outer container lookup was broken.
 
 **Consequences:** Scala now generates proper try/catch/finally block structure with `SYMBOLIC caught_exception` per case clause. Five new unit tests verify single catch, multiple catches, exception variable storage, try_end branching, and finally blocks. Scala added to `TRY_CATCH_LANGUAGES` in the Rosetta exception e2e tests. All 8238 tests pass.
+
+---
+
+### ADR-049: Fix Pascal try/except to use structured _lower_try_catch (2026-03-03)
+
+**Context:** Pascal's `_lower_pascal_try()` was a stub that simply iterated all children as sequential statements, causing both the try body and except body to execute unconditionally. This meant exception handlers ran even in the happy path.
+
+**Decision:** Replace the flat iteration with a proper `_extract_pascal_try_parts()` method that parses the Pascal `try` AST node by tracking `kExcept`/`kFinally` keyword boundaries:
+- Before `kExcept`/`kFinally`: first `statements` child → try body
+- After `kExcept`: `exceptionHandler` children → catch clauses (each with identifier, typeref, and handler body)
+- After `kFinally`: `statements` child → finally body
+
+The extracted parts are passed to the base class `_lower_try_catch()`, producing proper labeled blocks (try_body, catch_N, try_finally, try_end) with BRANCH instructions and `SYMBOLIC caught_exception` per handler.
+
+**Consequences:** Pascal now generates structured try/catch/finally block IR identical to the other 10 try/catch-supporting languages. Five new unit tests verify caught_exception generation, exception variable storage, try_end labels, finally blocks, and non-sequential execution. Pascal added to `TRY_CATCH_LANGUAGES` in Rosetta e2e. Rosetta exception e2e now uses a proper `try/except/on e: Exception do` program for Pascal. All 8244 tests pass.

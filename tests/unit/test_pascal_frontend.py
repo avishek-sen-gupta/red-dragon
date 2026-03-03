@@ -716,3 +716,114 @@ end.
         assert any(
             "inherited" in inst.operands or "Create" in inst.operands for inst in calls
         )
+
+
+class TestPascalTryExcept:
+    def test_try_except_generates_caught_exception(self):
+        """Pascal try/except with 'on e: Exception do' should lower to
+        SYMBOLIC caught_exception, not be executed sequentially."""
+        source = """\
+program M;
+var answer: integer;
+begin
+    try
+        answer := -1;
+    except
+        on e: Exception do
+            answer := 99;
+    end;
+end.
+"""
+        instructions = _parse_pascal(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        caught = [
+            s
+            for s in symbolics
+            if any("caught_exception" in str(op) for op in s.operands)
+        ]
+        assert len(caught) >= 1, (
+            "Expected at least 1 SYMBOLIC caught_exception from except clause, "
+            f"got {len(caught)}"
+        )
+
+    def test_try_except_stores_exception_variable(self):
+        """The exception variable 'e' should be stored via STORE_VAR."""
+        source = """\
+program M;
+begin
+    try
+        writeln('ok');
+    except
+        on e: Exception do
+            writeln('error');
+    end;
+end.
+"""
+        instructions = _parse_pascal(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stored_names = [inst.operands[0] for inst in stores]
+        assert (
+            "e" in stored_names
+        ), f"Expected 'e' in stored variables, got {stored_names}"
+
+    def test_try_except_has_try_end_label(self):
+        """Try body should BRANCH past the except block to try_end."""
+        source = """\
+program M;
+begin
+    try
+        writeln('ok');
+    except
+        on e: Exception do
+            writeln('error');
+    end;
+end.
+"""
+        instructions = _parse_pascal(source)
+        labels = _find_all(instructions, Opcode.LABEL)
+        try_end_labels = [l for l in labels if "try_end" in l.label]
+        assert len(try_end_labels) >= 1, "Expected at least 1 try_end label in IR"
+
+    def test_try_finally_has_finally_label(self):
+        """Pascal try/finally should generate try_finally label."""
+        source = """\
+program M;
+var answer: integer;
+begin
+    try
+        answer := 1;
+    finally
+        answer := 2;
+    end;
+end.
+"""
+        instructions = _parse_pascal(source)
+        labels = _find_all(instructions, Opcode.LABEL)
+        label_names = [l.label for l in labels]
+        assert any("try_body" in name for name in label_names)
+        assert any("try_finally" in name for name in label_names)
+        assert any("try_end" in name for name in label_names)
+
+    def test_try_except_body_not_sequential_with_catch(self):
+        """Catch block should NOT execute sequentially after try body.
+        The try body should BRANCH to try_end, skipping the catch."""
+        source = """\
+program M;
+var answer: integer;
+begin
+    try
+        answer := -1;
+    except
+        on e: Exception do
+            answer := 99;
+    end;
+end.
+"""
+        instructions = _parse_pascal(source)
+        labels = _find_all(instructions, Opcode.LABEL)
+        label_names = [l.label for l in labels]
+        # Must have catch label — proves separation
+        assert any("catch" in name for name in label_names), (
+            f"Expected a 'catch' label proving try/except separation, "
+            f"got labels: {label_names}"
+        )

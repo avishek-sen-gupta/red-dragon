@@ -144,7 +144,12 @@ answer = -1
 program M;
 var answer: integer;
 begin
-    answer := -1;
+    try
+        answer := -1;
+    except
+        on e: Exception do
+            answer := 99;
+    end;
 end.
 """,
 }
@@ -168,6 +173,7 @@ TRY_CATCH_LANGUAGES: frozenset[str] = frozenset(
         "cpp",
         "kotlin",
         "scala",
+        "pascal",
     }
 )
 
