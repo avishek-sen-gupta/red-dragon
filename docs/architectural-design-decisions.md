@@ -1074,16 +1074,3 @@ Also fixed Ruby's `raise` to emit `THROW` instead of `CALL_FUNCTION`.
 3. **JavaScript `new` expression** (`_lower_new_expression` in `javascript.py`): Return the `NEW_OBJECT` register (object address) instead of the `CALL_METHOD` register (constructor return value).
 
 **Consequences:** Class instantiation now works for Java (constructor dispatched, `this` bound, fields set), C#, Scala, and JavaScript. Eight new unit tests verify class method registration (Java, C#, Scala), constructor dispatch, field setting, and object allocation. All 8266 tests pass.
-
----
-
-### ADR-052: Cross-language Rosetta tests for destructuring, nested functions, and enums (2026-03-03)
-
-**Context:** The Rosetta test suite covered closures, classes, and exceptions across all 15 deterministic frontends. Three additional feature categories were added: array/tuple destructuring, nested/inner function calls, and enum-like named constant lookups. Multiple returns was attempted but dropped — the VM cannot resolve array constructors (`listOf`, `Array`, `Vec`) for Rust/Kotlin/Scala, Scala's parenthetical indexing `r(0)` isn't lowered as `LOAD_INDEX`, and C/C++ `main()` scopes variables out of frame 0.
-
-**Decision:** Add three new Rosetta test files, each following the established 3-class pattern (Lowering, CrossLanguage, Execution):
-1. **Destructuring** (`test_rosetta_destructuring.py`): Create a 2-element array, index into it to extract both values, compute `a + b = 15`. Languages with native destructuring syntax (Python, JS, TS, Rust) could use it, but array indexing was chosen as the universal pattern for VM compatibility. Kotlin and Scala use direct variable assignment as a fallback since `listOf`/`Array` indexing produces symbolic values.
-2. **Nested functions** (`test_rosetta_nested_functions.py`): Define `inner(y) → y * 2` and `outer(x) → inner(x) + 5`, compute `outer(5) = 15`. Languages without true nesting (C, C++, Java, C#, Pascal) define sibling functions.
-3. **Enums** (`test_rosetta_enums.py`): Define `RED=1, GREEN=2, BLUE=3` as named constants or dict entries, look up GREEN → `answer = 2`. Languages with native enums use class-level constants; others use dict/map/table.
-
-**Consequences:** 141 new tests (47 per file × 3 files) covering destructuring, nested function dispatch, and enum-like lookups across all 15 languages. All programs execute deterministically with zero LLM calls. All 8407 tests pass.
