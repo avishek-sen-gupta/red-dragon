@@ -663,19 +663,41 @@ class GoFrontend(BaseFrontend):
                 type_node = child.child_by_field_name("type")
                 if name_node:
                     type_name = self._node_text(name_node)
-                    reg = self._fresh_reg()
-                    hint = (
-                        f"struct:{type_name}"
-                        if type_node and type_node.type == "struct_type"
-                        else f"type:{type_name}"
-                    )
-                    self._emit(
-                        Opcode.SYMBOLIC,
-                        result_reg=reg,
-                        operands=[hint],
-                        node=node,
-                    )
-                    self._emit(Opcode.STORE_VAR, operands=[type_name, reg])
+                    if type_node and type_node.type == "struct_type":
+                        self._lower_go_struct_type(type_name, type_node, node)
+                    else:
+                        reg = self._fresh_reg()
+                        self._emit(
+                            Opcode.SYMBOLIC,
+                            result_reg=reg,
+                            operands=[f"type:{type_name}"],
+                            node=node,
+                        )
+                        self._emit(Opcode.STORE_VAR, operands=[type_name, reg])
+
+    def _lower_go_struct_type(self, type_name: str, type_node, parent_node):
+        """Emit a CLASS block for a Go struct type declaration.
+
+        Methods declared with a receiver of this type (at package level)
+        are associated with the class by the registry's hoisted-method scan.
+        """
+        class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{type_name}")
+        end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{type_name}")
+
+        self._emit(Opcode.BRANCH, label=end_label, node=parent_node)
+        self._emit(Opcode.LABEL, label=class_label)
+        # Struct fields are handled at instantiation time (composite_literal)
+        self._emit(Opcode.LABEL, label=end_label)
+
+        cls_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=cls_reg,
+            operands=[
+                constants.CLASS_REF_TEMPLATE.format(name=type_name, label=class_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[type_name, cls_reg])
 
     # -- Go: var declaration ---------------------------------------------------
 

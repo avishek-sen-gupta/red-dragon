@@ -341,7 +341,7 @@ poetry run pytest tests/integration/ -v  # integration tests only
 poetry run pytest tests/ -n 0 -v     # disable parallel execution
 ```
 
-Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures (including mutation persistence and accumulator semantics, cross-language via Rosetta — both nested-function and lambda/arrow-function forms), class/struct instantiation with method dispatch (8 languages: Python, Java, C#, Kotlin, Scala, JS, TS, PHP) and field access (cross-language), exception handling structure (cross-language), symbolic execution, factory routing, and the composable API layer.
+Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures (including mutation persistence and accumulator semantics, cross-language via Rosetta — both nested-function and lambda/arrow-function forms), class/struct instantiation with method dispatch (11 languages: Python, Java, C#, Kotlin, Scala, JS, TS, PHP, Go, C++, Rust) and field access (cross-language), exception handling structure (cross-language), symbolic execution, factory routing, and the composable API layer.
 
 ### Rosetta cross-language suite
 

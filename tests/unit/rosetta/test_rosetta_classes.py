@@ -3,13 +3,14 @@
 Verifies that the VM can execute programs using class instantiation, field
 access, and method calls (or language-appropriate equivalents).
 
-Tier 1 — Class with methods (Python, Java, C#, Kotlin, Scala):
-    Class instantiation, field access via ``this``, method calls.
+Tier 1 — Class with methods (11: Python, Java, C#, Kotlin, Scala, JS, TS,
+         PHP, Go, C++, Rust):
+    Class instantiation, field access via ``this``/``self``, method calls.
 
-Tier 2 — Object/struct field access (JS, TS, PHP, Ruby, Lua, Go, C, C++, Rust):
-    Object/struct creation + field read/write.
+Tier 2 — Object/struct/hash field access (3: Ruby, Lua, C):
+    Object/struct creation + field read/write; no instance methods.
 
-Tier 3 — Record field access (Pascal):
+Tier 3 — Record field access (1: Pascal):
     Record type allocation + field read/write.
 
 All programs compute a counter incremented 3 times → answer = 3.
@@ -106,12 +107,20 @@ type Counter struct {
     count int
 }
 
+func (c *Counter) increment() {
+    c.count = c.count + 1
+}
+
+func (c *Counter) getValue() int {
+    return c.count
+}
+
 func main() {
     c := Counter{count: 0}
-    c.count = c.count + 1
-    c.count = c.count + 1
-    c.count = c.count + 1
-    answer := c.count
+    c.increment()
+    c.increment()
+    c.increment()
+    answer := c.getValue()
     _ = answer
 }
 """,
@@ -160,24 +169,33 @@ int answer = c.count;
     "cpp": """\
 struct Counter {
     int count;
+    void increment() { this->count = this->count + 1; }
+    int getValue() { return this->count; }
 };
 Counter c;
 c.count = 0;
-c.count = c.count + 1;
-c.count = c.count + 1;
-c.count = c.count + 1;
-int answer = c.count;
+c.increment(); c.increment(); c.increment();
+int answer = c.getValue();
 """,
     "rust": """\
 struct Counter {
     count: i32,
 }
 
+impl Counter {
+    fn increment(&mut self) {
+        self.count = self.count + 1;
+    }
+    fn get_value(&self) -> i32 {
+        return self.count;
+    }
+}
+
 let mut c = Counter { count: 0 };
-c.count = c.count + 1;
-c.count = c.count + 1;
-c.count = c.count + 1;
-let answer = c.count;
+c.increment();
+c.increment();
+c.increment();
+let answer = c.get_value();
 """,
     "kotlin": """\
 class Counter {

@@ -155,18 +155,18 @@ class TestGoFrontendMethodCall:
 
 
 class TestGoFrontendStructDef:
-    def test_struct_definition_produces_symbolic(self):
+    def test_struct_definition_produces_class_ref(self):
         source = """package main
 type Point struct {
     X int
     Y int
 }"""
         ir = _parse_and_lower(source)
-        symbolics = _find_all(ir, Opcode.SYMBOLIC)
-        struct_symbolics = [
-            s for s in symbolics if any("struct:" in str(op) for op in s.operands)
+        consts = _find_all(ir, Opcode.CONST)
+        class_refs = [
+            c for c in consts if any("<class:" in str(op) for op in c.operands)
         ]
-        assert len(struct_symbolics) >= 1
+        assert len(class_refs) >= 1
         stores = _find_all(ir, Opcode.STORE_VAR)
         point_stores = [s for s in stores if "Point" in s.operands]
         assert len(point_stores) >= 1
@@ -266,8 +266,8 @@ func (c Counter) Value() int {
 }
 """
         ir = _parse_and_lower(source)
-        symbolics = _find_all(ir, Opcode.SYMBOLIC)
-        assert any("struct:" in str(s.operands) for s in symbolics)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("<class:" in str(c.operands) for c in consts)
         returns = _find_all(ir, Opcode.RETURN)
         assert len(returns) >= 1
         stores = _find_all(ir, Opcode.STORE_VAR)
