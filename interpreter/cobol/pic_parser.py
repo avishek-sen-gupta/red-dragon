@@ -25,6 +25,15 @@ _USAGE_TO_CATEGORY = {
     "COMP-3": CobolDataCategory.COMP3,
     "COMP3": CobolDataCategory.COMP3,
     "PACKED-DECIMAL": CobolDataCategory.COMP3,
+    "COMP": CobolDataCategory.BINARY,
+    "COMP-4": CobolDataCategory.BINARY,
+    "BINARY": CobolDataCategory.BINARY,
+    "COMP-5": CobolDataCategory.BINARY,
+    "COMP5": CobolDataCategory.BINARY,
+    "COMP-1": CobolDataCategory.COMP1,
+    "COMP1": CobolDataCategory.COMP1,
+    "COMP-2": CobolDataCategory.COMP2,
+    "COMP2": CobolDataCategory.COMP2,
 }
 
 
@@ -141,6 +150,25 @@ def parse_pic(pic: str, usage: str = "DISPLAY") -> CobolTypeDescriptor:
     Returns:
         A CobolTypeDescriptor describing the field's type and layout.
     """
+    category = _USAGE_TO_CATEGORY.get(usage, CobolDataCategory.ZONED_DECIMAL)
+
+    # COMP-1 and COMP-2 have no PIC clause — return immediately with fixed size.
+    if category in (CobolDataCategory.COMP1, CobolDataCategory.COMP2):
+        return CobolTypeDescriptor(
+            category=category,
+            total_digits=0,
+            decimal_digits=0,
+            signed=False,
+        )
+
+    if not pic:
+        return CobolTypeDescriptor(
+            category=category,
+            total_digits=0,
+            decimal_digits=0,
+            signed=False,
+        )
+
     input_stream = InputStream(pic)
     lexer = CobolDataTypesLexer(input_stream)
     token_stream = CommonTokenStream(lexer)
@@ -149,8 +177,6 @@ def parse_pic(pic: str, usage: str = "DISPLAY") -> CobolTypeDescriptor:
 
     visitor = _PicVisitor()
     visitor.visit(tree)
-
-    category = _USAGE_TO_CATEGORY.get(usage, CobolDataCategory.ZONED_DECIMAL)
 
     if visitor.is_alphanumeric:
         return CobolTypeDescriptor(
