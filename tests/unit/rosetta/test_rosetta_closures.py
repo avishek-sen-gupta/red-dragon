@@ -3,12 +3,11 @@
 Two tiers of programs compute the same result (answer = 15):
 
   Tier 1 — Genuine closures (Python, JavaScript, TypeScript, Lua, Go,
-      Kotlin, Scala):
+      Kotlin, Scala, Pascal):
       make_adder(x) returns a nested function adder(y) that captures x
       from the enclosing scope.  answer = make_adder(10)(5)
 
-  Tier 2 — Function-call fallback (Java, Ruby, PHP, C#, C, C++, Rust,
-      Pascal):
+  Tier 2 — Function-call fallback (Java, Ruby, PHP, C#, C, C++, Rust):
       A plain two-argument function apply_adder(x, y) with no closure
       semantics.  answer = apply_adder(10, 5)
 
@@ -42,7 +41,7 @@ from tests.unit.rosetta.conftest import (
 # ---------------------------------------------------------------------------
 
 CLOSURE_LANGUAGES: frozenset[str] = frozenset(
-    {"python", "javascript", "typescript", "lua", "go", "kotlin", "scala"}
+    {"python", "javascript", "typescript", "lua", "go", "kotlin", "scala", "pascal"}
 )
 FALLBACK_LANGUAGES: frozenset[str] = frozenset(
     {
@@ -53,16 +52,15 @@ FALLBACK_LANGUAGES: frozenset[str] = frozenset(
         "c",
         "cpp",
         "rust",
-        "pascal",
     }
 )
 
 # ---------------------------------------------------------------------------
 # Programs: adder-factory arithmetic in all 15 languages
 #
-# Tier 1 (CLOSURE_LANGUAGES — 7 languages): make_adder(x) returns
+# Tier 1 (CLOSURE_LANGUAGES — 8 languages): make_adder(x) returns
 #   adder(y) → x + y, invoked as make_adder(10)(5) = 15.
-# Tier 2 (FALLBACK_LANGUAGES — 8 languages): apply_adder(x, y) → x + y,
+# Tier 2 (FALLBACK_LANGUAGES — 7 languages): apply_adder(x, y) → x + y,
 #   invoked as apply_adder(10, 5) = 15.  No closure semantics.
 # ---------------------------------------------------------------------------
 
@@ -215,14 +213,18 @@ answer = add10(5)
     "pascal": """\
 program M;
 
-function apply_adder(x: integer; y: integer): integer;
+function make_adder(x: integer): integer;
+    function adder(y: integer): integer;
+    begin
+        adder := x + y;
+    end;
 begin
-    apply_adder := x + y;
+    make_adder := adder(5);
 end;
 
 var answer: integer;
 begin
-    answer := apply_adder(10, 5);
+    answer := make_adder(10);
 end.
 """,
 }
