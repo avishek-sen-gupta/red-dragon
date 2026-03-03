@@ -14,6 +14,7 @@ from functools import reduce
 
 from interpreter.cobol.asg_types import CobolField
 from interpreter.cobol.cobol_types import CobolTypeDescriptor
+from interpreter.cobol.condition_name import ConditionName, ConditionValue
 from interpreter.cobol.pic_parser import parse_pic
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,8 @@ class FieldLayout:
     value: str = ""
     occurs_count: int = 0
     element_size: int = 0
+    conditions: list[ConditionName] = field(default_factory=list)
+    values: list[ConditionValue] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -87,6 +90,8 @@ def _flatten_field(
             value=cobol_field.value,
             occurs_count=cobol_field.occurs,
             element_size=cobol_field.element_size,
+            conditions=cobol_field.conditions,
+            values=cobol_field.values,
         )
         return child_layouts
 
@@ -110,6 +115,8 @@ def _flatten_field(
             if cobol_field.element_size > 0
             else element_byte_length
         ),
+        conditions=cobol_field.conditions,
+        values=cobol_field.values,
     )
     logger.debug(
         "Field %s: offset=%d, length=%d, type=%s",
