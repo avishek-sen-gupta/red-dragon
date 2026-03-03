@@ -199,6 +199,30 @@ class TestCobolField:
         assert field.justified_right is False
         assert "justified_right" not in field.to_dict()
 
+    def test_field_with_synchronized(self):
+        data = {
+            "name": "WS-SYNC",
+            "level": 5,
+            "pic": "9(5)",
+            "usage": "COMP",
+            "offset": 0,
+            "synchronized": True,
+        }
+        field = CobolField.from_dict(data)
+        assert field.synchronized is True
+        assert CobolField.from_dict(field.to_dict()) == field
+
+    def test_field_without_synchronized_defaults(self):
+        data = {
+            "name": "WS-NOSYNC",
+            "level": 5,
+            "pic": "9(5)",
+            "offset": 0,
+        }
+        field = CobolField.from_dict(data)
+        assert field.synchronized is False
+        assert "synchronized" not in field.to_dict()
+
     def test_field_without_sign_defaults(self):
         data = {
             "name": "WS-NOSIGN",

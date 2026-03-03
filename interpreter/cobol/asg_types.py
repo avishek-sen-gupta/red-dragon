@@ -43,6 +43,7 @@ class CobolField:
     sign_leading: bool = False
     sign_separate: bool = False
     justified_right: bool = False
+    synchronized: bool = False
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolField:
@@ -63,6 +64,7 @@ class CobolField:
             sign_leading=sign_data.get("position", "") == "LEADING",
             sign_separate=sign_data.get("separate", False),
             justified_right=data.get("justified_right", False),
+            synchronized=data.get("synchronized", False),
         )
 
     def to_dict(self) -> dict:
@@ -94,6 +96,8 @@ class CobolField:
             }
         if self.justified_right:
             result["justified_right"] = True
+        if self.synchronized:
+            result["synchronized"] = True
         return result
 
 

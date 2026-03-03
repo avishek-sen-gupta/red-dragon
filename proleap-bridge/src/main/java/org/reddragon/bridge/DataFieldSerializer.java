@@ -8,6 +8,7 @@ import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryG
 import io.proleap.cobol.asg.metamodel.data.datadescription.OccursClause;
 import io.proleap.cobol.asg.metamodel.data.datadescription.JustifiedClause;
 import io.proleap.cobol.asg.metamodel.data.datadescription.SignClause;
+import io.proleap.cobol.asg.metamodel.data.datadescription.SynchronizedClause;
 import io.proleap.cobol.asg.metamodel.data.datadescription.ValueInterval;
 import io.proleap.cobol.asg.metamodel.valuestmt.ValueStmt;
 
@@ -107,6 +108,10 @@ public final class DataFieldSerializer {
             obj.addProperty("justified_right", true);
         }
 
+        if (extractSynchronized(group)) {
+            obj.addProperty("synchronized", true);
+        }
+
         List<DataDescriptionEntry> children = group.getDataDescriptionEntries();
         if (children != null && !children.isEmpty()) {
             JsonArray childArray = serializeChildren(children);
@@ -146,6 +151,14 @@ public final class DataFieldSerializer {
 
         for (DataDescriptionEntry child : children) {
             if (child instanceof DataDescriptionEntryGroup childGroup) {
+                // SYNCHRONIZED: align offset to natural boundary for COMP/BINARY fields
+                if (extractSynchronized(childGroup)) {
+                    int alignment = computeSyncAlignment(childGroup);
+                    if (alignment > 1 && childOffset % alignment != 0) {
+                        childOffset += alignment - (childOffset % alignment);
+                    }
+                }
+
                 int effectiveOffset = childOffset;
                 if (childGroup.getRedefinesClause() != null) {
                     effectiveOffset = findRedefinesOffset(children, childGroup);
@@ -160,6 +173,19 @@ public final class DataFieldSerializer {
             }
         }
         return childArray;
+    }
+
+    /**
+     * Computes the natural alignment boundary for a SYNCHRONIZED field.
+     * Returns the alignment in bytes (2, 4, or 8 for COMP/BINARY; 1 for others).
+     */
+    private static int computeSyncAlignment(DataDescriptionEntryGroup group) {
+        String usage = extractUsage(group);
+        return switch (usage) {
+            case "COMP", "COMP-4", "BINARY", "COMP-5" ->
+                    computePicByteLength(extractPic(group), usage);
+            default -> 1;
+        };
     }
 
     /**
@@ -424,6 +450,20 @@ public final class DataFieldSerializer {
             LOG.fine("No REDEFINES clause for " + group.getName());
         }
         return "";
+    }
+
+    /**
+     * Extracts the SYNCHRONIZED clause from a data description entry.
+     * Returns true if SYNCHRONIZED is present.
+     */
+    private static boolean extractSynchronized(DataDescriptionEntryGroup group) {
+        try {
+            SynchronizedClause syncClause = group.getSynchronizedClause();
+            return syncClause != null;
+        } catch (Exception e) {
+            LOG.fine("No SYNCHRONIZED clause for " + group.getName());
+        }
+        return false;
     }
 
     /**
