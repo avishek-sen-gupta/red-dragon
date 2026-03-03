@@ -587,6 +587,9 @@ class PascalFrontend(BaseFrontend):
 
         prev_func_name = self._current_function_name
         self._current_function_name = func_name
+        for child in node.children:
+            if child.type == "defProc":
+                self._lower_pascal_proc(child)
         if body_node:
             self._lower_pascal_block(body_node)
         self._current_function_name = prev_func_name

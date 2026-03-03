@@ -1130,3 +1130,13 @@ Also fixed Ruby's `raise` to emit `THROW` instead of `CALL_FUNCTION`.
 **Decision:** Upgrade Go, Kotlin, and Scala from Tier 2 (fallback) to Tier 1 (genuine closures). Each now implements `make_adder(x)` returning a nested function `adder(y)` that captures `x` from the enclosing scope, matching the pattern used by Python, JavaScript, TypeScript, and Lua. The remaining 8 languages stay as fallback: Java, C#, C, C++, Pascal (no nested functions), Rust (`fn` items don't capture), Ruby (`def` doesn't capture outer locals), and PHP (`function` doesn't capture without `use`).
 
 **Consequences:** Tier 1 grows from 4 to 7 languages; Tier 2 shrinks from 11 to 8. The test now exercises genuine closure semantics in every language that supports them. The docstring and comment block document why Rust, Ruby, and PHP remain in Tier 2 despite having nested function syntax.
+
+---
+
+### ADR-058: Upgrade Pascal to genuine closure in Rosetta test (2026-03-03)
+
+**Context:** Pascal has supported nested functions with lexical capture since the 1970s. The tree-sitter grammar correctly parses nested `defProc` nodes, but `_lower_pascal_proc` in the Pascal frontend only extracted the `declProc` (metadata) and `block` (body) children, skipping sibling `defProc` children. This meant nested functions parsed but were never lowered to IR, so Pascal was unnecessarily placed in Tier 2 (plain function fallback) of the Rosetta closures test.
+
+**Decision:** Fix `_lower_pascal_proc` to iterate over `node.children` and recursively call `_lower_pascal_proc` on any nested `defProc` children before lowering the body block. This follows the same pattern used by all other frontends that support nested functions. With the frontend fix in place, upgrade Pascal from Tier 2 (fallback) to Tier 1 (genuine closures) in the Rosetta closures test. The Pascal program now uses `make_adder(x)` containing a nested `adder(y)` that captures `x` from the enclosing scope, with `answer := make_adder(10)` producing 15.
+
+**Consequences:** Tier 1 grows from 7 to 8 languages; Tier 2 shrinks from 8 to 7. Pascal now exercises genuine nested-function closure semantics. The remaining 7 fallback languages (Java, C#, C, C++, Rust, Ruby, PHP) stay in Tier 2 for legitimate reasons (no nested functions or no lexical capture).
