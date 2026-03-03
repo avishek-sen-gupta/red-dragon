@@ -875,8 +875,10 @@ class ScalaFrontend(BaseFrontend):
         finally_node = None
         for child in node.children:
             if child.type == "catch_clause":
-                # Scala catch clause has a body with case_clause entries
-                catch_body_node = child.child_by_field_name("body")
+                # Scala catch clause has a case_block child (not a named "body" field)
+                catch_body_node = next(
+                    (c for c in child.children if c.type == "case_block"), None
+                )
                 if catch_body_node:
                     # Each case_clause in the catch body is a separate handler
                     cases = [
@@ -925,7 +927,9 @@ class ScalaFrontend(BaseFrontend):
                             {"body": catch_body_node, "variable": None, "type": None}
                         )
             elif child.type == "finally_clause":
-                finally_node = child.child_by_field_name("body")
+                finally_node = child.child_by_field_name("body") or next(
+                    (c for c in child.children if c.type == "block"), None
+                )
         return body_node, catch_clauses, finally_node
 
     def _lower_try_stmt(self, node):

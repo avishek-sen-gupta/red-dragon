@@ -805,3 +805,110 @@ object M {
         instructions = _parse_scala(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+
+class TestScalaTryCatch:
+    def test_try_catch_generates_caught_exception(self):
+        """Scala catch { case e: Exception => ... } should lower to
+        SYMBOLIC caught_exception, not be silently dropped."""
+        source = """\
+object M {
+    var answer: Int = 0
+    try {
+        answer = -1
+    } catch {
+        case e: Exception => answer = 99
+    }
+}
+"""
+        instructions = _parse_scala(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        caught = [
+            s
+            for s in symbolics
+            if any("caught_exception" in str(op) for op in s.operands)
+        ]
+        assert len(caught) >= 1, (
+            "Expected at least 1 SYMBOLIC caught_exception from catch clause, "
+            f"got {len(caught)}"
+        )
+
+    def test_try_catch_stores_exception_variable(self):
+        """The exception variable 'e' should be stored via STORE_VAR."""
+        source = """\
+object M {
+    try {
+        val x = 1
+    } catch {
+        case e: Exception => val y = 2
+    }
+}
+"""
+        instructions = _parse_scala(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stored_names = [inst.operands[0] for inst in stores]
+        assert (
+            "e" in stored_names
+        ), f"Expected 'e' in stored variables, got {stored_names}"
+
+    def test_try_catch_has_branch_to_end(self):
+        """Try body should BRANCH past the catch block to try_end."""
+        source = """\
+object M {
+    try {
+        val x = 1
+    } catch {
+        case e: Exception => val y = 2
+    }
+}
+"""
+        instructions = _parse_scala(source)
+        labels = _find_all(instructions, Opcode.LABEL)
+        try_end_labels = [l for l in labels if "try_end" in l.label]
+        assert len(try_end_labels) >= 1, "Expected at least 1 try_end label in IR"
+
+    def test_try_catch_with_finally(self):
+        """Scala try/catch/finally should generate all three blocks."""
+        source = """\
+object M {
+    var answer: Int = 0
+    try {
+        answer = 1
+    } catch {
+        case e: Exception => answer = 2
+    } finally {
+        answer = 3
+    }
+}
+"""
+        instructions = _parse_scala(source)
+        labels = _find_all(instructions, Opcode.LABEL)
+        label_names = [l.label for l in labels]
+        assert any("try_body" in name for name in label_names)
+        assert any("catch" in name for name in label_names)
+        assert any("try_finally" in name for name in label_names)
+        assert any("try_end" in name for name in label_names)
+
+    def test_try_catch_multiple_cases(self):
+        """Multiple case clauses should generate multiple catch blocks."""
+        source = """\
+object M {
+    try {
+        val x = 1
+    } catch {
+        case e: IllegalArgumentException => val a = 1
+        case e: RuntimeException => val b = 2
+    }
+}
+"""
+        instructions = _parse_scala(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        caught = [
+            s
+            for s in symbolics
+            if any("caught_exception" in str(op) for op in s.operands)
+        ]
+        assert len(caught) >= 2, (
+            "Expected at least 2 SYMBOLIC caught_exception (one per case clause), "
+            f"got {len(caught)}"
+        )
