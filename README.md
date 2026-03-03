@@ -341,11 +341,11 @@ poetry run pytest tests/integration/ -v  # integration tests only
 poetry run pytest tests/ -n 0 -v     # disable parallel execution
 ```
 
-Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures (including mutation persistence and accumulator semantics, cross-language via Rosetta), class/object instantiation and field access (cross-language), exception handling structure (cross-language), symbolic execution, factory routing, and the composable API layer.
+Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures (including mutation persistence and accumulator semantics, cross-language via Rosetta — both nested-function and lambda/arrow-function forms), class/object instantiation and field access (cross-language), exception handling structure (cross-language), symbolic execution, factory routing, and the composable API layer.
 
 ### Rosetta cross-language suite
 
-The **Rosetta suite** (`tests/unit/rosetta/`) implements 13 cross-language test sets (8 algorithms + closures + classes + exceptions + destructuring + nested functions) and verifies they produce clean, structurally consistent IR. 11 sets cover all 15 languages; the destructuring set covers the 6 languages with dedicated destructuring lowering (Python, JavaScript, TypeScript, Rust, Scala, Kotlin); the nested functions set covers the 10 languages with genuine nested function syntax (Python, JavaScript, TypeScript, Rust, Lua, Ruby, Go, Kotlin, Scala, PHP). Each problem tests:
+The **Rosetta suite** (`tests/unit/rosetta/`) implements 14 cross-language test sets (8 algorithms + closures + closures-lambda + classes + exceptions + destructuring + nested functions) and verifies they produce clean, structurally consistent IR. 11 sets cover all 15 languages; the closures-lambda set covers the 5 languages with lambda/arrow-function closure syntax (Python, JavaScript, TypeScript, Kotlin, Scala); the destructuring set covers the 6 languages with dedicated destructuring lowering (Python, JavaScript, TypeScript, Rust, Scala, Kotlin); the nested functions set covers the 10 languages with genuine nested function syntax (Python, JavaScript, TypeScript, Rust, Lua, Ruby, Go, Kotlin, Scala, PHP). Each problem tests:
 
 - Entry label presence and minimum instruction count
 - Zero unsupported `SYMBOLIC` nodes
@@ -397,7 +397,7 @@ The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercis
 
 ### Test totals
 
-**8362 tests** (8300 unit + 62 integration passed, 4 skipped, 6 xfailed) — all with zero LLM calls.
+**8387 tests** (8325 unit + 62 integration passed, 4 skipped, 6 xfailed) — all with zero LLM calls.
 
 ## Documentation
 

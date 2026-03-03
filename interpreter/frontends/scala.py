@@ -659,20 +659,51 @@ class ScalaFrontend(BaseFrontend):
         self._emit(Opcode.BRANCH, label=end_label)
         self._emit(Opcode.LABEL, label=func_label)
 
-        # Lambda params and body: children vary, lower all named children
-        named_children = [
-            c for c in node.children if c.is_named and c.type not in self.COMMENT_TYPES
-        ]
-        for child in named_children:
-            self._lower_stmt(child)
-
-        none_reg = self._fresh_reg()
-        self._emit(
-            Opcode.CONST,
-            result_reg=none_reg,
-            operands=[self.DEFAULT_RETURN_VALUE],
+        # Extract lambda parameters: bindings → binding → identifier
+        bindings_node = next(
+            (c for c in node.children if c.type == "bindings"),
+            None,
         )
-        self._emit(Opcode.RETURN, operands=[none_reg])
+        if bindings_node:
+            for child in bindings_node.children:
+                if child.type == "binding":
+                    id_node = next(
+                        (c for c in child.children if c.type == "identifier"),
+                        None,
+                    )
+                    if id_node:
+                        pname = self._node_text(id_node)
+                        self._emit(
+                            Opcode.SYMBOLIC,
+                            result_reg=self._fresh_reg(),
+                            operands=[f"{constants.PARAM_PREFIX}{pname}"],
+                            node=child,
+                        )
+                        self._emit(
+                            Opcode.STORE_VAR,
+                            operands=[pname, f"%{self._reg_counter - 1}"],
+                        )
+
+        # Lambda body: lower all named children except bindings.
+        # Scala lambdas implicitly return the last expression.
+        named_children = [
+            c
+            for c in node.children
+            if c.is_named and c.type != "bindings" and c.type not in self.COMMENT_TYPES
+        ]
+        for child in named_children[:-1]:
+            self._lower_stmt(child)
+        if named_children:
+            last_reg = self._lower_expr(named_children[-1])
+            self._emit(Opcode.RETURN, operands=[last_reg])
+        else:
+            none_reg = self._fresh_reg()
+            self._emit(
+                Opcode.CONST,
+                result_reg=none_reg,
+                operands=[self.DEFAULT_RETURN_VALUE],
+            )
+            self._emit(Opcode.RETURN, operands=[none_reg])
         self._emit(Opcode.LABEL, label=end_label)
 
         reg = self._fresh_reg()

@@ -687,8 +687,9 @@ class PythonFrontend(BaseFrontend):
 
     def _lower_lambda(self, node) -> str:
         """Lower `lambda x, y: expr` → inline function definition."""
-        func_label = self._fresh_label("lambda")
-        end_label = self._fresh_label("lambda_end")
+        func_name = f"__lambda_{self._label_counter}"
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
 
         # Branch past the function body
         self._emit(Opcode.BRANCH, label=end_label)
@@ -722,7 +723,9 @@ class PythonFrontend(BaseFrontend):
         self._emit(
             Opcode.CONST,
             result_reg=ref_reg,
-            operands=[f"func:{func_label}"],
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
             node=node,
         )
         return ref_reg

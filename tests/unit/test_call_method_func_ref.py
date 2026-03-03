@@ -82,6 +82,44 @@ class M {
         vars_ = _run_program(source, Language.CSHARP)
         assert vars_["answer"] == 15
 
+    def test_python_lambda_produces_func_ref(self):
+        """Python lambda should produce a proper FUNC_REF and compute correct closure result."""
+        source = """\
+make_adder = lambda x: lambda y: x + y
+add10 = make_adder(10)
+answer = add10(5)
+"""
+        vars_ = _run_program(source, Language.PYTHON)
+        assert vars_["answer"] == 15
+
+    def test_kotlin_lambda_literal_binds_params(self):
+        """Kotlin lambda literal should bind params and compute correct closure result."""
+        source = """\
+fun make_adder(x: Int): Int {
+    val adder = { y: Int -> x + y }
+    return adder(5)
+}
+
+val answer = make_adder(10)
+"""
+        vars_ = _run_program(source, Language.KOTLIN)
+        assert vars_["answer"] == 15
+
+    def test_scala_lambda_expression_binds_params(self):
+        """Scala lambda expression should bind params and compute correct closure result."""
+        source = """\
+object M {
+    def make_adder(x: Int): Int = {
+        val adder = (y: Int) => x + y
+        return adder(5)
+    }
+
+    val answer = make_adder(10)
+}
+"""
+        vars_ = _run_program(source, Language.SCALA)
+        assert vars_["answer"] == 15
+
 
 class TestCallUnknownOnFuncRef:
     def test_php_arrow_function_call(self):
