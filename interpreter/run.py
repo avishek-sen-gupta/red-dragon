@@ -243,7 +243,12 @@ def execute_cfg(
 
         is_return = instruction.opcode == Opcode.RETURN
         is_throw = instruction.opcode == Opcode.THROW
-        return_frame = vm.current_frame if (is_return or is_throw) else None
+        is_caught_throw = is_throw and update.next_label is not None
+        return_frame = (
+            vm.current_frame
+            if (is_return or (is_throw and not is_caught_throw))
+            else None
+        )
 
         is_call_dispatch = (
             update.call_push is not None and update.next_label is not None
@@ -253,7 +258,7 @@ def execute_cfg(
         else:
             apply_update(vm, update)
 
-        if is_return or is_throw:
+        if is_return or (is_throw and not is_caught_throw):
             flow = _handle_return_flow(
                 vm, cfg, return_frame, update, config.verbose, step
             )
