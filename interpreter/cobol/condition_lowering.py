@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from functools import reduce
 from typing import Any
 
 from interpreter.cobol.cobol_expression import (
@@ -11,6 +12,8 @@ from interpreter.cobol.cobol_expression import (
     FieldRefNode,
     LiteralNode,
 )
+from interpreter.cobol.condition_name import ConditionValue
+from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.ir import Opcode
@@ -18,17 +21,129 @@ from interpreter.ir import Opcode
 logger = logging.getLogger(__name__)
 
 
+def _emit_single_value_test(
+    ctx: EmitContext,
+    cv: ConditionValue,
+    layout: DataLayout,
+    region_reg: str,
+    parent_field_name: str,
+) -> str:
+    """Emit IR to test a parent field against a single ConditionValue.
+
+    For discrete values: parent_field == value
+    For THRU ranges: parent_field >= from AND parent_field <= to
+    """
+    parent_ref = ctx.resolve_field_ref(parent_field_name, layout, region_reg)
+    parent_reg = ctx.emit_decode_field(region_reg, parent_ref.fl, parent_ref.offset_reg)
+
+    if cv.is_range:
+        from_reg = ctx.const_to_reg(ctx.parse_literal(cv.from_val))
+        ge_result = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.BINOP,
+            result_reg=ge_result,
+            operands=[">=", parent_reg, from_reg],
+        )
+
+        parent_ref2 = ctx.resolve_field_ref(parent_field_name, layout, region_reg)
+        parent_reg2 = ctx.emit_decode_field(
+            region_reg, parent_ref2.fl, parent_ref2.offset_reg
+        )
+        to_reg = ctx.const_to_reg(ctx.parse_literal(cv.to_val))
+        le_result = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.BINOP,
+            result_reg=le_result,
+            operands=["<=", parent_reg2, to_reg],
+        )
+
+        and_result = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.BINOP,
+            result_reg=and_result,
+            operands=["and", ge_result, le_result],
+        )
+        return and_result
+
+    value_reg = ctx.const_to_reg(ctx.parse_literal(cv.from_val))
+    eq_result = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.BINOP,
+        result_reg=eq_result,
+        operands=["==", parent_reg, value_reg],
+    )
+    return eq_result
+
+
+def _emit_or_chain(ctx: EmitContext, regs: list[str]) -> str:
+    """Combine a list of boolean registers with OR. Returns result register."""
+    return reduce(
+        lambda acc, reg: _emit_or(ctx, acc, reg),
+        regs[1:],
+        regs[0],
+    )
+
+
+def _emit_or(ctx: EmitContext, left_reg: str, right_reg: str) -> str:
+    """Emit a single OR between two boolean registers."""
+    result = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.BINOP,
+        result_reg=result,
+        operands=["or", left_reg, right_reg],
+    )
+    return result
+
+
+def _expand_condition_name(
+    ctx: EmitContext,
+    condition_name: str,
+    condition_index: ConditionNameIndex,
+    layout: DataLayout,
+    region_reg: str,
+) -> str:
+    """Expand a level-88 condition name into field comparison IR.
+
+    For single-value conditions: parent == value
+    For multi-value: parent == v1 OR parent == v2 OR ...
+    For THRU ranges: parent >= from AND parent <= to
+    Mixed: combines all with OR.
+    """
+    entry = condition_index.lookup(condition_name)
+    value_regs = [
+        _emit_single_value_test(ctx, cv, layout, region_reg, entry.parent_field_name)
+        for cv in entry.values
+    ]
+
+    if not value_regs:
+        result = ctx.fresh_reg()
+        ctx.emit(Opcode.CONST, result_reg=result, operands=[True])
+        return result
+
+    return _emit_or_chain(ctx, value_regs)
+
+
 def lower_condition(
     ctx: EmitContext,
     condition: str,
     layout: DataLayout,
     region_reg: str,
+    condition_index: ConditionNameIndex = ConditionNameIndex({}),
 ) -> str:
     """Lower a simple condition string to a register holding a boolean.
 
-    Supports: "field OP value" where OP is >, <, >=, <=, =, NOT =
+    Supports:
+    - "field OP value" where OP is >, <, >=, <=, =, NOT =
+    - Single-token condition names (level-88) that expand to parent comparisons
     """
     parts = condition.split()
+
+    if len(parts) == 1 and condition_index.has_condition(parts[0]):
+        logger.debug("Expanding condition name: %s", parts[0])
+        return _expand_condition_name(
+            ctx, parts[0], condition_index, layout, region_reg
+        )
+
     if len(parts) >= 3:
         left_name = parts[0]
         if parts[1] == "NOT" and len(parts) >= 4:
