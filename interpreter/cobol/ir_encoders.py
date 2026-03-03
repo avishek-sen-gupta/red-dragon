@@ -1062,6 +1062,92 @@ def build_encode_alphanumeric_ir(func_name: str, length: int) -> list[IRInstruct
     return instructions
 
 
+def build_encode_alphanumeric_justified_ir(
+    func_name: str, length: int
+) -> list[IRInstruction]:
+    """Generate IR for right-justified alphanumeric EBCDIC encoding.
+
+    Inputs: %p_value (str)
+    Output: list[int] of EBCDIC bytes (length = `length`), right-justified
+
+    Short values are left-padded with spaces (EBCDIC 0x40).
+    Long values are truncated from the left (rightmost `length` bytes kept).
+    """
+    rc = _RegCounter(func_name)
+    instructions: list[IRInstruction] = []
+
+    # Convert string to EBCDIC bytes
+    ebcdic_bytes = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.CALL_FUNCTION,
+            result_reg=ebcdic_bytes,
+            operands=["__string_to_bytes", "%p_value", "ebcdic"],
+        )
+    )
+
+    # Create padding (EBCDIC spaces = 0x40)
+    padding = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.CALL_FUNCTION,
+            result_reg=padding,
+            operands=["__make_list", length, 0x40],
+        )
+    )
+
+    # Concatenate padding + input (right-justify: padding on the left)
+    combined = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.CALL_FUNCTION,
+            result_reg=combined,
+            operands=["__list_concat", padding, ebcdic_bytes],
+        )
+    )
+
+    # Take the LAST `length` bytes: slice from (len(combined) - length)
+    combined_len = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.CALL_FUNCTION,
+            result_reg=combined_len,
+            operands=["__list_len", combined],
+        )
+    )
+
+    start_offset = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.BINOP,
+            result_reg=start_offset,
+            operands=["-", combined_len, length],
+        )
+    )
+
+    end_offset = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.BINOP,
+            result_reg=end_offset,
+            operands=["+", start_offset, length],
+        )
+    )
+
+    result = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.CALL_FUNCTION,
+            result_reg=result,
+            operands=["__list_slice", combined, start_offset, end_offset],
+        )
+    )
+
+    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
+
+    return instructions
+
+
 def build_decode_alphanumeric_ir(func_name: str) -> list[IRInstruction]:
     """Generate IR for alphanumeric EBCDIC decoding.
 

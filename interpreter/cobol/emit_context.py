@@ -27,6 +27,7 @@ from interpreter.cobol.ir_encoders import (
     build_decode_zoned_ir,
     build_decode_zoned_separate_ir,
     build_encode_alphanumeric_ir,
+    build_encode_alphanumeric_justified_ir,
     build_encode_comp3_ir,
     build_encode_zoned_ir,
     build_encode_zoned_separate_ir,
@@ -254,17 +255,30 @@ class EmitContext:
         """Emit inline IR to encode a value per the field's type. Returns result register."""
         td = fl.type_descriptor
         if td.category == CobolDataCategory.ALPHANUMERIC:
-            return self.emit_encode_alphanumeric(fl.name, value, td.total_digits)
+            return self.emit_encode_alphanumeric(
+                fl.name, value, td.total_digits, justified_right=td.justified_right
+            )
         if td.category in (CobolDataCategory.COMP1, CobolDataCategory.COMP2):
             return self.emit_encode_float(fl.name, value, td)
         return self.emit_encode_numeric(fl.name, value, td)
 
-    def emit_encode_alphanumeric(self, field_name: str, value: str, length: int) -> str:
+    def emit_encode_alphanumeric(
+        self,
+        field_name: str,
+        value: str,
+        length: int,
+        justified_right: bool = False,
+    ) -> str:
         """Emit inline alphanumeric encoding IR. Returns result register."""
         value_reg = self.fresh_reg()
         self.emit(Opcode.CONST, result_reg=value_reg, operands=[value])
 
-        ir = build_encode_alphanumeric_ir(f"enc_alpha_{field_name}", length)
+        if justified_right:
+            ir = build_encode_alphanumeric_justified_ir(
+                f"enc_alpha_just_{field_name}", length
+            )
+        else:
+            ir = build_encode_alphanumeric_ir(f"enc_alpha_{field_name}", length)
         return self.inline_ir(ir, {"%p_value": value_reg})
 
     def emit_encode_float(self, field_name: str, value: str, td: Any) -> str:
@@ -392,7 +406,14 @@ class EmitContext:
         """Emit encoding IR from a string value register."""
         td = fl.type_descriptor
         if td.category == CobolDataCategory.ALPHANUMERIC:
-            ir = build_encode_alphanumeric_ir(f"enc_alpha_{fl.name}", td.total_digits)
+            if td.justified_right:
+                ir = build_encode_alphanumeric_justified_ir(
+                    f"enc_alpha_just_{fl.name}", td.total_digits
+                )
+            else:
+                ir = build_encode_alphanumeric_ir(
+                    f"enc_alpha_{fl.name}", td.total_digits
+                )
             return self.inline_ir(ir, {"%p_value": value_str_reg})
 
         if td.category in (CobolDataCategory.COMP1, CobolDataCategory.COMP2):

@@ -45,6 +45,7 @@ class FieldLayout:
     values: list[ConditionValue] = field(default_factory=list)
     sign_separate: bool = False
     sign_leading: bool = False
+    justified_right: bool = False
 
 
 @dataclass(frozen=True)
@@ -96,6 +97,7 @@ def _flatten_field(
             values=cobol_field.values,
             sign_separate=cobol_field.sign_separate,
             sign_leading=cobol_field.sign_leading,
+            justified_right=cobol_field.justified_right,
         )
         return child_layouts
 
@@ -104,6 +106,7 @@ def _flatten_field(
         cobol_field.usage,
         sign_leading=cobol_field.sign_leading,
         sign_separate=cobol_field.sign_separate,
+        justified_right=cobol_field.justified_right,
     )
     element_byte_length = type_desc.byte_length
     total_byte_length = (
@@ -128,6 +131,7 @@ def _flatten_field(
         values=cobol_field.values,
         sign_separate=cobol_field.sign_separate,
         sign_leading=cobol_field.sign_leading,
+        justified_right=cobol_field.justified_right,
     )
     logger.debug(
         "Field %s: offset=%d, length=%d, type=%s",
