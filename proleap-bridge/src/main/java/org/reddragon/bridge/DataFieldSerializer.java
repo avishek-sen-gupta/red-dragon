@@ -99,6 +99,16 @@ public final class DataFieldSerializer {
             obj.addProperty("element_size", elementSize);
         }
 
+        int occursMin = extractOccursMin(group);
+        if (occursMin > 0) {
+            obj.addProperty("occurs_min", occursMin);
+        }
+
+        String dependingOn = extractOccursDependingOn(group);
+        if (!dependingOn.isEmpty()) {
+            obj.addProperty("occurs_depending_on", dependingOn);
+        }
+
         JsonObject signObj = extractSign(group);
         if (signObj != null) {
             obj.add("sign", signObj);
@@ -504,6 +514,8 @@ public final class DataFieldSerializer {
 
     /**
      * Extracts the OCCURS count from a data description entry.
+     * For OCCURS DEPENDING ON, returns the max count (from getTo()).
+     * For fixed OCCURS, returns getFrom() (the only count).
      * Returns 0 if no OCCURS clause is present.
      */
     private static int extractOccurs(DataDescriptionEntryGroup group) {
@@ -511,6 +523,11 @@ public final class DataFieldSerializer {
             List<OccursClause> occursClauses = group.getOccursClauses();
             if (occursClauses != null && !occursClauses.isEmpty()) {
                 OccursClause clause = occursClauses.get(0);
+                // If DEPENDING ON is present, getTo() is the max count
+                if (clause.getOccursDepending() != null && clause.getTo() != null) {
+                    return Integer.parseInt(clause.getTo().getCtx().getText());
+                }
+                // Fixed OCCURS: the count is in getFrom()
                 if (clause.getFrom() != null && clause.getFrom().getCtx() != null) {
                     return Integer.parseInt(clause.getFrom().getCtx().getText());
                 }
@@ -519,5 +536,46 @@ public final class DataFieldSerializer {
             LOG.fine("Could not extract OCCURS for " + group.getName() + ": " + e.getMessage());
         }
         return 0;
+    }
+
+    /**
+     * Extracts the minimum OCCURS count for OCCURS DEPENDING ON.
+     * Returns 0 if no DEPENDING ON clause or no minimum specified.
+     */
+    private static int extractOccursMin(DataDescriptionEntryGroup group) {
+        try {
+            List<OccursClause> occursClauses = group.getOccursClauses();
+            if (occursClauses != null && !occursClauses.isEmpty()) {
+                OccursClause clause = occursClauses.get(0);
+                if (clause.getOccursDepending() != null
+                        && clause.getFrom() != null
+                        && clause.getFrom().getCtx() != null) {
+                    return Integer.parseInt(clause.getFrom().getCtx().getText());
+                }
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract OCCURS min for " + group.getName() + ": " + e.getMessage());
+        }
+        return 0;
+    }
+
+    /**
+     * Extracts the DEPENDING ON field name from an OCCURS clause.
+     * Returns empty string if no DEPENDING ON clause is present.
+     */
+    private static String extractOccursDependingOn(DataDescriptionEntryGroup group) {
+        try {
+            List<OccursClause> occursClauses = group.getOccursClauses();
+            if (occursClauses != null && !occursClauses.isEmpty()) {
+                OccursClause clause = occursClauses.get(0);
+                if (clause.getOccursDepending() != null
+                        && clause.getOccursDepending().getDependingOnCall() != null) {
+                    return clause.getOccursDepending().getDependingOnCall().getName();
+                }
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract DEPENDING ON for " + group.getName() + ": " + e.getMessage());
+        }
+        return "";
     }
 }

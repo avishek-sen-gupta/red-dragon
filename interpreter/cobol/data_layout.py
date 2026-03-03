@@ -46,6 +46,8 @@ class FieldLayout:
     sign_separate: bool = False
     sign_leading: bool = False
     justified_right: bool = False
+    occurs_depending_on: str = ""
+    occurs_min: int = 0
 
 
 @dataclass(frozen=True)
@@ -98,6 +100,8 @@ def _flatten_field(
             sign_separate=cobol_field.sign_separate,
             sign_leading=cobol_field.sign_leading,
             justified_right=cobol_field.justified_right,
+            occurs_depending_on=cobol_field.occurs_depending_on,
+            occurs_min=cobol_field.occurs_min,
         )
         return child_layouts
 
@@ -132,6 +136,8 @@ def _flatten_field(
         sign_separate=cobol_field.sign_separate,
         sign_leading=cobol_field.sign_leading,
         justified_right=cobol_field.justified_right,
+        occurs_depending_on=cobol_field.occurs_depending_on,
+        occurs_min=cobol_field.occurs_min,
     )
     logger.debug(
         "Field %s: offset=%d, length=%d, type=%s",

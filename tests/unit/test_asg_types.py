@@ -223,6 +223,39 @@ class TestCobolField:
         assert field.synchronized is False
         assert "synchronized" not in field.to_dict()
 
+    def test_field_with_occurs_depending_on(self):
+        data = {
+            "name": "WS-TABLE",
+            "level": 5,
+            "pic": "X(10)",
+            "usage": "DISPLAY",
+            "offset": 0,
+            "occurs": 100,
+            "element_size": 10,
+            "occurs_depending_on": "WS-COUNT",
+            "occurs_min": 1,
+        }
+        field = CobolField.from_dict(data)
+        assert field.occurs == 100
+        assert field.occurs_depending_on == "WS-COUNT"
+        assert field.occurs_min == 1
+        assert CobolField.from_dict(field.to_dict()) == field
+
+    def test_field_without_occurs_depending_on_defaults(self):
+        data = {
+            "name": "WS-FIXED",
+            "level": 5,
+            "pic": "X(10)",
+            "offset": 0,
+            "occurs": 5,
+            "element_size": 10,
+        }
+        field = CobolField.from_dict(data)
+        assert field.occurs_depending_on == ""
+        assert field.occurs_min == 0
+        assert "occurs_depending_on" not in field.to_dict()
+        assert "occurs_min" not in field.to_dict()
+
     def test_field_without_sign_defaults(self):
         data = {
             "name": "WS-NOSIGN",
