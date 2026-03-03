@@ -59,10 +59,30 @@ class TestParseStatementDispatch:
         assert stmt.source == "5"
         assert stmt.target == "WS-A"
 
+    def test_add_giving(self):
+        stmt = parse_statement(
+            {"type": "ADD", "operands": ["5", "WS-A"], "giving": ["WS-R"]}
+        )
+        assert isinstance(stmt, ArithmeticStatement)
+        assert stmt.op == "ADD"
+        assert stmt.source == "5"
+        assert stmt.target == "WS-A"
+        assert stmt.giving == ["WS-R"]
+
     def test_subtract(self):
         stmt = parse_statement({"type": "SUBTRACT", "operands": ["3", "WS-A"]})
         assert isinstance(stmt, ArithmeticStatement)
         assert stmt.op == "SUBTRACT"
+
+    def test_subtract_giving(self):
+        stmt = parse_statement(
+            {"type": "SUBTRACT", "operands": ["WS-B", "WS-A"], "giving": ["WS-R"]}
+        )
+        assert isinstance(stmt, ArithmeticStatement)
+        assert stmt.op == "SUBTRACT"
+        assert stmt.source == "WS-B"
+        assert stmt.target == "WS-A"
+        assert stmt.giving == ["WS-R"]
 
     def test_multiply(self):
         stmt = parse_statement({"type": "MULTIPLY", "operands": ["2", "WS-A"]})
@@ -551,6 +571,14 @@ class TestRoundTrip:
 
     def test_add_round_trip(self):
         data = {"type": "ADD", "operands": ["5", "WS-A"]}
+        assert self._round_trip(data) == data
+
+    def test_add_giving_round_trip(self):
+        data = {"type": "ADD", "operands": ["5", "WS-A"], "giving": ["WS-R"]}
+        assert self._round_trip(data) == data
+
+    def test_subtract_giving_round_trip(self):
+        data = {"type": "SUBTRACT", "operands": ["WS-B", "WS-A"], "giving": ["WS-R"]}
         assert self._round_trip(data) == data
 
     def test_display_round_trip(self):
