@@ -35,6 +35,7 @@ class CobolTypeDescriptor:
     signed: bool = False
     sign_separate: bool = False
     sign_leading: bool = False
+    justified_right: bool = False
 
     @property
     def byte_length(self) -> int:
