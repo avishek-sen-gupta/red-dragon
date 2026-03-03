@@ -167,6 +167,7 @@ TRY_CATCH_LANGUAGES: frozenset[str] = frozenset(
         "csharp",
         "cpp",
         "kotlin",
+        "scala",
     }
 )
 

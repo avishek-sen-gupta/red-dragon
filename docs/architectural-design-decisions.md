@@ -1017,3 +1017,17 @@ Benefits:
 - C/C++ struct field access (`c.count`) doesn't resolve correctly when the struct is locally declared — `LOAD_FIELD` returns symbolic values.
 
 **Consequences:** 156 new tests (47 closures + 47 classes + 62 exceptions) bring the total to 8232 tests (8170 unit + 62 integration, 6 skipped, 3 xfailed). The three test files document both the VM's current capabilities and its limitations around closures, class instantiation, and exception control flow — providing regression coverage and serving as a roadmap for future VM enhancements.
+
+---
+
+### ADR-048: Fix Scala catch clause recognition in try/catch lowering (2026-03-03)
+
+**Context:** Scala's `catch { case e: Exception => ... }` was silently dropped during lowering. The `_extract_try_parts()` method in the Scala frontend used `child.child_by_field_name("body")` to find the catch body, but tree-sitter's Scala grammar stores the `case_block` as an unnamed child of `catch_clause`, not as a named `body` field. Similarly, `finally_clause` stores its `block` child without a `body` field name. As a result, catch clauses produced no `SYMBOLIC caught_exception` in the IR, and finally blocks were dropped.
+
+**Decision:** Two-line fix in `_extract_try_parts()`:
+1. Replace `child.child_by_field_name("body")` with `next((c for c in child.children if c.type == "case_block"), None)` for catch clauses.
+2. Add a fallback `or next((c for c in child.children if c.type == "block"), None)` for the finally clause.
+
+The inner `case_clause` field names (`pattern`, `body`) do resolve correctly via `child_by_field_name`, so the per-case extraction logic was already correct — only the outer container lookup was broken.
+
+**Consequences:** Scala now generates proper try/catch/finally block structure with `SYMBOLIC caught_exception` per case clause. Five new unit tests verify single catch, multiple catches, exception variable storage, try_end branching, and finally blocks. Scala added to `TRY_CATCH_LANGUAGES` in the Rosetta exception e2e tests. All 8238 tests pass.
