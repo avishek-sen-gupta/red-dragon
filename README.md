@@ -345,14 +345,14 @@ Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integrati
 
 ### Rosetta cross-language suite
 
-The **Rosetta suite** (`tests/unit/rosetta/`) implements 11 cross-language test sets (8 algorithms + closures + classes + exceptions) in all 15 languages and verifies they all produce clean, structurally consistent IR. Each problem tests:
+The **Rosetta suite** (`tests/unit/rosetta/`) implements 15 cross-language test sets (8 algorithms + closures + classes + exceptions + destructuring + nested functions + multiple returns + enums) in all 15 languages and verifies they all produce clean, structurally consistent IR. Each problem tests:
 
 - Entry label presence and minimum instruction count
 - Zero unsupported `SYMBOLIC` nodes
 - Required opcode presence and operator spot-checks
 - Aggregate cross-language variance
 
-**VM execution verification** runs 7 algorithms plus closures, classes, and exceptions through the VM across all 15 languages and asserts correct computed results (factorial=120, fib(10)=55, gcd(48,18)=6, sorted arrays, interprocedural double_add(3,4)=14, closure make_adder(10)(5)=15, counter=3, try-body=-1) with zero LLM calls.
+**VM execution verification** runs 7 algorithms plus closures, classes, exceptions, destructuring, nested functions, multiple returns, and enums through the VM across all 15 languages and asserts correct computed results (factorial=120, fib(10)=55, gcd(48,18)=6, sorted arrays, interprocedural double_add(3,4)=14, closure make_adder(10)(5)=15, counter=3, try-body=-1, destructure a+b=15, outer(5)=15, sum+product=23, GREEN=2) with zero LLM calls.
 
 All frontends emit **canonical Python-form literals** (`"None"`, `"True"`, `"False"`) — language-native forms (`nil`, `null`, `undefined`, `NULL`, `true`, `false`) are canonicalized at lowering time.
 
@@ -397,7 +397,7 @@ The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercis
 
 ### Test totals
 
-**8266 tests** (8204 unit + 62 integration passed, 4 skipped, 3 xfailed) — all with zero LLM calls.
+**8454 tests** (8392 unit + 62 integration passed, 4 skipped, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 
