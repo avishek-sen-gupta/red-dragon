@@ -216,6 +216,64 @@ class TestBuildDataLayoutCompTypes:
         assert fl.byte_length == 2
 
 
+class TestBuildDataLayoutSignClause:
+    def test_sign_separate_adds_one_byte(self):
+        """SIGN IS TRAILING SEPARATE adds 1 byte to zoned decimal storage."""
+        fields = [
+            CobolField(
+                name="WS-AMT",
+                level=77,
+                pic="S9(5)",
+                usage="DISPLAY",
+                offset=0,
+                sign_separate=True,
+                sign_leading=False,
+            ),
+        ]
+        layout = build_data_layout(fields)
+        fl = layout.fields["WS-AMT"]
+        assert fl.type_descriptor.sign_separate is True
+        assert fl.type_descriptor.sign_leading is False
+        assert fl.byte_length == 6  # 5 digits + 1 sign byte
+        assert fl.type_descriptor.byte_length == 6
+
+    def test_sign_leading_separate_adds_one_byte(self):
+        """SIGN IS LEADING SEPARATE adds 1 byte."""
+        fields = [
+            CobolField(
+                name="WS-AMT2",
+                level=77,
+                pic="S9(3)",
+                usage="DISPLAY",
+                offset=0,
+                sign_separate=True,
+                sign_leading=True,
+            ),
+        ]
+        layout = build_data_layout(fields)
+        fl = layout.fields["WS-AMT2"]
+        assert fl.byte_length == 4  # 3 digits + 1 sign byte
+        assert fl.sign_separate is True
+        assert fl.sign_leading is True
+
+    def test_sign_leading_embedded_same_size(self):
+        """SIGN IS LEADING (no SEPARATE) — same byte length as trailing embedded."""
+        fields = [
+            CobolField(
+                name="WS-AMT3",
+                level=77,
+                pic="S9(5)",
+                usage="DISPLAY",
+                offset=0,
+                sign_leading=True,
+                sign_separate=False,
+            ),
+        ]
+        layout = build_data_layout(fields)
+        fl = layout.fields["WS-AMT3"]
+        assert fl.byte_length == 5  # embedded, no extra byte
+
+
 class TestBuildDataLayoutFieldValue:
     def test_field_with_initial_value(self):
         fields = [
