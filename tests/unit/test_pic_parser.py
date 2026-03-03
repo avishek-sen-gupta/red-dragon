@@ -144,3 +144,36 @@ class TestParsePicUsageOverride:
         """USAGE override doesn't affect alphanumeric category."""
         result = parse_pic("X(10)", usage="COMP-3")
         assert result.category == CobolDataCategory.ALPHANUMERIC
+
+    def test_comp_usage(self):
+        result = parse_pic("S9(5)", usage="COMP")
+        assert result.category == CobolDataCategory.BINARY
+        assert result.total_digits == 5
+        assert result.byte_length == 4
+
+    def test_comp4_usage(self):
+        result = parse_pic("9(4)", usage="COMP-4")
+        assert result.category == CobolDataCategory.BINARY
+        assert result.byte_length == 2
+
+    def test_binary_usage(self):
+        result = parse_pic("9(9)", usage="BINARY")
+        assert result.category == CobolDataCategory.BINARY
+        assert result.byte_length == 4
+
+    def test_comp5_usage(self):
+        result = parse_pic("9(5)", usage="COMP-5")
+        assert result.category == CobolDataCategory.BINARY
+        assert result.byte_length == 4
+
+    def test_comp1_usage(self):
+        """COMP-1 has no PIC clause — use empty PIC."""
+        result = parse_pic("", usage="COMP-1")
+        assert result.category == CobolDataCategory.COMP1
+        assert result.byte_length == 4
+
+    def test_comp2_usage(self):
+        """COMP-2 has no PIC clause — use empty PIC."""
+        result = parse_pic("", usage="COMP-2")
+        assert result.category == CobolDataCategory.COMP2
+        assert result.byte_length == 8

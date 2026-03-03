@@ -173,6 +173,49 @@ class TestBuildDataLayoutNestedGroups:
         assert layout.fields["WS-BODY"].offset == 5
 
 
+class TestBuildDataLayoutCompTypes:
+    def test_comp_field(self):
+        """COMP field with PIC 9(5) -> 4 bytes (BINARY category)."""
+        fields = [
+            CobolField(name="WS-D", level=77, pic="9(5)", usage="COMP", offset=0),
+        ]
+        layout = build_data_layout(fields)
+        fl = layout.fields["WS-D"]
+        assert fl.type_descriptor.category == CobolDataCategory.BINARY
+        assert fl.type_descriptor.total_digits == 5
+        assert fl.byte_length == 4
+
+    def test_comp1_field_no_pic(self):
+        """COMP-1 field has no PIC clause -> 4 bytes (single float)."""
+        fields = [
+            CobolField(name="WS-E", level=77, pic="", usage="COMP-1", offset=0),
+        ]
+        layout = build_data_layout(fields)
+        fl = layout.fields["WS-E"]
+        assert fl.type_descriptor.category == CobolDataCategory.COMP1
+        assert fl.byte_length == 4
+
+    def test_comp2_field_no_pic(self):
+        """COMP-2 field has no PIC clause -> 8 bytes (double float)."""
+        fields = [
+            CobolField(name="WS-F", level=77, pic="", usage="COMP-2", offset=0),
+        ]
+        layout = build_data_layout(fields)
+        fl = layout.fields["WS-F"]
+        assert fl.type_descriptor.category == CobolDataCategory.COMP2
+        assert fl.byte_length == 8
+
+    def test_comp5_field(self):
+        """COMP-5 field with PIC 9(4) -> 2 bytes (BINARY category)."""
+        fields = [
+            CobolField(name="WS-G", level=77, pic="9(4)", usage="COMP-5", offset=0),
+        ]
+        layout = build_data_layout(fields)
+        fl = layout.fields["WS-G"]
+        assert fl.type_descriptor.category == CobolDataCategory.BINARY
+        assert fl.byte_length == 2
+
+
 class TestBuildDataLayoutFieldValue:
     def test_field_with_initial_value(self):
         fields = [
