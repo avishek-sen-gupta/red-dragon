@@ -362,6 +362,20 @@ class CppFrontend(CFrontend):
                 return self._node_text(child)
         return ""
 
+    # -- C++: this param injection for instance methods ------------------
+
+    def _emit_this_param(self):
+        """Emit ``SYMBOLIC param:this`` + ``STORE_VAR this`` for instance methods."""
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=self._fresh_reg(),
+            operands=[f"{constants.PARAM_PREFIX}this"],
+        )
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=["this", f"%{self._reg_counter - 1}"],
+        )
+
     # -- C++: class specifier ------------------------------------------
 
     def _lower_class_specifier(self, node):
@@ -389,11 +403,15 @@ class CppFrontend(CFrontend):
         )
         self._emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
 
+    def _lower_struct_body(self, node):
+        """Override C _lower_struct_body to handle function_definition children."""
+        self._lower_cpp_class_body(node)
+
     def _lower_cpp_class_body(self, node):
-        """Lower field_declaration_list (C++ class body)."""
+        """Lower field_declaration_list (C++ class/struct body)."""
         for child in node.children:
             if child.type == "function_definition":
-                self._lower_function_def_c(child)
+                self._lower_cpp_method(child)
             elif child.type == "declaration":
                 self._lower_declaration(child)
             elif child.type == "field_declaration":
@@ -408,6 +426,72 @@ class CppFrontend(CFrontend):
                 self._lower_field_initializer_list(child)
             elif child.is_named and child.type not in ("{", "}"):
                 self._lower_stmt(child)
+
+    def _lower_cpp_method(self, node):
+        """Lower a function_definition inside a class/struct body, injecting param:this."""
+        declarator_node = node.child_by_field_name("declarator")
+        body_node = node.child_by_field_name("body")
+        init_list_node = next(
+            (c for c in node.children if c.type == "field_initializer_list"),
+            None,
+        )
+
+        func_name = "__anon"
+        params_node = None
+
+        if declarator_node:
+            if declarator_node.type == "function_declarator":
+                name_node = declarator_node.child_by_field_name("declarator")
+                params_node = declarator_node.child_by_field_name("parameters")
+                func_name = (
+                    self._extract_declarator_name(name_node) if name_node else "__anon"
+                )
+            else:
+                func_decl = self._find_function_declarator(declarator_node)
+                if func_decl:
+                    name_node = func_decl.child_by_field_name("declarator")
+                    params_node = func_decl.child_by_field_name("parameters")
+                    func_name = (
+                        self._extract_declarator_name(name_node)
+                        if name_node
+                        else "__anon"
+                    )
+                else:
+                    func_name = self._extract_declarator_name(declarator_node)
+
+        func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+        end_label = self._fresh_label(f"end_{func_name}")
+
+        self._emit(Opcode.BRANCH, label=end_label, node=node)
+        self._emit(Opcode.LABEL, label=func_label)
+
+        self._emit_this_param()
+
+        if params_node:
+            self._lower_c_params(params_node)
+
+        if init_list_node:
+            self._lower_field_initializer_list(init_list_node)
+
+        if body_node:
+            self._lower_block(body_node)
+
+        none_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST, result_reg=none_reg, operands=[self.DEFAULT_RETURN_VALUE]
+        )
+        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.LABEL, label=end_label)
+
+        func_reg = self._fresh_reg()
+        self._emit(
+            Opcode.CONST,
+            result_reg=func_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+        )
+        self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
 
     def _lower_field_initializer_list(self, node):
         """Lower field_initializer_list: : field(val), field2(val2).
