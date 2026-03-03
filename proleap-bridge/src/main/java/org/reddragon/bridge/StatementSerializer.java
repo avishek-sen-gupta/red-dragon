@@ -6,9 +6,11 @@ import io.proleap.cobol.asg.metamodel.procedure.Statement;
 import io.proleap.cobol.asg.metamodel.procedure.StatementType;
 import io.proleap.cobol.asg.metamodel.procedure.StatementTypeEnum;
 import io.proleap.cobol.asg.metamodel.procedure.add.AddStatement;
+import io.proleap.cobol.asg.metamodel.procedure.add.AddToGivingStatement;
 import io.proleap.cobol.asg.metamodel.procedure.add.AddToStatement;
 import io.proleap.cobol.asg.metamodel.procedure.add.From;
 import io.proleap.cobol.asg.metamodel.procedure.add.To;
+import io.proleap.cobol.asg.metamodel.procedure.add.ToGiving;
 import io.proleap.cobol.asg.metamodel.procedure.compute.ComputeStatement;
 import io.proleap.cobol.asg.metamodel.procedure.compute.Store;
 import io.proleap.cobol.asg.metamodel.procedure.continuestmt.ContinueStatement;
@@ -69,8 +71,10 @@ import io.proleap.cobol.asg.metamodel.procedure.stop.StopStatement;
 import io.proleap.cobol.asg.metamodel.procedure.string.DelimitedByPhrase;
 import io.proleap.cobol.asg.metamodel.procedure.string.Sendings;
 import io.proleap.cobol.asg.metamodel.procedure.string.StringStatement;
+import io.proleap.cobol.asg.metamodel.procedure.subtract.MinuendGiving;
 import io.proleap.cobol.asg.metamodel.procedure.subtract.SubtractStatement;
 import io.proleap.cobol.asg.metamodel.procedure.subtract.SubtractFromStatement;
+import io.proleap.cobol.asg.metamodel.procedure.subtract.SubtractFromGivingStatement;
 import io.proleap.cobol.asg.metamodel.procedure.subtract.Minuend;
 import io.proleap.cobol.asg.metamodel.procedure.subtract.Subtrahend;
 import io.proleap.cobol.asg.metamodel.procedure.unstring.UnstringStatement;
@@ -194,6 +198,23 @@ public final class StatementSerializer {
             for (To to : addTo.getTos()) {
                 operands.add(extractCallName(to.getToCall()));
             }
+        } else {
+            AddToGivingStatement addGiving = stmt.getAddToGivingStatement();
+            if (addGiving != null) {
+                for (From from : addGiving.getFroms()) {
+                    operands.add(extractValueStmtText(from.getFromValueStmt()));
+                }
+                for (ToGiving to : addGiving.getTos()) {
+                    operands.add(extractValueStmtText(to.getToValueStmt()));
+                }
+                JsonArray givingTargets = new JsonArray();
+                for (io.proleap.cobol.asg.metamodel.procedure.add.Giving g : addGiving.getGivings()) {
+                    givingTargets.add(extractCallName(g.getGivingCall()));
+                }
+                if (givingTargets.size() > 0) {
+                    obj.add("giving", givingTargets);
+                }
+            }
         }
 
         obj.add("operands", operands);
@@ -212,6 +233,27 @@ public final class StatementSerializer {
             }
             for (Minuend min : subtractFrom.getMinuends()) {
                 operands.add(extractCallName(min.getMinuendCall()));
+            }
+        } else {
+            SubtractFromGivingStatement subtractGiving = stmt.getSubtractFromGivingStatement();
+            if (subtractGiving != null) {
+                // Minuend first (source), subtrahends second (target)
+                // SUBTRACT X FROM Y GIVING Z → operands=[Y, X], giving=[Z]
+                // Python computes source - target = Y - X
+                MinuendGiving minuend = subtractGiving.getMinuend();
+                if (minuend != null) {
+                    operands.add(extractValueStmtText(minuend.getMinuendValueStmt()));
+                }
+                for (Subtrahend sub : subtractGiving.getSubtrahends()) {
+                    operands.add(extractValueStmtText(sub.getSubtrahendValueStmt()));
+                }
+                JsonArray givingTargets = new JsonArray();
+                for (io.proleap.cobol.asg.metamodel.procedure.subtract.Giving g : subtractGiving.getGivings()) {
+                    givingTargets.add(extractCallName(g.getGivingCall()));
+                }
+                if (givingTargets.size() > 0) {
+                    obj.add("giving", givingTargets);
+                }
             }
         }
 

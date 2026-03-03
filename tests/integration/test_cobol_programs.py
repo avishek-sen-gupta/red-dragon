@@ -120,6 +120,96 @@ class TestAddSubtract:
         assert _decode_zoned_unsigned(region, 8, 4) == 12
 
 
+class TestArithmeticGiving:
+    def test_add_giving(self):
+        """ADD WS-A TO WS-B GIVING WS-R stores A + B in R."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-ADDGIV.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A PIC 9(4) VALUE 10.",
+                "77 WS-B PIC 9(4) VALUE 25.",
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ADD WS-A TO WS-B GIVING WS-R.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-A=10, WS-B=25 unchanged; WS-R = 10 + 25 = 35
+        assert _decode_zoned_unsigned(region, 0, 4) == 10
+        assert _decode_zoned_unsigned(region, 4, 4) == 25
+        assert _decode_zoned_unsigned(region, 8, 4) == 35
+
+    def test_subtract_giving(self):
+        """SUBTRACT WS-A FROM WS-B GIVING WS-R stores B - A in R."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SUBGIV.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A PIC 9(4) VALUE 10.",
+                "77 WS-B PIC 9(4) VALUE 25.",
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SUBTRACT WS-A FROM WS-B GIVING WS-R.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-A=10, WS-B=25 unchanged; WS-R = 25 - 10 = 15
+        assert _decode_zoned_unsigned(region, 0, 4) == 10
+        assert _decode_zoned_unsigned(region, 4, 4) == 25
+        assert _decode_zoned_unsigned(region, 8, 4) == 15
+
+    def test_add_giving_literal(self):
+        """ADD 10 TO WS-A GIVING WS-R stores 10 + A in R."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-ADDLIT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A PIC 9(4) VALUE 7.",
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ADD 10 TO WS-A GIVING WS-R.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-A=7 unchanged; WS-R = 10 + 7 = 17
+        assert _decode_zoned_unsigned(region, 0, 4) == 7
+        assert _decode_zoned_unsigned(region, 4, 4) == 17
+
+    def test_subtract_giving_literal(self):
+        """SUBTRACT 3 FROM WS-A GIVING WS-R stores A - 3 in R."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SUBLIT.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A PIC 9(4) VALUE 20.",
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    SUBTRACT 3 FROM WS-A GIVING WS-R.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-A=20 unchanged; WS-R = 20 - 3 = 17
+        assert _decode_zoned_unsigned(region, 0, 4) == 20
+        assert _decode_zoned_unsigned(region, 4, 4) == 17
+
+
 class TestMultiplyDivide:
     def test_multiply_divide(self):
         """MULTIPLY ... GIVING and DIVIDE ... GIVING produce correct results."""
