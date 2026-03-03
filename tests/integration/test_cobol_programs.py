@@ -854,3 +854,165 @@ class TestOccursLoop:
         assert _decode_zoned_unsigned(region, 0, 4) == 1
         assert _decode_zoned_unsigned(region, 4, 4) == 2
         assert _decode_zoned_unsigned(region, 8, 4) == 3
+
+
+# ---------------------------------------------------------------------------
+# Level-88 condition names, FILLER disambiguation, multi-value VALUE clauses
+# ---------------------------------------------------------------------------
+
+
+class TestLevel88ConditionName:
+    def test_if_condition_name_single_value(self):
+        """IF STATUS-ACTIVE expands to IF WS-STATUS = 'A' and takes the true branch."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COND88.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '05 WS-STATUS PIC X(1) VALUE "A".',
+                '   88 STATUS-ACTIVE VALUE "A".',
+                '   88 STATUS-INACTIVE VALUE "I".',
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF STATUS-ACTIVE",
+                "        MOVE 1 TO WS-R",
+                "    ELSE",
+                "        MOVE 2 TO WS-R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-STATUS is 'A' which matches STATUS-ACTIVE, so WS-R = 1
+        assert _decode_zoned_unsigned(region, 1, 4) == 1
+
+    def test_if_condition_name_false_branch(self):
+        """IF STATUS-ACTIVE with WS-STATUS='I' takes the false branch."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COND88F.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '05 WS-STATUS PIC X(1) VALUE "I".',
+                '   88 STATUS-ACTIVE VALUE "A".',
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF STATUS-ACTIVE",
+                "        MOVE 1 TO WS-R",
+                "    ELSE",
+                "        MOVE 2 TO WS-R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-STATUS is 'I' which does NOT match STATUS-ACTIVE, so WS-R = 2
+        assert _decode_zoned_unsigned(region, 1, 4) == 2
+
+    def test_condition_name_multi_value_or(self):
+        """IF VALID-CODE with VALUE 'A' 'B' 'C' matches when field is 'B'."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COND88M.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '05 WS-CODE PIC X(1) VALUE "B".',
+                '   88 VALID-CODE VALUE "A" "B" "C".',
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF VALID-CODE",
+                "        MOVE 1 TO WS-R",
+                "    ELSE",
+                "        MOVE 2 TO WS-R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-CODE is 'B' which matches one of 'A','B','C' → true → WS-R = 1
+        assert _decode_zoned_unsigned(region, 1, 4) == 1
+
+    def test_condition_name_multi_value_no_match(self):
+        """IF VALID-CODE with VALUE 'A' 'B' 'C' fails when field is 'X'."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-COND88N.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '05 WS-CODE PIC X(1) VALUE "X".',
+                '   88 VALID-CODE VALUE "A" "B" "C".',
+                "77 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    IF VALID-CODE",
+                "        MOVE 1 TO WS-R",
+                "    ELSE",
+                "        MOVE 2 TO WS-R",
+                "    END-IF.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-CODE is 'X' which does NOT match any of 'A','B','C' → false → WS-R = 2
+        assert _decode_zoned_unsigned(region, 1, 4) == 2
+
+
+class TestFillerDisambiguation:
+    def test_filler_fields_do_not_collide(self):
+        """Multiple FILLER fields are disambiguated and don't crash layout building."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-FILLER.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-RECORD.",
+                "   05 WS-NAME PIC X(5) VALUE SPACES.",
+                "   05 FILLER PIC X(2) VALUE SPACES.",
+                "   05 WS-CODE PIC 9(4) VALUE 42.",
+                "   05 FILLER PIC X(3) VALUE SPACES.",
+                "   05 WS-FLAG PIC 9(1) VALUE 7.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-NAME at offset 0 (5 bytes), FILLER_1 at 5 (2 bytes),
+        # WS-CODE at 7 (4 bytes), FILLER_2 at 11 (3 bytes),
+        # WS-FLAG at 14 (1 byte)
+        assert _decode_zoned_unsigned(region, 7, 4) == 42
+        assert _decode_zoned_unsigned(region, 14, 1) == 7
+
+    def test_filler_between_computed_fields(self):
+        """FILLER padding doesn't affect arithmetic on surrounding fields."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-FILLER2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-REC.",
+                "   05 WS-A PIC 9(4) VALUE 10.",
+                "   05 FILLER PIC X(5) VALUE SPACES.",
+                "   05 WS-B PIC 9(4) VALUE 20.",
+                "   05 FILLER PIC X(3) VALUE SPACES.",
+                "   05 WS-R PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ADD WS-A TO WS-R.",
+                "    ADD WS-B TO WS-R.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-A at 0 (4), FILLER_1 at 4 (5), WS-B at 9 (4),
+        # FILLER_2 at 13 (3), WS-R at 16 (4)
+        assert _decode_zoned_unsigned(region, 16, 4) == 30

@@ -393,11 +393,11 @@ The COBOL test suite covers ASG round-trip, typed statement hierarchy (32 types)
 
 ### COBOL integration tests
 
-The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercises the full pipeline from real `.cbl` source code through the ProLeap Java bridge, ASG construction, IR lowering, CFG building, and VM execution. 32 tests cover initial values, ADD/SUBTRACT, MULTIPLY/DIVIDE (including GIVING), COMPUTE, MOVE, IF/ELSE, PERFORM TIMES/UNTIL/VARYING, nested PERFORM, GO TO, EVALUATE/WHEN, string moves, INITIALIZE, SET TO/UP BY/DOWN BY, SEARCH with WHEN, INSPECT TALLYING/REPLACING, CALL, STRING concatenation, UNSTRING splitting, and OCCURS (elementary MOVE, field subscript, PERFORM VARYING loop). Tests skip gracefully when the ProLeap bridge JAR is not available.
+The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercises the full pipeline from real `.cbl` source code through the ProLeap Java bridge, ASG construction, IR lowering, CFG building, and VM execution. 38 tests cover initial values, ADD/SUBTRACT, MULTIPLY/DIVIDE (including GIVING), COMPUTE, MOVE, IF/ELSE, PERFORM TIMES/UNTIL/VARYING, nested PERFORM, GO TO, EVALUATE/WHEN, string moves, INITIALIZE, SET TO/UP BY/DOWN BY, SEARCH with WHEN, INSPECT TALLYING/REPLACING, CALL, STRING concatenation, UNSTRING splitting, OCCURS (elementary MOVE, field subscript, PERFORM VARYING loop), level-88 condition names (single/multi-value, true/false branches), and FILLER field disambiguation. Tests skip gracefully when the ProLeap bridge JAR is not available.
 
 ### Test totals
 
-**7990 tests** (7958 unit + 32 integration passed, 3 xfailed) — all with zero LLM calls.
+**7996 tests** (7958 unit + 38 integration passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 
