@@ -12,6 +12,7 @@ from .vm import (
     SymbolicValue,
     HeapObject,
     ClosureEnvironment,
+    ExceptionHandler,
     StackFramePush,
     StateUpdate,
     HeapWrite,
@@ -382,7 +383,47 @@ def _handle_return(inst: IRInstruction, vm: VMState, **kwargs: Any) -> Execution
 
 def _handle_throw(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
     val = _resolve_reg(vm, inst.operands[0]) if inst.operands else None
-    return ExecutionResult.success(StateUpdate(reasoning=f"throw {val!r}"))
+    if vm.exception_stack:
+        handler = vm.exception_stack.pop()
+        # Redirect to the first catch label (or finally if no catch)
+        target = (
+            handler.catch_labels[0]
+            if handler.catch_labels
+            else handler.finally_label or handler.end_label
+        )
+        return ExecutionResult.success(
+            StateUpdate(
+                next_label=target, reasoning=f"throw {val!r} → caught by {target}"
+            )
+        )
+    return ExecutionResult.success(StateUpdate(reasoning=f"throw {val!r} (uncaught)"))
+
+
+def _handle_try_push(
+    inst: IRInstruction, vm: VMState, **kwargs: Any
+) -> ExecutionResult:
+    catch_labels_str, finally_label, end_label = (
+        inst.operands[0],
+        inst.operands[1],
+        inst.operands[2],
+    )
+    catch_labels = [lbl.strip() for lbl in catch_labels_str.split(",") if lbl.strip()]
+    vm.exception_stack.append(
+        ExceptionHandler(
+            catch_labels=catch_labels,
+            finally_label=finally_label,
+            end_label=end_label,
+        )
+    )
+    return ExecutionResult.success(
+        StateUpdate(reasoning=f"push exception handler → catch={catch_labels}")
+    )
+
+
+def _handle_try_pop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
+    if vm.exception_stack:
+        vm.exception_stack.pop()
+    return ExecutionResult.success(StateUpdate(reasoning="pop exception handler"))
 
 
 def _handle_branch_if(
@@ -963,6 +1004,8 @@ class LocalExecutor:
         Opcode.LOAD_INDEX: _handle_load_index,
         Opcode.RETURN: _handle_return,
         Opcode.THROW: _handle_throw,
+        Opcode.TRY_PUSH: _handle_try_push,
+        Opcode.TRY_POP: _handle_try_pop,
         Opcode.BRANCH_IF: _handle_branch_if,
         Opcode.BINOP: _handle_binop,
         Opcode.UNOP: _handle_unop,

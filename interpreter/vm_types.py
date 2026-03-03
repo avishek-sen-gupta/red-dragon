@@ -48,6 +48,15 @@ class ClosureEnvironment:
 
 
 @dataclass
+class ExceptionHandler:
+    """Exception handler pushed by TRY_PUSH, popped by TRY_POP or THROW."""
+
+    catch_labels: list[str] = field(default_factory=list)
+    finally_label: str = ""
+    end_label: str = ""
+
+
+@dataclass
 class StackFrame:
     function_name: str
     registers: dict[str, Any] = field(default_factory=dict)
@@ -87,6 +96,7 @@ class VMState:
     closures: dict[str, ClosureEnvironment] = field(default_factory=dict)
     regions: dict[str, bytearray] = field(default_factory=dict)
     continuations: dict[str, str] = field(default_factory=dict)
+    exception_stack: list[ExceptionHandler] = field(default_factory=list)
     io_provider: Any = (
         None  # Optional CobolIOProvider — Any to avoid COBOL import in core VM
     )
