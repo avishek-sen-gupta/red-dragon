@@ -222,10 +222,28 @@ class TestDataDivisionClassify:
             == DataDivisionStatus.HANDLED
         )
 
-    def test_sign_is_not_extracted(self):
+    def test_sign_is_handled(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.CLAUSE_SIGN.value)
-            == DataDivisionStatus.NOT_EXTRACTED
+            == DataDivisionStatus.HANDLED
+        )
+
+    def test_justified_is_handled(self):
+        assert (
+            _classify_dd_feature(DataDivisionFeature.CLAUSE_JUSTIFIED.value)
+            == DataDivisionStatus.HANDLED
+        )
+
+    def test_synchronized_is_handled(self):
+        assert (
+            _classify_dd_feature(DataDivisionFeature.CLAUSE_SYNCHRONIZED.value)
+            == DataDivisionStatus.HANDLED
+        )
+
+    def test_occurs_depending_is_handled(self):
+        assert (
+            _classify_dd_feature(DataDivisionFeature.CLAUSE_OCCURS_DEPENDING.value)
+            == DataDivisionStatus.HANDLED
         )
 
     def test_linkage_is_not_extracted(self):
