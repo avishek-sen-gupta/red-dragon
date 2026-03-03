@@ -1177,3 +1177,21 @@ Also fixed Ruby's `raise` to emit `THROW` instead of `CALL_FUNCTION`.
 Programs are organised in three tiers: Tier 1 (class with methods: Python, Java, C#, Kotlin, Scala), Tier 2 (object/struct field access: JS, TS, PHP, Ruby, Lua, Go, C, C++, Rust), Tier 3 (record field access: Pascal).
 
 **Consequences:** All 15 languages now exercise genuine class/struct/record operations. The test validates real field access and method dispatch rather than plain variable arithmetic. Seven frontends received targeted fixes that also benefit any future programs using these patterns.
+
+---
+
+### ADR-062: Promote 6 Tier 2 languages to Tier 1 class methods in Rosetta classes (2026-03-04)
+
+**Context:** After ADR-061, 5 languages (Python, Java, C#, Kotlin, Scala) used genuine class methods in `test_rosetta_classes.py` while 6 others (JS, TS, PHP, Go, C++, Rust) were at Tier 2 (field-only). Examination showed these 6 languages already had working class/method infrastructure in their frontends, only needing `param:this`/`param:self` injection.
+
+**Decision:** Promote 6 languages from Tier 2 to Tier 1 by injecting the receiver parameter:
+
+- **JS/TS** (Phase 1): Added `_emit_this_param()` and `_has_static_modifier()` to `JavaScriptFrontend`. `_lower_method_def` now injects `param:this` for non-static methods (including constructors). TS inherits JS fix. Static detection checks for `"static"` child token.
+- **PHP** (Phase 1): Added `_emit_this_param()` (emitting `param:$this`) and `_has_static_modifier()` (checking for `static_modifier` child) to `PhpFrontend`. Updated `_lower_php_object_creation` from `CALL_FUNCTION` to `NEW_OBJECT` + `CALL_METHOD("__construct")` to match the class instantiation pattern.
+- **Go** (Phase 2): Converted `_lower_go_type_decl` for struct types from emitting `SYMBOLIC "struct:..."` to a proper `CLASS_LABEL`/`END_CLASS_LABEL` block. Go methods (defined at package level with receivers) are associated via the registry's hoisted-method scan. No changes needed to `_lower_go_method_decl` — it already injected the receiver as the first parameter.
+- **C++** (Phase 2): Added `_emit_this_param()` and `_lower_cpp_method()` to `CppFrontend`. Overrode `_lower_struct_body` to delegate to `_lower_cpp_class_body`, which dispatches `function_definition` children to the new `_lower_cpp_method` (with `param:this` injection). Struct bodies now handle inline methods.
+- **Rust** (Phase 3): No frontend changes needed. `_extract_param_name` already handled `self_parameter` → `"self"`, and `_lower_impl_item` emitted a CLASS block with methods inside. Direct struct instantiation (`Counter { count: 0 }`) used instead of `Counter::new()` since scoped identifiers (`Type::method`) don't resolve to class-scoped functions.
+
+Updated tier classification: Tier 1 (11): Python, Java, C#, Kotlin, Scala, JS, TS, PHP, Go, C++, Rust. Tier 2 (3): Ruby, Lua, C. Tier 3 (1): Pascal.
+
+**Consequences:** 11 of 15 languages now exercise the full class/method dispatch pipeline (class registration, `CALL_METHOD`, receiver binding, `STORE_FIELD`/`LOAD_FIELD` through `this`/`self`). Ruby/Lua/C remain at Tier 2 due to fundamental architecture mismatches (Ruby's `@var` → plain identifier, Lua's table-based objects, C's lack of methods on structs).
