@@ -223,6 +223,11 @@ class RubyFrontend(BaseFrontend):
         # Standalone function call: method(args)
         if method_node:
             func_name = self._node_text(method_node)
+            # Ruby raise → THROW
+            if func_name == "raise":
+                val_reg = arg_regs[0] if arg_regs else self._fresh_reg()
+                self._emit(Opcode.THROW, operands=[val_reg], node=node)
+                return val_reg
             reg = self._fresh_reg()
             self._emit(
                 Opcode.CALL_FUNCTION,
@@ -659,6 +664,16 @@ class RubyFrontend(BaseFrontend):
 
         exit_target = finally_label or end_label
 
+        # push exception handler
+        self._emit(
+            Opcode.TRY_PUSH,
+            operands=[
+                ",".join(catch_labels),
+                finally_label or "",
+                end_label,
+            ],
+        )
+
         # try body
         self._emit(Opcode.LABEL, label=try_body_label)
         for child in body_children:
@@ -668,6 +683,8 @@ class RubyFrontend(BaseFrontend):
                 and child.type not in self.NOISE_TYPES
             ):
                 self._lower_stmt(child)
+        # pop exception handler (normal exit)
+        self._emit(Opcode.TRY_POP)
         if else_label:
             self._emit(Opcode.BRANCH, label=else_label)
         else:

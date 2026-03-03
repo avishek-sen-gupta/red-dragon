@@ -1046,3 +1046,18 @@ The inner `case_clause` field names (`pattern`, `body`) do resolve correctly via
 The extracted parts are passed to the base class `_lower_try_catch()`, producing proper labeled blocks (try_body, catch_N, try_finally, try_end) with BRANCH instructions and `SYMBOLIC caught_exception` per handler.
 
 **Consequences:** Pascal now generates structured try/catch/finally block IR identical to the other 10 try/catch-supporting languages. Five new unit tests verify caught_exception generation, exception variable storage, try_end labels, finally blocks, and non-sequential execution. Pascal added to `TRY_CATCH_LANGUAGES` in Rosetta e2e. Rosetta exception e2e now uses a proper `try/except/on e: Exception do` program for Pascal. All 8244 tests pass.
+
+---
+
+### ADR-050: Implement THROW exception control flow with TRY_PUSH/TRY_POP (2026-03-03)
+
+**Context:** The VM had TRY_PUSH and TRY_POP opcodes defined in the IR but no runtime support. THROW was a no-op — it logged but didn't redirect execution. Exception handlers (catch blocks) were dead code; the VM always fell through the try body and branched past them.
+
+**Decision:** Implement a three-part exception control flow mechanism:
+1. **IR emission**: `_lower_try_catch` (and Ruby's `_lower_try_catch_ruby`) emit `TRY_PUSH` before the try body (with catch labels, finally label, and end label as operands) and `TRY_POP` after the try body (before the BRANCH to exit target).
+2. **Executor handlers**: `_handle_try_push` pushes an `ExceptionHandler` onto `VMState.exception_stack`; `_handle_try_pop` pops it. `_handle_throw` checks the exception stack — if a handler exists, pops it and sets `next_label` to the first catch label; otherwise marks the throw as uncaught.
+3. **Run loop**: Caught throws (THROW with `next_label`) follow the label to the catch block instead of calling `_handle_return_flow`. Uncaught throws still propagate to the caller.
+
+Also fixed Ruby's `raise` to emit `THROW` instead of `CALL_FUNCTION`.
+
+**Consequences:** Exception control flow now works end-to-end: throw redirects to catch, code after throw is skipped, finally blocks execute on both normal and exceptional paths, and no-exception paths skip catch blocks. 14 new tests (5 Python execution, 2 IR emission, 7 cross-language) verify the behavior across Python, JavaScript, Java, PHP, Ruby, Kotlin, and C++. All 8258 tests pass.

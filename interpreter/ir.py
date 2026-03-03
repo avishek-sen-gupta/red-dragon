@@ -29,6 +29,8 @@ class Opcode(str, Enum):
     BRANCH = "BRANCH"
     RETURN = "RETURN"
     THROW = "THROW"
+    TRY_PUSH = "TRY_PUSH"
+    TRY_POP = "TRY_POP"
     # Special
     SYMBOLIC = "SYMBOLIC"
     # Region operations (byte-addressed memory)

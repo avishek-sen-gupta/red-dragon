@@ -931,10 +931,22 @@ class BaseFrontend(Frontend):
 
         exit_target = finally_label or end_label
 
+        # ── push exception handler ──
+        self._emit(
+            Opcode.TRY_PUSH,
+            operands=[
+                ",".join(catch_labels),
+                finally_label or "",
+                end_label,
+            ],
+        )
+
         # ── try body ──
         self._emit(Opcode.LABEL, label=try_body_label)
         if body_node:
             self._lower_block(body_node)
+        # ── pop exception handler (normal exit) ──
+        self._emit(Opcode.TRY_POP)
         # After try body: jump to else (if present), then finally/end
         if else_label:
             self._emit(Opcode.BRANCH, label=else_label)

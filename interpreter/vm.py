@@ -8,6 +8,7 @@ from .vm_types import (  # noqa: F401 — re-exported for backwards compatibilit
     SymbolicValue,
     HeapObject,
     ClosureEnvironment,
+    ExceptionHandler,
     StackFrame,
     VMState,
     HeapWrite,
