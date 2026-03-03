@@ -433,6 +433,40 @@ class TestBuildDataLayoutRenames:
         assert layout.total_bytes == 15
 
 
+class TestBuildDataLayoutBlankWhenZero:
+    def test_blank_when_zero_propagated_to_type_descriptor(self):
+        """BLANK WHEN ZERO field has blank_when_zero=True on type descriptor."""
+        fields = [
+            CobolField(
+                name="WS-BWZ",
+                level=77,
+                pic="9(5)",
+                usage="DISPLAY",
+                offset=0,
+                blank_when_zero=True,
+            ),
+        ]
+        layout = build_data_layout(fields)
+        fl = layout.fields["WS-BWZ"]
+        assert fl.type_descriptor.blank_when_zero is True
+        assert fl.byte_length == 5  # storage unchanged
+
+    def test_blank_when_zero_false_by_default(self):
+        """Fields without BLANK WHEN ZERO have blank_when_zero=False."""
+        fields = [
+            CobolField(
+                name="WS-PLAIN",
+                level=77,
+                pic="9(5)",
+                usage="DISPLAY",
+                offset=0,
+            ),
+        ]
+        layout = build_data_layout(fields)
+        fl = layout.fields["WS-PLAIN"]
+        assert fl.type_descriptor.blank_when_zero is False
+
+
 class TestBuildDataLayoutFieldValue:
     def test_field_with_initial_value(self):
         fields = [

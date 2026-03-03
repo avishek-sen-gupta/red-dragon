@@ -450,6 +450,24 @@ def _builtin_bytes_to_float(args: list[Any], vm: Any) -> Any:
     return float(result)
 
 
+def _builtin_cobol_blank_when_zero(args: list[Any], vm: Any) -> Any:
+    """Apply BLANK WHEN ZERO: if numeric value is zero, return EBCDIC spaces.
+
+    Args: [encoded_bytes: list[int], value_str: str, byte_length: int]
+    Returns: list[int] — encoded_bytes unchanged, or all-spaces if value is zero.
+    """
+    if len(args) < 3 or any(_is_symbolic(a) for a in args):
+        return _UNCOMPUTABLE
+    encoded_bytes, value_str, byte_length = args[0], args[1], args[2]
+    if not isinstance(encoded_bytes, list) or not isinstance(byte_length, int):
+        return _UNCOMPUTABLE
+    try:
+        is_zero = float(str(value_str)) == 0.0
+    except (ValueError, TypeError):
+        return encoded_bytes
+    return [0x40] * byte_length if is_zero else encoded_bytes
+
+
 BYTE_BUILTINS: dict[str, Any] = {
     "__nibble_get": _builtin_nibble_get,
     "__nibble_set": _builtin_nibble_set,
@@ -475,4 +493,5 @@ BYTE_BUILTINS: dict[str, Any] = {
     "__binary_bytes_to_int": _builtin_binary_bytes_to_int,
     "__float_to_bytes": _builtin_float_to_bytes,
     "__bytes_to_float": _builtin_bytes_to_float,
+    "__cobol_blank_when_zero": _builtin_cobol_blank_when_zero,
 }

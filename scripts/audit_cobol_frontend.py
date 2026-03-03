@@ -274,6 +274,7 @@ DD_BRIDGE_EXTRACTED: frozenset[str] = frozenset(
         DataDivisionFeature.CLAUSE_SIGN.value,
         DataDivisionFeature.CLAUSE_JUSTIFIED.value,
         DataDivisionFeature.CLAUSE_SYNCHRONIZED.value,
+        DataDivisionFeature.CLAUSE_BLANK_WHEN_ZERO.value,
         DataDivisionFeature.CLAUSE_FILLER.value,
     }
 )
@@ -300,6 +301,7 @@ DD_PYTHON_MODELLED: frozenset[str] = frozenset(
         DataDivisionFeature.CLAUSE_SIGN.value,
         DataDivisionFeature.CLAUSE_JUSTIFIED.value,
         DataDivisionFeature.CLAUSE_SYNCHRONIZED.value,
+        DataDivisionFeature.CLAUSE_BLANK_WHEN_ZERO.value,
         DataDivisionFeature.CLAUSE_FILLER.value,
     }
 )
@@ -326,6 +328,7 @@ DD_FRONTEND_HANDLED: frozenset[str] = frozenset(
         DataDivisionFeature.CLAUSE_SIGN.value,
         DataDivisionFeature.CLAUSE_JUSTIFIED.value,
         DataDivisionFeature.CLAUSE_SYNCHRONIZED.value,
+        DataDivisionFeature.CLAUSE_BLANK_WHEN_ZERO.value,
         DataDivisionFeature.CLAUSE_FILLER.value,
     }
 )

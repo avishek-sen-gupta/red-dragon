@@ -309,6 +309,30 @@ class TestCobolField:
         assert "renames_from" not in field.to_dict()
         assert "renames_thru" not in field.to_dict()
 
+    def test_field_with_blank_when_zero(self):
+        data = {
+            "name": "WS-BWZ",
+            "level": 5,
+            "pic": "9(5)",
+            "usage": "DISPLAY",
+            "offset": 0,
+            "blank_when_zero": True,
+        }
+        field = CobolField.from_dict(data)
+        assert field.blank_when_zero is True
+        assert CobolField.from_dict(field.to_dict()) == field
+
+    def test_field_without_blank_when_zero_defaults(self):
+        data = {
+            "name": "WS-NOBWZ",
+            "level": 5,
+            "pic": "9(5)",
+            "offset": 0,
+        }
+        field = CobolField.from_dict(data)
+        assert field.blank_when_zero is False
+        assert "blank_when_zero" not in field.to_dict()
+
 
 class TestCobolStatement:
     def test_move_statement(self):
