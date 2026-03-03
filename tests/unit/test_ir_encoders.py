@@ -21,6 +21,7 @@ from interpreter.cobol.ir_encoders import (
     build_encode_comp3_ir,
     build_decode_comp3_ir,
     build_encode_alphanumeric_ir,
+    build_encode_alphanumeric_justified_ir,
     build_decode_alphanumeric_ir,
     build_encode_binary_ir,
     build_decode_binary_ir,
@@ -686,3 +687,39 @@ class TestZonedSeparateRoundTripIR:
         )
         decoded = _execute_ir(dec_ir, {"%p_data": encoded})
         assert decoded == 42.0
+
+
+class TestEncodeAlphanumericJustifiedIR:
+    """Validate IR right-justified alphanumeric encoder."""
+
+    def test_short_value_left_padded(self):
+        ir = build_encode_alphanumeric_justified_ir("enc_aj", length=8)
+        ir_result = _execute_ir(ir, {"%p_value": "HI"})
+        ref_left = encode_alphanumeric("HI", 8)
+        # Right-justified: 6 spaces then HI
+        # EBCDIC space = 0x40, H = 0xC8, I = 0xC9
+        assert len(ir_result) == 8
+        # First 6 should be EBCDIC spaces
+        assert all(b == 0x40 for b in ir_result[:6])
+        # Last 2 should be the EBCDIC of "HI"
+        assert ir_result[6:] == list(encode_alphanumeric("HI", 2))
+
+    def test_exact_length(self):
+        ir = build_encode_alphanumeric_justified_ir("enc_aj", length=5)
+        ir_result = _execute_ir(ir, {"%p_value": "HELLO"})
+        ref_result = encode_alphanumeric("HELLO", 5)
+        # Exact length: same as regular encoding
+        assert bytes(ir_result) == ref_result
+
+    def test_over_length_truncated_from_left(self):
+        ir = build_encode_alphanumeric_justified_ir("enc_aj", length=3)
+        ir_result = _execute_ir(ir, {"%p_value": "ABCDE"})
+        # Right-justified: keep last 3 chars → "CDE"
+        ref_cde = encode_alphanumeric("CDE", 3)
+        assert bytes(ir_result) == ref_cde
+
+    def test_empty_string_all_spaces(self):
+        ir = build_encode_alphanumeric_justified_ir("enc_aj", length=4)
+        ir_result = _execute_ir(ir, {"%p_value": ""})
+        assert len(ir_result) == 4
+        assert all(b == 0x40 for b in ir_result)

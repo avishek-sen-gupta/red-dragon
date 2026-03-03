@@ -175,6 +175,30 @@ class TestCobolField:
         # since both are False
         assert "sign" not in field.to_dict()
 
+    def test_field_with_justified_right(self):
+        data = {
+            "name": "WS-JUST",
+            "level": 5,
+            "pic": "X(10)",
+            "usage": "DISPLAY",
+            "offset": 0,
+            "justified_right": True,
+        }
+        field = CobolField.from_dict(data)
+        assert field.justified_right is True
+        assert CobolField.from_dict(field.to_dict()) == field
+
+    def test_field_without_justified_defaults(self):
+        data = {
+            "name": "WS-NOJUST",
+            "level": 5,
+            "pic": "X(10)",
+            "offset": 0,
+        }
+        field = CobolField.from_dict(data)
+        assert field.justified_right is False
+        assert "justified_right" not in field.to_dict()
+
     def test_field_without_sign_defaults(self):
         data = {
             "name": "WS-NOSIGN",

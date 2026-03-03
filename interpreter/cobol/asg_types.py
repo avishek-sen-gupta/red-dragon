@@ -42,6 +42,7 @@ class CobolField:
     values: list[ConditionValue] = field(default_factory=list)
     sign_leading: bool = False
     sign_separate: bool = False
+    justified_right: bool = False
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolField:
@@ -61,6 +62,7 @@ class CobolField:
             values=[ConditionValue.from_dict(v) for v in data.get("values", [])],
             sign_leading=sign_data.get("position", "") == "LEADING",
             sign_separate=sign_data.get("separate", False),
+            justified_right=data.get("justified_right", False),
         )
 
     def to_dict(self) -> dict:
@@ -90,6 +92,8 @@ class CobolField:
                 "position": "LEADING" if self.sign_leading else "TRAILING",
                 "separate": self.sign_separate,
             }
+        if self.justified_right:
+            result["justified_right"] = True
         return result
 
 

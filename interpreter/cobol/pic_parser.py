@@ -145,6 +145,7 @@ def parse_pic(
     usage: str = "DISPLAY",
     sign_leading: bool = False,
     sign_separate: bool = False,
+    justified_right: bool = False,
 ) -> CobolTypeDescriptor:
     """Parse a COBOL PIC clause string into a CobolTypeDescriptor.
 
@@ -189,6 +190,7 @@ def parse_pic(
             total_digits=visitor.alphanumeric_length,
             decimal_digits=0,
             signed=False,
+            justified_right=justified_right,
         )
 
     total_digits = visitor.integer_digits + visitor.decimal_digits

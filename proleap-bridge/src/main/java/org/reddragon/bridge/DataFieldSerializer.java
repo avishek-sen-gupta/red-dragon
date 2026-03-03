@@ -6,6 +6,7 @@ import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntry;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryCondition;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryGroup;
 import io.proleap.cobol.asg.metamodel.data.datadescription.OccursClause;
+import io.proleap.cobol.asg.metamodel.data.datadescription.JustifiedClause;
 import io.proleap.cobol.asg.metamodel.data.datadescription.SignClause;
 import io.proleap.cobol.asg.metamodel.data.datadescription.ValueInterval;
 import io.proleap.cobol.asg.metamodel.valuestmt.ValueStmt;
@@ -100,6 +101,10 @@ public final class DataFieldSerializer {
         JsonObject signObj = extractSign(group);
         if (signObj != null) {
             obj.add("sign", signObj);
+        }
+
+        if (extractJustified(group)) {
+            obj.addProperty("justified_right", true);
         }
 
         List<DataDescriptionEntry> children = group.getDataDescriptionEntries();
@@ -419,6 +424,20 @@ public final class DataFieldSerializer {
             LOG.fine("No REDEFINES clause for " + group.getName());
         }
         return "";
+    }
+
+    /**
+     * Extracts the JUSTIFIED clause from a data description entry.
+     * Returns true if JUSTIFIED RIGHT is present.
+     */
+    private static boolean extractJustified(DataDescriptionEntryGroup group) {
+        try {
+            JustifiedClause justifiedClause = group.getJustifiedClause();
+            return justifiedClause != null;
+        } catch (Exception e) {
+            LOG.fine("No JUSTIFIED clause for " + group.getName());
+        }
+        return false;
     }
 
     /**
