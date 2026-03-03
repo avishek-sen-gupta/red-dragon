@@ -392,15 +392,17 @@ class EmitContext:
             operands=[region_reg, offset_reg, fl.byte_length, encoded_reg],
         )
 
-    # ── Condition Lowering (placeholder — will be replaced in step 4) ──
+    # ── Condition Lowering ───────────────────────────────────────
 
     def lower_condition(
         self, condition: str, layout: DataLayout, region_reg: str
     ) -> str:
-        """Lower a condition — delegates to condition_lowering module once extracted."""
-        # This is a forward-reference placeholder; in step 4 it will delegate
-        # to condition_lowering.lower_condition(self, condition, layout, region_reg)
-        raise NotImplementedError("lower_condition not yet wired")
+        """Lower a condition — delegates to condition_lowering module."""
+        from interpreter.cobol.condition_lowering import (
+            lower_condition as _lower_condition,
+        )
+
+        return _lower_condition(self, condition, layout, region_reg)
 
     # ── Parse Literal ─────────────────────────────────────────────
 
