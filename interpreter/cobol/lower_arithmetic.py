@@ -25,7 +25,7 @@ from interpreter.cobol.cobol_statements import (
     WhenStatement,
 )
 from interpreter.cobol.cobol_types import CobolDataCategory
-from interpreter.cobol.condition_lowering import lower_condition, lower_expr_node
+from interpreter.cobol.condition_lowering import lower_expr_node
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.ir import Opcode
@@ -163,7 +163,7 @@ def lower_if(
     region_reg: str,
 ) -> None:
     """IF condition ... [ELSE ...] END-IF."""
-    cond_reg = lower_condition(ctx, stmt.condition, layout, region_reg)
+    cond_reg = ctx.lower_condition(stmt.condition, layout, region_reg)
     true_label = ctx.fresh_label("if_true")
     false_label = ctx.fresh_label("if_false")
     end_label = ctx.fresh_label("if_end")
@@ -202,7 +202,7 @@ def lower_evaluate(
                 full_condition = f"{stmt.subject} = {child.condition}"
             else:
                 full_condition = child.condition
-            cond_reg = lower_condition(ctx, full_condition, layout, region_reg)
+            cond_reg = ctx.lower_condition(full_condition, layout, region_reg)
             when_true = ctx.fresh_label("when_true")
             when_false = ctx.fresh_label("when_false")
             ctx.emit(
