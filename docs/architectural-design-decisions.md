@@ -884,3 +884,30 @@ Benefits:
 - Distributed offset resolution at each call site — rejected in favour of centralized `_resolve_field_ref()` to avoid duplicating subscript arithmetic logic across 29 call sites.
 
 **Consequences:** 20 new unit tests and 3 new integration tests (elementary OCCURS, field subscript, PERFORM VARYING loop). All 7801 existing unit tests and 32 integration tests pass. COBOL programs can now define tables and access elements via literal or field-based subscripts.
+
+---
+
+### ADR-042: Level-88 condition names, FILLER disambiguation, and multi-value VALUE clauses (2026-03-03)
+
+**Context:** The DATA DIVISION audit showed three related features at NOT_EXTRACTED or BRIDGE_ONLY status: level-88 condition names (e.g. `88 STATUS-ACTIVE VALUE 'A'`), FILLER fields (anonymous padding fields that collide on the name "FILLER"), and multi-value VALUE clauses (`VALUE 'A' 'B' 'C'` or `VALUE 'A' THRU 'Z'`). These are fundamental COBOL features used in virtually all production programs.
+
+**Decision:** Implement all three features across all pipeline layers with three key design choices:
+
+1. **Bridge-level FILLER disambiguation:** The Java bridge renames FILLER fields to `FILLER_1`, `FILLER_2`, etc. using an instance counter on the serializer. This pushes disambiguation to the earliest possible point, ensuring unique field names throughout the pipeline without any downstream changes.
+
+2. **Condition name index with expansion in condition lowering:** Rather than embedding level-88 semantics in every statement lowerer, a `ConditionNameIndex` maps condition names to their parent field and values. The existing `lower_condition()` function gains a single-token check: when a condition string is a known condition name, it expands to `parent == v1 OR parent == v2 ...` for discrete values and `parent >= from AND parent <= to` for THRU ranges. The index is built once from `DataLayout.fields` and threaded via `EmitContext`.
+
+3. **Backward-compatible multi-value extraction:** The bridge emits both `"value"` (first value as string, for backward compatibility) and `"values"` (full array of `{"from": ..., "to": ...}` intervals). Python model carries both fields. Level-88 conditions use the same interval format in a `"conditions"` array on the parent field.
+
+**Changes:**
+- `DataFieldSerializer.java`: Added `disambiguateFiller()`, `serializeConditions()`, `extractAllValues()`, `serializeValueInterval()`, `stripQuotes()`. Changed from static-only to instance methods for FILLER counter state. `serializeEntries()` creates an instance internally.
+- `condition_name.py`: New file — `ConditionValue` and `ConditionName` frozen dataclasses with `from_dict`/`to_dict`.
+- `condition_name_index.py`: New file — `ConditionEntry`, `ConditionNameIndex`, `build_condition_index()`.
+- `asg_types.py`: `CobolField` gains `conditions: list[ConditionName]` and `values: list[ConditionValue]`.
+- `data_layout.py`: `FieldLayout` gains `conditions` and `values`, propagated in `_flatten_field()`.
+- `condition_lowering.py`: `lower_condition()` gains `condition_index` parameter; new `_expand_condition_name()`, `_emit_single_value_test()`, `_emit_or_chain()` functions.
+- `emit_context.py`: `EmitContext.__init__()` accepts `condition_index`, passes it to `lower_condition()`.
+- `cobol_frontend.py`: `lower()` calls `build_condition_index()` and passes index to `EmitContext`.
+- `audit_cobol_frontend.py`: Added ENTRY_CONDITION_88, CLAUSE_FILLER, CLAUSE_VALUE_MULTI to all three coverage sets.
+
+**Consequences:** 18 new unit tests covering condition value/name construction, condition name index building, and condition lowering expansion (single-value, multi-value OR, THRU range, mixed, unknown passthrough). All 7958 unit tests and 32 integration tests pass. Three features move from NOT_EXTRACTED to HANDLED in the audit.

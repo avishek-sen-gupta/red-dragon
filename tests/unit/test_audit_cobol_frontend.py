@@ -234,10 +234,22 @@ class TestDataDivisionClassify:
             == DataDivisionStatus.NOT_EXTRACTED
         )
 
-    def test_condition_88_is_not_extracted(self):
+    def test_condition_88_is_handled(self):
         assert (
             _classify_dd_feature(DataDivisionFeature.ENTRY_CONDITION_88.value)
-            == DataDivisionStatus.NOT_EXTRACTED
+            == DataDivisionStatus.HANDLED
+        )
+
+    def test_filler_is_handled(self):
+        assert (
+            _classify_dd_feature(DataDivisionFeature.CLAUSE_FILLER.value)
+            == DataDivisionStatus.HANDLED
+        )
+
+    def test_value_multi_is_handled(self):
+        assert (
+            _classify_dd_feature(DataDivisionFeature.CLAUSE_VALUE_MULTI.value)
+            == DataDivisionStatus.HANDLED
         )
 
 
