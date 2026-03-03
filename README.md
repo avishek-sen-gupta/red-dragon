@@ -352,7 +352,7 @@ The **Rosetta suite** (`tests/unit/rosetta/`) implements 13 cross-language test 
 - Required opcode presence and operator spot-checks
 - Aggregate cross-language variance
 
-**VM execution verification** runs 7 algorithms plus closures, classes, exceptions, destructuring, and nested functions through the VM and asserts correct computed results (factorial=120, fib(10)=55, gcd(48,18)=6, sorted arrays, interprocedural double_add(3,4)=14, closure make_adder(10)(5)=15, counter=3, try-body=-1, destructured a+b=15, nested outer(3)=11) with zero LLM calls.
+**VM execution verification** runs 7 algorithms plus closures, classes, exceptions, destructuring, and nested functions through the VM and asserts correct computed results (factorial=120, fib(10)=55, gcd(48,18)=6, sorted arrays, interprocedural double_add(3,4)=14, closure make_adder(10)(5)=15, counter=3, try-body=-1, destructured a+b=15, nested outer(3)=11) with zero LLM calls. Additionally, **inner function scoping** is verified for 7 languages (Python, JavaScript, TypeScript, Rust, Go, Kotlin, Scala) — confirming that inner functions are inaccessible outside the enclosing function's scope (the VM produces a symbolic value instead of a concrete result).
 
 All frontends emit **canonical Python-form literals** (`"None"`, `"True"`, `"False"`) — language-native forms (`nil`, `null`, `undefined`, `NULL`, `true`, `false`) are canonicalized at lowering time.
 
@@ -397,7 +397,7 @@ The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercis
 
 ### Test totals
 
-**8334 tests** (8272 unit + 62 integration passed, 4 skipped, 3 xfailed) — all with zero LLM calls.
+**8355 tests** (8293 unit + 62 integration passed, 4 skipped, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 

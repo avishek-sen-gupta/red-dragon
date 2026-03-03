@@ -21,6 +21,7 @@ Program:
 import pytest
 
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.vm_types import SymbolicValue, VMState
 
 from tests.unit.rosetta.conftest import (
     parse_for_language,
@@ -256,6 +257,161 @@ class TestNestedFunctionsExecution:
 
     def test_zero_llm_calls(self, execution_result):
         lang, _vm, stats = execution_result
+        assert (
+            stats.llm_calls == 0
+        ), f"[{lang}] expected 0 LLM calls, got {stats.llm_calls}"
+
+
+# ---------------------------------------------------------------------------
+# Inner function scoping tests: verify inner is inaccessible outside outer
+# ---------------------------------------------------------------------------
+#
+# 7 of 10 languages have genuine inner-function scoping (inner is local to
+# outer's scope): Python, JavaScript, TypeScript, Rust, Go, Kotlin, Scala.
+#
+# Excluded (3): Ruby, PHP, Lua — in these languages inner functions leak to
+# enclosing/global scope, so testing inaccessibility would not reflect actual
+# language semantics.
+#
+# Each program calls outer(3) → 11, then attempts inner(3) from outside.
+# The VM should resolve `inner` symbolically (frame-based lookup fails after
+# outer's frame is popped).
+# ---------------------------------------------------------------------------
+
+SCOPED_LANGUAGES: frozenset[str] = frozenset(
+    {"python", "javascript", "typescript", "rust", "go", "kotlin", "scala"}
+)
+
+SCOPING_PROGRAMS: dict[str, str] = {
+    "python": """\
+def outer(x):
+    def inner(y):
+        return y * 2
+    return inner(x) + 5
+
+result = outer(3)
+leaked = inner(3)
+""",
+    "javascript": """\
+function outer(x) {
+    function inner(y) {
+        return y * 2;
+    }
+    return inner(x) + 5;
+}
+
+let result = outer(3);
+let leaked = inner(3);
+""",
+    "typescript": """\
+function outer(x: number): number {
+    function inner(y: number): number {
+        return y * 2;
+    }
+    return inner(x) + 5;
+}
+
+let result: number = outer(3);
+let leaked: number = inner(3);
+""",
+    "rust": """\
+fn outer(x: i32) -> i32 {
+    fn inner(y: i32) -> i32 {
+        return y * 2;
+    }
+    return inner(x) + 5;
+}
+
+let result = outer(3);
+let leaked = inner(3);
+""",
+    "go": """\
+package main
+
+func outer(x int) int {
+    inner := func(y int) int {
+        return y * 2
+    }
+    return inner(x) + 5
+}
+
+func main() {
+    result := outer(3)
+    leaked := inner(3)
+    _ = result
+    _ = leaked
+}
+""",
+    "kotlin": """\
+fun outer(x: Int): Int {
+    fun inner(y: Int): Int {
+        return y * 2
+    }
+    return inner(x) + 5
+}
+
+val result = outer(3)
+val leaked = inner(3)
+""",
+    "scala": """\
+object M {
+    def outer(x: Int): Int = {
+        def inner(y: Int): Int = {
+            return y * 2
+        }
+        return inner(x) + 5
+    }
+
+    val result = outer(3)
+    val leaked = inner(3)
+}
+""",
+}
+
+EXPECTED_RESULT = 11
+
+
+def _extract_var(vm: VMState, var_name: str) -> object:
+    """Extract a variable from frame 0 locals (no PHP $ prefix needed)."""
+    frame = vm.call_stack[0]
+    assert var_name in frame.local_vars, (
+        f"expected '{var_name}' in frame 0 locals, "
+        f"got: {sorted(frame.local_vars.keys())}"
+    )
+    return frame.local_vars[var_name]
+
+
+class TestNestedFunctionScoping:
+    """Verify that inner functions are inaccessible outside outer's scope."""
+
+    @pytest.fixture(
+        params=sorted(SCOPED_LANGUAGES),
+        ids=lambda lang: lang,
+        scope="class",
+    )
+    def scoping_result(self, request):
+        lang = request.param
+        vm, stats = execute_for_language(lang, SCOPING_PROGRAMS[lang])
+        return lang, vm, stats
+
+    def test_inner_accessible_inside_outer(self, scoping_result):
+        lang, vm, _stats = scoping_result
+        result = _extract_var(vm, "result")
+        assert (
+            result == EXPECTED_RESULT
+        ), f"[{lang}] expected result={EXPECTED_RESULT}, got {result}"
+
+    def test_inner_inaccessible_outside_outer(self, scoping_result):
+        lang, vm, _stats = scoping_result
+        leaked = _extract_var(vm, "leaked")
+        assert isinstance(leaked, SymbolicValue), (
+            f"[{lang}] expected 'leaked' to be a SymbolicValue "
+            f"(inner function not accessible outside outer), "
+            f"got {type(leaked).__name__}: {leaked}"
+        )
+
+    def test_zero_llm_calls(self, scoping_result):
+        lang, _vm, stats = scoping_result
         assert (
             stats.llm_calls == 0
         ), f"[{lang}] expected 0 LLM calls, got {stats.llm_calls}"
