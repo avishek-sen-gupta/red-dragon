@@ -133,7 +133,7 @@ Control flow constructs (if/else, while, for, for-of/foreach, switch, break/cont
 
 </details>
 
-All constructs above produce real IR for proper data-flow analysis. All 15 frontends have **zero unsupported SYMBOLIC instructions** on the two-pass audit suite (`scripts/audit_all_frontends.py`), which combines dispatch-table coverage analysis (comparing AST node types against frontend dispatch tables with block-reachability classification) and runtime SYMBOLIC detection. A separate COBOL-specific audit (`scripts/audit_cobol_frontend.py`) checks all three layers of the ProLeap pipeline (bridge serialisation, Python dispatch, frontend lowering) and produces a per-type coverage matrix across ProLeap's 51 statement types. For unlisted languages, use `--frontend llm`.
+All constructs above produce real IR for proper data-flow analysis. All 15 frontends have **zero unsupported SYMBOLIC instructions** on the two-pass audit suite (`scripts/audit_all_frontends.py`), which combines dispatch-table coverage analysis (comparing AST node types against frontend dispatch tables with block-reachability classification) and runtime SYMBOLIC detection. A separate COBOL-specific audit (`scripts/audit_cobol_frontend.py`) checks all three layers of the ProLeap pipeline (bridge serialisation, Python dispatch, frontend lowering) and produces a per-type coverage matrix across ProLeap's 51 PROCEDURE DIVISION statement types plus a DATA DIVISION coverage matrix tracking 29 features across three layers (bridge extraction, Python modelling, frontend handling) — covering sections, entry types, and clauses (PIC, USAGE variants, VALUE, REDEFINES, OCCURS, etc.). For unlisted languages, use `--frontend llm`.
 
 ### COBOL frontend
 
@@ -396,7 +396,7 @@ The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercis
 
 ### Test totals
 
-**7835 tests** (7801 unit + 32 integration passed, 3 xfailed) — all with zero LLM calls.
+**7855 tests** (7820 unit + 32 integration passed, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 
