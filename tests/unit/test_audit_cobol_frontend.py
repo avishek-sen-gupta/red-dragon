@@ -6,15 +6,23 @@ import pytest
 
 from scripts.audit_cobol_frontend import (
     BRIDGE_SERIALIZED_TYPES,
-    PROLEAP_STATEMENT_TYPES,
+    DD_BRIDGE_EXTRACTED,
+    DD_FRONTEND_HANDLED,
+    DD_PYTHON_MODELLED,
     CobolAuditResult,
+    DataDivisionAuditResult,
+    DataDivisionFeature,
+    DataDivisionStatus,
+    PROLEAP_STATEMENT_TYPES,
     StatusCategory,
     _BRIDGE_TO_DISPATCH,
     _LOWERED_TYPES,
+    _classify_dd_feature,
     _classify_type,
     _run_pass1_bridge,
     _run_pass2_dispatch,
     run_audit,
+    run_data_division_audit,
 )
 from interpreter.cobol.cobol_statements import _DISPATCH_TABLE
 
@@ -142,3 +150,129 @@ class TestRunAudit:
     def test_run_audit_no_dispatch_missing(self):
         result = run_audit()
         assert len(result.dispatch_missing) == 0
+
+    def test_run_audit_includes_data_division(self):
+        result = run_audit()
+        assert result.data_division is not None
+        assert isinstance(result.data_division, DataDivisionAuditResult)
+
+
+# ── DATA DIVISION audit tests ──────────────────────────────────────
+
+
+class TestDataDivisionConstants:
+    """Verify DATA DIVISION static sets are consistent with the enum."""
+
+    def test_all_enum_members_accounted_for(self):
+        all_features = frozenset(f.value for f in DataDivisionFeature)
+        classified = (
+            DD_BRIDGE_EXTRACTED
+            | DD_PYTHON_MODELLED
+            | DD_FRONTEND_HANDLED
+            | (all_features - DD_BRIDGE_EXTRACTED)
+        )
+        assert classified == all_features
+
+    def test_bridge_extracted_subset_of_all(self):
+        all_features = frozenset(f.value for f in DataDivisionFeature)
+        assert DD_BRIDGE_EXTRACTED.issubset(all_features)
+
+    def test_python_modelled_subset_of_bridge_extracted(self):
+        assert DD_PYTHON_MODELLED.issubset(DD_BRIDGE_EXTRACTED)
+
+    def test_frontend_handled_subset_of_python_modelled(self):
+        assert DD_FRONTEND_HANDLED.issubset(DD_PYTHON_MODELLED)
+
+    def test_no_empty_sets(self):
+        assert len(DD_BRIDGE_EXTRACTED) > 0
+        assert len(DD_PYTHON_MODELLED) > 0
+        assert len(DD_FRONTEND_HANDLED) > 0
+
+
+class TestDataDivisionClassify:
+    """Spot-check classification of specific DATA DIVISION features."""
+
+    def test_pic_is_handled(self):
+        assert (
+            _classify_dd_feature(DataDivisionFeature.CLAUSE_PIC.value)
+            == DataDivisionStatus.HANDLED
+        )
+
+    def test_occurs_fixed_is_handled(self):
+        assert (
+            _classify_dd_feature(DataDivisionFeature.CLAUSE_OCCURS_FIXED.value)
+            == DataDivisionStatus.HANDLED
+        )
+
+    def test_working_storage_is_handled(self):
+        assert (
+            _classify_dd_feature(DataDivisionFeature.SECTION_WORKING_STORAGE.value)
+            == DataDivisionStatus.HANDLED
+        )
+
+    def test_comp_is_bridge_only(self):
+        assert (
+            _classify_dd_feature(DataDivisionFeature.CLAUSE_USAGE_COMP.value)
+            == DataDivisionStatus.BRIDGE_ONLY
+        )
+
+    def test_comp1_is_bridge_only(self):
+        assert (
+            _classify_dd_feature(DataDivisionFeature.CLAUSE_USAGE_COMP1.value)
+            == DataDivisionStatus.BRIDGE_ONLY
+        )
+
+    def test_sign_is_not_extracted(self):
+        assert (
+            _classify_dd_feature(DataDivisionFeature.CLAUSE_SIGN.value)
+            == DataDivisionStatus.NOT_EXTRACTED
+        )
+
+    def test_linkage_is_not_extracted(self):
+        assert (
+            _classify_dd_feature(DataDivisionFeature.SECTION_LINKAGE.value)
+            == DataDivisionStatus.NOT_EXTRACTED
+        )
+
+    def test_condition_88_is_not_extracted(self):
+        assert (
+            _classify_dd_feature(DataDivisionFeature.ENTRY_CONDITION_88.value)
+            == DataDivisionStatus.NOT_EXTRACTED
+        )
+
+
+class TestDataDivisionAudit:
+    """Test run_data_division_audit returns correct structure and counts."""
+
+    def test_returns_audit_result(self):
+        result = run_data_division_audit()
+        assert isinstance(result, DataDivisionAuditResult)
+
+    def test_all_features_classified(self):
+        result = run_data_division_audit()
+        all_features = frozenset(f.value for f in DataDivisionFeature)
+        assert frozenset(result.classified.keys()) == all_features
+
+    def test_counts_match_sets(self):
+        result = run_data_division_audit()
+        assert result.bridge_extracted == DD_BRIDGE_EXTRACTED
+        assert result.python_modelled == DD_PYTHON_MODELLED
+        assert result.frontend_handled == DD_FRONTEND_HANDLED
+
+    def test_every_feature_has_valid_status(self):
+        result = run_data_division_audit()
+        valid_statuses = {
+            DataDivisionStatus.HANDLED,
+            DataDivisionStatus.BRIDGE_ONLY,
+            DataDivisionStatus.MODELLED_NOT_HANDLED,
+            DataDivisionStatus.NOT_EXTRACTED,
+        }
+        for feature, status in result.classified.items():
+            assert status in valid_statuses, f"Invalid status for {feature}: {status}"
+
+    def test_handled_count(self):
+        result = run_data_division_audit()
+        handled_count = sum(
+            1 for s in result.classified.values() if s == DataDivisionStatus.HANDLED
+        )
+        assert handled_count == len(DD_FRONTEND_HANDLED)

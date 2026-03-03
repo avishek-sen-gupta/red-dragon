@@ -23,6 +23,7 @@ import logging
 import os
 import sys
 from dataclasses import dataclass, field
+from enum import Enum
 
 # Ensure project root is on sys.path so imports resolve.
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -209,6 +210,143 @@ _LOWERED_TYPES: frozenset[str] = frozenset(
 )
 
 
+# ── DATA DIVISION feature sets ──────────────────────────────────────
+
+
+class DataDivisionFeature(str, Enum):
+    """All auditable DATA DIVISION features."""
+
+    # Sections
+    SECTION_WORKING_STORAGE = "SECTION_WORKING_STORAGE"
+    SECTION_LINKAGE = "SECTION_LINKAGE"
+    SECTION_LOCAL_STORAGE = "SECTION_LOCAL_STORAGE"
+    SECTION_FILE = "SECTION_FILE"
+    # Entry types
+    ENTRY_GROUP = "ENTRY_GROUP"
+    ENTRY_CONDITION_88 = "ENTRY_CONDITION_88"
+    ENTRY_RENAME_66 = "ENTRY_RENAME_66"
+    # Clauses
+    CLAUSE_PIC = "CLAUSE_PIC"
+    CLAUSE_USAGE_DISPLAY = "CLAUSE_USAGE_DISPLAY"
+    CLAUSE_USAGE_COMP3 = "CLAUSE_USAGE_COMP3"
+    CLAUSE_USAGE_COMP = "CLAUSE_USAGE_COMP"
+    CLAUSE_USAGE_COMP1 = "CLAUSE_USAGE_COMP1"
+    CLAUSE_USAGE_COMP2 = "CLAUSE_USAGE_COMP2"
+    CLAUSE_USAGE_COMP5 = "CLAUSE_USAGE_COMP5"
+    CLAUSE_USAGE_INDEX = "CLAUSE_USAGE_INDEX"
+    CLAUSE_USAGE_POINTER = "CLAUSE_USAGE_POINTER"
+    CLAUSE_VALUE = "CLAUSE_VALUE"
+    CLAUSE_VALUE_MULTI = "CLAUSE_VALUE_MULTI"
+    CLAUSE_REDEFINES = "CLAUSE_REDEFINES"
+    CLAUSE_OCCURS_FIXED = "CLAUSE_OCCURS_FIXED"
+    CLAUSE_OCCURS_DEPENDING = "CLAUSE_OCCURS_DEPENDING"
+    CLAUSE_OCCURS_INDEXED_BY = "CLAUSE_OCCURS_INDEXED_BY"
+    CLAUSE_SIGN = "CLAUSE_SIGN"
+    CLAUSE_JUSTIFIED = "CLAUSE_JUSTIFIED"
+    CLAUSE_BLANK_WHEN_ZERO = "CLAUSE_BLANK_WHEN_ZERO"
+    CLAUSE_SYNCHRONIZED = "CLAUSE_SYNCHRONIZED"
+    CLAUSE_EXTERNAL = "CLAUSE_EXTERNAL"
+    CLAUSE_GLOBAL = "CLAUSE_GLOBAL"
+    CLAUSE_FILLER = "CLAUSE_FILLER"
+
+
+# Features the Java bridge (DataFieldSerializer) extracts from ProLeap.
+DD_BRIDGE_EXTRACTED: frozenset[str] = frozenset(
+    {
+        DataDivisionFeature.SECTION_WORKING_STORAGE.value,
+        DataDivisionFeature.ENTRY_GROUP.value,
+        DataDivisionFeature.CLAUSE_PIC.value,
+        DataDivisionFeature.CLAUSE_USAGE_DISPLAY.value,
+        DataDivisionFeature.CLAUSE_USAGE_COMP3.value,
+        DataDivisionFeature.CLAUSE_USAGE_COMP.value,
+        DataDivisionFeature.CLAUSE_USAGE_COMP1.value,
+        DataDivisionFeature.CLAUSE_USAGE_COMP2.value,
+        DataDivisionFeature.CLAUSE_USAGE_COMP5.value,
+        DataDivisionFeature.CLAUSE_USAGE_INDEX.value,
+        DataDivisionFeature.CLAUSE_USAGE_POINTER.value,
+        DataDivisionFeature.CLAUSE_VALUE.value,
+        DataDivisionFeature.CLAUSE_VALUE_MULTI.value,
+        DataDivisionFeature.CLAUSE_REDEFINES.value,
+        DataDivisionFeature.CLAUSE_OCCURS_FIXED.value,
+    }
+)
+
+# Features that CobolField / FieldLayout Python models carry.
+DD_PYTHON_MODELLED: frozenset[str] = frozenset(
+    {
+        DataDivisionFeature.SECTION_WORKING_STORAGE.value,
+        DataDivisionFeature.ENTRY_GROUP.value,
+        DataDivisionFeature.CLAUSE_PIC.value,
+        DataDivisionFeature.CLAUSE_USAGE_DISPLAY.value,
+        DataDivisionFeature.CLAUSE_USAGE_COMP3.value,
+        DataDivisionFeature.CLAUSE_VALUE.value,
+        DataDivisionFeature.CLAUSE_REDEFINES.value,
+        DataDivisionFeature.CLAUSE_OCCURS_FIXED.value,
+    }
+)
+
+# Features the frontend (cobol_frontend.py / data_layout.py) acts on during lowering.
+DD_FRONTEND_HANDLED: frozenset[str] = frozenset(
+    {
+        DataDivisionFeature.SECTION_WORKING_STORAGE.value,
+        DataDivisionFeature.ENTRY_GROUP.value,
+        DataDivisionFeature.CLAUSE_PIC.value,
+        DataDivisionFeature.CLAUSE_USAGE_DISPLAY.value,
+        DataDivisionFeature.CLAUSE_USAGE_COMP3.value,
+        DataDivisionFeature.CLAUSE_VALUE.value,
+        DataDivisionFeature.CLAUSE_REDEFINES.value,
+        DataDivisionFeature.CLAUSE_OCCURS_FIXED.value,
+    }
+)
+
+
+class DataDivisionStatus(str, Enum):
+    """Classification status for a DATA DIVISION feature."""
+
+    HANDLED = "HANDLED"
+    BRIDGE_ONLY = "BRIDGE_ONLY"
+    MODELLED_NOT_HANDLED = "MODELLED_NOT_HANDLED"
+    NOT_EXTRACTED = "NOT_EXTRACTED"
+
+
+@dataclass(frozen=True)
+class DataDivisionAuditResult:
+    """Result of the DATA DIVISION coverage audit."""
+
+    all_features: frozenset[str]
+    bridge_extracted: frozenset[str]
+    python_modelled: frozenset[str]
+    frontend_handled: frozenset[str]
+    classified: dict[str, DataDivisionStatus]
+
+
+def _classify_dd_feature(feature: str) -> DataDivisionStatus:
+    """Classify a single DATA DIVISION feature through the three layers."""
+    if feature in DD_FRONTEND_HANDLED:
+        return DataDivisionStatus.HANDLED
+    if feature in DD_PYTHON_MODELLED:
+        return DataDivisionStatus.MODELLED_NOT_HANDLED
+    if feature in DD_BRIDGE_EXTRACTED:
+        return DataDivisionStatus.BRIDGE_ONLY
+    return DataDivisionStatus.NOT_EXTRACTED
+
+
+def run_data_division_audit() -> DataDivisionAuditResult:
+    """Execute the static DATA DIVISION coverage audit."""
+    all_features = frozenset(f.value for f in DataDivisionFeature)
+    classified = {feature: _classify_dd_feature(feature) for feature in all_features}
+    return DataDivisionAuditResult(
+        all_features=all_features,
+        bridge_extracted=DD_BRIDGE_EXTRACTED,
+        python_modelled=DD_PYTHON_MODELLED,
+        frontend_handled=DD_FRONTEND_HANDLED,
+        classified=classified,
+    )
+
+
+# ── PROCEDURE DIVISION status categories ───────────────────────────
+
+
 class StatusCategory:
     """Coverage status categories for the audit matrix."""
 
@@ -240,6 +378,9 @@ class CobolAuditResult:
     not_lowered: list[str] = field(default_factory=list)
     runtime_warnings: list[str] = field(default_factory=list)
     runtime_available: bool = False
+    data_division: DataDivisionAuditResult = field(
+        default_factory=lambda: run_data_division_audit()
+    )
 
 
 def _classify_type(proleap_type: str) -> str:
@@ -369,6 +510,19 @@ def run_audit() -> CobolAuditResult:
     logger.info("=== Pass 3: Runtime lowering check ===")
     runtime_warnings, runtime_available = _run_pass3_runtime()
 
+    logger.info("=== DATA DIVISION coverage audit ===")
+    dd_result = run_data_division_audit()
+    dd_handled = sum(
+        1 for s in dd_result.classified.values() if s == DataDivisionStatus.HANDLED
+    )
+    logger.info(
+        "  Features: %d total, %d handled, %d bridge-only, %d not extracted",
+        len(dd_result.all_features),
+        dd_handled,
+        len(dd_result.bridge_extracted) - len(dd_result.frontend_handled),
+        len(dd_result.all_features) - len(dd_result.bridge_extracted),
+    )
+
     return CobolAuditResult(
         total_proleap_types=len(PROLEAP_STATEMENT_TYPES),
         bridge_serialized=bridge_serialized,
@@ -379,6 +533,7 @@ def run_audit() -> CobolAuditResult:
         not_lowered=not_lowered,
         runtime_warnings=runtime_warnings,
         runtime_available=runtime_available,
+        data_division=dd_result,
     )
 
 
@@ -492,7 +647,91 @@ def _print_coverage_matrix(result: CobolAuditResult) -> None:
     else:
         print("\nRuntime: skipped (bridge JAR not available)")
 
-    print(separator + "\n")
+    print(separator)
+
+    # ── DATA DIVISION Coverage ──────────────────────────────────────
+    dd = result.data_division
+    dd_col_widths = {
+        "feature": 30,
+        "bridge": 10,
+        "modelled": 10,
+        "handled": 10,
+        "status": 22,
+    }
+    dd_header = (
+        f"{'Feature':<{dd_col_widths['feature']}} "
+        f"{'Bridge':<{dd_col_widths['bridge']}} "
+        f"{'Modelled':<{dd_col_widths['modelled']}} "
+        f"{'Handled':<{dd_col_widths['handled']}} "
+        f"{'Status':<{dd_col_widths['status']}}"
+    )
+    dd_separator = "-" * len(dd_header)
+
+    print("\n" + dd_separator)
+    print("DATA DIVISION Coverage Audit")
+    print(dd_separator)
+    print(dd_header)
+    print(dd_separator)
+
+    dd_status_counts: dict[str, int] = {}
+    for feature in sorted(dd.all_features):
+        status = dd.classified[feature]
+        dd_status_counts[status.value] = dd_status_counts.get(status.value, 0) + 1
+
+        bridge_mark = "YES" if feature in dd.bridge_extracted else "no"
+        modelled_mark = (
+            "YES"
+            if feature in dd.python_modelled
+            else ("n/a" if feature not in dd.bridge_extracted else "no")
+        )
+        handled_mark = (
+            "YES"
+            if feature in dd.frontend_handled
+            else ("n/a" if feature not in dd.python_modelled else "no")
+        )
+
+        print(
+            f"{feature:<{dd_col_widths['feature']}} "
+            f"{bridge_mark:<{dd_col_widths['bridge']}} "
+            f"{modelled_mark:<{dd_col_widths['modelled']}} "
+            f"{handled_mark:<{dd_col_widths['handled']}} "
+            f"{status.value:<{dd_col_widths['status']}}"
+        )
+
+    print(dd_separator)
+
+    dd_handled = dd_status_counts.get(DataDivisionStatus.HANDLED.value, 0)
+    dd_bridge_only = dd_status_counts.get(DataDivisionStatus.BRIDGE_ONLY.value, 0)
+    dd_modelled_not = dd_status_counts.get(
+        DataDivisionStatus.MODELLED_NOT_HANDLED.value, 0
+    )
+    dd_not_extracted = dd_status_counts.get(DataDivisionStatus.NOT_EXTRACTED.value, 0)
+
+    print(f"\nTotal DATA DIVISION features: {len(dd.all_features)}")
+    print(f"  HANDLED (full pipeline):     {dd_handled}")
+    print(f"  BRIDGE_ONLY:                 {dd_bridge_only}")
+    print(f"  MODELLED_NOT_HANDLED:        {dd_modelled_not}")
+    print(f"  NOT_EXTRACTED:               {dd_not_extracted}")
+
+    dd_not_extracted_features = sorted(
+        f for f, s in dd.classified.items() if s == DataDivisionStatus.NOT_EXTRACTED
+    )
+    if dd_not_extracted_features:
+        print(f"\nNot extracted ({len(dd_not_extracted_features)} features):")
+        for f in dd_not_extracted_features:
+            print(f"  - {f}")
+
+    dd_bridge_only_features = sorted(
+        f for f, s in dd.classified.items() if s == DataDivisionStatus.BRIDGE_ONLY
+    )
+    if dd_bridge_only_features:
+        print(
+            f"\nBridge-only ({len(dd_bridge_only_features)} features — extracted but not modelled in Python):"
+        )
+        for f in dd_bridge_only_features:
+            print(f"  - {f}")
+
+    print(dd_separator + "\n")
 
 
 # ── COBOL sample source for Pass 3 ───────────────────────────────
