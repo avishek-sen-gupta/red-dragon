@@ -1,0 +1,66 @@
+"""Tests for FUNC_REF dispatch via CALL_METHOD and CALL_UNKNOWN.
+
+When a language invokes a method (e.g. `.call()`, `.apply()`) on a variable
+holding a FUNC_REF, the VM should dispatch to the underlying user function
+rather than falling through to the symbolic resolver.  Likewise, when
+CALL_UNKNOWN targets a FUNC_REF (PHP arrow-function call), it should invoke
+the function directly.
+"""
+
+from __future__ import annotations
+
+from interpreter.constants import Language
+from interpreter.run import run
+
+
+def _run_program(source: str, language: Language, max_steps: int = 200) -> dict:
+    """Run a program and return the main frame's local_vars."""
+    vm = run(source, language=language, max_steps=max_steps)
+    return dict(vm.call_stack[0].local_vars)
+
+
+class TestCallMethodOnFuncRef:
+    def test_java_lambda_apply(self):
+        """Java lambda invoked via .apply() should dispatch through FUNC_REF."""
+        source = """\
+class M {
+    static int make_adder(int x) {
+        var adder = (int y) -> { return x + y; };
+        return adder.apply(5);
+    }
+
+    static int answer = make_adder(10);
+}
+"""
+        vars_ = _run_program(source, Language.JAVA)
+        assert vars_["answer"] == 15
+
+    def test_ruby_lambda_call(self):
+        """Ruby lambda invoked via .call() should dispatch through FUNC_REF."""
+        source = """\
+def make_adder(x)
+    adder = -> (y) { return x + y }
+    return adder.call(5)
+end
+
+answer = make_adder(10)
+"""
+        vars_ = _run_program(source, Language.RUBY)
+        assert vars_["answer"] == 15
+
+
+class TestCallUnknownOnFuncRef:
+    def test_php_arrow_function_call(self):
+        """PHP arrow function invoked via dynamic call should dispatch through FUNC_REF."""
+        source = """\
+<?php
+function make_adder($x) {
+    $adder = fn($y) => $x + $y;
+    return $adder;
+}
+$add10 = make_adder(10);
+$answer = $add10(5);
+?>
+"""
+        vars_ = _run_program(source, Language.PHP)
+        assert vars_["$answer"] == 15
