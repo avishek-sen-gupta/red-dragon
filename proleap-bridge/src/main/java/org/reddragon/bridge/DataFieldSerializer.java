@@ -6,6 +6,7 @@ import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntry;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryCondition;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryGroup;
 import io.proleap.cobol.asg.metamodel.data.datadescription.OccursClause;
+import io.proleap.cobol.asg.metamodel.data.datadescription.SignClause;
 import io.proleap.cobol.asg.metamodel.data.datadescription.ValueInterval;
 import io.proleap.cobol.asg.metamodel.valuestmt.ValueStmt;
 
@@ -94,6 +95,11 @@ public final class DataFieldSerializer {
             obj.addProperty("occurs", occursCount);
             int elementSize = computeElementSize(group);
             obj.addProperty("element_size", elementSize);
+        }
+
+        JsonObject signObj = extractSign(group);
+        if (signObj != null) {
+            obj.add("sign", signObj);
         }
 
         List<DataDescriptionEntry> children = group.getDataDescriptionEntries();
@@ -274,7 +280,12 @@ public final class DataFieldSerializer {
                         .sum();
             }
         }
-        return computePicByteLength(extractPic(group), extractUsage(group));
+        int baseLength = computePicByteLength(extractPic(group), extractUsage(group));
+        JsonObject signObj = extractSign(group);
+        if (signObj != null && signObj.get("separate").getAsBoolean()) {
+            baseLength += 1;
+        }
+        return baseLength;
     }
 
     /**
@@ -408,6 +419,28 @@ public final class DataFieldSerializer {
             LOG.fine("No REDEFINES clause for " + group.getName());
         }
         return "";
+    }
+
+    /**
+     * Extracts the SIGN clause from a data description entry.
+     * Returns a JSON object with "position" ("LEADING"/"TRAILING") and "separate" (boolean),
+     * or null if no SIGN clause is present.
+     */
+    private static JsonObject extractSign(DataDescriptionEntryGroup group) {
+        try {
+            SignClause signClause = group.getSignClause();
+            if (signClause != null && signClause.getSignClauseType() != null) {
+                JsonObject signObj = new JsonObject();
+                String position = signClause.getSignClauseType() == SignClause.SignClauseType.LEADING
+                        ? "LEADING" : "TRAILING";
+                signObj.addProperty("position", position);
+                signObj.addProperty("separate", signClause.isSeparate());
+                return signObj;
+            }
+        } catch (Exception e) {
+            LOG.fine("No SIGN clause for " + group.getName());
+        }
+        return null;
     }
 
     /**

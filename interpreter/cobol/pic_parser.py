@@ -140,7 +140,12 @@ class _PicVisitor(CobolDataTypesVisitor):
         return 1
 
 
-def parse_pic(pic: str, usage: str = "DISPLAY") -> CobolTypeDescriptor:
+def parse_pic(
+    pic: str,
+    usage: str = "DISPLAY",
+    sign_leading: bool = False,
+    sign_separate: bool = False,
+) -> CobolTypeDescriptor:
     """Parse a COBOL PIC clause string into a CobolTypeDescriptor.
 
     Args:
@@ -203,4 +208,6 @@ def parse_pic(pic: str, usage: str = "DISPLAY") -> CobolTypeDescriptor:
         total_digits=total_digits,
         decimal_digits=visitor.decimal_digits,
         signed=visitor.is_signed,
+        sign_separate=sign_separate,
+        sign_leading=sign_leading,
     )

@@ -145,6 +145,47 @@ class TestCobolField:
         assert field.conditions == []
         assert field.values == []
 
+    def test_field_with_sign_leading_separate(self):
+        data = {
+            "name": "WS-SIGNED",
+            "level": 5,
+            "pic": "S9(5)V99",
+            "usage": "DISPLAY",
+            "offset": 0,
+            "sign": {"position": "LEADING", "separate": True},
+        }
+        field = CobolField.from_dict(data)
+        assert field.sign_leading is True
+        assert field.sign_separate is True
+        assert CobolField.from_dict(field.to_dict()) == field
+
+    def test_field_with_sign_trailing_embedded(self):
+        data = {
+            "name": "WS-SIGNED2",
+            "level": 5,
+            "pic": "S9(5)",
+            "usage": "DISPLAY",
+            "offset": 0,
+            "sign": {"position": "TRAILING", "separate": False},
+        }
+        field = CobolField.from_dict(data)
+        assert field.sign_leading is False
+        assert field.sign_separate is False
+        # Trailing embedded is the default, so to_dict should not emit sign
+        # since both are False
+        assert "sign" not in field.to_dict()
+
+    def test_field_without_sign_defaults(self):
+        data = {
+            "name": "WS-NOSIGN",
+            "level": 77,
+            "pic": "9(5)",
+            "offset": 0,
+        }
+        field = CobolField.from_dict(data)
+        assert field.sign_leading is False
+        assert field.sign_separate is False
+
 
 class TestCobolStatement:
     def test_move_statement(self):

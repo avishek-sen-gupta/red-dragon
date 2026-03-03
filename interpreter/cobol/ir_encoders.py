@@ -33,14 +33,20 @@ class _RegCounter:
         return name
 
 
-def build_encode_zoned_ir(func_name: str, total_digits: int) -> list[IRInstruction]:
-    """Generate IR for zoned decimal encoding.
+def build_encode_zoned_ir(
+    func_name: str, total_digits: int, sign_leading: bool = False
+) -> list[IRInstruction]:
+    """Generate IR for zoned decimal encoding (embedded sign).
 
     Inputs: %p_digits (list[int]), %p_sign_nibble (int: 0xF/0xC/0xD)
     Output: list[int] of zoned decimal bytes (length = total_digits)
+
+    When sign_leading=True, sign nibble is in high nibble of first byte.
+    Otherwise (default), sign nibble is in high nibble of last byte.
     """
     rc = _RegCounter(func_name)
     instructions: list[IRInstruction] = []
+    sign_byte_index = 0 if sign_leading else total_digits - 1
 
     # Create result list filled with 0xF0 (zone nibble for unsigned digits)
     result = rc.next()
@@ -82,13 +88,13 @@ def build_encode_zoned_ir(func_name: str, total_digits: int) -> list[IRInstructi
         )
         result = new_result
 
-    # Set sign nibble on the last byte (high nibble)
-    last_byte = rc.next()
+    # Set sign nibble on the sign byte (high nibble)
+    sign_byte = rc.next()
     instructions.append(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
-            result_reg=last_byte,
-            operands=["__list_get", result, total_digits - 1],
+            result_reg=sign_byte,
+            operands=["__list_get", result, sign_byte_index],
         )
     )
 
@@ -97,7 +103,7 @@ def build_encode_zoned_ir(func_name: str, total_digits: int) -> list[IRInstructi
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=signed_byte,
-            operands=["__nibble_set", last_byte, "high", "%p_sign_nibble"],
+            operands=["__nibble_set", sign_byte, "high", "%p_sign_nibble"],
         )
     )
 
@@ -106,7 +112,7 @@ def build_encode_zoned_ir(func_name: str, total_digits: int) -> list[IRInstructi
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=final_result,
-            operands=["__list_set", result, total_digits - 1, signed_byte],
+            operands=["__list_set", result, sign_byte_index, signed_byte],
         )
     )
 
@@ -121,15 +127,22 @@ def build_encode_zoned_ir(func_name: str, total_digits: int) -> list[IRInstructi
 
 
 def build_decode_zoned_ir(
-    func_name: str, total_digits: int, decimal_digits: int
+    func_name: str,
+    total_digits: int,
+    decimal_digits: int,
+    sign_leading: bool = False,
 ) -> list[IRInstruction]:
-    """Generate IR for zoned decimal decoding.
+    """Generate IR for zoned decimal decoding (embedded sign).
 
     Inputs: %p_data (list[int] of bytes)
     Output: float
+
+    When sign_leading=True, sign nibble is extracted from byte 0.
+    Otherwise (default), sign nibble is extracted from the last byte.
     """
     rc = _RegCounter(func_name)
     instructions: list[IRInstruction] = []
+    sign_byte_index = 0 if sign_leading else total_digits - 1
 
     # Accumulate digit values: value = sum(digit[i] * 10^(n-1-i))
     accum = rc.next()
@@ -200,13 +213,13 @@ def build_decode_zoned_ir(
         )
         accum = as_float
 
-    # Extract sign from last byte's high nibble
-    last_byte = rc.next()
+    # Extract sign from the sign byte's high nibble
+    sign_byte = rc.next()
     instructions.append(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
-            result_reg=last_byte,
-            operands=["__list_get", "%p_data", total_digits - 1],
+            result_reg=sign_byte,
+            operands=["__list_get", "%p_data", sign_byte_index],
         )
     )
 
@@ -215,7 +228,7 @@ def build_decode_zoned_ir(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=sign_nibble,
-            operands=["__nibble_get", last_byte, "high"],
+            operands=["__nibble_get", sign_byte, "high"],
         )
     )
 
@@ -264,6 +277,273 @@ def build_decode_zoned_ir(
         )
     )
 
+    return instructions
+
+
+def build_encode_zoned_separate_ir(
+    func_name: str, total_digits: int, sign_leading: bool = False
+) -> list[IRInstruction]:
+    """Generate IR for zoned decimal encoding with SEPARATE sign character.
+
+    Inputs: %p_digits (list[int]), %p_sign_nibble (int: 0xF/0xC/0xD)
+    Output: list[int] of bytes (length = total_digits + 1)
+
+    Digits are encoded as pure unsigned zoned (zone=0xF0 on all bytes).
+    A separate sign byte is prepended (sign_leading=True) or appended (default).
+    EBCDIC: '+' = 0x4E, '-' = 0x60.
+    """
+    rc = _RegCounter(func_name)
+    instructions: list[IRInstruction] = []
+
+    # Build digit bytes (no embedded sign — all zones are 0xF)
+    digits_list = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.CALL_FUNCTION,
+            result_reg=digits_list,
+            operands=["__make_list", total_digits, 0xF0],
+        )
+    )
+
+    for i in range(total_digits):
+        digit = rc.next()
+        instructions.append(
+            IRInstruction(
+                opcode=Opcode.CALL_FUNCTION,
+                result_reg=digit,
+                operands=["__list_get", "%p_digits", i],
+            )
+        )
+
+        byte_val = rc.next()
+        instructions.append(
+            IRInstruction(
+                opcode=Opcode.CALL_FUNCTION,
+                result_reg=byte_val,
+                operands=["__nibble_set", 0xF0, "low", digit],
+            )
+        )
+
+        new_digits = rc.next()
+        instructions.append(
+            IRInstruction(
+                opcode=Opcode.CALL_FUNCTION,
+                result_reg=new_digits,
+                operands=["__list_set", digits_list, i, byte_val],
+            )
+        )
+        digits_list = new_digits
+
+    # Compute sign byte: 0xD → 0x60 ('-'), else → 0x4E ('+')
+    is_neg = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.BINOP,
+            result_reg=is_neg,
+            operands=["==", "%p_sign_nibble", 0x0D],
+        )
+    )
+
+    # sign_byte = 0x4E + is_neg * (0x60 - 0x4E) = 0x4E + is_neg * 0x12
+    neg_offset = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.BINOP,
+            result_reg=neg_offset,
+            operands=["*", is_neg, 0x12],
+        )
+    )
+
+    sign_byte_val = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.BINOP,
+            result_reg=sign_byte_val,
+            operands=["+", 0x4E, neg_offset],
+        )
+    )
+
+    # Build single-element sign list
+    sign_list = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.CALL_FUNCTION,
+            result_reg=sign_list,
+            operands=["__make_list", 1, 0],
+        )
+    )
+
+    sign_list_set = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.CALL_FUNCTION,
+            result_reg=sign_list_set,
+            operands=["__list_set", sign_list, 0, sign_byte_val],
+        )
+    )
+
+    # Concatenate: sign_leading → [sign] + digits, else → digits + [sign]
+    if sign_leading:
+        final_result = rc.next()
+        instructions.append(
+            IRInstruction(
+                opcode=Opcode.CALL_FUNCTION,
+                result_reg=final_result,
+                operands=["__list_concat", sign_list_set, digits_list],
+            )
+        )
+    else:
+        final_result = rc.next()
+        instructions.append(
+            IRInstruction(
+                opcode=Opcode.CALL_FUNCTION,
+                result_reg=final_result,
+                operands=["__list_concat", digits_list, sign_list_set],
+            )
+        )
+
+    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[final_result]))
+    return instructions
+
+
+def build_decode_zoned_separate_ir(
+    func_name: str,
+    total_digits: int,
+    decimal_digits: int,
+    sign_leading: bool = False,
+) -> list[IRInstruction]:
+    """Generate IR for zoned decimal decoding with SEPARATE sign character.
+
+    Inputs: %p_data (list[int] of bytes, length = total_digits + 1)
+    Output: float
+
+    sign_leading=True: byte 0 is the sign, bytes 1..N are digits.
+    sign_leading=False: bytes 0..N-1 are digits, byte N is the sign.
+    EBCDIC: 0x60 = '-', anything else = '+'.
+    """
+    rc = _RegCounter(func_name)
+    instructions: list[IRInstruction] = []
+
+    # Extract sign byte
+    sign_byte_index = 0 if sign_leading else total_digits
+    sign_byte = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.CALL_FUNCTION,
+            result_reg=sign_byte,
+            operands=["__list_get", "%p_data", sign_byte_index],
+        )
+    )
+
+    # digit_start offset: 1 if sign_leading, else 0
+    digit_start = 1 if sign_leading else 0
+
+    # Accumulate digit values
+    accum = rc.next()
+    instructions.append(
+        IRInstruction(opcode=Opcode.CONST, result_reg=accum, operands=[0])
+    )
+
+    for i in range(total_digits):
+        byte_reg = rc.next()
+        instructions.append(
+            IRInstruction(
+                opcode=Opcode.CALL_FUNCTION,
+                result_reg=byte_reg,
+                operands=["__list_get", "%p_data", digit_start + i],
+            )
+        )
+
+        digit = rc.next()
+        instructions.append(
+            IRInstruction(
+                opcode=Opcode.CALL_FUNCTION,
+                result_reg=digit,
+                operands=["__nibble_get", byte_reg, "low"],
+            )
+        )
+
+        power = 10 ** (total_digits - 1 - i)
+        contribution = rc.next()
+        instructions.append(
+            IRInstruction(
+                opcode=Opcode.BINOP,
+                result_reg=contribution,
+                operands=["*", digit, power],
+            )
+        )
+
+        new_accum = rc.next()
+        instructions.append(
+            IRInstruction(
+                opcode=Opcode.BINOP,
+                result_reg=new_accum,
+                operands=["+", accum, contribution],
+            )
+        )
+        accum = new_accum
+
+    # Apply decimal scaling
+    if decimal_digits > 0:
+        divisor = 10**decimal_digits
+        scaled = rc.next()
+        instructions.append(
+            IRInstruction(
+                opcode=Opcode.BINOP,
+                result_reg=scaled,
+                operands=["/", accum, divisor],
+            )
+        )
+        accum = scaled
+    else:
+        as_float = rc.next()
+        instructions.append(
+            IRInstruction(
+                opcode=Opcode.CALL_FUNCTION,
+                result_reg=as_float,
+                operands=["float", accum],
+            )
+        )
+        accum = as_float
+
+    # Apply sign: 0x60 = negative
+    is_neg = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.BINOP,
+            result_reg=is_neg,
+            operands=["==", sign_byte, 0x60],
+        )
+    )
+
+    two_neg = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.BINOP,
+            result_reg=two_neg,
+            operands=["*", 2, is_neg],
+        )
+    )
+
+    sign_mult = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.BINOP,
+            result_reg=sign_mult,
+            operands=["-", 1, two_neg],
+        )
+    )
+
+    final_result = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.BINOP,
+            result_reg=final_result,
+            operands=["*", accum, sign_mult],
+        )
+    )
+
+    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[final_result]))
     return instructions
 
 

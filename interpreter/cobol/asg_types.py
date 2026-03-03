@@ -40,9 +40,12 @@ class CobolField:
     element_size: int = 0
     conditions: list[ConditionName] = field(default_factory=list)
     values: list[ConditionValue] = field(default_factory=list)
+    sign_leading: bool = False
+    sign_separate: bool = False
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolField:
+        sign_data = data.get("sign", {})
         return cls(
             name=data["name"],
             level=data["level"],
@@ -56,6 +59,8 @@ class CobolField:
             element_size=data.get("element_size", 0),
             conditions=[ConditionName.from_dict(c) for c in data.get("conditions", [])],
             values=[ConditionValue.from_dict(v) for v in data.get("values", [])],
+            sign_leading=sign_data.get("position", "") == "LEADING",
+            sign_separate=sign_data.get("separate", False),
         )
 
     def to_dict(self) -> dict:
@@ -80,6 +85,11 @@ class CobolField:
             result["conditions"] = [c.to_dict() for c in self.conditions]
         if self.values:
             result["values"] = [v.to_dict() for v in self.values]
+        if self.sign_leading or self.sign_separate:
+            result["sign"] = {
+                "position": "LEADING" if self.sign_leading else "TRAILING",
+                "separate": self.sign_separate,
+            }
         return result
 
 

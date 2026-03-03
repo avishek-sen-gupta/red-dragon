@@ -33,6 +33,8 @@ class CobolTypeDescriptor:
     total_digits: int
     decimal_digits: int = 0
     signed: bool = False
+    sign_separate: bool = False
+    sign_leading: bool = False
 
     @property
     def byte_length(self) -> int:
@@ -46,7 +48,7 @@ class CobolTypeDescriptor:
         - ALPHANUMERIC: 1 byte per character → total_digits bytes.
         """
         if self.category == CobolDataCategory.ZONED_DECIMAL:
-            return self.total_digits
+            return self.total_digits + (1 if self.sign_separate else 0)
         if self.category == CobolDataCategory.COMP3:
             return (self.total_digits // 2) + 1
         if self.category == CobolDataCategory.BINARY:

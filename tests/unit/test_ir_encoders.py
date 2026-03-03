@@ -16,6 +16,8 @@ from interpreter.registry import FunctionRegistry
 from interpreter.cobol.ir_encoders import (
     build_encode_zoned_ir,
     build_decode_zoned_ir,
+    build_encode_zoned_separate_ir,
+    build_decode_zoned_separate_ir,
     build_encode_comp3_ir,
     build_decode_comp3_ir,
     build_encode_alphanumeric_ir,
@@ -516,3 +518,171 @@ class TestFloatRoundTripIR:
         decoded = _execute_ir(dec_ir, {"%p_data": encoded})
 
         assert abs(decoded - 3.14159265358979) < 1e-10
+
+
+class TestEncodeZonedLeadingIR:
+    """Validate IR zoned encoder with SIGN IS LEADING (embedded)."""
+
+    def test_leading_positive(self):
+        digits = [1, 2, 3, 4, 5]
+        sign_nib = 0x0C  # positive
+        ir = build_encode_zoned_ir("enc_zl", total_digits=5, sign_leading=True)
+        result = _execute_ir(ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        # Byte 0: sign 0xC in high nibble, digit 1 in low → 0xC1
+        assert result[0] == 0xC1
+        # Remaining bytes: zone 0xF, digit in low
+        assert result[1] == 0xF2
+        assert result[4] == 0xF5
+
+    def test_leading_negative(self):
+        digits = [0, 0, 0, 4, 2]
+        sign_nib = 0x0D  # negative
+        ir = build_encode_zoned_ir("enc_zl", total_digits=5, sign_leading=True)
+        result = _execute_ir(ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        assert result[0] == 0xD0  # sign D, digit 0
+        assert result[4] == 0xF2
+
+
+class TestDecodeZonedLeadingIR:
+    """Validate IR zoned decoder with SIGN IS LEADING (embedded)."""
+
+    def test_leading_positive(self):
+        # 0xC1 = sign C (positive), digit 1
+        data = [0xC1, 0xF2, 0xF3, 0xF4, 0xF5]
+        ir = build_decode_zoned_ir(
+            "dec_zl", total_digits=5, decimal_digits=0, sign_leading=True
+        )
+        result = _execute_ir(ir, {"%p_data": data})
+        assert result == 12345.0
+
+    def test_leading_negative(self):
+        data = [0xD1, 0xF2, 0xF3, 0xF4, 0xF5]
+        ir = build_decode_zoned_ir(
+            "dec_zl", total_digits=5, decimal_digits=0, sign_leading=True
+        )
+        result = _execute_ir(ir, {"%p_data": data})
+        assert result == -12345.0
+
+
+class TestEncodeZonedSeparateIR:
+    """Validate IR zoned encoder with SIGN SEPARATE CHARACTER."""
+
+    def test_trailing_separate_positive(self):
+        digits = [1, 2, 3]
+        sign_nib = 0x0C  # positive
+        ir = build_encode_zoned_separate_ir(
+            "enc_zs", total_digits=3, sign_leading=False
+        )
+        result = _execute_ir(ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        # 3 digit bytes + 1 sign byte
+        assert len(result) == 4
+        assert result[0] == 0xF1  # pure unsigned digit
+        assert result[1] == 0xF2
+        assert result[2] == 0xF3
+        assert result[3] == 0x4E  # EBCDIC '+'
+
+    def test_trailing_separate_negative(self):
+        digits = [1, 2, 3]
+        sign_nib = 0x0D  # negative
+        ir = build_encode_zoned_separate_ir(
+            "enc_zs", total_digits=3, sign_leading=False
+        )
+        result = _execute_ir(ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        assert len(result) == 4
+        assert result[3] == 0x60  # EBCDIC '-'
+
+    def test_leading_separate_positive(self):
+        digits = [4, 5]
+        sign_nib = 0x0C
+        ir = build_encode_zoned_separate_ir("enc_zs", total_digits=2, sign_leading=True)
+        result = _execute_ir(ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        assert len(result) == 3
+        assert result[0] == 0x4E  # sign first
+        assert result[1] == 0xF4
+        assert result[2] == 0xF5
+
+    def test_leading_separate_negative(self):
+        digits = [4, 5]
+        sign_nib = 0x0D
+        ir = build_encode_zoned_separate_ir("enc_zs", total_digits=2, sign_leading=True)
+        result = _execute_ir(ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        assert result[0] == 0x60  # '-' sign first
+
+
+class TestDecodeZonedSeparateIR:
+    """Validate IR zoned decoder with SIGN SEPARATE CHARACTER."""
+
+    def test_trailing_separate_positive(self):
+        # 3 digit bytes + '+' sign
+        data = [0xF1, 0xF2, 0xF3, 0x4E]
+        ir = build_decode_zoned_separate_ir(
+            "dec_zs", total_digits=3, decimal_digits=0, sign_leading=False
+        )
+        result = _execute_ir(ir, {"%p_data": data})
+        assert result == 123.0
+
+    def test_trailing_separate_negative(self):
+        data = [0xF1, 0xF2, 0xF3, 0x60]
+        ir = build_decode_zoned_separate_ir(
+            "dec_zs", total_digits=3, decimal_digits=0, sign_leading=False
+        )
+        result = _execute_ir(ir, {"%p_data": data})
+        assert result == -123.0
+
+    def test_leading_separate_positive(self):
+        data = [0x4E, 0xF4, 0xF5]
+        ir = build_decode_zoned_separate_ir(
+            "dec_zs", total_digits=2, decimal_digits=0, sign_leading=True
+        )
+        result = _execute_ir(ir, {"%p_data": data})
+        assert result == 45.0
+
+    def test_leading_separate_negative(self):
+        data = [0x60, 0xF4, 0xF5]
+        ir = build_decode_zoned_separate_ir(
+            "dec_zs", total_digits=2, decimal_digits=0, sign_leading=True
+        )
+        result = _execute_ir(ir, {"%p_data": data})
+        assert result == -45.0
+
+    def test_trailing_separate_with_decimal(self):
+        data = [0xF1, 0xF2, 0xF3, 0xF4, 0x60]
+        ir = build_decode_zoned_separate_ir(
+            "dec_zs", total_digits=4, decimal_digits=2, sign_leading=False
+        )
+        result = _execute_ir(ir, {"%p_data": data})
+        assert result == -12.34
+
+
+class TestZonedSeparateRoundTripIR:
+    """Encode via IR, decode via IR — sign separate round trip."""
+
+    def test_trailing_separate_round_trip(self):
+        digits = [1, 2, 3, 4, 5]
+        sign_nib = 0x0D  # negative
+
+        enc_ir = build_encode_zoned_separate_ir(
+            "enc", total_digits=5, sign_leading=False
+        )
+        encoded = _execute_ir(enc_ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+
+        dec_ir = build_decode_zoned_separate_ir(
+            "dec", total_digits=5, decimal_digits=0, sign_leading=False
+        )
+        decoded = _execute_ir(dec_ir, {"%p_data": encoded})
+        assert decoded == -12345.0
+
+    def test_leading_separate_round_trip(self):
+        digits = [0, 4, 2]
+        sign_nib = 0x0C  # positive
+
+        enc_ir = build_encode_zoned_separate_ir(
+            "enc", total_digits=3, sign_leading=True
+        )
+        encoded = _execute_ir(enc_ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+
+        dec_ir = build_decode_zoned_separate_ir(
+            "dec", total_digits=3, decimal_digits=0, sign_leading=True
+        )
+        decoded = _execute_ir(dec_ir, {"%p_data": encoded})
+        assert decoded == 42.0
