@@ -49,3 +49,48 @@ class TestCobolTypeDescriptor:
         assert td.byte_length == 7
         assert td.decimal_digits == 2
         assert td.signed is True
+
+    def test_binary_byte_length_small(self):
+        """BINARY with 1-4 digits: 2 bytes (halfword)."""
+        td = CobolTypeDescriptor(category=CobolDataCategory.BINARY, total_digits=4)
+        assert td.byte_length == 2
+
+    def test_binary_byte_length_medium(self):
+        """BINARY with 5-9 digits: 4 bytes (fullword)."""
+        td = CobolTypeDescriptor(category=CobolDataCategory.BINARY, total_digits=7)
+        assert td.byte_length == 4
+
+    def test_binary_byte_length_large(self):
+        """BINARY with 10-18 digits: 8 bytes (doubleword)."""
+        td = CobolTypeDescriptor(category=CobolDataCategory.BINARY, total_digits=15)
+        assert td.byte_length == 8
+
+    def test_binary_byte_length_boundary_4(self):
+        """BINARY with exactly 4 digits: still 2 bytes."""
+        td = CobolTypeDescriptor(category=CobolDataCategory.BINARY, total_digits=4)
+        assert td.byte_length == 2
+
+    def test_binary_byte_length_boundary_5(self):
+        """BINARY with exactly 5 digits: crosses to 4 bytes."""
+        td = CobolTypeDescriptor(category=CobolDataCategory.BINARY, total_digits=5)
+        assert td.byte_length == 4
+
+    def test_binary_byte_length_boundary_9(self):
+        """BINARY with exactly 9 digits: still 4 bytes."""
+        td = CobolTypeDescriptor(category=CobolDataCategory.BINARY, total_digits=9)
+        assert td.byte_length == 4
+
+    def test_binary_byte_length_boundary_10(self):
+        """BINARY with exactly 10 digits: crosses to 8 bytes."""
+        td = CobolTypeDescriptor(category=CobolDataCategory.BINARY, total_digits=10)
+        assert td.byte_length == 8
+
+    def test_comp1_byte_length(self):
+        """COMP-1: always 4 bytes (single-precision float)."""
+        td = CobolTypeDescriptor(category=CobolDataCategory.COMP1, total_digits=0)
+        assert td.byte_length == 4
+
+    def test_comp2_byte_length(self):
+        """COMP-2: always 8 bytes (double-precision float)."""
+        td = CobolTypeDescriptor(category=CobolDataCategory.COMP2, total_digits=0)
+        assert td.byte_length == 8
