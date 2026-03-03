@@ -46,6 +46,8 @@ class CobolField:
     synchronized: bool = False
     occurs_depending_on: str = ""
     occurs_min: int = 0
+    renames_from: str = ""
+    renames_thru: str = ""
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolField:
@@ -69,6 +71,8 @@ class CobolField:
             synchronized=data.get("synchronized", False),
             occurs_depending_on=data.get("occurs_depending_on", ""),
             occurs_min=data.get("occurs_min", 0),
+            renames_from=data.get("renames_from", ""),
+            renames_thru=data.get("renames_thru", ""),
         )
 
     def to_dict(self) -> dict:
@@ -106,6 +110,10 @@ class CobolField:
             result["occurs_depending_on"] = self.occurs_depending_on
         if self.occurs_min:
             result["occurs_min"] = self.occurs_min
+        if self.renames_from:
+            result["renames_from"] = self.renames_from
+        if self.renames_thru:
+            result["renames_thru"] = self.renames_thru
         return result
 
 
