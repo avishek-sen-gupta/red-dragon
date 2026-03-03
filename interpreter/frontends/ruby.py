@@ -863,7 +863,27 @@ class RubyFrontend(BaseFrontend):
 
         body_node = node.child_by_field_name("body")
         if body_node:
-            self._lower_block(body_node)
+            # Inline the block body directly — avoid dispatching a `block`
+            # node to _lower_ruby_block which would create a nested
+            # sub-function instead of inlining the lambda body.
+            # A Ruby `block` node has structure: { block_body }, so find
+            # the block_body/body_statement child and lower its contents.
+            inner = next(
+                (
+                    c
+                    for c in body_node.children
+                    if c.type in ("block_body", "body_statement")
+                ),
+                None,
+            )
+            target = inner if inner else body_node
+            for child in target.children:
+                if (
+                    child.is_named
+                    and child.type not in self.NOISE_TYPES
+                    and child.type not in self.COMMENT_TYPES
+                ):
+                    self._lower_stmt(child)
         else:
             # Inline body: lower named children except params and delimiters
             for child in node.children:
