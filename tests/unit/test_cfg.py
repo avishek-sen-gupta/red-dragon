@@ -275,7 +275,7 @@ class TestCfgToMermaidShapes:
         assert len(entry_lines) == 1
         assert '(["' in entry_lines[0] and '"])' in entry_lines[0]
 
-    def test_branch_if_block_uses_diamond_shape(self):
+    def test_branch_if_entry_block_still_uses_stadium_shape(self):
         """Entry block ending with BRANCH_IF still gets stadium (entry wins)."""
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": "entry"}),
