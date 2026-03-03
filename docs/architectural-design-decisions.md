@@ -994,3 +994,26 @@ Benefits:
 - `StatementSerializer.java`: Added `AddToGivingStatement` branch in `serializeAdd()` and `SubtractFromGivingStatement` branch in `serializeSubtract()`. New imports: `AddToGivingStatement`, `ToGiving`, `SubtractFromGivingStatement`, `MinuendGiving`.
 
 **Consequences:** All four arithmetic GIVING forms (ADD, SUBTRACT, MULTIPLY, DIVIDE) now work end-to-end through the bridge. Four new integration tests and four new unit tests verify the round-trip and execution. All 8075 tests pass.
+
+---
+
+### ADR-047: Cross-language e2e tests for closures, classes, and exceptions (2026-03-03)
+
+**Context:** The Rosetta suite tested 8 algorithms (GCD, factorial, fibonacci, bubble sort, is_prime, interprocedural, fizzbuzz) and the Exercism suite tested 18 exercises — all across 15 languages. However, three feature categories had no cross-language coverage: closures (Python-only in `test_closures.py`), class/object operations (untested), and exception handling (untested).
+
+**Decision:** Add three new Rosetta test files following the established pattern (PROGRAMS dict, lowering tests across all 15 langs, execution tests across STANDARD_EXECUTABLE_LANGUAGES):
+
+1. **`test_rosetta_closures.py`** — Factory function returning a closure that captures an enclosing variable. Languages with true closure support (Python, JS, TS, Lua, PHP, Ruby) use nested functions. Languages without first-class closures (C, C++, Go, Pascal, Java, C#, Kotlin, Scala, Rust) use equivalent two-argument function calls. Expected: `answer = 15`.
+
+2. **`test_rosetta_classes.py`** — Object/struct creation with field mutation. Python uses full class with `__init__`/`increment`/`get_value` methods. JS/TS use object literals with field access. PHP uses `stdClass`. Ruby/Lua use hash/table indexing. Rust uses struct field access. Java/C#/Scala/Kotlin use class-level state. C/C++/Go/Pascal use local variable mutation. Expected: `answer = 3`.
+
+3. **`test_rosetta_exceptions.py`** — Try/catch structural lowering and happy-path execution. 10 languages (Python, JS, TS, Java, Ruby, PHP, C#, C++, Kotlin) generate labeled try/catch blocks with `SYMBOLIC caught_exception` in the catch clause; the test verifies this structure. 5 languages (C, Go, Rust, Lua, Pascal) lack native try/catch and use direct assignment. The execution test verifies the try body runs and branches past the catch block (catch blocks are structurally present but unreachable in the current VM since THROW is a no-op). Expected: `answer = -1`.
+
+**Limitations discovered:**
+- Kotlin/Scala function references (`::adder`, `adder _`) produce unsupported SYMBOLIC instructions — closure tests use simplified two-argument patterns for these languages.
+- Class instantiation via `new_object` + `call_method constructor` (JS/TS/Java/C#/Kotlin) stores the constructor's return value instead of the object reference — only Python's `call_function ClassName` path correctly returns the heap object. This prevented testing true class instantiation across most languages.
+- Scala's `catch { case e: Exception => ... }` pattern is not recognized as a catch clause by the frontend (no `SYMBOLIC caught_exception` generated).
+- Pascal's `try/except/end` is lowered flat (all children as sequential statements) rather than as labeled try/catch blocks.
+- C/C++ struct field access (`c.count`) doesn't resolve correctly when the struct is locally declared — `LOAD_FIELD` returns symbolic values.
+
+**Consequences:** 156 new tests (47 closures + 47 classes + 62 exceptions) bring the total to 8232 tests (8170 unit + 62 integration, 6 skipped, 3 xfailed). The three test files document both the VM's current capabilities and its limitations around closures, class instantiation, and exception control flow — providing regression coverage and serving as a roadmap for future VM enhancements.

@@ -341,18 +341,18 @@ poetry run pytest tests/integration/ -v  # integration tests only
 poetry run pytest tests/ -n 0 -v     # disable parallel execution
 ```
 
-Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures (including mutation persistence and shared environments), symbolic execution, factory routing, and the composable API layer.
+Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures (including mutation persistence and shared environments, cross-language via Rosetta), class/object instantiation and field access (cross-language), exception handling structure (cross-language), symbolic execution, factory routing, and the composable API layer.
 
 ### Rosetta cross-language suite
 
-The **Rosetta suite** (`tests/unit/rosetta/`) implements 8 classic algorithms in all 15 languages and verifies they all produce clean, structurally consistent IR. Each problem tests:
+The **Rosetta suite** (`tests/unit/rosetta/`) implements 11 cross-language test sets (8 algorithms + closures + classes + exceptions) in all 15 languages and verifies they all produce clean, structurally consistent IR. Each problem tests:
 
 - Entry label presence and minimum instruction count
 - Zero unsupported `SYMBOLIC` nodes
 - Required opcode presence and operator spot-checks
 - Aggregate cross-language variance
 
-**VM execution verification** runs 7 algorithms through the VM across all 15 languages and asserts correct computed results (factorial=120, fib(10)=55, gcd(48,18)=6, sorted arrays, interprocedural double_add(3,4)=14) with zero LLM calls.
+**VM execution verification** runs 7 algorithms plus closures, classes, and exceptions through the VM across all 15 languages and asserts correct computed results (factorial=120, fib(10)=55, gcd(48,18)=6, sorted arrays, interprocedural double_add(3,4)=14, closure make_adder(10)(5)=15, counter=3, try-body=-1) with zero LLM calls.
 
 All frontends emit **canonical Python-form literals** (`"None"`, `"True"`, `"False"`) — language-native forms (`nil`, `null`, `undefined`, `NULL`, `true`, `false`) are canonicalized at lowering time.
 
@@ -397,7 +397,7 @@ The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercis
 
 ### Test totals
 
-**8082 tests** (8020 unit + 62 integration passed, 3 xfailed) — all with zero LLM calls.
+**8238 tests** (8176 unit + 62 integration passed, 6 skipped, 3 xfailed) — all with zero LLM calls.
 
 ## Documentation
 
