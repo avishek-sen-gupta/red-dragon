@@ -223,7 +223,7 @@ class TestCSharpFrontendFallback:
         opcodes = _opcodes(ir)
         assert Opcode.RETURN in opcodes
         consts = _find_all(ir, Opcode.CONST)
-        assert any("func:" in str(inst.operands) for inst in consts)
+        assert any("<function:" in str(inst.operands) for inst in consts)
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
@@ -335,7 +335,7 @@ if (x > 100) {
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("square" in inst.operands for inst in stores)
         consts = _find_all(ir, Opcode.CONST)
-        assert any("func:" in str(inst.operands) for inst in consts)
+        assert any("<function:" in str(inst.operands) for inst in consts)
 
     def test_for_loop_with_nested_if(self):
         source = """\
@@ -381,7 +381,7 @@ class TestCSharpLambda:
         assert Opcode.RETURN in opcodes
         assert Opcode.BINOP in opcodes
         consts = _find_all(ir, Opcode.CONST)
-        assert any("func:" in str(inst.operands) for inst in consts)
+        assert any("<function:" in str(inst.operands) for inst in consts)
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("f" in inst.operands for inst in stores)
 
@@ -392,7 +392,7 @@ class TestCSharpLambda:
         assert Opcode.RETURN in opcodes
         assert Opcode.BINOP in opcodes
         consts = _find_all(ir, Opcode.CONST)
-        assert any("func:" in str(inst.operands) for inst in consts)
+        assert any("<function:" in str(inst.operands) for inst in consts)
 
 
 class TestCSharpArrayCreation:

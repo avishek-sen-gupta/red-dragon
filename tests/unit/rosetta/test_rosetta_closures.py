@@ -153,9 +153,7 @@ $answer = $add10(5);
     "csharp": """\
 class M {
     static int make_adder(int x) {
-        int adder(int y) {
-            return x + y;
-        }
+        var adder = (int y) => { return x + y; };
         return adder(5);
     }
 
