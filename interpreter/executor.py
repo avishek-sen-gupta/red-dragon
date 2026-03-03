@@ -741,11 +741,21 @@ def _try_class_constructor_call(
 
     params = registry.func_params.get(init_label, [])
     new_vars: dict[str, Any] = {}
-    if params:
+    # Detect whether the first parameter is an explicit self/this reference
+    self_params = frozenset({"self", "this"})
+    has_explicit_self = bool(params) and params[0] in self_params
+    if has_explicit_self:
+        # Python-style: first param is self/this, rest are constructor args
         new_vars[params[0]] = addr
-    for i, arg in enumerate(args):
-        if i + 1 < len(params):
-            new_vars[params[i + 1]] = _serialize_value(arg)
+        for i, arg in enumerate(args):
+            if i + 1 < len(params):
+                new_vars[params[i + 1]] = _serialize_value(arg)
+    else:
+        # Java/C++/C#-style: this is implicit, all params are constructor args
+        new_vars["this"] = addr
+        for i, arg in enumerate(args):
+            if i < len(params):
+                new_vars[params[i]] = _serialize_value(arg)
 
     return ExecutionResult.success(
         StateUpdate(
