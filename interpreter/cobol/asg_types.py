@@ -35,6 +35,8 @@ class CobolField:
     value: str = ""
     redefines: str = ""
     children: list[CobolField] = field(default_factory=list)
+    occurs: int = 0
+    element_size: int = 0
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolField:
@@ -47,6 +49,8 @@ class CobolField:
             value=data.get("value", ""),
             redefines=data.get("redefines", ""),
             children=[CobolField.from_dict(c) for c in data.get("children", [])],
+            occurs=data.get("occurs", 0),
+            element_size=data.get("element_size", 0),
         )
 
     def to_dict(self) -> dict:
@@ -63,6 +67,10 @@ class CobolField:
             result["redefines"] = self.redefines
         if self.children:
             result["children"] = [c.to_dict() for c in self.children]
+        if self.occurs:
+            result["occurs"] = self.occurs
+        if self.element_size:
+            result["element_size"] = self.element_size
         return result
 
 

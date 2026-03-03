@@ -79,6 +79,8 @@ import io.proleap.cobol.asg.metamodel.procedure.delete.DeleteStatement;
 import io.proleap.cobol.asg.metamodel.procedure.rewrite.RewriteStatement;
 import io.proleap.cobol.asg.metamodel.procedure.start.StartStatement;
 import io.proleap.cobol.asg.metamodel.call.Call;
+import io.proleap.cobol.asg.metamodel.call.TableCall;
+import io.proleap.cobol.asg.metamodel.valuestmt.Subscript;
 import io.proleap.cobol.asg.metamodel.valuestmt.ValueStmt;
 
 import org.antlr.v4.runtime.CharStream;
@@ -1191,6 +1193,22 @@ public final class StatementSerializer {
         if (call == null) {
             return "";
         }
+        // Unwrap delegate calls to reach the actual underlying call
+        Call unwrapped = call.unwrap();
+
+        // Detect TABLE_CALL and append subscript notation
+        if (unwrapped.getCallType() == Call.CallType.TABLE_CALL && unwrapped instanceof TableCall tableCall) {
+            String baseName = tableCall.getName();
+            List<Subscript> subscripts = tableCall.getSubscripts();
+            if (subscripts != null && !subscripts.isEmpty()) {
+                // Single-dimension OCCURS: use first subscript only
+                Subscript sub = subscripts.get(0);
+                String subText = extractValueStmtText(sub.getSubscriptValueStmt());
+                return baseName + "(" + subText + ")";
+            }
+            return (baseName != null) ? baseName : unwrapped.toString();
+        }
+
         String name = call.getName();
         return (name != null) ? name : call.toString();
     }

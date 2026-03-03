@@ -8,6 +8,8 @@ produces IR instructions for the VM.
 from __future__ import annotations
 
 import logging
+import re
+from dataclasses import dataclass
 from typing import Any
 
 from interpreter.cobol.asg_types import (
@@ -107,6 +109,35 @@ def _translate_cobol_figurative(value: str) -> str:
     return _COBOL_FIGURATIVE_CONSTANTS.get(value, value)
 
 
+_SUBSCRIPT_RE = re.compile(r"^([A-Za-z][A-Za-z0-9-]*)\((.+)\)$")
+
+
+def _parse_subscript_notation(name: str) -> tuple[str, str]:
+    """Parse 'FIELD(SUBSCRIPT)' notation into (base_name, subscript).
+
+    Returns (name, "") for bare names without subscripts.
+    """
+    match = _SUBSCRIPT_RE.match(name)
+    if match:
+        return match.group(1), match.group(2)
+    return name, ""
+
+
+@dataclass(frozen=True)
+class ResolvedFieldRef:
+    """Result of resolving a field reference, possibly with a subscript.
+
+    Attributes:
+        fl: The FieldLayout for the base field.
+        offset_reg: Register holding the computed byte offset.
+            For bare refs, this is a CONST of fl.offset.
+            For subscripted refs, this is base + (idx - 1) * element_size.
+    """
+
+    fl: FieldLayout
+    offset_reg: str
+
+
 class CobolFrontend(Frontend):
     """Lowers COBOL ASG (from ProLeap bridge) to RedDragon IR.
 
@@ -178,6 +209,86 @@ class CobolFrontend(Frontend):
         )
         self._instructions.append(inst)
 
+    # ── Field reference resolution ──────────────────────────────────
+
+    def _resolve_field_ref(
+        self, name: str, layout: DataLayout, region_reg: str
+    ) -> ResolvedFieldRef:
+        """Resolve a field reference that may contain subscript notation.
+
+        For bare names: returns FieldLayout + CONST offset register.
+        For subscripted names like 'WS-TBL(3)' or 'WS-TBL(WS-IDX)':
+        resolves the subscript value and emits offset arithmetic:
+        base_offset + (index - 1) * element_size.
+        """
+        base_name, subscript = _parse_subscript_notation(name)
+        fl = layout.fields[base_name]
+
+        if not subscript:
+            offset_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=offset_reg, operands=[fl.offset])
+            return ResolvedFieldRef(fl=fl, offset_reg=offset_reg)
+
+        # Resolve subscript value: literal or field
+        try:
+            idx_val = int(subscript)
+            idx_reg = self._const_to_reg(idx_val)
+        except ValueError:
+            # Subscript is a field reference — decode it
+            sub_base, _ = _parse_subscript_notation(subscript)
+            if sub_base in layout.fields:
+                sub_fl = layout.fields[sub_base]
+                idx_reg = self._emit_decode_field(region_reg, sub_fl)
+            else:
+                idx_reg = self._const_to_reg(1)
+                logger.warning(
+                    "Subscript field %s not found in layout, defaulting to 1",
+                    subscript,
+                )
+
+        # Compute offset: fl.offset + (idx - 1) * element_size
+        one_reg = self._const_to_reg(1)
+        idx_minus_one = self._fresh_reg()
+        self._emit(
+            Opcode.BINOP,
+            result_reg=idx_minus_one,
+            operands=["-", idx_reg, one_reg],
+        )
+
+        elem_size = fl.element_size if fl.element_size > 0 else fl.byte_length
+        elem_size_reg = self._const_to_reg(elem_size)
+        displacement = self._fresh_reg()
+        self._emit(
+            Opcode.BINOP,
+            result_reg=displacement,
+            operands=["*", idx_minus_one, elem_size_reg],
+        )
+
+        base_offset_reg = self._const_to_reg(fl.offset)
+        final_offset_reg = self._fresh_reg()
+        self._emit(
+            Opcode.BINOP,
+            result_reg=final_offset_reg,
+            operands=["+", base_offset_reg, displacement],
+        )
+
+        # For subscripted access, use element-level FieldLayout
+        # (byte_length = single element size, not total array size)
+        element_fl = FieldLayout(
+            name=fl.name,
+            type_descriptor=fl.type_descriptor,
+            offset=fl.offset,
+            byte_length=elem_size,
+            redefines=fl.redefines,
+            value=fl.value,
+        )
+        return ResolvedFieldRef(fl=element_fl, offset_reg=final_offset_reg)
+
+    def _has_field(self, name: str, layout: DataLayout) -> bool:
+        """Check if a name (possibly subscripted) refers to a known field."""
+        base_name, _ = _parse_subscript_notation(name)
+        return base_name in layout.fields
+
     # ── DATA DIVISION ──────────────────────────────────────────────
 
     def _lower_data_division(self, layout: DataLayout) -> str:
@@ -200,11 +311,14 @@ class CobolFrontend(Frontend):
         )
         return region_reg
 
-    def _emit_field_encode(self, region_reg: str, fl: FieldLayout, value: str) -> None:
+    def _emit_field_encode(
+        self, region_reg: str, fl: FieldLayout, value: str, offset_reg: str = ""
+    ) -> None:
         """Emit IR to encode a value and write it to the region."""
         encoded_reg = self._emit_encode_value(fl, value)
-        offset_reg = self._fresh_reg()
-        self._emit(Opcode.CONST, result_reg=offset_reg, operands=[fl.offset])
+        if not offset_reg:
+            offset_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=offset_reg, operands=[fl.offset])
         self._emit(
             Opcode.WRITE_REGION,
             operands=[region_reg, offset_reg, fl.byte_length, encoded_reg],
@@ -264,10 +378,20 @@ class CobolFrontend(Frontend):
             ir, {"%p_digits": digits_reg, "%p_sign_nibble": sign_reg}
         )
 
-    def _emit_decode_field(self, region_reg: str, fl: FieldLayout) -> str:
-        """Emit IR to load and decode a field from the region. Returns decoded value register."""
-        offset_reg = self._fresh_reg()
-        self._emit(Opcode.CONST, result_reg=offset_reg, operands=[fl.offset])
+    def _emit_decode_field(
+        self, region_reg: str, fl: FieldLayout, offset_reg: str = ""
+    ) -> str:
+        """Emit IR to load and decode a field from the region. Returns decoded value register.
+
+        Args:
+            region_reg: Register holding the memory region.
+            fl: FieldLayout for the field.
+            offset_reg: Optional pre-computed offset register. If empty,
+                uses fl.offset as a constant.
+        """
+        if not offset_reg:
+            offset_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=offset_reg, operands=[fl.offset])
 
         data_reg = self._fresh_reg()
         self._emit(
@@ -467,22 +591,19 @@ class CobolFrontend(Frontend):
         region_reg: str,
     ) -> None:
         """MOVE X TO Y: decode X, encode as Y's type, write to Y's region."""
-        target_fl = layout.fields[stmt.target]
+        target_ref = self._resolve_field_ref(stmt.target, layout, region_reg)
 
-        if stmt.source in layout.fields:
-            source_fl = layout.fields[stmt.source]
-            decoded_reg = self._emit_decode_field(region_reg, source_fl)
+        if self._has_field(stmt.source, layout):
+            source_ref = self._resolve_field_ref(stmt.source, layout, region_reg)
+            decoded_reg = self._emit_decode_field(
+                region_reg, source_ref.fl, source_ref.offset_reg
+            )
             value_str_reg = self._emit_to_string(decoded_reg)
         else:
             value_str_reg = self._const_to_reg(str(stmt.source))
 
-        encoded_reg = self._emit_encode_from_string(target_fl, value_str_reg)
-
-        offset_reg = self._fresh_reg()
-        self._emit(Opcode.CONST, result_reg=offset_reg, operands=[target_fl.offset])
-        self._emit(
-            Opcode.WRITE_REGION,
-            operands=[region_reg, offset_reg, target_fl.byte_length, encoded_reg],
+        self._emit_encode_and_write(
+            region_reg, target_ref.fl, value_str_reg, target_ref.offset_reg
         )
 
     def _lower_arithmetic(
@@ -496,15 +617,19 @@ class CobolFrontend(Frontend):
             self._lower_arithmetic_giving(stmt, layout, region_reg)
             return
 
-        target_fl = layout.fields[stmt.target]
+        target_ref = self._resolve_field_ref(stmt.target, layout, region_reg)
 
-        if stmt.source in layout.fields:
-            source_fl = layout.fields[stmt.source]
-            src_decoded = self._emit_decode_field(region_reg, source_fl)
+        if self._has_field(stmt.source, layout):
+            source_ref = self._resolve_field_ref(stmt.source, layout, region_reg)
+            src_decoded = self._emit_decode_field(
+                region_reg, source_ref.fl, source_ref.offset_reg
+            )
         else:
             src_decoded = self._const_to_reg(float(stmt.source))
 
-        tgt_decoded = self._emit_decode_field(region_reg, target_fl)
+        tgt_decoded = self._emit_decode_field(
+            region_reg, target_ref.fl, target_ref.offset_reg
+        )
 
         op = _ARITHMETIC_OPS[stmt.op]
         result_reg = self._fresh_reg()
@@ -515,13 +640,8 @@ class CobolFrontend(Frontend):
         )
 
         result_str_reg = self._emit_to_string(result_reg)
-        encoded_reg = self._emit_encode_from_string(target_fl, result_str_reg)
-
-        offset_reg = self._fresh_reg()
-        self._emit(Opcode.CONST, result_reg=offset_reg, operands=[target_fl.offset])
-        self._emit(
-            Opcode.WRITE_REGION,
-            operands=[region_reg, offset_reg, target_fl.byte_length, encoded_reg],
+        self._emit_encode_and_write(
+            region_reg, target_ref.fl, result_str_reg, target_ref.offset_reg
         )
 
     def _lower_arithmetic_giving(
@@ -538,8 +658,9 @@ class CobolFrontend(Frontend):
         """
 
         def _decode_operand(name: str) -> str:
-            if name in layout.fields:
-                return self._emit_decode_field(region_reg, layout.fields[name])
+            if self._has_field(name, layout):
+                ref = self._resolve_field_ref(name, layout, region_reg)
+                return self._emit_decode_field(region_reg, ref.fl, ref.offset_reg)
             return self._const_to_reg(float(name))
 
         left_reg = _decode_operand(stmt.source)
@@ -554,19 +675,10 @@ class CobolFrontend(Frontend):
         )
 
         for giving_name in stmt.giving:
-            giving_fl = layout.fields[giving_name]
+            giving_ref = self._resolve_field_ref(giving_name, layout, region_reg)
             result_str_reg = self._emit_to_string(result_reg)
-            encoded_reg = self._emit_encode_from_string(giving_fl, result_str_reg)
-            offset_reg = self._fresh_reg()
-            self._emit(Opcode.CONST, result_reg=offset_reg, operands=[giving_fl.offset])
-            self._emit(
-                Opcode.WRITE_REGION,
-                operands=[
-                    region_reg,
-                    offset_reg,
-                    giving_fl.byte_length,
-                    encoded_reg,
-                ],
+            self._emit_encode_and_write(
+                region_reg, giving_ref.fl, result_str_reg, giving_ref.offset_reg
             )
 
     def _lower_compute(
@@ -585,16 +697,12 @@ class CobolFrontend(Frontend):
 
         result_str_reg = self._emit_to_string(result_reg)
         for target_name in stmt.targets:
-            if target_name not in layout.fields:
+            if not self._has_field(target_name, layout):
                 logger.warning("COMPUTE target %s not found in layout", target_name)
                 continue
-            target_fl = layout.fields[target_name]
-            encoded_reg = self._emit_encode_from_string(target_fl, result_str_reg)
-            offset_reg = self._fresh_reg()
-            self._emit(Opcode.CONST, result_reg=offset_reg, operands=[target_fl.offset])
-            self._emit(
-                Opcode.WRITE_REGION,
-                operands=[region_reg, offset_reg, target_fl.byte_length, encoded_reg],
+            target_ref = self._resolve_field_ref(target_name, layout, region_reg)
+            self._emit_encode_and_write(
+                region_reg, target_ref.fl, result_str_reg, target_ref.offset_reg
             )
 
     def _lower_expr_node(
@@ -607,8 +715,9 @@ class CobolFrontend(Frontend):
         if isinstance(node, LiteralNode):
             return self._const_to_reg(self._parse_literal(node.value))
         if isinstance(node, FieldRefNode):
-            if node.name in layout.fields:
-                return self._emit_decode_field(region_reg, layout.fields[node.name])
+            if self._has_field(node.name, layout):
+                ref = self._resolve_field_ref(node.name, layout, region_reg)
+                return self._emit_decode_field(region_reg, ref.fl, ref.offset_reg)
             return self._const_to_reg(self._parse_literal(node.name))
         if isinstance(node, BinOpNode):
             left_reg = self._lower_expr_node(node.left, layout, region_reg)
@@ -757,8 +866,11 @@ class CobolFrontend(Frontend):
         self._emit(Opcode.STORE_VAR, operands=[counter_var, zero_reg])
 
         # Resolve times value (literal or field)
-        if spec.times in layout.fields:
-            times_reg = self._emit_decode_field(region_reg, layout.fields[spec.times])
+        if self._has_field(spec.times, layout):
+            times_ref = self._resolve_field_ref(spec.times, layout, region_reg)
+            times_reg = self._emit_decode_field(
+                region_reg, times_ref.fl, times_ref.offset_reg
+            )
         else:
             times_reg = self._const_to_reg(self._parse_literal(spec.times))
 
@@ -847,10 +959,12 @@ class CobolFrontend(Frontend):
         exit_label = self._fresh_label("perform_varying_exit")
 
         # Initialize varying variable: encode FROM value into field
-        if spec.varying_var in layout.fields:
-            varying_fl = layout.fields[spec.varying_var]
+        if self._has_field(spec.varying_var, layout):
+            varying_ref = self._resolve_field_ref(spec.varying_var, layout, region_reg)
             from_str_reg = self._const_to_reg(str(spec.varying_from))
-            self._emit_encode_and_write(region_reg, varying_fl, from_str_reg)
+            self._emit_encode_and_write(
+                region_reg, varying_ref.fl, from_str_reg, varying_ref.offset_reg
+            )
 
         if spec.test_before:
             # TEST BEFORE
@@ -886,14 +1000,16 @@ class CobolFrontend(Frontend):
         region_reg: str,
     ) -> None:
         """Emit IR to increment the VARYING variable by the BY value."""
-        if spec.varying_var not in layout.fields:
+        if not self._has_field(spec.varying_var, layout):
             logger.warning("VARYING variable %s not found in layout", spec.varying_var)
             return
 
-        varying_fl = layout.fields[spec.varying_var]
+        varying_ref = self._resolve_field_ref(spec.varying_var, layout, region_reg)
 
         # Decode current value
-        val_reg = self._emit_decode_field(region_reg, varying_fl)
+        val_reg = self._emit_decode_field(
+            region_reg, varying_ref.fl, varying_ref.offset_reg
+        )
 
         # Add BY step
         by_reg = self._const_to_reg(self._parse_literal(spec.varying_by))
@@ -906,18 +1022,22 @@ class CobolFrontend(Frontend):
 
         # Encode back
         new_str_reg = self._emit_to_string(new_val_reg)
-        self._emit_encode_and_write(region_reg, varying_fl, new_str_reg)
+        self._emit_encode_and_write(
+            region_reg, varying_ref.fl, new_str_reg, varying_ref.offset_reg
+        )
 
     def _emit_encode_and_write(
         self,
         region_reg: str,
         fl: FieldLayout,
         value_str_reg: str,
+        offset_reg: str = "",
     ) -> None:
         """Encode a string value and write it to the field's region slot."""
         encoded_reg = self._emit_encode_from_string(fl, value_str_reg)
-        offset_reg = self._fresh_reg()
-        self._emit(Opcode.CONST, result_reg=offset_reg, operands=[fl.offset])
+        if not offset_reg:
+            offset_reg = self._fresh_reg()
+            self._emit(Opcode.CONST, result_reg=offset_reg, operands=[fl.offset])
         self._emit(
             Opcode.WRITE_REGION,
             operands=[region_reg, offset_reg, fl.byte_length, encoded_reg],
@@ -932,9 +1052,9 @@ class CobolFrontend(Frontend):
         """DISPLAY field-or-literal."""
         operand = stmt.operand
 
-        if isinstance(operand, str) and operand in layout.fields:
-            fl = layout.fields[operand]
-            decoded_reg = self._emit_decode_field(region_reg, fl)
+        if isinstance(operand, str) and self._has_field(operand, layout):
+            ref = self._resolve_field_ref(operand, layout, region_reg)
+            decoded_reg = self._emit_decode_field(region_reg, ref.fl, ref.offset_reg)
             display_reg = self._emit_to_string(decoded_reg)
         else:
             display_reg = self._const_to_reg(str(operand))
@@ -1033,16 +1153,16 @@ class CobolFrontend(Frontend):
     ) -> None:
         """INITIALIZE field1 field2 — reset to type-appropriate defaults."""
         for operand in stmt.operands:
-            if operand not in layout.fields:
+            if not self._has_field(operand, layout):
                 logger.warning("INITIALIZE target %s not found in layout", operand)
                 continue
-            fl = layout.fields[operand]
-            td = fl.type_descriptor
+            ref = self._resolve_field_ref(operand, layout, region_reg)
+            td = ref.fl.type_descriptor
             if td.category == CobolDataCategory.ALPHANUMERIC:
                 default = " " * td.total_digits
             else:
                 default = "0"
-            self._emit_field_encode(region_reg, fl, default)
+            self._emit_field_encode(region_reg, ref.fl, default, ref.offset_reg)
 
     def _lower_set(
         self,
@@ -1055,22 +1175,26 @@ class CobolFrontend(Frontend):
             # SET target(s) TO value(s) — assign first value to all targets
             value_str = stmt.values[0] if stmt.values else "0"
             for target_name in stmt.targets:
-                if target_name not in layout.fields:
+                if not self._has_field(target_name, layout):
                     logger.warning("SET target %s not found in layout", target_name)
                     continue
-                target_fl = layout.fields[target_name]
+                target_ref = self._resolve_field_ref(target_name, layout, region_reg)
                 value_str_reg = self._const_to_reg(str(value_str))
-                self._emit_encode_and_write(region_reg, target_fl, value_str_reg)
+                self._emit_encode_and_write(
+                    region_reg, target_ref.fl, value_str_reg, target_ref.offset_reg
+                )
         elif stmt.set_type == "BY":
             # SET target UP|DOWN BY value — increment/decrement
             step_val = stmt.values[0] if stmt.values else "1"
             op = "+" if stmt.by_type == "UP" else "-"
             for target_name in stmt.targets:
-                if target_name not in layout.fields:
+                if not self._has_field(target_name, layout):
                     logger.warning("SET target %s not found in layout", target_name)
                     continue
-                target_fl = layout.fields[target_name]
-                tgt_decoded = self._emit_decode_field(region_reg, target_fl)
+                target_ref = self._resolve_field_ref(target_name, layout, region_reg)
+                tgt_decoded = self._emit_decode_field(
+                    region_reg, target_ref.fl, target_ref.offset_reg
+                )
                 step_reg = self._const_to_reg(self._parse_literal(step_val))
                 result_reg = self._fresh_reg()
                 self._emit(
@@ -1079,7 +1203,9 @@ class CobolFrontend(Frontend):
                     operands=[op, tgt_decoded, step_reg],
                 )
                 result_str_reg = self._emit_to_string(result_reg)
-                self._emit_encode_and_write(region_reg, target_fl, result_str_reg)
+                self._emit_encode_and_write(
+                    region_reg, target_ref.fl, result_str_reg, target_ref.offset_reg
+                )
 
     # ── Tier 2: STRING, UNSTRING, INSPECT ─────────────────────────
 
@@ -1097,9 +1223,11 @@ class CobolFrontend(Frontend):
         part_regs: list[str] = []
         for sending in stmt.sendings:
             # Decode source field or use literal
-            if sending.value in layout.fields:
-                source_fl = layout.fields[sending.value]
-                decoded_reg = self._emit_decode_field(region_reg, source_fl)
+            if self._has_field(sending.value, layout):
+                source_ref = self._resolve_field_ref(sending.value, layout, region_reg)
+                decoded_reg = self._emit_decode_field(
+                    region_reg, source_ref.fl, source_ref.offset_reg
+                )
                 src_str_reg = self._emit_to_string(decoded_reg)
             else:
                 src_str_reg = self._const_to_reg(str(sending.value))
@@ -1156,9 +1284,11 @@ class CobolFrontend(Frontend):
                 concat_reg = new_concat
 
         # Write to target
-        if stmt.into and stmt.into in layout.fields:
-            target_fl = layout.fields[stmt.into]
-            self._emit_encode_and_write(region_reg, target_fl, concat_reg)
+        if stmt.into and self._has_field(stmt.into, layout):
+            target_ref = self._resolve_field_ref(stmt.into, layout, region_reg)
+            self._emit_encode_and_write(
+                region_reg, target_ref.fl, concat_reg, target_ref.offset_reg
+            )
         else:
             logger.warning("STRING INTO target %s not found in layout", stmt.into)
 
@@ -1173,9 +1303,11 @@ class CobolFrontend(Frontend):
         Decode source, split by delimiter, write each part to target field.
         """
         # Decode source
-        if stmt.source in layout.fields:
-            source_fl = layout.fields[stmt.source]
-            decoded_reg = self._emit_decode_field(region_reg, source_fl)
+        if self._has_field(stmt.source, layout):
+            source_ref = self._resolve_field_ref(stmt.source, layout, region_reg)
+            decoded_reg = self._emit_decode_field(
+                region_reg, source_ref.fl, source_ref.offset_reg
+            )
             src_str_reg = self._emit_to_string(decoded_reg)
         else:
             src_str_reg = self._const_to_reg(str(stmt.source))
@@ -1190,12 +1322,12 @@ class CobolFrontend(Frontend):
 
         # Write each part to corresponding target
         for i, target_name in enumerate(stmt.into):
-            if target_name not in layout.fields:
+            if not self._has_field(target_name, layout):
                 logger.warning(
                     "UNSTRING INTO target %s not found in layout", target_name
                 )
                 continue
-            target_fl = layout.fields[target_name]
+            target_ref = self._resolve_field_ref(target_name, layout, region_reg)
             idx_reg = self._const_to_reg(i)
             part_reg = self._fresh_reg()
             self._emit(
@@ -1203,7 +1335,9 @@ class CobolFrontend(Frontend):
                 result_reg=part_reg,
                 operands=["__list_get", parts_reg, idx_reg],
             )
-            self._emit_encode_and_write(region_reg, target_fl, part_reg)
+            self._emit_encode_and_write(
+                region_reg, target_ref.fl, part_reg, target_ref.offset_reg
+            )
 
     def _lower_inspect(
         self,
@@ -1212,11 +1346,14 @@ class CobolFrontend(Frontend):
         region_reg: str,
     ) -> None:
         """INSPECT source TALLYING|REPLACING ..."""
-        if stmt.source not in layout.fields:
+        if not self._has_field(stmt.source, layout):
             logger.warning("INSPECT source %s not found in layout", stmt.source)
             return
-        source_fl = layout.fields[stmt.source]
-        decoded_reg = self._emit_decode_field(region_reg, source_fl)
+        source_ref = self._resolve_field_ref(stmt.source, layout, region_reg)
+        source_fl = source_ref.fl
+        decoded_reg = self._emit_decode_field(
+            region_reg, source_fl, source_ref.offset_reg
+        )
         src_str_reg = self._emit_to_string(decoded_reg)
 
         if stmt.inspect_type == "TALLYING":
@@ -1257,10 +1394,14 @@ class CobolFrontend(Frontend):
             total_count_reg = new_total
 
         # Write total count to tally target
-        if stmt.tallying_target and stmt.tallying_target in layout.fields:
-            tally_fl = layout.fields[stmt.tallying_target]
+        if stmt.tallying_target and self._has_field(stmt.tallying_target, layout):
+            tally_ref = self._resolve_field_ref(
+                stmt.tallying_target, layout, region_reg
+            )
             count_str_reg = self._emit_to_string(total_count_reg)
-            self._emit_encode_and_write(region_reg, tally_fl, count_str_reg)
+            self._emit_encode_and_write(
+                region_reg, tally_ref.fl, count_str_reg, tally_ref.offset_reg
+            )
 
     def _lower_inspect_replacing(
         self,
@@ -1364,16 +1505,20 @@ class CobolFrontend(Frontend):
         self._emit(Opcode.LABEL, label=increment_label)
 
         # Increment varying index field if present
-        if stmt.varying and stmt.varying in layout.fields:
-            varying_fl = layout.fields[stmt.varying]
-            decoded_reg = self._emit_decode_field(region_reg, varying_fl)
+        if stmt.varying and self._has_field(stmt.varying, layout):
+            varying_ref = self._resolve_field_ref(stmt.varying, layout, region_reg)
+            decoded_reg = self._emit_decode_field(
+                region_reg, varying_ref.fl, varying_ref.offset_reg
+            )
             one_reg = self._const_to_reg(1)
             inc_reg = self._fresh_reg()
             self._emit(
                 Opcode.BINOP, result_reg=inc_reg, operands=["+", decoded_reg, one_reg]
             )
             str_reg = self._emit_to_string(inc_reg)
-            self._emit_encode_and_write(region_reg, varying_fl, str_reg)
+            self._emit_encode_and_write(
+                region_reg, varying_ref.fl, str_reg, varying_ref.offset_reg
+            )
 
         # Increment safety counter
         ctr_reg2 = self._fresh_reg()
@@ -1406,14 +1551,15 @@ class CobolFrontend(Frontend):
         calls in tree-sitter frontends).
         """
         # Build argument registers from USING params
-        arg_regs = [
-            (
-                self._emit_decode_field(region_reg, layout.fields[param.name])
-                if param.name in layout.fields
-                else self._const_to_reg(param.name)
-            )
-            for param in stmt.using
-        ]
+        arg_regs: list[str] = []
+        for param in stmt.using:
+            if self._has_field(param.name, layout):
+                ref = self._resolve_field_ref(param.name, layout, region_reg)
+                arg_regs.append(
+                    self._emit_decode_field(region_reg, ref.fl, ref.offset_reg)
+                )
+            else:
+                arg_regs.append(self._const_to_reg(param.name))
 
         # Emit symbolic call
         result_reg = self._fresh_reg()
@@ -1424,10 +1570,12 @@ class CobolFrontend(Frontend):
         )
 
         # If GIVING, write the result back to the giving field
-        if stmt.giving and stmt.giving in layout.fields:
-            giving_fl = layout.fields[stmt.giving]
+        if stmt.giving and self._has_field(stmt.giving, layout):
+            giving_ref = self._resolve_field_ref(stmt.giving, layout, region_reg)
             str_reg = self._emit_to_string(result_reg)
-            self._emit_encode_and_write(region_reg, giving_fl, str_reg)
+            self._emit_encode_and_write(
+                region_reg, giving_ref.fl, str_reg, giving_ref.offset_reg
+            )
 
         logger.info("CALL %s with %d params (symbolic)", stmt.program, len(stmt.using))
 
@@ -1495,10 +1643,12 @@ class CobolFrontend(Frontend):
             operands=["__cobol_accept", device_reg],
         )
         # Write result to target field if it exists in layout
-        if stmt.target and stmt.target in layout.fields:
-            target_fl = layout.fields[stmt.target]
+        if stmt.target and self._has_field(stmt.target, layout):
+            target_ref = self._resolve_field_ref(stmt.target, layout, region_reg)
             str_reg = self._emit_to_string(result_reg)
-            self._emit_encode_and_write(region_reg, target_fl, str_reg)
+            self._emit_encode_and_write(
+                region_reg, target_ref.fl, str_reg, target_ref.offset_reg
+            )
         logger.info("ACCEPT %s FROM %s", stmt.target, stmt.from_device)
 
     def _lower_open(
@@ -1551,10 +1701,12 @@ class CobolFrontend(Frontend):
             operands=["__cobol_read_record", fn_reg],
         )
         # Write result to INTO target field if specified
-        if stmt.into and stmt.into in layout.fields:
-            target_fl = layout.fields[stmt.into]
+        if stmt.into and self._has_field(stmt.into, layout):
+            target_ref = self._resolve_field_ref(stmt.into, layout, region_reg)
             str_reg = self._emit_to_string(result_reg)
-            self._emit_encode_and_write(region_reg, target_fl, str_reg)
+            self._emit_encode_and_write(
+                region_reg, target_ref.fl, str_reg, target_ref.offset_reg
+            )
         logger.info("READ %s INTO %s", stmt.file_name, stmt.into or "(none)")
 
     def _lower_write(
@@ -1565,9 +1717,11 @@ class CobolFrontend(Frontend):
     ) -> None:
         """WRITE record-name [FROM field] — write record via __cobol_write_record."""
         # Determine the data to write: FROM field if specified, otherwise record-name
-        if stmt.from_field and stmt.from_field in layout.fields:
-            from_fl = layout.fields[stmt.from_field]
-            decoded_reg = self._emit_decode_field(region_reg, from_fl)
+        if stmt.from_field and self._has_field(stmt.from_field, layout):
+            from_ref = self._resolve_field_ref(stmt.from_field, layout, region_reg)
+            decoded_reg = self._emit_decode_field(
+                region_reg, from_ref.fl, from_ref.offset_reg
+            )
             data_reg = self._emit_to_string(decoded_reg)
         else:
             data_reg = self._const_to_reg(stmt.from_field or stmt.record_name)
@@ -1588,9 +1742,11 @@ class CobolFrontend(Frontend):
         region_reg: str,
     ) -> None:
         """REWRITE record-name [FROM field] — rewrite record via __cobol_rewrite_record."""
-        if stmt.from_field and stmt.from_field in layout.fields:
-            from_fl = layout.fields[stmt.from_field]
-            decoded_reg = self._emit_decode_field(region_reg, from_fl)
+        if stmt.from_field and self._has_field(stmt.from_field, layout):
+            from_ref = self._resolve_field_ref(stmt.from_field, layout, region_reg)
+            decoded_reg = self._emit_decode_field(
+                region_reg, from_ref.fl, from_ref.offset_reg
+            )
             data_reg = self._emit_to_string(decoded_reg)
         else:
             data_reg = self._const_to_reg(stmt.from_field or stmt.record_name)
@@ -1660,15 +1816,19 @@ class CobolFrontend(Frontend):
                 op = op_map.get(parts[1], "==")
                 right_val = parts[2]
 
-            if left_name in layout.fields:
-                left_reg = self._emit_decode_field(region_reg, layout.fields[left_name])
+            if self._has_field(left_name, layout):
+                left_ref = self._resolve_field_ref(left_name, layout, region_reg)
+                left_reg = self._emit_decode_field(
+                    region_reg, left_ref.fl, left_ref.offset_reg
+                )
             else:
                 left_reg = self._const_to_reg(self._parse_literal(left_name))
 
             right_parsed = self._parse_literal(right_val)
-            if isinstance(right_parsed, str) and right_parsed in layout.fields:
+            if isinstance(right_parsed, str) and self._has_field(right_parsed, layout):
+                right_ref = self._resolve_field_ref(right_parsed, layout, region_reg)
                 right_reg = self._emit_decode_field(
-                    region_reg, layout.fields[right_parsed]
+                    region_reg, right_ref.fl, right_ref.offset_reg
                 )
             else:
                 right_reg = self._const_to_reg(right_parsed)

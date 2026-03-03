@@ -774,3 +774,83 @@ class TestUnstringStatement:
         # WS-LAST (offset 16, 5 bytes) should be EBCDIC "WORLD"
         expected_world = [0xE6, 0xD6, 0xD9, 0xD3, 0xC4]
         assert list(region[16:21]) == expected_world
+
+
+class TestElementaryOccursMove:
+    def test_move_to_occurs_element(self):
+        """MOVE 42 TO WS-TBL(2) — stores 42 in the second element."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-OCCURS.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-TBL PIC 9(4) OCCURS 3.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 42 TO WS-TBL(2).",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-TBL occupies 12 bytes (4 * 3)
+        # Element 1 at offset 0: should be 0 (uninitialised/zeros)
+        assert _decode_zoned_unsigned(region, 0, 4) == 0
+        # Element 2 at offset 4: should be 42
+        assert _decode_zoned_unsigned(region, 4, 4) == 42
+        # Element 3 at offset 8: should be 0
+        assert _decode_zoned_unsigned(region, 8, 4) == 0
+
+
+class TestOccursFieldSubscript:
+    def test_move_with_field_subscript(self):
+        """MOVE 99 TO WS-TBL(WS-IDX) — field-based subscript."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-OCCURS-IDX.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-TBL PIC 9(4) OCCURS 3.",
+                "77 WS-IDX PIC 9(4) VALUE 2.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 99 TO WS-TBL(WS-IDX).",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-TBL: 12 bytes (4*3), WS-IDX: 4 bytes at offset 12
+        # Element WS-IDX=2, so offset 4
+        assert _decode_zoned_unsigned(region, 4, 4) == 99
+        # Elements 1 and 3 untouched
+        assert _decode_zoned_unsigned(region, 0, 4) == 0
+        assert _decode_zoned_unsigned(region, 8, 4) == 0
+
+
+class TestOccursLoop:
+    def test_perform_varying_with_occurs(self):
+        """PERFORM VARYING I FROM 1 BY 1 UNTIL I > 3, MOVE I TO WS-TBL(I)."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-OCCURS-LOOP.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-TBL PIC 9(4) OCCURS 3.",
+                "77 WS-I PIC 9(4) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    PERFORM VARYING WS-I FROM 1 BY 1",
+                "        UNTIL WS-I > 3",
+                "        MOVE WS-I TO WS-TBL(WS-I)",
+                "    END-PERFORM.",
+                "    STOP RUN.",
+            ],
+            max_steps=5000,
+        )
+        region = _first_region(vm)
+        # Each element should contain its 1-based index
+        assert _decode_zoned_unsigned(region, 0, 4) == 1
+        assert _decode_zoned_unsigned(region, 4, 4) == 2
+        assert _decode_zoned_unsigned(region, 8, 4) == 3
