@@ -1,13 +1,16 @@
 """Rosetta test: class/object operations across all 15 deterministic frontends.
 
 Verifies that the VM can execute programs using class instantiation, field
-access, and method calls (or language-appropriate equivalents):
+access, and method calls (or language-appropriate equivalents).
 
-    - Python: class with __init__, increment(), get_value()
-    - JS/TS/PHP: object literal or stdClass with field access
-    - Ruby/Lua: hash/table with indexed field access
-    - Rust: struct with field mutation
-    - Java/C#/Scala/Kotlin/Go/C/C++/Pascal: class-level or local state mutation
+Tier 1 — Class with methods (Python, Java, C#, Kotlin, Scala):
+    Class instantiation, field access via ``this``, method calls.
+
+Tier 2 — Object/struct field access (JS, TS, PHP, Ruby, Lua, Go, C, C++, Rust):
+    Object/struct creation + field read/write.
+
+Tier 3 — Record field access (Pascal):
+    Record type allocation + field read/write.
 
 All programs compute a counter incremented 3 times → answer = 3.
 """
@@ -64,11 +67,21 @@ c.count = c.count + 1;
 let answer: number = c.count;
 """,
     "java": """\
+class Counter {
+    int count;
+    Counter() { this.count = 0; }
+    void increment() { this.count = this.count + 1; }
+    int getValue() { return this.count; }
+}
 class M {
-    static int count = 0;
-    static int a = count + 1;
-    static int b = a + 1;
-    static int answer = b + 1;
+    static int run() {
+        Counter c = new Counter();
+        c.increment();
+        c.increment();
+        c.increment();
+        return c.getValue();
+    }
+    static int answer = run();
 }
 """,
     "ruby": """\
@@ -82,12 +95,16 @@ answer = c["count"]
     "go": """\
 package main
 
+type Counter struct {
+    count int
+}
+
 func main() {
-    count := 0
-    count = count + 1
-    count = count + 1
-    count = count + 1
-    answer := count
+    c := Counter{count: 0}
+    c.count = c.count + 1
+    c.count = c.count + 1
+    c.count = c.count + 1
+    answer := c.count
     _ = answer
 }
 """,
@@ -102,26 +119,44 @@ $answer = $c->count;
 ?>
 """,
     "csharp": """\
+class Counter {
+    int count;
+    Counter() { this.count = 0; }
+    void Increment() { this.count = this.count + 1; }
+    int GetValue() { return this.count; }
+}
 class M {
-    static int count = 0;
-    static int a = count + 1;
-    static int b = a + 1;
-    static int answer = b + 1;
+    static int Run() {
+        Counter c = new Counter();
+        c.Increment();
+        c.Increment();
+        c.Increment();
+        return c.GetValue();
+    }
+    static int answer = Run();
 }
 """,
     "c": """\
-int count = 0;
-count = count + 1;
-count = count + 1;
-count = count + 1;
-int answer = count;
+struct Counter {
+    int count;
+};
+struct Counter c;
+c.count = 0;
+c.count = c.count + 1;
+c.count = c.count + 1;
+c.count = c.count + 1;
+int answer = c.count;
 """,
     "cpp": """\
-int count = 0;
-count = count + 1;
-count = count + 1;
-count = count + 1;
-int answer = count;
+struct Counter {
+    int count;
+};
+Counter c;
+c.count = 0;
+c.count = c.count + 1;
+c.count = c.count + 1;
+c.count = c.count + 1;
+int answer = c.count;
 """,
     "rust": """\
 struct Counter {
@@ -135,19 +170,33 @@ c.count = c.count + 1;
 let answer = c.count;
 """,
     "kotlin": """\
-var count: Int = 0
-count = count + 1
-count = count + 1
-count = count + 1
-val answer: Int = count
+class Counter {
+    var count: Int = 0
+    fun increment() { this.count = this.count + 1 }
+    fun getValue(): Int { return this.count }
+}
+val c = Counter()
+c.count = 0
+c.increment()
+c.increment()
+c.increment()
+val answer: Int = c.getValue()
 """,
     "scala": """\
 object M {
-    var count: Int = 0
-    count = count + 1
-    count = count + 1
-    count = count + 1
-    val answer: Int = count
+    class Counter {
+        def increment(): Unit = { this.count = this.count + 1 }
+        def getValue(): Int = { return this.count }
+    }
+    def run(): Int = {
+        val c = new Counter()
+        c.count = 0
+        c.increment()
+        c.increment()
+        c.increment()
+        return c.getValue()
+    }
+    val answer = run()
 }
 """,
     "lua": """\
@@ -160,14 +209,15 @@ answer = c["count"]
 """,
     "pascal": """\
 program M;
-var count: integer;
+type TCounter = record count: integer; end;
+var c: TCounter;
 var answer: integer;
 begin
-    count := 0;
-    count := count + 1;
-    count := count + 1;
-    count := count + 1;
-    answer := count;
+    c.count := 0;
+    c.count := c.count + 1;
+    c.count := c.count + 1;
+    c.count := c.count + 1;
+    answer := c.count;
 end.
 """,
 }
