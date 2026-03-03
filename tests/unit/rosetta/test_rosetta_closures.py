@@ -3,18 +3,18 @@
 Two tiers of programs compute the same result (answer = 15):
 
   Tier 1 — Genuine closures (Python, JavaScript, TypeScript, Lua, Go,
-      Kotlin, Scala, Pascal):
-      make_adder(x) returns a nested function adder(y) that captures x
-      from the enclosing scope.  answer = make_adder(10)(5)
+      Kotlin, Scala, Pascal, PHP, Rust, C#, C++, Java, Ruby):
+      make_adder(x) returns or invokes a nested function / lambda /
+      closure that captures x from the enclosing scope.
+      answer = make_adder(10)(5)  — or —  make_adder calls closure
+      internally and returns the numeric result.
 
-  Tier 2 — Function-call fallback (Java, Ruby, PHP, C#, C, C++, Rust):
+  Tier 2 — Function-call fallback (C):
       A plain two-argument function apply_adder(x, y) with no closure
       semantics.  answer = apply_adder(10, 5)
 
-Why some languages with nested function syntax remain in Tier 2:
-  - Rust: nested `fn` items are static and do not capture enclosing variables.
-  - Ruby: `def` inside another `def` does not capture outer locals.
-  - PHP: nested `function` does not capture without an explicit `use` clause.
+Why C remains in Tier 2:
+  - C has no lambda / closure / nested-function syntax at all.
 
 The test verifies that every frontend lowers to valid IR and that the VM
 produces the correct arithmetic result (15) for all 15 languages.
@@ -41,26 +41,35 @@ from tests.unit.rosetta.conftest import (
 # ---------------------------------------------------------------------------
 
 CLOSURE_LANGUAGES: frozenset[str] = frozenset(
-    {"python", "javascript", "typescript", "lua", "go", "kotlin", "scala", "pascal"}
+    {
+        "python",
+        "javascript",
+        "typescript",
+        "lua",
+        "go",
+        "kotlin",
+        "scala",
+        "pascal",
+        "php",
+        "rust",
+        "csharp",
+        "cpp",
+        "java",
+        "ruby",
+    }
 )
 FALLBACK_LANGUAGES: frozenset[str] = frozenset(
     {
-        "java",
-        "ruby",
-        "php",
-        "csharp",
         "c",
-        "cpp",
-        "rust",
     }
 )
 
 # ---------------------------------------------------------------------------
 # Programs: adder-factory arithmetic in all 15 languages
 #
-# Tier 1 (CLOSURE_LANGUAGES — 8 languages): make_adder(x) returns
-#   adder(y) → x + y, invoked as make_adder(10)(5) = 15.
-# Tier 2 (FALLBACK_LANGUAGES — 7 languages): apply_adder(x, y) → x + y,
+# Tier 1 (CLOSURE_LANGUAGES — 14 languages): make_adder(x) returns or
+#   invokes a nested function / lambda / closure capturing x.
+# Tier 2 (FALLBACK_LANGUAGES — 1 language, C only): apply_adder(x, y),
 #   invoked as apply_adder(10, 5) = 15.  No closure semantics.
 # ---------------------------------------------------------------------------
 
@@ -98,21 +107,18 @@ let answer: number = add10(5);
 """,
     "java": """\
 class M {
-    static int make_adder_result;
-
-    static int apply_adder(int x, int y) {
-        return x + y;
+    static int make_adder(int x) {
+        var adder = (int y) -> { return x + y; };
+        return adder.apply(5);
     }
 
-    static int answer = apply_adder(10, 5);
+    static int answer = make_adder(10);
 }
 """,
     "ruby": """\
 def make_adder(x)
-    def adder(x, y)
-        return x + y
-    end
-    return adder(x, 5)
+    adder = -> (y) { return x + y }
+    return adder.call(5)
 end
 
 answer = make_adder(10)
@@ -136,22 +142,24 @@ func main() {
     "php": """\
 <?php
 function make_adder($x) {
-    function adder($x, $y) {
-        return $x + $y;
-    }
-    return adder($x, 5);
+    $adder = fn($y) => $x + $y;
+    return $adder;
 }
 
-$answer = make_adder(10);
+$add10 = make_adder(10);
+$answer = $add10(5);
 ?>
 """,
     "csharp": """\
 class M {
-    static int apply_adder(int x, int y) {
-        return x + y;
+    static int make_adder(int x) {
+        int adder(int y) {
+            return x + y;
+        }
+        return adder(5);
     }
 
-    static int answer = apply_adder(10, 5);
+    static int answer = make_adder(10);
 }
 """,
     "c": """\
@@ -162,18 +170,21 @@ int apply_adder(int x, int y) {
 int answer = apply_adder(10, 5);
 """,
     "cpp": """\
-int apply_adder(int x, int y) {
-    return x + y;
+int make_adder(int x) {
+    auto adder = [=](int y) { return x + y; };
+    return adder(5);
 }
 
-int answer = apply_adder(10, 5);
+int answer = make_adder(10);
 """,
     "rust": """\
-fn apply_adder(x: i32, y: i32) -> i32 {
-    return x + y;
+fn make_adder(x: i32) -> i32 {
+    let adder = |y: i32| -> i32 { x + y };
+    return adder;
 }
 
-let answer = apply_adder(10, 5);
+let add10 = make_adder(10);
+let answer = add10(5);
 """,
     "kotlin": """\
 fun make_adder(x: Int): Int {

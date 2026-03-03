@@ -268,7 +268,12 @@ class CppFrontend(CFrontend):
         self._emit(Opcode.LABEL, label=func_label)
 
         if params_node:
-            self._lower_c_params(params_node)
+            # lambda_declarator wraps the parameter_list; find it inside
+            param_list = next(
+                (c for c in params_node.children if c.type == "parameter_list"),
+                params_node,
+            )
+            self._lower_c_params(param_list)
 
         if body_node:
             if body_node.type == "compound_statement":

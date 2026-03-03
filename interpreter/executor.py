@@ -937,6 +937,13 @@ def _handle_call_method(
     arg_regs = inst.operands[2:]
     args = [_resolve_reg(vm, a) for a in arg_regs]
 
+    # If the object is a FUNC_REF, invoke it directly (e.g. .call(), .apply())
+    func_ref = _parse_func_ref(obj_val)
+    if func_ref.matched:
+        return _try_user_function_call(
+            obj_val, args, inst, vm, cfg, registry, current_label
+        )
+
     addr = _heap_addr(obj_val)
     type_hint = ""
     if addr and addr in vm.heap:
@@ -981,6 +988,9 @@ def _handle_call_method(
 def _handle_call_unknown(
     inst: IRInstruction,
     vm: VMState,
+    cfg: CFG,
+    registry: FunctionRegistry,
+    current_label: str,
     call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
     **kwargs: Any,
 ) -> ExecutionResult:
@@ -988,6 +998,14 @@ def _handle_call_unknown(
     target_val = _resolve_reg(vm, inst.operands[0])
     arg_regs = inst.operands[1:]
     args = [_resolve_reg(vm, a) for a in arg_regs]
+
+    # If the target resolves to a FUNC_REF, invoke it directly
+    user_result = _try_user_function_call(
+        target_val, args, inst, vm, cfg, registry, current_label
+    )
+    if user_result.handled:
+        return user_result
+
     target_desc = _symbolic_name(target_val)
     return call_resolver.resolve_call(target_desc, args, inst, vm)
 
