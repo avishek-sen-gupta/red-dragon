@@ -1061,3 +1061,16 @@ The extracted parts are passed to the base class `_lower_try_catch()`, producing
 Also fixed Ruby's `raise` to emit `THROW` instead of `CALL_FUNCTION`.
 
 **Consequences:** Exception control flow now works end-to-end: throw redirects to catch, code after throw is skipped, finally blocks execute on both normal and exceptional paths, and no-exception paths skip catch blocks. 14 new tests (5 Python execution, 2 IR emission, 7 cross-language) verify the behavior across Python, JavaScript, Java, PHP, Ruby, Kotlin, and C++. All 8258 tests pass.
+
+---
+
+### ADR-051: Fix class instantiation for non-Python frontends (2026-03-03)
+
+**Context:** Class instantiation only worked for Python. Java, C#, and Scala emit method definitions *after* the `end_class` label (so they execute at top level for field initializers and static blocks). The registry scanner only tracked methods *inside* `class_X`...`end_class_X` labels, so hoisted methods were never associated with their class. Additionally, JavaScript's `new` expression returned the constructor's return value instead of the object address, and `_try_class_constructor_call` assumed all constructors have an explicit `self`/`this` first parameter (Python-style), breaking Java/C++ where `this` is implicit.
+
+**Decision:** Three-part fix:
+1. **Registry scanner** (`_scan_classes` in `registry.py`): Keep `in_class` set after `end_class_X` instead of clearing it. Use the class ref `CONST <class:X@...>` that follows as a reinforcing marker. Function refs after `end_class` are correctly associated with the preceding class until a new class ref appears.
+2. **Constructor `this` binding** (`_try_class_constructor_call` in `executor.py`): Detect whether the first parameter is an explicit `self`/`this` (Python-style). If not, explicitly bind `this` to the object address and map all parameters to constructor arguments without the offset.
+3. **JavaScript `new` expression** (`_lower_new_expression` in `javascript.py`): Return the `NEW_OBJECT` register (object address) instead of the `CALL_METHOD` register (constructor return value).
+
+**Consequences:** Class instantiation now works for Java (constructor dispatched, `this` bound, fields set), C#, Scala, and JavaScript. Eight new unit tests verify class method registration (Java, C#, Scala), constructor dispatch, field setting, and object allocation. All 8266 tests pass.

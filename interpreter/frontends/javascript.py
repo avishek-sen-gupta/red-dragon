@@ -734,14 +734,14 @@ class JavaScriptFrontend(BaseFrontend):
             operands=[class_name],
             node=node,
         )
-        result_reg = self._fresh_reg()
+        ctor_reg = self._fresh_reg()
         self._emit(
             Opcode.CALL_METHOD,
-            result_reg=result_reg,
+            result_reg=ctor_reg,
             operands=[obj_reg, "constructor"] + arg_regs,
             node=node,
         )
-        return result_reg
+        return obj_reg
 
     # ── JS await expression ──────────────────────────────────────
 
