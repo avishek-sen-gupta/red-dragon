@@ -530,6 +530,204 @@ def build_decode_comp3_ir(
     return instructions
 
 
+def build_encode_binary_ir(
+    func_name: str, total_digits: int, byte_count: int, signed: bool
+) -> list[IRInstruction]:
+    """Generate IR for COMP/BINARY encoding.
+
+    Inputs: %p_digits (list[int]), %p_sign_nibble (int: 0xF/0xC/0xD)
+    Output: list[int] of big-endian binary bytes (length = byte_count)
+
+    Reconstructs the integer from the digit list, applies sign from
+    the sign nibble, then packs via __int_to_binary_bytes.
+    """
+    rc = _RegCounter(func_name)
+    instructions: list[IRInstruction] = []
+
+    # Accumulate digits into integer value
+    accum = rc.next()
+    instructions.append(
+        IRInstruction(opcode=Opcode.CONST, result_reg=accum, operands=[0])
+    )
+
+    for i in range(total_digits):
+        digit = rc.next()
+        instructions.append(
+            IRInstruction(
+                opcode=Opcode.CALL_FUNCTION,
+                result_reg=digit,
+                operands=["__list_get", "%p_digits", i],
+            )
+        )
+
+        power = 10 ** (total_digits - 1 - i)
+        contribution = rc.next()
+        instructions.append(
+            IRInstruction(
+                opcode=Opcode.BINOP,
+                result_reg=contribution,
+                operands=["*", digit, power],
+            )
+        )
+
+        new_accum = rc.next()
+        instructions.append(
+            IRInstruction(
+                opcode=Opcode.BINOP,
+                result_reg=new_accum,
+                operands=["+", accum, contribution],
+            )
+        )
+        accum = new_accum
+
+    # Apply sign: sign_nibble == 0xD → negate
+    is_neg = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.BINOP,
+            result_reg=is_neg,
+            operands=["==", "%p_sign_nibble", 0x0D],
+        )
+    )
+
+    two_neg = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.BINOP,
+            result_reg=two_neg,
+            operands=["*", 2, is_neg],
+        )
+    )
+
+    sign_mult = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.BINOP,
+            result_reg=sign_mult,
+            operands=["-", 1, two_neg],
+        )
+    )
+
+    signed_value = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.BINOP,
+            result_reg=signed_value,
+            operands=["*", accum, sign_mult],
+        )
+    )
+
+    # Pack as big-endian binary bytes
+    result = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.CALL_FUNCTION,
+            result_reg=result,
+            operands=[
+                "__int_to_binary_bytes",
+                signed_value,
+                byte_count,
+                signed,
+            ],
+        )
+    )
+
+    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
+    return instructions
+
+
+def build_decode_binary_ir(
+    func_name: str, byte_count: int, decimal_digits: int, signed: bool
+) -> list[IRInstruction]:
+    """Generate IR for COMP/BINARY decoding.
+
+    Inputs: %p_data (list[int] of bytes)
+    Output: float
+    """
+    rc = _RegCounter(func_name)
+    instructions: list[IRInstruction] = []
+
+    # Unpack bytes to integer
+    int_val = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.CALL_FUNCTION,
+            result_reg=int_val,
+            operands=["__binary_bytes_to_int", "%p_data", signed],
+        )
+    )
+
+    # Apply decimal scaling
+    if decimal_digits > 0:
+        divisor = 10**decimal_digits
+        scaled = rc.next()
+        instructions.append(
+            IRInstruction(
+                opcode=Opcode.BINOP,
+                result_reg=scaled,
+                operands=["/", int_val, divisor],
+            )
+        )
+        int_val = scaled
+    else:
+        as_float = rc.next()
+        instructions.append(
+            IRInstruction(
+                opcode=Opcode.CALL_FUNCTION,
+                result_reg=as_float,
+                operands=["float", int_val],
+            )
+        )
+        int_val = as_float
+
+    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[int_val]))
+    return instructions
+
+
+def build_encode_float_ir(func_name: str, byte_count: int) -> list[IRInstruction]:
+    """Generate IR for COMP-1/COMP-2 float encoding.
+
+    Inputs: %p_float_value (float or int)
+    Output: list[int] of IEEE 754 bytes
+    """
+    rc = _RegCounter(func_name)
+    instructions: list[IRInstruction] = []
+
+    result = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.CALL_FUNCTION,
+            result_reg=result,
+            operands=["__float_to_bytes", "%p_float_value", byte_count],
+        )
+    )
+
+    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
+    return instructions
+
+
+def build_decode_float_ir(func_name: str, byte_count: int) -> list[IRInstruction]:
+    """Generate IR for COMP-1/COMP-2 float decoding.
+
+    Inputs: %p_data (list[int] of bytes)
+    Output: float
+    """
+    rc = _RegCounter(func_name)
+    instructions: list[IRInstruction] = []
+
+    result = rc.next()
+    instructions.append(
+        IRInstruction(
+            opcode=Opcode.CALL_FUNCTION,
+            result_reg=result,
+            operands=["__bytes_to_float", "%p_data", byte_count],
+        )
+    )
+
+    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
+    return instructions
+
+
 def build_encode_alphanumeric_ir(func_name: str, length: int) -> list[IRInstruction]:
     """Generate IR for alphanumeric EBCDIC encoding.
 
