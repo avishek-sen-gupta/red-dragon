@@ -14,6 +14,7 @@ from interpreter.cobol.cobol_statements import (
     StopRunStatement,
     parse_statement,
 )
+from interpreter.cobol.condition_name import ConditionName, ConditionValue
 
 
 class TestCobolField:
@@ -79,6 +80,70 @@ class TestCobolField:
         field = CobolField.from_dict(data)
         assert field.value == "0"
         assert CobolField.from_dict(field.to_dict()) == field
+
+    def test_field_with_conditions(self):
+        data = {
+            "name": "WS-STATUS",
+            "level": 5,
+            "pic": "X(1)",
+            "usage": "DISPLAY",
+            "offset": 0,
+            "conditions": [
+                {
+                    "name": "STATUS-ACTIVE",
+                    "values": [{"from": "A", "to": ""}],
+                },
+                {
+                    "name": "STATUS-VALID",
+                    "values": [
+                        {"from": "A", "to": ""},
+                        {"from": "B", "to": ""},
+                        {"from": "C", "to": ""},
+                    ],
+                },
+            ],
+        }
+        field = CobolField.from_dict(data)
+        assert len(field.conditions) == 2
+        assert field.conditions[0].name == "STATUS-ACTIVE"
+        assert len(field.conditions[0].values) == 1
+        assert field.conditions[1].name == "STATUS-VALID"
+        assert len(field.conditions[1].values) == 3
+        assert CobolField.from_dict(field.to_dict()) == field
+
+    def test_field_with_multi_values(self):
+        data = {
+            "name": "WS-CODE",
+            "level": 5,
+            "pic": "X(1)",
+            "usage": "DISPLAY",
+            "offset": 0,
+            "value": "A",
+            "values": [
+                {"from": "A", "to": ""},
+                {"from": "X", "to": "Z"},
+            ],
+        }
+        field = CobolField.from_dict(data)
+        assert field.value == "A"
+        assert len(field.values) == 2
+        assert field.values[0].from_val == "A"
+        assert not field.values[0].is_range
+        assert field.values[1].from_val == "X"
+        assert field.values[1].to_val == "Z"
+        assert field.values[1].is_range
+        assert CobolField.from_dict(field.to_dict()) == field
+
+    def test_field_defaults_empty_conditions_and_values(self):
+        data = {
+            "name": "WS-SIMPLE",
+            "level": 77,
+            "pic": "9(5)",
+            "offset": 0,
+        }
+        field = CobolField.from_dict(data)
+        assert field.conditions == []
+        assert field.values == []
 
 
 class TestCobolStatement:

@@ -3,8 +3,11 @@ package org.reddragon.bridge;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntry;
+import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryCondition;
 import io.proleap.cobol.asg.metamodel.data.datadescription.DataDescriptionEntryGroup;
 import io.proleap.cobol.asg.metamodel.data.datadescription.OccursClause;
+import io.proleap.cobol.asg.metamodel.data.datadescription.ValueInterval;
+import io.proleap.cobol.asg.metamodel.valuestmt.ValueStmt;
 
 import java.util.List;
 import java.util.logging.Logger;
@@ -28,6 +31,9 @@ public final class DataFieldSerializer {
     private static final Pattern PIC_TOKEN_PATTERN =
             Pattern.compile("([SsVv])|([9AaXx])(?:\\((\\d+)\\))?");
 
+    /** Running counter for disambiguating FILLER fields within a serialization session. */
+    private int fillerCount = 0;
+
     private DataFieldSerializer() {
     }
 
@@ -38,12 +44,13 @@ public final class DataFieldSerializer {
      * @return JSON array of CobolField objects
      */
     public static JsonArray serializeEntries(List<DataDescriptionEntry> entries) {
+        DataFieldSerializer instance = new DataFieldSerializer();
         JsonArray fields = new JsonArray();
         int runningOffset = 0;
 
         for (DataDescriptionEntry entry : entries) {
             if (entry instanceof DataDescriptionEntryGroup group) {
-                JsonObject field = serializeGroup(group, runningOffset);
+                JsonObject field = instance.serializeGroup(group, runningOffset);
                 fields.add(field);
 
                 boolean isRedefines = group.getRedefinesClause() != null;
@@ -58,17 +65,23 @@ public final class DataFieldSerializer {
     /**
      * Serializes a single DataDescriptionEntryGroup to a CobolField JSON object.
      */
-    private static JsonObject serializeGroup(DataDescriptionEntryGroup group, int offset) {
+    private JsonObject serializeGroup(DataDescriptionEntryGroup group, int offset) {
         JsonObject obj = new JsonObject();
-        obj.addProperty("name", group.getName());
+        String fieldName = disambiguateFiller(group.getName());
+        obj.addProperty("name", fieldName);
         obj.addProperty("level", group.getLevelNumber());
         obj.addProperty("pic", extractPic(group));
         obj.addProperty("usage", extractUsage(group));
         obj.addProperty("offset", offset);
 
-        String value = extractValue(group);
+        String value = extractFirstValue(group);
         if (!value.isEmpty()) {
             obj.addProperty("value", value);
+        }
+
+        JsonArray valuesArray = extractAllValues(group);
+        if (valuesArray.size() > 0) {
+            obj.add("values", valuesArray);
         }
 
         String redefines = extractRedefines(group);
@@ -89,17 +102,34 @@ public final class DataFieldSerializer {
             if (childArray.size() > 0) {
                 obj.add("children", childArray);
             }
+
+            JsonArray conditionsArray = serializeConditions(children);
+            if (conditionsArray.size() > 0) {
+                obj.add("conditions", conditionsArray);
+            }
         }
 
-        LOG.fine("Serialized field: " + group.getName() + " level=" + group.getLevelNumber()
+        LOG.fine("Serialized field: " + fieldName + " level=" + group.getLevelNumber()
                 + " pic=" + extractPic(group) + " offset=" + offset);
         return obj;
     }
 
     /**
+     * Disambiguates FILLER field names by appending a sequential counter.
+     * "FILLER" becomes "FILLER_1", "FILLER_2", etc.
+     */
+    private String disambiguateFiller(String name) {
+        if ("FILLER".equalsIgnoreCase(name)) {
+            fillerCount++;
+            return "FILLER_" + fillerCount;
+        }
+        return name;
+    }
+
+    /**
      * Serializes child entries with running offset computation within the group.
      */
-    private static JsonArray serializeChildren(List<DataDescriptionEntry> children) {
+    private JsonArray serializeChildren(List<DataDescriptionEntry> children) {
         JsonArray childArray = new JsonArray();
         int childOffset = 0;
 
@@ -119,6 +149,75 @@ public final class DataFieldSerializer {
             }
         }
         return childArray;
+    }
+
+    /**
+     * Serializes level-88 condition entries from a list of children.
+     * Returns a JSON array of condition objects, each with "name" and "values".
+     */
+    private JsonArray serializeConditions(List<DataDescriptionEntry> children) {
+        JsonArray conditionsArray = new JsonArray();
+
+        for (DataDescriptionEntry child : children) {
+            if (child instanceof DataDescriptionEntryCondition condition) {
+                JsonObject condObj = new JsonObject();
+                condObj.addProperty("name", condition.getName());
+
+                JsonArray valuesArray = new JsonArray();
+                try {
+                    if (condition.getValueClause() != null
+                            && condition.getValueClause().getValueIntervals() != null) {
+                        for (ValueInterval interval : condition.getValueClause().getValueIntervals()) {
+                            valuesArray.add(serializeValueInterval(interval));
+                        }
+                    }
+                } catch (Exception e) {
+                    LOG.fine("Could not extract values for condition " + condition.getName()
+                            + ": " + e.getMessage());
+                }
+
+                condObj.add("values", valuesArray);
+                conditionsArray.add(condObj);
+                LOG.fine("Serialized level-88 condition: " + condition.getName()
+                        + " with " + valuesArray.size() + " value intervals");
+            }
+        }
+        return conditionsArray;
+    }
+
+    /**
+     * Serializes a single ValueInterval to a JSON object with "from" and "to" keys.
+     */
+    private static JsonObject serializeValueInterval(ValueInterval interval) {
+        JsonObject intervalObj = new JsonObject();
+
+        ValueStmt fromVs = interval.getFromValueStmt();
+        if (fromVs != null && fromVs.getCtx() != null) {
+            intervalObj.addProperty("from", stripQuotes(fromVs.getCtx().getText()));
+        } else {
+            intervalObj.addProperty("from", "");
+        }
+
+        ValueStmt toVs = interval.getToValueStmt();
+        if (toVs != null && toVs.getCtx() != null) {
+            intervalObj.addProperty("to", stripQuotes(toVs.getCtx().getText()));
+        } else {
+            intervalObj.addProperty("to", "");
+        }
+
+        return intervalObj;
+    }
+
+    /**
+     * Strips surrounding quotes from a string literal.
+     */
+    private static String stripQuotes(String raw) {
+        if (raw.length() >= 2
+                && ((raw.startsWith("'") && raw.endsWith("'"))
+                || (raw.startsWith("\"") && raw.endsWith("\"")))) {
+            return raw.substring(1, raw.length() - 1);
+        }
+        return raw;
     }
 
     /**
@@ -255,27 +354,42 @@ public final class DataFieldSerializer {
         };
     }
 
-    private static String extractValue(DataDescriptionEntryGroup group) {
+    /**
+     * Extracts the first value from a VALUE clause (backward compatibility).
+     */
+    private static String extractFirstValue(DataDescriptionEntryGroup group) {
         try {
             if (group.getValueClause() != null && !group.getValueClause().getValueIntervals().isEmpty()) {
-                io.proleap.cobol.asg.metamodel.data.datadescription.ValueInterval interval =
-                        group.getValueClause().getValueIntervals().get(0);
-                io.proleap.cobol.asg.metamodel.valuestmt.ValueStmt fromVs = interval.getFromValueStmt();
+                ValueInterval interval = group.getValueClause().getValueIntervals().get(0);
+                ValueStmt fromVs = interval.getFromValueStmt();
                 if (fromVs != null && fromVs.getCtx() != null) {
-                    String raw = fromVs.getCtx().getText();
-                    // Strip surrounding quotes from string literals
-                    if (raw.length() >= 2
-                            && ((raw.startsWith("'") && raw.endsWith("'"))
-                            || (raw.startsWith("\"") && raw.endsWith("\"")))) {
-                        raw = raw.substring(1, raw.length() - 1);
-                    }
-                    return raw;
+                    return stripQuotes(fromVs.getCtx().getText());
                 }
             }
         } catch (Exception e) {
             LOG.fine("No VALUE clause for " + group.getName());
         }
         return "";
+    }
+
+    /**
+     * Extracts all value intervals from a VALUE clause as a JSON array
+     * of {"from": ..., "to": ...} objects.
+     */
+    private static JsonArray extractAllValues(DataDescriptionEntryGroup group) {
+        JsonArray valuesArray = new JsonArray();
+        try {
+            if (group.getValueClause() != null
+                    && group.getValueClause().getValueIntervals() != null
+                    && !group.getValueClause().getValueIntervals().isEmpty()) {
+                for (ValueInterval interval : group.getValueClause().getValueIntervals()) {
+                    valuesArray.add(serializeValueInterval(interval));
+                }
+            }
+        } catch (Exception e) {
+            LOG.fine("Could not extract all values for " + group.getName());
+        }
+        return valuesArray;
     }
 
     private static String extractRedefines(DataDescriptionEntryGroup group) {
