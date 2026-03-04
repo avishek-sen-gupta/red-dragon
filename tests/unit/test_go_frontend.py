@@ -242,9 +242,9 @@ package main
 func main() {
     items := []int{1, 2, 3, 4, 5}
     total := 0
-    for i := 0; i < 5; i++ {
-        if items[i] > 2 {
-            total = total + items[i]
+    for _, v := range items {
+        if v > 2 {
+            total = total + v
         }
     }
 }
@@ -256,6 +256,7 @@ func main() {
         assert len(branches) >= 2
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("total" in s.operands for s in stores)
+        assert any("v" in s.operands for s in stores)
         assert len(ir) > 20
 
     def test_struct_method_with_receiver(self):
