@@ -12,3 +12,14 @@ build/
 # Java / Maven
 proleap-bridge/target/
 proleap-bridge/dependency-reduced-pom.xml
+
+# Eclipse project files
+proleap-bridge/.classpath
+proleap-bridge/.project
+proleap-bridge/.settings/
+
+# macOS
+.DS_Store
+
+# Claude Code
+.claude/
