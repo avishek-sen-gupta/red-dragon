@@ -311,7 +311,7 @@
   <h1 class="banner-title"><svg class="banner-logo" viewBox="0 0 30 50" width="30" height="50"><polygon points="5,10 25,25 5,40" fill="#e57373"/></svg>Red<span style="color: #e57373;">Dragon</span></h1>
   <h2 style="color: #90a4ae;">Multi-language LLM-assisted symbolic execution and dataflow analysis</h2>
   <p class="tagline">"Deterministic where possible. Symbolic where necessary. LLM only as a last resort."</p>
-  <p class="small dim" style="margin-top: 40px;">~24K LOC &middot; 27 opcodes &middot; 15 frontends &middot; 8,469 tests &middot; 4 LLM providers</p>
+  <p class="small dim" style="margin-top: 40px;">~82K LOC &middot; 27 opcodes &middot; 15 frontends &middot; 8,496+ tests &middot; 4 LLM providers</p>
   <aside class="notes">
     This is an end-to-end technical deep dive into RedDragon's architecture.
     The key idea: avoid LLMs entirely for concrete programs, fall back gracefully
@@ -323,17 +323,18 @@
 <section>
   <h2>The Problem</h2>
   <ul>
-    <li class="fragment">Interpret code across <span class="accent">15 languages</span> with unknown externals</li>
-    <li class="fragment">LLM calls are <span class="accent4">100&ndash;1000x slower</span> than local execution</li>
-    <li class="fragment">Most code paths are <span class="accent2">fully deterministic</span> &mdash; no LLM needed</li>
-    <li class="fragment">External values (API calls, user input) are genuinely unknown</li>
+    <li class="fragment"><span class="accent4">Reverse-engineering incomplete code</span> &mdash; legacy migrations, decompiled binaries, partial extracts, missing dependencies</li>
+    <li class="fragment">Need to <span class="accent">parse, analyse, and execute</span> across many languages &mdash; even when source is malformed or the language has no parser</li>
+    <li class="fragment">Unknown externals (unresolved imports, missing APIs) <span class="accent4">halt execution</span> at the first gap</li>
+    <li class="fragment">LLMs can fill these gaps, but are <span class="accent4">100&ndash;1000x slower</span> than local execution &mdash; most code paths are <span class="accent2">fully deterministic</span></li>
   </ul>
   <div class="fragment" style="margin-top: 30px; padding: 15px; border: 1px solid var(--accent3); border-radius: 8px;">
-    <strong class="accent3">Can we build an interpreter that avoids LLMs entirely for concrete programs, and degrades gracefully for the rest?</strong>
+    <strong class="accent3">Can we build infrastructure that is deterministic when code is complete, and uses LLMs only at the boundaries where information is genuinely missing?</strong>
   </div>
   <aside class="notes">
-    The fundamental tension: LLMs are powerful but slow. Most code doesn't need them.
-    We want to pay the LLM cost only for genuinely unknown values.
+    The target is frequently-incomplete code found in real reverse-engineering scenarios.
+    Two ideas: (1) frontends that emit IR deterministically or through LLMs,
+    (2) a VM that integrates LLMs to produce plausible state changes for missing deps.
   </aside>
 </section>
 
@@ -417,7 +418,7 @@
       <span class="opcode-cat value">CALL_UNKNOWN</span>
     </div>
     <div>
-      <h3>Control Flow (7)</h3>
+      <h3>Control &amp; Storage (9)</h3>
       <span class="opcode-cat control">STORE_VAR</span>
       <span class="opcode-cat control">STORE_FIELD</span>
       <span class="opcode-cat control">STORE_INDEX</span>
@@ -425,9 +426,16 @@
       <span class="opcode-cat control">BRANCH</span>
       <span class="opcode-cat control">RETURN</span>
       <span class="opcode-cat control">THROW</span>
-      <h3 style="margin-top: 15px;">Special (2)</h3>
+      <span class="opcode-cat control">TRY_PUSH</span>
+      <span class="opcode-cat control">TRY_POP</span>
+      <h3 style="margin-top: 15px;">Special (7)</h3>
       <span class="opcode-cat special">SYMBOLIC</span>
       <span class="opcode-cat special">LABEL</span>
+      <span class="opcode-cat special">ALLOC_REGION</span>
+      <span class="opcode-cat special">WRITE_REGION</span>
+      <span class="opcode-cat special">LOAD_REGION</span>
+      <span class="opcode-cat special">SET_CONTINUATION</span>
+      <span class="opcode-cat special">RESUME_CONTINUATION</span>
     </div>
   </div>
   <p class="fragment small dim" style="margin-top: 15px;">
@@ -520,7 +528,7 @@ BINOP     t11, t9, "==", t10</code></pre>
     <div class="lang-cell"><strong>Pascal</strong></div>
   </div>
   <p class="fragment">All share the same <code class="accent">BaseFrontend</code> architecture</p>
-  <p class="fragment">All lower to the same <code class="accent2">20-opcode IR</code></p>
+  <p class="fragment">All lower to the same <code class="accent2">27-opcode IR</code></p>
   <p class="fragment small dim">+ <code>LLMFrontend</code>: language-agnostic, sends raw source to LLM &rarr; IR JSON</p>
   <aside class="notes">
     Every frontend produces identical IR. The VM doesn't know or care what
@@ -1218,7 +1226,7 @@ end;</code></pre>
   <ul>
     <li class="fragment">Link each <strong class="accent">use</strong> (LOAD_VAR) to its reaching <strong>definitions</strong> (STORE_VAR)</li>
     <li class="fragment">Trace registers back to <strong class="accent2">named variables</strong> via the chain</li>
-    <li class="fragment">Build a <strong class="accent3">transitive dependency graph</strong> &mdash; "what does this value depend on?"</li>
+    <li class="fragment">Build a <strong class="accent2">raw dependency graph</strong> (direct edges) and a <strong class="accent3">transitive closure</strong> (all reachable deps)</li>
   </ul>
   <div class="fragment" style="margin-top: 25px;">
     <pre><code class="language-python"># result depends on...
@@ -1267,163 +1275,138 @@ result = income * rate + bonus
   </p>
 </section>
 
-<!-- Slide 17: Dependency Graph: Source → IR → Graph -->
+<!-- Slide 17: Dependency Graph: Source → Graph -->
 <section>
   <h2>Dependency Graph: Source &rarr; Graph</h2>
   <div class="two-col">
     <div>
       <h3>Source</h3>
-      <pre><code class="language-python">def process_order(price, quantity,
-                   tax_rate, has_discount):
-    subtotal = price * quantity
-    tax = subtotal * tax_rate
-    if has_discount:
-        discount = subtotal * 0.1
-        total = subtotal + tax - discount
-    else:
-        total = subtotal + tax
-    return total</code></pre>
+      <pre><code class="language-python">a = 1
+b = 2
+c = a + b
+d = a * b
+e = c + d
+f = e - a
+
+def square(x):
+    return x * x
+
+g = square(c)
+h = g + f
+total = h + e + b</code></pre>
     </div>
     <div class="dep-graph">
-      <h3>Dependency Graph</h3>
-      <svg viewBox="0 0 380 340" width="380" height="340">
+      <h3>Direct Dependency Graph</h3>
+      <svg viewBox="0 0 380 400" width="380" height="400">
         <defs>
           <marker id="arrowDirect" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
             <polygon points="0 0, 8 3, 0 6" fill="#4fc3f7"/>
           </marker>
-          <marker id="arrowMerge" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-            <polygon points="0 0, 8 3, 0 6" fill="#e57373"/>
-          </marker>
         </defs>
-        <!-- Parameter nodes (row 1) -->
-        <circle class="node-circle" cx="50" cy="30" r="24" stroke="#4fc3f7"/>
-        <text class="node-label" x="50" y="30">price</text>
-        <circle class="node-circle" cx="150" cy="30" r="24" stroke="#4fc3f7"/>
-        <text class="node-label" x="150" y="30">qty</text>
-        <circle class="node-circle" cx="250" cy="30" r="24" stroke="#4fc3f7"/>
-        <text class="node-label" x="250" y="30">tax_r</text>
-        <circle class="node-circle" cx="350" cy="30" r="24" stroke="#4fc3f7"/>
-        <text class="node-label" x="350" y="30">disc?</text>
+        <!-- Leaf nodes (row 1) -->
+        <circle class="node-circle" cx="100" cy="30" r="22" stroke="#4fc3f7"/>
+        <text class="node-label" x="100" y="30">a</text>
+        <circle class="node-circle" cx="280" cy="30" r="22" stroke="#4fc3f7"/>
+        <text class="node-label" x="280" y="30">b</text>
 
-        <!-- subtotal (row 2) -->
+        <!-- Row 2: c, d (diamond) -->
         <g class="fragment" data-fragment-index="1">
-          <circle class="node-circle" cx="100" cy="110" r="24" stroke="#4fc3f7"/>
-          <text class="node-label" x="100" y="110">sub</text>
-          <line class="edge-direct" x1="60" y1="52" x2="88" y2="88"/>
-          <line class="edge-direct" x1="140" y1="52" x2="112" y2="88"/>
+          <circle class="node-circle" cx="100" cy="110" r="22" stroke="#81c784"/>
+          <text class="node-label" x="100" y="110">c</text>
+          <line class="edge-direct" x1="100" y1="52" x2="100" y2="88" marker-end="url(#arrowDirect)"/>
+          <line class="edge-direct" x1="268" y1="48" x2="116" y2="94" marker-end="url(#arrowDirect)"/>
+        </g>
+        <g class="fragment" data-fragment-index="1">
+          <circle class="node-circle" cx="280" cy="110" r="22" stroke="#81c784"/>
+          <text class="node-label" x="280" y="110">d</text>
+          <line class="edge-direct" x1="112" y1="48" x2="264" y2="94" marker-end="url(#arrowDirect)"/>
+          <line class="edge-direct" x1="280" y1="52" x2="280" y2="88" marker-end="url(#arrowDirect)"/>
         </g>
 
-        <!-- tax (row 2) -->
+        <!-- Row 3: e, g -->
         <g class="fragment" data-fragment-index="2">
-          <circle class="node-circle" cx="230" cy="110" r="24" stroke="#4fc3f7"/>
-          <text class="node-label" x="230" y="110">tax</text>
-          <line class="edge-direct" x1="118" y1="126" x2="208" y2="108"/>
-          <line class="edge-direct" x1="242" y1="52" x2="234" y2="88"/>
+          <circle class="node-circle" cx="190" cy="190" r="22" stroke="#81c784"/>
+          <text class="node-label" x="190" y="190">e</text>
+          <line class="edge-direct" x1="116" y1="126" x2="176" y2="174" marker-end="url(#arrowDirect)"/>
+          <line class="edge-direct" x1="264" y1="126" x2="204" y2="174" marker-end="url(#arrowDirect)"/>
+        </g>
+        <g class="fragment" data-fragment-index="2">
+          <circle class="node-circle" cx="50" cy="190" r="22" stroke="#ffb74d"/>
+          <text class="node-label" x="50" y="190">g</text>
+          <line class="edge-direct" x1="86" y1="126" x2="60" y2="172" marker-end="url(#arrowDirect)"/>
         </g>
 
-        <!-- discount (row 3, conditional) -->
+        <!-- Row 4: f -->
         <g class="fragment" data-fragment-index="3">
-          <circle class="node-circle" cx="100" cy="210" r="24" stroke="#81c784"/>
-          <text class="node-label" x="100" y="210">disc</text>
-          <line class="edge-direct" x1="100" y1="134" x2="100" y2="188"/>
+          <circle class="node-circle" cx="250" cy="270" r="22" stroke="#81c784"/>
+          <text class="node-label" x="250" y="270">f</text>
+          <line class="edge-direct" x1="202" y1="208" x2="240" y2="252" marker-end="url(#arrowDirect)"/>
+          <line class="edge-direct" x1="100" y1="52" x2="236" y2="256" marker-end="url(#arrowDirect)" stroke-dasharray="6,4"/>
         </g>
 
-        <!-- total (row 4, merge point) -->
+        <!-- Row 5: h -->
         <g class="fragment" data-fragment-index="4">
-          <circle class="node-circle" cx="190" cy="310" r="28" stroke="#e57373" stroke-width="3"/>
-          <text class="node-label" x="190" y="310" style="font-size: 14px; font-weight: bold;">total</text>
-          <!-- from subtotal -->
-          <line class="edge-merge" x1="100" y1="134" x2="175" y2="285"/>
-          <!-- from tax -->
-          <line class="edge-merge" x1="230" y1="134" x2="200" y2="285"/>
-          <!-- from discount (conditional) -->
-          <line class="edge-merge" x1="110" y1="232" x2="175" y2="288"/>
+          <circle class="node-circle" cx="150" cy="330" r="22" stroke="#81c784"/>
+          <text class="node-label" x="150" y="330">h</text>
+          <line class="edge-direct" x1="60" y1="210" x2="138" y2="314" marker-end="url(#arrowDirect)"/>
+          <line class="edge-direct" x1="238" y1="286" x2="162" y2="314" marker-end="url(#arrowDirect)"/>
         </g>
 
-        <!-- has_discount → branch -->
-        <g class="fragment" data-fragment-index="3">
-          <line class="edge-direct" x1="340" y1="52" x2="115" y2="192" stroke-dasharray="6,4"/>
+        <!-- Row 6: total -->
+        <g class="fragment" data-fragment-index="5">
+          <circle class="node-circle" cx="190" cy="390" r="26" stroke="#e57373" stroke-width="3"/>
+          <text class="node-label" x="190" y="390" style="font-size: 14px; font-weight: bold;">total</text>
+          <line class="edge-merge" x1="158" y1="350" x2="182" y2="366" marker-end="url(#arrowDirect)"/>
+          <line class="edge-merge" x1="196" y1="210" x2="192" y2="366" marker-end="url(#arrowDirect)"/>
+          <line class="edge-merge" x1="280" y1="52" x2="204" y2="370" marker-end="url(#arrowDirect)" stroke-dasharray="6,4"/>
         </g>
       </svg>
     </div>
   </div>
   <div class="dep-legend fragment" data-fragment-index="1">
     <span class="leg-direct accent">Direct dependency</span>
-    <span class="leg-merge accent4">Merge-point edge</span>
   </div>
+  <p class="fragment small dim" style="margin-top: 4px;">
+    Diamond: <code>c</code> and <code>d</code> both depend on <code>a</code>, <code>b</code>. Function call: <code>g = square(c)</code>. Multi-operand: <code>total = h + e + b</code>.
+  </p>
 </section>
 
-<!-- Slide 18: Dependency Graph — Transitive Closure -->
+<!-- Slide 18: Dependency Graph — Raw vs Transitive -->
 <section>
-  <h2>Dependency Graph: Transitive Closure</h2>
-  <p class="small">What does <code class="accent4">total</code> <em>ultimately</em> depend on?</p>
-  <div class="dep-graph" style="text-align: center; margin-top: 10px;">
-    <svg viewBox="0 0 520 360" width="520" height="360">
-      <defs>
-        <marker id="arrowDirect2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-          <polygon points="0 0, 8 3, 0 6" fill="#4fc3f7"/>
-        </marker>
-        <marker id="arrowTransitive" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-          <polygon points="0 0, 8 3, 0 6" fill="#ffb74d"/>
-        </marker>
-        <marker id="arrowMerge2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-          <polygon points="0 0, 8 3, 0 6" fill="#e57373"/>
-        </marker>
-      </defs>
-      <!-- Parameters (row 1) -->
-      <circle class="node-circle" cx="80" cy="30" r="26" stroke="#4fc3f7"/>
-      <text class="node-label" x="80" y="30">price</text>
-      <circle class="node-circle" cx="200" cy="30" r="26" stroke="#4fc3f7"/>
-      <text class="node-label" x="200" y="30">quantity</text>
-      <circle class="node-circle" cx="330" cy="30" r="26" stroke="#4fc3f7"/>
-      <text class="node-label" x="330" y="30">tax_rate</text>
-      <circle class="node-circle" cx="460" cy="30" r="26" stroke="#4fc3f7"/>
-      <text class="node-label" x="460" y="26" style="font-size: 11px;">has_</text>
-      <text class="node-label" x="460" y="40" style="font-size: 11px;">discount</text>
-
-      <!-- subtotal (row 2) -->
-      <circle class="node-circle" cx="140" cy="120" r="26" stroke="#4fc3f7"/>
-      <text class="node-label" x="140" y="120" style="font-size: 11px;">subtotal</text>
-      <line class="edge-direct" x1="96" y1="52" x2="126" y2="98" marker-end="url(#arrowDirect2)"/>
-      <line class="edge-direct" x1="186" y1="52" x2="154" y2="98" marker-end="url(#arrowDirect2)"/>
-
-      <!-- tax (row 2) -->
-      <circle class="node-circle" cx="290" cy="120" r="26" stroke="#4fc3f7"/>
-      <text class="node-label" x="290" y="120">tax</text>
-      <line class="edge-direct" x1="164" y1="130" x2="266" y2="120" marker-end="url(#arrowDirect2)"/>
-      <line class="edge-direct" x1="318" y1="52" x2="300" y2="98" marker-end="url(#arrowDirect2)"/>
-
-      <!-- discount (row 3) -->
-      <circle class="node-circle" cx="140" cy="220" r="26" stroke="#81c784"/>
-      <text class="node-label" x="140" y="220" style="font-size: 11px;">discount</text>
-      <line class="edge-direct" x1="140" y1="146" x2="140" y2="196" marker-end="url(#arrowDirect2)"/>
-
-      <!-- total (row 4) -->
-      <circle class="node-circle" cx="260" cy="320" r="30" stroke="#e57373" stroke-width="3"/>
-      <text class="node-label" x="260" y="316" style="font-size: 12px; font-weight: bold;">total</text>
-      <text class="node-label" x="260" y="332" style="font-size: 10px; fill: #e57373;">(2 defs)</text>
-
-      <!-- Direct edges to total -->
-      <line class="edge-merge" x1="148" y1="144" x2="244" y2="294" marker-end="url(#arrowMerge2)"/>
-      <line class="edge-merge" x1="290" y1="146" x2="264" y2="292" marker-end="url(#arrowMerge2)"/>
-      <line class="edge-merge" x1="152" y1="244" x2="244" y2="298" marker-end="url(#arrowMerge2)"/>
-
-      <!-- Transitive edges (dashed orange) from params to total -->
-      <g class="fragment" data-fragment-index="1">
-        <line class="edge-transitive" x1="80" y1="56" x2="240" y2="296" marker-end="url(#arrowTransitive)"/>
-        <line class="edge-transitive" x1="200" y1="56" x2="250" y2="294" marker-end="url(#arrowTransitive)"/>
-        <line class="edge-transitive" x1="330" y1="56" x2="272" y2="294" marker-end="url(#arrowTransitive)"/>
-      </g>
-    </svg>
+  <h2>Raw vs Transitive Dependencies</h2>
+  <p class="small">Two graphs returned in <code class="accent">DataflowResult</code>:</p>
+  <div class="two-col" style="margin-top: 15px;">
+    <div>
+      <h3 style="color: var(--accent2);">raw_dependency_graph</h3>
+      <p class="small dim">Direct edges only &mdash; what the expression reads</p>
+      <pre style="font-size: 0.55em;"><code class="nohighlight">a &larr; (leaf)
+b &larr; (leaf)
+c &larr; a, b
+d &larr; a, b
+e &larr; c, d
+f &larr; a, e
+g &larr; c
+h &larr; f, g
+total &larr; b, e, h</code></pre>
+    </div>
+    <div class="fragment">
+      <h3 style="color: var(--accent3);">dependency_graph</h3>
+      <p class="small dim">Transitive closure &mdash; all reachable deps</p>
+      <pre style="font-size: 0.55em;"><code class="nohighlight">c &rarr; {a, b}
+d &rarr; {a, b}
+e &rarr; {a, b, c, d}
+f &rarr; {a, b, c, d, e}
+g &rarr; {a, b, c}
+h &rarr; {a, b, c, d, e, f, g}
+total &rarr; {a, b, c, d, e, f, g, h}</code></pre>
+    </div>
   </div>
-  <div class="dep-legend">
-    <span class="leg-direct accent">Direct</span>
-    <span class="leg-transitive accent3">Transitive</span>
-    <span class="leg-merge accent4">Merge (2 reaching defs)</span>
+  <div class="fragment" style="margin-top: 20px; padding: 12px; border: 1px solid var(--accent3); border-radius: 8px;">
+    <strong class="accent3">Key distinction:</strong> <code>total = h + e + b</code> has 3 direct deps (<code>h</code>, <code>e</code>, <code>b</code>)
+    but 8 transitive deps. The raw graph shows what the code <em>reads</em>; the transitive graph shows what <em>affects</em> it.
   </div>
-  <p class="fragment small" style="margin-top: 8px;">
-    <code class="accent4">total</code> has <strong>2 reaching definitions</strong> at the merge point.<br>
-    Transitive closure reveals: <code>total &rarr; subtotal &rarr; {price, quantity}</code> and <code>total &rarr; tax &rarr; {subtotal, tax_rate}</code>
+  <p class="fragment small dim" style="margin-top: 8px;">
+    Demo: <code>poetry run python scripts/demo_dataflow.py</code>
   </p>
 </section>
 
@@ -1497,7 +1480,14 @@ class SymbolicValue:
   BRANCH_IF:     _handle_branch_if,
   RETURN:        _handle_return,
   THROW:         _handle_throw,
+  TRY_PUSH:      _handle_try_push,
+  TRY_POP:       _handle_try_pop,
   SYMBOLIC:      _handle_symbolic,
+  ALLOC_REGION:  _handle_alloc_region,
+  WRITE_REGION:  _handle_write_region,
+  LOAD_REGION:   _handle_load_region,
+  SET_CONTINUATION:    ...,
+  RESUME_CONTINUATION: ...,
 }</code></pre>
     </div>
     <div>
@@ -1742,35 +1732,6 @@ vm, ex_stats = execute_cfg(cfg, "entry", registry, VMConfig())</code></pre>
   <p class="fragment small dim" style="margin-top: 10px;">Functions compose hierarchically: <code>dump_cfg</code> &rarr; <code>build_cfg_from_source</code> &rarr; <code>lower_source</code></p>
 </section>
 
-<!-- Slide 29: Testing -->
-<section>
-  <h2>Testing</h2>
-  <div class="stats-grid" style="grid-template-columns: repeat(2, 1fr);">
-    <div class="stat-card">
-      <div class="number">1,214</div>
-      <div class="label">test functions</div>
-    </div>
-    <div class="stat-card">
-      <div class="number">0</div>
-      <div class="label">real LLM calls in tests</div>
-    </div>
-  </div>
-  <ul style="margin-top: 20px;">
-    <li class="fragment"><strong class="accent">pytest + fixtures</strong> for setup, <code>tmp_path</code> for filesystem tests</li>
-    <li class="fragment"><strong class="accent2">Dependency injection</strong> with fake API clients &mdash; no <code>unittest.mock.patch</code></li>
-    <li class="fragment">Each language frontend has a <strong>dedicated test file</strong> (29 test files total)</li>
-    <li class="fragment">Integration tests use local repos (<code>~/code/mojo-lsp</code>, <code>~/code/smojol</code>)</li>
-  </ul>
-  <div class="fragment" style="margin-top: 20px;">
-    <pre><code class="language-python"># Example: testing with injected fake client
-def test_symbolic_execution(tmp_path):
-    client = FakeLLMClient(responses={"sym_0": "42"})
-    backend = ClaudeBackend(client=client)
-    result = run_program(source, backend=backend)
-    assert result["x"] == 42</code></pre>
-  </div>
-</section>
-
 <!-- ============================================================ -->
 <!-- CLOSING                                                      -->
 <!-- ============================================================ -->
@@ -1780,11 +1741,11 @@ def test_symbolic_execution(tmp_path):
   <h2>By The Numbers</h2>
   <div class="stats-grid">
     <div class="stat-card">
-      <div class="number">~24K</div>
+      <div class="number">~82K</div>
       <div class="label">lines of code</div>
     </div>
     <div class="stat-card">
-      <div class="number">20</div>
+      <div class="number">27</div>
       <div class="label">IR opcodes</div>
     </div>
     <div class="stat-card">
@@ -1792,7 +1753,7 @@ def test_symbolic_execution(tmp_path):
       <div class="label">language frontends</div>
     </div>
     <div class="stat-card">
-      <div class="number">1,214</div>
+      <div class="number">8,496+</div>
       <div class="label">tests</div>
     </div>
     <div class="stat-card">
@@ -1805,12 +1766,13 @@ def test_symbolic_execution(tmp_path):
     </div>
   </div>
   <div class="fragment" style="margin-top: 20px;">
+    <p class="small dim" style="margin-bottom: 8px;">All providers via <strong class="accent">LiteLLM</strong> unified interface:</p>
     <table>
       <tr><th>Provider</th><th>Default Model</th></tr>
       <tr><td>Claude</td><td><code>claude-sonnet-4-20250514</code></td></tr>
       <tr><td>OpenAI</td><td><code>gpt-4o</code></td></tr>
-      <tr><td>Ollama</td><td><code>qwen2.5-coder:7b-instruct</code></td></tr>
-      <tr><td>HuggingFace</td><td><code>qwen2.5-coder-32b</code></td></tr>
+      <tr><td>Ollama</td><td><code>ollama/qwen2.5-coder:7b-instruct</code></td></tr>
+      <tr><td>HuggingFace</td><td><code>huggingface/qwen2.5-coder-32b</code></td></tr>
     </table>
   </div>
 </section>
