@@ -157,8 +157,8 @@ class TestCppSpecial:
 
     def test_fallback_symbolic(self):
         instructions = _parse_cpp('int main() { asm volatile("nop"); }')
-        opcodes = _opcodes(instructions)
-        assert Opcode.SYMBOLIC in opcodes
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert any("unsupported:" in str(inst.operands) for inst in symbolics)
 
     def test_string_literal(self):
         instructions = _parse_cpp('int main() { const char* s = "hello"; }')
