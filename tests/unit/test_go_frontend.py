@@ -196,10 +196,16 @@ class TestGoFrontendReturn:
         assert len(returns) >= 1
 
     def test_return_without_value(self):
+        """Bare return emits CONST with default value followed by RETURN."""
         source = "package main; func f() { return }"
         ir = _parse_and_lower(source)
         returns = _find_all(ir, Opcode.RETURN)
         assert len(returns) >= 1
+        # Bare return should emit a CONST "None" (default return value) before RETURN
+        consts = _find_all(ir, Opcode.CONST)
+        assert any(
+            c.operands == ["None"] for c in consts
+        ), f"bare return should emit CONST ['None'], got {[c.operands for c in consts]}"
 
 
 class TestGoFrontendMultipleReturn:
