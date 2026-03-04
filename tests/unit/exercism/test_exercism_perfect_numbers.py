@@ -27,7 +27,6 @@ from tests.unit.exercism.conftest import (
 EXERCISE = "perfect_numbers"
 
 # classify is the same name in all languages (single word, no case split)
-SNAKE_CASE_LANGUAGES = frozenset({"python", "ruby", "rust"})
 
 
 def _function_name(language: str) -> str:

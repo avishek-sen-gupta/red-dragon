@@ -34,8 +34,6 @@ from tests.unit.exercism.conftest import (
 
 EXERCISE = "acronym"
 
-SNAKE_CASE_LANGUAGES = frozenset({"python", "ruby", "rust"})
-
 
 def _function_name(language: str) -> str:
     """Return the acronym function name for *language*."""
