@@ -221,7 +221,10 @@ object M {
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes or Opcode.BRANCH in opcodes
         labels = _labels_in_order(instructions)
-        assert any("case" in lbl for lbl in labels)
+        case_labels = [lbl for lbl in labels if "case" in lbl]
+        assert (
+            len(case_labels) >= 3
+        ), "4 cases (3 concrete + 1 default) should produce >= 3 case labels"
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("r" in inst.operands for inst in stores)
         assert len(instructions) > 15
