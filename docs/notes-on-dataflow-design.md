@@ -31,10 +31,11 @@ flowchart TD
     S1["1. Collect definitions\n← every point where a variable/register is assigned"]
     S2["2. Reaching defs (GEN/KILL/IN/OUT)\n← worklist fixpoint: which defs reach each block?"]
     S3["3. Def-use chains\n← link each use to the definition(s) it reads"]
-    S4["4. Dependency graph (transitive close)\n← named-variable → named-variable dependencies\n(traces through register chains)"]
-    DR["DataflowResult"]
+    S4["4. Raw dependency graph\n← direct named-variable → named-variable dependencies\n(traces through register chains)"]
+    S5["5. Transitive closure\n← propagate indirect dependencies"]
+    DR["DataflowResult\n(raw_dependency_graph + dependency_graph)"]
 
-    CFG --> S1 --> S2 --> S3 --> S4 --> DR
+    CFG --> S1 --> S2 --> S3 --> S4 --> S5 --> DR
 ```
 
 The analysis is **forward**, **may** (over-approximate), and **intraprocedural** (single function/module scope). It operates on the same `BasicBlock`/`CFG` structures and `IRInstruction` objects used by the VM.
@@ -113,7 +114,8 @@ class DataflowResult:
     definitions: list[Definition]
     block_facts: dict[str, BlockDataflowFacts]
     def_use_chains: list[DefUseLink]
-    dependency_graph: dict[str, set[str]]    # var → set of vars it depends on
+    dependency_graph: dict[str, set[str]]        # var → all vars it depends on (transitive)
+    raw_dependency_graph: dict[str, set[str]]    # var → vars it directly depends on
 ```
 
 ---
@@ -383,7 +385,7 @@ The use of `%0` links to whatever definition produced `%0`, and only then does `
 
 ## 6. Dependency Graph Construction
 
-`build_dependency_graph()` (`interpreter/dataflow.py:313`) traces from named variable assignments back through register chains to discover which named variables influence which others.
+`_build_raw_dependency_graph()` traces from named variable assignments back through register chains to discover which named variables directly influence which others. `_transitive_closure()` then propagates indirect dependencies.
 
 ### The problem
 
@@ -450,19 +452,26 @@ def _is_temporary_register(name: str) -> bool:
     return rest.isdigit() or rest.startswith("_")  # t0, t1, t_cond
 ```
 
-**Step 4: Compute transitive closure** — if A depends on B and B depends on C, then A depends on C:
+Steps 1–3 produce the **raw dependency graph** (direct dependencies only). This is stored as `raw_dependency_graph` in the result.
+
+**Step 4: Compute transitive closure** via `_transitive_closure()` — if A depends on B and B depends on C, then A depends on C:
 
 ```python
-changed = True
-while changed:
-    changed = False
-    for var, deps in dep_graph.items():
-        transitive = {td for d in deps if d in dep_graph for td in dep_graph[d]}
-        new_deps = deps | transitive
-        if new_deps != deps:
-            dep_graph[var] = new_deps
-            changed = True
+def _transitive_closure(raw_graph: dict[str, set[str]]) -> dict[str, set[str]]:
+    dep_graph = {var: set(deps) for var, deps in raw_graph.items()}
+    changed = True
+    while changed:
+        changed = False
+        for var, deps in dep_graph.items():
+            transitive = {td for d in deps if d in dep_graph for td in dep_graph[d]}
+            new_deps = deps | transitive
+            if new_deps != deps:
+                dep_graph[var] = new_deps
+                changed = True
+    return dep_graph
 ```
+
+This is stored as `dependency_graph` in the result.
 
 ### Visual: register chain tracing
 
@@ -523,14 +532,18 @@ def analyze(cfg: CFG) -> DataflowResult:
     def_use_chains = extract_def_use_chains(cfg, block_facts)
     logger.info("Extracted %d def-use chains", len(def_use_chains))
 
-    dependency_graph = build_dependency_graph(def_use_chains)
-    logger.info("Built dependency graph with %d variables", len(dependency_graph))
+    raw_dependency_graph = _build_raw_dependency_graph(def_use_chains)
+    logger.info("Built raw dependency graph with %d variables", len(raw_dependency_graph))
+
+    dependency_graph = _transitive_closure(raw_dependency_graph)
+    logger.info("Built transitive dependency graph with %d variables", len(dependency_graph))
 
     return DataflowResult(
         definitions=all_defs,
         block_facts=block_facts,
         def_use_chains=def_use_chains,
         dependency_graph=dependency_graph,
+        raw_dependency_graph=raw_dependency_graph,
     )
 ```
 
@@ -724,8 +737,10 @@ interpreter/
 │   ├── solve_reaching_definitions()
 │   ├── extract_def_use_chains()
 │   ├── _trace_to_named_vars(), _is_temporary_register()
-│   ├── build_dependency_graph()
-│   └── analyze()              ← main entry point
+│   ├── _build_raw_dependency_graph()
+│   ├── _transitive_closure()
+│   ├── build_dependency_graph()   ← convenience: raw + closure
+│   └── analyze()                  ← main entry point
 │
 ├── cfg_types.py         BasicBlock, CFG (input to analysis)
 ├── cfg.py               build_cfg() (produces CFG from IR)
@@ -733,10 +748,10 @@ interpreter/
 └── constants.py         DATAFLOW_MAX_ITERATIONS = 1000
 
 tests/unit/
-└── test_dataflow.py     17 test cases, 413 lines
+└── test_dataflow.py     20 test cases
     ├── TestReachingDefinitions (5 tests)
     ├── TestDefUseChains (4 tests)
-    ├── TestDependencyGraph (4 tests)
+    ├── TestDependencyGraph (7 tests — direct, transitive, raw graph, multi-operand)
     ├── TestIntegration (3 tests)
     └── TestEdgeCases (1 test)
 ```
@@ -767,7 +782,7 @@ The dataflow module has **no dependency** on the VM, executor, backend, or any f
 | **Frozen data types** | `Definition`, `Use`, `DefUseLink` are immutable and hashable for set operations |
 | **Separation of concerns** | Analysis is independent of VM, frontends, and backends |
 | **Register chain tracing** | Bridges the gap between IR registers and named variables |
-| **Transitive closure** | Dependency graph answers "what ultimately affects this variable?" |
+| **Raw + transitive graphs** | Raw graph has direct edges only; transitive closure propagates indirect dependencies. Both are returned in `DataflowResult` |
 | **Safety bound** | `DATAFLOW_MAX_ITERATIONS` prevents non-termination on pathological inputs |
 | **Progressive logging** | Each phase logs its output size for debugging |
 | **Comprehensive case analysis** | `_uses_of()` handles every opcode explicitly — no default fallthrough |
