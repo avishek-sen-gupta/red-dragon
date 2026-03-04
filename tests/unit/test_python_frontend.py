@@ -494,8 +494,12 @@ class TestPythonDecorators:
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("foo" in inst.operands for inst in stores)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
-        # Decorator call wraps foo
         assert len(calls) >= 1
+        # Decorator my_dec must be loaded to call it
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any(
+            "my_dec" in inst.operands for inst in loads
+        ), f"my_dec not loaded, got {[l.operands for l in loads]}"
 
     def test_decorator_stacked(self):
         source = "@dec1\n@dec2\ndef bar():\n    return 1"

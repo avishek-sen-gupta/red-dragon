@@ -66,6 +66,9 @@ class TestGetFrontend:
             llm_client=fake,
         )
         assert isinstance(frontend, LLMFrontend)
+        assert (
+            frontend._language == "javascript"
+        ), f"expected 'javascript', got {frontend._language}"
 
     def test_unknown_frontend_type_raises(self):
         with pytest.raises(ValueError, match="Unknown frontend type"):

@@ -1046,7 +1046,10 @@ class TestTier2Lowering:
 
         # Should produce WRITE_REGION for the STRING result
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
-        assert len(writes) >= 1
+        # 2 initial VALUE writes (WS-FIRST, WS-LAST) + at least 1 from STRING into WS-RESULT
+        assert (
+            len(writes) >= 3
+        ), f"expected >= 3 WRITE_REGION (2 init + STRING), got {len(writes)}"
 
     def test_string_with_delimiter_calls_split(self):
         fields = [
