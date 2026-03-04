@@ -45,7 +45,9 @@ class M {
     static int answer = make_adder(10);
 }
 """
-        assert _has_func_ref(source, Language.JAVA), "IR should contain a FUNC_REF for the lambda"
+        assert _has_func_ref(
+            source, Language.JAVA
+        ), "IR should contain a FUNC_REF for the lambda"
         vars_ = _run_program(source, Language.JAVA)
         assert vars_["answer"] == 15
 
@@ -59,7 +61,9 @@ end
 
 answer = make_adder(10)
 """
-        assert _has_func_ref(source, Language.RUBY), "IR should contain a FUNC_REF for the lambda"
+        assert _has_func_ref(
+            source, Language.RUBY
+        ), "IR should contain a FUNC_REF for the lambda"
         vars_ = _run_program(source, Language.RUBY)
         assert vars_["answer"] == 15
 
