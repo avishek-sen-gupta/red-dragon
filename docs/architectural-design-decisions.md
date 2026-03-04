@@ -1195,3 +1195,18 @@ Programs are organised in three tiers: Tier 1 (class with methods: Python, Java,
 Updated tier classification: Tier 1 (11): Python, Java, C#, Kotlin, Scala, JS, TS, PHP, Go, C++, Rust. Tier 2 (3): Ruby, Lua, C. Tier 3 (1): Pascal.
 
 **Consequences:** 11 of 15 languages now exercise the full class/method dispatch pipeline (class registration, `CALL_METHOD`, receiver binding, `STORE_FIELD`/`LOAD_FIELD` through `this`/`self`). Ruby/Lua/C remain at Tier 2 due to fundamental architecture mismatches (Ruby's `@var` → plain identifier, Lua's table-based objects, C's lack of methods on structs).
+
+---
+
+### ADR-063: Promote Ruby to Tier 1 class/method semantics (2026-03-04)
+
+**Context:** Ruby was stuck at Tier 2 (hash-based field access) in the Rosetta classes test. The Ruby frontend already had class/method infrastructure (`_lower_ruby_class`, `_lower_ruby_method`, `_lower_ruby_call`) but lacked four capabilities: (1) `@var` instance variables mapped to plain `LOAD_VAR`/`STORE_VAR` instead of field operations on `self`, (2) no implicit `self` parameter injection for instance methods, (3) `Counter.new()` dispatched as a regular method call instead of object construction, (4) `initialize` was not mapped to the canonical `__init__` constructor name.
+
+**Decision:** Five targeted changes to `ruby.py`:
+1. **`_lower_instance_variable`**: New dispatch handler for `instance_variable` nodes — strips `@` prefix, emits `LOAD_VAR self` + `LOAD_FIELD self_reg "field"` (read) or `STORE_FIELD self_reg "field" val_reg` (write via `_lower_store_target`).
+2. **`_emit_self_param`**: Emits `SYMBOLIC param:self` + `STORE_VAR self` at method entry, matching the `_emit_this_param` pattern used by JS/PHP/Java/Kotlin/Scala/C#/C++.
+3. **`_lower_ruby_method(inject_self=True)`**: When called from class body, injects `self` param and maps `initialize` → `__init__`.
+4. **`_lower_ruby_call` `new` detection**: When receiver starts with uppercase and method is `new`, emits `NEW_OBJECT(class)` + `CALL_METHOD(obj, "__init__", args)` instead of a regular method call.
+5. **`_lower_ruby_class` body iteration**: Replaced `_lower_block(body_node)` with explicit child iteration — `method` children get `inject_self=True`, others get `_lower_stmt`.
+
+**Consequences:** Ruby is promoted to Tier 1 (12 languages total). The Rosetta classes test now uses a genuine Ruby class with `initialize`, `increment`, and `get_value` methods. Lua and C remain at Tier 2. Pascal remains at Tier 3.

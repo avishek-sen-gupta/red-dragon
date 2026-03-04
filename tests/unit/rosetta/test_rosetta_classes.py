@@ -3,11 +3,11 @@
 Verifies that the VM can execute programs using class instantiation, field
 access, and method calls (or language-appropriate equivalents).
 
-Tier 1 — Class with methods (11: Python, Java, C#, Kotlin, Scala, JS, TS,
-         PHP, Go, C++, Rust):
+Tier 1 — Class with methods (12: Python, Java, C#, Kotlin, Scala, JS, TS,
+         PHP, Go, C++, Rust, Ruby):
     Class instantiation, field access via ``this``/``self``, method calls.
 
-Tier 2 — Object/struct/hash field access (3: Ruby, Lua, C):
+Tier 2 — Object/struct/hash field access (2: Lua, C):
     Object/struct creation + field read/write; no instance methods.
 
 Tier 3 — Record field access (1: Pascal):
@@ -93,12 +93,23 @@ class M {
 }
 """,
     "ruby": """\
-c = {}
-c["count"] = 0
-c["count"] = c["count"] + 1
-c["count"] = c["count"] + 1
-c["count"] = c["count"] + 1
-answer = c["count"]
+class Counter
+    def initialize()
+        @count = 0
+    end
+    def increment()
+        @count = @count + 1
+    end
+    def get_value()
+        return @count
+    end
+end
+
+c = Counter.new()
+c.increment()
+c.increment()
+c.increment()
+answer = c.get_value()
 """,
     "go": """\
 package main

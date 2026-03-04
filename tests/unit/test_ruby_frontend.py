@@ -44,8 +44,8 @@ class TestRubyVariables:
 
     def test_instance_variable_assignment(self):
         instructions = _parse_ruby("@name = 'hello'")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
-        assert any("@name" in inst.operands for inst in stores)
+        stores = _find_all(instructions, Opcode.STORE_FIELD)
+        assert any("name" in inst.operands for inst in stores)
 
     def test_augmented_assignment(self):
         instructions = _parse_ruby("x += 1")
@@ -207,7 +207,84 @@ end
         instructions = _parse_ruby(source)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("Dog" in inst.operands for inst in stores)
-        assert any("@name" in inst.operands for inst in stores)
+        field_stores = _find_all(instructions, Opcode.STORE_FIELD)
+        assert any("name" in inst.operands for inst in field_stores)
+
+
+class TestRubyClassObjectSemantics:
+    def test_new_emits_new_object_and_call_init(self):
+        instructions = _parse_ruby("c = Counter.new()")
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_OBJECT in opcodes
+        assert Opcode.CALL_METHOD in opcodes
+        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
+        assert any("Counter" in inst.operands for inst in new_objs)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("__init__" in inst.operands for inst in calls)
+
+    def test_initialize_mapped_to_init(self):
+        source = """\
+class Foo
+  def initialize()
+    @x = 0
+  end
+end
+"""
+        instructions = _parse_ruby(source)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("__init__" in str(inst.operands) for inst in consts)
+        assert not any("initialize" in str(inst.operands) for inst in consts)
+
+    def test_instance_method_gets_self_param(self):
+        source = """\
+class Foo
+  def bar()
+    @x = 1
+  end
+end
+"""
+        instructions = _parse_ruby(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        param_names = [
+            inst.operands[0]
+            for inst in symbolics
+            if inst.operands and str(inst.operands[0]).startswith("param:")
+        ]
+        assert any("self" in p for p in param_names)
+
+    def test_instance_variable_read_emits_load_field(self):
+        instructions = _parse_ruby("x = @count")
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert any("count" in inst.operands for inst in loads)
+
+    def test_instance_variable_write_emits_store_field(self):
+        instructions = _parse_ruby("@count = 5")
+        stores = _find_all(instructions, Opcode.STORE_FIELD)
+        assert any("count" in inst.operands for inst in stores)
+
+    def test_class_execution_counter(self):
+        source = """\
+class Counter
+    def initialize()
+        @count = 0
+    end
+    def increment()
+        @count = @count + 1
+    end
+    def get_value()
+        return @count
+    end
+end
+
+c = Counter.new()
+c.increment()
+c.increment()
+c.increment()
+answer = c.get_value()
+"""
+        vm, stats = execute_for_language("ruby", source)
+        assert extract_answer(vm, "ruby") == 3
+        assert stats.llm_calls == 0
 
 
 class TestRubySpecial:
@@ -309,7 +386,8 @@ end
         instructions = _parse_ruby(source)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("Counter" in inst.operands for inst in stores)
-        assert any("@count" in inst.operands for inst in stores)
+        field_stores = _find_all(instructions, Opcode.STORE_FIELD)
+        assert any("count" in inst.operands for inst in field_stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
         binops = _find_all(instructions, Opcode.BINOP)
