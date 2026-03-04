@@ -73,3 +73,23 @@ class TestGetFrontend:
     def test_unknown_frontend_type_raises(self):
         with pytest.raises(ValueError, match="Unknown frontend type"):
             get_frontend("python", frontend_type="magic")
+
+    def test_deterministic_with_repair_client_returns_decorator(self):
+        from interpreter.ast_repair.repairing_frontend_decorator import (
+            RepairingFrontendDecorator,
+        )
+
+        fake_repair = FakeLLMClient()
+        frontend = get_frontend(
+            "python",
+            frontend_type=constants.FRONTEND_DETERMINISTIC,
+            repair_client=fake_repair,
+        )
+        assert isinstance(frontend, RepairingFrontendDecorator)
+
+    def test_deterministic_without_repair_client_returns_plain(self):
+        frontend = get_frontend(
+            "python",
+            frontend_type=constants.FRONTEND_DETERMINISTIC,
+        )
+        assert isinstance(frontend, PythonFrontend)
