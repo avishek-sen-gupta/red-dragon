@@ -144,10 +144,11 @@ class CobolParagraph:
 
 @dataclass(frozen=True)
 class CobolSection:
-    """A COBOL PROCEDURE DIVISION section containing paragraphs."""
+    """A COBOL PROCEDURE DIVISION section containing paragraphs and bare statements."""
 
     name: str
     paragraphs: list[CobolParagraph] = field(default_factory=list)
+    statements: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolSection:
@@ -156,12 +157,15 @@ class CobolSection:
             paragraphs=[
                 CobolParagraph.from_dict(p) for p in data.get("paragraphs", [])
             ],
+            statements=[parse_statement(s) for s in data.get("statements", [])],
         )
 
     def to_dict(self) -> dict:
         result: dict = {"name": self.name}
         if self.paragraphs:
             result["paragraphs"] = [p.to_dict() for p in self.paragraphs]
+        if self.statements:
+            result["statements"] = [s.to_dict() for s in self.statements]
         return result
 
 
@@ -173,11 +177,13 @@ class CobolASG:
         data_fields: Working-Storage Section fields.
         sections: Procedure Division sections.
         paragraphs: Standalone paragraphs (no section).
+        statements: Division-level bare statements (no paragraph or section).
     """
 
     data_fields: list[CobolField] = field(default_factory=list)
     sections: list[CobolSection] = field(default_factory=list)
     paragraphs: list[CobolParagraph] = field(default_factory=list)
+    statements: list[CobolStatementType] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict) -> CobolASG:
@@ -187,6 +193,7 @@ class CobolASG:
             paragraphs=[
                 CobolParagraph.from_dict(p) for p in data.get("paragraphs", [])
             ],
+            statements=[parse_statement(s) for s in data.get("statements", [])],
         )
 
     def to_dict(self) -> dict:
@@ -197,4 +204,6 @@ class CobolASG:
             result["sections"] = [s.to_dict() for s in self.sections]
         if self.paragraphs:
             result["paragraphs"] = [p.to_dict() for p in self.paragraphs]
+        if self.statements:
+            result["statements"] = [s.to_dict() for s in self.statements]
         return result

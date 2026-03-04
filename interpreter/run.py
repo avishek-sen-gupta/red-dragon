@@ -527,6 +527,7 @@ def run(
     )
     exec_start = time.perf_counter()
     vm, exec_stats = execute_cfg(cfg, entry, registry, vm_config)
+    vm.data_layout = frontend.data_layout
     stats.execution_time = time.perf_counter() - exec_start
 
     stats.execution_steps = exec_stats.steps

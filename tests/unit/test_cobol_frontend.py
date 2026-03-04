@@ -6,6 +6,7 @@ from interpreter.cobol.asg_types import (
     CobolASG,
     CobolField,
     CobolParagraph,
+    CobolSection,
 )
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.cobol_statements import (
@@ -1631,3 +1632,144 @@ class TestCallAlterEntryCancelLowering:
             c for c in calls if c.operands and c.operands[0] == "__cobol_delete_record"
         ]
         assert len(delete_calls) == 1
+
+
+class TestBareStatements:
+    """Tests for bare statements at division and section level."""
+
+    def test_bare_division_statements_lower_to_ir(self):
+        """Division-level bare statements (no paragraph) should produce IR."""
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
+        ]
+        asg = CobolASG(
+            data_fields=fields,
+            statements=[
+                ComputeStatement(targets=["WS-A"], expression="WS-A + 50"),
+                DisplayStatement(operand="WS-A"),
+            ],
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(b"")
+
+        # COMPUTE produces a BINOP + WRITE_REGION
+        binops = _find_opcodes(instructions, Opcode.BINOP)
+        assert len(binops) >= 1, "COMPUTE should emit at least one BINOP"
+
+        # DISPLAY produces a CALL_FUNCTION for print
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        print_calls = [c for c in calls if c.operands and c.operands[0] == "print"]
+        assert len(print_calls) >= 1, "DISPLAY should emit a print CALL_FUNCTION"
+
+    def test_bare_section_statements_lower_to_ir(self):
+        """Section-level bare statements should produce IR with section LABEL."""
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
+        ]
+        asg = CobolASG(
+            data_fields=fields,
+            sections=[
+                CobolSection(
+                    name="MAIN-SECTION",
+                    statements=[DisplayStatement(operand="WS-A")],
+                ),
+            ],
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(b"")
+
+        # Should have a section LABEL
+        labels = _find_opcodes(instructions, Opcode.LABEL)
+        section_labels = [
+            inst for inst in labels if inst.label == "section_MAIN-SECTION"
+        ]
+        assert len(section_labels) == 1, "Should emit section LABEL"
+
+        # DISPLAY should emit print
+        calls = _find_opcodes(instructions, Opcode.CALL_FUNCTION)
+        print_calls = [c for c in calls if c.operands and c.operands[0] == "print"]
+        assert len(print_calls) >= 1, "DISPLAY should emit a print CALL_FUNCTION"
+
+    def test_mixed_bare_and_paragraph_ordering(self):
+        """Division-level bare statements should come before paragraph statements in IR."""
+        fields = [
+            CobolField(name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0),
+        ]
+        asg = CobolASG(
+            data_fields=fields,
+            statements=[DisplayStatement(operand="WS-A")],
+            paragraphs=[
+                CobolParagraph(
+                    name="MAIN-PARA",
+                    statements=[StopRunStatement()],
+                ),
+            ],
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        instructions = frontend.lower(b"")
+
+        # Find indices of first print (from bare DISPLAY) and first paragraph LABEL
+        print_idx = next(
+            (
+                i
+                for i, inst in enumerate(instructions)
+                if inst.opcode == Opcode.CALL_FUNCTION
+                and inst.operands
+                and inst.operands[0] == "print"
+            ),
+            -1,
+        )
+        para_label_idx = next(
+            (
+                i
+                for i, inst in enumerate(instructions)
+                if inst.opcode == Opcode.LABEL and inst.label == "para_MAIN-PARA"
+            ),
+            -1,
+        )
+        assert print_idx != -1, "Should find a print CALL_FUNCTION"
+        assert para_label_idx != -1, "Should find para_MAIN-PARA LABEL"
+        assert (
+            print_idx < para_label_idx
+        ), "Bare statement (DISPLAY) should come before paragraph LABEL"
+
+
+class TestDataLayout:
+    def test_data_layout_empty_before_lower(self):
+        """data_layout returns empty dict before lower() is called."""
+        asg = CobolASG(data_fields=[])
+        frontend = CobolFrontend(_FakeParser(asg))
+        assert frontend.data_layout == {}
+
+    def test_data_layout_after_lower(self):
+        """data_layout exposes correct field metadata after lower()."""
+        asg = CobolASG(
+            data_fields=[
+                CobolField(
+                    name="WS-A", level=77, pic="9(3)", usage="DISPLAY", offset=0
+                ),
+                CobolField(
+                    name="WS-B",
+                    level=77,
+                    pic="X(5)",
+                    usage="DISPLAY",
+                    offset=3,
+                ),
+            ],
+        )
+        frontend = CobolFrontend(_FakeParser(asg))
+        frontend.lower(b"")
+
+        layout = frontend.data_layout
+        assert "WS-A" in layout
+        assert layout["WS-A"]["offset"] == 0
+        assert layout["WS-A"]["length"] == 3
+        assert layout["WS-A"]["category"] == "ZONED_DECIMAL"
+        assert layout["WS-A"]["total_digits"] == 3
+        assert layout["WS-A"]["decimal_digits"] == 0
+        assert layout["WS-A"]["signed"] is False
+
+        assert "WS-B" in layout
+        assert layout["WS-B"]["offset"] == 3
+        assert layout["WS-B"]["length"] == 5
+        assert layout["WS-B"]["category"] == "ALPHANUMERIC"

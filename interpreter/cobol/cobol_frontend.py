@@ -49,6 +49,7 @@ class CobolFrontend(Frontend):
     ):
         self._parser = cobol_parser
         self._observer = observer
+        self._layout = DataLayout()
         self._ctx = EmitContext(
             dispatch_fn=dispatch_statement,
             observer=observer,
@@ -90,10 +91,30 @@ class CobolFrontend(Frontend):
 
     # ── Main entry point ──────────────────────────────────────────
 
+    @property
+    def data_layout(self) -> dict[str, dict]:
+        """Expose the COBOL data layout as a language-agnostic dict.
+
+        Available after lower() has been called. Maps field names to
+        offset, length, and type category info.
+        """
+        return {
+            name: {
+                "offset": fl.offset,
+                "length": fl.byte_length,
+                "category": fl.type_descriptor.category.value,
+                "total_digits": fl.type_descriptor.total_digits,
+                "decimal_digits": fl.type_descriptor.decimal_digits,
+                "signed": fl.type_descriptor.signed,
+            }
+            for name, fl in self._layout.fields.items()
+        }
+
     def lower(self, source: bytes) -> list[IRInstruction]:
         """Lower COBOL source to IR via the ProLeap bridge."""
         asg = self._parser.parse(source)
         layout = build_data_layout(asg.data_fields)
+        self._layout = layout
         condition_index = build_condition_index(layout.fields)
 
         self._ctx = EmitContext(

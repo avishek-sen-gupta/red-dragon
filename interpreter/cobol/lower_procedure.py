@@ -18,10 +18,13 @@ def lower_procedure_division(
     layout: DataLayout,
     region_reg: str,
 ) -> None:
-    """Lower all sections and standalone paragraphs."""
+    """Lower division-level bare statements, standalone paragraphs, and sections."""
     ctx.section_paragraphs = {
         section.name: [p.name for p in section.paragraphs] for section in asg.sections
     }
+
+    for stmt in asg.statements:
+        ctx.lower_statement(stmt, layout, region_reg)
 
     for para in asg.paragraphs:
         lower_paragraph(ctx, para, layout, region_reg)
@@ -37,6 +40,8 @@ def lower_section(
     region_reg: str,
 ) -> None:
     ctx.emit(Opcode.LABEL, label=f"section_{section.name}")
+    for stmt in section.statements:
+        ctx.lower_statement(stmt, layout, region_reg)
     for para in section.paragraphs:
         lower_paragraph(ctx, para, layout, region_reg)
     ctx.emit(

@@ -11,6 +11,7 @@ import io.proleap.cobol.asg.metamodel.data.workingstorage.WorkingStorageSection;
 import io.proleap.cobol.asg.metamodel.procedure.Paragraph;
 import io.proleap.cobol.asg.metamodel.procedure.ProcedureDivision;
 import io.proleap.cobol.asg.metamodel.procedure.Section;
+import io.proleap.cobol.asg.metamodel.procedure.Statement;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -120,6 +121,16 @@ public final class AsgSerializer {
                 asg.add("paragraphs", parasArray);
             }
         }
+
+        // Division-level bare statements (not inside any paragraph or section)
+        List<Statement> divStatements = pd.getStatements();
+        if (divStatements != null && !divStatements.isEmpty()) {
+            JsonArray stmts = StatementSerializer.serializeStatements(divStatements);
+            if (stmts.size() > 0) {
+                asg.add("statements", stmts);
+                LOG.info("Serialized " + stmts.size() + " division-level bare statements");
+            }
+        }
     }
 
     /**
@@ -136,6 +147,15 @@ public final class AsgSerializer {
                 JsonArray parasArray = serializeParagraphs(new ArrayList<>(paras));
                 if (parasArray.size() > 0) {
                     sectionObj.add("paragraphs", parasArray);
+                }
+            }
+
+            // Section-level bare statements (not inside any paragraph)
+            List<Statement> sectionStatements = section.getStatements();
+            if (sectionStatements != null && !sectionStatements.isEmpty()) {
+                JsonArray stmts = StatementSerializer.serializeStatements(new ArrayList<>(sectionStatements));
+                if (stmts.size() > 0) {
+                    sectionObj.add("statements", stmts);
                 }
             }
 

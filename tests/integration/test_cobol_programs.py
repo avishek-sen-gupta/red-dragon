@@ -1449,3 +1449,87 @@ class TestBlankWhenZero:
         region = _first_region(vm)
         # After MOVE 0, BLANK WHEN ZERO should produce spaces
         assert list(region[0:4]) == [0x40, 0x40, 0x40, 0x40]
+
+
+class TestBareStatements:
+    """Bare statements (no enclosing paragraph) at division and section level."""
+
+    def test_division_level_bare_compute(self):
+        """COMPUTE directly under PROCEDURE DIVISION (no paragraph) executes correctly."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. BARE-DIV.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A PIC 9(3) VALUE 100.",
+                "PROCEDURE DIVISION.",
+                "    COMPUTE WS-A = WS-A + 50.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 3) == 150
+
+    def test_section_level_bare_compute(self):
+        """COMPUTE directly under a SECTION (no paragraph) executes correctly."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. BARE-SEC.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A PIC 9(3) VALUE 100.",
+                "PROCEDURE DIVISION.",
+                "MAIN-SECTION SECTION.",
+                "    COMPUTE WS-A = WS-A + 50.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 3) == 150
+
+    def test_mixed_bare_and_paragraph(self):
+        """Division-level bare statement followed by a paragraph both execute."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. MIX-BARE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A PIC 9(3) VALUE 100.",
+                "77 WS-B PIC 9(3) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "    COMPUTE WS-A = WS-A + 50.",
+                "    PERFORM CALC-PARA.",
+                "    STOP RUN.",
+                "CALC-PARA.",
+                "    COMPUTE WS-B = WS-A + 10.",
+            ]
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 0, 3) == 150
+        assert _decode_zoned_unsigned(region, 3, 3) == 160
+
+
+class TestDataLayout:
+    def test_data_layout_present_after_execution(self):
+        """run() attaches data_layout with correct field entries to VMState."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. LAYOUT-TEST.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "77 WS-A PIC 9(3) VALUE 150.",
+                "PROCEDURE DIVISION.",
+                "    STOP RUN.",
+            ]
+        )
+        assert vm.data_layout, "data_layout should not be empty after execution"
+        assert "WS-A" in vm.data_layout
+        ws_a = vm.data_layout["WS-A"]
+        assert ws_a["offset"] == 0
+        assert ws_a["length"] == 3
+        assert ws_a["category"] == "ZONED_DECIMAL"
+        assert ws_a["total_digits"] == 3
