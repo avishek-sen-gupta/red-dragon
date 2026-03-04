@@ -1,0 +1,294 @@
+"""Scala-specific declaration lowerers — pure functions taking (ctx, node)."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from interpreter.ir import Opcode
+from interpreter import constants
+
+if TYPE_CHECKING:
+    from interpreter.frontends.context import TreeSitterEmitContext
+
+
+def _extract_pattern_name(ctx: TreeSitterEmitContext, pattern_node) -> str:
+    """Extract name from a pattern node (identifier, typed_pattern, etc.)."""
+    if pattern_node is None:
+        return "__unknown"
+    if pattern_node.type == "identifier":
+        return ctx.node_text(pattern_node)
+    # typed_pattern or other wrapper: find the identifier inside
+    id_child = next(
+        (c for c in pattern_node.children if c.type == "identifier"),
+        None,
+    )
+    if id_child:
+        return ctx.node_text(id_child)
+    return ctx.node_text(pattern_node)
+
+
+def _lower_scala_tuple_destructure(
+    ctx: TreeSitterEmitContext, pattern_node, val_reg: str, parent_node
+) -> None:
+    """Lower `val (a, b) = expr` — emit LOAD_INDEX + STORE_VAR per element."""
+    named_children = [
+        c for c in pattern_node.children if c.type not in ("(", ")", ",") and c.is_named
+    ]
+    for i, child in enumerate(named_children):
+        var_name = _extract_pattern_name(ctx, child)
+        idx_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+        elem_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.LOAD_INDEX,
+            result_reg=elem_reg,
+            operands=[val_reg, idx_reg],
+            node=child,
+        )
+        ctx.emit(
+            Opcode.STORE_VAR,
+            operands=[var_name, elem_reg],
+            node=parent_node,
+        )
+
+
+def _lower_val_or_var_def(ctx: TreeSitterEmitContext, node) -> None:
+    """Shared logic for val_definition and var_definition, with tuple destructuring."""
+    pattern_node = node.child_by_field_name("pattern")
+    value_node = node.child_by_field_name("value")
+    if value_node:
+        val_reg = ctx.lower_expr(value_node)
+    else:
+        val_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.CONST,
+            result_reg=val_reg,
+            operands=[ctx.constants.none_literal],
+        )
+
+    if pattern_node is not None and pattern_node.type == "tuple_pattern":
+        _lower_scala_tuple_destructure(ctx, pattern_node, val_reg, node)
+    else:
+        var_name = _extract_pattern_name(ctx, pattern_node)
+        ctx.emit(
+            Opcode.STORE_VAR,
+            operands=[var_name, val_reg],
+            node=node,
+        )
+
+
+def lower_val_def(ctx: TreeSitterEmitContext, node) -> None:
+    _lower_val_or_var_def(ctx, node)
+
+
+def lower_var_def(ctx: TreeSitterEmitContext, node) -> None:
+    _lower_val_or_var_def(ctx, node)
+
+
+def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
+    """Emit ``SYMBOLIC param:this`` + ``STORE_VAR this`` for instance methods."""
+    ctx.emit(
+        Opcode.SYMBOLIC,
+        result_reg=ctx.fresh_reg(),
+        operands=[f"{constants.PARAM_PREFIX}this"],
+    )
+    ctx.emit(
+        Opcode.STORE_VAR,
+        operands=["this", f"%{ctx.reg_counter - 1}"],
+    )
+
+
+def lower_scala_params(ctx: TreeSitterEmitContext, params_node) -> None:
+    for child in params_node.children:
+        if child.type == "parameter":
+            name_node = child.child_by_field_name("name")
+            if name_node:
+                pname = ctx.node_text(name_node)
+                ctx.emit(
+                    Opcode.SYMBOLIC,
+                    result_reg=ctx.fresh_reg(),
+                    operands=[f"{constants.PARAM_PREFIX}{pname}"],
+                    node=child,
+                )
+                ctx.emit(
+                    Opcode.STORE_VAR,
+                    operands=[pname, f"%{ctx.reg_counter - 1}"],
+                )
+
+
+def lower_function_def(
+    ctx: TreeSitterEmitContext, node, inject_this: bool = False
+) -> None:
+    name_node = node.child_by_field_name("name")
+    params_node = node.child_by_field_name("parameters")
+    body_node = node.child_by_field_name("body")
+
+    func_name = ctx.node_text(name_node) if name_node else "__anon"
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+    end_label = ctx.fresh_label(f"end_{func_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
+    ctx.emit(Opcode.LABEL, label=func_label)
+
+    if inject_this:
+        _emit_this_param(ctx)
+
+    if params_node:
+        lower_scala_params(ctx, params_node)
+
+    if body_node:
+        ctx.lower_block(body_node)
+
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
+    )
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=func_reg,
+        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+
+_CLASS_BODY_FUNC_TYPES = frozenset({"function_definition"})
+
+
+def _lower_class_body_hoisted(
+    ctx: TreeSitterEmitContext, node, inject_this: bool = False
+) -> None:
+    """Hoist all class-body children to top level.
+
+    Emits function definitions first (so their refs are registered),
+    then field initializers and other statements.
+    """
+    children = [
+        c
+        for c in node.children
+        if c.is_named
+        and c.type not in ctx.constants.comment_types
+        and c.type not in ctx.constants.noise_types
+    ]
+    functions = [c for c in children if c.type in _CLASS_BODY_FUNC_TYPES]
+    rest = [c for c in children if c.type not in _CLASS_BODY_FUNC_TYPES]
+    for child in functions:
+        lower_function_def(ctx, child, inject_this=inject_this)
+    for child in rest:
+        ctx.lower_stmt(child)
+
+
+def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
+    name_node = node.child_by_field_name("name")
+    body_node = node.child_by_field_name("body")
+    class_name = ctx.node_text(name_node) if name_node else "__anon_class"
+
+    class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
+    end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
+    ctx.emit(Opcode.LABEL, label=class_label)
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    cls_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=cls_reg,
+        operands=[
+            constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
+        ],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+
+    if body_node:
+        _lower_class_body_hoisted(ctx, body_node, inject_this=True)
+
+
+def lower_object_def(ctx: TreeSitterEmitContext, node) -> None:
+    name_node = node.child_by_field_name("name")
+    body_node = node.child_by_field_name("body")
+    obj_name = ctx.node_text(name_node) if name_node else "__anon_object"
+
+    class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{obj_name}")
+    end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{obj_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
+    ctx.emit(Opcode.LABEL, label=class_label)
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    cls_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=cls_reg,
+        operands=[
+            constants.CLASS_REF_TEMPLATE.format(name=obj_name, label=class_label)
+        ],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[obj_name, cls_reg])
+
+    if body_node:
+        _lower_class_body_hoisted(ctx, body_node)
+
+
+def lower_trait_def(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower trait_definition like class_definition."""
+    name_node = node.child_by_field_name("name")
+    body_node = node.child_by_field_name("body")
+    trait_name = ctx.node_text(name_node) if name_node else "__anon_trait"
+
+    class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{trait_name}")
+    end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{trait_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
+    ctx.emit(Opcode.LABEL, label=class_label)
+    if body_node:
+        ctx.lower_block(body_node)
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    cls_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=cls_reg,
+        operands=[
+            constants.CLASS_REF_TEMPLATE.format(name=trait_name, label=class_label)
+        ],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[trait_name, cls_reg])
+
+
+def lower_function_declaration(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower abstract function declaration (no body) as function stub."""
+    name_node = node.child_by_field_name("name")
+    func_name = ctx.node_text(name_node) if name_node else "__abstract"
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+    end_label = ctx.fresh_label(f"end_{func_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
+    ctx.emit(Opcode.LABEL, label=func_label)
+
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
+    )
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=func_reg,
+        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+
+def lower_function_def_stmt(ctx: TreeSitterEmitContext, node) -> None:
+    """Statement-dispatch wrapper for function_definition."""
+    lower_function_def(ctx, node)

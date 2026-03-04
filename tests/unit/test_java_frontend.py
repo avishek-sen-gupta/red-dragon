@@ -740,9 +740,10 @@ class TestJavaScopedIdentifier:
         assert not any("scoped_identifier" in str(inst.operands) for inst in symbolics)
 
     def test_scoped_identifier_dispatch_registered(self):
-        """Verify scoped_identifier is registered in _EXPR_DISPATCH."""
+        """Verify scoped_identifier is registered in the expression dispatch table."""
         frontend = JavaFrontend(TreeSitterParserFactory(), "java")
-        assert "scoped_identifier" in frontend._EXPR_DISPATCH
+        expr_dispatch = frontend._build_expr_dispatch()
+        assert "scoped_identifier" in expr_dispatch
 
 
 class TestJavaTextBlock:

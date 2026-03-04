@@ -1210,3 +1210,27 @@ Updated tier classification: Tier 1 (11): Python, Java, C#, Kotlin, Scala, JS, T
 5. **`_lower_ruby_class` body iteration**: Replaced `_lower_block(body_node)` with explicit child iteration — `method` children get `inject_self=True`, others get `_lower_stmt`.
 
 **Consequences:** Ruby is promoted to Tier 1 (12 languages total). The Rosetta classes test now uses a genuine Ruby class with `initialize`, `increment`, and `get_value` methods. Lua and C remain at Tier 2. Pascal remains at Tier 3.
+
+---
+
+### ADR-2026-03-04: Refactor tree-sitter frontends from monolithic files to modular packages with pure functions + context
+
+**Status:** Accepted
+
+**Context:** All 13 tree-sitter frontends (excluding C++/TypeScript which are inheritance wrappers, and COBOL which was already modular) were monolithic single files of 780–1,658 lines each, cramming 30–55 handler methods into one class. This made them hard to navigate, test in isolation, and compose. The COBOL frontend had already been successfully decomposed into 16 focused modules with an `EmitContext` pattern.
+
+**Decision:** Refactor all tree-sitter frontends to a modular pure-functions + injected-context architecture:
+
+1. **`TreeSitterEmitContext`** (`interpreter/frontends/context.py`): A dataclass holding all mutable state (registers, labels, instructions, loop/break stacks), dispatch tables, grammar constants, and utility methods (`fresh_reg`, `fresh_label`, `emit`, `lower_block`, `lower_stmt`, `lower_expr`). Passed as the first argument to all pure-function lowerers.
+
+2. **`GrammarConstants`** (same file): A dataclass holding overridable grammar field names and literal strings per language (function name/params/body fields, if condition/consequence/alternative fields, block node types, comment types, canonical literals).
+
+3. **Common lowerers** (`interpreter/frontends/common/`): Pure functions extracted from `BaseFrontend` into 5 modules — `expressions.py`, `control_flow.py`, `declarations.py`, `assignments.py`, `exceptions.py`. Each function has signature `(ctx: TreeSitterEmitContext, node) -> str | None`.
+
+4. **Per-language packages** (`interpreter/frontends/<lang>/`): Each monolithic `<lang>.py` becomes a package with `__init__.py`, `frontend.py` (thin orchestrator), `expressions.py`, `control_flow.py`, `declarations.py`. The frontend class overrides only `_build_constants()`, `_build_stmt_dispatch()`, `_build_expr_dispatch()`.
+
+5. **Dual-mode `BaseFrontend`**: Supports both legacy (bound methods in `_STMT_DISPATCH`/`_EXPR_DISPATCH`) and context mode (pure functions via `_build_*()` methods), enabling incremental migration.
+
+6. **Inheritance preserved**: C++ extends C's frontend, TypeScript extends JavaScript's — both call `super()._build_*()` and overlay their own entries.
+
+**Consequences:** All 15 frontends are now modular packages (13 fully converted + 2 inheritance wrappers). 8469 tests pass with zero regressions. Each handler is independently testable as a pure function. Common patterns are shared via `common/` modules. The `_base.py` file is reduced to a thin orchestration template.

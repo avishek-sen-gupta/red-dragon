@@ -1,0 +1,327 @@
+"""JavaScript-specific control flow lowerers — pure functions taking (ctx, node)."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from interpreter.ir import Opcode
+from interpreter.frontends.common.exceptions import (
+    lower_raise_or_throw,
+    lower_try_catch,
+)
+
+if TYPE_CHECKING:
+    from interpreter.frontends.context import TreeSitterEmitContext
+
+
+def lower_js_alternative(ctx: TreeSitterEmitContext, alt_node, end_label: str) -> None:
+    alt_type = alt_node.type
+    if alt_type == "else_clause":
+        for child in alt_node.children:
+            if child.type not in ("else",):
+                ctx.lower_stmt(child)
+    elif alt_type == "if_statement":
+        lower_js_if(ctx, alt_node)
+    else:
+        ctx.lower_block(alt_node)
+
+
+def lower_js_if(ctx: TreeSitterEmitContext, node) -> None:
+    cond_node = node.child_by_field_name("condition")
+    body_node = node.child_by_field_name("consequence")
+    alt_node = node.child_by_field_name("alternative")
+
+    cond_reg = ctx.lower_expr(cond_node)
+    true_label = ctx.fresh_label("if_true")
+    false_label = ctx.fresh_label("if_false")
+    end_label = ctx.fresh_label("if_end")
+
+    if alt_node:
+        ctx.emit(
+            Opcode.BRANCH_IF,
+            operands=[cond_reg],
+            label=f"{true_label},{false_label}",
+            node=node,
+        )
+    else:
+        ctx.emit(
+            Opcode.BRANCH_IF,
+            operands=[cond_reg],
+            label=f"{true_label},{end_label}",
+            node=node,
+        )
+
+    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.lower_block(body_node)
+    ctx.emit(Opcode.BRANCH, label=end_label)
+
+    if alt_node:
+        ctx.emit(Opcode.LABEL, label=false_label)
+        lower_js_alternative(ctx, alt_node, end_label)
+        ctx.emit(Opcode.BRANCH, label=end_label)
+
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+
+def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
+    # for (let x in/of obj) { body }
+    operator_node = node.child_by_field_name("operator")
+    is_for_of = operator_node is not None and ctx.node_text(operator_node) == "of"
+
+    if is_for_of:
+        lower_for_of(ctx, node)
+        return
+
+    # for...in — model as: keys(obj) -> index-based loop over keys array
+    left = node.child_by_field_name("left")
+    right = node.child_by_field_name("right")
+    body_node = node.child_by_field_name("body")
+
+    obj_reg = ctx.lower_expr(right)
+    keys_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_FUNCTION,
+        result_reg=keys_reg,
+        operands=["keys", obj_reg],
+        node=node,
+    )
+
+    var_name = _extract_var_name(ctx, left) if left else "__for_in_var"
+
+    idx_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
+    len_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_FUNCTION,
+        result_reg=len_reg,
+        operands=["len", keys_reg],
+    )
+
+    loop_label = ctx.fresh_label("for_in_cond")
+    body_label = ctx.fresh_label("for_in_body")
+    end_label = ctx.fresh_label("for_in_end")
+
+    ctx.emit(Opcode.LABEL, label=loop_label)
+    cond_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.BINOP,
+        result_reg=cond_reg,
+        operands=["<", idx_reg, len_reg],
+    )
+    ctx.emit(
+        Opcode.BRANCH_IF,
+        operands=[cond_reg],
+        label=f"{body_label},{end_label}",
+    )
+
+    ctx.emit(Opcode.LABEL, label=body_label)
+    elem_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.LOAD_INDEX,
+        result_reg=elem_reg,
+        operands=[keys_reg, idx_reg],
+    )
+    if var_name:
+        ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+
+    update_label = ctx.fresh_label("for_in_update")
+    ctx.push_loop(update_label, end_label)
+    if body_node:
+        ctx.lower_block(body_node)
+    ctx.pop_loop()
+
+    ctx.emit(Opcode.LABEL, label=update_label)
+    one_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
+    new_idx = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.BINOP,
+        result_reg=new_idx,
+        operands=["+", idx_reg, one_reg],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=["__for_idx", new_idx])
+    ctx.emit(Opcode.BRANCH, label=loop_label)
+
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+
+def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower for (const x of iterable) as index-based iteration."""
+    left = node.child_by_field_name("left")
+    right = node.child_by_field_name("right")
+    body_node = node.child_by_field_name("body")
+
+    iter_reg = ctx.lower_expr(right)
+    var_name = _extract_var_name(ctx, left) if left else "__for_of_var"
+
+    idx_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
+    len_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
+
+    loop_label = ctx.fresh_label("for_of_cond")
+    body_label = ctx.fresh_label("for_of_body")
+    end_label = ctx.fresh_label("for_of_end")
+
+    ctx.emit(Opcode.LABEL, label=loop_label)
+    cond_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.BINOP, result_reg=cond_reg, operands=["<", idx_reg, len_reg])
+    ctx.emit(
+        Opcode.BRANCH_IF,
+        operands=[cond_reg],
+        label=f"{body_label},{end_label}",
+    )
+
+    ctx.emit(Opcode.LABEL, label=body_label)
+    elem_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
+    if var_name:
+        ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+
+    update_label = ctx.fresh_label("for_of_update")
+    ctx.push_loop(update_label, end_label)
+    if body_node:
+        ctx.lower_block(body_node)
+    ctx.pop_loop()
+
+    ctx.emit(Opcode.LABEL, label=update_label)
+    one_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
+    new_idx = ctx.fresh_reg()
+    ctx.emit(Opcode.BINOP, result_reg=new_idx, operands=["+", idx_reg, one_reg])
+    ctx.emit(Opcode.STORE_VAR, operands=["__for_idx", new_idx])
+    ctx.emit(Opcode.BRANCH, label=loop_label)
+
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+
+def _extract_var_name(ctx: TreeSitterEmitContext, node) -> str | None:
+    """Extract variable name from a declaration or identifier."""
+    if node.type == "identifier":
+        return ctx.node_text(node)
+    if node.type in ("lexical_declaration", "variable_declaration"):
+        for child in node.children:
+            if child.type == "variable_declarator":
+                name_node = child.child_by_field_name("name")
+                if name_node:
+                    return ctx.node_text(name_node)
+    return None
+
+
+def lower_js_try(ctx: TreeSitterEmitContext, node) -> None:
+    body_node = node.child_by_field_name("body")
+    handler = node.child_by_field_name("handler")
+    finalizer = node.child_by_field_name("finalizer")
+    catch_clauses = []
+    if handler:
+        param_node = handler.child_by_field_name("parameter")
+        exc_var = ctx.node_text(param_node) if param_node else None
+        catch_body = handler.child_by_field_name("body")
+        catch_clauses.append({"body": catch_body, "variable": exc_var, "type": None})
+    finally_node = finalizer.child_by_field_name("body") if finalizer else None
+    lower_try_catch(ctx, node, body_node, catch_clauses, finally_node)
+
+
+def lower_js_throw(ctx: TreeSitterEmitContext, node) -> None:
+    lower_raise_or_throw(ctx, node, keyword="throw")
+
+
+def lower_switch_statement(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower switch(x) { case a: ... default: ... } as if/else chain."""
+    value_node = node.child_by_field_name("value")
+    body_node = node.child_by_field_name("body")
+
+    disc_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
+    end_label = ctx.fresh_label("switch_end")
+
+    ctx.break_target_stack.append(end_label)
+
+    if body_node:
+        cases = [
+            c for c in body_node.children if c.type in ("switch_case", "switch_default")
+        ]
+        for case_node in cases:
+            if case_node.type == "switch_case":
+                value_child = case_node.child_by_field_name("value")
+                if value_child:
+                    case_reg = ctx.lower_expr(value_child)
+                    cond_reg = ctx.fresh_reg()
+                    ctx.emit(
+                        Opcode.BINOP,
+                        result_reg=cond_reg,
+                        operands=["===", disc_reg, case_reg],
+                        node=case_node,
+                    )
+                    body_label = ctx.fresh_label("case_body")
+                    next_label = ctx.fresh_label("case_next")
+                    ctx.emit(
+                        Opcode.BRANCH_IF,
+                        operands=[cond_reg],
+                        label=f"{body_label},{next_label}",
+                    )
+                    ctx.emit(Opcode.LABEL, label=body_label)
+                    _lower_switch_case_body(ctx, case_node)
+                    ctx.emit(Opcode.BRANCH, label=end_label)
+                    ctx.emit(Opcode.LABEL, label=next_label)
+            elif case_node.type == "switch_default":
+                _lower_switch_case_body(ctx, case_node)
+
+    ctx.break_target_stack.pop()
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+
+def _lower_switch_case_body(ctx: TreeSitterEmitContext, case_node) -> None:
+    """Lower the body statements of a switch case/default clause."""
+    for child in case_node.children:
+        if child.is_named and child.type not in ("switch_case", "switch_default"):
+            ctx.lower_stmt(child)
+
+
+def lower_do_statement(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower do { body } while (cond)."""
+    body_node = node.child_by_field_name("body")
+    cond_node = node.child_by_field_name("condition")
+
+    body_label = ctx.fresh_label("do_body")
+    cond_label = ctx.fresh_label("do_cond")
+    end_label = ctx.fresh_label("do_end")
+
+    ctx.emit(Opcode.LABEL, label=body_label)
+
+    ctx.push_loop(cond_label, end_label)
+    if body_node:
+        ctx.lower_block(body_node)
+    ctx.pop_loop()
+
+    ctx.emit(Opcode.LABEL, label=cond_label)
+    cond_reg = ctx.lower_expr(cond_node) if cond_node else ctx.fresh_reg()
+    ctx.emit(
+        Opcode.BRANCH_IF,
+        operands=[cond_reg],
+        label=f"{body_label},{end_label}",
+        node=node,
+    )
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+
+def lower_labeled_statement(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower `label: stmt` -> LABEL(name) + lower body."""
+    label_node = node.child_by_field_name("label")
+    body_node = node.child_by_field_name("body")
+
+    label_name = ctx.node_text(label_node) if label_node else "unknown_label"
+    label = ctx.fresh_label(label_name)
+    ctx.emit(Opcode.LABEL, label=label)
+
+    if body_node:
+        ctx.lower_stmt(body_node)
+
+
+def lower_with_statement(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower `with (obj) { body }` — lower object then body."""
+    object_node = node.child_by_field_name("object")
+    body_node = node.child_by_field_name("body")
+    if object_node:
+        ctx.lower_expr(object_node)
+    if body_node:
+        ctx.lower_block(body_node)

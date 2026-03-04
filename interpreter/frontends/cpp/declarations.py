@@ -1,0 +1,337 @@
+"""C++-specific declaration lowerers — pure functions taking (ctx, node)."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from interpreter.ir import Opcode
+from interpreter import constants
+from interpreter.frontends.c.declarations import (
+    extract_declarator_name,
+    _find_function_declarator,
+    lower_c_params,
+    lower_declaration,
+    lower_struct_field,
+)
+
+if TYPE_CHECKING:
+    from interpreter.frontends.context import TreeSitterEmitContext
+
+
+def lower_cpp_declaration(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower a C++ declaration using C++ struct type detection."""
+    struct_type = _extract_cpp_struct_type(ctx, node)
+    for child in node.children:
+        if child.type == "init_declarator":
+            from interpreter.frontends.c.declarations import _lower_init_declarator
+
+            _lower_init_declarator(ctx, child, struct_type=struct_type)
+        elif child.type == "identifier":
+            var_name = ctx.node_text(child)
+            if struct_type:
+                val_reg = ctx.fresh_reg()
+                ctx.emit(
+                    Opcode.CALL_FUNCTION,
+                    result_reg=val_reg,
+                    operands=[struct_type],
+                    node=node,
+                )
+            else:
+                val_reg = ctx.fresh_reg()
+                ctx.emit(
+                    Opcode.CONST,
+                    result_reg=val_reg,
+                    operands=[ctx.constants.none_literal],
+                )
+            ctx.emit(
+                Opcode.STORE_VAR,
+                operands=[var_name, val_reg],
+                node=node,
+            )
+
+
+def _extract_cpp_struct_type(ctx: TreeSitterEmitContext, node) -> str:
+    """Return struct/class type name from a declaration, or ''.
+
+    Extends the C version to also detect bare ``type_identifier``
+    nodes (``Counter c;`` without ``struct`` keyword).
+    """
+    from interpreter.frontends.c.declarations import _extract_struct_type
+
+    result = _extract_struct_type(ctx, node)
+    if result:
+        return result
+    for child in node.children:
+        if child.type == "type_identifier":
+            return ctx.node_text(child)
+    return ""
+
+
+def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
+    """Emit ``SYMBOLIC param:this`` + ``STORE_VAR this`` for instance methods."""
+    ctx.emit(
+        Opcode.SYMBOLIC,
+        result_reg=ctx.fresh_reg(),
+        operands=[f"{constants.PARAM_PREFIX}this"],
+    )
+    ctx.emit(
+        Opcode.STORE_VAR,
+        operands=["this", f"%{ctx.reg_counter - 1}"],
+    )
+
+
+def lower_class_specifier(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower class_specifier (C++ class with field_declaration_list body)."""
+    name_node = node.child_by_field_name("name")
+    body_node = node.child_by_field_name("body")
+    class_name = ctx.node_text(name_node) if name_node else "__anon_class"
+
+    class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
+    end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
+    ctx.emit(Opcode.LABEL, label=class_label)
+    if body_node:
+        lower_cpp_class_body(ctx, body_node)
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    cls_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=cls_reg,
+        operands=[
+            constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
+        ],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+
+
+def lower_cpp_class_body(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower field_declaration_list (C++ class/struct body)."""
+    from interpreter.frontends.cpp.control_flow import lower_template_decl
+
+    for child in node.children:
+        if child.type == "function_definition":
+            lower_cpp_method(ctx, child)
+        elif child.type == "declaration":
+            lower_declaration(ctx, child)
+        elif child.type == "field_declaration":
+            lower_struct_field(ctx, child)
+        elif child.type == "template_declaration":
+            lower_template_decl(ctx, child)
+        elif child.type == "friend_declaration":
+            continue
+        elif child.type == "access_specifier":
+            continue
+        elif child.type == "field_initializer_list":
+            lower_field_initializer_list(ctx, child)
+        elif child.is_named and child.type not in ("{", "}"):
+            ctx.lower_stmt(child)
+
+
+def lower_cpp_method(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower a function_definition inside a class/struct body, injecting param:this."""
+    declarator_node = node.child_by_field_name("declarator")
+    body_node = node.child_by_field_name("body")
+    init_list_node = next(
+        (c for c in node.children if c.type == "field_initializer_list"),
+        None,
+    )
+
+    func_name = "__anon"
+    params_node = None
+
+    if declarator_node:
+        if declarator_node.type == "function_declarator":
+            name_node = declarator_node.child_by_field_name("declarator")
+            params_node = declarator_node.child_by_field_name("parameters")
+            func_name = (
+                extract_declarator_name(ctx, name_node) if name_node else "__anon"
+            )
+        else:
+            func_decl = _find_function_declarator(declarator_node)
+            if func_decl:
+                name_node = func_decl.child_by_field_name("declarator")
+                params_node = func_decl.child_by_field_name("parameters")
+                func_name = (
+                    extract_declarator_name(ctx, name_node) if name_node else "__anon"
+                )
+            else:
+                func_name = extract_declarator_name(ctx, declarator_node)
+
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+    end_label = ctx.fresh_label(f"end_{func_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
+    ctx.emit(Opcode.LABEL, label=func_label)
+
+    _emit_this_param(ctx)
+
+    if params_node:
+        lower_c_params(ctx, params_node)
+
+    if init_list_node:
+        lower_field_initializer_list(ctx, init_list_node)
+
+    if body_node:
+        ctx.lower_block(body_node)
+
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
+    )
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=func_reg,
+        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+
+def lower_field_initializer_list(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower field_initializer_list: : field(val), field2(val2).
+
+    Emits: LOAD_VAR this -> [lower_expr(arg) -> STORE_FIELD this, field, val] x N
+    """
+    this_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.LOAD_VAR,
+        result_reg=this_reg,
+        operands=["this"],
+        node=node,
+    )
+    for child in node.children:
+        if child.type == "field_initializer":
+            field_node = next(
+                (c for c in child.children if c.type == "field_identifier"),
+                None,
+            )
+            args_node = next(
+                (c for c in child.children if c.type == "argument_list"),
+                None,
+            )
+            if field_node is None:
+                continue
+            field_name = ctx.node_text(field_node)
+            if args_node:
+                arg_children = [c for c in args_node.children if c.is_named]
+                val_reg = (
+                    ctx.lower_expr(arg_children[0]) if arg_children else ctx.fresh_reg()
+                )
+            else:
+                val_reg = ctx.fresh_reg()
+                ctx.emit(
+                    Opcode.CONST,
+                    result_reg=val_reg,
+                    operands=[ctx.constants.default_return_value],
+                )
+            ctx.emit(
+                Opcode.STORE_FIELD,
+                operands=[this_reg, field_name, val_reg],
+                node=child,
+            )
+
+
+def lower_cpp_function_def(ctx: TreeSitterEmitContext, node) -> None:
+    """Override C function_def to detect and lower field_initializer_list in constructors."""
+    declarator_node = node.child_by_field_name("declarator")
+    body_node = node.child_by_field_name("body")
+    init_list_node = next(
+        (c for c in node.children if c.type == "field_initializer_list"),
+        None,
+    )
+
+    func_name = "__anon"
+    params_node = None
+
+    if declarator_node:
+        if declarator_node.type == "function_declarator":
+            name_node = declarator_node.child_by_field_name("declarator")
+            params_node = declarator_node.child_by_field_name("parameters")
+            func_name = (
+                extract_declarator_name(ctx, name_node) if name_node else "__anon"
+            )
+        else:
+            func_decl = _find_function_declarator(declarator_node)
+            if func_decl:
+                name_node = func_decl.child_by_field_name("declarator")
+                params_node = func_decl.child_by_field_name("parameters")
+                func_name = (
+                    extract_declarator_name(ctx, name_node) if name_node else "__anon"
+                )
+            else:
+                func_name = extract_declarator_name(ctx, declarator_node)
+
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+    end_label = ctx.fresh_label(f"end_{func_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
+    ctx.emit(Opcode.LABEL, label=func_label)
+
+    if params_node:
+        lower_c_params(ctx, params_node)
+
+    # Emit field initializer list (C++ constructor initializer) before body
+    if init_list_node:
+        lower_field_initializer_list(ctx, init_list_node)
+
+    if body_node:
+        ctx.lower_block(body_node)
+
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
+    )
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=func_reg,
+        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+
+def lower_cpp_struct_body(ctx: TreeSitterEmitContext, node) -> None:
+    """Override C _lower_struct_body to handle function_definition children."""
+    lower_cpp_class_body(ctx, node)
+
+
+def lower_cpp_struct_def(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower struct_specifier using C++ class body handling."""
+    name_node = node.child_by_field_name("name")
+    body_node = node.child_by_field_name("body")
+
+    if name_node is None and body_node is None:
+        return
+
+    struct_name = ctx.node_text(name_node) if name_node else "__anon_struct"
+
+    class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{struct_name}")
+    end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{struct_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
+    ctx.emit(Opcode.LABEL, label=class_label)
+    if body_node:
+        lower_cpp_class_body(ctx, body_node)
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    cls_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=cls_reg,
+        operands=[
+            constants.CLASS_REF_TEMPLATE.format(name=struct_name, label=class_label)
+        ],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[struct_name, cls_reg])

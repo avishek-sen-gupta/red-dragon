@@ -703,9 +703,9 @@ class TestCFrontendCaseStatementDefensive:
     """Verify case_statement has a dispatch entry for defensive handling."""
 
     def test_case_statement_has_dispatch_entry(self):
-        """case_statement is registered in _STMT_DISPATCH for defensive handling."""
+        """case_statement is registered in stmt dispatch for defensive handling."""
         frontend = CFrontend(TreeSitterParserFactory(), "c")
-        assert "case_statement" in frontend._STMT_DISPATCH
+        assert "case_statement" in frontend._build_stmt_dispatch()
 
     def test_switch_case_still_works_after_dispatch_entry(self):
         """Adding case_statement to _STMT_DISPATCH must not break normal
