@@ -8,7 +8,7 @@ This document captures key architectural decisions made during the development o
 
 **Context:** The project needed a single representation that all source languages lower into, enabling language-agnostic analysis and execution. A tree-based AST would require per-language walkers for every downstream pass.
 
-**Decision:** Adopt a flattened three-address code (TAC) IR with ~19 opcodes (`CONST`, `BINOP`, `STORE_VAR`, `LOAD_VAR`, `BRANCH_IF`, `LABEL`, `CALL_FUNCTION`, `RETURN`, etc.). Every instruction is a flat dataclass with an opcode, operands, and a destination register. No nested expressions — all intermediates are explicit.
+**Decision:** Adopt a flattened three-address code (TAC) IR with 27 opcodes (see [IR Reference](ir-reference.md)). Every instruction is a flat dataclass with an opcode, operands, and a destination register. No nested expressions — all intermediates are explicit.
 
 **Consequences:** CFG construction, dataflow analysis, and VM execution all operate on the same flat instruction list, eliminating duplication. Adding a new language frontend only requires emitting these opcodes. The trade-off is that lowering must decompose complex expressions (e.g., `a + b * c`) into multiple instructions, increasing IR verbosity.
 
@@ -48,7 +48,7 @@ This document captures key architectural decisions made during the development o
 
 **Context:** Supporting languages without tree-sitter grammars required an alternative lowering path. Using an LLM as a "reasoning engine" to analyse code produces inconsistent, hallucination-prone results.
 
-**Decision:** Constrain the LLM to act as a **compiler frontend**: the prompt provides all 19 opcode schemas, concrete patterns for functions/classes/control flow, and a full worked example. The LLM's job is mechanical translation, not reasoning. Output is structured JSON matching the IR schema.
+**Decision:** Constrain the LLM to act as a **compiler frontend**: the prompt provides all 27 opcode schemas (see [IR Reference](ir-reference.md)), concrete patterns for functions/classes/control flow, and a full worked example. The LLM's job is mechanical translation, not reasoning. Output is structured JSON matching the IR schema.
 
 **Consequences:** LLM output is far more consistent because the task is pattern-matching rather than open-ended reasoning. Any language the LLM has seen in training can be lowered. The trade-off is that the prompt is large (~2K tokens) and quality depends on the LLM's familiarity with the source language.
 

@@ -311,7 +311,7 @@
   <h1 class="banner-title"><svg class="banner-logo" viewBox="0 0 30 50" width="30" height="50"><polygon points="5,10 25,25 5,40" fill="#e57373"/></svg>Red<span style="color: #e57373;">Dragon</span></h1>
   <h2 style="color: #90a4ae;">Multi-language LLM-assisted symbolic execution and dataflow analysis</h2>
   <p class="tagline">"Deterministic where possible. Symbolic where necessary. LLM only as a last resort."</p>
-  <p class="small dim" style="margin-top: 40px;">~24K LOC &middot; 20 opcodes &middot; 15 frontends &middot; 1,214 tests &middot; 4 LLM providers</p>
+  <p class="small dim" style="margin-top: 40px;">~24K LOC &middot; 27 opcodes &middot; 15 frontends &middot; 8,469 tests &middot; 4 LLM providers</p>
   <aside class="notes">
     This is an end-to-end technical deep dive into RedDragon's architecture.
     The key idea: avoid LLMs entirely for concrete programs, fall back gracefully
@@ -375,7 +375,7 @@
     <span class="arch-arrow fragment" data-fragment-index="3">&rarr;</span>
     <div class="arch-box green fragment" data-fragment-index="3">Lower<br><span class="small dim">Frontend</span></div>
     <span class="arch-arrow fragment" data-fragment-index="4">&rarr;</span>
-    <div class="arch-box green fragment" data-fragment-index="4">IR<br><span class="small dim">20 opcodes</span></div>
+    <div class="arch-box green fragment" data-fragment-index="4">IR<br><span class="small dim">27 opcodes</span></div>
     <span class="arch-arrow fragment" data-fragment-index="5">&rarr;</span>
     <div class="arch-box fragment" data-fragment-index="5">CFG<br><span class="small dim">dataflow</span></div>
     <span class="arch-arrow fragment" data-fragment-index="6">&rarr;</span>
@@ -434,7 +434,7 @@
     No expression trees. No register allocation. Each instruction has an explicit destination register.
   </p>
   <aside class="notes">
-    20 opcodes total. The IR is deliberately flat — no nested expressions.
+    27 opcodes total. The IR is deliberately flat — no nested expressions.
     Every value has a named register. This makes dataflow analysis trivial.
   </aside>
 </section>
@@ -624,7 +624,7 @@ BINOP     t11, t9, "==", t10</code></pre>
     <div>
       <h3>The Prompt Contract</h3>
       <ul style="font-size: 0.75em;">
-        <li class="fragment">System prompt is a <strong>full IR specification</strong>: all 20 opcodes with their operand schemas</li>
+        <li class="fragment">System prompt is a <strong>full IR specification</strong>: all 27 opcodes with their operand schemas</li>
         <li class="fragment">Includes <strong>exact patterns</strong> for functions, classes, if/else, loops &mdash; not prose descriptions, but concrete JSON examples</li>
         <li class="fragment">Full worked example: <code>fib(n)</code> &rarr; 30-instruction IR listing</li>
         <li class="fragment">User prompt is just: <em>"Lower this {language} source into IR"</em></li>
@@ -1475,7 +1475,7 @@ class SymbolicValue:
 <!-- Slide 20: LocalExecutor -->
 <section>
   <h2>LocalExecutor</h2>
-  <p>Full dispatch table: <strong class="accent">19 opcode handlers + 10 builtins</strong></p>
+  <p>Full dispatch table: <strong class="accent">27 opcode handlers + 10 builtins</strong></p>
   <div class="two-col" style="font-size: 0.85em;">
     <div>
       <pre><code class="language-python">DISPATCH = {
@@ -1627,7 +1627,7 @@ p = Point(3, 4)
     </div>
     <div class="arch-box fragment" style="width: 80%; display: block; margin: 15px auto; text-align: left; padding: 15px 25px;">
       <strong class="accent4">Language-agnostic</strong><br>
-      <span class="small dim">Same 20 opcodes for all 15 languages &rarr; one VM, one analysis framework</span>
+      <span class="small dim">Same 27 opcodes for all 15 languages &rarr; one VM, one analysis framework</span>
     </div>
   </div>
 </section>

@@ -24,7 +24,7 @@ This document describes the design of the frontend subsystem — the pipeline st
 
 ## 1. Overview
 
-The frontend subsystem converts source code in any language into a universal flattened three-address code IR (~20 opcodes). There are three frontend strategies:
+The frontend subsystem converts source code in any language into a universal flattened three-address code IR ([27 opcodes](ir-reference.md)). There are three frontend strategies:
 
 | Strategy | Input | How | Speed | Languages |
 |---|---|---|---|---|
@@ -494,7 +494,7 @@ The `tree` parameter is **ignored** — the LLM works from raw source text only.
 `LLMFrontendPrompts.SYSTEM_PROMPT` (`interpreter/llm_frontend.py:23`) is a ~180-line prompt that includes:
 
 1. **Instruction format specification** — JSON schema for each instruction
-2. **Complete opcode reference** — all 20 opcodes with operand formats
+2. **Complete opcode reference** — all 27 opcodes with operand formats (see [IR Reference](ir-reference.md))
 3. **Critical patterns** — exact templates for function definitions, class definitions, constructor calls, method calls, if/elif/else
 4. **Full worked example** — Fibonacci function lowered to 30+ IR instructions
 5. **Strict rules** — entry label mandatory, flattening required, literal formats
@@ -929,7 +929,7 @@ Every instruction from the deterministic frontend carries its source location, e
 
 | Principle | Manifestation |
 |---|---|
-| **Single IR for all languages** | 20 opcodes are enough to represent 15 languages + LLM output |
+| **Single IR for all languages** | 27 opcodes are enough to represent 15 languages + COBOL + LLM output |
 | **Dispatch table pattern** | Extensible via dict lookup, not if/elif chains |
 | **Overridable constants** | Same lowering logic handles different tree-sitter grammars |
 | **Graceful degradation** | Unknown constructs → `SYMBOLIC`, not crashes |

@@ -6,7 +6,7 @@ This directory contains exhaustive per-file documentation for the RedDragon fron
 
 ## Architecture Overview
 
-The frontend subsystem converts source code in any of 15 supported languages into a universal flattened three-address code IR (~20 opcodes). The deterministic frontend strategy uses tree-sitter to parse source into an AST, then performs recursive descent over that AST to emit IR instructions.
+The frontend subsystem converts source code in any of 15 supported languages into a universal flattened three-address code IR ([27 opcodes](../ir-reference.md)). The deterministic frontend strategy uses tree-sitter to parse source into an AST, then performs recursive descent over that AST to emit IR instructions.
 
 The architecture follows a classic **base class + per-language subclass** pattern:
 
