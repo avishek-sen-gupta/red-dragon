@@ -363,6 +363,26 @@ end.
         assert len(func_refs) >= 2
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 2
+        # Verify CALL_FUNCTION Greet appears inside Main's body
+        labels = _labels_in_order(instructions)
+        main_label_idx = next(
+            i
+            for i, inst in enumerate(instructions)
+            if inst.opcode == Opcode.LABEL and inst.label and "func_Main" in inst.label
+        )
+        end_main_idx = next(
+            i
+            for i, inst in enumerate(instructions)
+            if inst.opcode == Opcode.LABEL and inst.label and "end_Main" in inst.label
+        )
+        greet_call_indices = [
+            i
+            for i, inst in enumerate(instructions)
+            if inst.opcode == Opcode.CALL_FUNCTION and "Greet" in inst.operands
+        ]
+        assert any(
+            main_label_idx < idx < end_main_idx for idx in greet_call_indices
+        ), "Greet() call must appear inside Main's body"
 
     def test_function_result_assignment(self):
         source = """\
