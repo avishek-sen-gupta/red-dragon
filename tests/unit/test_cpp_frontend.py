@@ -221,7 +221,7 @@ int main() {
         source = """\
 int main() {
     int x = 10;
-    auto f = [](int a, int b) { return a + b; };
+    auto f = [x](int a, int b) { return a + x + b; };
     int result = f(x, 20);
 }
 """
@@ -233,6 +233,8 @@ int main() {
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("result" in inst.operands for inst in stores)
         assert any("f" in inst.operands for inst in stores)
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("x" in inst.operands for inst in loads)
 
     def test_range_for_with_method(self):
         source = """\
@@ -263,6 +265,10 @@ int main() {
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("pi" in inst.operands for inst in stores)
         assert any("truncated" in inst.operands for inst in stores)
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("pi" in inst.operands for inst in loads)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
     def test_try_catch_with_throw(self):
         source = """\

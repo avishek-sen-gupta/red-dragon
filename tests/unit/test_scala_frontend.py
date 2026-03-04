@@ -171,10 +171,11 @@ class TestScalaSpecial:
         assert instructions[0].label == "entry"
 
     def test_fallback_symbolic(self):
-        instructions = _parse_scala("object M { type Alias = List[Int] }")
+        instructions = _parse_scala("object M { val x = classOf[Int] }")
         opcodes = _opcodes(instructions)
-        # Type alias should produce at least a SYMBOLIC or be passthrough
-        assert len(instructions) > 1
+        assert Opcode.SYMBOLIC in opcodes
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert any("unsupported:" in str(inst.operands) for inst in symbolics)
 
     def test_return_last_expression_in_block(self):
         instructions = _parse_scala(

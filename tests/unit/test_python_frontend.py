@@ -990,6 +990,7 @@ class TestPythonInterpolation:
         # The string node is lowered as CONST containing the f-string text
         consts = _find_all(instructions, Opcode.CONST)
         assert len(consts) >= 1
+        assert any("hello" in str(inst.operands) for inst in consts)
 
     def test_interpolation_no_symbolic(self):
         """f-string should not emit unsupported:interpolation."""

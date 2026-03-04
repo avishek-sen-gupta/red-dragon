@@ -903,6 +903,8 @@ class Bar {
         instructions = _parse_js(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("count" in inst.operands for inst in stores)
 
 
 class TestJavaScriptWithStatement:

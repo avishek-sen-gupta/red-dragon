@@ -263,22 +263,21 @@ fn main() {
         source = """\
 fn main() {
     let mut total = 0;
-    let mut i = 0;
-    while i < 10 {
+    for i in 0..10 {
         if i % 2 == 0 {
             total = total + i;
         }
-        i = i + 1;
     }
 }
 """
         instructions = _parse_rust(source)
         branches = _find_all(instructions, Opcode.BRANCH_IF)
-        assert len(branches) >= 2
+        assert len(branches) >= 1
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("total" in inst.operands for inst in stores)
-        assert any("i" in inst.operands for inst in stores)
-        assert len(instructions) > 20
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("range" in str(inst.operands) for inst in calls)
+        assert len(instructions) > 10
 
     def test_nested_if_as_expression(self):
         source = """\
