@@ -765,7 +765,7 @@ const (
         assert any("A" in inst.operands for inst in stores)
         assert any("B" in inst.operands for inst in stores)
 
-    def test_const_without_value(self):
+    def test_const_with_explicit_type(self):
         source = """\
 package main
 const X int = 10

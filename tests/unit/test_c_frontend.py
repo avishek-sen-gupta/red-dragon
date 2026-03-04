@@ -458,7 +458,7 @@ void f() {
 
 
 class TestCFrontendStructFieldDeclaration:
-    def test_struct_field_with_default(self):
+    def test_struct_multi_field_lowering(self):
         source = """
 struct Vec3 {
     float x;
