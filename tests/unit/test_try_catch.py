@@ -94,6 +94,11 @@ class TestBasicTryCatch:
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
         assert any("catch_0" in l for l in labels)
+        assert any("try_end" in l for l in labels)
+        caught = [s for s in _symbolics(ir) if "caught_exception" in str(s.operands)]
+        assert len(caught) == 1
+        stores = [i for i in ir if i.opcode == Opcode.STORE_VAR and "e" in i.operands]
+        assert len(stores) >= 1
 
     def test_cpp_try_catch(self):
         ir = _parse_and_lower(
@@ -104,6 +109,9 @@ class TestBasicTryCatch:
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
         assert any("catch_0" in l for l in labels)
+        assert any("try_end" in l for l in labels)
+        caught = [s for s in _symbolics(ir) if "caught_exception" in str(s.operands)]
+        assert len(caught) == 1
 
     def test_csharp_try_catch(self):
         ir = _parse_and_lower(
@@ -114,6 +122,11 @@ class TestBasicTryCatch:
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
         assert any("catch_0" in l for l in labels)
+        assert any("try_end" in l for l in labels)
+        caught = [s for s in _symbolics(ir) if "caught_exception" in str(s.operands)]
+        assert len(caught) == 1
+        stores = [i for i in ir if i.opcode == Opcode.STORE_VAR and "e" in i.operands]
+        assert len(stores) >= 1
 
     def test_php_try_catch(self):
         ir = _parse_and_lower(
@@ -124,6 +137,11 @@ class TestBasicTryCatch:
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
         assert any("catch_0" in l for l in labels)
+        assert any("try_end" in l for l in labels)
+        caught = [s for s in _symbolics(ir) if "caught_exception" in str(s.operands)]
+        assert len(caught) == 1
+        stores = [i for i in ir if i.opcode == Opcode.STORE_VAR and "$e" in i.operands]
+        assert len(stores) >= 1
 
     def test_kotlin_try_catch(self):
         ir = _parse_and_lower(
@@ -134,6 +152,9 @@ class TestBasicTryCatch:
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
         assert any("catch_0" in l for l in labels)
+        assert any("try_end" in l for l in labels)
+        caught = [s for s in _symbolics(ir) if "caught_exception" in str(s.operands)]
+        assert len(caught) == 1
 
     def test_ruby_begin_rescue(self):
         ir = _parse_and_lower(
@@ -144,6 +165,11 @@ class TestBasicTryCatch:
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
         assert any("catch_0" in l for l in labels)
+        assert any("try_end" in l for l in labels)
+        caught = [s for s in _symbolics(ir) if "caught_exception" in str(s.operands)]
+        assert len(caught) == 1
+        stores = [i for i in ir if i.opcode == Opcode.STORE_VAR and "e" in i.operands]
+        assert len(stores) >= 1
 
 
 # ── Try/finally without catch ───────────────────────────────────────
@@ -364,6 +390,18 @@ class TestCatchWithoutVariable:
         labels = _labels(ir)
         assert any("try_body" in l for l in labels)
         assert any("catch_0" in l for l in labels)
+        # Caught exception symbolic should exist even without variable
+        caught = [s for s in _symbolics(ir) if "caught_exception" in str(s.operands)]
+        assert len(caught) == 1
+        # Bare except has no named variable — no STORE_VAR for exception
+        exc_stores = [
+            i
+            for i in ir
+            if i.opcode == Opcode.STORE_VAR and caught[0].result_reg in i.operands
+        ]
+        assert (
+            len(exc_stores) == 0
+        ), "bare except should not store exception to a variable"
 
 
 # ── Python try/except/else/finally ──────────────────────────────────

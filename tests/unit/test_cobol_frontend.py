@@ -101,6 +101,11 @@ class TestDataDivisionLowering:
 
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert len(writes) >= 1  # At least one WRITE_REGION for initial value
+        # Verify the write contains encoded bytes for "123"
+        write_bytes = [w.operands for w in writes]
+        assert any(
+            isinstance(ops, list) and len(ops) >= 2 for ops in write_bytes
+        ), f"WRITE_REGION should have region + data operands, got {write_bytes}"
 
     def test_entry_label_emitted(self):
         asg = CobolASG(
