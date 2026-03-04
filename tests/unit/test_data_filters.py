@@ -58,7 +58,7 @@ class TestAlignDecimal:
         assert align_decimal("123", 3, 0) == "123"
 
     def test_overflow_integer(self):
-        """'999' with PIC 9(2)V9(1) → '991' (integer overflow truncation)"""
+        """'999' with PIC 9(2)V9(1) → '990' (integer overflow truncation)"""
         # left_adjust("999", 2) → "99", dec "".ljust(1,"0") → "0"
         # Wait: "999" has no decimal, so int_part="999", dec_part=""
         # left_adjust("999", 2) → "99" (rightmost 2)
