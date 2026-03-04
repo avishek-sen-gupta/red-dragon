@@ -171,3 +171,6 @@ let answer = 42;
         assert vars_["answer"] == 42
         assert isinstance(vars_["d"], str)
         assert vars_["d"].startswith("obj_")
+        # Constructor body must have run: this.name = "Rex"
+        heap_obj = vm.heap[vars_["d"]]
+        assert heap_obj.fields["name"] == "Rex"
