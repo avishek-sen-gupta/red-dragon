@@ -6,7 +6,14 @@
 
 ![CI](https://github.com/avishek-sen-gupta/red-dragon/actions/workflows/ci.yml/badge.svg) [![Presentation](https://img.shields.io/badge/Presentation-slides-blue)](presentation/index.html) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE.md)
 
-**RedDragon** is a multi-language source code analysis toolkit that:
+**RedDragon** is an experiment in building infrastructure for **reverse-engineering frequently-incomplete code** — the kind found in legacy migrations, decompiled binaries, partial extracts, and codebases with missing dependencies. It explores two ideas:
+
+1. **Language frontends that emit IR deterministically *or* through LLMs** — tree-sitter frontends (15 languages) and a ProLeap bridge (COBOL) handle well-formed source deterministically; an LLM frontend fills in gaps for unsupported languages, malformed fragments, or constructs the deterministic frontends don't yet cover. Both paths produce the same universal [27-opcode IR](docs/ir-reference.md).
+2. **A VM that integrates LLMs to produce plausible state changes** when execution hits missing dependencies, unresolved imports, or unknown externals — keeping execution moving through incomplete programs instead of halting at the first unknown.
+
+When source is complete and all dependencies are present, the entire pipeline (parse → lower → execute) is **deterministic with 0 LLM calls**. LLMs are only invoked at the boundaries where information is genuinely missing.
+
+Concretely, RedDragon:
 
 - **Parses and lowers** source in 15 languages via tree-sitter, COBOL via ProLeap parser bridge, or any language via LLM-based lowering (including chunked lowering for large files) — each frontend owns its parsing internally; callers only provide `source: bytes`
 - **Produces** a universal flattened three-address code IR ([27 opcodes](docs/ir-reference.md), including 3 byte-addressed memory region opcodes and 2 named continuation opcodes) with structured source location traceability (every IR instruction from deterministic frontends carries its originating AST span; LLM frontends lack AST nodes and produce `NO_SOURCE_LOCATION`) — the LLM frontend uses the LLM as a **compiler frontend**, constrained by a formal IR schema with concrete patterns
@@ -43,23 +50,45 @@ For programs with concrete inputs and no external dependencies, the entire execu
 
 ## Setup
 
-Requires Python >= 3.10 and [Poetry](https://python-poetry.org/).
+### Prerequisites
+
+| Dependency | Required for | Install |
+|------------|-------------|---------|
+| Python >= 3.10 | Core | [python.org](https://www.python.org/) or your package manager |
+| [Poetry](https://python-poetry.org/) | Dependency management | `pipx install poetry` |
+| JDK 17+ | COBOL frontend only | [adoptium.net](https://adoptium.net/) or `brew install openjdk@17` |
+| [Maven](https://maven.apache.org/) | Building ProLeap bridge | `brew install maven` or [maven.apache.org](https://maven.apache.org/install.html) |
+
+### Full build (including COBOL)
 
 ```bash
+git clone --recurse-submodules https://github.com/avishek-sen-gupta/red-dragon.git
+cd red-dragon
+
+# 1. Python dependencies
 poetry install
+
+# 2. ProLeap COBOL bridge (requires JDK 17+ and Maven)
+cd proleap-bridge && ./build.sh && cd ..
+# Produces: proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar
+
+# 3. Verify
+poetry run python -m pytest tests/unit/ -x -q       # unit tests (no external deps)
+poetry run python -m pytest tests/integration/ -x -q # integration tests (needs ProLeap JAR)
 ```
 
-### ProLeap COBOL Bridge (optional)
-
-The COBOL frontend requires the ProLeap bridge JAR (JDK 17+, Maven). ProLeap is vendored as a git submodule:
+### Minimal build (without COBOL)
 
 ```bash
-git submodule update --init                # fetch the ProLeap submodule
-cd proleap-bridge && ./build.sh            # builds ProLeap + bridge in one step
-# Produces: target/proleap-bridge-0.1.0-shaded.jar
+git clone https://github.com/avishek-sen-gupta/red-dragon.git
+cd red-dragon
+poetry install
+poetry run python -m pytest tests/unit/ -x -q
 ```
 
-Standalone usage (pipe COBOL source or pass file path):
+All 15 tree-sitter frontends and the LLM frontends work without JDK/Maven. COBOL integration tests skip gracefully when the ProLeap JAR is not present.
+
+### ProLeap bridge standalone usage
 
 ```bash
 cat myprogram.cbl | java -jar proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar
@@ -67,7 +96,9 @@ java -jar proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar myprogram.cbl
 java -jar proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar -format TANDEM myprogram.cbl
 ```
 
-Set your API key for the LLM backend (only needed for `--frontend llm` or when execution encounters symbolic values):
+### LLM API keys (optional)
+
+Only needed for `--frontend llm` or when execution encounters symbolic values:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-...          # for Claude (default)
@@ -418,6 +449,16 @@ The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercis
 - **[COBOL Frontend Design](docs/frontend-design/cobol.md)** — ProLeap bridge architecture, PIC-driven encoding, 20-statement coverage matrix, PERFORM continuation semantics, SEARCH/STRING/INSPECT lowering patterns
 - **[Dataflow Design Document](docs/notes-on-dataflow-design.md)** — Dataflow analysis architecture: reaching definitions via GEN/KILL worklist fixpoint, def-use chain extraction, variable dependency graph construction with transitive closure, integration with IR/CFG, worked examples, and complexity analysis
 - **[Architectural Decision Records](docs/architectural-design-decisions.md)** — Chronological log of key architectural decisions: IR design, deterministic VM, symbolic execution, closure semantics, LLM frontend strategy, dataflow analysis, modular package structure, and more
+
+## Limitations
+
+This is an experimental project. Key limitations to be aware of:
+
+- **No standard library implementations.** Language standard libraries are not implemented. The VM provides a small set of builtins (string operations, basic I/O, arithmetic) but calls to standard library functions (e.g., `Collections.sort()` in Java, `itertools` in Python) will produce symbolic values or fall back to the LLM oracle.
+- **Language feature coverage is evolving.** Frontend support for each language is tested through [Exercism](#exercism-integration-suite) and [Rosetta](#rosetta-cross-language-suite) cross-language suites, but not every language construct is covered. Edge cases in complex features (e.g., advanced pattern matching, generator expressions, async/await) may lower incorrectly or produce `SYMBOLIC` nodes.
+- **LLM frontends are non-deterministic.** The LLM and chunked-LLM frontends produce valid IR in most cases, but outputs can vary between runs and may occasionally generate structurally incorrect IR despite schema constraints and retries.
+- **No concurrency or I/O modelling.** The VM is single-threaded and does not model file I/O, network calls, or concurrency primitives. Programs relying on these will hit symbolic boundaries.
+- **COBOL frontend requires external tooling.** The ProLeap bridge needs JDK 17+ and a separately-built JAR. It is not included in the default Poetry install.
 
 ## See Also
 
