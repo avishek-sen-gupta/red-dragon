@@ -983,14 +983,16 @@ class TestPythonListPattern:
 
 class TestPythonInterpolation:
     def test_interpolation_basic(self):
-        """f'hello {name}' is lowered as const (whole f-string text)."""
+        """f'hello {name}' decomposes into CONST + LOAD_VAR + BINOP concatenation."""
         instructions = _parse_python('x = f"hello {name}"')
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
-        # The string node is lowered as CONST containing the f-string text
         consts = _find_all(instructions, Opcode.CONST)
-        assert len(consts) >= 1
         assert any("hello" in str(inst.operands) for inst in consts)
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("name" in inst.operands for inst in loads)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
 
     def test_interpolation_no_symbolic(self):
         """f-string should not emit unsupported:interpolation."""
