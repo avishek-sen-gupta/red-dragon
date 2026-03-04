@@ -368,8 +368,8 @@ class TestIntegration:
         assert len(result.definitions) > 0
         assert len(result.def_use_chains) > 0
 
-    def test_max_iterations_bounded(self):
-        """Verify convergence limit works by checking normal programs converge fast."""
+    def test_analysis_converges_for_loop_program(self):
+        """Reaching definitions analysis converges and covers all blocks on a loop program."""
         ir = [
             _make_inst(Opcode.LABEL, label="entry"),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["0"]),
