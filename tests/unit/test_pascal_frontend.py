@@ -102,20 +102,21 @@ class TestPascalFunctions:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("function:" in str(inst.operands) for inst in consts)
 
-    def test_function_params_are_symbolic(self):
-        # The Pascal grammar wraps defProc around declProc + block.
-        # The frontend finds identifier/declArgs inside defProc's children —
-        # but they are nested inside declProc. The current implementation
-        # does not extract params when they are inside declProc, so params
-        # are not lowered. This test documents the current behaviour.
+    def test_function_params_are_lowered(self):
+        # The Pascal frontend extracts params from declArgs inside defProc
+        # and emits SYMBOLIC param:x + STORE_VAR for each parameter.
         instructions = _parse_pascal(
             "program M; function F(x: Integer): Integer; begin F := x; end; begin end."
         )
         opcodes = _opcodes(instructions)
-        # The function body (F := x) still gets lowered
         assert Opcode.LOAD_VAR in opcodes
         assert Opcode.STORE_VAR in opcodes
         assert Opcode.RETURN in opcodes
+        # Params ARE lowered — expect SYMBOLIC with "param:x"
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert any("param:x" in str(s.operands) for s in symbolics), (
+            "Expected param:x SYMBOLIC instruction for function parameter"
+        )
 
 
 class TestPascalControlFlow:
