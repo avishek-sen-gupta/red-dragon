@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RedDragon: Overview</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reveal.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/theme/moon.min.css">
+  <style>
+    :root {
+      --box-bg: rgba(34, 51, 68, 0.85);
+      --box-border: #4fc3f7;
+      --accent: #4fc3f7;
+      --accent2: #81c784;
+      --accent3: #ffb74d;
+      --accent4: #e57373;
+      --dim: #90a4ae;
+    }
+    .reveal { font-size: 32px; }
+    .reveal h1 { font-size: 1.8em; color: #4fc3f7; }
+    .reveal h1.banner-title {
+      text-transform: none;
+      color: #ffffff;
+      font-family: Helvetica, Arial, sans-serif;
+      font-size: 2.4em;
+      font-weight: bold;
+      text-shadow: 0 0 12px rgba(255, 255, 255, 0.4), 0 0 24px rgba(255, 255, 255, 0.2);
+    }
+    .banner-logo {
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    .reveal h2 { font-size: 1.4em; color: #4fc3f7; }
+    .reveal h3 { font-size: 1.1em; color: #81c784; }
+    .reveal ul { font-size: 0.85em; }
+    .reveal li { margin-bottom: 0.5em; }
+    .reveal .small { font-size: 0.7em; }
+    .reveal .dim { color: var(--dim); }
+    .reveal .accent { color: var(--accent); }
+    .reveal .accent2 { color: var(--accent2); }
+    .reveal .accent3 { color: var(--accent3); }
+    .reveal .accent4 { color: var(--accent4); }
+
+    .arch-box {
+      display: inline-block;
+      padding: 12px 20px;
+      margin: 6px;
+      border: 2px solid var(--box-border);
+      border-radius: 8px;
+      background: var(--box-bg);
+      color: #fff;
+      font-weight: bold;
+      font-size: 0.8em;
+      text-align: center;
+      min-width: 100px;
+    }
+    .arch-box.green { border-color: var(--accent2); }
+    .arch-box.orange { border-color: var(--accent3); }
+    .arch-box.red { border-color: var(--accent4); }
+    .arch-arrow {
+      display: inline-block;
+      color: var(--accent);
+      font-size: 1.5em;
+      vertical-align: middle;
+      margin: 0 4px;
+    }
+    .arch-flow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 2px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin: 30px auto;
+      max-width: 750px;
+    }
+    .stat-card {
+      padding: 20px;
+      border: 2px solid var(--box-border);
+      border-radius: 10px;
+      background: var(--box-bg);
+      text-align: center;
+    }
+    .stat-card .number {
+      font-size: 2.2em;
+      font-weight: bold;
+      color: var(--accent);
+    }
+    .stat-card .label {
+      font-size: 0.7em;
+      color: var(--dim);
+      margin-top: 5px;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      align-items: start;
+    }
+
+    .tagline {
+      font-size: 0.9em;
+      color: var(--dim);
+      font-style: italic;
+      margin-top: 20px;
+    }
+
+    .lang-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin: 20px auto;
+      max-width: 800px;
+    }
+    .lang-cell {
+      padding: 10px;
+      border: 1px solid var(--box-border);
+      border-radius: 6px;
+      background: var(--box-bg);
+      font-size: 0.7em;
+      text-align: center;
+    }
+
+    .callout {
+      margin-top: 25px;
+      padding: 18px 25px;
+      border-radius: 10px;
+      font-size: 0.85em;
+    }
+    .callout.blue { border: 2px solid var(--accent); }
+    .callout.green { border: 2px solid var(--accent2); }
+    .callout.orange { border: 2px solid var(--accent3); }
+
+    .reveal .slide-number { font-size: 14px; }
+
+    .scenario-card {
+      padding: 18px 22px;
+      border-radius: 10px;
+      background: var(--box-bg);
+      border: 1px solid #37474f;
+      margin-bottom: 12px;
+      text-align: left;
+    }
+    .scenario-card strong { color: var(--accent); }
+    .scenario-card .dim { font-size: 0.8em; }
+  </style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- Slide 1: Title -->
+<section>
+  <h1 class="banner-title"><svg class="banner-logo" viewBox="0 0 30 50" width="30" height="50"><polygon points="5,10 25,25 5,40" fill="#e57373"/></svg>Red<span style="color: #e57373;">Dragon</span></h1>
+  <h2 style="color: #90a4ae;">Understand code across 15 languages &mdash; even when it's incomplete</h2>
+  <p class="tagline">"Deterministic where possible. Symbolic where necessary. LLM only as a last resort."</p>
+  <p class="small dim" style="margin-top: 40px;">~82K lines of code &middot; 15 languages &middot; 8,496+ tests</p>
+</section>
+
+<!-- Slide 2: The Problem -->
+<section>
+  <h2>The Problem</h2>
+  <ul>
+    <li class="fragment"><span class="accent4">Real-world code is often incomplete</span> &mdash; legacy migrations, decompiled binaries, partial extracts, missing dependencies</li>
+    <li class="fragment">Traditional tools <span class="accent4">halt at the first gap</span> &mdash; one missing import, one unknown API call, and analysis stops entirely</li>
+    <li class="fragment">Asking an LLM to "just figure it out" is <span class="accent4">100&ndash;1,000x slower</span> than running code directly &mdash; and most code paths don't need an LLM at all</li>
+  </ul>
+  <div class="callout orange fragment">
+    <strong class="accent3">What if we could analyse and run code deterministically wherever possible, and only call an LLM at the exact points where information is genuinely missing?</strong>
+  </div>
+</section>
+
+<!-- Slide 3: The Solution -->
+<section>
+  <h2>The Solution</h2>
+  <p style="margin-bottom: 25px;">RedDragon is a <strong class="accent">multi-language code analysis engine</strong> that:</p>
+  <div class="two-col">
+    <div>
+      <div class="arch-box green fragment" style="width: 90%; display: block; margin: 12px auto; padding: 18px;">
+        <strong>Parses</strong> source code<br>
+        <span class="small dim">15 languages, one unified representation</span>
+      </div>
+      <div class="arch-box green fragment" style="width: 90%; display: block; margin: 12px auto; padding: 18px;">
+        <strong>Analyses</strong> data flow<br>
+        <span class="small dim">Which variables depend on which?</span>
+      </div>
+    </div>
+    <div>
+      <div class="arch-box green fragment" style="width: 90%; display: block; margin: 12px auto; padding: 18px;">
+        <strong>Executes</strong> deterministically<br>
+        <span class="small dim">Runs concrete code locally, fast</span>
+      </div>
+      <div class="arch-box orange fragment" style="width: 90%; display: block; margin: 12px auto; padding: 18px;">
+        <strong>Fills gaps</strong> with LLMs<br>
+        <span class="small dim">Only for genuinely unknown values</span>
+      </div>
+    </div>
+  </div>
+  <p class="fragment dim small" style="margin-top: 20px;">
+    The key: the LLM is a <strong>last resort</strong>, not the default. Most code runs without it.
+  </p>
+</section>
+
+<!-- Slide 4: How It Works (High Level) -->
+<section>
+  <h2>How It Works</h2>
+  <div class="arch-flow" style="margin: 30px 0;">
+    <div class="arch-box fragment">Source Code<br><span class="small dim">any of 15 languages</span></div>
+    <span class="arch-arrow fragment">&rarr;</span>
+    <div class="arch-box green fragment">Parse &amp; Translate<br><span class="small dim">universal format</span></div>
+    <span class="arch-arrow fragment">&rarr;</span>
+    <div class="arch-box green fragment">Analyse<br><span class="small dim">data flow &amp; deps</span></div>
+    <span class="arch-arrow fragment">&rarr;</span>
+    <div class="arch-box green fragment">Execute<br><span class="small dim">locally, fast</span></div>
+    <span class="arch-arrow fragment">&rarr;</span>
+    <div class="arch-box orange fragment">LLM Fallback<br><span class="small dim">only if needed</span></div>
+  </div>
+  <div class="callout blue fragment">
+    <strong>Every stage is deterministic</strong> except the final LLM fallback.
+    For fully concrete programs, the LLM is <strong class="accent2">never called</strong>.
+  </div>
+</section>
+
+<!-- Slide 5: 15 Languages, One Tool -->
+<section>
+  <h2>15 Languages, One Tool</h2>
+  <div class="lang-grid">
+    <div class="lang-cell"><strong>Python</strong></div>
+    <div class="lang-cell"><strong>JavaScript</strong></div>
+    <div class="lang-cell"><strong>TypeScript</strong></div>
+    <div class="lang-cell"><strong>Java</strong></div>
+    <div class="lang-cell"><strong>Ruby</strong></div>
+    <div class="lang-cell"><strong>Go</strong></div>
+    <div class="lang-cell"><strong>PHP</strong></div>
+    <div class="lang-cell"><strong>C#</strong></div>
+    <div class="lang-cell"><strong>C</strong></div>
+    <div class="lang-cell"><strong>C++</strong></div>
+    <div class="lang-cell"><strong>Rust</strong></div>
+    <div class="lang-cell"><strong>Kotlin</strong></div>
+    <div class="lang-cell"><strong>Scala</strong></div>
+    <div class="lang-cell"><strong>Lua</strong></div>
+    <div class="lang-cell"><strong>Pascal</strong></div>
+  </div>
+  <ul>
+    <li class="fragment">All languages are translated to the <strong class="accent">same internal format</strong> &mdash; the same analysis runs on all of them</li>
+    <li class="fragment">For <strong class="accent3">unsupported languages</strong>, the LLM can act as a translator &mdash; zero code changes needed</li>
+    <li class="fragment">Write your analysis <strong>once</strong>, apply it to <strong>any</strong> supported language</li>
+  </ul>
+</section>
+
+<!-- Slide 6: What Can You Do With It? -->
+<section>
+  <h2>What Can You Do With It?</h2>
+  <div class="scenario-card fragment">
+    <strong>Variable Dependency Analysis</strong><br>
+    <span class="dim">"Which inputs affect this output?" &mdash; trace every variable back to its sources, across function calls and branches</span>
+  </div>
+  <div class="scenario-card fragment">
+    <strong>Cross-Language Code Understanding</strong><br>
+    <span class="dim">Parse and analyse Python, Java, C++, and 12 more languages through a single unified pipeline</span>
+  </div>
+  <div class="scenario-card fragment">
+    <strong>Incomplete Code Execution</strong><br>
+    <span class="dim">Run code that has missing APIs or unknown imports &mdash; RedDragon fills gaps with symbolic placeholders and keeps going</span>
+  </div>
+  <div class="scenario-card fragment">
+    <strong>Legacy Code Reverse Engineering</strong><br>
+    <span class="dim">Analyse decompiled, partial, or poorly-documented codebases without needing them to compile or run</span>
+  </div>
+</section>
+
+<!-- Slide 7: The LLM Advantage -->
+<section>
+  <h2>Smart LLM Usage</h2>
+  <p style="margin-bottom: 20px;">RedDragon uses LLMs in <strong class="accent">two targeted ways</strong>:</p>
+  <div class="two-col">
+    <div>
+      <h3 style="color: var(--accent3);">1. As a Translator</h3>
+      <p class="small">For languages without a built-in parser, the LLM translates source code into RedDragon's internal format.</p>
+      <p class="small dim" style="margin-top: 10px;">This means <strong>any</strong> programming language can be supported &mdash; even exotic or proprietary ones.</p>
+    </div>
+    <div>
+      <h3 style="color: var(--accent3);">2. As a Gap-Filler</h3>
+      <p class="small">When executing code that calls an unknown API or missing function, the LLM provides a plausible result so execution can continue.</p>
+      <p class="small dim" style="margin-top: 10px;">Everything else runs locally at <strong>native speed</strong> &mdash; no LLM needed.</p>
+    </div>
+  </div>
+  <div class="callout green fragment" style="margin-top: 25px;">
+    <strong>Supports 4 LLM providers:</strong> Claude, OpenAI, Ollama (local), and HuggingFace &mdash; all through a single unified interface.
+  </div>
+</section>
+
+<!-- Slide 8: Why Not Just Use an LLM? -->
+<section>
+  <h2>Why Not Just Ask an LLM?</h2>
+  <div style="margin: 30px auto; max-width: 650px;">
+    <div class="two-col" style="text-align: center;">
+      <div>
+        <div class="arch-box green" style="width: 100%; display: block; padding: 20px;">
+          <div style="font-size: 1.6em; font-weight: bold; color: var(--accent2);">&lt; 1 ms</div>
+          <div class="small" style="margin-top: 8px;">RedDragon local execution<br>(per step)</div>
+        </div>
+      </div>
+      <div>
+        <div class="arch-box red" style="width: 100%; display: block; padding: 20px;">
+          <div style="font-size: 1.6em; font-weight: bold; color: var(--accent4);">100 ms &ndash; 2 s</div>
+          <div class="small" style="margin-top: 8px;">LLM API call<br>(per step)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul>
+    <li class="fragment">A simple function like <code>factorial(5)</code> takes <strong class="accent2">~67 microseconds</strong> locally vs. <strong class="accent4">~33 seconds</strong> if every step went through an LLM</li>
+    <li class="fragment">Most real code is <strong>fully concrete</strong> at any given call site &mdash; only genuinely missing information needs an LLM</li>
+    <li class="fragment">LLMs also <strong class="accent4">cost money per call</strong> &mdash; minimising calls reduces both latency and cost</li>
+  </ul>
+</section>
+
+<!-- Slide 9: Graceful Degradation -->
+<section>
+  <h2>Graceful Degradation</h2>
+  <p style="margin-bottom: 20px;">RedDragon <strong class="accent">never crashes</strong> on unknown code. It degrades gracefully:</p>
+  <div style="max-width: 650px; margin: 0 auto;">
+    <div class="arch-box green fragment" style="width: 100%; display: block; margin: 12px auto; padding: 15px; text-align: left;">
+      <strong>Complete code</strong> &rarr; fully deterministic execution, zero LLM calls
+    </div>
+    <div class="arch-box fragment" style="width: 100%; display: block; margin: 12px auto; padding: 15px; text-align: left;">
+      <strong>Partially complete code</strong> &rarr; runs what it can, marks unknowns as symbolic placeholders
+    </div>
+    <div class="arch-box orange fragment" style="width: 100%; display: block; margin: 12px auto; padding: 15px; text-align: left;">
+      <strong>Code with missing dependencies</strong> &rarr; asks an LLM only at the exact point of the gap
+    </div>
+    <div class="arch-box red fragment" style="width: 100%; display: block; margin: 12px auto; padding: 15px; text-align: left;">
+      <strong>Unsupported language</strong> &rarr; LLM translates the entire file, then analysis proceeds normally
+    </div>
+  </div>
+  <p class="fragment dim small" style="margin-top: 15px;">
+    One unknown doesn't block the rest. Analysis and execution continue around the gaps.
+  </p>
+</section>
+
+<!-- Slide 10: By The Numbers -->
+<section>
+  <h2>By The Numbers</h2>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="number">15</div>
+      <div class="label">languages supported</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">~82K</div>
+      <div class="label">lines of code</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">8,496+</div>
+      <div class="label">automated tests</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">4</div>
+      <div class="label">LLM providers</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">500,000x</div>
+      <div class="label">faster than pure-LLM</div>
+    </div>
+    <div class="stat-card">
+      <div class="number">0</div>
+      <div class="label">LLM calls for complete code</div>
+    </div>
+  </div>
+</section>
+
+<!-- Slide 11: Q&A -->
+<section>
+  <h1 class="banner-title"><svg class="banner-logo" viewBox="0 0 30 50" width="30" height="50"><polygon points="5,10 25,25 5,40" fill="#e57373"/></svg>Red<span style="color: #e57373;">Dragon</span></h1>
+  <div class="arch-flow" style="margin: 30px 0;">
+    <div class="arch-box">Source</div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box green">Parse</div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box green">Analyse</div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box green">Execute</div>
+    <span class="arch-arrow">&rarr;</span>
+    <div class="arch-box orange">(LLM)</div>
+  </div>
+  <p class="tagline">"Deterministic where possible. Symbolic where necessary. LLM only as a last resort."</p>
+  <h2 style="margin-top: 40px;">Questions?</h2>
+</section>
+
+</div><!-- /.slides -->
+</div><!-- /.reveal -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/reveal.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/5.1.0/plugin/notes/notes.min.js"></script>
+<script>
+  Reveal.initialize({
+    hash: true,
+    slideNumber: true,
+    transition: 'slide',
+    plugins: [RevealNotes]
+  });
+</script>
+</body>
+</html>

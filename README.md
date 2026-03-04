@@ -4,7 +4,7 @@
 
 # RedDragon
 
-![CI](https://github.com/avishek-sen-gupta/red-dragon/actions/workflows/ci.yml/badge.svg) [![Presentation](https://img.shields.io/badge/Presentation-slides-blue)](presentation/index.html) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE.md)
+![CI](https://github.com/avishek-sen-gupta/red-dragon/actions/workflows/ci.yml/badge.svg) [![Technical Presentation](https://img.shields.io/badge/Technical-slides-blue)](presentation/technical-presentation.html) [![Overview Presentation](https://img.shields.io/badge/Overview-slides-green)](presentation/overview-presentation.html) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE.md)
 
 **RedDragon** is an experiment in building infrastructure for **reverse-engineering frequently-incomplete code** — the kind found in legacy migrations, decompiled binaries, partial extracts, and codebases with missing dependencies. It explores two ideas:
 
