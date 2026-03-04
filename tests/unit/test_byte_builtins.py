@@ -20,6 +20,12 @@ from interpreter.cobol.byte_builtins import (
     _builtin_float_to_bytes,
     _builtin_bytes_to_float,
     _builtin_cobol_blank_when_zero,
+    _builtin_string_find,
+    _builtin_string_split,
+    _builtin_string_count,
+    _builtin_string_replace,
+    _builtin_string_concat,
+    _builtin_string_concat_pair,
     BYTE_BUILTINS,
 )
 from interpreter.vm import Operators
@@ -186,9 +192,26 @@ class TestByteBuiltinsRegistration:
             "__list_slice",
             "__list_concat",
             "__make_list",
+            "__cobol_prepare_digits",
+            "__cobol_prepare_sign",
+            "__string_find",
+            "__string_split",
+            "__string_count",
+            "__string_replace",
+            "__string_concat",
+            "__string_concat_pair",
+            "__int_to_binary_bytes",
+            "__binary_bytes_to_int",
+            "__float_to_bytes",
+            "__bytes_to_float",
+            "__cobol_blank_when_zero",
         ]
         for name in expected_names:
             assert name in BYTE_BUILTINS, f"{name} not in BYTE_BUILTINS"
+        assert set(expected_names) == set(BYTE_BUILTINS.keys()), (
+            f"Mismatch: expected {set(expected_names) - set(BYTE_BUILTINS.keys())} missing, "
+            f"unexpected {set(BYTE_BUILTINS.keys()) - set(expected_names)} extra"
+        )
 
     def test_builtins_merged_into_table(self):
         from interpreter.builtins import Builtins
@@ -449,6 +472,130 @@ class TestBytesToFloat:
     def test_symbolic_returns_uncomputable(self):
         sym = SymbolicValue(name="x")
         assert _builtin_bytes_to_float([sym, 4], None) is _UNCOMPUTABLE
+
+
+class TestStringFind:
+    """Tests for __string_find builtin."""
+
+    def test_found(self):
+        assert _builtin_string_find(["hello world", "world"], None) == 6
+
+    def test_not_found(self):
+        assert _builtin_string_find(["hello", "xyz"], None) == -1
+
+    def test_empty_needle(self):
+        assert _builtin_string_find(["hello", ""], None) == 0
+
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue(name="x")
+        assert _builtin_string_find([sym, "a"], None) is _UNCOMPUTABLE
+
+    def test_too_few_args_returns_uncomputable(self):
+        assert _builtin_string_find(["hello"], None) is _UNCOMPUTABLE
+
+
+class TestStringSplit:
+    """Tests for __string_split builtin."""
+
+    def test_split(self):
+        assert _builtin_string_split(["a,b,c", ","], None) == ["a", "b", "c"]
+
+    def test_no_delimiter_match(self):
+        assert _builtin_string_split(["hello", ","], None) == ["hello"]
+
+    def test_empty_delimiter_returns_whole(self):
+        assert _builtin_string_split(["hello", ""], None) == ["hello"]
+
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue(name="x")
+        assert _builtin_string_split([sym, ","], None) is _UNCOMPUTABLE
+
+
+class TestStringCount:
+    """Tests for __string_count builtin."""
+
+    def test_all_mode(self):
+        assert _builtin_string_count(["abcabc", "abc", "all"], None) == 2
+
+    def test_all_mode_no_match(self):
+        assert _builtin_string_count(["hello", "xyz", "all"], None) == 0
+
+    def test_leading_mode(self):
+        assert _builtin_string_count(["aaab", "a", "leading"], None) == 3
+
+    def test_leading_mode_no_leading(self):
+        assert _builtin_string_count(["baaa", "a", "leading"], None) == 0
+
+    def test_characters_mode(self):
+        assert _builtin_string_count(["hello", "", "characters"], None) == 5
+
+    def test_unknown_mode_returns_uncomputable(self):
+        assert _builtin_string_count(["hello", "l", "unknown"], None) is _UNCOMPUTABLE
+
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue(name="x")
+        assert _builtin_string_count([sym, "a", "all"], None) is _UNCOMPUTABLE
+
+
+class TestStringReplace:
+    """Tests for __string_replace builtin."""
+
+    def test_all_mode(self):
+        assert _builtin_string_replace(["aXaXa", "X", "Y", "all"], None) == "aYaYa"
+
+    def test_first_mode(self):
+        assert _builtin_string_replace(["aXaXa", "X", "Y", "first"], None) == "aYaXa"
+
+    def test_leading_mode(self):
+        # "XXa" → replace leading "X" with "Y" → "YXa" (result no longer starts with "X")
+        assert _builtin_string_replace(["XXa", "X", "Y", "leading"], None) == "YXa"
+
+    def test_leading_mode_repeating(self):
+        # "XXXb" with from="XX" → "YXb" (one leading match consumed)
+        assert _builtin_string_replace(["XXXb", "XX", "Y", "leading"], None) == "YXb"
+
+    def test_empty_from_pat_returns_source(self):
+        assert _builtin_string_replace(["hello", "", "Y", "all"], None) == "hello"
+
+    def test_unknown_mode_returns_uncomputable(self):
+        assert (
+            _builtin_string_replace(["a", "a", "b", "unknown"], None) is _UNCOMPUTABLE
+        )
+
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue(name="x")
+        assert _builtin_string_replace([sym, "a", "b", "all"], None) is _UNCOMPUTABLE
+
+
+class TestStringConcat:
+    """Tests for __string_concat builtin."""
+
+    def test_concat_list(self):
+        assert _builtin_string_concat([["a", "b", "c"]], None) == "abc"
+
+    def test_empty_list(self):
+        assert _builtin_string_concat([[]], None) == ""
+
+    def test_single_element(self):
+        assert _builtin_string_concat([["hello"]], None) == "hello"
+
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue(name="x")
+        assert _builtin_string_concat([sym], None) is _UNCOMPUTABLE
+
+
+class TestStringConcatPair:
+    """Tests for __string_concat_pair builtin."""
+
+    def test_concat_pair(self):
+        assert _builtin_string_concat_pair(["hello", " world"], None) == "hello world"
+
+    def test_coerces_to_string(self):
+        assert _builtin_string_concat_pair([42, "!"], None) == "42!"
+
+    def test_symbolic_returns_uncomputable(self):
+        sym = SymbolicValue(name="x")
+        assert _builtin_string_concat_pair([sym, "a"], None) is _UNCOMPUTABLE
 
 
 class TestCobolBlankWhenZero:
