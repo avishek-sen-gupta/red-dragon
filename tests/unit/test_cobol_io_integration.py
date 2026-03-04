@@ -2,6 +2,7 @@
 
 from interpreter.cfg import build_cfg
 from interpreter.cobol.io_provider import NullIOProvider, StubIOProvider
+from interpreter.vm_types import SymbolicValue
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg
@@ -61,10 +62,9 @@ class TestExecutorIOProviderDispatch:
         vm = _execute_with_provider(ir, provider)
 
         result = vm.current_frame.registers.get("%result")
-        # Should be a SymbolicValue (dict or SymbolicValue object)
-        assert hasattr(result, "name") or (
-            isinstance(result, dict) and result.get("__symbolic__")
-        )
+        assert isinstance(
+            result, SymbolicValue
+        ), f"expected SymbolicValue, got {type(result).__name__}: {result}"
 
     def test_null_provider_returns_symbolic(self):
         ir = _build_call_function_ir("__cobol_accept", "CONSOLE")
@@ -72,9 +72,9 @@ class TestExecutorIOProviderDispatch:
         vm = _execute_with_provider(ir, provider)
 
         result = vm.current_frame.registers.get("%result")
-        assert hasattr(result, "name") or (
-            isinstance(result, dict) and result.get("__symbolic__")
-        )
+        assert isinstance(
+            result, SymbolicValue
+        ), f"expected SymbolicValue, got {type(result).__name__}: {result}"
 
     def test_stub_read_returns_record(self):
         ir = _build_call_function_ir("__cobol_read_record", "CUST-FILE")

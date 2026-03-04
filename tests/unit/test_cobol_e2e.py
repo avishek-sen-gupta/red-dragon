@@ -95,8 +95,11 @@ class TestHelloWorldFixture:
 
         # Region should have 11 bytes written (EBCDIC-encoded "HELLO WORLD")
         assert len(region) == 11
-        # Verify non-zero content (EBCDIC encoding of "HELLO WORLD")
-        assert any(b != 0 for b in region)
+        # Verify actual EBCDIC content matches "HELLO WORLD"
+        expected_ebcdic = list("HELLO WORLD".encode("cp500"))
+        assert (
+            list(region) == expected_ebcdic
+        ), f"expected EBCDIC 'HELLO WORLD', got {list(region)}"
 
 
 class TestMoveFieldsFixture:
@@ -141,6 +144,10 @@ class TestArithmeticFixture:
         region_addr = list(vm.regions.keys())[0]
         region = vm.regions[region_addr]
         assert len(region) == 5  # 9(5)
+        # Straight-line execution runs DATA + PROCEDURE: 100 + 50 - 25 = 125
+        assert (
+            _decode_zoned_unsigned(region, 0, 5) == 125
+        ), f"expected zoned decimal 125 (100+50-25), got {_decode_zoned_unsigned(region, 0, 5)}"
 
 
 class TestPerformReturnFixture:
@@ -158,8 +165,10 @@ class TestPerformReturnFixture:
         assert len(vm.regions) >= 1
         region_addr = list(vm.regions.keys())[0]
         region = vm.regions[region_addr]
-        # The MOVE 42 TO WS-RESULT should have written to the region
-        assert any(b != 0 for b in region)
+        # WS-RESULT at offset 0, PIC 9(3): MOVE 42 should yield 42
+        assert (
+            _decode_zoned_unsigned(region, 0, 3) == 42
+        ), "PERFORM should return to caller — WS-RESULT must be 42"
 
     def test_nested_perform(self):
         """MAIN PERFORMs PARA-A, PARA-A PERFORMs PARA-B, both return correctly."""

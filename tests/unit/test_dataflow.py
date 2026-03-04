@@ -298,8 +298,13 @@ class TestDependencyGraph:
         cfg = _build_simple_cfg(ir)
         result = analyze(cfg)
 
-        if "x" in result.dependency_graph:
-            assert "x" not in result.dependency_graph["x"]
+        # x must appear in definitions (proves analysis processed it)
+        defined_vars = {d.variable for d in result.definitions}
+        assert "x" in defined_vars, "x should appear in definitions"
+        # x = 1 has no self-dependency
+        assert "x" not in result.dependency_graph.get(
+            "x", set()
+        ), "x = 1 should not self-depend"
 
     def test_loop_creates_self_dependency(self):
         """while: x = x + 1 → x depends on x."""
