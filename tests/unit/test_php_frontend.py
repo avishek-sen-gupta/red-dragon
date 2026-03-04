@@ -240,9 +240,9 @@ foreach ($items as $item) {
 """
         ir = _parse_and_lower(source)
         opcodes = _opcodes(ir)
-        # foreach is lowered as SYMBOLIC in current frontend
-        assert Opcode.SYMBOLIC in opcodes or Opcode.BRANCH_IF in opcodes
-        assert len(ir) > 1
+        assert Opcode.BRANCH_IF in opcodes
+        calls = _find_all(ir, Opcode.CALL_METHOD)
+        assert any("add" in inst.operands for inst in calls)
 
     def test_class_with_constructor_and_methods(self):
         source = """\
