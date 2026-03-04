@@ -78,7 +78,7 @@ class TestDumpIr:
     def test_multiline_output(self):
         result = dump_ir(SIMPLE_SOURCE)
         lines = result.strip().split("\n")
-        assert len(lines) >= 1
+        assert len(lines) >= 2
 
 
 class TestBuildCfgFromSource:

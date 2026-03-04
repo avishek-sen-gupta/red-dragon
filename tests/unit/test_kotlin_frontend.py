@@ -358,6 +358,13 @@ fun main() {
 }
 """
         instructions = _parse_kotlin(source)
+        # `is` type checks produce CALL_FUNCTION with "is"
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("is" in inst.operands for inst in calls)
+        # `when` arms produce BRANCH_IF for each condition
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        # Result is stored
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("result" in inst.operands for inst in stores)
 
