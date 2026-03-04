@@ -424,7 +424,9 @@ void f() {
 """
         ir = _parse_and_lower(source)
         opcodes = _opcodes(ir)
-        assert Opcode.SYMBOLIC in opcodes or Opcode.BRANCH_IF in opcodes
+        assert (
+            Opcode.BRANCH_IF in opcodes
+        ), "switch should lower to BRANCH_IF, not fall back to SYMBOLIC"
         assert len(ir) > 3
 
     def test_do_while_loop(self):
