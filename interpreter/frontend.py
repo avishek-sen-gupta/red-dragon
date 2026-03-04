@@ -10,6 +10,8 @@ from .frontend_observer import FrontendObserver, NullFrontendObserver
 from .ir import IRInstruction
 from . import constants
 
+_NO_REPAIR_CLIENT = object()  # sentinel — distinct from None
+
 
 class Frontend(ABC):
     @abstractmethod
@@ -42,6 +44,7 @@ def get_frontend(
     llm_provider: str = "claude",
     llm_client: Any = None,
     observer: FrontendObserver = NullFrontendObserver(),
+    repair_client: Any = _NO_REPAIR_CLIENT,
 ) -> Frontend:
     """Build a frontend for the given language.
 
@@ -51,6 +54,8 @@ def get_frontend(
         llm_provider: LLM provider name when frontend_type="llm".
         llm_client: Pre-built LLMClient for DI/testing (skips factory).
         observer: Timing observer for parse/lower phases.
+        repair_client: Optional LLMClient for AST repair. When provided with
+            a deterministic frontend, wraps it in RepairingFrontendDecorator.
 
     Returns:
         A Frontend instance.
@@ -69,7 +74,22 @@ def get_frontend(
     if frontend_type == constants.FRONTEND_DETERMINISTIC:
         from .frontends import get_deterministic_frontend
 
-        return get_deterministic_frontend(language, observer=observer)
+        frontend = get_deterministic_frontend(language, observer=observer)
+        if repair_client is not _NO_REPAIR_CLIENT:
+            from .ast_repair.repairing_frontend_decorator import (
+                RepairingFrontendDecorator,
+            )
+            from .llm_client import LLMClient
+            from .parser import TreeSitterParserFactory
+
+            if isinstance(repair_client, LLMClient):
+                frontend = RepairingFrontendDecorator(
+                    inner_frontend=frontend,
+                    llm_client=repair_client,
+                    parser_factory=TreeSitterParserFactory(),
+                    language=language,
+                )
+        return frontend
 
     if frontend_type in (constants.FRONTEND_LLM, constants.FRONTEND_CHUNKED_LLM):
         from .llm_client import LLMClient, get_llm_client
