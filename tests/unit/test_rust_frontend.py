@@ -109,6 +109,33 @@ class TestRustControlFlow:
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("r" in inst.operands for inst in stores)
 
+    def test_if_elseif_chain_all_branches_produce_ir(self):
+        """All branches of if/else-if/else-if/else must produce IR."""
+        instructions = _parse_rust(
+            "fn main() { if x==1 { y=10; }"
+            " else if x==2 { y=20; }"
+            " else if x==3 { y=30; }"
+            " else { y=40; } }"
+        )
+        consts = _find_all(instructions, Opcode.CONST)
+        const_values = [op for inst in consts for op in inst.operands]
+        assert "10" in const_values, "if-branch value missing"
+        assert "20" in const_values, "first else-if-branch value missing"
+        assert "30" in const_values, "second else-if-branch value missing"
+        assert "40" in const_values, "else-branch value missing"
+
+        branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branch_ifs) == 3
+
+        labels = _labels_in_order(instructions)
+        branch_targets = {
+            target for inst in branch_ifs for target in inst.label.split(",")
+        }
+        label_set = set(labels)
+        assert branch_targets.issubset(
+            label_set
+        ), f"Unreachable targets: {branch_targets - label_set}"
+
 
 class TestRustStructs:
     def test_struct_definition(self):

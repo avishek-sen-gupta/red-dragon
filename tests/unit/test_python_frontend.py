@@ -109,6 +109,64 @@ class TestPythonControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.LOAD_INDEX in opcodes
 
+    def test_if_elif_elif_else_all_branches_produce_ir(self):
+        """All branches of if/elif/elif/else must produce IR — not just the first elif."""
+        source = (
+            "if x == 1:\n"
+            "    y = 10\n"
+            "elif x == 2:\n"
+            "    y = 20\n"
+            "elif x == 3:\n"
+            "    y = 30\n"
+            "else:\n"
+            "    y = 40\n"
+        )
+        instructions = _parse_python(source)
+        consts = _find_all(instructions, Opcode.CONST)
+        const_values = [op for inst in consts for op in inst.operands]
+        assert "10" in const_values, "if-branch value missing"
+        assert "20" in const_values, "first elif-branch value missing"
+        assert "30" in const_values, "second elif-branch value missing"
+        assert "40" in const_values, "else-branch value missing"
+
+    def test_if_elif_elif_else_branch_structure(self):
+        """Multi-elif CFG must have correct BRANCH_IF count and all labels reachable."""
+        source = (
+            "if x == 1:\n"
+            "    y = 10\n"
+            "elif x == 2:\n"
+            "    y = 20\n"
+            "elif x == 3:\n"
+            "    y = 30\n"
+            "else:\n"
+            "    y = 40\n"
+        )
+        instructions = _parse_python(source)
+        branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
+        # One BRANCH_IF for the if, one for each elif => 3 total
+        assert len(branch_ifs) == 3
+
+        labels = _labels_in_order(instructions)
+        # Each BRANCH_IF target label must appear as a LABEL instruction
+        branch_targets = {
+            target for inst in branch_ifs for target in inst.label.split(",")
+        }
+        label_set = set(labels)
+        assert branch_targets.issubset(
+            label_set
+        ), f"Unreachable targets: {branch_targets - label_set}"
+
+    def test_if_single_elif_no_else(self):
+        """if/elif without else still lowers both branches."""
+        source = "if a:\n    x = 1\nelif b:\n    x = 2\n"
+        instructions = _parse_python(source)
+        consts = _find_all(instructions, Opcode.CONST)
+        const_values = [op for inst in consts for op in inst.operands]
+        assert "1" in const_values
+        assert "2" in const_values
+        branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branch_ifs) == 2
+
 
 class TestPythonFunctions:
     def test_function_definition(self):

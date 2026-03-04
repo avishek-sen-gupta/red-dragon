@@ -21,6 +21,90 @@ if TYPE_CHECKING:
 _WILDCARD_PATTERN = "_"
 
 
+# ── if/elif/else ──────────────────────────────────────────────
+
+
+def lower_python_if(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower Python if/elif/else chains by iterating all sibling clauses.
+
+    Python's tree-sitter grammar places elif_clause and else_clause as
+    flat siblings under if_statement.  The common lower_if only sees the
+    first alternative via child_by_field_name, silently dropping subsequent
+    elif/else branches.  This lowerer collects them all.
+    """
+    cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
+    body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
+
+    elif_clauses = [c for c in node.children if c.type == "elif_clause"]
+    else_clause = next((c for c in node.children if c.type == "else_clause"), None)
+    has_alternative = len(elif_clauses) > 0 or else_clause is not None
+
+    cond_reg = ctx.lower_expr(cond_node)
+    true_label = ctx.fresh_label("if_true")
+    end_label = ctx.fresh_label("if_end")
+    false_label = ctx.fresh_label("if_false") if has_alternative else end_label
+
+    ctx.emit(
+        Opcode.BRANCH_IF,
+        operands=[cond_reg],
+        label=f"{true_label},{false_label}",
+        node=node,
+    )
+
+    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.lower_block(body_node)
+    ctx.emit(Opcode.BRANCH, label=end_label)
+
+    if has_alternative:
+        ctx.emit(Opcode.LABEL, label=false_label)
+        _lower_python_elif_chain(ctx, elif_clauses, else_clause, end_label)
+
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+
+def _lower_python_elif_chain(
+    ctx: TreeSitterEmitContext,
+    elif_clauses: list,
+    else_clause,
+    end_label: str,
+) -> None:
+    """Lower a chain of elif_clause nodes followed by optional else_clause."""
+    remaining_elifs = elif_clauses[1:] if len(elif_clauses) > 1 else []
+    has_more = len(remaining_elifs) > 0 or else_clause is not None
+
+    if not elif_clauses:
+        # Only else remains
+        if else_clause:
+            body = else_clause.child_by_field_name("body")
+            if body:
+                ctx.lower_block(body)
+        ctx.emit(Opcode.BRANCH, label=end_label)
+        return
+
+    current = elif_clauses[0]
+    cond_node = current.child_by_field_name(ctx.constants.if_condition_field)
+    body_node = current.child_by_field_name(ctx.constants.if_consequence_field)
+
+    cond_reg = ctx.lower_expr(cond_node)
+    true_label = ctx.fresh_label("elif_true")
+    false_label = ctx.fresh_label("elif_false") if has_more else end_label
+
+    ctx.emit(
+        Opcode.BRANCH_IF,
+        operands=[cond_reg],
+        label=f"{true_label},{false_label}",
+        node=current,
+    )
+
+    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.lower_block(body_node)
+    ctx.emit(Opcode.BRANCH, label=end_label)
+
+    if has_more:
+        ctx.emit(Opcode.LABEL, label=false_label)
+        _lower_python_elif_chain(ctx, remaining_elifs, else_clause, end_label)
+
+
 # ── for loop ──────────────────────────────────────────────────
 
 
