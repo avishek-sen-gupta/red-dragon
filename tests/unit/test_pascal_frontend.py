@@ -221,7 +221,7 @@ end.
         assert any("function:" in str(inst.operands) for inst in consts)
         assert len(instructions) > 10
 
-    def test_function_with_for_loop(self):
+    def test_function_with_while_loop(self):
         source = """\
 program M;
 function Sum(n: Integer): Integer;
