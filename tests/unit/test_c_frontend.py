@@ -330,7 +330,15 @@ void f() {
         assert any("sum" in s.operands for s in stores)
         assert any("i" in s.operands for s in stores)
         assert any("j" in s.operands for s in stores)
-        assert len(ir) > 25
+        # grid[i][j] should produce two chained LOAD_INDEX (one per subscript)
+        load_indices = _find_all(ir, Opcode.LOAD_INDEX)
+        assert (
+            len(load_indices) == 2
+        ), "grid[i][j] should produce 2 LOAD_INDEX instructions"
+        # Second LOAD_INDEX should chain off the first (nested subscript)
+        assert (
+            load_indices[1].operands[0] == load_indices[0].result_reg
+        ), "grid[i][j]: second subscript should use result of first as base"
 
     def test_struct_field_access_and_mutation(self):
         source = """\
