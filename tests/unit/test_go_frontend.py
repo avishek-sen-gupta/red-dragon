@@ -104,6 +104,32 @@ func main() {
         labels = _find_all(ir, Opcode.LABEL)
         assert len(labels) >= 3
 
+    def test_if_elseif_chain_all_branches_produce_ir(self):
+        """All branches of if/else-if/else-if/else must produce IR."""
+        source = """package main
+func f() {
+    if x == 1 { y = 10 } else if x == 2 { y = 20 } else if x == 3 { y = 30 } else { y = 40 }
+}"""
+        ir = _parse_and_lower(source)
+        consts = _find_all(ir, Opcode.CONST)
+        const_values = [op for inst in consts for op in inst.operands]
+        assert "10" in const_values, "if-branch value missing"
+        assert "20" in const_values, "first else-if-branch value missing"
+        assert "30" in const_values, "second else-if-branch value missing"
+        assert "40" in const_values, "else-branch value missing"
+
+        branch_ifs = _find_all(ir, Opcode.BRANCH_IF)
+        assert len(branch_ifs) == 3
+
+        labels = _labels_in_order(ir)
+        branch_targets = {
+            target for inst in branch_ifs for target in inst.label.split(",")
+        }
+        label_set = set(labels)
+        assert branch_targets.issubset(
+            label_set
+        ), f"Unreachable targets: {branch_targets - label_set}"
+
 
 class TestGoFrontendForLoop:
     def test_c_style_for_loop(self):

@@ -89,7 +89,7 @@ class PythonFrontend(BaseFrontend):
             "assignment": py_assign.lower_assignment,
             "augmented_assignment": py_assign.lower_augmented_assignment,
             "return_statement": common_assign.lower_return,
-            "if_statement": common_cf.lower_if,
+            "if_statement": py_cf.lower_python_if,
             "while_statement": common_cf.lower_while,
             "for_statement": py_cf.lower_for,
             "function_definition": common_decl.lower_function_def,
