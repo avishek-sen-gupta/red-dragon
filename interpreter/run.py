@@ -190,7 +190,7 @@ def execute_cfg(
     vm.call_stack.append(StackFrame(function_name=constants.MAIN_FRAME_NAME))
     vm.io_provider = config.io_provider
 
-    llm = get_backend(config.backend)
+    llm = None  # lazy — only created if local executor can't handle an instruction
     call_resolver = _create_resolver(config)
     current_label = entry
     ip = 0
@@ -234,6 +234,8 @@ def execute_cfg(
         if result.handled:
             update = result.update
         else:
+            if llm is None:
+                llm = get_backend(config.backend)
             update = llm.interpret_instruction(instruction, vm)
             used_llm = True
             llm_calls += 1
@@ -313,7 +315,7 @@ def execute_cfg_traced(
     vm.io_provider = config.io_provider
     initial_state = copy.deepcopy(vm)
 
-    llm = get_backend(config.backend)
+    llm = None  # lazy — only created if local executor can't handle an instruction
     call_resolver = _create_resolver(config)
     current_label = entry
     ip = 0
@@ -358,6 +360,8 @@ def execute_cfg_traced(
         if result.handled:
             update = result.update
         else:
+            if llm is None:
+                llm = get_backend(config.backend)
             update = llm.interpret_instruction(instruction, vm)
             used_llm = True
             llm_calls += 1
