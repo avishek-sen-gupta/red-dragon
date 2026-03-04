@@ -224,9 +224,10 @@ class TestFactorialRecLowering:
     def test_call_function_present(self, language_ir):
         lang, ir = language_ir
         calls = find_all(ir, Opcode.CALL_FUNCTION)
+        # Need >= 2: one for the top-level call site, one for the recursive self-call
         assert (
-            len(calls) >= 1
-        ), f"[{lang}] expected at least one CALL_FUNCTION (recursion), got {len(calls)}"
+            len(calls) >= 2
+        ), f"[{lang}] expected at least 2 CALL_FUNCTION (call site + recursion), got {len(calls)}"
 
 
 # ---------------------------------------------------------------------------
