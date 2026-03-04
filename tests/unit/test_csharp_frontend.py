@@ -722,6 +722,9 @@ class C {
         ir = _parse_and_lower(source)
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("y" in inst.operands for inst in stores)
+        # The arithmetic (+) must be lowered as a BINOP
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
 
 
 class TestCSharpFixedStatement:
