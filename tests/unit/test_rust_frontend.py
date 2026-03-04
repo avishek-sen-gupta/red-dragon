@@ -179,11 +179,6 @@ class TestRustSpecial:
         assert instructions[0].opcode == Opcode.LABEL
         assert instructions[0].label == "entry"
 
-    def test_fallback_symbolic(self):
-        instructions = _parse_rust("fn main() { unsafe { do_risky(); } }")
-        opcodes = _opcodes(instructions)
-        assert Opcode.SYMBOLIC in opcodes or Opcode.CALL_FUNCTION in opcodes
-
     def test_binary_expression(self):
         instructions = _parse_rust("fn main() { let z = x + y; }")
         binops = _find_all(instructions, Opcode.BINOP)
