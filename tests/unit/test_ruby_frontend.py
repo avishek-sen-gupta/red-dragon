@@ -304,6 +304,10 @@ class TestRubySpecial:
         instructions = _parse_ruby("BEGIN { puts 'start' }")
         opcodes = _opcodes(instructions)
         assert Opcode.SYMBOLIC in opcodes
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert any(
+            "unsupported:" in str(s.operands) for s in symbolics
+        ), f"SYMBOLIC should be 'unsupported:' kind, got {[s.operands for s in symbolics]}"
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
