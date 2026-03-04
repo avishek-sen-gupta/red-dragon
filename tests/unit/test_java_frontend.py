@@ -113,6 +113,19 @@ class TestJavaControlFlow:
         assert Opcode.LABEL in opcodes
         assert Opcode.BRANCH in opcodes
 
+    def test_nested_if_else_chain(self):
+        instructions = _parse_java(
+            'class M { void m() { if (x > 100) { grade = "A"; }'
+            ' else if (x > 50) { grade = "B"; }'
+            ' else { grade = "F"; } } }'
+        )
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("grade" in inst.operands for inst in stores)
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert len(binops) >= 2
+
     def test_while_loop(self):
         instructions = _parse_java("class M { void m() { while (x > 0) { x--; } } }")
         opcodes = _opcodes(instructions)

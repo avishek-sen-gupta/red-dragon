@@ -436,7 +436,10 @@ result = items.select { |x| x > 0 }.map { |x| x * 2 }.first
 """
         instructions = _parse_ruby(source)
         calls = _find_all(instructions, Opcode.CALL_METHOD)
-        assert len(calls) >= 1
+        method_names = [inst.operands[1] for inst in calls if len(inst.operands) > 1]
+        assert "select" in method_names
+        assert "map" in method_names
+        assert "first" in method_names
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("result" in inst.operands for inst in stores)
 
