@@ -101,6 +101,12 @@ class TestJavaMethodCalls:
         instructions = _parse_java('class M { void m() { Dog d = new Dog("Rex"); } }')
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("Dog" in inst.operands for inst in calls)
+        # Constructor argument "Rex" should be loaded as a CONST
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any('"Rex"' in str(inst.operands) for inst in consts)
+        # Result stored in variable d
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("d" in inst.operands for inst in stores)
 
 
 class TestJavaControlFlow:
