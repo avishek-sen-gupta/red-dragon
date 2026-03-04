@@ -1096,7 +1096,9 @@ class TestFillerDisambiguation:
         assert _decode_zoned_unsigned(region, 7, 4) == 42
         assert _decode_zoned_unsigned(region, 14, 1) == 7
         # Region size must account for all fields including FILLERs: 5+2+4+3+1 = 15
-        assert len(region) >= 15, f"region must be >= 15 bytes for all fields + FILLERs, got {len(region)}"
+        assert (
+            len(region) >= 15
+        ), f"region must be >= 15 bytes for all fields + FILLERs, got {len(region)}"
 
     def test_filler_between_computed_fields(self):
         """FILLER padding doesn't affect arithmetic on surrounding fields."""

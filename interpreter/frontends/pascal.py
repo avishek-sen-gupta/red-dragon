@@ -1024,6 +1024,15 @@ class PascalFrontend(BaseFrontend):
                         ),
                     }
                 )
+            elif in_except and child.type == "statements":
+                # Bare except block without "on E: Exception do" wrapper
+                catch_clauses.append(
+                    {
+                        "body": child,
+                        "variable": None,
+                        "type": "Exception",
+                    }
+                )
             elif in_finally and child.type == "statements":
                 finally_node = child
 

@@ -89,6 +89,10 @@ class TestExecuteCfgBasic:
         vm, stats = execute_cfg(cfg, "entry", registry)
 
         assert vm.current_frame.local_vars["result"] == 99
+        # Verify execution actually ran (distinguishes from test_const_and_store)
+        assert stats.steps > 0, "execution must have taken at least one step"
+        # Verify CFG resolved "entry" as its entry point
+        assert cfg.entry == "entry", f"CFG entry should be 'entry', got {cfg.entry}"
 
     def test_invalid_entry_point_raises(self):
         instructions = _make_instructions(
