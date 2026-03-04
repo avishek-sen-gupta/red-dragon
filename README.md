@@ -134,6 +134,128 @@ poetry run python interpreter.py myfile.py --mermaid --function foo  # CFG for a
 | `--mermaid` | Output CFG as a Mermaid flowchart diagram and exit |
 | `--function` | Extract CFG for a single function (use with `--mermaid` or `--cfg-only`) |
 
+### Programmatic API
+
+All CLI pipelines are available as composable functions — no argparse required.
+
+#### Deterministic (no LLM calls)
+
+```python
+from interpreter import lower_source, dump_ir, build_cfg_from_source, dump_cfg, dump_mermaid, extract_function_source, ir_stats, run
+from interpreter.constants import Language
+
+source = """
+def factorial(n):
+    if n <= 1:
+        return n
+    return n * factorial(n - 1)
+result = factorial(6)
+"""
+
+# Parse and lower to IR via tree-sitter (0 LLM calls)
+instructions = lower_source(source, language=Language.PYTHON)
+instructions = lower_source(source, language="javascript")  # strings still accepted
+
+# Get IR as text
+ir_text = dump_ir(source, language=Language.PYTHON)
+
+# Build a CFG (optionally scoped to a single function)
+cfg = build_cfg_from_source(source, function_name="factorial")
+
+# Get CFG or Mermaid text
+cfg_text = dump_cfg(source)
+mermaid = dump_mermaid(source, function_name="factorial")
+
+# Extract raw source text of a named function (recursive — finds methods and nested functions)
+fn_source = extract_function_source(source, "factorial", language=Language.PYTHON)
+
+# Get opcode frequency counts
+stats = ir_stats(source, language=Language.PYTHON)  # e.g. {"CONST": 3, "STORE_VAR": 2, ...}
+
+# Full pipeline: parse → lower → CFG → execute (deterministic, 0 LLM calls)
+vm = run(source, language=Language.PYTHON, verbose=True)
+frame = vm.call_stack[0]
+print(frame.local_vars["result"])  # 720
+```
+
+#### With LLM calls
+
+```python
+from interpreter import lower_source, run
+from interpreter.constants import Language
+from interpreter import constants
+from interpreter.run_types import UnresolvedCallStrategy
+
+# LLM frontend: the LLM acts as a compiler frontend, lowering source to IR
+# Works for any language, even those without a tree-sitter frontend
+instructions = lower_source(
+    "x = math.sqrt(16)\ny = x + 1\n",
+    language=Language.PYTHON,
+    frontend_type=constants.FRONTEND_LLM,       # or "chunked_llm" for large files
+    backend="claude",                            # or "openai", "ollama", "huggingface"
+)
+
+# LLM resolver: deterministic frontend + LLM resolves external/missing dependencies
+# math.sqrt and math.floor are external — the LLM provides plausible concrete values
+vm = run(
+    "import math\nx = math.sqrt(16)\ny = math.floor(7.8)\n",
+    language=Language.PYTHON,
+    unresolved_call_strategy=UnresolvedCallStrategy.LLM,
+    backend="claude",
+)
+frame = vm.call_stack[0]
+print(frame.local_vars["x"])  # 4.0 (resolved by LLM)
+print(frame.local_vars["y"])  # 7   (resolved by LLM)
+
+# LLM frontend for an unsupported language (no tree-sitter frontend needed)
+from interpreter.llm_client import get_llm_client
+from interpreter.llm_frontend import LLMFrontend
+from interpreter.cfg import build_cfg
+from interpreter.registry import build_registry
+from interpreter import execute_cfg, VMConfig
+
+haskell_source = "factorial 0 = 1\nfactorial n = n * factorial (n - 1)\nx = factorial 5\n"
+llm_client = get_llm_client(provider="claude")
+frontend = LLMFrontend(llm_client=llm_client, language="haskell")
+instructions = frontend.lower(haskell_source.encode("utf-8"))
+
+cfg = build_cfg(instructions)
+registry = build_registry(instructions, cfg)
+vm, stats = execute_cfg(cfg, cfg.entry, registry, VMConfig(max_steps=200))
+```
+
+#### Standalone VM execution
+
+`execute_cfg` runs a pre-built CFG without re-running the full parse → lower → build pipeline — useful for programmatic use where you build/customize the CFG and registry independently:
+
+```python
+from interpreter import lower_source, execute_cfg, VMConfig
+from interpreter.constants import Language
+from interpreter.cfg import build_cfg
+from interpreter.registry import build_registry
+
+instructions = lower_source(source, language=Language.PYTHON)
+cfg = build_cfg(instructions)
+registry = build_registry(instructions, cfg)
+
+vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+# stats.steps, stats.llm_calls, stats.final_heap_objects, ...
+```
+
+| Function | Returns | Purpose |
+|---|---|---|
+| `lower_source(source, language, frontend_type, backend)` | `list[IRInstruction]` | Parse + lower source to IR |
+| `dump_ir(source, language, frontend_type, backend)` | `str` | IR text output |
+| `build_cfg_from_source(source, language, frontend_type, backend, function_name)` | `CFG` | Parse → lower → optionally slice → build CFG |
+| `dump_cfg(source, language, frontend_type, backend, function_name)` | `str` | CFG text output |
+| `dump_mermaid(source, language, frontend_type, backend, function_name)` | `str` | Mermaid flowchart output |
+| `ir_stats(source, language, frontend_type, backend)` | `dict[str, int]` | Opcode frequency counts |
+| `extract_function_source(source, function_name, language)` | `str` | Raw source text of a named function (recursive AST walk) |
+| `execute_cfg(cfg, entry_point, registry, config)` | `(VMState, ExecutionStats)` | Execute a pre-built CFG from a given entry point |
+| `execute_traced(source, language, function_name, entry_point, frontend_type, backend, max_steps)` | `ExecutionTrace` | Parse → lower → CFG → execute with per-step VMState snapshots for replay |
+
+Functions compose hierarchically: `dump_ir` calls `lower_source`; `dump_cfg` and `dump_mermaid` call `build_cfg_from_source`, which calls `lower_source`. Full execution is available via `interpreter.run()`, via `execute_cfg()` for standalone VM execution with a pre-built CFG, or via `execute_traced()` for step-by-step replay with VMState snapshots at each instruction.
+
 ## Supported languages
 
 15 deterministic tree-sitter frontends (0 LLM calls, sub-millisecond latency):
@@ -323,128 +445,6 @@ poetry run python scripts/demo_llm_e2e.py             # LLM frontend + LLM resol
 poetry run python scripts/demo_unsupported_language.py  # LLM frontend for Haskell (no tree-sitter)
 poetry run python scripts/run_chunked_demo.py           # chunked LLM frontend
 ```
-
-## Programmatic API
-
-All CLI pipelines are available as composable functions — no argparse required.
-
-### Deterministic (no LLM calls)
-
-```python
-from interpreter import lower_source, dump_ir, build_cfg_from_source, dump_cfg, dump_mermaid, extract_function_source, ir_stats, run
-from interpreter.constants import Language
-
-source = """
-def factorial(n):
-    if n <= 1:
-        return n
-    return n * factorial(n - 1)
-result = factorial(6)
-"""
-
-# Parse and lower to IR via tree-sitter (0 LLM calls)
-instructions = lower_source(source, language=Language.PYTHON)
-instructions = lower_source(source, language="javascript")  # strings still accepted
-
-# Get IR as text
-ir_text = dump_ir(source, language=Language.PYTHON)
-
-# Build a CFG (optionally scoped to a single function)
-cfg = build_cfg_from_source(source, function_name="factorial")
-
-# Get CFG or Mermaid text
-cfg_text = dump_cfg(source)
-mermaid = dump_mermaid(source, function_name="factorial")
-
-# Extract raw source text of a named function (recursive — finds methods and nested functions)
-fn_source = extract_function_source(source, "factorial", language=Language.PYTHON)
-
-# Get opcode frequency counts
-stats = ir_stats(source, language=Language.PYTHON)  # e.g. {"CONST": 3, "STORE_VAR": 2, ...}
-
-# Full pipeline: parse → lower → CFG → execute (deterministic, 0 LLM calls)
-vm = run(source, language=Language.PYTHON, verbose=True)
-frame = vm.call_stack[0]
-print(frame.local_vars["result"])  # 720
-```
-
-### With LLM calls
-
-```python
-from interpreter import lower_source, run
-from interpreter.constants import Language
-from interpreter import constants
-from interpreter.run_types import UnresolvedCallStrategy
-
-# LLM frontend: the LLM acts as a compiler frontend, lowering source to IR
-# Works for any language, even those without a tree-sitter frontend
-instructions = lower_source(
-    "x = math.sqrt(16)\ny = x + 1\n",
-    language=Language.PYTHON,
-    frontend_type=constants.FRONTEND_LLM,       # or "chunked_llm" for large files
-    backend="claude",                            # or "openai", "ollama", "huggingface"
-)
-
-# LLM resolver: deterministic frontend + LLM resolves external/missing dependencies
-# math.sqrt and math.floor are external — the LLM provides plausible concrete values
-vm = run(
-    "import math\nx = math.sqrt(16)\ny = math.floor(7.8)\n",
-    language=Language.PYTHON,
-    unresolved_call_strategy=UnresolvedCallStrategy.LLM,
-    backend="claude",
-)
-frame = vm.call_stack[0]
-print(frame.local_vars["x"])  # 4.0 (resolved by LLM)
-print(frame.local_vars["y"])  # 7   (resolved by LLM)
-
-# LLM frontend for an unsupported language (no tree-sitter frontend needed)
-from interpreter.llm_client import get_llm_client
-from interpreter.llm_frontend import LLMFrontend
-from interpreter.cfg import build_cfg
-from interpreter.registry import build_registry
-from interpreter import execute_cfg, VMConfig
-
-haskell_source = "factorial 0 = 1\nfactorial n = n * factorial (n - 1)\nx = factorial 5\n"
-llm_client = get_llm_client(provider="claude")
-frontend = LLMFrontend(llm_client=llm_client, language="haskell")
-instructions = frontend.lower(haskell_source.encode("utf-8"))
-
-cfg = build_cfg(instructions)
-registry = build_registry(instructions, cfg)
-vm, stats = execute_cfg(cfg, cfg.entry, registry, VMConfig(max_steps=200))
-```
-
-### Standalone VM execution
-
-`execute_cfg` runs a pre-built CFG without re-running the full parse → lower → build pipeline — useful for programmatic use where you build/customize the CFG and registry independently:
-
-```python
-from interpreter import lower_source, execute_cfg, VMConfig
-from interpreter.constants import Language
-from interpreter.cfg import build_cfg
-from interpreter.registry import build_registry
-
-instructions = lower_source(source, language=Language.PYTHON)
-cfg = build_cfg(instructions)
-registry = build_registry(instructions, cfg)
-
-vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
-# stats.steps, stats.llm_calls, stats.final_heap_objects, ...
-```
-
-| Function | Returns | Purpose |
-|---|---|---|
-| `lower_source(source, language, frontend_type, backend)` | `list[IRInstruction]` | Parse + lower source to IR |
-| `dump_ir(source, language, frontend_type, backend)` | `str` | IR text output |
-| `build_cfg_from_source(source, language, frontend_type, backend, function_name)` | `CFG` | Parse → lower → optionally slice → build CFG |
-| `dump_cfg(source, language, frontend_type, backend, function_name)` | `str` | CFG text output |
-| `dump_mermaid(source, language, frontend_type, backend, function_name)` | `str` | Mermaid flowchart output |
-| `ir_stats(source, language, frontend_type, backend)` | `dict[str, int]` | Opcode frequency counts |
-| `extract_function_source(source, function_name, language)` | `str` | Raw source text of a named function (recursive AST walk) |
-| `execute_cfg(cfg, entry_point, registry, config)` | `(VMState, ExecutionStats)` | Execute a pre-built CFG from a given entry point |
-| `execute_traced(source, language, function_name, entry_point, frontend_type, backend, max_steps)` | `ExecutionTrace` | Parse → lower → CFG → execute with per-step VMState snapshots for replay |
-
-Functions compose hierarchically: `dump_ir` calls `lower_source`; `dump_cfg` and `dump_mermaid` call `build_cfg_from_source`, which calls `lower_source`. Full execution is available via `interpreter.run()`, via `execute_cfg()` for standalone VM execution with a pre-built CFG, or via `execute_traced()` for step-by-step replay with VMState snapshots at each instruction.
 
 ## Testing
 
