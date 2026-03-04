@@ -137,7 +137,9 @@ class TestResolveFieldRef:
         # Should have emitted CONST, BINOP (sub), CONST (elem_size), BINOP (mul),
         # CONST (base), BINOP (add)
         binop_insts = [i for i in frontend._instructions if i.opcode == Opcode.BINOP]
-        assert len(binop_insts) == 3  # idx-1, *(elem_size), +(base)
+        assert len(binop_insts) == 3
+        # Verify the three operations: (idx-1), *(elem_size), +(base)
+        assert [i.operands[0] for i in binop_insts] == ["-", "*", "+"]
 
     def test_has_field_with_subscript(self):
         """_has_field correctly identifies subscripted field references."""
