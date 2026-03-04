@@ -114,9 +114,9 @@ class TestPascalFunctions:
         assert Opcode.RETURN in opcodes
         # Params ARE lowered — expect SYMBOLIC with "param:x"
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
-        assert any("param:x" in str(s.operands) for s in symbolics), (
-            "Expected param:x SYMBOLIC instruction for function parameter"
-        )
+        assert any(
+            "param:x" in str(s.operands) for s in symbolics
+        ), "Expected param:x SYMBOLIC instruction for function parameter"
 
 
 class TestPascalControlFlow:
