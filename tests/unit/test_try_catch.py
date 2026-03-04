@@ -340,8 +340,14 @@ class TestCatchWithoutVariable:
                 inst.operands
             ):
                 found_caught = True
-        # The next instruction after SYMBOLIC should NOT be a STORE_VAR for exc var
-        # (it might be a STORE_VAR for something else in the catch body)
+        # catch(...) has no named variable — any STORE_VAR after caught_exception
+        # must not bind the caught_exception register to a named exception variable
+        caught_reg = caught[0].result_reg
+        for store in stores_after_caught:
+            assert caught_reg not in store.operands, (
+                f"catch(...) should not store caught_exception to a variable, "
+                f"but found STORE_VAR binding {caught_reg}: {store}"
+            )
 
     def test_python_bare_except(self):
         ir = _parse_and_lower(
