@@ -1,4 +1,4 @@
-"""Integration tests — verify executor dispatches __cobol_* calls to io_provider."""
+"""Unit tests — verify executor dispatches __cobol_* calls to io_provider."""
 
 from interpreter.cfg import build_cfg
 from interpreter.cobol.io_provider import NullIOProvider, StubIOProvider
