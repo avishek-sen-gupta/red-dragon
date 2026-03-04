@@ -200,6 +200,9 @@ class C {
         ir = _parse_and_lower(source)
         returns = _find_all(ir, Opcode.RETURN)
         assert len(returns) >= 1
+        # The return value 42 must be present as a CONST
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("42" in str(inst.operands) for inst in consts)
 
 
 class TestCSharpFrontendAssignmentExpression:
