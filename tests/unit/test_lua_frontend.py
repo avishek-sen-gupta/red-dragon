@@ -44,7 +44,7 @@ class TestLuaLocalVariables:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("10" in inst.operands for inst in consts)
 
-    def test_local_without_initializer(self):
+    def test_local_without_initializer_produces_no_ir(self):
         # tree-sitter Lua wraps the identifier inside variable_list (no
         # assignment_statement child), and the current frontend does not find
         # the identifier as a direct child of variable_declaration.  The
