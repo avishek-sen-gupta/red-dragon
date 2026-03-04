@@ -117,6 +117,10 @@ class TestAddSubtract:
             ]
         )
         region = _first_region(vm)
+        # Source operands unchanged
+        assert _decode_zoned_unsigned(region, 0, 4) == 10, "WS-A should remain 10"
+        assert _decode_zoned_unsigned(region, 4, 4) == 5, "WS-B should remain 5"
+        # WS-R = 10 + 5 - 3 = 12
         assert _decode_zoned_unsigned(region, 8, 4) == 12
 
 
@@ -231,6 +235,9 @@ class TestMultiplyDivide:
             ]
         )
         region = _first_region(vm)
+        # Source operands unchanged by GIVING
+        assert _decode_zoned_unsigned(region, 0, 4) == 10, "WS-A should remain 10"
+        assert _decode_zoned_unsigned(region, 4, 4) == 5, "WS-B should remain 5"
         # WS-R = 10 * 3 = 30
         assert _decode_zoned_unsigned(region, 8, 4) == 30
         # WS-Q = 30 / 5 = 6
@@ -239,7 +246,7 @@ class TestMultiplyDivide:
 
 class TestComputeExpression:
     def test_compute_expression(self):
-        """COMPUTE with arithmetic expression."""
+        """COMPUTE WS-R = WS-A + WS-B * 2 should evaluate as 10 + (5*2) = 20."""
         vm = _run_cobol(
             [
                 "IDENTIFICATION DIVISION.",
@@ -256,6 +263,10 @@ class TestComputeExpression:
             ]
         )
         region = _first_region(vm)
+        # Source operands unchanged
+        assert _decode_zoned_unsigned(region, 0, 4) == 10, "WS-A should remain 10"
+        assert _decode_zoned_unsigned(region, 4, 4) == 5, "WS-B should remain 5"
+        # Result: 10 + (5 * 2) = 20
         assert _decode_zoned_unsigned(region, 8, 4) == 20
 
 
@@ -738,6 +749,10 @@ class TestSearchStatement:
             max_steps=50000,
         )
         region = _first_region(vm)
+        # WS-IDX should have advanced beyond its initial value of 1
+        assert (
+            _decode_zoned_unsigned(region, 0, 4) > 1
+        ), "WS-IDX should have incremented during search"
         # No match found — AT END should execute
         assert _decode_zoned_unsigned(region, 4, 4) == 99
 
@@ -1080,6 +1095,8 @@ class TestFillerDisambiguation:
         # WS-FLAG at 14 (1 byte)
         assert _decode_zoned_unsigned(region, 7, 4) == 42
         assert _decode_zoned_unsigned(region, 14, 1) == 7
+        # Region size must account for all fields including FILLERs: 5+2+4+3+1 = 15
+        assert len(region) >= 15, f"region must be >= 15 bytes for all fields + FILLERs, got {len(region)}"
 
     def test_filler_between_computed_fields(self):
         """FILLER padding doesn't affect arithmetic on surrounding fields."""

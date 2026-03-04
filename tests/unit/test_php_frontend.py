@@ -196,6 +196,10 @@ class TestPhpFrontendReturn:
         ir = _parse_and_lower(source)
         returns = _find_all(ir, Opcode.RETURN)
         assert len(returns) >= 1
+        consts = _find_all(ir, Opcode.CONST)
+        assert any(
+            "42" in str(c.operands) for c in consts
+        ), f"return 42 should emit CONST 42, got {[c.operands for c in consts]}"
 
 
 class TestPhpFrontendThrow:
