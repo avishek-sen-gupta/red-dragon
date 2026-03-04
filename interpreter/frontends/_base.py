@@ -1,4 +1,14 @@
-"""BaseFrontend — language-agnostic tree-sitter AST → IR lowering infrastructure."""
+"""BaseFrontend — language-agnostic tree-sitter AST → IR lowering infrastructure.
+
+Supports two modes:
+  1. **Context mode** (new): subclass overrides ``_build_constants()``,
+     ``_build_stmt_dispatch()``, ``_build_expr_dispatch()`` returning pure functions.
+  2. **Legacy mode**: subclass populates ``_STMT_DISPATCH`` / ``_EXPR_DISPATCH``
+     dicts with bound methods in ``__init__``.
+
+Legacy mode is detected automatically when ``_STMT_DISPATCH`` or ``_EXPR_DISPATCH``
+is non-empty.  Once all frontends are converted, legacy code will be removed.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +18,7 @@ from typing import Any, Callable
 
 from ..frontend import Frontend
 from ..frontend_observer import FrontendObserver, NullFrontendObserver
+from ..frontends.context import GrammarConstants, TreeSitterEmitContext
 from ..ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
 from ..parser import ParserFactory
 from .. import constants
@@ -19,9 +30,9 @@ logger = logging.getLogger(__name__)
 class BaseFrontend(Frontend):
     """Base class for deterministic tree-sitter frontends.
 
-    Subclasses populate ``_STMT_DISPATCH`` and ``_EXPR_DISPATCH`` tables and
-    override field-name / literal constants where the grammar differs from
-    the defaults.
+    Converted frontends override ``_build_constants``, ``_build_stmt_dispatch``,
+    and ``_build_expr_dispatch``.  Unconverted frontends populate
+    ``_STMT_DISPATCH`` and ``_EXPR_DISPATCH`` tables in ``__init__``.
     """
 
     # ── overridable constants ────────────────────────────────────
@@ -77,6 +88,7 @@ class BaseFrontend(Frontend):
         self._parser_factory = parser_factory
         self._language = language
         self._observer = observer
+        # Legacy state (used only by unconverted frontends)
         self._reg_counter: int = 0
         self._label_counter: int = 0
         self._instructions: list[IRInstruction] = []
@@ -135,6 +147,20 @@ class BaseFrontend(Frontend):
             end_col=e[1],
         )
 
+    # ── context-mode hooks (override in subclasses for pure-function dispatch) ──
+
+    def _build_constants(self):
+        """Override to return a GrammarConstants for context-mode dispatch."""
+        return None
+
+    def _build_stmt_dispatch(self) -> dict[str, Callable]:
+        """Override to return stmt dispatch table for context-mode dispatch."""
+        return {}
+
+    def _build_expr_dispatch(self) -> dict[str, Callable]:
+        """Override to return expr dispatch table for context-mode dispatch."""
+        return {}
+
     # ── entry point ──────────────────────────────────────────────
 
     def lower(self, source: bytes) -> list[IRInstruction]:
@@ -144,17 +170,39 @@ class BaseFrontend(Frontend):
         self._observer.on_parse(time.perf_counter() - t0)
 
         t1 = time.perf_counter()
-        self._reg_counter = 0
-        self._label_counter = 0
-        self._instructions = []
-        self._source = source
-        self._loop_stack = []
-        self._break_target_stack = []
         root = tree.root_node
-        self._emit(Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)
-        self._lower_block(root)
+
+        grammar_constants = self._build_constants()
+        if grammar_constants is not None:
+            result = self._lower_with_context(source, root)
+        else:
+            self._reg_counter = 0
+            self._label_counter = 0
+            self._instructions = []
+            self._source = source
+            self._loop_stack = []
+            self._break_target_stack = []
+            self._emit(Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)
+            self._lower_block(root)
+            result = self._instructions
+
         self._observer.on_lower(time.perf_counter() - t1)
-        return self._instructions
+        return result
+
+    def _lower_with_context(self, source: bytes, root) -> list[IRInstruction]:
+        """Context-mode lowering using TreeSitterEmitContext and pure functions."""
+        grammar_constants = self._build_constants()
+        ctx = TreeSitterEmitContext(
+            source=source,
+            language=self._language,
+            observer=self._observer,
+            constants=grammar_constants,
+            stmt_dispatch=self._build_stmt_dispatch(),
+            expr_dispatch=self._build_expr_dispatch(),
+        )
+        ctx.emit(Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)
+        ctx.lower_block(root)
+        return ctx.instructions
 
     # ── dispatchers ──────────────────────────────────────────────
 
