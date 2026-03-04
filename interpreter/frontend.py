@@ -15,6 +15,14 @@ class Frontend(ABC):
     @abstractmethod
     def lower(self, source: bytes) -> list[IRInstruction]: ...
 
+    @property
+    def data_layout(self) -> dict[str, dict]:
+        """Language-agnostic data layout mapping field names to offset/length/type info.
+
+        Override in language frontends that produce memory layouts (e.g. COBOL).
+        """
+        return {}
+
 
 # Backward-compatibility re-export: code that imports PythonFrontend from here still works.
 from .frontends.python import PythonFrontend  # noqa: E402, F401
