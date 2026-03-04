@@ -130,81 +130,11 @@ Respond with ONLY valid JSON. No markdown fences. No text outside the JSON objec
         return StateUpdate(**data)
 
 
-class ClaudeBackend(LLMBackend):
-    """Backend that delegates LLM calls to a ClaudeLLMClient."""
+class LLMInterpreterBackend(LLMBackend):
+    """Backend that delegates LLM calls to any LLMClient."""
 
-    def __init__(self, model: str = "claude-sonnet-4-20250514", client: Any = None):
-        self._llm_client = get_llm_client(
-            provider="claude",
-            model=model,
-            client=client,
-        )
-
-    def interpret_instruction(
-        self, instruction: IRInstruction, state: VMState
-    ) -> StateUpdate:
-        user_msg = self._build_prompt(instruction, state)
-        raw = self._llm_client.complete(
-            system_prompt=self.SYSTEM_PROMPT,
-            user_message=user_msg,
-            max_tokens=1024,
-        )
-        return self._parse_response(raw)
-
-
-class OpenAIBackend(LLMBackend):
-    """Backend that delegates LLM calls to an OpenAILLMClient."""
-
-    def __init__(self, model: str = "gpt-4o", client: Any = None):
-        self._llm_client = get_llm_client(
-            provider="openai",
-            model=model,
-            client=client,
-        )
-
-    def interpret_instruction(
-        self, instruction: IRInstruction, state: VMState
-    ) -> StateUpdate:
-        user_msg = self._build_prompt(instruction, state)
-        raw = self._llm_client.complete(
-            system_prompt=self.SYSTEM_PROMPT,
-            user_message=user_msg,
-            max_tokens=1024,
-        )
-        return self._parse_response(raw)
-
-
-class OllamaBackend(LLMBackend):
-    """Backend that delegates LLM calls to a local Ollama instance."""
-
-    def __init__(self, model: str = "qwen2.5-coder:7b-instruct", client: Any = None):
-        self._llm_client = get_llm_client(
-            provider="ollama",
-            model=model,
-            client=client,
-        )
-
-    def interpret_instruction(
-        self, instruction: IRInstruction, state: VMState
-    ) -> StateUpdate:
-        user_msg = self._build_prompt(instruction, state)
-        raw = self._llm_client.complete(
-            system_prompt=self.SYSTEM_PROMPT,
-            user_message=user_msg,
-            max_tokens=1024,
-        )
-        return self._parse_response(raw)
-
-
-class HuggingFaceBackend(LLMBackend):
-    """Backend that delegates LLM calls to a HuggingFace Inference Endpoint."""
-
-    def __init__(self, model: str = "", client: Any = None):
-        self._llm_client = get_llm_client(
-            provider="huggingface",
-            model=model,
-            client=client,
-        )
+    def __init__(self, llm_client: LLMClient):
+        self._llm_client = llm_client
 
     def interpret_instruction(
         self, instruction: IRInstruction, state: VMState
@@ -223,14 +153,11 @@ def get_backend(name: str, client: Any = None) -> LLMBackend:
 
     Args:
         name: "claude", "openai", "ollama", or "huggingface"
-        client: Optional pre-built API client for DI/testing.
+        client: Optional pre-built completion_fn callable for DI/testing.
     """
-    if name == "claude":
-        return ClaudeBackend(client=client)
-    if name == "openai":
-        return OpenAIBackend(client=client)
-    if name == "ollama":
-        return OllamaBackend(client=client)
-    if name == "huggingface":
-        return HuggingFaceBackend(client=client)
-    raise ValueError(f"Unknown backend: {name}")
+    llm_client = (
+        get_llm_client(provider=name, completion_fn=client)
+        if client
+        else get_llm_client(provider=name)
+    )
+    return LLMInterpreterBackend(llm_client=llm_client)

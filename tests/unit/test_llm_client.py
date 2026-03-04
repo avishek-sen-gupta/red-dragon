@@ -2,113 +2,137 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from interpreter.llm_client import (
-    ClaudeLLMClient,
-    OpenAILLMClient,
-    get_llm_client,
+    LiteLLMClient,
     LLMClient,
+    get_llm_client,
+    _resolve_model,
 )
 
 
-class FakeAnthropicResponse:
-    """Mimics anthropic message response structure."""
-
-    def __init__(self, text: str):
-        self.content = [type("Block", (), {"text": text})()]
-
-
-class FakeAnthropicClient:
-    """Fake anthropic.Anthropic() for testing."""
-
-    def __init__(self):
-        self.messages = self
-        self.last_call = {}
-
-    def create(self, **kwargs):
-        self.last_call = kwargs
-        return FakeAnthropicResponse("fake claude response")
+def _fake_completion_fn(**kwargs):
+    """Fake litellm.completion() that records calls and returns a canned response."""
+    _fake_completion_fn.last_call = kwargs
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="fake response"))]
+    )
 
 
-class FakeOpenAIResponse:
-    """Mimics openai chat completion response structure."""
-
-    def __init__(self, text: str):
-        self.choices = [
-            type("Choice", (), {"message": type("Msg", (), {"content": text})()})()
-        ]
-
-
-class FakeOpenAIClient:
-    """Fake openai.OpenAI() for testing."""
-
-    def __init__(self):
-        self.chat = type("Chat", (), {"completions": self})()
-        self.last_call = {}
-
-    def create(self, **kwargs):
-        self.last_call = kwargs
-        return FakeOpenAIResponse("fake openai response")
-
-
-class TestClaudeLLMClient:
-    def test_complete_with_injected_client(self):
-        fake = FakeAnthropicClient()
-        client = ClaudeLLMClient(client=fake)
+class TestLiteLLMClient:
+    def test_complete_delegates_to_completion_fn(self):
+        _fake_completion_fn.last_call = {}
+        client = LiteLLMClient(
+            model="claude-sonnet-4-20250514", completion_fn=_fake_completion_fn
+        )
         result = client.complete("sys prompt", "user msg", max_tokens=512)
 
-        assert result == "fake claude response"
-        assert fake.last_call["model"] == "claude-sonnet-4-20250514"
-        assert fake.last_call["system"] == "sys prompt"
-        assert fake.last_call["max_tokens"] == 512
-        assert fake.last_call["messages"] == [{"role": "user", "content": "user msg"}]
+        assert result == "fake response"
+        call = _fake_completion_fn.last_call
+        assert call["model"] == "claude-sonnet-4-20250514"
+        assert call["max_tokens"] == 512
+        assert call["messages"] == [
+            {"role": "system", "content": "sys prompt"},
+            {"role": "user", "content": "user msg"},
+        ]
+        assert "api_base" not in call
 
-    def test_custom_model(self):
-        fake = FakeAnthropicClient()
-        client = ClaudeLLMClient(model="claude-haiku-35", client=fake)
+    def test_api_base_passed_when_set(self):
+        _fake_completion_fn.last_call = {}
+        client = LiteLLMClient(
+            model="ollama/qwen2.5-coder:7b-instruct",
+            api_base="http://localhost:11434",
+            completion_fn=_fake_completion_fn,
+        )
         client.complete("s", "u")
-        assert fake.last_call["model"] == "claude-haiku-35"
+        assert _fake_completion_fn.last_call["api_base"] == "http://localhost:11434"
+
+    def test_is_llm_client_subclass(self):
+        client = LiteLLMClient(model="test", completion_fn=_fake_completion_fn)
+        assert isinstance(client, LLMClient)
 
 
-class TestOpenAILLMClient:
-    def test_complete_with_injected_client(self):
-        fake = FakeOpenAIClient()
-        client = OpenAILLMClient(client=fake)
-        result = client.complete("sys prompt", "user msg", max_tokens=256)
+class TestResolveModel:
+    def test_claude_default(self):
+        model, base = _resolve_model("claude", "", "")
+        assert model == "claude-sonnet-4-20250514"
+        assert base == ""
 
-        assert result == "fake openai response"
-        assert fake.last_call["model"] == "gpt-4o"
-        assert fake.last_call["max_tokens"] == 256
-        assert fake.last_call["response_format"] == {"type": "json_object"}
-        messages = fake.last_call["messages"]
-        assert messages[0] == {"role": "system", "content": "sys prompt"}
-        assert messages[1] == {"role": "user", "content": "user msg"}
+    def test_claude_custom_model(self):
+        model, base = _resolve_model("claude", "claude-haiku-35", "")
+        assert model == "claude-haiku-35"
+        assert base == ""
 
-    def test_custom_model(self):
-        fake = FakeOpenAIClient()
-        client = OpenAILLMClient(model="gpt-3.5-turbo", client=fake)
-        client.complete("s", "u")
-        assert fake.last_call["model"] == "gpt-3.5-turbo"
+    def test_openai_default(self):
+        model, base = _resolve_model("openai", "", "")
+        assert model == "gpt-4o"
+        assert base == ""
+
+    def test_ollama_default(self):
+        model, base = _resolve_model("ollama", "", "")
+        assert model == "ollama/qwen2.5-coder:7b-instruct"
+        assert base == "http://localhost:11434"
+
+    def test_ollama_custom_model(self):
+        model, base = _resolve_model("ollama", "llama3", "")
+        assert model == "ollama/llama3"
+
+    def test_huggingface_registry_lookup(self):
+        model, base = _resolve_model("huggingface", "qwen2.5-coder-32b", "")
+        assert "huggingface/" in model
+        assert "huggingface.cloud" in base
+
+    def test_huggingface_explicit_url(self):
+        model, base = _resolve_model(
+            "huggingface", "my-model", "https://my-endpoint.com"
+        )
+        assert model == "huggingface/my-model"
+        assert base == "https://my-endpoint.com"
+
+    def test_huggingface_no_url_no_registry_raises(self):
+        with pytest.raises(ValueError, match="No base_url provided"):
+            _resolve_model("huggingface", "unknown-model", "")
+
+    def test_unknown_provider_raises(self):
+        with pytest.raises(ValueError, match="Unknown LLM provider"):
+            _resolve_model("gemini", "", "")
 
 
 class TestGetLLMClient:
-    def test_claude_default(self):
-        fake = FakeAnthropicClient()
-        client = get_llm_client(provider="claude", client=fake)
-        assert isinstance(client, ClaudeLLMClient)
+    def test_returns_litellm_client(self):
+        client = get_llm_client(provider="claude", completion_fn=_fake_completion_fn)
+        assert isinstance(client, LiteLLMClient)
 
-    def test_openai_default(self):
-        fake = FakeOpenAIClient()
-        client = get_llm_client(provider="openai", client=fake)
-        assert isinstance(client, OpenAILLMClient)
-
-    def test_claude_with_model(self):
-        fake = FakeAnthropicClient()
-        client = get_llm_client(provider="claude", model="custom-model", client=fake)
-        assert isinstance(client, ClaudeLLMClient)
+    def test_claude_model_resolution(self):
+        _fake_completion_fn.last_call = {}
+        client = get_llm_client(provider="claude", completion_fn=_fake_completion_fn)
         client.complete("s", "u")
-        assert fake.last_call["model"] == "custom-model"
+        assert _fake_completion_fn.last_call["model"] == "claude-sonnet-4-20250514"
+
+    def test_openai_model_resolution(self):
+        _fake_completion_fn.last_call = {}
+        client = get_llm_client(provider="openai", completion_fn=_fake_completion_fn)
+        client.complete("s", "u")
+        assert _fake_completion_fn.last_call["model"] == "gpt-4o"
+
+    def test_custom_model_override(self):
+        _fake_completion_fn.last_call = {}
+        client = get_llm_client(
+            provider="claude", model="custom-model", completion_fn=_fake_completion_fn
+        )
+        client.complete("s", "u")
+        assert _fake_completion_fn.last_call["model"] == "custom-model"
+
+    def test_ollama_prefixes_model(self):
+        _fake_completion_fn.last_call = {}
+        client = get_llm_client(provider="ollama", completion_fn=_fake_completion_fn)
+        client.complete("s", "u")
+        assert (
+            _fake_completion_fn.last_call["model"] == "ollama/qwen2.5-coder:7b-instruct"
+        )
 
     def test_unknown_provider_raises(self):
         with pytest.raises(ValueError, match="Unknown LLM provider"):

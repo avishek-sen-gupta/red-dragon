@@ -1234,3 +1234,13 @@ Updated tier classification: Tier 1 (11): Python, Java, C#, Kotlin, Scala, JS, T
 6. **Inheritance preserved**: C++ extends C's frontend, TypeScript extends JavaScript's — both call `super()._build_*()` and overlay their own entries.
 
 **Consequences:** All 15 frontends are now modular packages (13 fully converted + 2 inheritance wrappers). 8469 tests pass with zero regressions. Each handler is independently testable as a pure function. Common patterns are shared via `common/` modules. The `_base.py` file is reduced to a thin orchestration template.
+
+---
+
+### ADR-019: Migrate from provider-specific SDKs to LiteLLM (2026-03-04)
+
+**Context:** The LLM integration layer had 4 near-identical `LLMClient` subclasses (`ClaudeLLMClient`, `OpenAILLMClient`, `OllamaLLMClient`, `HuggingFaceLLMClient`) each wrapping a provider-specific SDK, and 4 identical `LLMBackend` subclasses differing only in the provider string passed to the factory. This duplication meant every new provider required a new class pair, and two direct SDK dependencies (`anthropic`, `openai`) had to be maintained separately.
+
+**Decision:** Replace the `anthropic` and `openai` direct dependencies with `litellm`, which provides a unified `completion()` interface that handles provider routing internally. Collapse the 4 client classes into a single `LiteLLMClient` that accepts an injectable `completion_fn` callable (defaulting to `litellm.completion()`), and the 4 backend classes into a single `LLMInterpreterBackend` that accepts any `LLMClient`. A `_resolve_model()` function maps `(provider, model, base_url)` to LiteLLM model strings (e.g. `ollama/qwen2.5-coder:7b-instruct`).
+
+**Consequences:** SDK dependencies reduced from 2 to 1. `llm_client.py` reduced from ~247 to ~130 lines, `backend.py` from ~237 to ~163 lines. The `LLMClient` ABC and `LLMBackend` ABC are preserved as injection seams — all downstream code (`llm_frontend.py`, `unresolved_call.py`, `run.py`) is unchanged. Adding a new provider now requires only a `_ProviderDefaults` entry and a model string mapping in `_resolve_model()`. The `get_backend()` factory signature is preserved for backward compatibility. 8493 tests pass with zero regressions.

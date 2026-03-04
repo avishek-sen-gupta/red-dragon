@@ -307,12 +307,22 @@ The LLM frontend (`--frontend llm`) sends source to an LLM constrained by a form
 
 The **chunked LLM frontend** (`--frontend chunked_llm`) handles large files by decomposing them into per-function/class chunks via tree-sitter, lowering each independently, then renumbering registers/labels and reassembling. Failed chunks produce `SYMBOLIC` placeholders.
 
+All providers are accessed through [LiteLLM](https://github.com/BerriAI/litellm), a unified completion interface that routes to provider-specific APIs internally.
+
 | Provider | Flag | Notes |
 |----------|------|-------|
 | Claude | `-b claude` | Best quality, requires `ANTHROPIC_API_KEY` |
 | OpenAI | `-b openai` | Requires `OPENAI_API_KEY` |
 | HuggingFace | `-b huggingface` | Inference Endpoints, requires `HUGGING_FACE_API_TOKEN` |
 | Ollama | `-b ollama` | Local, no API key needed |
+
+Demo scripts exercising the LLM integration:
+
+```bash
+poetry run python scripts/demo_llm_e2e.py             # LLM frontend + LLM resolver (Python)
+poetry run python scripts/demo_unsupported_language.py  # LLM frontend for Haskell (no tree-sitter)
+poetry run python scripts/run_chunked_demo.py           # chunked LLM frontend
+```
 
 ## Programmatic API
 

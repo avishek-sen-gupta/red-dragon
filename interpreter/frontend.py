@@ -80,7 +80,9 @@ def get_frontend(
         elif isinstance(llm_client, LLMClient):
             resolved_client = llm_client
         else:
-            resolved_client = get_llm_client(provider=llm_provider, client=llm_client)
+            resolved_client = get_llm_client(
+                provider=llm_provider, completion_fn=llm_client
+            )
 
         max_tokens = LLMFrontend.DEFAULT_MAX_TOKENS
         if frontend_type == constants.FRONTEND_CHUNKED_LLM:

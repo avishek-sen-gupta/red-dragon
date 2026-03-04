@@ -6,57 +6,28 @@ import json
 
 import pytest
 
-from interpreter.backend import ClaudeBackend, OpenAIBackend, get_backend
+from interpreter.backend import LLMInterpreterBackend, get_backend
+from interpreter.llm_client import LLMClient
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.vm import VMState, StackFrame
 
 
-class FakeAnthropicResponse:
-    def __init__(self, text: str):
-        self.content = [type("Block", (), {"text": text})()]
+class FakeLLMClient(LLMClient):
+    """Fake LLMClient for testing backend logic."""
 
+    def __init__(self, response_json: dict):
+        self._response_json = response_json
+        self.last_call: dict = {}
 
-class FakeAnthropicClient:
-    def __init__(self):
-        self.messages = self
-        self.last_call = {}
-
-    def create(self, **kwargs):
-        self.last_call = kwargs
-        return FakeAnthropicResponse(
-            json.dumps(
-                {
-                    "register_writes": {"%0": 42},
-                    "var_writes": {},
-                    "reasoning": "test",
-                }
-            )
-        )
-
-
-class FakeOpenAIResponse:
-    def __init__(self, text: str):
-        self.choices = [
-            type("Choice", (), {"message": type("Msg", (), {"content": text})()})()
-        ]
-
-
-class FakeOpenAIClient:
-    def __init__(self):
-        self.chat = type("Chat", (), {"completions": self})()
-        self.last_call = {}
-
-    def create(self, **kwargs):
-        self.last_call = kwargs
-        return FakeOpenAIResponse(
-            json.dumps(
-                {
-                    "register_writes": {"%0": 42},
-                    "var_writes": {},
-                    "reasoning": "test",
-                }
-            )
-        )
+    def complete(
+        self, system_prompt: str, user_message: str, max_tokens: int = 4096
+    ) -> str:
+        self.last_call = {
+            "system_prompt": system_prompt,
+            "user_message": user_message,
+            "max_tokens": max_tokens,
+        }
+        return json.dumps(self._response_json)
 
 
 def _make_vm_with_frame() -> VMState:
@@ -65,10 +36,16 @@ def _make_vm_with_frame() -> VMState:
     return vm
 
 
-class TestClaudeBackendRefactored:
+class TestLLMInterpreterBackend:
     def test_interpret_instruction(self):
-        fake = FakeAnthropicClient()
-        backend = ClaudeBackend(client=fake)
+        fake_client = FakeLLMClient(
+            {
+                "register_writes": {"%0": 42},
+                "var_writes": {},
+                "reasoning": "test",
+            }
+        )
+        backend = LLMInterpreterBackend(llm_client=fake_client)
         inst = IRInstruction(opcode=Opcode.CONST, result_reg="%0", operands=["42"])
         vm = _make_vm_with_frame()
         update = backend.interpret_instruction(inst, vm)
@@ -76,30 +53,42 @@ class TestClaudeBackendRefactored:
         assert update.register_writes == {"%0": 42}
         assert update.reasoning == "test"
 
-
-class TestOpenAIBackendRefactored:
-    def test_interpret_instruction(self):
-        fake = FakeOpenAIClient()
-        backend = OpenAIBackend(client=fake)
-        inst = IRInstruction(opcode=Opcode.CONST, result_reg="%0", operands=["42"])
+    def test_passes_system_prompt(self):
+        fake_client = FakeLLMClient(
+            {
+                "register_writes": {"%0": 1},
+                "reasoning": "ok",
+            }
+        )
+        backend = LLMInterpreterBackend(llm_client=fake_client)
+        inst = IRInstruction(opcode=Opcode.CONST, result_reg="%0", operands=["1"])
         vm = _make_vm_with_frame()
-        update = backend.interpret_instruction(inst, vm)
+        backend.interpret_instruction(inst, vm)
 
-        assert update.register_writes == {"%0": 42}
-        assert update.reasoning == "test"
+        assert "symbolic interpreter" in fake_client.last_call["system_prompt"]
+        assert fake_client.last_call["max_tokens"] == 1024
 
 
 class TestGetBackendFactory:
-    def test_claude_with_client(self):
-        fake = FakeAnthropicClient()
-        backend = get_backend("claude", client=fake)
-        assert isinstance(backend, ClaudeBackend)
+    def test_returns_llm_interpreter_backend(self):
+        from types import SimpleNamespace
 
-    def test_openai_with_client(self):
-        fake = FakeOpenAIClient()
-        backend = get_backend("openai", client=fake)
-        assert isinstance(backend, OpenAIBackend)
+        def fake_completion_fn(**kwargs):
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content=json.dumps(
+                                {"register_writes": {}, "reasoning": "ok"}
+                            )
+                        )
+                    )
+                ]
+            )
+
+        backend = get_backend("claude", client=fake_completion_fn)
+        assert isinstance(backend, LLMInterpreterBackend)
 
     def test_unknown_raises(self):
-        with pytest.raises(ValueError, match="Unknown backend"):
+        with pytest.raises(ValueError, match="Unknown LLM provider"):
             get_backend("gemini")
