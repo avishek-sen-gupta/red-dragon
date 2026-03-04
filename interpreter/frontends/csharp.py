@@ -1037,9 +1037,12 @@ class CSharpFrontend(BaseFrontend):
 
         if alt_node:
             self._emit(Opcode.LABEL, label=false_label)
-            for child in alt_node.children:
-                if child.type not in ("else",) and child.is_named:
-                    self._lower_stmt(child)
+            if alt_node.type == "if_statement":
+                self._lower_if(alt_node)
+            else:
+                for child in alt_node.children:
+                    if child.type not in ("else",) and child.is_named:
+                        self._lower_stmt(child)
             self._emit(Opcode.BRANCH, label=end_label)
 
         self._emit(Opcode.LABEL, label=end_label)
