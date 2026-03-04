@@ -321,7 +321,7 @@ if (x > 100) {
 """
         ir = _parse_and_lower(source)
         branches = _find_all(ir, Opcode.BRANCH_IF)
-        assert len(branches) >= 1
+        assert len(branches) >= 2
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("grade" in inst.operands for inst in stores)
         binops = _find_all(ir, Opcode.BINOP)
