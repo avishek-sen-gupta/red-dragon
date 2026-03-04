@@ -471,6 +471,10 @@ class TestJavaScriptNewExpression:
         assert any("constructor" in inst.operands for inst in calls)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("obj" in inst.operands for inst in stores)
+        # Args should be loaded
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("name" in inst.operands for inst in loads)
+        assert any("age" in inst.operands for inst in loads)
 
     def test_new_expression_in_throw(self):
         instructions = _parse_js('throw new Error("fail");')
