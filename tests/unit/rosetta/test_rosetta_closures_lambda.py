@@ -111,6 +111,18 @@ class TestClosuresLambdaLowering:
             language=lang,
         )
 
+    def test_lambda_emits_nested_function_label(self, language_ir):
+        """Lambda/arrow closures must emit >= 2 nested func_ labels (outer + anonymous inner)."""
+        lang, ir = language_ir
+        labels = [
+            inst.label
+            for inst in ir
+            if inst.opcode == Opcode.LABEL and inst.label and "func_" in inst.label
+        ]
+        assert (
+            len(labels) >= 2
+        ), f"[{lang}] lambda closure should produce >= 2 nested func_ labels, got {labels}"
+
 
 # ---------------------------------------------------------------------------
 # Cross-language consistency tests
