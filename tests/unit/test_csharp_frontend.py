@@ -580,7 +580,9 @@ class C {
 """
         ir = _parse_and_lower(source)
         opcodes = _opcodes(ir)
-        assert Opcode.BINOP in opcodes or Opcode.BRANCH in opcodes
+        assert (
+            Opcode.BINOP in opcodes
+        ), "switch expression must produce BINOP for arm comparisons"
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("result" in inst.operands for inst in stores)
 

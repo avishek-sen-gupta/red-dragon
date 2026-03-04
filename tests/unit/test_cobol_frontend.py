@@ -691,9 +691,13 @@ class TestPerformLoopLowering:
             and inst.operands
             and inst.operands[0] == "print"
         ]
-        assert any(
-            bi < pi for bi in branch_if_indices for pi in print_indices
-        ), "TEST BEFORE should have condition before body"
+        assert (
+            branch_if_indices and print_indices
+        ), "expected both BRANCH_IF and print calls"
+        assert branch_if_indices[0] < print_indices[0], (
+            f"TEST BEFORE: first condition (idx {branch_if_indices[0]}) "
+            f"must precede first body (idx {print_indices[0]})"
+        )
 
     def test_perform_until_test_after_body_first(self):
         fields = [
@@ -723,9 +727,13 @@ class TestPerformLoopLowering:
             i for i, inst in enumerate(instructions) if inst.opcode == Opcode.BRANCH_IF
         ]
         # At least one of the print calls should come before the BRANCH_IF
-        assert any(
-            pi < bi for pi in print_indices for bi in branch_if_indices
-        ), "TEST AFTER should have body before condition"
+        assert (
+            print_indices and branch_if_indices
+        ), "expected both print calls and BRANCH_IF"
+        assert print_indices[0] < branch_if_indices[0], (
+            f"TEST AFTER: first body (idx {print_indices[0]}) "
+            f"must precede first condition (idx {branch_if_indices[0]})"
+        )
 
     def test_perform_varying_inline_emits_init_and_increment(self):
         fields = [
