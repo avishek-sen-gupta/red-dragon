@@ -104,6 +104,7 @@ class DataflowResult:
     block_facts: dict[str, BlockDataflowFacts]
     def_use_chains: list[DefUseLink]
     dependency_graph: dict[str, set[str]]
+    raw_dependency_graph: dict[str, set[str]]
 
 
 def _defs_of(instruction: IRInstruction) -> list[str]:
@@ -310,31 +311,15 @@ def extract_def_use_chains(
     return chains
 
 
-def build_dependency_graph(
+def _build_raw_dependency_graph(
     def_use_chains: list[DefUseLink],
 ) -> dict[str, set[str]]:
-    """Build a variable dependency graph: var -> set of vars it depends on.
+    """Build a raw variable dependency graph: var -> set of vars it directly depends on.
 
     Traces through register chains: for each STORE_VAR, find what named variables
     the RHS value ultimately depends on by walking backward through defining instructions.
+    Does NOT compute transitive closure.
     """
-    # Build map: register/variable -> uses of the instruction that defines it
-    # i.e., what does the instruction that produces this register consume?
-    defined_by_uses: dict[str, set[str]] = {}
-    for link in def_use_chains:
-        defn = link.definition
-        defined_by_uses.setdefault(defn.variable, set())
-        # The instruction that defines defn.variable uses link.use.variable... no.
-        # Actually: link = (definition -> use), meaning the definition feeds INTO the use.
-        # We need the reverse: for each defined variable, what does its defining instruction use?
-
-    # Correct approach: for each definition, gather what its instruction uses
-    all_def_instructions: dict[str, list[IRInstruction]] = {}
-    for link in def_use_chains:
-        all_def_instructions.setdefault(link.definition.variable, []).append(
-            link.definition.instruction
-        )
-
     # Map: variable -> set of variables/registers used by its defining instruction
     produced_from: dict[str, set[str]] = {}
     for link in def_use_chains:
@@ -359,7 +344,14 @@ def build_dependency_graph(
         _trace_to_named_vars(rhs_reg, produced_from, named_deps, set())
         dep_graph.setdefault(var_name, set()).update(named_deps)
 
-    # Compute transitive closure
+    return dep_graph
+
+
+def _transitive_closure(
+    raw_graph: dict[str, set[str]],
+) -> dict[str, set[str]]:
+    """Compute transitive closure of a dependency graph."""
+    dep_graph = {var: set(deps) for var, deps in raw_graph.items()}
     changed = True
     while changed:
         changed = False
@@ -369,8 +361,18 @@ def build_dependency_graph(
             if new_deps != deps:
                 dep_graph[var] = new_deps
                 changed = True
-
     return dep_graph
+
+
+def build_dependency_graph(
+    def_use_chains: list[DefUseLink],
+) -> dict[str, set[str]]:
+    """Build a variable dependency graph with transitive closure.
+
+    Returns var -> set of all vars it depends on (direct + transitive).
+    """
+    raw = _build_raw_dependency_graph(def_use_chains)
+    return _transitive_closure(raw)
 
 
 def _is_temporary_register(name: str) -> bool:
@@ -415,9 +417,15 @@ def analyze(cfg: CFG) -> DataflowResult:
     def_use_chains = extract_def_use_chains(cfg, block_facts)
     logger.info("Extracted %d def-use chains", len(def_use_chains))
 
-    dependency_graph = build_dependency_graph(def_use_chains)
+    raw_dependency_graph = _build_raw_dependency_graph(def_use_chains)
     logger.info(
-        "Built dependency graph with %d variables",
+        "Built raw dependency graph with %d variables",
+        len(raw_dependency_graph),
+    )
+
+    dependency_graph = _transitive_closure(raw_dependency_graph)
+    logger.info(
+        "Built transitive dependency graph with %d variables",
         len(dependency_graph),
     )
 
@@ -426,4 +434,5 @@ def analyze(cfg: CFG) -> DataflowResult:
         block_facts=block_facts,
         def_use_chains=def_use_chains,
         dependency_graph=dependency_graph,
+        raw_dependency_graph=raw_dependency_graph,
     )
