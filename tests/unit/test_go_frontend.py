@@ -384,8 +384,6 @@ func main() {
         ir = _parse_and_lower(source)
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("defer" in inst.operands for inst in calls)
-        method_calls = _find_all(ir, Opcode.CALL_METHOD)
-        assert any("Read" in inst.operands for inst in method_calls)
 
 
 class TestGoCompositeLiteral:

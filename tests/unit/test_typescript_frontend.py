@@ -297,6 +297,10 @@ export function clamp(val: number, min: number, max: number): number {
         assert any("clamp" in inst.operands for inst in stores)
 
     def test_non_null_assertion_chain(self):
+        # NOTE: The `!` (non-null assertion) operator is transparent at the IR level —
+        # the TS frontend strips it via _lower_non_null_expr (x! → just lower x).
+        # This test verifies the property chain lowers correctly; the `!` operators
+        # cannot be observed in IR output.
         source = """\
 const name: string = obj!.user!.name;
 const upper: string = name.toUpperCase();

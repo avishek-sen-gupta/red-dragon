@@ -675,6 +675,21 @@ class TestPerformLoopLowering:
         gt_ops = [b for b in binops if b.operands[0] == ">"]
         assert len(gt_ops) >= 1
 
+        # TEST BEFORE: condition (BRANCH_IF) must appear before body (print call)
+        branch_if_indices = [
+            i for i, inst in enumerate(instructions) if inst.opcode == Opcode.BRANCH_IF
+        ]
+        print_indices = [
+            i
+            for i, inst in enumerate(instructions)
+            if inst.opcode == Opcode.CALL_FUNCTION
+            and inst.operands
+            and inst.operands[0] == "print"
+        ]
+        assert any(
+            bi < pi for bi in branch_if_indices for pi in print_indices
+        ), "TEST BEFORE should have condition before body"
+
     def test_perform_until_test_after_body_first(self):
         fields = [
             CobolField(
