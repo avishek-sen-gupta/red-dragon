@@ -286,23 +286,6 @@ Control flow constructs (if/else, while, for, for-of/foreach, switch, break/cont
 
 </details>
 
-All constructs above produce real IR for proper data-flow analysis. All 15 frontends have **zero unsupported SYMBOLIC instructions** on the two-pass audit suite (`scripts/audit_all_frontends.py`), which combines dispatch-table coverage analysis (comparing AST node types against frontend dispatch tables with block-reachability classification) and runtime SYMBOLIC detection. A separate COBOL-specific audit (`scripts/audit_cobol_frontend.py`) checks all three layers of the ProLeap pipeline (bridge serialisation, Python dispatch, frontend lowering) and produces a per-type coverage matrix across ProLeap's 51 PROCEDURE DIVISION statement types plus a DATA DIVISION coverage matrix tracking 29 features across three layers (bridge extraction, Python modelling, frontend handling) — covering sections, entry types, and clauses (PIC, USAGE variants, VALUE, REDEFINES, OCCURS, etc.). For unlisted languages, use `--frontend llm`.
-
-### COBOL frontend
-
-The COBOL frontend uses the [ProLeap COBOL Parser](https://github.com/uwol/proleap-cobol-parser) via a subprocess bridge (requires JDK 17). It lowers DATA DIVISION fields to byte-addressed memory regions with PIC-driven encoding/decoding, SIGN IS LEADING/TRAILING [SEPARATE CHARACTER] support, JUSTIFIED RIGHT alignment, SYNCHRONIZED natural word boundary alignment, BLANK WHEN ZERO display semantics, OCCURS DEPENDING ON variable-length arrays, level-66 RENAMES field aliasing (simple and THRU range), level-88 condition name expansion (single-value, multi-value OR, and THRU range conditions), FILLER field disambiguation, multi-value VALUE clauses, **bare statements** (division-level and section-level statements not enclosed in any paragraph), and **32 of 51** PROCEDURE DIVISION statement types to standard IR (24 fully handled + 8 I/O stub types). After execution, `VMState.data_layout` maps COBOL field names to their offset, length, and type metadata for named memory inspection. Internally, the frontend is decomposed into 16 focused modules (`emit_context`, `field_resolution`, `condition_lowering`, `condition_name`, `condition_name_index`, `statement_dispatch`, `lower_data_division`, `lower_procedure`, `lower_perform`, `lower_arithmetic`, `lower_string_inspect`, `lower_search`, `lower_call`, `lower_io`, `figurative_constants`, `data_layout`) — `cobol_frontend.py` is a slim ~100-line orchestrator. See the [COBOL frontend design document](docs/frontend-design/cobol.md) for full details.
-
-| Category | Statements |
-|----------|-----------|
-| **Arithmetic** | MOVE, ADD, SUBTRACT, MULTIPLY, DIVIDE, COMPUTE |
-| **Control flow** | IF/ELSE, EVALUATE/WHEN, PERFORM (simple/THRU/TIMES/UNTIL/VARYING), GO TO, STOP RUN |
-| **No-ops** | CONTINUE, EXIT, CANCEL |
-| **Data manipulation** | INITIALIZE, SET (TO / UP BY / DOWN BY) |
-| **String operations** | STRING, UNSTRING, INSPECT (TALLYING / REPLACING) |
-| **Table operations** | SEARCH (linear, with VARYING index and AT END), OCCURS (single-dimension arrays with literal/field subscripts) |
-| **Inter-program** | CALL (symbolic, with USING/GIVING parameter passing), ENTRY, ALTER |
-| **I/O (stub)** | ACCEPT, READ, WRITE, OPEN, CLOSE, REWRITE, START, DELETE — via injectable `CobolIOProvider` |
-
 ## Example: CFG
 
 ```python
@@ -489,14 +472,6 @@ The **Exercism suite** (`tests/unit/exercism/`) pulls canonical test data from [
 | **Total** | | **171** | **5068** | **5374** |
 
 </details>
-
-### COBOL frontend tests
-
-The COBOL test suite covers ASG round-trip, typed statement hierarchy (32 types), PIC parsing, data layout, frontend lowering, bare statements (division-level and section-level), data layout exposure via `Frontend.data_layout` property, PERFORM loop variants, section PERFORM, SEARCH, STRING/UNSTRING/INSPECT, CALL/ALTER/ENTRY/CANCEL lowering, I/O provider (NullIOProvider/StubIOProvider with REWRITE/START/DELETE and executor integration), parser bridge, numeric encoding (COMP-3 packed BCD, COMP/BINARY big-endian two's complement, COMP-1/COMP-2 IEEE 754 floats), SIGN clause variants (leading/trailing, embedded/separate), JUSTIFIED RIGHT alignment, SYNCHRONIZED natural alignment, OCCURS DEPENDING ON metadata, level-66 RENAMES field aliasing (simple and THRU range), level-88 condition name expansion (single-value, multi-value OR, THRU range, mixed discrete+range), condition name index, FILLER disambiguation, multi-value VALUE clauses, VMState data_layout serialization, and end-to-end fixture tests.
-
-### COBOL integration tests
-
-The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercises the full pipeline from real `.cbl` source code through the ProLeap Java bridge, ASG construction, IR lowering, CFG building, and VM execution. 67 tests cover initial values, ADD/SUBTRACT (including GIVING), MULTIPLY/DIVIDE (including GIVING), COMPUTE, MOVE, IF/ELSE, PERFORM TIMES/UNTIL/VARYING, nested PERFORM, GO TO, EVALUATE/WHEN, string moves, INITIALIZE, SET TO/UP BY/DOWN BY, SEARCH with WHEN, INSPECT TALLYING/REPLACING, CALL, STRING concatenation, UNSTRING splitting, OCCURS (elementary MOVE, field subscript, PERFORM VARYING loop), level-88 condition names (single/multi-value, THRU ranges, mixed discrete+range, true/false branches), EVALUATE TRUE with condition names, PERFORM UNTIL with condition names, FILLER field disambiguation, BLANK WHEN ZERO, bare statements (division-level and section-level), and data layout preservation after execution. A separate E2E feature suite (`test_cobol_e2e_features.py`) exercises multi-feature composition: all arithmetic forms in one program, control-flow composition, string operations, level-88 conditions, paragraph PERFORMs, OCCURS with subscripts, and BLANK WHEN ZERO. Tests skip gracefully when the ProLeap bridge JAR is not available.
 
 ## Documentation
 
