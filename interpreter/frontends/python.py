@@ -35,7 +35,7 @@ class PythonFrontend(BaseFrontend):
             "identifier": self._lower_identifier,
             "integer": self._lower_const_literal,
             "float": self._lower_const_literal,
-            "string": self._lower_const_literal,
+            "string": self._lower_python_string,
             "concatenated_string": self._lower_const_literal,
             "true": self._lower_canonical_true,
             "false": self._lower_canonical_false,
@@ -1186,6 +1186,29 @@ class PythonFrontend(BaseFrontend):
         return self._lower_expr(named_children[0])
 
     # ── Python-specific: f-string interpolation ──────────────────
+
+    def _lower_python_string(self, node) -> str:
+        """Lower string nodes, decomposing f-strings into parts + concatenation."""
+        has_interpolation = any(c.type == "interpolation" for c in node.children)
+        if not has_interpolation:
+            return self._lower_const_literal(node)
+
+        parts: list[str] = []
+        for child in node.children:
+            if child.type == "interpolation":
+                parts.append(self._lower_interpolation(child))
+            elif child.type == "string_content":
+                frag_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.CONST,
+                    result_reg=frag_reg,
+                    operands=[self._node_text(child)],
+                    node=child,
+                )
+                parts.append(frag_reg)
+            # skip string_start, string_end delimiters
+
+        return self._lower_interpolated_string_parts(parts, node)
 
     def _lower_interpolation(self, node) -> str:
         """Lower {expr} inside f-strings → lower the inner expression."""
