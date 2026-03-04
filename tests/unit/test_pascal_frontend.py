@@ -615,7 +615,15 @@ class TestPascalTry:
             "program M; begin try x := 1; except x := 0; end; end."
         )
         stores = _find_all(instructions, Opcode.STORE_VAR)
-        assert any("x" in inst.operands for inst in stores)
+        x_stores = [s for s in stores if "x" in s.operands]
+        # Both try body (x := 1) and except body (x := 0) must be lowered
+        assert (
+            len(x_stores) >= 2
+        ), f"expected >= 2 STORE_VAR for 'x' (try + except), got {len(x_stores)}"
+        consts = _find_all(instructions, Opcode.CONST)
+        const_vals = [c.operands[0] for c in consts]
+        assert "1" in const_vals, f"try body CONST '1' missing, got {const_vals}"
+        assert "0" in const_vals, f"except body CONST '0' missing, got {const_vals}"
 
 
 class TestPascalDeclUsesNoop:
