@@ -277,6 +277,9 @@ fn main() {
         assert any("total" in inst.operands for inst in stores)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("range" in str(inst.operands) for inst in calls)
+        # Mutation: total = total + i should produce a "+" BINOP
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
         assert len(instructions) > 10
 
     def test_nested_if_as_expression(self):
