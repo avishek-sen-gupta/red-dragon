@@ -232,6 +232,8 @@ class TestCFrontendCastExpression:
         source = "void f() { int y = (int)x; }"
         ir = _parse_and_lower(source)
         # The cast should transparently lower the inner value
+        loads = _find_all(ir, Opcode.LOAD_VAR)
+        assert any("x" in inst.operands for inst in loads)
         stores = _find_all(ir, Opcode.STORE_VAR)
         y_stores = [s for s in stores if "y" in s.operands]
         assert len(y_stores) >= 1
