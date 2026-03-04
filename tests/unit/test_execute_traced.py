@@ -128,6 +128,7 @@ class TestExecuteCfgTracedBasic:
 
         assert trace.stats.steps > 0
         assert trace.stats.llm_calls == 0
+        assert trace.stats.steps == len(trace.steps)
 
     def test_final_vm_state_matches_last_trace_step(self):
         instructions = _make_instructions(
