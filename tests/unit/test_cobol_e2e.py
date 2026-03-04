@@ -255,6 +255,9 @@ class TestPerformReturnFixture:
         # Should complete within steps (hit STOP RUN in SECOND-PARA)
         assert stats.steps < 200
         assert len(vm.regions) >= 1
+        # WS-A should be 2: FIRST-PARA MOVEs 1, then fall-through to SECOND-PARA MOVEs 2
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 0, 3) == 2
 
 
 class TestCobolFrontendIdempotency:
