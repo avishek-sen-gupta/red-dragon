@@ -162,7 +162,7 @@ class TestPerformReturnFixture:
         assert any(b != 0 for b in region)
 
     def test_nested_perform(self):
-        """A calls B, B calls C, all return correctly."""
+        """MAIN PERFORMs PARA-A, PARA-A PERFORMs PARA-B, both return correctly."""
         asg = CobolASG.from_dict(
             {
                 "data_fields": [
@@ -188,6 +188,7 @@ class TestPerformReturnFixture:
                         "statements": [
                             {"type": "MOVE", "operands": ["10", "WS-VAL"]},
                             {"type": "PERFORM", "operands": ["PARA-B"]},
+                            {"type": "MOVE", "operands": ["42", "WS-VAL"]},
                         ],
                     },
                     {
@@ -206,10 +207,12 @@ class TestPerformReturnFixture:
 
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=300))
 
-        # Should have completed without infinite looping
         assert stats.steps < 300
-        # Region should have been written to (MOVE statements executed)
         assert len(vm.regions) >= 1
+        region = vm.regions[list(vm.regions.keys())[0]]
+        # PARA-A: MOVE 10 → PERFORM PARA-B (MOVE 99) → MOVE 42
+        # Final WS-VAL == 42 proves PARA-B returned to PARA-A and PARA-A continued
+        assert _decode_zoned_unsigned(region, 0, 3) == 42
 
     def test_fall_through_without_perform(self):
         """Two paragraphs, no PERFORM — verify sequential execution."""
@@ -366,6 +369,9 @@ class TestIfElseExecution:
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
         assert stats.steps < 200
         assert len(vm.regions) >= 1
+        # WS-RESULT should be 1 (THEN branch: MOVE 1 TO WS-RESULT)
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 3, 3) == 1
 
     def test_if_false_branch_taken(self):
         """IF WS-A > 10 should take the ELSE branch when WS-A = 5."""
@@ -417,6 +423,9 @@ class TestIfElseExecution:
         vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
         assert stats.steps < 200
         assert len(vm.regions) >= 1
+        # WS-RESULT should be 2 (ELSE branch: MOVE 2 TO WS-RESULT)
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 3, 3) == 2
 
 
 class TestPerformTimesExecution:
@@ -463,8 +472,10 @@ class TestPerformTimesExecution:
 
         # Should complete within step limit
         assert stats.steps < 500
-        # Region should be written (ADD executed 3 times)
         assert len(vm.regions) >= 1
+        # WS-CTR should be 3 after ADD 1 executed 3 times
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 0, 3) == 3
 
 
 class TestPerformUntilExecution:
@@ -512,6 +523,9 @@ class TestPerformUntilExecution:
 
         assert stats.steps < 500
         assert len(vm.regions) >= 1
+        # WS-A should be 3: test-before loops ADD 1 three times (0→1→2→3), then exits
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 0, 3) == 3
 
 
 class TestPerformVaryingExecution:
@@ -573,6 +587,10 @@ class TestPerformVaryingExecution:
 
         assert stats.steps < 1000
         assert len(vm.regions) >= 1
+        # WS-SUM should be 6: VARYING WS-IDX from 1 by 1 until > 3
+        # adds 1+2+3 = 6
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 3, 5) == 6
 
 
 def _decode_zoned_unsigned(region: list[int], offset: int, length: int) -> int:
