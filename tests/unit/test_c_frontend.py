@@ -692,12 +692,8 @@ int y = 10;
 class TestCFrontendCaseStatementDefensive:
     """Verify case_statement has a dispatch entry for defensive handling."""
 
-    def test_case_statement_outside_switch_no_symbolic(self):
-        """A case_statement encountered via _lower_block should not produce
-        unsupported SYMBOLIC — it should lower its body statements."""
-        # Normal switch/case works via _lower_switch which manually extracts
-        # case_statement children. This test verifies the defensive handler
-        # by checking that case_statement is in _STMT_DISPATCH.
+    def test_case_statement_has_dispatch_entry(self):
+        """case_statement is registered in _STMT_DISPATCH for defensive handling."""
         frontend = CFrontend(TreeSitterParserFactory(), "c")
         assert "case_statement" in frontend._STMT_DISPATCH
 
