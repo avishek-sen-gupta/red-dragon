@@ -582,6 +582,9 @@ class TestJavaScriptFunctionExpression:
         instructions = _parse_js("arr.forEach(function(item) { process(item); });")
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("forEach" in inst.operands for inst in calls)
+        # Function expression should be lowered as a CONST with function reference
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("function:" in str(inst.operands) for inst in consts)
 
 
 class TestJavaScriptSuperExpression:

@@ -175,7 +175,8 @@ class TestConditionNameExpansion:
         assert len(or_ops) == 1
 
     def test_unknown_condition_passes_through(self):
-        """A single token that is NOT a known condition name defaults to true."""
+        """A single token that is NOT a known condition name defaults to true
+        without any condition-name expansion (no or/and/== from expansion)."""
         fields = [
             CobolField(name="WS-A", level=77, pic="9(4)", usage="DISPLAY", offset=0),
         ]
@@ -184,6 +185,10 @@ class TestConditionNameExpansion:
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         last_const = const_insts[-1]
         assert last_const.operands == [True]
+        # No expansion: no or/and BINOPs that condition-name expansion would produce
+        binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
+        expansion_ops = [i for i in binop_insts if i.operands[0] in ("or", "and", "==")]
+        assert len(expansion_ops) == 0, "Unknown condition should not expand"
 
     def test_regular_comparison_still_works_with_index(self):
         """Normal 'field OP value' conditions still work when index is present."""
