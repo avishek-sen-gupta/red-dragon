@@ -745,7 +745,6 @@ class TestJavaScopedIdentifier:
         assert "scoped_identifier" in frontend._EXPR_DISPATCH
 
 
-
 class TestJavaTextBlock:
     def test_text_block_basic(self):
         source = (
