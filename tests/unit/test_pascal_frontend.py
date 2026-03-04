@@ -183,13 +183,10 @@ class TestPascalVariableDeclarations:
 class TestPascalFallback:
     def test_unsupported_construct_symbolic(self):
         # A construct the frontend does not have a handler for should produce SYMBOLIC
-        instructions = _parse_pascal(
-            "program M; begin case x of 1: WriteLn('one'); end; end."
-        )
+        instructions = _parse_pascal("program M; begin asm mov ax, bx; end; end.")
         opcodes = _opcodes(instructions)
-        # case/switch is not handled, so it should fall back to expression lowering
-        # which produces SYMBOLIC for unsupported node types
-        assert Opcode.SYMBOLIC in opcodes or Opcode.CALL_FUNCTION in opcodes
+        # asm blocks are not handled — should fall back to SYMBOLIC
+        assert Opcode.SYMBOLIC in opcodes
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
