@@ -32,9 +32,10 @@ class RubyFrontend(BaseFrontend):
         observer: FrontendObserver = NullFrontendObserver(),
     ):
         super().__init__(parser_factory, language, observer)
+        self._in_class = False
         self._EXPR_DISPATCH: dict[str, Callable] = {
             "identifier": self._lower_identifier,
-            "instance_variable": self._lower_identifier,
+            "instance_variable": self._lower_instance_variable,
             "constant": self._lower_identifier,
             "integer": self._lower_const_literal,
             "float": self._lower_const_literal,
@@ -129,6 +130,35 @@ class RubyFrontend(BaseFrontend):
         )
         return reg
 
+    # -- Ruby: instance variable (@var) → LOAD_FIELD / STORE_FIELD on self ---
+
+    def _lower_instance_variable(self, node) -> str:
+        """Lower ``@var`` as ``LOAD_VAR self`` + ``LOAD_FIELD self_reg 'var'``."""
+        raw = self._node_text(node)
+        field_name = raw.lstrip("@")
+        self_reg = self._fresh_reg()
+        self._emit(Opcode.LOAD_VAR, result_reg=self_reg, operands=["self"], node=node)
+        reg = self._fresh_reg()
+        self._emit(
+            Opcode.LOAD_FIELD,
+            result_reg=reg,
+            operands=[self_reg, field_name],
+            node=node,
+        )
+        return reg
+
+    def _emit_self_param(self):
+        """Emit ``SYMBOLIC param:self`` + ``STORE_VAR self`` for instance methods."""
+        self._emit(
+            Opcode.SYMBOLIC,
+            result_reg=self._fresh_reg(),
+            operands=[f"{constants.PARAM_PREFIX}self"],
+        )
+        self._emit(
+            Opcode.STORE_VAR,
+            operands=["self", f"%{self._reg_counter - 1}"],
+        )
+
     # -- Ruby: argument_list unwrap -------------------------------------------
 
     def _lower_ruby_argument_list(self, node) -> str:
@@ -207,10 +237,29 @@ class RubyFrontend(BaseFrontend):
             block_reg = self._lower_ruby_block(block_node)
             arg_regs = arg_regs + [block_reg]
 
-        # Method call on receiver: obj.method(...)
+        # Class.new(...) → NEW_OBJECT + CALL_METHOD __init__
         if receiver_node and method_node:
-            obj_reg = self._lower_expr(receiver_node)
             method_name = self._node_text(method_node)
+            receiver_text = self._node_text(receiver_node)
+            if method_name == "new" and receiver_text[0:1].isupper():
+                obj_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.NEW_OBJECT,
+                    result_reg=obj_reg,
+                    operands=[receiver_text],
+                    node=node,
+                )
+                ctor_reg = self._fresh_reg()
+                self._emit(
+                    Opcode.CALL_METHOD,
+                    result_reg=ctor_reg,
+                    operands=[obj_reg, "__init__"] + arg_regs,
+                    node=node,
+                )
+                return obj_reg
+
+            # Method call on receiver: obj.method(...)
+            obj_reg = self._lower_expr(receiver_node)
             reg = self._fresh_reg()
             self._emit(
                 Opcode.CALL_METHOD,
@@ -405,17 +454,23 @@ class RubyFrontend(BaseFrontend):
 
     # -- Ruby: method definition -----------------------------------------------
 
-    def _lower_ruby_method(self, node):
+    def _lower_ruby_method(self, node, inject_self: bool = False):
         name_node = node.child_by_field_name("name")
         params_node = node.child_by_field_name("parameters")
         body_node = node.child_by_field_name("body")
 
-        func_name = self._node_text(name_node) if name_node else "__anon"
+        raw_name = self._node_text(name_node) if name_node else "__anon"
+        func_name = (
+            "__init__" if (inject_self and raw_name == "initialize") else raw_name
+        )
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
         self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=func_label)
+
+        if inject_self:
+            self._emit_self_param()
 
         if params_node:
             self._lower_ruby_params(params_node)
@@ -473,7 +528,14 @@ class RubyFrontend(BaseFrontend):
         self._emit(Opcode.BRANCH, label=end_label, node=node)
         self._emit(Opcode.LABEL, label=class_label)
         if body_node:
-            self._lower_block(body_node)
+            prev_in_class = self._in_class
+            self._in_class = True
+            for child in body_node.children:
+                if child.type == "method":
+                    self._lower_ruby_method(child, inject_self=True)
+                elif child.is_named:
+                    self._lower_stmt(child)
+            self._in_class = prev_in_class
         self._emit(Opcode.LABEL, label=end_label)
 
         cls_reg = self._fresh_reg()
@@ -536,9 +598,23 @@ class RubyFrontend(BaseFrontend):
     # -- Ruby: store target with instance variables ----------------------------
 
     def _lower_store_target(self, target, val_reg: str, parent_node):
-        if target.type in (
+        if target.type == "instance_variable":
+            raw = self._node_text(target)
+            field_name = raw.lstrip("@")
+            self_reg = self._fresh_reg()
+            self._emit(
+                Opcode.LOAD_VAR,
+                result_reg=self_reg,
+                operands=["self"],
+                node=parent_node,
+            )
+            self._emit(
+                Opcode.STORE_FIELD,
+                operands=[self_reg, field_name, val_reg],
+                node=parent_node,
+            )
+        elif target.type in (
             "identifier",
-            "instance_variable",
             "constant",
             "global_variable",
             "class_variable",
