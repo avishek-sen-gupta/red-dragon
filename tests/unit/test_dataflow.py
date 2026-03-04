@@ -266,6 +266,23 @@ class TestDependencyGraph:
         assert "y" in result.dependency_graph
         assert "x" in result.dependency_graph["y"]
 
+    def test_direct_dependency_in_raw_graph(self):
+        """y = x + 1 → raw graph has y depending on x."""
+        ir = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="t0", operands=["10"]),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
+            _make_inst(Opcode.CONST, result_reg="t2", operands=["1"]),
+            _make_inst(Opcode.BINOP, result_reg="t3", operands=["+", "t1", "t2"]),
+            _make_inst(Opcode.STORE_VAR, operands=["y", "t3"]),
+        ]
+        cfg = _build_simple_cfg(ir)
+        result = analyze(cfg)
+
+        assert "y" in result.raw_dependency_graph
+        assert "x" in result.raw_dependency_graph["y"]
+
     def test_transitive_dependency(self):
         """y=x+1; z=y*2 → z depends on y and transitively on x."""
         ir = [
@@ -287,6 +304,53 @@ class TestDependencyGraph:
         assert "z" in result.dependency_graph
         assert "y" in result.dependency_graph["z"]
         assert "x" in result.dependency_graph["z"]
+
+    def test_raw_graph_excludes_transitive_deps(self):
+        """y=x+1; z=y*2 → raw graph has z depending on y but NOT x."""
+        ir = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="t0", operands=["10"]),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
+            _make_inst(Opcode.CONST, result_reg="t2", operands=["1"]),
+            _make_inst(Opcode.BINOP, result_reg="t3", operands=["+", "t1", "t2"]),
+            _make_inst(Opcode.STORE_VAR, operands=["y", "t3"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg="t4", operands=["y"]),
+            _make_inst(Opcode.CONST, result_reg="t5", operands=["2"]),
+            _make_inst(Opcode.BINOP, result_reg="t6", operands=["*", "t4", "t5"]),
+            _make_inst(Opcode.STORE_VAR, operands=["z", "t6"]),
+        ]
+        cfg = _build_simple_cfg(ir)
+        result = analyze(cfg)
+
+        assert "z" in result.raw_dependency_graph
+        assert "y" in result.raw_dependency_graph["z"]
+        assert "x" not in result.raw_dependency_graph["z"]
+
+    def test_raw_graph_preserves_all_direct_deps_in_multi_operand_expression(self):
+        """a=1; b=2; c=a+b; d=c+b → raw graph has d depending on both c and b."""
+        ir = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
+            _make_inst(Opcode.STORE_VAR, operands=["a", "t0"]),
+            _make_inst(Opcode.CONST, result_reg="t1", operands=["2"]),
+            _make_inst(Opcode.STORE_VAR, operands=["b", "t1"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg="t2", operands=["a"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg="t3", operands=["b"]),
+            _make_inst(Opcode.BINOP, result_reg="t4", operands=["+", "t2", "t3"]),
+            _make_inst(Opcode.STORE_VAR, operands=["c", "t4"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg="t5", operands=["c"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg="t6", operands=["b"]),
+            _make_inst(Opcode.BINOP, result_reg="t7", operands=["+", "t5", "t6"]),
+            _make_inst(Opcode.STORE_VAR, operands=["d", "t7"]),
+        ]
+        cfg = _build_simple_cfg(ir)
+        result = analyze(cfg)
+
+        # Raw: d directly depends on c and b (both operands of d = c + b)
+        assert result.raw_dependency_graph["d"] == {"c", "b"}
+        # Transitive: d depends on a, b, c (b directly, a through c)
+        assert result.dependency_graph["d"] == {"a", "b", "c"}
 
     def test_no_self_dependency_without_loop(self):
         """x=1 → x does not depend on itself."""

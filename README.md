@@ -364,36 +364,56 @@ vm = run(source, language="python", unresolved_call_strategy=UnresolvedCallStrat
 
 ## Dataflow analysis
 
-Iterative intraprocedural analysis on the CFG: **reaching definitions**, **def-use chains**, and **variable dependency graphs** (transitive closure).
+Iterative intraprocedural analysis on the CFG: **reaching definitions**, **def-use chains**, and **variable dependency graphs** (both direct and transitive closure).
 
 ### Example: dependency graph
 
 ```python
-def process_order(price, quantity, tax_rate, has_discount):
-    subtotal = price * quantity
-    tax = subtotal * tax_rate
-    if has_discount:
-        discount = subtotal * 0.1
-        total = subtotal + tax - discount
-    else:
-        total = subtotal + tax
-    return total
+a = 1
+b = 2
+c = a + b
+d = a * b
+e = c + d
+f = e - a
+
+def square(x):
+    return x * x
+
+g = square(c)
+h = g + f
+total = h + e + b
 ```
+
+Diamond dependencies (`c` and `d` both depend on `a` and `b`), function calls (`g = square(c)`), and multi-operand expressions (`total = h + e + b`). The direct dependency graph ([docs/graph.md](docs/graph.md)):
 
 ```mermaid
-flowchart TD
-    price([price]) --> subtotal
-    quantity([quantity]) --> subtotal
-    subtotal([subtotal]) --> tax
-    tax_rate([tax_rate]) --> tax
-    subtotal --> discount
-    has_discount([has_discount]) -.-> discount([discount])
-    subtotal --> total
-    tax([tax]) --> total
-    discount --> total(["<b>total</b>"])
+flowchart BT
+    a["a"]
+    b["b"]
+    c["c"]
+    d["d"]
+    e["e"]
+    f["f"]
+    g["g"]
+    h["h"]
+    total["total"]
+    a --> c
+    b --> c
+    a --> d
+    b --> d
+    c --> e
+    d --> e
+    a --> f
+    e --> f
+    c --> g
+    f --> h
+    g --> h
+    b --> total
+    e --> total
+    h --> total
 ```
 
-`total` transitively depends on all four parameters. Dashed edge = conditional dependency.
+`total` directly depends on `h`, `e`, and `b`. The transitive closure adds `a`, `c`, `d`, `f`, and `g`. See [`scripts/demo_dataflow.py`](scripts/demo_dataflow.py) for the full pipeline (lowering → CFG → reaching definitions → dependency graph → Mermaid visualisation).
 
 ## LLM frontend
 
