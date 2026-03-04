@@ -37,8 +37,6 @@ from tests.unit.exercism.conftest import (
 
 EXERCISE = "bob"
 
-SNAKE_CASE_LANGUAGES = frozenset({"python", "ruby", "rust"})
-
 
 def _function_name(language: str) -> str:
     """Return the bob function name for *language*."""
