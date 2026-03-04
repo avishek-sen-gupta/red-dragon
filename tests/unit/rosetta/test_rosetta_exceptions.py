@@ -6,9 +6,9 @@ block, which is structurally present but unreachable in the current VM
 (THROW is a no-op that does not redirect control flow).
 
 Languages with native try/catch (Python, JS, TS, Java, Ruby, Kotlin,
-Scala, PHP, C#, C++) generate labeled try/catch blocks.
+Scala, PHP, C#, C++, Pascal) generate labeled try/catch blocks.
 
-Languages without try/catch (C, Go, Rust, Lua, Pascal) use direct
+Languages without try/catch (C, Go, Rust, Lua) use direct
 assignment as a fallback to verify the same execution outcome.
 
 All programs set answer = -1.
