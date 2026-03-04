@@ -112,10 +112,6 @@ def _case_args(case: dict) -> list[object]:
     return [phrase, len(phrase)]
 
 
-def _has_apostrophe(case: dict) -> bool:
-    return "'" in case["input"]["phrase"]
-
-
 EXECUTABLE_LANGUAGES: frozenset[str] = STANDARD_EXECUTABLE_LANGUAGES - {"pascal"}
 
 
