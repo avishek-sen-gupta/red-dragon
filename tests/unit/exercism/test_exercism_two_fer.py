@@ -146,3 +146,23 @@ class TestTwoFerExecution:
         assert (
             stats.llm_calls == 0
         ), f"[{lang}] {desc}: expected 0 LLM calls, got {stats.llm_calls}"
+
+
+class TestTwoFerDefaultParameter:
+    """Verify that calling two_fer() with no arguments uses the default parameter.
+
+    Currently xfail: solutions take name as a required argument because the VM
+    lacks crnoss-language default-parameter support.
+    """
+
+    @pytest.mark.xfail(
+        reason="VM does not support default parameters; solutions require explicit name",
+        strict=True,
+    )
+    @pytest.mark.parametrize("lang", sorted(EXECUTABLE_LANGUAGES))
+    def test_no_arg_uses_default(self, lang):
+        fn_name = _function_name(lang)
+        source = build_program(SOLUTIONS[lang], fn_name, [], lang)
+        vm, _stats = execute_for_language(lang, source)
+        answer = extract_answer(vm, lang)
+        assert answer == "One for you, one for me."
