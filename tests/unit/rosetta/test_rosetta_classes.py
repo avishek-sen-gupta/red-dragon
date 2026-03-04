@@ -290,6 +290,18 @@ class TestClassesLowering:
             language=lang,
         )
 
+    def test_class_specific_opcodes_present(self, language_ir):
+        """Languages with class/object semantics must emit CALL_METHOD or STORE_INDEX."""
+        lang, ir = language_ir
+        # C uses plain structs, Pascal uses records — no class-specific opcodes expected
+        if lang in ("c", "pascal"):
+            return
+        ops = {inst.opcode for inst in ir}
+        class_ops = ops & {Opcode.CALL_METHOD, Opcode.STORE_INDEX}
+        assert (
+            class_ops
+        ), f"[{lang}] expected CALL_METHOD or STORE_INDEX for class operations"
+
 
 # ---------------------------------------------------------------------------
 # Cross-language consistency tests
