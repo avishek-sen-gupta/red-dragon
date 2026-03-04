@@ -93,6 +93,8 @@ int answer = 42;
         # d should be a heap address, not symbolic
         assert isinstance(vars_["d"], str)
         assert vars_["d"].startswith("obj_")
+        # Constructor should have dispatched to Dog — verify heap object type
+        assert vm.heap[vars_["d"]].type_hint == "Dog"
 
     def test_constructor_sets_fields(self):
         """Java constructor should set fields on the allocated object."""
