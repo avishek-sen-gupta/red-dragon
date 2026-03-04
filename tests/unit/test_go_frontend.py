@@ -212,6 +212,9 @@ func swap(a int, b int) (int, int) {
         returns = _find_all(ir, Opcode.RETURN)
         # Multiple return values produce multiple RETURN instructions
         assert len(returns) >= 2
+        loads = _find_all(ir, Opcode.LOAD_VAR)
+        assert any("b" in inst.operands for inst in loads)
+        assert any("a" in inst.operands for inst in loads)
 
 
 class TestGoFrontendFallback:

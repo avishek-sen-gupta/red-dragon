@@ -69,6 +69,10 @@ class TestJavaExpressions:
         )
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("d" in inst.operands for inst in loads)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
 
     def test_ternary_expression(self):
         instructions = _parse_java(
@@ -267,6 +271,7 @@ interface Shape {}
 class Circle implements Shape {
     double radius;
     Circle(double r) { this.radius = r; }
+    boolean check(Object o) { return o instanceof Shape; }
 }
 """
         instructions = _parse_java(source)
@@ -276,6 +281,8 @@ class Circle implements Shape {
         assert any("Circle" in inst.operands for inst in stores)
         store_fields = _find_all(instructions, Opcode.STORE_FIELD)
         assert any("radius" in inst.operands for inst in store_fields)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("instanceof" in inst.operands for inst in calls)
 
     def test_try_catch_with_throw(self):
         source = """\

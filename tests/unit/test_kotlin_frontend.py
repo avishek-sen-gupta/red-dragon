@@ -157,10 +157,11 @@ class TestKotlinSpecial:
         assert instructions[0].label == "entry"
 
     def test_fallback_symbolic(self):
-        instructions = _parse_kotlin("fun main() { @Deprecated fun old() {} }")
+        instructions = _parse_kotlin("fun main() { val x = fun(a: Int): Int = a + 1 }")
         opcodes = _opcodes(instructions)
-        # Should produce at least some IR; annotation itself might be ignored
-        assert len(instructions) > 1
+        assert Opcode.SYMBOLIC in opcodes
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert any("unsupported:" in str(inst.operands) for inst in symbolics)
 
     def test_method_call_via_navigation(self):
         instructions = _parse_kotlin("fun main() { obj.doSomething(1) }")
