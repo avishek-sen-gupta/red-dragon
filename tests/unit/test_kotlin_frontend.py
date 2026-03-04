@@ -442,6 +442,10 @@ class Factory {
         instructions = _parse_kotlin(source)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("Factory" in inst.operands for inst in stores)
+        # The `create` method must also be lowered
+        assert any(
+            "create" in inst.operands for inst in stores
+        ), f"create method not stored, got {[s.operands for s in stores]}"
 
 
 class TestKotlinEnumClassBody:
