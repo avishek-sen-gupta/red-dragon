@@ -30,7 +30,9 @@ flowchart TD
     SRC --> LLM["LLM Frontend<br>any language"]
     SRC --> CHUNK["Chunked LLM<br>chunk → LLM × N → renumber → reassemble"]
 
-    DET --> IR[Flattened TAC IR]
+    DET --> REPAIR["AST Repair (optional)<br>LLM fixes ERROR/MISSING nodes"]
+    REPAIR --> IR[Flattened TAC IR]
+    DET -->|no errors| IR
     COBOL --> IR
     LLM --> IR
     CHUNK --> IR
@@ -436,7 +438,27 @@ Demo scripts exercising the LLM integration:
 poetry run python scripts/demo_llm_e2e.py             # LLM frontend + LLM resolver (Python)
 poetry run python scripts/demo_unsupported_language.py  # LLM frontend for Haskell (no tree-sitter)
 poetry run python scripts/run_chunked_demo.py           # chunked LLM frontend
+poetry run python scripts/demo_ast_repair.py            # LLM-assisted AST repair for malformed source
 ```
+
+## LLM-assisted AST repair
+
+When tree-sitter parses malformed source, it produces ERROR/MISSING nodes that fall through to `SYMBOLIC "unsupported:ERROR"`. The **AST repair** feature uses an LLM to fix broken syntax before deterministic lowering, maximising deterministic IR coverage for real-world incomplete code.
+
+```python
+from interpreter.frontend import get_frontend
+from interpreter.llm_client import get_llm_client
+
+repair_llm = get_llm_client(provider="claude")
+frontend = get_frontend("python", repair_client=repair_llm)
+ir = frontend.lower(malformed_source)
+```
+
+The repair is:
+- **Optional** — enabled only when `repair_client` is provided to `get_frontend()`
+- **Centralised** — wraps any deterministic frontend via decorator; all 15 languages get it for free
+- **Retry-capable** — configurable max attempts (`RepairConfig(max_retries=3)`)
+- **Safe** — if all retries fail, falls back to the original source (ERROR nodes become SYMBOLIC as before)
 
 ## Testing
 
