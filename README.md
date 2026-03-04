@@ -498,10 +498,6 @@ The COBOL test suite covers ASG round-trip, typed statement hierarchy (32 types)
 
 The COBOL integration suite (`tests/integration/test_cobol_programs.py`) exercises the full pipeline from real `.cbl` source code through the ProLeap Java bridge, ASG construction, IR lowering, CFG building, and VM execution. 67 tests cover initial values, ADD/SUBTRACT (including GIVING), MULTIPLY/DIVIDE (including GIVING), COMPUTE, MOVE, IF/ELSE, PERFORM TIMES/UNTIL/VARYING, nested PERFORM, GO TO, EVALUATE/WHEN, string moves, INITIALIZE, SET TO/UP BY/DOWN BY, SEARCH with WHEN, INSPECT TALLYING/REPLACING, CALL, STRING concatenation, UNSTRING splitting, OCCURS (elementary MOVE, field subscript, PERFORM VARYING loop), level-88 condition names (single/multi-value, THRU ranges, mixed discrete+range, true/false branches), EVALUATE TRUE with condition names, PERFORM UNTIL with condition names, FILLER field disambiguation, BLANK WHEN ZERO, bare statements (division-level and section-level), and data layout preservation after execution. A separate E2E feature suite (`test_cobol_e2e_features.py`) exercises multi-feature composition: all arithmetic forms in one program, control-flow composition, string operations, level-88 conditions, paragraph PERFORMs, OCCURS with subscripts, and BLANK WHEN ZERO. Tests skip gracefully when the ProLeap bridge JAR is not available.
 
-### Test totals
-
-**8484 tests** (8417 unit + 67 integration passed, 4 skipped, 21 xfailed) — all with zero LLM calls.
-
 ## Documentation
 
 - **[VM Design Document](docs/notes-on-vm-design.md)** — Comprehensive technical deep-dive into the VM architecture: IR design, CFG construction, state model, execution engine, call dispatch, symbolic execution, closures, LLM fallback, dataflow analysis, and end-to-end worked examples with code references
