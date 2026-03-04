@@ -127,6 +127,13 @@ class TestCSwitchLowering:
         binops = _find_all(ir, Opcode.BINOP)
         eq_ops = [b for b in binops if "==" in b.operands]
         assert len(eq_ops) == 1
+        # Default arm should store 99 into x
+        stores = [s for s in _find_all(ir, Opcode.STORE_VAR) if "x" in s.operands]
+        consts = [c for c in _find_all(ir, Opcode.CONST) if "99" in c.operands]
+        assert len(consts) >= 1, "default arm should produce CONST 99"
+        assert (
+            len(stores) >= 2
+        ), "should have stores for both case 1 (10) and default (99)"
 
     def test_empty_switch(self):
         ir = _parse_and_lower(
