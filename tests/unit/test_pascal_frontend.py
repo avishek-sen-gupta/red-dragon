@@ -340,22 +340,29 @@ end.
     def test_procedure_calling_procedure(self):
         source = """\
 program M;
-procedure Main;
+procedure Greet;
 begin
   WriteLn('Hello');
-  WriteLn('World');
+end;
+procedure Main;
+begin
+  Greet();
 end;
 begin
+  Main();
 end.
 """
         instructions = _parse_pascal(source)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
-        writeln_calls = [c for c in calls if "WriteLn" in c.operands]
-        assert len(writeln_calls) >= 2
+        greet_calls = [c for c in calls if "Greet" in c.operands]
+        assert len(greet_calls) >= 1
+        main_calls = [c for c in calls if "Main" in c.operands]
+        assert len(main_calls) >= 1
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("function:" in str(inst.operands) for inst in consts)
+        func_refs = [c for c in consts if "function:" in str(c.operands)]
+        assert len(func_refs) >= 2
         returns = _find_all(instructions, Opcode.RETURN)
-        assert len(returns) >= 1
+        assert len(returns) >= 2
 
     def test_function_result_assignment(self):
         source = """\
