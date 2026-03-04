@@ -371,7 +371,8 @@ end
         instructions = _parse_ruby(source)
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("each" in inst.operands for inst in calls)
-        # Block is lowered as inline closure — expect RETURN and func: CONST
+        # Block is lowered as inline closure — expect RETURN and CONST with Ruby's "func:" ref
+        # (Note: Ruby uses "func:label" rather than the standard "<function:name@label>" format)
         opcodes = _opcodes(instructions)
         assert Opcode.RETURN in opcodes
         consts = _find_all(instructions, Opcode.CONST)
