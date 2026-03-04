@@ -133,7 +133,9 @@ class TestExecutorIOProviderDispatch:
         vm = _execute_with_provider(ir, None)
         result = vm.current_frame.registers.get("%result")
         # Should get a concrete list of digit ints from the builtin, not symbolic
-        assert isinstance(result, list), f"Expected concrete list, got {type(result)}: {result}"
+        assert isinstance(
+            result, list
+        ), f"Expected concrete list, got {type(result)}: {result}"
 
     def test_non_cobol_call_not_intercepted_by_provider(self):
         """Non __cobol_* calls bypass the provider entirely."""
