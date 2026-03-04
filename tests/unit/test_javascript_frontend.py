@@ -546,6 +546,11 @@ class TestJavaScriptSequenceExpression:
         instructions = _parse_js("const x = (a++, b++, c);")
         binops = _find_all(instructions, Opcode.BINOP)
         assert len(binops) >= 2
+        # Side effects: a++ and b++ should produce STORE_VAR back to a and b
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores if inst.operands]
+        assert "a" in store_names
+        assert "b" in store_names
 
 
 class TestJavaScriptSpreadElement:
