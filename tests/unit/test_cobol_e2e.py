@@ -1298,5 +1298,7 @@ class TestGotoInsidePerform:
         # The GO TO bypasses WORK-PARA's end label, so the PERFORM
         # continuation is never triggered — control does NOT return to
         # MAIN-PARA. The ADD 1 after the PERFORM never executes.
-        # Total: 10 + 100 = 110.
-        assert _decode_zoned_unsigned(region, 0, 4) == 110
+        # Total: 10 + 100 = 110 (would be 111 if continuation ran).
+        val = _decode_zoned_unsigned(region, 0, 4)
+        assert val == 110
+        assert val != 111, "ADD 1 after PERFORM should not have executed"
