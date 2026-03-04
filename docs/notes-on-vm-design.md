@@ -897,7 +897,7 @@ class LLMBackend(ABC):
     def _parse_response(self, text) -> StateUpdate: ...
 ```
 
-Four concrete backends: `ClaudeBackend`, `OpenAIBackend`, `OllamaBackend`, `HuggingFaceBackend`. All delegate to an `LLMClient` abstraction via `get_llm_client()`.
+One concrete backend: `LLMInterpreterBackend`, which accepts any `LLMClient` via constructor injection. All providers (Claude, OpenAI, Ollama, HuggingFace) are accessed through [LiteLLM](https://github.com/BerriAI/litellm), a unified completion interface — `get_llm_client()` resolves the provider string to a LiteLLM model identifier and returns a `LiteLLMClient`.
 
 ### Prompt construction
 
@@ -968,7 +968,8 @@ LABEL func_factorial_0
 1. Collect all definitions
 2. Solve reaching definitions (worklist fixpoint)
 3. Extract def-use chains
-4. Build dependency graph (with transitive closure)
+4. Build raw dependency graph (direct deps only)
+5. Compute transitive closure
 ```
 
 ### Core data types
@@ -1022,17 +1023,23 @@ Convergence is capped at `DATAFLOW_MAX_ITERATIONS` (1000) to prevent non-termina
 
 ### Dependency graph
 
-`build_dependency_graph()` (`interpreter/dataflow.py:313`) traces register chains backward from `STORE_VAR` instructions to find named variable dependencies, then computes the transitive closure:
+`_build_raw_dependency_graph()` traces register chains backward from `STORE_VAR` instructions to find direct named variable dependencies. `_transitive_closure()` then propagates indirect dependencies:
 
 ```
 subtotal = price * quantity
+tax = subtotal * tax_rate
+total = subtotal + tax
 
 Traces: subtotal ← %2 (BINOP) ← %0 (LOAD_VAR price), %1 (LOAD_VAR quantity)
-Result: subtotal depends on {price, quantity}
 
-total = subtotal + tax
-Result: total depends on {subtotal, tax, price, quantity}  (transitive)
+Raw (direct):       subtotal → {price, quantity}
+                    tax      → {subtotal, tax_rate}
+                    total    → {subtotal, tax}
+
+Transitive closure: total    → {subtotal, tax, price, quantity, tax_rate}
 ```
+
+Both graphs are returned in `DataflowResult`: `raw_dependency_graph` (direct edges) and `dependency_graph` (transitive closure).
 
 ---
 
@@ -1050,8 +1057,8 @@ interpreter/
 ├── executor.py              LocalExecutor dispatch table, all 27 opcode handlers
 ├── builtins.py              Built-in function table (len, range, print, ...)
 ├── registry.py              FunctionRegistry, function/class scanning
-├── backend.py               LLMBackend ABC + 4 concrete backends
-├── llm_client.py            LLMClient abstraction for API calls
+├── backend.py               LLMBackend ABC + LLMInterpreterBackend (via LiteLLM)
+├── llm_client.py            LLMClient ABC + LiteLLMClient (unified provider access)
 ├── parser.py                tree-sitter parser wrapper
 ├── frontend.py              Frontend ABC + factory, language routing
 ├── frontends/               15 language-specific tree-sitter frontends
