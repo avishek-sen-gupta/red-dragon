@@ -1,0 +1,74 @@
+"""Pascal-specific constants shared across lowerer modules."""
+
+from __future__ import annotations
+
+K_OPERATOR_MAP: dict[str, str] = {
+    "kAdd": "+",
+    "kSub": "-",
+    "kMul": "*",
+    "kDiv": "/",
+    "kGt": ">",
+    "kLt": "<",
+    "kEq": "==",
+    "kNeq": "!=",
+    "kGte": ">=",
+    "kLte": "<=",
+    "kAnd": "and",
+    "kOr": "or",
+    "kMod": "mod",
+}
+
+KEYWORD_NOISE: frozenset[str] = frozenset(
+    {
+        "kProgram",
+        "kBegin",
+        "kEnd",
+        "kEndDot",
+        "kVar",
+        "kDo",
+        "kThen",
+        "kElse",
+        "kOf",
+        "kTo",
+        "kDownto",
+        "kAssign",
+        "kSemicolon",
+        "kColon",
+        "kComma",
+        "kDot",
+        "kLParen",
+        "kRParen",
+        "kIf",
+        "kWhile",
+        "kFor",
+        "kRepeat",
+        "kUntil",
+        "kFunction",
+        "kProcedure",
+        "kCase",
+        "kNot",
+        "kSub",
+        "kAdd",
+        "kEq",
+        "kConst",
+        "kTry",
+        "kExcept",
+        "kFinally",
+        "kOn",
+        "kRaise",
+        "kWith",
+        ";",
+        ":",
+        ",",
+        ".",
+        "(",
+        ")",
+        "\n",
+    }
+)
+
+K_UNARY_MAP: dict[str, str] = {
+    "kNot": "not",
+    "kSub": "-",
+    "kAdd": "+",
+}

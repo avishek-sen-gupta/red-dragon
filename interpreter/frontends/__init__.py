@@ -8,7 +8,6 @@ from ._base import BaseFrontend
 from ..constants import Language
 from ..frontend_observer import FrontendObserver, NullFrontendObserver
 from ..parser import TreeSitterParserFactory
-from .python import PythonFrontend
 
 # Lazy imports to avoid loading all frontends at startup
 _FRONTEND_CLASSES: dict[Language, str] = {
@@ -54,7 +53,6 @@ SUPPORTED_DETERMINISTIC_LANGUAGES: tuple[str, ...] = tuple(_FRONTEND_CLASSES.key
 __all__ = [
     "BaseFrontend",
     "Language",
-    "PythonFrontend",
     "get_deterministic_frontend",
     "SUPPORTED_DETERMINISTIC_LANGUAGES",
 ]

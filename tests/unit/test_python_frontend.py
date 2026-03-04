@@ -1010,7 +1010,10 @@ class TestPythonInterpolation:
     def test_interpolation_handler_directly(self):
         """interpolation node lowered directly should lower the inner expression."""
         from tree_sitter_language_pack import get_parser
-        from interpreter.frontends.python import PythonFrontend
+        from interpreter.frontends.python.expressions import lower_interpolation
+        from interpreter.frontends.python.frontend import PythonFrontend
+        from interpreter.frontends.context import TreeSitterEmitContext
+        from interpreter.frontend_observer import NullFrontendObserver
 
         parser = get_parser("python")
         source = b'f"{x + 1}"'
@@ -1022,12 +1025,19 @@ class TestPythonInterpolation:
             string_node,
         )
         fe = PythonFrontend(TreeSitterParserFactory(), "python")
-        fe._source = source
-        fe._emit(Opcode.LABEL, label="entry")
-        reg = fe._lower_interpolation(interp_node)
+        ctx = TreeSitterEmitContext(
+            source=source,
+            language="python",
+            observer=NullFrontendObserver(),
+            constants=fe._build_constants(),
+            stmt_dispatch=fe._build_stmt_dispatch(),
+            expr_dispatch=fe._build_expr_dispatch(),
+        )
+        ctx.emit(Opcode.LABEL, label="entry")
+        reg = lower_interpolation(ctx, interp_node)
         assert reg.startswith("%")
         # Should have lowered the binary_operator inside
-        binops = _find_all(fe._instructions, Opcode.BINOP)
+        binops = _find_all(ctx.instructions, Opcode.BINOP)
         assert len(binops) >= 1
 
 

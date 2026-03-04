@@ -25,7 +25,15 @@ class Frontend(ABC):
 
 
 # Backward-compatibility re-export: code that imports PythonFrontend from here still works.
-from .frontends.python import PythonFrontend  # noqa: E402, F401
+# Lazy import to avoid circular import when frontends are packages.
+
+
+def __getattr__(name: str):
+    if name == "PythonFrontend":
+        from interpreter.frontends.python import PythonFrontend
+
+        return PythonFrontend
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def get_frontend(
