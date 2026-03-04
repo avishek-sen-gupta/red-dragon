@@ -10,6 +10,8 @@ the function directly.
 from __future__ import annotations
 
 from interpreter.constants import Language
+from interpreter.frontends import get_deterministic_frontend
+from interpreter.ir import Opcode
 from interpreter.run import run
 
 
@@ -17,6 +19,17 @@ def _run_program(source: str, language: Language, max_steps: int = 200) -> dict:
     """Run a program and return the main frame's local_vars."""
     vm = run(source, language=language, max_steps=max_steps)
     return dict(vm.call_stack[0].local_vars)
+
+
+def _has_func_ref(source: str, language: Language) -> bool:
+    """Check whether the IR contains a CONST with a '<function:' FUNC_REF."""
+    fe = get_deterministic_frontend(language.value)
+    ir = fe.lower(source.encode())
+    return any(
+        inst.opcode == Opcode.CONST
+        and any("<function:" in str(op) for op in inst.operands)
+        for inst in ir
+    )
 
 
 class TestCallMethodOnFuncRef:
@@ -32,6 +45,7 @@ class M {
     static int answer = make_adder(10);
 }
 """
+        assert _has_func_ref(source, Language.JAVA), "IR should contain a FUNC_REF for the lambda"
         vars_ = _run_program(source, Language.JAVA)
         assert vars_["answer"] == 15
 
@@ -45,6 +59,7 @@ end
 
 answer = make_adder(10)
 """
+        assert _has_func_ref(source, Language.RUBY), "IR should contain a FUNC_REF for the lambda"
         vars_ = _run_program(source, Language.RUBY)
         assert vars_["answer"] == 15
 
