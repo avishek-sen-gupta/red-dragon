@@ -100,6 +100,11 @@ def _case_id(case: dict) -> str:
 
 
 def _case_args(case: dict) -> list[object]:
+    # The canonical "no name given" case has name=None, expecting the solution
+    # to use a default parameter (e.g. def two_fer(name="you")).  The VM does
+    # not yet support default parameters across all 15 languages, so solutions
+    # take name as a required argument.  We substitute "you" explicitly here
+    # to match the expected output.
     name = case["input"]["name"]
     return [name if name is not None else "you"]
 
