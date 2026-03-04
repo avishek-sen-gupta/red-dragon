@@ -214,12 +214,13 @@ class TestPhpFrontendFallback:
         assert ir[0].label == "entry"
 
     def test_unsupported_construct_fallback(self):
-        source = "<?php $x = 10; ?>"
+        source = "<?php declare(strict_types=1); ?>"
         ir = _parse_and_lower(source)
         opcodes = _opcodes(ir)
-        # Basic constructs should not produce SYMBOLIC
-        stores = _find_all(ir, Opcode.STORE_VAR)
-        assert len(stores) >= 1
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert any(
+            "unsupported:declare_statement" in str(inst.operands) for inst in symbolics
+        )
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
@@ -915,6 +916,8 @@ class TestPhpYieldExpression:
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         yield_calls = [c for c in calls if "yield" in c.operands]
         assert len(yield_calls) >= 2
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("gen" in inst.operands for inst in stores)
 
 
 class TestPhpReferenceAssignment:

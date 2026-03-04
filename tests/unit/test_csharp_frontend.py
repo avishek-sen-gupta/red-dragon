@@ -751,14 +751,16 @@ class C {
     def test_event_field_with_initializer(self):
         source = """\
 class C {
-    event EventHandler OnChange;
-    event EventHandler OnReset;
+    event EventHandler OnChange = null;
+    event EventHandler OnReset = null;
 }
 """
         ir = _parse_and_lower(source)
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("OnChange" in inst.operands for inst in stores)
         assert any("OnReset" in inst.operands for inst in stores)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("None" in str(inst.operands) for inst in consts)
 
 
 class TestCSharpEventDeclaration:
