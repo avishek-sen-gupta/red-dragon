@@ -1007,6 +1007,9 @@ class TestSectionFallThrough:
 
         assert stats.steps < 200
         assert len(vm.regions) >= 1
+        # Fall-through: FIRST-PARA sets WS-A=1, SECOND-PARA overwrites to 2
+        region = vm.regions[list(vm.regions.keys())[0]]
+        assert _decode_zoned_unsigned(region, 0, 3) == 2
 
 
 class TestNestedPerformNumericValues:
