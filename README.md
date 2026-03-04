@@ -258,7 +258,7 @@ Functions compose hierarchically: `dump_ir` calls `lower_source`; `dump_cfg` and
 
 ## Supported languages
 
-15 deterministic tree-sitter frontends (0 LLM calls, sub-millisecond latency):
+15 deterministic tree-sitter frontends (0 LLM calls):
 
 Python, JavaScript, TypeScript, Java, Ruby, Go, PHP, C#, C, C++, Rust, Kotlin, Scala, Lua, Pascal
 
@@ -433,7 +433,7 @@ All providers are accessed through [LiteLLM](https://github.com/BerriAI/litellm)
 
 | Provider | Flag | Notes |
 |----------|------|-------|
-| Claude | `-b claude` | Best quality, requires `ANTHROPIC_API_KEY` |
+| Claude | `-b claude` | Requires `ANTHROPIC_API_KEY` |
 | OpenAI | `-b openai` | Requires `OPENAI_API_KEY` |
 | HuggingFace | `-b huggingface` | Inference Endpoints, requires `HUGGING_FACE_API_TOKEN` |
 | Ollama | `-b ollama` | Local, no API key needed |
