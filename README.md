@@ -8,14 +8,14 @@
 
 **RedDragon** is an experiment in building infrastructure for **reverse-engineering frequently-incomplete code** — the kind found in legacy migrations, decompiled binaries, partial extracts, and codebases with missing dependencies. It explores two ideas:
 
-1. **Language frontends that emit IR deterministically *or* through LLMs** — tree-sitter frontends (15 languages) and a ProLeap bridge (COBOL) handle well-formed source deterministically; an LLM frontend fills in gaps for unsupported languages, malformed fragments, or constructs the deterministic frontends don't yet cover. Both paths produce the same universal [27-opcode IR](docs/ir-reference.md).
+1. **Language frontends that emit IR deterministically *or* through LLMs** — tree-sitter frontends (15 languages) and a ProLeap bridge (COBOL) handle well-formed source deterministically; when tree-sitter hits malformed syntax, an optional **LLM repair loop** fixes only the broken fragments and re-parses, maximising deterministic coverage for real-world incomplete code. For languages without a tree-sitter frontend, a **full LLM frontend** lowers source to IR entirely through an LLM — supporting any language without new parser code. Both paths produce the same universal [27-opcode IR](docs/ir-reference.md).
 2. **A VM that integrates LLMs to produce plausible state changes** when execution hits missing dependencies, unresolved imports, or unknown externals — keeping execution moving through incomplete programs instead of halting at the first unknown.
 
 When source is complete and all dependencies are present, the entire pipeline (parse → lower → execute) is **deterministic with 0 LLM calls**. LLMs are only invoked at the boundaries where information is genuinely missing.
 
 Concretely, RedDragon:
 
-- **Parses and lowers** source in 15 languages via tree-sitter, COBOL via ProLeap parser bridge, or any language via LLM-based lowering (including chunked lowering for large files) — each frontend owns its parsing internally; callers only provide `source: bytes`
+- **Parses and lowers** source in 15 languages via tree-sitter (with optional LLM-assisted repair of malformed syntax), COBOL via ProLeap parser bridge, or **any language** via full LLM-based lowering (including chunked lowering for large files) — each frontend owns its parsing internally; callers only provide `source: bytes`
 - **Produces** a universal flattened three-address code IR ([27 opcodes](docs/ir-reference.md), including 3 byte-addressed memory region opcodes and 2 named continuation opcodes) with structured source location traceability (every IR instruction from deterministic frontends carries its originating AST span; LLM frontends lack AST nodes and produce `NO_SOURCE_LOCATION`) — the LLM frontend uses the LLM as a **compiler frontend**, constrained by a formal IR schema with concrete patterns
 - **Builds** control flow graphs from IR instructions
 - **Analyses** data flow via iterative reaching definitions, def-use chains, and variable dependency graphs
