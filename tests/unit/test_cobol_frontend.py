@@ -562,7 +562,7 @@ class TestComputeLowering:
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
         assert (
             len(writes) >= 4
-        )  # 2 initial values (WS-A has value, C and D have "0") + 2 targets
+        )  # 3 initial values (WS-A="100", WS-C="0", WS-D="0") + 2 COMPUTE targets
 
     def test_compute_literal_expression(self):
         """COMPUTE with only literals (no field references)."""
