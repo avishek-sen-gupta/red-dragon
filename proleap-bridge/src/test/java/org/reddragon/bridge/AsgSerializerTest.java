@@ -148,6 +148,60 @@ public class AsgSerializerTest {
         assertEquals("ADD should have 2 operands (from + to)", 2, operands.size());
     }
 
+    // ── Bare Statements (division-level) ───────────────────────────────
+
+    @Test
+    public void testBareStatements_hasDivisionStatements() throws Exception {
+        JsonObject asg = parseFixture("bare_statements.cbl");
+
+        assertTrue("ASG must have statements", asg.has("statements"));
+        JsonArray stmts = asg.getAsJsonArray("statements");
+        assertEquals("Should have 3 bare statements", 3, stmts.size());
+
+        assertStatementType(stmts, 0, "COMPUTE");
+        assertStatementType(stmts, 1, "DISPLAY");
+        assertStatementType(stmts, 2, "STOP_RUN");
+    }
+
+    @Test
+    public void testBareStatements_noParagraphs() throws Exception {
+        JsonObject asg = parseFixture("bare_statements.cbl");
+
+        assertFalse("ASG should not have paragraphs", asg.has("paragraphs"));
+    }
+
+    // ── Bare Statements (section-level) ──────────────────────────────────
+
+    @Test
+    public void testSectionBareStatements_hasSectionStatements() throws Exception {
+        JsonObject asg = parseFixture("section_bare_statements.cbl");
+
+        assertTrue("ASG must have sections", asg.has("sections"));
+        JsonArray sections = asg.getAsJsonArray("sections");
+        assertTrue("Should have at least 1 section", sections.size() >= 1);
+
+        JsonObject mainSection = sections.get(0).getAsJsonObject();
+        assertEquals("MAIN-SECTION", mainSection.get("name").getAsString());
+
+        assertTrue("Section must have statements", mainSection.has("statements"));
+        JsonArray stmts = mainSection.getAsJsonArray("statements");
+        assertEquals("Should have 3 section-level bare statements", 3, stmts.size());
+
+        assertStatementType(stmts, 0, "COMPUTE");
+        assertStatementType(stmts, 1, "DISPLAY");
+        assertStatementType(stmts, 2, "STOP_RUN");
+    }
+
+    @Test
+    public void testSectionBareStatements_noParagraphs() throws Exception {
+        JsonObject asg = parseFixture("section_bare_statements.cbl");
+
+        JsonArray sections = asg.getAsJsonArray("sections");
+        JsonObject mainSection = sections.get(0).getAsJsonObject();
+
+        assertFalse("Section should not have paragraphs", mainSection.has("paragraphs"));
+    }
+
     // ── DataFieldSerializer unit tests ───────────────────────────────────
 
     @Test

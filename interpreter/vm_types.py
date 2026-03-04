@@ -97,6 +97,7 @@ class VMState:
     regions: dict[str, bytearray] = field(default_factory=dict)
     continuations: dict[str, str] = field(default_factory=dict)
     exception_stack: list[ExceptionHandler] = field(default_factory=list)
+    data_layout: dict[str, dict] = field(default_factory=dict)
     io_provider: Any = (
         None  # Optional CobolIOProvider — Any to avoid COBOL import in core VM
     )
@@ -127,6 +128,8 @@ class VMState:
             }
         if self.continuations:
             result["continuations"] = dict(self.continuations)
+        if self.data_layout:
+            result["data_layout"] = dict(self.data_layout)
         return result
 
 
