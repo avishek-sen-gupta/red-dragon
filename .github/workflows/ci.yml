@@ -49,6 +49,30 @@ jobs:
           PROLEAP_BRIDGE_JAR: ${{ github.workspace }}/proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar
         run: poetry run pytest tests/ -v
 
+  analysis:
+    name: Code quality analysis
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: |
+          pip install poetry
+          poetry install
+      - name: Radon cyclomatic complexity
+        run: poetry run radon cc interpreter/ -s -n C
+      - name: Radon maintainability index
+        run: poetry run radon mi interpreter/ -s -n B
+      - name: Pylint (report only)
+        run: poetry run pylint interpreter/ --exit-zero
+      - name: Import linter
+        run: poetry run lint-imports
+      - name: Pydeps (dry run)
+        run: poetry run pydeps interpreter --no-show --no-output -T png 2>&1 || true
+
   bridge:
     name: ProLeap COBOL Bridge
     runs-on: ubuntu-latest
