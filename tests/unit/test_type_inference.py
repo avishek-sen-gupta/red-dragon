@@ -7,6 +7,7 @@ from interpreter.conversion_result import IDENTITY_CONVERSION
 from interpreter.default_conversion_rules import DefaultConversionRules
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.null_type_resolver import NullTypeResolver
+from interpreter.function_signature import FunctionSignature
 from interpreter.type_inference import infer_types, _infer_const_type
 from interpreter.type_resolver import TypeResolver
 
@@ -515,3 +516,167 @@ class TestImmutability:
         env = infer_types(instructions, _default_resolver())
         with pytest.raises(TypeError):
             env.register_types["%99"] = "Bogus"
+
+
+# ---------------------------------------------------------------------------
+# Function signatures (param types + return type)
+# ---------------------------------------------------------------------------
+
+
+class TestFunctionSignatures:
+    def test_typed_params_collected(self):
+        """LABEL → SYMBOLIC params → CONST func ref → signatures include param types."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.BRANCH, label="end_add_0"),
+            _make_inst(Opcode.LABEL, label="func_add_0", type_hint="Int"),
+            _make_inst(
+                Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"], type_hint="Int"
+            ),
+            _make_inst(
+                Opcode.SYMBOLIC, result_reg="%1", operands=["param:b"], type_hint="Int"
+            ),
+            _make_inst(Opcode.RETURN, operands=["%2"]),
+            _make_inst(Opcode.LABEL, label="end_add_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%3",
+                operands=["<function:add@func_add_0>"],
+            ),
+            _make_inst(Opcode.STORE_VAR, operands=["add", "%3"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert "add" in env.func_signatures
+        sig = env.func_signatures["add"]
+        assert sig == FunctionSignature(
+            params=(("a", "Int"), ("b", "Int")), return_type="Int"
+        )
+
+    def test_untyped_params_collected_with_empty_type(self):
+        """SYMBOLIC params without type_hint → param name with empty type."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.BRANCH, label="end_greet_0"),
+            _make_inst(Opcode.LABEL, label="func_greet_0"),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:name"]),
+            _make_inst(Opcode.RETURN, operands=["%1"]),
+            _make_inst(Opcode.LABEL, label="end_greet_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%2",
+                operands=["<function:greet@func_greet_0>"],
+            ),
+            _make_inst(Opcode.STORE_VAR, operands=["greet", "%2"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert "greet" in env.func_signatures
+        sig = env.func_signatures["greet"]
+        assert sig == FunctionSignature(params=(("name", ""),), return_type="")
+
+    def test_no_internal_labels_in_signatures(self):
+        """Internal labels like func_add_0 should NOT appear in func_signatures."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.BRANCH, label="end_add_0"),
+            _make_inst(Opcode.LABEL, label="func_add_0", type_hint="Int"),
+            _make_inst(
+                Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"], type_hint="Int"
+            ),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_add_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:add@func_add_0>"],
+            ),
+            _make_inst(Opcode.STORE_VAR, operands=["add", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert "func_add_0" not in env.func_signatures
+        assert "add" in env.func_signatures
+
+    def test_function_with_no_params(self):
+        """Function with no parameters → empty params tuple."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.BRANCH, label="end_main_0"),
+            _make_inst(Opcode.LABEL, label="func_main_0", type_hint="void"),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_main_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:main@func_main_0>"],
+            ),
+            _make_inst(Opcode.STORE_VAR, operands=["main", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.func_signatures["main"] == FunctionSignature(
+            params=(), return_type="void"
+        )
+
+    def test_multiple_functions(self):
+        """Multiple function definitions → each gets its own signature."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            # func add
+            _make_inst(Opcode.BRANCH, label="end_add_0"),
+            _make_inst(Opcode.LABEL, label="func_add_0", type_hint="Int"),
+            _make_inst(
+                Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"], type_hint="Int"
+            ),
+            _make_inst(
+                Opcode.SYMBOLIC, result_reg="%1", operands=["param:b"], type_hint="Int"
+            ),
+            _make_inst(Opcode.RETURN, operands=["%2"]),
+            _make_inst(Opcode.LABEL, label="end_add_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%3",
+                operands=["<function:add@func_add_0>"],
+            ),
+            _make_inst(Opcode.STORE_VAR, operands=["add", "%3"]),
+            # func greet
+            _make_inst(Opcode.BRANCH, label="end_greet_0"),
+            _make_inst(Opcode.LABEL, label="func_greet_0", type_hint="String"),
+            _make_inst(
+                Opcode.SYMBOLIC,
+                result_reg="%4",
+                operands=["param:name"],
+                type_hint="String",
+            ),
+            _make_inst(Opcode.RETURN, operands=["%5"]),
+            _make_inst(Opcode.LABEL, label="end_greet_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%6",
+                operands=["<function:greet@func_greet_0>"],
+            ),
+            _make_inst(Opcode.STORE_VAR, operands=["greet", "%6"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.func_signatures["add"] == FunctionSignature(
+            params=(("a", "Int"), ("b", "Int")), return_type="Int"
+        )
+        assert env.func_signatures["greet"] == FunctionSignature(
+            params=(("name", "String"),), return_type="String"
+        )
+
+    def test_func_signatures_is_immutable(self):
+        """func_signatures should be a read-only mapping."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.BRANCH, label="end_f_0"),
+            _make_inst(Opcode.LABEL, label="func_f_0", type_hint="Int"),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_f_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:f@func_f_0>"],
+            ),
+            _make_inst(Opcode.STORE_VAR, operands=["f", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        with pytest.raises(TypeError):
+            env.func_signatures["bogus"] = FunctionSignature(params=(), return_type="")
