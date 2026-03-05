@@ -64,6 +64,7 @@
 - If enums map to actual objects with behaviour (if they represent configurable functionalities, for example), resolve them into the actual executable objects as early on in the call chain as possible, and inject those objects as dependencies, not the enums.
 - For variables which can only take a fixed set of values (a set of strings, for example), use enums instead of strings.
 - Avoid using direct print statements, unless it's for one-off debugging. Use logging facilities.
+- Do not mutate objects to initialise them. All dependencies should be injected during object construction time.
 
 ## Code Review Patterns
 
