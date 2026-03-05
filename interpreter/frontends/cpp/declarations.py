@@ -168,8 +168,11 @@ def lower_cpp_method(ctx: TreeSitterEmitContext, node) -> None:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
+    raw_return = extract_type_from_field(ctx, node, "type")
+    return_hint = normalize_type_hint(raw_return, ctx.type_map)
+
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
 
     _emit_this_param(ctx)
 
@@ -277,8 +280,11 @@ def lower_cpp_function_def(ctx: TreeSitterEmitContext, node) -> None:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
+    raw_return = extract_type_from_field(ctx, node, "type")
+    return_hint = normalize_type_hint(raw_return, ctx.type_map)
+
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
 
     if params_node:
         lower_c_params(ctx, params_node)

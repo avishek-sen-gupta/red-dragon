@@ -96,8 +96,11 @@ def lower_php_func_def(ctx: TreeSitterEmitContext, node) -> None:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
+    raw_return = extract_type_from_field(ctx, node, "return_type")
+    return_hint = normalize_type_hint(raw_return, ctx.type_map)
+
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
 
     if params_node:
         lower_php_params(ctx, params_node)
@@ -133,8 +136,11 @@ def lower_php_method_decl(ctx: TreeSitterEmitContext, node) -> None:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
+    raw_return = extract_type_from_field(ctx, node, "return_type")
+    return_hint = normalize_type_hint(raw_return, ctx.type_map)
+
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
 
     if not _has_static_modifier(node):
         _emit_this_param(ctx)

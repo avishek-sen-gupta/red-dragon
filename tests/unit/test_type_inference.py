@@ -422,6 +422,90 @@ class TestCallFunctionInference:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Return type inference via LABEL → CALL_FUNCTION
+# ---------------------------------------------------------------------------
+
+
+class TestReturnTypeInference:
+    def test_label_with_type_hint_records_return_type(self):
+        """LABEL with type_hint records the function's return type."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="func_add_0", type_hint="Int"),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_add_0"),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        # Return type is recorded internally — verify via full chain below
+        # LABEL itself produces no register type
+        assert len(env.register_types) == 0
+
+    def test_full_chain_label_const_call_function(self):
+        """LABEL → CONST func ref → CALL_FUNCTION → result register gets return type."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            # Function definition with return type
+            _make_inst(Opcode.BRANCH, label="end_add_0"),
+            _make_inst(Opcode.LABEL, label="func_add_0", type_hint="Int"),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_add_0"),
+            # Store function ref: add → func_add_0
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:add@func_add_0>"],
+            ),
+            _make_inst(Opcode.STORE_VAR, operands=["add", "%1"]),
+            # Call add(x, y) → result in %4
+            _make_inst(Opcode.CONST, result_reg="%2", operands=["3"]),
+            _make_inst(Opcode.CONST, result_reg="%3", operands=["4"]),
+            _make_inst(
+                Opcode.CALL_FUNCTION,
+                result_reg="%4",
+                operands=["add", "%2", "%3"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%4"] == "Int"
+
+    def test_constructor_type_hint_overrides_return_type(self):
+        """CALL_FUNCTION with explicit type_hint (constructor) overrides inferred return type."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label="func_Dog_0", type_hint="void"),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_Dog_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:Dog@func_Dog_0>"],
+            ),
+            _make_inst(Opcode.STORE_VAR, operands=["Dog", "%1"]),
+            _make_inst(
+                Opcode.CALL_FUNCTION,
+                result_reg="%2",
+                operands=["Dog", "%1"],
+                type_hint="Dog",
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        # Explicit type_hint on CALL_FUNCTION wins
+        assert env.register_types["%2"] == "Dog"
+
+    def test_unknown_function_stays_untyped(self):
+        """CALL_FUNCTION for an unknown function leaves register untyped."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(
+                Opcode.CALL_FUNCTION,
+                result_reg="%0",
+                operands=["unknownFunc", "%1"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert "%0" not in env.register_types
+
+
 class TestImmutability:
     def test_type_environment_is_frozen(self):
         instructions = [
