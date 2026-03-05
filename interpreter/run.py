@@ -122,13 +122,15 @@ def _handle_call_dispatch_setup(
     update: StateUpdate,
     current_label: str,
     ip: int,
+    type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
+    conversion_rules: ConversionRules = _IDENTITY_RULES,
 ):
     """Set up the new call frame's return info after call_push + dispatch."""
     call_result_reg = instruction.result_reg
     call_return_label = current_label
     call_return_ip = ip + 1
 
-    apply_update(vm, update)
+    apply_update(vm, update, type_env=type_env, conversion_rules=conversion_rules)
 
     new_frame = vm.current_frame
     new_frame.return_label = call_return_label
@@ -247,8 +249,6 @@ def execute_cfg(
             current_label=current_label,
             ip=ip,
             call_resolver=call_resolver,
-            type_env=type_env,
-            conversion_rules=conversion_rules,
         )
         used_llm = False
         if result.handled:
@@ -276,9 +276,19 @@ def execute_cfg(
             update.call_push is not None and update.next_label is not None
         )
         if is_call_dispatch:
-            _handle_call_dispatch_setup(vm, instruction, update, current_label, ip)
+            _handle_call_dispatch_setup(
+                vm,
+                instruction,
+                update,
+                current_label,
+                ip,
+                type_env=type_env,
+                conversion_rules=conversion_rules,
+            )
         else:
-            apply_update(vm, update)
+            apply_update(
+                vm, update, type_env=type_env, conversion_rules=conversion_rules
+            )
 
         if is_return or (is_throw and not is_caught_throw):
             flow = _handle_return_flow(
@@ -377,8 +387,6 @@ def execute_cfg_traced(
             current_label=current_label,
             ip=ip,
             call_resolver=call_resolver,
-            type_env=type_env,
-            conversion_rules=conversion_rules,
         )
         used_llm = False
         if result.handled:
@@ -401,9 +409,19 @@ def execute_cfg_traced(
             update.call_push is not None and update.next_label is not None
         )
         if is_call_dispatch:
-            _handle_call_dispatch_setup(vm, instruction, update, current_label, ip)
+            _handle_call_dispatch_setup(
+                vm,
+                instruction,
+                update,
+                current_label,
+                ip,
+                type_env=type_env,
+                conversion_rules=conversion_rules,
+            )
         else:
-            apply_update(vm, update)
+            apply_update(
+                vm, update, type_env=type_env, conversion_rules=conversion_rules
+            )
 
         # Snapshot the VM state after update
         trace_steps.append(
