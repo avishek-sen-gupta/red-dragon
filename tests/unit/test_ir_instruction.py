@@ -50,12 +50,13 @@ class TestIRInstructionTypeHint:
         assert inst.label == "my_label"
         assert inst.source_location == NO_SOURCE_LOCATION
 
-    def test_str_representation_unchanged_with_type_hint(self):
+    def test_str_representation_includes_type_hint(self):
         without = IRInstruction(opcode=Opcode.CONST, result_reg="t0", operands=[42])
         with_hint = IRInstruction(
             opcode=Opcode.CONST, result_reg="t0", operands=[42], type_hint="int"
         )
-        assert str(without) == str(with_hint)
+        assert str(without) == "t0 = const 42"
+        assert str(with_hint) == "t0 = const 42  :: int"
 
     def test_type_hint_in_serialization(self):
         inst = IRInstruction(
