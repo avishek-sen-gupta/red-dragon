@@ -94,7 +94,7 @@ def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
         if var_decl
         else ""
     )
-    type_hint = normalize_type_hint(raw_type, ctx.language)
+    type_hint = normalize_type_hint(raw_type, ctx.type_map)
 
     # Find the value expression: skip keywords, type annotations, '='
     value_node = _find_property_value(ctx, node)
@@ -144,7 +144,7 @@ def _lower_kotlin_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 raw_type = extract_type_from_child(
                     ctx, child, ("user_type", "nullable_type")
                 )
-                type_hint = normalize_type_hint(raw_type, ctx.language)
+                type_hint = normalize_type_hint(raw_type, ctx.type_map)
                 ctx.emit(
                     Opcode.SYMBOLIC,
                     result_reg=ctx.fresh_reg(),

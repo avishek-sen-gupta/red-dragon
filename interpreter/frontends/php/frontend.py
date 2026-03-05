@@ -29,6 +29,22 @@ class PhpFrontend(BaseFrontend):
             block_node_types=frozenset({"compound_statement", "program"}),
         )
 
+    def _build_type_map(self) -> dict[str, str]:
+        return {
+            "int": "Int",
+            "integer": "Int",
+            "float": "Float",
+            "double": "Float",
+            "bool": "Bool",
+            "boolean": "Bool",
+            "string": "String",
+            "array": "Array",
+            "object": "Object",
+            "void": "Any",
+            "mixed": "Any",
+            "null": "Any",
+        }
+
     def _build_expr_dispatch(self) -> dict[str, Callable]:
         return {
             "variable_name": php_expr.lower_php_variable,
