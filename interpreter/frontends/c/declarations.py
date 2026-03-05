@@ -7,6 +7,10 @@ from typing import TYPE_CHECKING
 
 from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.frontends.type_extraction import (
+    extract_type_from_field,
+    normalize_type_hint,
+)
 
 if TYPE_CHECKING:
     from interpreter.frontends.context import TreeSitterEmitContext
@@ -47,9 +51,13 @@ def _extract_struct_type(ctx: TreeSitterEmitContext, node) -> str:
 def lower_declaration(ctx: TreeSitterEmitContext, node) -> None:
     """Lower a C declaration: type declarator(s) with optional initializers."""
     struct_type = _extract_struct_type(ctx, node)
+    raw_type = extract_type_from_field(ctx, node, "type")
+    type_hint = normalize_type_hint(raw_type, ctx.language)
     for child in node.children:
         if child.type == "init_declarator":
-            _lower_init_declarator(ctx, child, struct_type=struct_type)
+            _lower_init_declarator(
+                ctx, child, struct_type=struct_type, type_hint=type_hint
+            )
         elif child.type == "identifier":
             var_name = ctx.node_text(child)
             if struct_type:
@@ -71,11 +79,12 @@ def lower_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 Opcode.STORE_VAR,
                 operands=[var_name, val_reg],
                 node=node,
+                type_hint=type_hint,
             )
 
 
 def _lower_init_declarator(
-    ctx: TreeSitterEmitContext, node, struct_type: str = ""
+    ctx: TreeSitterEmitContext, node, struct_type: str = "", type_hint: str = ""
 ) -> None:
     """Lower init_declarator (fields: declarator, value)."""
     decl_node = node.child_by_field_name("declarator")
@@ -104,6 +113,7 @@ def _lower_init_declarator(
         Opcode.STORE_VAR,
         operands=[var_name, val_reg],
         node=node,
+        type_hint=type_hint,
     )
 
 
@@ -125,15 +135,19 @@ def lower_c_params(ctx: TreeSitterEmitContext, params_node) -> None:
             decl_node = child.child_by_field_name("declarator")
             if decl_node:
                 pname = extract_declarator_name(ctx, decl_node)
+                raw_type = extract_type_from_field(ctx, child, "type")
+                type_hint = normalize_type_hint(raw_type, ctx.language)
                 ctx.emit(
                     Opcode.SYMBOLIC,
                     result_reg=ctx.fresh_reg(),
                     operands=[f"{constants.PARAM_PREFIX}{pname}"],
                     node=child,
+                    type_hint=type_hint,
                 )
                 ctx.emit(
                     Opcode.STORE_VAR,
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
+                    type_hint=type_hint,
                 )
 
 

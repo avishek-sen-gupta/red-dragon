@@ -118,6 +118,7 @@ class TreeSitterEmitContext:
         label: str = "",
         source_location: SourceLocation = NO_SOURCE_LOCATION,
         node=None,
+        type_hint: str = "",
     ) -> IRInstruction:
         loc = (
             source_location
@@ -130,6 +131,7 @@ class TreeSitterEmitContext:
             operands=operands or [],
             label=label or None,
             source_location=loc,
+            type_hint=type_hint,
         )
         self.instructions.append(inst)
         return inst

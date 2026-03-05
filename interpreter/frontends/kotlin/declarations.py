@@ -6,6 +6,10 @@ from typing import TYPE_CHECKING
 
 from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.frontends.type_extraction import (
+    extract_type_from_child,
+    normalize_type_hint,
+)
 
 if TYPE_CHECKING:
     from interpreter.frontends.context import TreeSitterEmitContext
@@ -84,6 +88,14 @@ def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
     )
     var_name = _extract_property_name(ctx, var_decl) if var_decl else "__unknown"
 
+    # Extract type from the variable_declaration child
+    raw_type = (
+        extract_type_from_child(ctx, var_decl, ("user_type", "nullable_type"))
+        if var_decl
+        else ""
+    )
+    type_hint = normalize_type_hint(raw_type, ctx.language)
+
     # Find the value expression: skip keywords, type annotations, '='
     value_node = _find_property_value(ctx, node)
 
@@ -100,6 +112,7 @@ def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
         Opcode.STORE_VAR,
         operands=[var_name, val_reg],
         node=node,
+        type_hint=type_hint,
     )
 
 
@@ -128,15 +141,21 @@ def _lower_kotlin_params(ctx: TreeSitterEmitContext, params_node) -> None:
             )
             if id_node:
                 pname = ctx.node_text(id_node)
+                raw_type = extract_type_from_child(
+                    ctx, child, ("user_type", "nullable_type")
+                )
+                type_hint = normalize_type_hint(raw_type, ctx.language)
                 ctx.emit(
                     Opcode.SYMBOLIC,
                     result_reg=ctx.fresh_reg(),
                     operands=[f"{constants.PARAM_PREFIX}{pname}"],
                     node=child,
+                    type_hint=type_hint,
                 )
                 ctx.emit(
                     Opcode.STORE_VAR,
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
+                    type_hint=type_hint,
                 )
 
 

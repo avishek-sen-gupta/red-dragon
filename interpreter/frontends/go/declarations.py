@@ -7,6 +7,10 @@ from typing import TYPE_CHECKING
 
 from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.frontends.type_extraction import (
+    extract_type_from_field,
+    normalize_type_hint,
+)
 from interpreter.frontends.go.expressions import (
     extract_expression_list,
     get_expression_list_children,
@@ -154,15 +158,19 @@ def lower_go_params(ctx: TreeSitterEmitContext, params_node) -> None:
             name_node = child.child_by_field_name("name")
             if name_node:
                 pname = ctx.node_text(name_node)
+                raw_type = extract_type_from_field(ctx, child, "type")
+                type_hint = normalize_type_hint(raw_type, ctx.language)
                 ctx.emit(
                     Opcode.SYMBOLIC,
                     result_reg=ctx.fresh_reg(),
                     operands=[f"{constants.PARAM_PREFIX}{pname}"],
                     node=child,
+                    type_hint=type_hint,
                 )
                 ctx.emit(
                     Opcode.STORE_VAR,
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
+                    type_hint=type_hint,
                 )
         elif child.type == "identifier":
             pname = ctx.node_text(child)
@@ -244,6 +252,8 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
     """Lower a single var_spec, supporting multiple names: `var a, b = 1, 2`."""
     names = [c for c in spec.children if c.type == "identifier"]
     value_node = spec.child_by_field_name("value")
+    raw_type = extract_type_from_field(ctx, spec, "type")
+    type_hint = normalize_type_hint(raw_type, ctx.language)
 
     if value_node:
         val_regs = lower_expression_list(ctx, value_node)
@@ -252,6 +262,7 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
                 Opcode.STORE_VAR,
                 operands=[ctx.node_text(name_node), val_reg],
                 node=parent_node,
+                type_hint=type_hint,
             )
         # If more names than values (e.g. `var a, b int`), store None for remainder
         for name_node in names[len(val_regs) :]:
@@ -265,6 +276,7 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
                 Opcode.STORE_VAR,
                 operands=[ctx.node_text(name_node), val_reg],
                 node=parent_node,
+                type_hint=type_hint,
             )
     else:
         for name_node in names:
@@ -278,6 +290,7 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
                 Opcode.STORE_VAR,
                 operands=[ctx.node_text(name_node), val_reg],
                 node=parent_node,
+                type_hint=type_hint,
             )
 
 
