@@ -5,12 +5,9 @@ Extracted from BaseFrontend: if/elif/while/for/break/continue.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
-
-if TYPE_CHECKING:
-    from interpreter.frontends.context import TreeSitterEmitContext
 
 
 def lower_if(ctx: TreeSitterEmitContext, node) -> None:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter import constants
@@ -14,9 +14,6 @@ from interpreter.frontends.java.expressions import (
     extract_call_args_unwrap,
     lower_java_store_target,
 )
-
-if TYPE_CHECKING:
-    from interpreter.frontends.context import TreeSitterEmitContext
 
 
 def lower_if(ctx: TreeSitterEmitContext, node) -> None:

@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter.frontends.common.exceptions import lower_try_catch
 from interpreter.frontends.scala.expressions import lower_if_expr, lower_match_expr
-
-if TYPE_CHECKING:
-    from interpreter.frontends.context import TreeSitterEmitContext
 
 
 def lower_if_stmt(ctx: TreeSitterEmitContext, node) -> None:

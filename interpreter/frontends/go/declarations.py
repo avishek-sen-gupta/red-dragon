@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter import constants
@@ -17,9 +17,6 @@ from interpreter.frontends.go.expressions import (
     lower_expression_list,
     lower_go_store_target,
 )
-
-if TYPE_CHECKING:
-    from interpreter.frontends.context import TreeSitterEmitContext
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +52,6 @@ def lower_go_assignment(ctx: TreeSitterEmitContext, node) -> None:
 
 
 # -- Go: function declaration ----------------------------------------------
-
 
 _GO_MAIN_FUNC_NAME = "main"
 

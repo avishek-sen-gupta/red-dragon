@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter.frontends.common.exceptions import (
@@ -14,12 +14,7 @@ from interpreter.frontends.python.expressions import (
     lower_store_target,
 )
 
-if TYPE_CHECKING:
-    from interpreter.frontends.context import TreeSitterEmitContext
-
-
 _WILDCARD_PATTERN = "_"
-
 
 # ── if/elif/else ──────────────────────────────────────────────
 
