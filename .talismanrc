@@ -49,4 +49,4 @@ fileignoreconfig:
 - filename: interpreter/registry.py
   checksum: af467ca3418f518967b604d790de151f9b1a98fbbc19898769acf0109dfa903b
 - filename: interpreter/type_environment.py
-  checksum: 5f11da8a35324454b0265069ebae4746433c9c57e1eb5a19b2806c7a7b7c6bdb
+  checksum: c50058f8627f2d1f4d71b169d53ff13ce56b2e8927f19cd960aea18723674844

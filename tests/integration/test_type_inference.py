@@ -5,6 +5,7 @@ import pytest
 from interpreter.api import lower_source
 from interpreter.constants import TypeName
 from interpreter.default_conversion_rules import DefaultConversionRules
+from interpreter.function_signature import FunctionSignature
 from interpreter.ir import Opcode
 from interpreter.type_inference import infer_types
 from interpreter.type_resolver import TypeResolver
@@ -719,3 +720,204 @@ class TestLuaNoReturnType:
             assert (
                 label.type_hint == ""
             ), f"Lua function LABEL should have no return type, got {label.type_hint!r}"
+
+
+# ---------------------------------------------------------------------------
+# Function signatures: param types + return type across languages
+# ---------------------------------------------------------------------------
+
+
+class TestJavaFuncSignatures:
+    def test_add_function_signature(self):
+        """Java add(int a, int b): int → full signature with typed params."""
+        _instructions, env = _lower_and_infer(
+            """\
+class M {
+    static int add(int a, int b) { return a + b; }
+}
+""",
+            "java",
+        )
+        assert "add" in env.func_signatures
+        sig = env.func_signatures["add"]
+        assert sig.return_type == "Int"
+        assert sig.params == (("a", "Int"), ("b", "Int"))
+
+
+class TestCSharpFuncSignatures:
+    def test_add_function_signature(self):
+        """C# Add(int a, int b): int → full signature."""
+        _instructions, env = _lower_and_infer(
+            """\
+class M {
+    static int Add(int a, int b) { return a + b; }
+}
+""",
+            "csharp",
+        )
+        assert "Add" in env.func_signatures
+        sig = env.func_signatures["Add"]
+        assert sig.return_type == "Int"
+        assert sig.params == (("a", "Int"), ("b", "Int"))
+
+
+class TestCFuncSignatures:
+    def test_add_function_signature(self):
+        """C add(int a, int b) → full signature."""
+        _instructions, env = _lower_and_infer(
+            "int add(int a, int b) { return a + b; }",
+            "c",
+        )
+        assert "add" in env.func_signatures
+        sig = env.func_signatures["add"]
+        assert sig.return_type == "Int"
+        assert sig.params == (("a", "Int"), ("b", "Int"))
+
+
+class TestCppFuncSignatures:
+    def test_add_function_signature(self):
+        """C++ add(int a, int b) → full signature."""
+        _instructions, env = _lower_and_infer(
+            "int add(int a, int b) { return a + b; }",
+            "cpp",
+        )
+        assert "add" in env.func_signatures
+        sig = env.func_signatures["add"]
+        assert sig.return_type == "Int"
+        assert sig.params == (("a", "Int"), ("b", "Int"))
+
+
+class TestGoFuncSignatures:
+    def test_add_function_signature(self):
+        """Go func add(a int, b int) int → full signature."""
+        _instructions, env = _lower_and_infer(
+            """\
+package main
+
+func add(a int, b int) int {
+    return a + b
+}
+""",
+            "go",
+        )
+        assert "add" in env.func_signatures
+        sig = env.func_signatures["add"]
+        assert sig.return_type == "Int"
+        assert sig.params == (("a", "Int"), ("b", "Int"))
+
+
+class TestRustFuncSignatures:
+    def test_add_function_signature(self):
+        """Rust fn add(a: i32, b: i32) -> i32 → full signature."""
+        _instructions, env = _lower_and_infer(
+            "fn add(a: i32, b: i32) -> i32 { a + b }",
+            "rust",
+        )
+        assert "add" in env.func_signatures
+        sig = env.func_signatures["add"]
+        assert sig.return_type == "Int"
+        assert sig.params == (("a", "Int"), ("b", "Int"))
+
+
+class TestKotlinFuncSignatures:
+    def test_add_function_signature(self):
+        """Kotlin fun add(a: Int, b: Int): Int → full signature."""
+        _instructions, env = _lower_and_infer(
+            "fun add(a: Int, b: Int): Int { return a + b }",
+            "kotlin",
+        )
+        assert "add" in env.func_signatures
+        sig = env.func_signatures["add"]
+        assert sig.return_type == "Int"
+        assert sig.params == (("a", "Int"), ("b", "Int"))
+
+
+class TestScalaFuncSignatures:
+    def test_add_function_signature(self):
+        """Scala def add(a: Int, b: Int): Int → full signature."""
+        _instructions, env = _lower_and_infer(
+            "def add(a: Int, b: Int): Int = a + b",
+            "scala",
+        )
+        assert "add" in env.func_signatures
+        sig = env.func_signatures["add"]
+        assert sig.return_type == "Int"
+        assert sig.params == (("a", "Int"), ("b", "Int"))
+
+
+class TestTypeScriptFuncSignatures:
+    def test_add_function_signature(self):
+        """TypeScript function add(a: number, b: number): number → full signature."""
+        _instructions, env = _lower_and_infer(
+            "function add(a: number, b: number): number { return a + b; }",
+            "typescript",
+        )
+        assert "add" in env.func_signatures
+        sig = env.func_signatures["add"]
+        assert sig.return_type == "Float"
+        assert sig.params == (("a", "Float"), ("b", "Float"))
+
+
+class TestPythonFuncSignatures:
+    def test_add_function_signature(self):
+        """Python def add(a: int, b: int) -> int → full signature."""
+        _instructions, env = _lower_and_infer(
+            "def add(a: int, b: int) -> int:\n    return a + b",
+            "python",
+        )
+        assert "add" in env.func_signatures
+        sig = env.func_signatures["add"]
+        assert sig.return_type == "Int"
+        assert sig.params == (("a", "Int"), ("b", "Int"))
+
+
+class TestPHPFuncSignatures:
+    def test_add_function_signature(self):
+        """PHP function add(int $a, int $b): int → full signature (PHP keeps $ prefix)."""
+        _instructions, env = _lower_and_infer(
+            "<?php function add(int $a, int $b): int { return $a + $b; }",
+            "php",
+        )
+        assert "add" in env.func_signatures
+        sig = env.func_signatures["add"]
+        assert sig.return_type == "Int"
+        assert sig.params == (("$a", "Int"), ("$b", "Int"))
+
+
+class TestJavaScriptFuncSignatures:
+    def test_untyped_function_signature(self):
+        """JavaScript function add(a, b) → params collected with empty types."""
+        _instructions, env = _lower_and_infer(
+            "function add(a, b) { return a + b; }",
+            "javascript",
+        )
+        assert "add" in env.func_signatures
+        sig = env.func_signatures["add"]
+        assert sig.return_type == ""
+        assert sig.params == (("a", ""), ("b", ""))
+
+
+class TestRubyFuncSignatures:
+    def test_untyped_function_signature(self):
+        """Ruby def add(a, b) → params collected with empty types."""
+        _instructions, env = _lower_and_infer(
+            "def add(a, b)\n  a + b\nend",
+            "ruby",
+        )
+        assert "add" in env.func_signatures
+        sig = env.func_signatures["add"]
+        assert sig.return_type == ""
+        assert sig.params == (("a", ""), ("b", ""))
+
+
+class TestLuaFuncSignatures:
+    def test_untyped_function_signature(self):
+        """Lua function add(a, b) → params collected with empty types."""
+        _instructions, env = _lower_and_infer(
+            "function add(a, b)\n  return a + b\nend",
+            "lua",
+        )
+        assert "add" in env.func_signatures
+        sig = env.func_signatures["add"]
+        assert sig.return_type == ""
+        assert sig.params == (("a", ""), ("b", ""))
