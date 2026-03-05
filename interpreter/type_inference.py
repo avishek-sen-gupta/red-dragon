@@ -155,6 +155,16 @@ def _infer_new_array(
         register_types[inst.result_reg] = TypeName.ARRAY
 
 
+def _infer_call_function(
+    inst: IRInstruction,
+    register_types: dict[str, str],
+    var_types: dict[str, str],
+    type_resolver: TypeResolver,
+) -> None:
+    if inst.result_reg and inst.type_hint:
+        register_types[inst.result_reg] = inst.type_hint
+
+
 _DISPATCH: dict[Opcode, callable] = {
     Opcode.SYMBOLIC: _infer_symbolic,
     Opcode.CONST: _infer_const,
@@ -164,6 +174,7 @@ _DISPATCH: dict[Opcode, callable] = {
     Opcode.UNOP: _infer_unop,
     Opcode.NEW_OBJECT: _infer_new_object,
     Opcode.NEW_ARRAY: _infer_new_array,
+    Opcode.CALL_FUNCTION: _infer_call_function,
 }
 
 

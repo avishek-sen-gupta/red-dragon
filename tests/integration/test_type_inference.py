@@ -76,6 +76,24 @@ class M {
         binop_types = [env.register_types.get(b.result_reg, "") for b in binops]
         assert TypeName.FLOAT in binop_types
 
+    def test_new_object_constructor_typed(self):
+        """Java `new Dog(...)` → CALL_FUNCTION result register typed as Dog."""
+        instructions, env = _lower_and_infer(
+            """\
+class M {
+    static Dog d = new Dog("Rex", 5);
+}
+""",
+            "java",
+        )
+        call_fns = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.CALL_FUNCTION and i.type_hint == "Dog"
+        ]
+        assert len(call_fns) >= 1
+        assert env.register_types[call_fns[0].result_reg] == "Dog"
+
     def test_string_variable(self):
         """Java String variable gets String type."""
         _instructions, env = _lower_and_infer(
@@ -89,6 +107,56 @@ class M {
             "class M { static boolean flag = true; }", "java"
         )
         assert env.var_types["flag"] == "Bool"
+
+
+# ---------------------------------------------------------------------------
+# C#
+# ---------------------------------------------------------------------------
+
+
+class TestCSharpTypeInference:
+    def test_new_object_constructor_typed(self):
+        """C# `new Dog(...)` → CALL_FUNCTION result register typed as Dog."""
+        instructions, env = _lower_and_infer(
+            """\
+class M {
+    static Dog d = new Dog("Rex", 5);
+}
+""",
+            "csharp",
+        )
+        call_fns = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.CALL_FUNCTION and i.type_hint == "Dog"
+        ]
+        assert len(call_fns) >= 1
+        assert env.register_types[call_fns[0].result_reg] == "Dog"
+
+
+# ---------------------------------------------------------------------------
+# C++
+# ---------------------------------------------------------------------------
+
+
+class TestCppTypeInference:
+    def test_new_object_constructor_typed(self):
+        """C++ `new Dog(...)` → CALL_FUNCTION result register typed as Dog."""
+        instructions, env = _lower_and_infer(
+            """\
+int main() {
+    Dog* d = new Dog("Rex", 5);
+}
+""",
+            "cpp",
+        )
+        call_fns = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.CALL_FUNCTION and i.type_hint == "Dog"
+        ]
+        assert len(call_fns) >= 1
+        assert env.register_types[call_fns[0].result_reg] == "Dog"
 
 
 # ---------------------------------------------------------------------------
