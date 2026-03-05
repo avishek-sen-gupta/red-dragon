@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from interpreter.conversion_result import ConversionResult, IDENTITY_CONVERSION
+from typing import Any, Callable
+
+from interpreter.conversion_result import (
+    ConversionResult,
+    IDENTITY_CONVERSION,
+    _identity,
+)
 from interpreter.identity_conversion_rules import IdentityConversionRules
 from interpreter.type_resolver import TypeResolver
 
@@ -21,3 +27,8 @@ class NullTypeResolver(TypeResolver):
         self, operator: str, left_hint: str, right_hint: str
     ) -> ConversionResult:
         return IDENTITY_CONVERSION
+
+    def resolve_assignment(
+        self, value_hint: str, target_hint: str
+    ) -> Callable[[Any], Any]:
+        return _identity
