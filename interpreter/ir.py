@@ -90,6 +90,8 @@ class IRInstruction(BaseModel):
             if self.label and self.opcode != Opcode.LABEL:
                 parts.append(self.label)
             base = " ".join(parts)
+        if self.type_hint:
+            base += f"  :: {self.type_hint}"
         if not self.source_location.is_unknown():
             return f"{base}  # {self.source_location}"
         return base
