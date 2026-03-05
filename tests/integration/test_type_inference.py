@@ -910,6 +910,161 @@ class TestRubyFuncSignatures:
         assert sig.params == (("a", ""), ("b", ""))
 
 
+# ---------------------------------------------------------------------------
+# Builtin return types (integration)
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# RETURN backfill (integration)
+# ---------------------------------------------------------------------------
+
+
+class TestPythonReturnBackfill:
+    def test_unannotated_function_returning_int_literal(self):
+        """Python `def double(x): return 42` → func_signatures["double"].return_type == Int."""
+        _instructions, env = _lower_and_infer(
+            "def double(x):\n    return 42\n",
+            "python",
+        )
+        assert "double" in env.func_signatures
+        assert env.func_signatures["double"].return_type == TypeName.INT
+
+    def test_unannotated_function_returning_string_literal(self):
+        """Python `def greet(): return "hi"` → return_type == String."""
+        _instructions, env = _lower_and_infer(
+            'def greet():\n    return "hi"\n',
+            "python",
+        )
+        assert "greet" in env.func_signatures
+        assert env.func_signatures["greet"].return_type == TypeName.STRING
+
+
+class TestJavaScriptReturnBackfill:
+    def test_unannotated_function_returning_int_literal(self):
+        """JS `function f() { return 42; }` → func_signatures["f"].return_type == Int."""
+        _instructions, env = _lower_and_infer(
+            "function f() { return 42; }",
+            "javascript",
+        )
+        assert "f" in env.func_signatures
+        assert env.func_signatures["f"].return_type == TypeName.INT
+
+
+class TestRubyReturnBackfill:
+    def test_unannotated_function_returning_int_literal(self):
+        """Ruby `def f; return 42; end` → func_signatures["f"].return_type == Int."""
+        _instructions, env = _lower_and_infer(
+            "def f\n  return 42\nend",
+            "ruby",
+        )
+        assert "f" in env.func_signatures
+        assert env.func_signatures["f"].return_type == TypeName.INT
+
+
+# ---------------------------------------------------------------------------
+# CALL_METHOD return types (integration)
+# ---------------------------------------------------------------------------
+
+
+class TestJavaCallMethodReturnType:
+    def test_typed_method_call_result(self):
+        """Java class with typed method → CALL_METHOD result typed."""
+        instructions, env = _lower_and_infer(
+            """\
+class Dog {
+    int getAge() { return 5; }
+    static void main() {
+        Dog d = new Dog();
+        int age = d.getAge();
+    }
+}
+""",
+            "java",
+        )
+        call_methods = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.CALL_METHOD
+            and i.result_reg
+            and len(i.operands) >= 2
+            and str(i.operands[1]) == "getAge"
+        ]
+        assert len(call_methods) >= 1
+        result_type = env.register_types.get(call_methods[0].result_reg)
+        assert result_type == "Int"
+
+
+# ---------------------------------------------------------------------------
+# Field type table (integration)
+# ---------------------------------------------------------------------------
+
+
+class TestPythonFieldTypes:
+    def test_self_field_store_and_load(self):
+        """Python `self.x = 42` then `y = self.x` → y typed as Int."""
+        instructions, env = _lower_and_infer(
+            """\
+class Dog:
+    def __init__(self):
+        self.age = 5
+    def get_age(self):
+        return self.age
+""",
+            "python",
+        )
+        # Verify STORE_FIELD and LOAD_FIELD instructions exist
+        store_fields = [i for i in instructions if i.opcode == Opcode.STORE_FIELD]
+        load_fields = [i for i in instructions if i.opcode == Opcode.LOAD_FIELD]
+        assert len(store_fields) >= 1, "Expected at least one STORE_FIELD"
+        assert len(load_fields) >= 1, "Expected at least one LOAD_FIELD"
+
+
+class TestJavaFieldTypes:
+    def test_field_assignment_and_access(self):
+        """Java field store and load → typed."""
+        instructions, env = _lower_and_infer(
+            """\
+class Dog {
+    int age;
+    Dog() { this.age = 5; }
+    int getAge() { return this.age; }
+}
+""",
+            "java",
+        )
+        store_fields = [i for i in instructions if i.opcode == Opcode.STORE_FIELD]
+        load_fields = [i for i in instructions if i.opcode == Opcode.LOAD_FIELD]
+        assert len(store_fields) >= 1, "Expected at least one STORE_FIELD"
+        assert len(load_fields) >= 1, "Expected at least one LOAD_FIELD"
+
+
+class TestPythonBuiltinReturnTypes:
+    def test_len_returns_int(self):
+        """Python `x = len("hello")` → var_types["x"] == Int."""
+        _instructions, env = _lower_and_infer(
+            'x = len("hello")',
+            "python",
+        )
+        assert env.var_types["x"] == TypeName.INT
+
+    def test_range_returns_array(self):
+        """Python `r = range(10)` → var_types["r"] == Array."""
+        _instructions, env = _lower_and_infer(
+            "r = range(10)",
+            "python",
+        )
+        assert env.var_types["r"] == TypeName.ARRAY
+
+    def test_abs_returns_number(self):
+        """Python `y = abs(-5)` → var_types["y"] == Number."""
+        _instructions, env = _lower_and_infer(
+            "y = abs(-5)",
+            "python",
+        )
+        assert env.var_types["y"] == TypeName.NUMBER
+
+
 class TestLuaFuncSignatures:
     def test_untyped_function_signature(self):
         """Lua function add(a, b) → params collected with empty types."""

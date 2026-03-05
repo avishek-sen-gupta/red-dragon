@@ -16,6 +16,21 @@ from interpreter.type_resolver import TypeResolver
 
 logger = logging.getLogger(__name__)
 
+_BUILTIN_RETURN_TYPES: dict[str, str] = {
+    "len": TypeName.INT,
+    "int": TypeName.INT,
+    "float": TypeName.FLOAT,
+    "str": TypeName.STRING,
+    "bool": TypeName.BOOL,
+    "range": TypeName.ARRAY,
+    "abs": TypeName.NUMBER,
+    "max": TypeName.NUMBER,
+    "min": TypeName.NUMBER,
+    "arrayOf": TypeName.ARRAY,
+    "intArrayOf": TypeName.ARRAY,
+    "Array": TypeName.ARRAY,
+}
+
 _FUNC_REF_PATTERN = re.compile(r"<function:")
 _FUNC_REF_EXTRACT = re.compile(constants.FUNC_REF_PATTERN)
 _CLASS_REF_PATTERN = re.compile(r"<class:")
@@ -30,6 +45,9 @@ class _InferenceContext:
     func_return_types: dict[str, str] = field(default_factory=dict)
     func_param_types: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
     current_func_label: str = ""
+    current_class_name: str = ""
+    class_method_types: dict[str, dict[str, str]] = field(default_factory=dict)
+    field_types: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
 def infer_types(
@@ -98,13 +116,22 @@ def _infer_label(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if inst.label and inst.label.startswith("func_"):
+    if not inst.label:
+        return
+    if inst.label.startswith(constants.FUNC_LABEL_PREFIX):
         ctx.current_func_label = inst.label
         ctx.func_param_types.setdefault(inst.label, [])
         if inst.type_hint:
             ctx.func_return_types[inst.label] = inst.type_hint
-    elif inst.label:
-        # Leaving a function scope (e.g. end_add_0 or another non-func label)
+    elif inst.label.startswith(
+        constants.CLASS_LABEL_PREFIX
+    ) and not inst.label.startswith(constants.END_CLASS_LABEL_PREFIX):
+        ctx.current_class_name = inst.label.removeprefix(
+            constants.CLASS_LABEL_PREFIX
+        ).rsplit("_", 1)[0]
+        ctx.class_method_types.setdefault(ctx.current_class_name, {})
+        ctx.current_func_label = ""
+    else:
         ctx.current_func_label = ""
 
 
@@ -143,6 +170,11 @@ def _infer_const(
             ctx.func_return_types[func_name] = ctx.func_return_types[func_label]
         if func_label in ctx.func_param_types:
             ctx.func_param_types[func_name] = ctx.func_param_types[func_label]
+        if ctx.current_class_name:
+            ret_type = ctx.func_return_types.get(func_label, "")
+            ctx.class_method_types.setdefault(ctx.current_class_name, {})[
+                func_name
+            ] = ret_type
         return
     inferred = _infer_const_type(raw)
     if inferred:
@@ -190,12 +222,24 @@ def _infer_binop(
         ctx.register_types[inst.result_reg] = result.result_type
 
 
+_UNOP_FIXED_TYPES: dict[str, str] = {
+    "not": TypeName.BOOL,
+    "!": TypeName.BOOL,
+    "#": TypeName.INT,
+}
+
+
 def _infer_unop(
     inst: IRInstruction,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
     if not inst.result_reg or len(inst.operands) < 2:
+        return
+    operator = str(inst.operands[0])
+    fixed = _UNOP_FIXED_TYPES.get(operator)
+    if fixed:
+        ctx.register_types[inst.result_reg] = fixed
         return
     operand_hint = ctx.register_types.get(str(inst.operands[1]), "")
     if operand_hint:
@@ -233,6 +277,95 @@ def _infer_call_function(
         func_name = str(inst.operands[0])
         if func_name in ctx.func_return_types:
             ctx.register_types[inst.result_reg] = ctx.func_return_types[func_name]
+        elif func_name in _BUILTIN_RETURN_TYPES:
+            ctx.register_types[inst.result_reg] = _BUILTIN_RETURN_TYPES[func_name]
+
+
+def _infer_alloc_region(
+    inst: IRInstruction,
+    ctx: _InferenceContext,
+    type_resolver: TypeResolver,
+) -> None:
+    if inst.result_reg:
+        ctx.register_types[inst.result_reg] = "Region"
+
+
+def _infer_load_region(
+    inst: IRInstruction,
+    ctx: _InferenceContext,
+    type_resolver: TypeResolver,
+) -> None:
+    if inst.result_reg:
+        ctx.register_types[inst.result_reg] = TypeName.ARRAY
+
+
+def _infer_store_field(
+    inst: IRInstruction,
+    ctx: _InferenceContext,
+    type_resolver: TypeResolver,
+) -> None:
+    if len(inst.operands) < 3:
+        return
+    obj_reg = str(inst.operands[0])
+    field_name = str(inst.operands[1])
+    value_reg = str(inst.operands[2])
+    class_name = ctx.register_types.get(obj_reg, "")
+    value_type = ctx.register_types.get(value_reg, "")
+    if class_name and value_type:
+        ctx.field_types.setdefault(class_name, {})[field_name] = value_type
+
+
+def _infer_load_field(
+    inst: IRInstruction,
+    ctx: _InferenceContext,
+    type_resolver: TypeResolver,
+) -> None:
+    if not inst.result_reg or len(inst.operands) < 2:
+        return
+    obj_reg = str(inst.operands[0])
+    field_name = str(inst.operands[1])
+    class_name = ctx.register_types.get(obj_reg, "")
+    if class_name and class_name in ctx.field_types:
+        field_type = ctx.field_types[class_name].get(field_name, "")
+        if field_type:
+            ctx.register_types[inst.result_reg] = field_type
+
+
+def _infer_call_method(
+    inst: IRInstruction,
+    ctx: _InferenceContext,
+    type_resolver: TypeResolver,
+) -> None:
+    if not inst.result_reg or len(inst.operands) < 2:
+        return
+    obj_reg = str(inst.operands[0])
+    method_name = str(inst.operands[1])
+    class_name = ctx.register_types.get(obj_reg, "")
+    if class_name and class_name in ctx.class_method_types:
+        ret_type = ctx.class_method_types[class_name].get(method_name, "")
+        if ret_type:
+            ctx.register_types[inst.result_reg] = ret_type
+            return
+    # Fallback: try func_return_types for unique method names
+    if method_name in ctx.func_return_types:
+        ctx.register_types[inst.result_reg] = ctx.func_return_types[method_name]
+
+
+def _infer_return(
+    inst: IRInstruction,
+    ctx: _InferenceContext,
+    type_resolver: TypeResolver,
+) -> None:
+    if not ctx.current_func_label:
+        return
+    if ctx.current_func_label in ctx.func_return_types:
+        return
+    if not inst.operands:
+        return
+    value_reg = str(inst.operands[0])
+    ret_type = ctx.register_types.get(value_reg, "")
+    if ret_type:
+        ctx.func_return_types[ctx.current_func_label] = ret_type
 
 
 _DISPATCH: dict[Opcode, callable] = {
@@ -246,6 +379,12 @@ _DISPATCH: dict[Opcode, callable] = {
     Opcode.NEW_OBJECT: _infer_new_object,
     Opcode.NEW_ARRAY: _infer_new_array,
     Opcode.CALL_FUNCTION: _infer_call_function,
+    Opcode.CALL_METHOD: _infer_call_method,
+    Opcode.STORE_FIELD: _infer_store_field,
+    Opcode.LOAD_FIELD: _infer_load_field,
+    Opcode.ALLOC_REGION: _infer_alloc_region,
+    Opcode.LOAD_REGION: _infer_load_region,
+    Opcode.RETURN: _infer_return,
 }
 
 

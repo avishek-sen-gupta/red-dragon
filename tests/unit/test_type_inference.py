@@ -284,6 +284,55 @@ class TestUnopInference:
         env = infer_types(instructions, _default_resolver())
         assert env.register_types["%1"] == TypeName.INT
 
+    def test_not_produces_bool(self):
+        """UNOP `not` → Bool regardless of operand type."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+            _make_inst(Opcode.UNOP, result_reg="%1", operands=["not", "%0"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%1"] == TypeName.BOOL
+
+    def test_bang_produces_bool(self):
+        """UNOP `!` → Bool regardless of operand type."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+            _make_inst(Opcode.UNOP, result_reg="%1", operands=["!", "%0"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%1"] == TypeName.BOOL
+
+    def test_hash_produces_int(self):
+        """UNOP `#` (Lua length) → Int."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=['"hello"']),
+            _make_inst(Opcode.UNOP, result_reg="%1", operands=["#", "%0"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%1"] == TypeName.INT
+
+    def test_negation_passes_through(self):
+        """UNOP `-` passes through operand type (unchanged behaviour)."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["3.14"]),
+            _make_inst(Opcode.UNOP, result_reg="%1", operands=["-", "%0"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%1"] == TypeName.FLOAT
+
+    def test_not_on_untyped_operand_still_produces_bool(self):
+        """UNOP `not` with untyped operand → Bool."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.UNOP, result_reg="%1", operands=["not", "%0"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%1"] == TypeName.BOOL
+
 
 # ---------------------------------------------------------------------------
 # NEW_OBJECT / NEW_ARRAY
@@ -505,6 +554,402 @@ class TestReturnTypeInference:
         ]
         env = infer_types(instructions, _default_resolver())
         assert "%0" not in env.register_types
+
+
+# ---------------------------------------------------------------------------
+# Builtin return types
+# ---------------------------------------------------------------------------
+
+
+class TestBuiltinReturnTypes:
+    def test_len_returns_int(self):
+        """CALL_FUNCTION `len` → Int via builtin table."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["len", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == TypeName.INT
+
+    def test_str_returns_string(self):
+        """CALL_FUNCTION `str` → String via builtin table."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["str", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == TypeName.STRING
+
+    def test_range_returns_array(self):
+        """CALL_FUNCTION `range` → Array via builtin table."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["range", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == TypeName.ARRAY
+
+    def test_int_builtin_returns_int(self):
+        """CALL_FUNCTION `int` → Int via builtin table."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["int", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == TypeName.INT
+
+    def test_float_builtin_returns_float(self):
+        """CALL_FUNCTION `float` → Float via builtin table."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["float", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == TypeName.FLOAT
+
+    def test_bool_builtin_returns_bool(self):
+        """CALL_FUNCTION `bool` → Bool via builtin table."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["bool", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == TypeName.BOOL
+
+    def test_abs_returns_number(self):
+        """CALL_FUNCTION `abs` → Number via builtin table."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["abs", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == TypeName.NUMBER
+
+    def test_unknown_function_stays_untyped_with_builtins(self):
+        """Unknown function not in builtin table → untyped."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(
+                Opcode.CALL_FUNCTION, result_reg="%0", operands=["myFunc", "%1"]
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert "%0" not in env.register_types
+
+    def test_type_hint_takes_precedence_over_builtin(self):
+        """Explicit type_hint on CALL_FUNCTION overrides builtin table."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(
+                Opcode.CALL_FUNCTION,
+                result_reg="%0",
+                operands=["len", "%1"],
+                type_hint="CustomType",
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == "CustomType"
+
+    def test_user_defined_function_takes_precedence_over_builtin(self):
+        """User-defined `len` function overrides builtin table."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label="func_len_0", type_hint="String"),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_len_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:len@func_len_0>"],
+            ),
+            _make_inst(Opcode.CALL_FUNCTION, result_reg="%2", operands=["len", "%3"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%2"] == "String"
+
+
+# ---------------------------------------------------------------------------
+# RETURN backfill
+# ---------------------------------------------------------------------------
+
+
+class TestReturnBackfill:
+    def test_unannotated_function_returning_typed_const_gets_return_type(self):
+        """Unannotated function returning a typed CONST → func_return_types populated."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.BRANCH, label="end_double_0"),
+            _make_inst(Opcode.LABEL, label="func_double_0"),  # no type_hint
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_double_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:double@func_double_0>"],
+            ),
+            _make_inst(Opcode.STORE_VAR, operands=["double", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert "double" in env.func_signatures
+        assert env.func_signatures["double"].return_type == TypeName.INT
+
+    def test_call_function_picks_up_backfilled_return_type(self):
+        """CALL_FUNCTION picks up the backfilled return type from RETURN."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.BRANCH, label="end_double_0"),
+            _make_inst(Opcode.LABEL, label="func_double_0"),  # no type_hint
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_double_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:double@func_double_0>"],
+            ),
+            _make_inst(Opcode.STORE_VAR, operands=["double", "%1"]),
+            _make_inst(
+                Opcode.CALL_FUNCTION,
+                result_reg="%2",
+                operands=["double", "%3"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%2"] == TypeName.INT
+
+    def test_annotated_function_not_overwritten_by_return(self):
+        """Annotated function's return type should NOT be overwritten by RETURN backfill."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.BRANCH, label="end_add_0"),
+            _make_inst(Opcode.LABEL, label="func_add_0", type_hint="Float"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_add_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:add@func_add_0>"],
+            ),
+            _make_inst(Opcode.STORE_VAR, operands=["add", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        # Float (from annotation) should NOT be overwritten by Int (from CONST 42)
+        assert env.func_signatures["add"].return_type == "Float"
+
+    def test_return_with_untyped_register_does_not_backfill(self):
+        """RETURN with an untyped register does not backfill."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.BRANCH, label="end_f_0"),
+            _make_inst(Opcode.LABEL, label="func_f_0"),  # no type_hint
+            _make_inst(Opcode.RETURN, operands=["%0"]),  # %0 has no type
+            _make_inst(Opcode.LABEL, label="end_f_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:f@func_f_0>"],
+            ),
+            _make_inst(Opcode.STORE_VAR, operands=["f", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.func_signatures["f"].return_type == ""
+
+
+# ---------------------------------------------------------------------------
+# CALL_METHOD return types
+# ---------------------------------------------------------------------------
+
+
+class TestCallMethodReturnTypes:
+    def test_class_method_return_type_from_typed_function(self):
+        """Class with typed method → CALL_METHOD on typed object → result typed."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            # class Dog { getAge(): Int }
+            _make_inst(Opcode.LABEL, label="class_Dog_0"),
+            _make_inst(Opcode.BRANCH, label="end_getAge_0"),
+            _make_inst(Opcode.LABEL, label="func_getAge_0", type_hint="Int"),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_getAge_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:getAge@func_getAge_0>"],
+            ),
+            _make_inst(Opcode.LABEL, label="end_class_Dog_0"),
+            # obj = new Dog()
+            _make_inst(Opcode.NEW_OBJECT, result_reg="%2", operands=["Dog"]),
+            # obj.getAge()
+            _make_inst(
+                Opcode.CALL_METHOD,
+                result_reg="%3",
+                operands=["%2", "getAge"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%3"] == "Int"
+
+    def test_unknown_method_stays_untyped(self):
+        """CALL_METHOD on unknown method → untyped."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.NEW_OBJECT, result_reg="%0", operands=["Dog"]),
+            _make_inst(
+                Opcode.CALL_METHOD,
+                result_reg="%1",
+                operands=["%0", "unknownMethod"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert "%1" not in env.register_types
+
+    def test_fallback_to_func_return_types_for_unique_method(self):
+        """CALL_METHOD falls back to func_return_types when object type unknown."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            # Define function getAge with return type Int
+            _make_inst(Opcode.BRANCH, label="end_getAge_0"),
+            _make_inst(Opcode.LABEL, label="func_getAge_0", type_hint="Int"),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_getAge_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:getAge@func_getAge_0>"],
+            ),
+            # Call method on untyped object
+            _make_inst(
+                Opcode.CALL_METHOD,
+                result_reg="%3",
+                operands=["%2", "getAge"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%3"] == "Int"
+
+    def test_class_scope_reset_on_new_class(self):
+        """When a new class_ label is hit, scope switches to the new class."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            # class Cat { speak(): String }
+            _make_inst(Opcode.LABEL, label="class_Cat_0"),
+            _make_inst(Opcode.BRANCH, label="end_speak_0"),
+            _make_inst(Opcode.LABEL, label="func_speak_0", type_hint="String"),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_speak_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:speak@func_speak_0>"],
+            ),
+            _make_inst(Opcode.LABEL, label="end_class_Cat_0"),
+            # class Dog { bark(): Int }
+            _make_inst(Opcode.LABEL, label="class_Dog_0"),
+            _make_inst(Opcode.BRANCH, label="end_bark_0"),
+            _make_inst(Opcode.LABEL, label="func_bark_0", type_hint="Int"),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_bark_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%2",
+                operands=["<function:bark@func_bark_0>"],
+            ),
+            _make_inst(Opcode.LABEL, label="end_class_Dog_0"),
+            # cat.speak() → String
+            _make_inst(Opcode.NEW_OBJECT, result_reg="%3", operands=["Cat"]),
+            _make_inst(Opcode.CALL_METHOD, result_reg="%4", operands=["%3", "speak"]),
+            # dog.bark() → Int
+            _make_inst(Opcode.NEW_OBJECT, result_reg="%5", operands=["Dog"]),
+            _make_inst(Opcode.CALL_METHOD, result_reg="%6", operands=["%5", "bark"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%4"] == "String"
+        assert env.register_types["%6"] == "Int"
+
+
+# ---------------------------------------------------------------------------
+# Field type table (STORE_FIELD / LOAD_FIELD)
+# ---------------------------------------------------------------------------
+
+
+class TestFieldTypeTable:
+    def test_store_field_then_load_field_typed(self):
+        """STORE_FIELD typed value → LOAD_FIELD same class/field → typed."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.NEW_OBJECT, result_reg="%0", operands=["Dog"]),
+            _make_inst(Opcode.CONST, result_reg="%1", operands=["5"]),
+            _make_inst(Opcode.STORE_FIELD, operands=["%0", "age", "%1"]),
+            # Different object of same class
+            _make_inst(Opcode.NEW_OBJECT, result_reg="%2", operands=["Dog"]),
+            _make_inst(Opcode.LOAD_FIELD, result_reg="%3", operands=["%2", "age"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%3"] == TypeName.INT
+
+    def test_load_field_unknown_class_untyped(self):
+        """LOAD_FIELD on untyped object → untyped."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LOAD_FIELD, result_reg="%1", operands=["%0", "x"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert "%1" not in env.register_types
+
+    def test_load_field_unknown_field_untyped(self):
+        """LOAD_FIELD on known class but unknown field → untyped."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.NEW_OBJECT, result_reg="%0", operands=["Dog"]),
+            _make_inst(Opcode.CONST, result_reg="%1", operands=["5"]),
+            _make_inst(Opcode.STORE_FIELD, operands=["%0", "age", "%1"]),
+            _make_inst(Opcode.LOAD_FIELD, result_reg="%2", operands=["%0", "name"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert "%2" not in env.register_types
+
+    def test_multiple_fields_on_same_class(self):
+        """Multiple fields stored on same class → each loaded with correct type."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.NEW_OBJECT, result_reg="%0", operands=["Dog"]),
+            _make_inst(Opcode.CONST, result_reg="%1", operands=["5"]),
+            _make_inst(Opcode.STORE_FIELD, operands=["%0", "age", "%1"]),
+            _make_inst(Opcode.CONST, result_reg="%2", operands=['"Rex"']),
+            _make_inst(Opcode.STORE_FIELD, operands=["%0", "name", "%2"]),
+            _make_inst(Opcode.LOAD_FIELD, result_reg="%3", operands=["%0", "age"]),
+            _make_inst(Opcode.LOAD_FIELD, result_reg="%4", operands=["%0", "name"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%3"] == TypeName.INT
+        assert env.register_types["%4"] == TypeName.STRING
+
+
+# ---------------------------------------------------------------------------
+# ALLOC_REGION / LOAD_REGION
+# ---------------------------------------------------------------------------
+
+
+class TestRegionInference:
+    def test_alloc_region_produces_region_type(self):
+        """ALLOC_REGION → register typed as 'Region'."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.ALLOC_REGION, result_reg="%0", operands=["100"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == "Region"
+
+    def test_load_region_produces_array_type(self):
+        """LOAD_REGION → register typed as Array."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LOAD_REGION, result_reg="%0", operands=["%1", "0", "10"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == TypeName.ARRAY
 
 
 class TestImmutability:
