@@ -1,22 +1,31 @@
-"""TypeResolver — composes ConversionRules to resolve BINOP type coercion."""
+"""TypeResolver — composes ConversionRules to resolve BINOP and assignment coercion."""
 
 from __future__ import annotations
 
 import logging
+from typing import Any, Callable
 
 from interpreter.conversion_rules import ConversionRules
-from interpreter.conversion_result import ConversionResult, IDENTITY_CONVERSION
+from interpreter.conversion_result import (
+    ConversionResult,
+    IDENTITY_CONVERSION,
+    _identity,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class TypeResolver:
-    """Resolves binary operation type coercion by delegating to ConversionRules.
+    """Resolves type coercion for binary operations and assignments.
 
-    Logic:
+    BINOP logic:
     - Both hints empty → identity (current VM behavior, no coercion).
     - One hint missing → assume the other's type (symmetric).
     - Both present → delegate to the injected ConversionRules.
+
+    Assignment logic:
+    - Either hint empty → identity (no coercion without both types known).
+    - Both present → delegate to ConversionRules.coerce_assignment().
     """
 
     def __init__(self, conversion_rules: ConversionRules) -> None:
@@ -38,3 +47,16 @@ class TypeResolver:
             effective_right,
         )
         return self._conversion_rules.resolve(operator, effective_left, effective_right)
+
+    def resolve_assignment(
+        self, value_hint: str, target_hint: str
+    ) -> Callable[[Any], Any]:
+        if not value_hint or not target_hint:
+            return _identity
+
+        logger.debug(
+            "resolve_assignment: %s → %s, delegating to rules",
+            value_hint,
+            target_hint,
+        )
+        return self._conversion_rules.coerce_assignment(value_hint, target_hint)

@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Any, Callable
+
 from interpreter.conversion_rules import ConversionRules
-from interpreter.conversion_result import ConversionResult, IDENTITY_CONVERSION
+from interpreter.conversion_result import (
+    ConversionResult,
+    IDENTITY_CONVERSION,
+    _identity,
+)
 
 
 class IdentityConversionRules(ConversionRules):
@@ -17,3 +23,8 @@ class IdentityConversionRules(ConversionRules):
         self, operator: str, left_type: str, right_type: str
     ) -> ConversionResult:
         return IDENTITY_CONVERSION
+
+    def coerce_assignment(
+        self, value_type: str, target_type: str
+    ) -> Callable[[Any], Any]:
+        return _identity
