@@ -31,4 +31,13 @@ addopts = "-n auto"
 black = "^26.1.0"
 pytest = "^8.0.0"
 pytest-xdist = "^3.8.0"
+radon = "^6.0"
+pylint = "^3.0"
+import-linter = "^2.0"
+grimp = "^3.0"
+pydeps = "^1.12"
+
+[tool.radon]
+exclude = "tests/*"
+cc_min = "C"
 
