@@ -7,6 +7,10 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.javascript.expressions import lower_js_params
+from interpreter.frontends.type_extraction import (
+    extract_type_from_field,
+    normalize_type_hint,
+)
 
 
 def lower_js_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
@@ -172,8 +176,11 @@ def _lower_method_def(ctx: TreeSitterEmitContext, node) -> None:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
+    raw_return = extract_type_from_field(ctx, node, "return_type")
+    return_hint = normalize_type_hint(raw_return.lstrip(": "), ctx.type_map)
+
     ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
 
     if not _has_static_modifier(node):
         _emit_this_param(ctx)
@@ -212,8 +219,11 @@ def lower_js_function_def(ctx: TreeSitterEmitContext, node) -> None:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
+    raw_return = extract_type_from_field(ctx, node, "return_type")
+    return_hint = normalize_type_hint(raw_return.lstrip(": "), ctx.type_map)
+
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
 
     if params_node:
         lower_js_params(ctx, params_node)

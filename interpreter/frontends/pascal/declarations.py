@@ -9,7 +9,10 @@ from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
 from interpreter.frontends.pascal.control_flow import lower_pascal_block
-from interpreter.frontends.type_extraction import normalize_type_hint
+from interpreter.frontends.type_extraction import (
+    normalize_type_hint,
+)
+from interpreter.frontends.pascal.type_helpers import extract_pascal_return_type
 
 logger = logging.getLogger(__name__)
 
@@ -183,8 +186,10 @@ def lower_pascal_proc(ctx: TreeSitterEmitContext, node) -> None:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
+    return_hint = extract_pascal_return_type(ctx, search_node)
+
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
 
     if args_node:
         _lower_pascal_params(ctx, args_node)
