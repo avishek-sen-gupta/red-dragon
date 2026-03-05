@@ -75,6 +75,7 @@ class IRInstruction(BaseModel):
     operands: list[Any] = []
     label: str | None = None  # for LABEL / branch targets
     source_location: SourceLocation = NO_SOURCE_LOCATION
+    type_hint: str = ""
 
     def __str__(self) -> str:
         parts: list[str] = []
