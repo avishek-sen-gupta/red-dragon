@@ -485,6 +485,10 @@ The **Rosetta suite** (`tests/unit/rosetta/`) implements 14 cross-language test 
 
 All frontends emit **canonical Python-form literals** (`"None"`, `"True"`, `"False"`) — language-native forms (`nil`, `null`, `undefined`, `NULL`, `true`, `false`) are canonicalized at lowering time.
 
+### Equivalence suite
+
+The **equivalence suite** (`tests/unit/equivalence/`) verifies that all 15 frontends produce **structurally identical IR** for the same algorithm. Function bodies are extracted, LABEL pseudo-instructions stripped, and raw opcode sequences compared across all languages. Currently covers recursive and iterative factorial. Iterative factorial achieves full 15-language equivalence; recursive factorial has 4 frontends (kotlin, pascal, rust, scala) with minor redundant instructions pending cleanup.
+
 ### Exercism integration suite
 
 The **Exercism suite** (`tests/unit/exercism/`) pulls canonical test data from [Exercism's problem-specifications](https://github.com/exercism/problem-specifications) and runs solutions in all 15 languages. Each exercise is parametrized across all canonical test cases.
