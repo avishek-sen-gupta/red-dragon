@@ -1,6 +1,6 @@
 # RedDragon VM Design Document
 
-This document describes the design and internals of the RedDragon symbolic virtual machine (VM). It is intended for senior technical leads coming to the codebase from scratch. All file references are relative to the repository root.
+This document describes the design and internals of the RedDragon virtual machine (VM). It is intended for senior technical leads coming to the codebase from scratch. All file references are relative to the repository root.
 
 ---
 
@@ -13,7 +13,7 @@ This document describes the design and internals of the RedDragon symbolic virtu
 5. [VM State Model](#5-vm-state-model)
 6. [Execution Engine](#6-execution-engine)
 7. [Call Dispatch and Return](#7-call-dispatch-and-return)
-8. [Symbolic Execution](#8-symbolic-execution)
+8. [Best-Effort Execution](#8-best-effort-execution)
 9. [Closure Capture and Mutation](#9-closure-capture-and-mutation)
 10. [Built-in Functions](#10-built-in-functions)
 11. [LLM Backend (Oracle Fallback)](#11-llm-backend-oracle-fallback)
@@ -316,7 +316,7 @@ class SymbolicValue:
     constraints: list[str] = field(...)        # ["sym_0 + 1", "len(items)"]
 ```
 
-Symbolic values propagate through arithmetic, comparisons, and function calls, accumulating constraints. This is the foundation of symbolic execution — the VM tracks *what the program would do* even when it doesn't know concrete values.
+Symbolic values propagate through arithmetic, comparisons, and function calls, accumulating constraints. This allows the VM to track *what the program would do* even when it doesn't know concrete values.
 
 ### Fresh symbolic generation
 
@@ -620,9 +620,9 @@ func_label = methods[method_name]
 
 ---
 
-## 8. Symbolic Execution
+## 8. Best-Effort Execution
 
-The VM's symbolic execution is the mechanism that enables analysis of programs with incomplete information.
+The VM's best-effort execution mechanism enables running programs with incomplete information by substituting symbolic placeholder values where concrete values are unavailable.
 
 ### When symbolic values arise
 

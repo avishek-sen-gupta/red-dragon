@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="banner.svg" alt="RedDragon — Multi-language symbolic code analysis" width="900">
+  <img src="banner.svg" alt="RedDragon — Multi-language code analysis and execution" width="900">
 </p>
 
 # RedDragon
@@ -20,7 +20,7 @@ Concretely, RedDragon:
 - **Produces** a universal flattened three-address code IR ([27 opcodes](docs/ir-reference.md), including 3 byte-addressed memory region opcodes and 2 named continuation opcodes) with structured source location traceability (every IR instruction from deterministic frontends carries its originating AST span; LLM frontends lack AST nodes and produce `NO_SOURCE_LOCATION`) — the LLM frontend uses the LLM as a **compiler frontend**, constrained by a formal IR schema with concrete patterns
 - **Builds** control flow graphs from IR instructions
 - **Analyses** data flow via iterative reaching definitions, def-use chains, and variable dependency graphs
-- **Executes** programs symbolically via a deterministic VM — tracking data flow through incomplete programs with missing imports or unknown externals entirely without LLM calls — with a configurable **LLM plausible-value resolver** that can replace symbolic placeholders with concrete values for unresolved function/method calls
+- **Executes** programs via a deterministic VM — tracking data flow through incomplete programs with missing imports or unknown externals entirely without LLM calls — with a configurable **LLM plausible-value resolver** that can replace symbolic placeholders with concrete values for unresolved function/method calls
 
 ## How it works
 
@@ -315,7 +315,7 @@ flowchart TD
 
 Function bodies appear as subgraphs with dashed call edges (`-.->|"call"|`) connecting `CALL_FUNCTION` sites to function entry blocks. Blocks with more than 6 instructions are collapsed to show the first 4 lines, an `... (N more)` placeholder, and the terminator — keeping CFG diagrams readable without hiding critical branch/return instructions. All 15 frontends produce the same CFG shape for equivalent logic.
 
-## Example: symbolic execution (0 LLM calls)
+## Example: deterministic execution (0 LLM calls)
 
 ```python
 def factorial(n):
@@ -339,9 +339,9 @@ Final state: result = 120  (67 steps, 0 LLM calls)
 
 The VM also handles classes with heap allocation, method dispatch, field access, closures with shared mutable environments (capture-by-reference — mutations inside closures persist across calls and are visible to sibling closures from the same scope), byte-addressed memory regions (`ALLOC_REGION`/`WRITE_REGION`/`LOAD_REGION` for COBOL-style REDEFINES overlays), named continuations (`SET_CONTINUATION`/`RESUME_CONTINUATION` for COBOL PERFORM return semantics), **data layout preservation** (COBOL field names, offsets, lengths, and type metadata are attached to `VMState.data_layout` after execution — enabling field-name-based memory inspection instead of raw byte offsets), and builtins (`len`, `range`, `print`, `int`, `str`, byte-manipulation primitives, etc.) — all deterministically. The interpreter's execution engine is split into focused modules: `interpreter/vm_types.py` (VM data types), `interpreter/cfg_types.py` (CFG data types), `interpreter/run_types.py` (pipeline config/stats types), `interpreter/registry.py` (function/class registry), `interpreter/builtins.py` (built-in function table), `interpreter/executor.py` (opcode handlers and dispatch), and `interpreter/cobol/` (COBOL type system, EBCDIC tables, and IR encoder/decoder builders).
 
-## Symbolic data flow
+## Handling incomplete programs
 
-When the interpreter encounters incomplete information (missing imports, unknown externals), it creates symbolic values rather than erroring:
+When the interpreter encounters incomplete information (missing imports, unknown externals), it creates symbolic placeholder values rather than erroring:
 
 - `process(items)` where `process` is unresolved → `sym_N [process(sym_M)]`
 - `obj.method(arg)` on a symbolic object → `sym_N [sym_M.method(arg)]`
@@ -470,7 +470,7 @@ poetry run pytest tests/integration/ -v  # integration tests only
 poetry run pytest tests/ -n 0 -v     # disable parallel execution
 ```
 
-Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures (including mutation persistence and accumulator semantics, cross-language via Rosetta — both nested-function and lambda/arrow-function forms), class/struct instantiation with method dispatch (12 languages: Python, Java, C#, Kotlin, Scala, JS, TS, PHP, Go, C++, Rust, Ruby) and field access (cross-language), exception handling structure (cross-language), symbolic execution, factory routing, and the composable API layer.
+Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures (including mutation persistence and accumulator semantics, cross-language via Rosetta — both nested-function and lambda/arrow-function forms), class/struct instantiation with method dispatch (12 languages: Python, Java, C#, Kotlin, Scala, JS, TS, PHP, Go, C++, Rust, Ruby) and field access (cross-language), exception handling structure (cross-language), VM execution, factory routing, and the composable API layer.
 
 ### Rosetta cross-language suite
 
@@ -543,12 +543,12 @@ Import-linter enforces two architectural contracts: the VM/executor/run layer mu
 
 ## Documentation
 
-- **[VM Design Document](docs/notes-on-vm-design.md)** — Comprehensive technical deep-dive into the VM architecture: IR design, CFG construction, state model, execution engine, call dispatch, symbolic execution, closures, LLM fallback, dataflow analysis, and end-to-end worked examples with code references
+- **[VM Design Document](docs/notes-on-vm-design.md)** — Comprehensive technical deep-dive into the VM architecture: IR design, CFG construction, state model, execution engine, call dispatch, best-effort execution, closures, LLM fallback, dataflow analysis, and end-to-end worked examples with code references
 - **[Frontend Design Document](docs/notes-on-frontend-design.md)** — Frontend subsystem architecture: Frontend ABC contract, tree-sitter parser layer, BaseFrontend dispatch table engine, all 15 language-specific frontends, LLM frontend with prompt engineering, chunked LLM frontend with register renumbering, factory routing, and lowering patterns reference
 - **[Per-Language Frontend Design](docs/frontend-design/)** — Exhaustive per-language documentation of all 15 deterministic frontends and the COBOL frontend: dispatch tables, overridden constants, language-specific lowering methods, canonical literal handling, and worked examples for each language
 - **[COBOL Frontend Design](docs/frontend-design/cobol.md)** — ProLeap bridge architecture, PIC-driven encoding, 20-statement coverage matrix, PERFORM continuation semantics, SEARCH/STRING/INSPECT lowering patterns
 - **[Dataflow Design Document](docs/notes-on-dataflow-design.md)** — Dataflow analysis architecture: reaching definitions via GEN/KILL worklist fixpoint, def-use chain extraction, variable dependency graph construction with transitive closure, integration with IR/CFG, worked examples, and complexity analysis
-- **[Architectural Decision Records](docs/architectural-design-decisions.md)** — Chronological log of key architectural decisions: IR design, deterministic VM, symbolic execution, closure semantics, LLM frontend strategy, dataflow analysis, modular package structure, and more
+- **[Architectural Decision Records](docs/architectural-design-decisions.md)** — Chronological log of key architectural decisions: IR design, deterministic VM, best-effort execution, closure semantics, LLM frontend strategy, dataflow analysis, modular package structure, and more
 
 ## Limitations
 
