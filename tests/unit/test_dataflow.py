@@ -460,6 +460,114 @@ class TestIntegration:
         assert all(label in facts for label in cfg.blocks)
 
 
+class TestRegionOpcodeDataflow:
+    def test_alloc_region_tracked_as_definition(self):
+        """ALLOC_REGION result_reg appears in collected definitions."""
+        ir = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.ALLOC_REGION, result_reg="%r0", operands=[1024]),
+        ]
+        cfg = _build_simple_cfg(ir)
+        defs = collect_all_definitions(cfg)
+
+        defined_vars = {d.variable for d in defs}
+        assert "%r0" in defined_vars
+
+    def test_load_region_tracked_as_definition(self):
+        """LOAD_REGION result_reg appears in collected definitions."""
+        ir = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.ALLOC_REGION, result_reg="%r0", operands=[1024]),
+            _make_inst(
+                Opcode.LOAD_REGION,
+                result_reg="%r1",
+                operands=["%r0", "%off", 4],
+            ),
+        ]
+        cfg = _build_simple_cfg(ir)
+        defs = collect_all_definitions(cfg)
+
+        defined_vars = {d.variable for d in defs}
+        assert "%r1" in defined_vars
+
+    def test_write_region_uses_tracked(self):
+        """WRITE_REGION's region_reg, offset_reg, and value_reg tracked as uses."""
+        inst = _make_inst(Opcode.WRITE_REGION, operands=["%r0", "%off", 4, "%val"])
+        uses = _uses_of(inst)
+
+        assert "%r0" in uses
+        assert "%off" in uses
+        assert "%val" in uses
+        assert 4 not in uses
+
+    def test_load_region_uses_tracked(self):
+        """LOAD_REGION's region_reg and offset_reg tracked as uses."""
+        inst = _make_inst(
+            Opcode.LOAD_REGION,
+            result_reg="%r1",
+            operands=["%r0", "%off", 4],
+        )
+        uses = _uses_of(inst)
+
+        assert "%r0" in uses
+        assert "%off" in uses
+        assert 4 not in uses
+
+    def test_cobol_style_def_use_chain(self):
+        """Mini COBOL-like program produces correct def-use chains through region ops."""
+        ir = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            # Allocate a region
+            _make_inst(Opcode.ALLOC_REGION, result_reg="%r0", operands=[256]),
+            # Write a value into the region
+            _make_inst(Opcode.CONST, result_reg="%off", operands=["0"]),
+            _make_inst(Opcode.CONST, result_reg="%val", operands=["42"]),
+            _make_inst(Opcode.WRITE_REGION, operands=["%r0", "%off", 4, "%val"]),
+            # Load from the region
+            _make_inst(
+                Opcode.LOAD_REGION,
+                result_reg="%loaded",
+                operands=["%r0", "%off", 4],
+            ),
+            # Store into a named variable
+            _make_inst(Opcode.STORE_VAR, operands=["result", "%loaded"]),
+        ]
+        cfg = _build_simple_cfg(ir)
+        result = analyze(cfg)
+
+        # %r0 should be defined (ALLOC_REGION)
+        defined_vars = {d.variable for d in result.definitions}
+        assert "%r0" in defined_vars
+        assert "%loaded" in defined_vars
+
+        # WRITE_REGION should have def-use chain from %r0
+        write_region_uses = [
+            c
+            for c in result.def_use_chains
+            if c.use.instruction.opcode == Opcode.WRITE_REGION
+            and c.use.variable == "%r0"
+        ]
+        assert len(write_region_uses) >= 1
+
+        # LOAD_REGION should have def-use chain from %r0
+        load_region_uses = [
+            c
+            for c in result.def_use_chains
+            if c.use.instruction.opcode == Opcode.LOAD_REGION
+            and c.use.variable == "%r0"
+        ]
+        assert len(load_region_uses) >= 1
+
+        # STORE_VAR of 'result' should use %loaded from LOAD_REGION
+        store_result_uses = [
+            c
+            for c in result.def_use_chains
+            if c.use.instruction.opcode == Opcode.STORE_VAR
+            and c.use.variable == "%loaded"
+        ]
+        assert len(store_result_uses) >= 1
+
+
 class TestEdgeCases:
     def test_symbolic_instruction_passthrough(self):
         """SYMBOLIC instruction doesn't crash analysis."""
