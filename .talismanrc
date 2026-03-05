@@ -48,3 +48,5 @@ fileignoreconfig:
   checksum: 2300b7b98efd38a6d8900c8c10158fba247fe300f7d50043bb8374a1cd4a8ab1
 - filename: interpreter/registry.py
   checksum: af467ca3418f518967b604d790de151f9b1a98fbbc19898769acf0109dfa903b
+- filename: interpreter/type_environment.py
+  checksum: 5f11da8a35324454b0265069ebae4746433c9c57e1eb5a19b2806c7a7b7c6bdb
