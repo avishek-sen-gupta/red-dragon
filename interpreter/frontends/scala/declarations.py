@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter import constants
@@ -10,9 +10,6 @@ from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
 )
-
-if TYPE_CHECKING:
-    from interpreter.frontends.context import TreeSitterEmitContext
 
 
 def _extract_pattern_name(ctx: TreeSitterEmitContext, pattern_node) -> str:

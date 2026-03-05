@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter.frontends.common.exceptions import lower_try_catch
 from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
-
-if TYPE_CHECKING:
-    from interpreter.frontends.context import TreeSitterEmitContext
 
 logger = logging.getLogger(__name__)
 

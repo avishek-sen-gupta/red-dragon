@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter import constants
@@ -11,9 +11,6 @@ from interpreter.frontends.common.expressions import (
     lower_const_literal,
     lower_interpolated_string_parts,
 )
-
-if TYPE_CHECKING:
-    from interpreter.frontends.context import TreeSitterEmitContext
 
 
 def lower_instance_variable(ctx: TreeSitterEmitContext, node) -> str:

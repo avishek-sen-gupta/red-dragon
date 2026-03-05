@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter import constants
@@ -16,9 +16,6 @@ from interpreter.frontends.kotlin.expressions import (
     lower_if_expr,
     lower_kotlin_store_target,
 )
-
-if TYPE_CHECKING:
-    from interpreter.frontends.context import TreeSitterEmitContext
 
 logger = logging.getLogger(__name__)
 

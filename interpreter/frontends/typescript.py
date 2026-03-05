@@ -6,7 +6,7 @@ skipping type annotations.
 
 from __future__ import annotations
 
-from typing import Callable, TYPE_CHECKING
+from typing import Callable
 
 from interpreter.frontends.javascript import JavaScriptFrontend
 from interpreter.frontends.context import GrammarConstants
@@ -14,9 +14,7 @@ from interpreter.frontends.common import expressions as common_expr
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.type_extraction import normalize_type_hint
-
-if TYPE_CHECKING:
-    from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.context import TreeSitterEmitContext
 
 
 class TypeScriptFrontend(JavaScriptFrontend):

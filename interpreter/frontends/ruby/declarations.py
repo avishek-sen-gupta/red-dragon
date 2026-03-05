@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.ruby.expressions import lower_ruby_params
-
-if TYPE_CHECKING:
-    from interpreter.frontends.context import TreeSitterEmitContext
 
 
 def _emit_self_param(ctx: TreeSitterEmitContext) -> None:

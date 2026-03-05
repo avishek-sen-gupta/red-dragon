@@ -6,13 +6,10 @@ which supports tuple/pattern_list unpacking.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter.frontends.python.expressions import lower_store_target
-
-if TYPE_CHECKING:
-    from interpreter.frontends.context import TreeSitterEmitContext
 
 
 def lower_assignment(ctx: TreeSitterEmitContext, node) -> None:

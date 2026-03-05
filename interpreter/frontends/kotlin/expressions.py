@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter import constants
@@ -13,9 +13,6 @@ from interpreter.frontends.common.expressions import (
     lower_interpolated_string_parts,
     lower_update_expr,
 )
-
-if TYPE_CHECKING:
-    from interpreter.frontends.context import TreeSitterEmitContext
 
 logger = logging.getLogger(__name__)
 
