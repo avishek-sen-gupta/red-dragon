@@ -31,6 +31,8 @@ _BUILTIN_RETURN_TYPES: dict[str, str] = {
     "Array": TypeName.ARRAY,
 }
 
+_SELF_PARAM_NAMES = frozenset({"self", "this", "$this"})
+
 _FUNC_REF_PATTERN = re.compile(r"<function:")
 _FUNC_REF_EXTRACT = re.compile(constants.FUNC_REF_PATTERN)
 _CLASS_REF_PATTERN = re.compile(r"<class:")
@@ -48,6 +50,8 @@ class _InferenceContext:
     current_class_name: str = ""
     class_method_types: dict[str, dict[str, str]] = field(default_factory=dict)
     field_types: dict[str, dict[str, str]] = field(default_factory=dict)
+    array_element_types: dict[str, str] = field(default_factory=dict)
+    register_source_var: dict[str, str] = field(default_factory=dict)
 
 
 def infer_types(
@@ -153,6 +157,19 @@ def _infer_symbolic(
                 (param_name, param_type)
             )
 
+    # self/this typing: assign class name when inside a class scope
+    if (
+        inst.result_reg
+        and not inst.type_hint
+        and ctx.current_class_name
+        and inst.operands
+    ):
+        operand = str(inst.operands[0])
+        if operand.startswith("param:"):
+            param_name = operand[len("param:") :]
+            if param_name in _SELF_PARAM_NAMES:
+                ctx.register_types[inst.result_reg] = ctx.current_class_name
+
 
 def _infer_const(
     inst: IRInstruction,
@@ -187,6 +204,8 @@ def _infer_load_var(
     type_resolver: TypeResolver,
 ) -> None:
     name = inst.operands[0] if inst.operands else ""
+    if inst.result_reg and name:
+        ctx.register_source_var[inst.result_reg] = str(name)
     if inst.result_reg and name in ctx.var_types:
         ctx.register_types[inst.result_reg] = ctx.var_types[name]
 
@@ -351,6 +370,50 @@ def _infer_call_method(
         ctx.register_types[inst.result_reg] = ctx.func_return_types[method_name]
 
 
+def _infer_call_unknown(
+    inst: IRInstruction,
+    ctx: _InferenceContext,
+    type_resolver: TypeResolver,
+) -> None:
+    if not inst.result_reg or not inst.operands:
+        return
+    target_reg = str(inst.operands[0])
+    func_name = ctx.register_source_var.get(target_reg, "")
+    if not func_name:
+        return
+    if func_name in ctx.func_return_types:
+        ctx.register_types[inst.result_reg] = ctx.func_return_types[func_name]
+    elif func_name in _BUILTIN_RETURN_TYPES:
+        ctx.register_types[inst.result_reg] = _BUILTIN_RETURN_TYPES[func_name]
+
+
+def _infer_store_index(
+    inst: IRInstruction,
+    ctx: _InferenceContext,
+    type_resolver: TypeResolver,
+) -> None:
+    if len(inst.operands) < 3:
+        return
+    arr_reg = str(inst.operands[0])
+    value_reg = str(inst.operands[2])
+    value_type = ctx.register_types.get(value_reg, "")
+    if value_type:
+        ctx.array_element_types[arr_reg] = value_type
+
+
+def _infer_load_index(
+    inst: IRInstruction,
+    ctx: _InferenceContext,
+    type_resolver: TypeResolver,
+) -> None:
+    if not inst.result_reg or len(inst.operands) < 2:
+        return
+    arr_reg = str(inst.operands[0])
+    element_type = ctx.array_element_types.get(arr_reg, "")
+    if element_type:
+        ctx.register_types[inst.result_reg] = element_type
+
+
 def _infer_return(
     inst: IRInstruction,
     ctx: _InferenceContext,
@@ -385,6 +448,9 @@ _DISPATCH: dict[Opcode, callable] = {
     Opcode.ALLOC_REGION: _infer_alloc_region,
     Opcode.LOAD_REGION: _infer_load_region,
     Opcode.RETURN: _infer_return,
+    Opcode.CALL_UNKNOWN: _infer_call_unknown,
+    Opcode.STORE_INDEX: _infer_store_index,
+    Opcode.LOAD_INDEX: _infer_load_index,
 }
 
 

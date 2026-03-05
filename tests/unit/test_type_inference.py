@@ -1125,3 +1125,309 @@ class TestFunctionSignatures:
         env = infer_types(instructions, _default_resolver())
         with pytest.raises(TypeError):
             env.func_signatures["bogus"] = FunctionSignature(params=(), return_type="")
+
+
+# ---------------------------------------------------------------------------
+# self/this typing in class methods
+# ---------------------------------------------------------------------------
+
+
+class TestSelfThisTyping:
+    def test_param_self_inside_class_typed_as_class_name(self):
+        """param:self inside class_Dog scope → register typed as 'Dog'."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label="class_Dog_0"),
+            _make_inst(Opcode.BRANCH, label="end___init___0"),
+            _make_inst(Opcode.LABEL, label="func___init___0"),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:self"]),
+            _make_inst(Opcode.RETURN, operands=[]),
+            _make_inst(Opcode.LABEL, label="end___init___0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%9",
+                operands=["<function:__init__@func___init___0>"],
+            ),
+            _make_inst(Opcode.LABEL, label="end_class_Dog_0"),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == "Dog"
+
+    def test_param_this_inside_class_typed_as_class_name(self):
+        """param:this inside class_Cat scope → register typed as 'Cat'."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label="class_Cat_0"),
+            _make_inst(Opcode.BRANCH, label="end_getAge_0"),
+            _make_inst(Opcode.LABEL, label="func_getAge_0"),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:this"]),
+            _make_inst(Opcode.RETURN, operands=[]),
+            _make_inst(Opcode.LABEL, label="end_getAge_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%9",
+                operands=["<function:getAge@func_getAge_0>"],
+            ),
+            _make_inst(Opcode.LABEL, label="end_class_Cat_0"),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == "Cat"
+
+    def test_param_dollar_this_inside_class_typed_as_class_name(self):
+        """param:$this inside class_User scope → register typed as 'User' (PHP)."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label="class_User_0"),
+            _make_inst(Opcode.BRANCH, label="end_getName_0"),
+            _make_inst(Opcode.LABEL, label="func_getName_0"),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:$this"]),
+            _make_inst(Opcode.RETURN, operands=[]),
+            _make_inst(Opcode.LABEL, label="end_getName_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%9",
+                operands=["<function:getName@func_getName_0>"],
+            ),
+            _make_inst(Opcode.LABEL, label="end_class_User_0"),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == "User"
+
+    def test_param_self_outside_class_not_typed(self):
+        """param:self outside any class scope → no type assigned."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.BRANCH, label="end_f_0"),
+            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:self"]),
+            _make_inst(Opcode.RETURN, operands=[]),
+            _make_inst(Opcode.LABEL, label="end_f_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%9",
+                operands=["<function:f@func_f_0>"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert "%0" not in env.register_types
+
+    def test_self_typing_enables_field_tracking(self):
+        """param:self typed → STORE_FIELD on self register → field_types populated."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label="class_Dog_0"),
+            _make_inst(Opcode.BRANCH, label="end___init___0"),
+            _make_inst(Opcode.LABEL, label="func___init___0"),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:self"]),
+            _make_inst(Opcode.STORE_VAR, operands=["self", "%0"]),
+            _make_inst(Opcode.CONST, result_reg="%1", operands=["5"]),
+            _make_inst(Opcode.STORE_FIELD, operands=["%0", "age", "%1"]),
+            _make_inst(Opcode.RETURN, operands=[]),
+            _make_inst(Opcode.LABEL, label="end___init___0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%9",
+                operands=["<function:__init__@func___init___0>"],
+            ),
+            # get_age method — load self, load field
+            _make_inst(Opcode.BRANCH, label="end_get_age_0"),
+            _make_inst(Opcode.LABEL, label="func_get_age_0"),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%2", operands=["param:self"]),
+            _make_inst(Opcode.LOAD_FIELD, result_reg="%3", operands=["%2", "age"]),
+            _make_inst(Opcode.RETURN, operands=["%3"]),
+            _make_inst(Opcode.LABEL, label="end_get_age_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%8",
+                operands=["<function:get_age@func_get_age_0>"],
+            ),
+            _make_inst(Opcode.LABEL, label="end_class_Dog_0"),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        # self register typed as Dog
+        assert env.register_types["%0"] == "Dog"
+        assert env.register_types["%2"] == "Dog"
+        # LOAD_FIELD on self.age → Int
+        assert env.register_types["%3"] == TypeName.INT
+
+    def test_param_self_with_explicit_type_hint_uses_type_hint(self):
+        """If param:self already has a type_hint, that takes priority."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label="class_Dog_0"),
+            _make_inst(Opcode.BRANCH, label="end_f_0"),
+            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(
+                Opcode.SYMBOLIC,
+                result_reg="%0",
+                operands=["param:self"],
+                type_hint="SpecialDog",
+            ),
+            _make_inst(Opcode.RETURN, operands=[]),
+            _make_inst(Opcode.LABEL, label="end_f_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%9",
+                operands=["<function:f@func_f_0>"],
+            ),
+            _make_inst(Opcode.LABEL, label="end_class_Dog_0"),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        # Explicit type_hint takes priority over class name
+        assert env.register_types["%0"] == "SpecialDog"
+
+
+# ---------------------------------------------------------------------------
+# CALL_UNKNOWN
+# ---------------------------------------------------------------------------
+
+
+class TestCallUnknown:
+    def test_target_resolves_to_known_function_via_var_types(self):
+        """CALL_UNKNOWN target register → var_types → func_return_types → typed."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            # Define function 'add' with return type Int
+            _make_inst(Opcode.BRANCH, label="end_add_0"),
+            _make_inst(Opcode.LABEL, label="func_add_0", type_hint="Int"),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_add_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:add@func_add_0>"],
+            ),
+            _make_inst(Opcode.STORE_VAR, operands=["add", "%1"]),
+            # Load 'add' into a register, then CALL_UNKNOWN on it
+            _make_inst(Opcode.LOAD_VAR, result_reg="%2", operands=["add"]),
+            _make_inst(
+                Opcode.CALL_UNKNOWN,
+                result_reg="%3",
+                operands=["%2", "%4"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%3"] == "Int"
+
+    def test_target_resolves_to_builtin(self):
+        """CALL_UNKNOWN target register → var_types name → builtin → typed."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.STORE_VAR, operands=["len", "%0"], type_hint=""),
+            _make_inst(Opcode.LOAD_VAR, result_reg="%1", operands=["len"]),
+            _make_inst(
+                Opcode.CALL_UNKNOWN,
+                result_reg="%2",
+                operands=["%1", "%3"],
+            ),
+        ]
+        # var_types needs 'len' → store it via CONST + STORE_VAR
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:len"]),
+            _make_inst(Opcode.STORE_VAR, operands=["len", "%0"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg="%1", operands=["len"]),
+            _make_inst(
+                Opcode.CALL_UNKNOWN,
+                result_reg="%2",
+                operands=["%1", "%3"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        # 'len' is in _BUILTIN_RETURN_TYPES → Int
+        assert env.register_types["%2"] == TypeName.INT
+
+    def test_unknown_target_stays_untyped(self):
+        """CALL_UNKNOWN with unresolvable target → untyped."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(
+                Opcode.CALL_UNKNOWN,
+                result_reg="%1",
+                operands=["%0"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert "%1" not in env.register_types
+
+    def test_no_result_reg_does_not_crash(self):
+        """CALL_UNKNOWN without result_reg → no crash."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CALL_UNKNOWN, operands=["%0"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        # Just verify no crash
+
+
+# ---------------------------------------------------------------------------
+# STORE_INDEX / LOAD_INDEX
+# ---------------------------------------------------------------------------
+
+
+class TestStoreIndexLoadIndex:
+    def test_store_then_load_same_array_register(self):
+        """STORE_INDEX typed value → LOAD_INDEX same array register → typed."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.NEW_ARRAY, result_reg="%0"),
+            _make_inst(Opcode.CONST, result_reg="%1", operands=["5"]),
+            _make_inst(Opcode.CONST, result_reg="%2", operands=["0"]),
+            _make_inst(Opcode.STORE_INDEX, operands=["%0", "%2", "%1"]),
+            _make_inst(Opcode.LOAD_INDEX, result_reg="%3", operands=["%0", "%2"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%3"] == TypeName.INT
+
+    def test_load_index_unknown_array_untyped(self):
+        """LOAD_INDEX on array with no prior STORE_INDEX → untyped."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.NEW_ARRAY, result_reg="%0"),
+            _make_inst(Opcode.CONST, result_reg="%1", operands=["0"]),
+            _make_inst(Opcode.LOAD_INDEX, result_reg="%2", operands=["%0", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert "%2" not in env.register_types
+
+    def test_last_store_wins(self):
+        """Multiple STORE_INDEX with different types → last one wins."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.NEW_ARRAY, result_reg="%0"),
+            _make_inst(Opcode.CONST, result_reg="%1", operands=["5"]),
+            _make_inst(Opcode.CONST, result_reg="%2", operands=["0"]),
+            _make_inst(Opcode.STORE_INDEX, operands=["%0", "%2", "%1"]),
+            # Now store a string
+            _make_inst(Opcode.CONST, result_reg="%3", operands=['"hello"']),
+            _make_inst(Opcode.STORE_INDEX, operands=["%0", "%2", "%3"]),
+            _make_inst(Opcode.LOAD_INDEX, result_reg="%4", operands=["%0", "%2"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%4"] == TypeName.STRING
+
+    def test_store_index_untyped_value_no_tracking(self):
+        """STORE_INDEX with untyped value → no element type tracked."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.NEW_ARRAY, result_reg="%0"),
+            _make_inst(Opcode.CONST, result_reg="%2", operands=["0"]),
+            # %1 is untyped
+            _make_inst(Opcode.STORE_INDEX, operands=["%0", "%2", "%1"]),
+            _make_inst(Opcode.LOAD_INDEX, result_reg="%3", operands=["%0", "%2"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert "%3" not in env.register_types
+
+    def test_store_index_no_result_reg(self):
+        """STORE_INDEX never produces a result register."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.NEW_ARRAY, result_reg="%0"),
+            _make_inst(Opcode.CONST, result_reg="%1", operands=["5"]),
+            _make_inst(Opcode.CONST, result_reg="%2", operands=["0"]),
+            _make_inst(Opcode.STORE_INDEX, operands=["%0", "%2", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        # STORE_INDEX should not add any new register beyond %0, %1, %2
+        assert set(env.register_types.keys()) <= {"%0", "%1", "%2"}
