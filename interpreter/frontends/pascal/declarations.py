@@ -9,6 +9,7 @@ from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
 from interpreter.frontends.pascal.control_flow import lower_pascal_block
+from interpreter.frontends.type_extraction import normalize_type_hint
 
 if TYPE_CHECKING:
     from interpreter.frontends.context import TreeSitterEmitContext
@@ -114,6 +115,9 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(Opcode.STORE_VAR, operands=[var_name, arr_reg], node=node)
     else:
         type_name = _pascal_var_type_name(ctx, type_node) if type_node else ""
+        type_hint = (
+            normalize_type_hint(type_name.lower(), ctx.language) if type_name else ""
+        )
         val_reg = ctx.fresh_reg()
         record_types: set[str] = getattr(ctx, "_pascal_record_types", set())
         if type_name in record_types:
@@ -129,7 +133,12 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
                 result_reg=val_reg,
                 operands=[ctx.constants.none_literal],
             )
-        ctx.emit(Opcode.STORE_VAR, operands=[var_name, val_reg], node=node)
+        ctx.emit(
+            Opcode.STORE_VAR,
+            operands=[var_name, val_reg],
+            node=node,
+            type_hint=type_hint,
+        )
 
 
 def _pascal_array_size(ctx: TreeSitterEmitContext, type_node) -> int:
@@ -236,6 +245,12 @@ def _lower_pascal_single_param(ctx: TreeSitterEmitContext, child) -> None:
     e.g. ``a, b: integer``.  Only direct ``identifier`` children are
     parameter names; the type identifier is nested inside ``type > typeref``.
     """
+    type_name = _pascal_var_type_name(
+        ctx, next((c for c in child.children if c.type == "type"), None)
+    )
+    type_hint = (
+        normalize_type_hint(type_name.lower(), ctx.language) if type_name else ""
+    )
     for id_node in child.children:
         if id_node.type != "identifier":
             continue
@@ -245,10 +260,12 @@ def _lower_pascal_single_param(ctx: TreeSitterEmitContext, child) -> None:
             result_reg=ctx.fresh_reg(),
             operands=[f"{constants.PARAM_PREFIX}{pname}"],
             node=child,
+            type_hint=type_hint,
         )
         ctx.emit(
             Opcode.STORE_VAR,
             operands=[pname, f"%{ctx.reg_counter - 1}"],
+            type_hint=type_hint,
         )
 
 

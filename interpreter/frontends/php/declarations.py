@@ -7,6 +7,10 @@ from typing import TYPE_CHECKING
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.php.control_flow import lower_php_compound
+from interpreter.frontends.type_extraction import (
+    extract_type_from_field,
+    normalize_type_hint,
+)
 
 if TYPE_CHECKING:
     from interpreter.frontends.context import TreeSitterEmitContext
@@ -21,29 +25,37 @@ def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
             name_node = child.child_by_field_name("name")
             if name_node:
                 pname = ctx.node_text(name_node)
+                raw_type = extract_type_from_field(ctx, child, "type")
+                type_hint = normalize_type_hint(raw_type, ctx.language)
                 ctx.emit(
                     Opcode.SYMBOLIC,
                     result_reg=ctx.fresh_reg(),
                     operands=[f"{constants.PARAM_PREFIX}{pname}"],
                     node=child,
+                    type_hint=type_hint,
                 )
                 ctx.emit(
                     Opcode.STORE_VAR,
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
+                    type_hint=type_hint,
                 )
         elif child.type == "variadic_parameter":
             name_node = child.child_by_field_name("name")
             if name_node:
                 pname = ctx.node_text(name_node)
+                raw_type = extract_type_from_field(ctx, child, "type")
+                type_hint = normalize_type_hint(raw_type, ctx.language)
                 ctx.emit(
                     Opcode.SYMBOLIC,
                     result_reg=ctx.fresh_reg(),
                     operands=[f"{constants.PARAM_PREFIX}{pname}"],
                     node=child,
+                    type_hint=type_hint,
                 )
                 ctx.emit(
                     Opcode.STORE_VAR,
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
+                    type_hint=type_hint,
                 )
         elif child.type == "variable_name":
             pname = ctx.node_text(child)

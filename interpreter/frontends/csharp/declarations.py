@@ -7,6 +7,10 @@ from typing import TYPE_CHECKING
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.csharp.expressions import lower_csharp_params
+from interpreter.frontends.type_extraction import (
+    extract_type_from_field,
+    normalize_type_hint,
+)
 
 if TYPE_CHECKING:
     from interpreter.frontends.context import TreeSitterEmitContext
@@ -21,12 +25,16 @@ def lower_local_decl_stmt(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_variable_declaration(ctx: TreeSitterEmitContext, node) -> None:
     """Lower a variable_declaration node with one or more declarators."""
+    raw_type = extract_type_from_field(ctx, node, "type")
+    type_hint = normalize_type_hint(raw_type, ctx.language)
     for child in node.children:
         if child.type == "variable_declarator":
-            _lower_csharp_declarator(ctx, child)
+            _lower_csharp_declarator(ctx, child, type_hint=type_hint)
 
 
-def _lower_csharp_declarator(ctx: TreeSitterEmitContext, node) -> None:
+def _lower_csharp_declarator(
+    ctx: TreeSitterEmitContext, node, type_hint: str = ""
+) -> None:
     """Lower a C# variable_declarator.
 
     The name is the first named child (identifier).
@@ -60,6 +68,7 @@ def _lower_csharp_declarator(ctx: TreeSitterEmitContext, node) -> None:
         Opcode.STORE_VAR,
         operands=[var_name, val_reg],
         node=node,
+        type_hint=type_hint,
     )
 
 

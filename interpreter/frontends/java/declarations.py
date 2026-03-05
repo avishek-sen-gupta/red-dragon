@@ -7,12 +7,18 @@ from typing import TYPE_CHECKING
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.java.expressions import lower_java_params
+from interpreter.frontends.type_extraction import (
+    extract_type_from_field,
+    normalize_type_hint,
+)
 
 if TYPE_CHECKING:
     from interpreter.frontends.context import TreeSitterEmitContext
 
 
 def lower_local_var_decl(ctx: TreeSitterEmitContext, node) -> None:
+    raw_type = extract_type_from_field(ctx, node, "type")
+    type_hint = normalize_type_hint(raw_type, ctx.language)
     for child in node.children:
         if child.type == "variable_declarator":
             name_node = child.child_by_field_name("name")
@@ -23,6 +29,7 @@ def lower_local_var_decl(ctx: TreeSitterEmitContext, node) -> None:
                     Opcode.STORE_VAR,
                     operands=[ctx.node_text(name_node), val_reg],
                     node=node,
+                    type_hint=type_hint,
                 )
             elif name_node:
                 val_reg = ctx.fresh_reg()
@@ -35,6 +42,7 @@ def lower_local_var_decl(ctx: TreeSitterEmitContext, node) -> None:
                     Opcode.STORE_VAR,
                     operands=[ctx.node_text(name_node), val_reg],
                     node=node,
+                    type_hint=type_hint,
                 )
 
 
@@ -228,6 +236,8 @@ def _lower_constructor_decl(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def _lower_field_decl(ctx: TreeSitterEmitContext, node) -> None:
+    raw_type = extract_type_from_field(ctx, node, "type")
+    type_hint = normalize_type_hint(raw_type, ctx.language)
     for child in node.children:
         if child.type == "variable_declarator":
             name_node = child.child_by_field_name("name")
@@ -238,6 +248,7 @@ def _lower_field_decl(ctx: TreeSitterEmitContext, node) -> None:
                     Opcode.STORE_VAR,
                     operands=[ctx.node_text(name_node), val_reg],
                     node=node,
+                    type_hint=type_hint,
                 )
 
 

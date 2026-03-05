@@ -13,6 +13,10 @@ from interpreter.frontends.c.declarations import (
     lower_declaration,
     lower_struct_field,
 )
+from interpreter.frontends.type_extraction import (
+    extract_type_from_field,
+    normalize_type_hint,
+)
 
 if TYPE_CHECKING:
     from interpreter.frontends.context import TreeSitterEmitContext
@@ -21,11 +25,15 @@ if TYPE_CHECKING:
 def lower_cpp_declaration(ctx: TreeSitterEmitContext, node) -> None:
     """Lower a C++ declaration using C++ struct type detection."""
     struct_type = _extract_cpp_struct_type(ctx, node)
+    raw_type = extract_type_from_field(ctx, node, "type")
+    type_hint = normalize_type_hint(raw_type, ctx.language)
     for child in node.children:
         if child.type == "init_declarator":
             from interpreter.frontends.c.declarations import _lower_init_declarator
 
-            _lower_init_declarator(ctx, child, struct_type=struct_type)
+            _lower_init_declarator(
+                ctx, child, struct_type=struct_type, type_hint=type_hint
+            )
         elif child.type == "identifier":
             var_name = ctx.node_text(child)
             if struct_type:
@@ -47,6 +55,7 @@ def lower_cpp_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 Opcode.STORE_VAR,
                 operands=[var_name, val_reg],
                 node=node,
+                type_hint=type_hint,
             )
 
 
