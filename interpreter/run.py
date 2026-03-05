@@ -5,15 +5,22 @@ from __future__ import annotations
 import copy
 import logging
 import time
+from types import MappingProxyType
 from typing import Any
 
 from .constants import Language
-from .ir import Opcode
+from .conversion_rules import ConversionRules
+from .default_conversion_rules import DefaultConversionRules
+from .identity_conversion_rules import IdentityConversionRules
+from .ir import IRInstruction, Opcode
 from .frontend import get_frontend
 from .frontend_observer import FrontendObserver
 from .cfg import CFG, build_cfg
 from .registry import build_registry, _parse_class_ref, FunctionRegistry
 from .executor import _try_execute_locally
+from .type_environment import TypeEnvironment
+from .type_inference import infer_types
+from .type_resolver import TypeResolver
 from .unresolved_call import (
     SymbolicResolver,
     LLMPlausibleResolver,
@@ -40,6 +47,13 @@ from .backend import get_backend
 from . import constants
 
 logger = logging.getLogger(__name__)
+
+_EMPTY_TYPE_ENV = TypeEnvironment(
+    register_types=MappingProxyType({}),
+    var_types=MappingProxyType({}),
+    func_signatures=MappingProxyType({}),
+)
+_IDENTITY_RULES = IdentityConversionRules()
 
 
 def _create_resolver(config: VMConfig) -> UnresolvedCallResolver:
@@ -169,6 +183,8 @@ def execute_cfg(
     entry_point: str,
     registry: FunctionRegistry,
     config: VMConfig = VMConfig(),
+    type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
+    conversion_rules: ConversionRules = _IDENTITY_RULES,
 ) -> tuple[VMState, ExecutionStats]:
     """Execute a pre-built CFG from the given entry point.
 
@@ -180,6 +196,8 @@ def execute_cfg(
         entry_point: Label of the block to start execution from.
         registry: Pre-built function/class registry.
         config: Execution configuration (backend, max_steps, verbose).
+        type_env: Type environment from static inference (empty by default).
+        conversion_rules: Type coercion rules (identity by default).
 
     Returns:
         Tuple of (final VMState, ExecutionStats).
@@ -229,6 +247,8 @@ def execute_cfg(
             current_label=current_label,
             ip=ip,
             call_resolver=call_resolver,
+            type_env=type_env,
+            conversion_rules=conversion_rules,
         )
         used_llm = False
         if result.handled:
@@ -293,6 +313,8 @@ def execute_cfg_traced(
     entry_point: str,
     registry: FunctionRegistry,
     config: VMConfig = VMConfig(),
+    type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
+    conversion_rules: ConversionRules = _IDENTITY_RULES,
 ) -> tuple[VMState, ExecutionTrace]:
     """Execute a pre-built CFG and record a trace of every step.
 
@@ -355,6 +377,8 @@ def execute_cfg_traced(
             current_label=current_label,
             ip=ip,
             call_resolver=call_resolver,
+            type_env=type_env,
+            conversion_rules=conversion_rules,
         )
         used_llm = False
         if result.handled:
@@ -521,6 +545,11 @@ def run(
     stats.registry_functions = len(registry.func_params)
     stats.registry_classes = len(registry.classes)
 
+    # 4c. Type inference
+    conversion_rules = DefaultConversionRules()
+    type_resolver = TypeResolver(conversion_rules)
+    type_env = infer_types(instructions, type_resolver)
+
     # 5. Execute via extract
     vm_config = VMConfig(
         backend=backend,
@@ -530,7 +559,14 @@ def run(
         unresolved_call_strategy=unresolved_call_strategy,
     )
     exec_start = time.perf_counter()
-    vm, exec_stats = execute_cfg(cfg, entry, registry, vm_config)
+    vm, exec_stats = execute_cfg(
+        cfg,
+        entry,
+        registry,
+        vm_config,
+        type_env=type_env,
+        conversion_rules=conversion_rules,
+    )
     vm.data_layout = frontend.data_layout
     stats.execution_time = time.perf_counter() - exec_start
 
