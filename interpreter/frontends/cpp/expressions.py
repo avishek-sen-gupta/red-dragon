@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter import constants
@@ -13,9 +13,6 @@ from interpreter.frontends.common.expressions import (
     lower_canonical_none,
 )
 from interpreter.frontends.c.expressions import lower_c_store_target
-
-if TYPE_CHECKING:
-    from interpreter.frontends.context import TreeSitterEmitContext
 
 
 def lower_new_expr(ctx: TreeSitterEmitContext, node) -> str:

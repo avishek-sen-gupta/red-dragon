@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter import constants
@@ -11,10 +11,6 @@ from interpreter.frontends.common.expressions import (
     lower_interpolated_string_parts,
     lower_store_target as common_lower_store_target,
 )
-
-if TYPE_CHECKING:
-    from interpreter.frontends.context import TreeSitterEmitContext
-
 
 # ── store target (with tuple unpack) ──────────────────────────
 

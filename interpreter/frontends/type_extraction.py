@@ -6,10 +6,7 @@ normalize language-specific type names to canonical TypeName values.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.context import TreeSitterEmitContext
 
 
 def normalize_type_hint(raw: str, type_map: dict[str, str]) -> str:
