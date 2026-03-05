@@ -654,7 +654,7 @@ def lower_csharp_params(ctx: TreeSitterEmitContext, params_node) -> None:
             if name_node:
                 pname = ctx.node_text(name_node)
                 raw_type = extract_type_from_field(ctx, child, "type")
-                type_hint = normalize_type_hint(raw_type, ctx.language)
+                type_hint = normalize_type_hint(raw_type, ctx.type_map)
                 ctx.emit(
                     Opcode.SYMBOLIC,
                     result_reg=ctx.fresh_reg(),

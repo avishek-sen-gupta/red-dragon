@@ -32,6 +32,21 @@ class ScalaFrontend(BaseFrontend):
             default_return_value="()",
         )
 
+    def _build_type_map(self) -> dict[str, str]:
+        return {
+            "Int": "Int",
+            "Long": "Int",
+            "Short": "Int",
+            "Byte": "Int",
+            "Char": "Int",
+            "Float": "Float",
+            "Double": "Float",
+            "Boolean": "Bool",
+            "String": "String",
+            "Unit": "Any",
+            "Any": "Any",
+        }
+
     def _build_expr_dispatch(self) -> dict[str, Callable]:
         return {
             "identifier": common_expr.lower_identifier,

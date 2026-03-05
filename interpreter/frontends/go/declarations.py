@@ -159,7 +159,7 @@ def lower_go_params(ctx: TreeSitterEmitContext, params_node) -> None:
             if name_node:
                 pname = ctx.node_text(name_node)
                 raw_type = extract_type_from_field(ctx, child, "type")
-                type_hint = normalize_type_hint(raw_type, ctx.language)
+                type_hint = normalize_type_hint(raw_type, ctx.type_map)
                 ctx.emit(
                     Opcode.SYMBOLIC,
                     result_reg=ctx.fresh_reg(),
@@ -253,7 +253,7 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
     names = [c for c in spec.children if c.type == "identifier"]
     value_node = spec.child_by_field_name("value")
     raw_type = extract_type_from_field(ctx, spec, "type")
-    type_hint = normalize_type_hint(raw_type, ctx.language)
+    type_hint = normalize_type_hint(raw_type, ctx.type_map)
 
     if value_node:
         val_regs = lower_expression_list(ctx, value_node)

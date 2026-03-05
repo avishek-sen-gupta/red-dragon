@@ -70,7 +70,7 @@ def lower_param(ctx: TreeSitterEmitContext, child) -> None:
     if pname is None:
         return
     raw_type = extract_type_from_field(ctx, child, "type")
-    type_hint = normalize_type_hint(raw_type, ctx.language) if raw_type else ""
+    type_hint = normalize_type_hint(raw_type, ctx.type_map) if raw_type else ""
     ctx.emit(
         Opcode.SYMBOLIC,
         result_reg=ctx.fresh_reg(),

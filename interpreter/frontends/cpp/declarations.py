@@ -26,7 +26,7 @@ def lower_cpp_declaration(ctx: TreeSitterEmitContext, node) -> None:
     """Lower a C++ declaration using C++ struct type detection."""
     struct_type = _extract_cpp_struct_type(ctx, node)
     raw_type = extract_type_from_field(ctx, node, "type")
-    type_hint = normalize_type_hint(raw_type, ctx.language)
+    type_hint = normalize_type_hint(raw_type, ctx.type_map)
     for child in node.children:
         if child.type == "init_declarator":
             from interpreter.frontends.c.declarations import _lower_init_declarator

@@ -27,6 +27,27 @@ class GoFrontend(BaseFrontend):
             block_node_types=frozenset({"block", "statement_list", "source_file"}),
         )
 
+    def _build_type_map(self) -> dict[str, str]:
+        return {
+            "int": "Int",
+            "int8": "Int",
+            "int16": "Int",
+            "int32": "Int",
+            "int64": "Int",
+            "uint": "Int",
+            "uint8": "Int",
+            "uint16": "Int",
+            "uint32": "Int",
+            "uint64": "Int",
+            "uintptr": "Int",
+            "rune": "Int",
+            "byte": "Int",
+            "float32": "Float",
+            "float64": "Float",
+            "bool": "Bool",
+            "string": "String",
+        }
+
     def _build_expr_dispatch(self) -> dict[str, Callable]:
         return {
             "identifier": common_expr.lower_identifier,

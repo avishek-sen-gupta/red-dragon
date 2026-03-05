@@ -31,6 +31,23 @@ class PascalFrontend(BaseFrontend):
             ),
         )
 
+    def _build_type_map(self) -> dict[str, str]:
+        return {
+            "integer": "Int",
+            "longint": "Int",
+            "shortint": "Int",
+            "byte": "Int",
+            "word": "Int",
+            "cardinal": "Int",
+            "real": "Float",
+            "single": "Float",
+            "double": "Float",
+            "extended": "Float",
+            "boolean": "Bool",
+            "char": "String",
+            "string": "String",
+        }
+
     def _build_context(self, source: bytes) -> TreeSitterEmitContext:
         ctx = super()._build_context(source)
         # Pascal-specific mutable state stored on the context

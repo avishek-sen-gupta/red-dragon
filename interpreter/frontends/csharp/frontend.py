@@ -29,6 +29,34 @@ class CSharpFrontend(BaseFrontend):
             ),
         )
 
+    def _build_type_map(self) -> dict[str, str]:
+        return {
+            "int": "Int",
+            "long": "Int",
+            "short": "Int",
+            "byte": "Int",
+            "sbyte": "Int",
+            "uint": "Int",
+            "ulong": "Int",
+            "ushort": "Int",
+            "char": "Int",
+            "Int32": "Int",
+            "Int64": "Int",
+            "float": "Float",
+            "double": "Float",
+            "decimal": "Float",
+            "Single": "Float",
+            "Double": "Float",
+            "Decimal": "Float",
+            "bool": "Bool",
+            "Boolean": "Bool",
+            "string": "String",
+            "String": "String",
+            "void": "Any",
+            "object": "Object",
+            "Object": "Object",
+        }
+
     def _build_expr_dispatch(self) -> dict[str, Callable]:
         return {
             "identifier": common_expr.lower_identifier,

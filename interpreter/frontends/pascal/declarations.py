@@ -116,7 +116,7 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
     else:
         type_name = _pascal_var_type_name(ctx, type_node) if type_node else ""
         type_hint = (
-            normalize_type_hint(type_name.lower(), ctx.language) if type_name else ""
+            normalize_type_hint(type_name.lower(), ctx.type_map) if type_name else ""
         )
         val_reg = ctx.fresh_reg()
         record_types: set[str] = getattr(ctx, "_pascal_record_types", set())
@@ -249,7 +249,7 @@ def _lower_pascal_single_param(ctx: TreeSitterEmitContext, child) -> None:
         ctx, next((c for c in child.children if c.type == "type"), None)
     )
     type_hint = (
-        normalize_type_hint(type_name.lower(), ctx.language) if type_name else ""
+        normalize_type_hint(type_name.lower(), ctx.type_map) if type_name else ""
     )
     for id_node in child.children:
         if id_node.type != "identifier":

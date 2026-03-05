@@ -35,6 +35,19 @@ class TypeScriptFrontend(JavaScriptFrontend):
             block_node_types=js_constants.block_node_types,
         )
 
+    def _build_type_map(self) -> dict[str, str]:
+        return {
+            "number": "Float",
+            "string": "String",
+            "boolean": "Bool",
+            "void": "Any",
+            "any": "Any",
+            "undefined": "Any",
+            "null": "Any",
+            "never": "Any",
+            "object": "Object",
+        }
+
     def _build_expr_dispatch(self) -> dict[str, Callable]:
         dispatch = super()._build_expr_dispatch()
         dispatch.update(
@@ -330,7 +343,7 @@ def _extract_ts_type_hint(ctx: TreeSitterEmitContext, param_node) -> str:
         None,
     )
     raw = ctx.node_text(type_child) if type_child else ""
-    return normalize_type_hint(raw, ctx.language)
+    return normalize_type_hint(raw, ctx.type_map)
 
 
 def lower_ts_param(ctx: TreeSitterEmitContext, child) -> None:

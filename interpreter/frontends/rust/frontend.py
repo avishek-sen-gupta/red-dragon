@@ -31,6 +31,28 @@ class RustFrontend(BaseFrontend):
             default_return_value="()",
         )
 
+    def _build_type_map(self) -> dict[str, str]:
+        return {
+            "i8": "Int",
+            "i16": "Int",
+            "i32": "Int",
+            "i64": "Int",
+            "i128": "Int",
+            "isize": "Int",
+            "u8": "Int",
+            "u16": "Int",
+            "u32": "Int",
+            "u64": "Int",
+            "u128": "Int",
+            "usize": "Int",
+            "f32": "Float",
+            "f64": "Float",
+            "bool": "Bool",
+            "String": "String",
+            "str": "String",
+            "&str": "String",
+        }
+
     def _build_expr_dispatch(self) -> dict[str, Callable]:
         return {
             "identifier": common_expr.lower_identifier,

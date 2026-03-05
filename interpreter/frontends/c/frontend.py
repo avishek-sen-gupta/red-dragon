@@ -48,6 +48,22 @@ class CFrontend(BaseFrontend):
             default_return_value="0",
         )
 
+    def _build_type_map(self) -> dict[str, str]:
+        return {
+            "int": "Int",
+            "long": "Int",
+            "short": "Int",
+            "char": "Int",
+            "unsigned": "Int",
+            "signed": "Int",
+            "size_t": "Int",
+            "float": "Float",
+            "double": "Float",
+            "bool": "Bool",
+            "_Bool": "Bool",
+            "void": "Any",
+        }
+
     def _build_expr_dispatch(self) -> dict[str, Callable]:
         return {
             "identifier": common_expr.lower_identifier,

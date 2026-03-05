@@ -31,6 +31,19 @@ class PythonFrontend(BaseFrontend):
             paren_expr_type="parenthesized_expression",
         )
 
+    def _build_type_map(self) -> dict[str, str]:
+        return {
+            "int": "Int",
+            "float": "Float",
+            "bool": "Bool",
+            "str": "String",
+            "bytes": "String",
+            "list": "Array",
+            "dict": "Object",
+            "object": "Object",
+            "None": "Any",
+        }
+
     def _build_expr_dispatch(self) -> dict[str, Callable]:
         return {
             "identifier": common_expr.lower_identifier,

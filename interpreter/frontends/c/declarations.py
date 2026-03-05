@@ -52,7 +52,7 @@ def lower_declaration(ctx: TreeSitterEmitContext, node) -> None:
     """Lower a C declaration: type declarator(s) with optional initializers."""
     struct_type = _extract_struct_type(ctx, node)
     raw_type = extract_type_from_field(ctx, node, "type")
-    type_hint = normalize_type_hint(raw_type, ctx.language)
+    type_hint = normalize_type_hint(raw_type, ctx.type_map)
     for child in node.children:
         if child.type == "init_declarator":
             _lower_init_declarator(
@@ -136,7 +136,7 @@ def lower_c_params(ctx: TreeSitterEmitContext, params_node) -> None:
             if decl_node:
                 pname = extract_declarator_name(ctx, decl_node)
                 raw_type = extract_type_from_field(ctx, child, "type")
-                type_hint = normalize_type_hint(raw_type, ctx.language)
+                type_hint = normalize_type_hint(raw_type, ctx.type_map)
                 ctx.emit(
                     Opcode.SYMBOLIC,
                     result_reg=ctx.fresh_reg(),

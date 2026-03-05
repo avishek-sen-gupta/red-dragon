@@ -93,6 +93,9 @@ class TreeSitterEmitContext:
     loop_stack: list[dict[str, str]] = field(default_factory=list)
     break_target_stack: list[str] = field(default_factory=list)
 
+    # Per-language type map: raw type string -> canonical TypeName
+    type_map: dict[str, str] = field(default_factory=dict)
+
     # Dispatch tables: node_type -> Callable[[TreeSitterEmitContext, node], ...]
     stmt_dispatch: dict[str, Callable] = field(default_factory=dict)
     expr_dispatch: dict[str, Callable] = field(default_factory=dict)
