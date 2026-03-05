@@ -13,6 +13,7 @@ from interpreter.frontends.context import GrammarConstants
 from interpreter.frontends.common import expressions as common_expr
 from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.frontends.type_extraction import normalize_type_hint
 
 if TYPE_CHECKING:
     from interpreter.frontends.context import TreeSitterEmitContext
@@ -318,8 +319,22 @@ def lower_ts_internal_module(ctx: TreeSitterEmitContext, node) -> None:
 # ── TS-specific param handling ───────────────────────────────────
 
 
+def _extract_ts_type_hint(ctx: TreeSitterEmitContext, param_node) -> str:
+    """Extract type hint from a TS parameter's type_annotation field."""
+    type_ann = param_node.child_by_field_name("type")
+    if type_ann is None:
+        return ""
+    # type_annotation contains `: <type>` — find the first named non-colon child
+    type_child = next(
+        (c for c in type_ann.children if c.is_named),
+        None,
+    )
+    raw = ctx.node_text(type_child) if type_child else ""
+    return normalize_type_hint(raw, ctx.language)
+
+
 def lower_ts_param(ctx: TreeSitterEmitContext, child) -> None:
-    """Lower a single TS parameter, skipping type annotations."""
+    """Lower a single TS parameter, extracting type annotations."""
     if child.type in ("(", ")", ",", ":", "type_annotation"):
         return
     if child.type == "required_parameter":
@@ -330,15 +345,18 @@ def lower_ts_param(ctx: TreeSitterEmitContext, child) -> None:
             )
         if pname_node:
             pname = ctx.node_text(pname_node)
+            type_hint = _extract_ts_type_hint(ctx, child)
             ctx.emit(
                 Opcode.SYMBOLIC,
                 result_reg=ctx.fresh_reg(),
                 operands=[f"{constants.PARAM_PREFIX}{pname}"],
                 node=child,
+                type_hint=type_hint,
             )
             ctx.emit(
                 Opcode.STORE_VAR,
                 operands=[pname, f"%{ctx.reg_counter - 1}"],
+                type_hint=type_hint,
             )
         return
     if child.type == "optional_parameter":
@@ -349,15 +367,18 @@ def lower_ts_param(ctx: TreeSitterEmitContext, child) -> None:
             )
         if pname_node:
             pname = ctx.node_text(pname_node)
+            type_hint = _extract_ts_type_hint(ctx, child)
             ctx.emit(
                 Opcode.SYMBOLIC,
                 result_reg=ctx.fresh_reg(),
                 operands=[f"{constants.PARAM_PREFIX}{pname}"],
                 node=child,
+                type_hint=type_hint,
             )
             ctx.emit(
                 Opcode.STORE_VAR,
                 operands=[pname, f"%{ctx.reg_counter - 1}"],
+                type_hint=type_hint,
             )
         return
     # Fall back to JS param handling

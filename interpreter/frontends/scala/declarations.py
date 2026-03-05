@@ -6,6 +6,10 @@ from typing import TYPE_CHECKING
 
 from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.frontends.type_extraction import (
+    extract_type_from_field,
+    normalize_type_hint,
+)
 
 if TYPE_CHECKING:
     from interpreter.frontends.context import TreeSitterEmitContext
@@ -56,6 +60,8 @@ def _lower_val_or_var_def(ctx: TreeSitterEmitContext, node) -> None:
     """Shared logic for val_definition and var_definition, with tuple destructuring."""
     pattern_node = node.child_by_field_name("pattern")
     value_node = node.child_by_field_name("value")
+    raw_type = extract_type_from_field(ctx, node, "type")
+    type_hint = normalize_type_hint(raw_type, ctx.language)
     if value_node:
         val_reg = ctx.lower_expr(value_node)
     else:
@@ -74,6 +80,7 @@ def _lower_val_or_var_def(ctx: TreeSitterEmitContext, node) -> None:
             Opcode.STORE_VAR,
             operands=[var_name, val_reg],
             node=node,
+            type_hint=type_hint,
         )
 
 
@@ -104,15 +111,19 @@ def lower_scala_params(ctx: TreeSitterEmitContext, params_node) -> None:
             name_node = child.child_by_field_name("name")
             if name_node:
                 pname = ctx.node_text(name_node)
+                raw_type = extract_type_from_field(ctx, child, "type")
+                type_hint = normalize_type_hint(raw_type, ctx.language)
                 ctx.emit(
                     Opcode.SYMBOLIC,
                     result_reg=ctx.fresh_reg(),
                     operands=[f"{constants.PARAM_PREFIX}{pname}"],
                     node=child,
+                    type_hint=type_hint,
                 )
                 ctx.emit(
                     Opcode.STORE_VAR,
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
+                    type_hint=type_hint,
                 )
 
 

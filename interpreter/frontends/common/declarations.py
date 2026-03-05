@@ -9,6 +9,10 @@ from typing import TYPE_CHECKING
 
 from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.frontends.type_extraction import (
+    extract_type_from_field,
+    normalize_type_hint,
+)
 
 if TYPE_CHECKING:
     from interpreter.frontends.context import TreeSitterEmitContext
@@ -65,15 +69,19 @@ def lower_param(ctx: TreeSitterEmitContext, child) -> None:
     pname = extract_param_name(ctx, child)
     if pname is None:
         return
+    raw_type = extract_type_from_field(ctx, child, "type")
+    type_hint = normalize_type_hint(raw_type, ctx.language) if raw_type else ""
     ctx.emit(
         Opcode.SYMBOLIC,
         result_reg=ctx.fresh_reg(),
         operands=[f"{constants.PARAM_PREFIX}{pname}"],
         node=child,
+        type_hint=type_hint,
     )
     ctx.emit(
         Opcode.STORE_VAR,
         operands=[pname, f"%{ctx.reg_counter - 1}"],
+        type_hint=type_hint,
     )
 
 
