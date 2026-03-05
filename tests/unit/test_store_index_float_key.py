@@ -1,8 +1,8 @@
 """Tests proving the float-index heap key mismatch bug is fixed.
 
 When STORE_INDEX receives a float index (e.g. 2.0) and the type environment
-declares that register as Int, the executor coerces the float to int before
-using it as a heap key — so str(2) == "2" matches on both store and load.
+declares that register as Int, apply_update coerces the float to int at
+write time — so str(2) == "2" matches on both store and load.
 """
 
 from types import MappingProxyType
@@ -12,7 +12,7 @@ from interpreter.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.type_environment import TypeEnvironment
 from interpreter.vm import VMState, apply_update
-from interpreter.vm_types import StackFrame
+from interpreter.vm_types import StackFrame, StateUpdate
 from interpreter.executor import LocalExecutor
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
@@ -40,21 +40,30 @@ def _type_env_with(register_types: dict[str, str]) -> TypeEnvironment:
     )
 
 
-def _execute(vm, inst, type_env=None, conversion_rules=None):
+def _set_reg(vm, reg, val, type_env=None, conversion_rules=None):
+    """Write a value to a register through apply_update so coercion fires."""
     kwargs = {}
     if type_env is not None:
         kwargs["type_env"] = type_env
     if conversion_rules is not None:
         kwargs["conversion_rules"] = conversion_rules
+    apply_update(vm, StateUpdate(register_writes={reg: val}), **kwargs)
+
+
+def _execute(vm, inst, type_env=None, conversion_rules=None):
     result = LocalExecutor.execute(
         inst=inst,
         vm=vm,
         cfg=_empty_cfg(),
         registry=_empty_registry(),
-        **kwargs,
     )
     assert result.handled
-    apply_update(vm, result.update)
+    kwargs = {}
+    if type_env is not None:
+        kwargs["type_env"] = type_env
+    if conversion_rules is not None:
+        kwargs["conversion_rules"] = conversion_rules
+    apply_update(vm, result.update, **kwargs)
     return result
 
 
@@ -78,9 +87,9 @@ class TestFloatIndexHeapKeyMismatch:
         type_env = _type_env_with({"%idx_f": "Int"})
         rules = DefaultConversionRules()
 
-        # Store value 42 at float index 2.0 (coerced to int 2)
-        vm.current_frame.registers["%idx_f"] = 2.0
-        vm.current_frame.registers["%val"] = 42
+        # Store value 42 at float index 2.0 (coerced to int 2 at write time)
+        _set_reg(vm, "%idx_f", 2.0, type_env=type_env, conversion_rules=rules)
+        _set_reg(vm, "%val", 42)
         _execute(
             vm,
             IRInstruction(
@@ -92,7 +101,7 @@ class TestFloatIndexHeapKeyMismatch:
         )
 
         # Load from int index 2
-        vm.current_frame.registers["%idx_i"] = 2
+        _set_reg(vm, "%idx_i", 2)
         _execute(
             vm,
             IRInstruction(
@@ -113,8 +122,8 @@ class TestFloatIndexHeapKeyMismatch:
         rules = DefaultConversionRules()
 
         # Store value 99 at int index 2
-        vm.current_frame.registers["%idx_i"] = 2
-        vm.current_frame.registers["%val"] = 99
+        _set_reg(vm, "%idx_i", 2)
+        _set_reg(vm, "%val", 99)
         _execute(
             vm,
             IRInstruction(
@@ -125,8 +134,8 @@ class TestFloatIndexHeapKeyMismatch:
             conversion_rules=rules,
         )
 
-        # Load from float index 2.0 (coerced to int 2)
-        vm.current_frame.registers["%idx_f"] = 2.0
+        # Load from float index 2.0 (coerced to int 2 at write time)
+        _set_reg(vm, "%idx_f", 2.0, type_env=type_env, conversion_rules=rules)
         _execute(
             vm,
             IRInstruction(
@@ -146,8 +155,8 @@ class TestFloatIndexHeapKeyMismatch:
         type_env = _type_env_with({"%idx_f": "Int"})
         rules = DefaultConversionRules()
 
-        vm.current_frame.registers["%idx_f"] = 2.0
-        vm.current_frame.registers["%val"] = 77
+        _set_reg(vm, "%idx_f", 2.0, type_env=type_env, conversion_rules=rules)
+        _set_reg(vm, "%val", 77)
         _execute(
             vm,
             IRInstruction(

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from types import MappingProxyType
 from typing import Any
 
 from .constants import TypeName
 from .conversion_rules import ConversionRules
+from .identity_conversion_rules import IdentityConversionRules
 from .type_environment import TypeEnvironment
 from .vm_types import (  # noqa: F401 — re-exported for backwards compatibility
     SymbolicValue,
@@ -23,8 +25,44 @@ from .vm_types import (  # noqa: F401 — re-exported for backwards compatibilit
     _serialize_value,
 )
 
+_EMPTY_TYPE_ENV = TypeEnvironment(
+    register_types=MappingProxyType({}),
+    var_types=MappingProxyType({}),
+    func_signatures=MappingProxyType({}),
+)
 
-def apply_update(vm: VMState, update: StateUpdate):
+_IDENTITY_RULES = IdentityConversionRules()
+
+
+def _coerce_value(
+    val: Any,
+    reg: str,
+    type_env: TypeEnvironment,
+    conversion_rules: ConversionRules,
+) -> Any:
+    """Coerce *val* to the type declared for *reg* in *type_env*.
+
+    Returns *val* unchanged when no coercion is needed (no declared type,
+    runtime type already matches, or the register name is not in the env).
+    """
+    if not isinstance(reg, str) or not reg.startswith("%"):
+        return val
+    target_type = type_env.register_types.get(reg, "")
+    if not target_type:
+        return val
+    runtime_type = _runtime_type_name(val)
+    if not runtime_type or runtime_type == target_type:
+        return val
+    coercer = conversion_rules.coerce_assignment(runtime_type, target_type)
+    return coercer(val)
+
+
+def apply_update(
+    vm: VMState,
+    update: StateUpdate,
+    type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
+    conversion_rules: ConversionRules = _IDENTITY_RULES,
+):
     """Mechanically apply a StateUpdate to the VM."""
     frame = vm.current_frame
 
@@ -51,8 +89,12 @@ def apply_update(vm: VMState, update: StateUpdate):
         vm.heap[obj.addr] = HeapObject(type_hint=obj.type_hint)
 
     # Register writes — always to the CURRENT (caller's) frame
+    # Coerce values at write time based on the type environment.
     for reg, val in update.register_writes.items():
-        frame.registers[reg] = _deserialize_value(val, vm)
+        deserialized = _deserialize_value(val, vm)
+        frame.registers[reg] = _coerce_value(
+            deserialized, reg, type_env, conversion_rules
+        )
 
     # Heap writes
     for hw in update.heap_writes:
@@ -191,16 +233,7 @@ def _resolve_typed_reg(
     has no declared type, or the runtime type already matches.
     """
     val = _resolve_reg(vm, operand)
-    if not isinstance(operand, str) or not operand.startswith("%"):
-        return val
-    target_type = type_env.register_types.get(operand, "")
-    if not target_type:
-        return val
-    runtime_type = _runtime_type_name(val)
-    if not runtime_type or runtime_type == target_type:
-        return val
-    coercer = conversion_rules.coerce_assignment(runtime_type, target_type)
-    return coercer(val)
+    return _coerce_value(val, operand, type_env, conversion_rules)
 
 
 class Operators:
