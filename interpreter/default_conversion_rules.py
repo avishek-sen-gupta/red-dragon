@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+import math
+from typing import Any, Callable
 
 from interpreter.constants import TypeName
 from interpreter.conversion_rules import ConversionRules
-from interpreter.conversion_result import ConversionResult, IDENTITY_CONVERSION
+from interpreter.conversion_result import (
+    ConversionResult,
+    IDENTITY_CONVERSION,
+    _identity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +26,11 @@ def _to_float(x: Any) -> float:
 
 def _to_int(x: Any) -> int:
     return int(x)
+
+
+def _truncate_to_int(x: Any) -> int:
+    """Truncate toward zero — matches C/Java/COBOL integer assignment semantics."""
+    return math.trunc(x)
 
 
 class DefaultConversionRules(ConversionRules):
@@ -97,3 +107,25 @@ class DefaultConversionRules(ConversionRules):
             return ConversionResult(result_type=TypeName.INT)
 
         return IDENTITY_CONVERSION
+
+    def coerce_assignment(
+        self, value_type: str, target_type: str
+    ) -> Callable[[Any], Any]:
+        if value_type == target_type:
+            return _identity
+
+        pair = (value_type, target_type)
+
+        # Narrowing: Float → Int (truncate toward zero)
+        if pair == (TypeName.FLOAT, TypeName.INT):
+            return _truncate_to_int
+
+        # Widening: Int → Float
+        if pair == (TypeName.INT, TypeName.FLOAT):
+            return _to_float
+
+        # Bool → Int promotion
+        if pair == (TypeName.BOOL, TypeName.INT):
+            return _to_int
+
+        return _identity
