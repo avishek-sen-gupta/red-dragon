@@ -6,6 +6,7 @@ import logging
 import re
 from types import MappingProxyType
 
+from interpreter import constants
 from interpreter.constants import TypeName
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.type_environment import TypeEnvironment
@@ -14,6 +15,7 @@ from interpreter.type_resolver import TypeResolver
 logger = logging.getLogger(__name__)
 
 _FUNC_REF_PATTERN = re.compile(r"<function:")
+_FUNC_REF_EXTRACT = re.compile(constants.FUNC_REF_PATTERN)
 _CLASS_REF_PATTERN = re.compile(r"<class:")
 
 
@@ -27,9 +29,12 @@ def infer_types(
     """
     register_types: dict[str, str] = {}
     var_types: dict[str, str] = {}
+    func_return_types: dict[str, str] = {}
 
     for inst in instructions:
-        _infer_instruction(inst, register_types, var_types, type_resolver)
+        _infer_instruction(
+            inst, register_types, var_types, type_resolver, func_return_types
+        )
 
     logger.debug(
         "Type inference complete: %d register types, %d variable types",
@@ -47,11 +52,23 @@ def _infer_instruction(
     register_types: dict[str, str],
     var_types: dict[str, str],
     type_resolver: TypeResolver,
+    func_return_types: dict[str, str],
 ) -> None:
     """Infer and record the output type for a single instruction."""
     handler = _DISPATCH.get(inst.opcode)
     if handler:
-        handler(inst, register_types, var_types, type_resolver)
+        handler(inst, register_types, var_types, type_resolver, func_return_types)
+
+
+def _infer_label(
+    inst: IRInstruction,
+    register_types: dict[str, str],
+    var_types: dict[str, str],
+    type_resolver: TypeResolver,
+    func_return_types: dict[str, str],
+) -> None:
+    if inst.label and inst.type_hint:
+        func_return_types[inst.label] = inst.type_hint
 
 
 def _infer_symbolic(
@@ -59,6 +76,7 @@ def _infer_symbolic(
     register_types: dict[str, str],
     var_types: dict[str, str],
     type_resolver: TypeResolver,
+    func_return_types: dict[str, str],
 ) -> None:
     if inst.type_hint and inst.result_reg:
         register_types[inst.result_reg] = inst.type_hint
@@ -69,11 +87,21 @@ def _infer_const(
     register_types: dict[str, str],
     var_types: dict[str, str],
     type_resolver: TypeResolver,
+    func_return_types: dict[str, str],
 ) -> None:
-    if inst.result_reg:
-        inferred = _infer_const_type(inst.operands[0] if inst.operands else "None")
-        if inferred:
-            register_types[inst.result_reg] = inferred
+    if not inst.result_reg:
+        return
+    raw = str(inst.operands[0]) if inst.operands else "None"
+    # If this is a function reference, extract name→return-type mapping
+    match = _FUNC_REF_EXTRACT.search(raw)
+    if match:
+        func_name, func_label = match.group(1), match.group(2)
+        if func_label in func_return_types:
+            func_return_types[func_name] = func_return_types[func_label]
+        return
+    inferred = _infer_const_type(raw)
+    if inferred:
+        register_types[inst.result_reg] = inferred
 
 
 def _infer_load_var(
@@ -81,6 +109,7 @@ def _infer_load_var(
     register_types: dict[str, str],
     var_types: dict[str, str],
     type_resolver: TypeResolver,
+    func_return_types: dict[str, str],
 ) -> None:
     name = inst.operands[0] if inst.operands else ""
     if inst.result_reg and name in var_types:
@@ -92,6 +121,7 @@ def _infer_store_var(
     register_types: dict[str, str],
     var_types: dict[str, str],
     type_resolver: TypeResolver,
+    func_return_types: dict[str, str],
 ) -> None:
     name = inst.operands[0] if inst.operands else ""
     if not name:
@@ -109,6 +139,7 @@ def _infer_binop(
     register_types: dict[str, str],
     var_types: dict[str, str],
     type_resolver: TypeResolver,
+    func_return_types: dict[str, str],
 ) -> None:
     if not inst.result_reg or len(inst.operands) < 3:
         return
@@ -125,6 +156,7 @@ def _infer_unop(
     register_types: dict[str, str],
     var_types: dict[str, str],
     type_resolver: TypeResolver,
+    func_return_types: dict[str, str],
 ) -> None:
     if not inst.result_reg or len(inst.operands) < 2:
         return
@@ -138,6 +170,7 @@ def _infer_new_object(
     register_types: dict[str, str],
     var_types: dict[str, str],
     type_resolver: TypeResolver,
+    func_return_types: dict[str, str],
 ) -> None:
     if inst.result_reg and inst.operands:
         class_name = str(inst.operands[0])
@@ -150,6 +183,7 @@ def _infer_new_array(
     register_types: dict[str, str],
     var_types: dict[str, str],
     type_resolver: TypeResolver,
+    func_return_types: dict[str, str],
 ) -> None:
     if inst.result_reg:
         register_types[inst.result_reg] = TypeName.ARRAY
@@ -160,12 +194,18 @@ def _infer_call_function(
     register_types: dict[str, str],
     var_types: dict[str, str],
     type_resolver: TypeResolver,
+    func_return_types: dict[str, str],
 ) -> None:
     if inst.result_reg and inst.type_hint:
         register_types[inst.result_reg] = inst.type_hint
+    elif inst.result_reg and inst.operands:
+        func_name = str(inst.operands[0])
+        if func_name in func_return_types:
+            register_types[inst.result_reg] = func_return_types[func_name]
 
 
 _DISPATCH: dict[Opcode, callable] = {
+    Opcode.LABEL: _infer_label,
     Opcode.SYMBOLIC: _infer_symbolic,
     Opcode.CONST: _infer_const,
     Opcode.LOAD_VAR: _infer_load_var,
