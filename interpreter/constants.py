@@ -65,3 +65,16 @@ FRONTEND_COBOL = "cobol"
 SUPPORTED_DETERMINISTIC_LANGUAGES: tuple[str, ...] = tuple(
     lang.value for lang in Language if lang != Language.COBOL
 )
+
+
+class TypeName(StrEnum):
+    """Canonical type names for the type ontology DAG."""
+
+    ANY = "Any"
+    NUMBER = "Number"
+    INT = "Int"
+    FLOAT = "Float"
+    STRING = "String"
+    BOOL = "Bool"
+    OBJECT = "Object"
+    ARRAY = "Array"
