@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from .constants import TypeName
+from .conversion_rules import ConversionRules
+from .type_environment import TypeEnvironment
 from .vm_types import (  # noqa: F401 — re-exported for backwards compatibility
     SymbolicValue,
     HeapObject,
@@ -156,6 +159,48 @@ def _parse_const(raw: str) -> Any:
     if len(raw) >= 2 and raw[0] in ('"', "'") and raw[-1] == raw[0]:
         return raw[1:-1]
     return raw
+
+
+_PYTHON_TYPE_TO_TYPE_NAME: dict[type, str] = {
+    bool: TypeName.BOOL,
+    int: TypeName.INT,
+    float: TypeName.FLOAT,
+    str: TypeName.STRING,
+}
+
+
+def _runtime_type_name(val: Any) -> str:
+    """Map a Python runtime value to its canonical TypeName.
+
+    bool must be checked before int because ``isinstance(True, int)`` is True.
+    Returns empty string for unrecognised types (no coercion will be applied).
+    """
+    # Exact type lookup avoids isinstance chains and the bool/int subclass trap.
+    return _PYTHON_TYPE_TO_TYPE_NAME.get(type(val), "")
+
+
+def _resolve_typed_reg(
+    vm: VMState,
+    operand: str,
+    type_env: TypeEnvironment,
+    conversion_rules: ConversionRules,
+) -> Any:
+    """Resolve a register value and coerce it to the type declared by *type_env*.
+
+    Falls back to plain ``_resolve_reg`` when the operand is not a register,
+    has no declared type, or the runtime type already matches.
+    """
+    val = _resolve_reg(vm, operand)
+    if not isinstance(operand, str) or not operand.startswith("%"):
+        return val
+    target_type = type_env.register_types.get(operand, "")
+    if not target_type:
+        return val
+    runtime_type = _runtime_type_name(val)
+    if not runtime_type or runtime_type == target_type:
+        return val
+    coercer = conversion_rules.coerce_assignment(runtime_type, target_type)
+    return coercer(val)
 
 
 class Operators:

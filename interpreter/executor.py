@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import logging
+from types import MappingProxyType
 from typing import Any
 
 from .ir import IRInstruction, Opcode
 from .cfg import CFG
+from .conversion_rules import ConversionRules
+from .identity_conversion_rules import IdentityConversionRules
+from .type_environment import TypeEnvironment
 from .vm import (
     VMState,
     SymbolicValue,
@@ -22,6 +26,7 @@ from .vm import (
     Operators,
     _serialize_value,
     _resolve_reg,
+    _resolve_typed_reg,
     _is_symbolic,
     _heap_addr,
     _parse_const,
@@ -32,6 +37,25 @@ from .unresolved_call import UnresolvedCallResolver, SymbolicResolver
 from . import constants
 
 _DEFAULT_RESOLVER = SymbolicResolver()
+
+_EMPTY_TYPE_ENV = TypeEnvironment(
+    register_types=MappingProxyType({}),
+    var_types=MappingProxyType({}),
+    func_signatures=MappingProxyType({}),
+)
+
+_IDENTITY_RULES = IdentityConversionRules()
+
+
+def _typed_resolve(vm: VMState, operand: str, kwargs: dict[str, Any]) -> Any:
+    """Resolve a register with type-aware coercion from kwargs."""
+    return _resolve_typed_reg(
+        vm,
+        operand,
+        kwargs.get("type_env", _EMPTY_TYPE_ENV),
+        kwargs.get("conversion_rules", _IDENTITY_RULES),
+    )
+
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +157,7 @@ def _handle_store_var(
     inst: IRInstruction, vm: VMState, **kwargs: Any
 ) -> ExecutionResult:
     name = inst.operands[0]
-    val = _resolve_reg(vm, inst.operands[1])
+    val = _typed_resolve(vm, inst.operands[1], kwargs)
     return ExecutionResult.success(
         StateUpdate(
             var_writes={name: _serialize_value(val)},
@@ -210,9 +234,9 @@ def _handle_new_array(
 def _handle_store_field(
     inst: IRInstruction, vm: VMState, **kwargs: Any
 ) -> ExecutionResult:
-    obj_val = _resolve_reg(vm, inst.operands[0])
+    obj_val = _typed_resolve(vm, inst.operands[0], kwargs)
     field_name = inst.operands[1]
-    val = _resolve_reg(vm, inst.operands[2])
+    val = _typed_resolve(vm, inst.operands[2], kwargs)
     addr = _heap_addr(obj_val)
     if addr and addr not in vm.heap:
         # Materialise a synthetic heap entry for symbolic objects so that
@@ -243,7 +267,7 @@ def _handle_store_field(
 def _handle_load_field(
     inst: IRInstruction, vm: VMState, **kwargs: Any
 ) -> ExecutionResult:
-    obj_val = _resolve_reg(vm, inst.operands[0])
+    obj_val = _typed_resolve(vm, inst.operands[0], kwargs)
     field_name = inst.operands[1]
     addr = _heap_addr(obj_val)
     if addr and addr not in vm.heap:
@@ -282,9 +306,9 @@ def _handle_load_field(
 def _handle_store_index(
     inst: IRInstruction, vm: VMState, **kwargs: Any
 ) -> ExecutionResult:
-    arr_val = _resolve_reg(vm, inst.operands[0])
-    idx_val = _resolve_reg(vm, inst.operands[1])
-    val = _resolve_reg(vm, inst.operands[2])
+    arr_val = _typed_resolve(vm, inst.operands[0], kwargs)
+    idx_val = _typed_resolve(vm, inst.operands[1], kwargs)
+    val = _typed_resolve(vm, inst.operands[2], kwargs)
     addr = _heap_addr(arr_val)
     if addr and addr not in vm.heap:
         # Materialise a synthetic heap entry for symbolic arrays so that
@@ -315,8 +339,8 @@ def _handle_store_index(
 def _handle_load_index(
     inst: IRInstruction, vm: VMState, **kwargs: Any
 ) -> ExecutionResult:
-    arr_val = _resolve_reg(vm, inst.operands[0])
-    idx_val = _resolve_reg(vm, inst.operands[1])
+    arr_val = _typed_resolve(vm, inst.operands[0], kwargs)
+    idx_val = _typed_resolve(vm, inst.operands[1], kwargs)
     addr = _heap_addr(arr_val)
 
     # Native string/list indexing — bypass heap for raw Python values.
@@ -371,7 +395,7 @@ def _handle_load_index(
 
 
 def _handle_return(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
-    val = _resolve_reg(vm, inst.operands[0]) if inst.operands else None
+    val = _typed_resolve(vm, inst.operands[0], kwargs) if inst.operands else None
     return ExecutionResult.success(
         StateUpdate(
             return_value=_serialize_value(val),
@@ -382,7 +406,7 @@ def _handle_return(inst: IRInstruction, vm: VMState, **kwargs: Any) -> Execution
 
 
 def _handle_throw(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
-    val = _resolve_reg(vm, inst.operands[0]) if inst.operands else None
+    val = _typed_resolve(vm, inst.operands[0], kwargs) if inst.operands else None
     if vm.exception_stack:
         handler = vm.exception_stack.pop()
         # Redirect to the first catch label (or finally if no catch)
@@ -428,7 +452,7 @@ def _handle_try_pop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> Executio
 def _handle_branch_if(
     inst: IRInstruction, vm: VMState, **kwargs: Any
 ) -> ExecutionResult:
-    cond_val = _resolve_reg(vm, inst.operands[0])
+    cond_val = _typed_resolve(vm, inst.operands[0], kwargs)
     targets = inst.label.split(",")
     true_label = targets[0].strip()
     false_label = targets[1].strip() if len(targets) > 1 else None
@@ -458,8 +482,8 @@ def _handle_branch_if(
 
 def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
     oper = inst.operands[0]
-    lhs = _resolve_reg(vm, inst.operands[1])
-    rhs = _resolve_reg(vm, inst.operands[2])
+    lhs = _typed_resolve(vm, inst.operands[1], kwargs)
+    rhs = _typed_resolve(vm, inst.operands[2], kwargs)
 
     if _is_symbolic(lhs) or _is_symbolic(rhs):
         lhs_desc = _symbolic_name(lhs)
@@ -493,7 +517,7 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
 
 def _handle_unop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
     oper = inst.operands[0]
-    operand = _resolve_reg(vm, inst.operands[1])
+    operand = _typed_resolve(vm, inst.operands[1], kwargs)
     if _is_symbolic(operand):
         op_desc = _symbolic_name(operand)
         sym = vm.fresh_symbolic(hint=f"{oper}{op_desc}")
@@ -595,10 +619,10 @@ def _handle_write_region(
 
     Write bytes from value_reg (a list[int]) into the region at the given offset.
     """
-    region_addr = _resolve_reg(vm, inst.operands[0])
-    offset = _resolve_reg(vm, inst.operands[1])
+    region_addr = _typed_resolve(vm, inst.operands[0], kwargs)
+    offset = _typed_resolve(vm, inst.operands[1], kwargs)
     length = inst.operands[2]
-    value = _resolve_reg(vm, inst.operands[3])
+    value = _typed_resolve(vm, inst.operands[3], kwargs)
 
     has_symbolic_elements = isinstance(value, list) and any(
         _is_symbolic(v) for v in value
@@ -637,8 +661,8 @@ def _handle_load_region(
 
     Read bytes from the region and return as list[int].
     """
-    region_addr = _resolve_reg(vm, inst.operands[0])
-    offset = _resolve_reg(vm, inst.operands[1])
+    region_addr = _typed_resolve(vm, inst.operands[0], kwargs)
+    offset = _typed_resolve(vm, inst.operands[1], kwargs)
     length = inst.operands[2]
 
     if _is_symbolic(region_addr) or _is_symbolic(offset):
@@ -847,7 +871,7 @@ def _handle_call_function(
 ) -> ExecutionResult:
     func_name = inst.operands[0]
     arg_regs = inst.operands[1:]
-    args = [_resolve_reg(vm, a) for a in arg_regs]
+    args = [_typed_resolve(vm, a, kwargs) for a in arg_regs]
 
     # 0. Try I/O provider (for __cobol_* calls)
     if (
@@ -932,10 +956,10 @@ def _handle_call_method(
     call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
     **kwargs: Any,
 ) -> ExecutionResult:
-    obj_val = _resolve_reg(vm, inst.operands[0])
+    obj_val = _typed_resolve(vm, inst.operands[0], kwargs)
     method_name = inst.operands[1]
     arg_regs = inst.operands[2:]
-    args = [_resolve_reg(vm, a) for a in arg_regs]
+    args = [_typed_resolve(vm, a, kwargs) for a in arg_regs]
 
     # If the object is a FUNC_REF, invoke it directly (e.g. .call(), .apply())
     func_ref = _parse_func_ref(obj_val)
@@ -995,9 +1019,9 @@ def _handle_call_unknown(
     **kwargs: Any,
 ) -> ExecutionResult:
     """Handle CALL_UNKNOWN — dynamic call target, resolve via configured strategy."""
-    target_val = _resolve_reg(vm, inst.operands[0])
+    target_val = _typed_resolve(vm, inst.operands[0], kwargs)
     arg_regs = inst.operands[1:]
-    args = [_resolve_reg(vm, a) for a in arg_regs]
+    args = [_typed_resolve(vm, a, kwargs) for a in arg_regs]
 
     # If the target resolves to a FUNC_REF, invoke it directly
     user_result = _try_user_function_call(
@@ -1055,6 +1079,8 @@ class LocalExecutor:
         current_label: str = "",
         ip: int = 0,
         call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
+        type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
+        conversion_rules: ConversionRules = _IDENTITY_RULES,
     ) -> ExecutionResult:
         handler = cls.DISPATCH.get(inst.opcode)
         if not handler:
@@ -1067,6 +1093,8 @@ class LocalExecutor:
             current_label=current_label,
             ip=ip,
             call_resolver=call_resolver,
+            type_env=type_env,
+            conversion_rules=conversion_rules,
         )
 
 
@@ -1078,6 +1106,8 @@ def _try_execute_locally(
     current_label: str = "",
     ip: int = 0,
     call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
+    type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
+    conversion_rules: ConversionRules = _IDENTITY_RULES,
 ) -> ExecutionResult:
     """Try to execute an instruction without the LLM.
 
@@ -1085,5 +1115,13 @@ def _try_execute_locally(
     handled locally, and the StateUpdate if so.
     """
     return LocalExecutor.execute(
-        inst, vm, cfg, registry, current_label, ip, call_resolver
+        inst,
+        vm,
+        cfg,
+        registry,
+        current_label,
+        ip,
+        call_resolver,
+        type_env,
+        conversion_rules,
     )
