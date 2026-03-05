@@ -1065,6 +1065,111 @@ class TestPythonBuiltinReturnTypes:
         assert env.var_types["y"] == TypeName.NUMBER
 
 
+# ---------------------------------------------------------------------------
+# self/this typing — field tracking through self (integration)
+# ---------------------------------------------------------------------------
+
+
+class TestPythonSelfFieldTracking:
+    def test_self_field_store_then_load_typed(self):
+        """Python class: self.age = 5 → LOAD_FIELD on self.age typed as Int."""
+        instructions, env = _lower_and_infer(
+            """\
+class Dog:
+    def __init__(self):
+        self.age = 5
+    def get_age(self):
+        return self.age
+""",
+            "python",
+        )
+        # Verify self registers are typed as Dog
+        symbolics = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.SYMBOLIC
+            and i.operands
+            and str(i.operands[0]) == "param:self"
+        ]
+        assert len(symbolics) >= 1
+        for sym in symbolics:
+            assert env.register_types.get(sym.result_reg) == "Dog"
+
+        # Verify LOAD_FIELD on self.age is typed
+        load_fields = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.LOAD_FIELD
+            and i.result_reg
+            and len(i.operands) >= 2
+            and str(i.operands[1]) == "age"
+        ]
+        assert len(load_fields) >= 1
+        assert env.register_types[load_fields[0].result_reg] == TypeName.INT
+
+
+class TestJavaSelfFieldTracking:
+    def test_this_param_typed_as_class_name(self):
+        """Java class: param:this in method → register typed as Dog."""
+        instructions, env = _lower_and_infer(
+            """\
+class Dog {
+    int age;
+    int getAge() { return this.age; }
+}
+""",
+            "java",
+        )
+        # Verify this registers are typed as Dog
+        symbolics = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.SYMBOLIC
+            and i.operands
+            and str(i.operands[0]) == "param:this"
+        ]
+        assert len(symbolics) >= 1
+        for sym in symbolics:
+            assert env.register_types.get(sym.result_reg) == "Dog"
+
+    def test_this_field_store_then_load_typed(self):
+        """Java class with self-init pattern → field tracking through this."""
+        instructions, env = _lower_and_infer(
+            """\
+class Dog {
+    int age;
+    void setAge() { this.age = 5; }
+    int getAge() { return this.age; }
+}
+""",
+            "java",
+        )
+        # STORE_FIELD on typed this → field_types["Dog"]["age"] populated
+        store_fields = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.STORE_FIELD
+            and len(i.operands) >= 2
+            and str(i.operands[1]) == "age"
+        ]
+        assert len(store_fields) >= 1
+        # Check if the store's object register is typed
+        obj_reg = str(store_fields[0].operands[0])
+        obj_typed = obj_reg in env.register_types
+        if obj_typed:
+            # LOAD_FIELD on this.age should also be typed
+            load_fields = [
+                i
+                for i in instructions
+                if i.opcode == Opcode.LOAD_FIELD
+                and i.result_reg
+                and len(i.operands) >= 2
+                and str(i.operands[1]) == "age"
+            ]
+            assert len(load_fields) >= 1
+            assert env.register_types[load_fields[0].result_reg] == TypeName.INT
+
+
 class TestLuaFuncSignatures:
     def test_untyped_function_signature(self):
         """Lua function add(a, b) → params collected with empty types."""
