@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 def lower_local_var_decl(ctx: TreeSitterEmitContext, node) -> None:
     raw_type = extract_type_from_field(ctx, node, "type")
-    type_hint = normalize_type_hint(raw_type, ctx.language)
+    type_hint = normalize_type_hint(raw_type, ctx.type_map)
     for child in node.children:
         if child.type == "variable_declarator":
             name_node = child.child_by_field_name("name")
@@ -237,7 +237,7 @@ def _lower_constructor_decl(ctx: TreeSitterEmitContext, node) -> None:
 
 def _lower_field_decl(ctx: TreeSitterEmitContext, node) -> None:
     raw_type = extract_type_from_field(ctx, node, "type")
-    type_hint = normalize_type_hint(raw_type, ctx.language)
+    type_hint = normalize_type_hint(raw_type, ctx.type_map)
     for child in node.children:
         if child.type == "variable_declarator":
             name_node = child.child_by_field_name("name")

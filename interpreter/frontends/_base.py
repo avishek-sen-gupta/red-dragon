@@ -161,6 +161,10 @@ class BaseFrontend(Frontend):
         """Override to return expr dispatch table for context-mode dispatch."""
         return {}
 
+    def _build_type_map(self) -> dict[str, str]:
+        """Override to return a raw-type → canonical-type mapping."""
+        return {}
+
     # ── entry point ──────────────────────────────────────────────
 
     def lower(self, source: bytes) -> list[IRInstruction]:
@@ -197,6 +201,7 @@ class BaseFrontend(Frontend):
             language=self._language,
             observer=self._observer,
             constants=grammar_constants,
+            type_map=self._build_type_map(),
             stmt_dispatch=self._build_stmt_dispatch(),
             expr_dispatch=self._build_expr_dispatch(),
         )

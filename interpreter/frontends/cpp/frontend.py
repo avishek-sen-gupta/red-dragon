@@ -39,6 +39,18 @@ class CppFrontend(CFrontend):
             default_return_value=base.default_return_value,
         )
 
+    def _build_type_map(self) -> dict[str, str]:
+        base = super()._build_type_map()
+        base.update(
+            {
+                "bool": "Bool",
+                "void": "Any",
+                "string": "String",
+                "std::string": "String",
+            }
+        )
+        return base
+
     def _build_expr_dispatch(self) -> dict[str, Callable]:
         dispatch = super()._build_expr_dispatch()
         dispatch.update(

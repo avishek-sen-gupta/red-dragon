@@ -26,7 +26,7 @@ def lower_local_decl_stmt(ctx: TreeSitterEmitContext, node) -> None:
 def lower_variable_declaration(ctx: TreeSitterEmitContext, node) -> None:
     """Lower a variable_declaration node with one or more declarators."""
     raw_type = extract_type_from_field(ctx, node, "type")
-    type_hint = normalize_type_hint(raw_type, ctx.language)
+    type_hint = normalize_type_hint(raw_type, ctx.type_map)
     for child in node.children:
         if child.type == "variable_declarator":
             _lower_csharp_declarator(ctx, child, type_hint=type_hint)

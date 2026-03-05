@@ -70,7 +70,7 @@ def lower_rust_param(ctx: TreeSitterEmitContext, child) -> None:
     if pname is None:
         return
     raw_type = extract_type_from_field(ctx, child, "type")
-    type_hint = normalize_type_hint(raw_type, ctx.language)
+    type_hint = normalize_type_hint(raw_type, ctx.type_map)
     ctx.emit(
         Opcode.SYMBOLIC,
         result_reg=ctx.fresh_reg(),
@@ -134,7 +134,7 @@ def lower_let_decl(ctx: TreeSitterEmitContext, node) -> None:
     pattern_node = node.child_by_field_name("pattern")
     value_node = node.child_by_field_name("value")
     raw_type = extract_type_from_field(ctx, node, "type")
-    type_hint = normalize_type_hint(raw_type, ctx.language)
+    type_hint = normalize_type_hint(raw_type, ctx.type_map)
     if value_node:
         val_reg = ctx.lower_expr(value_node)
     else:
@@ -346,7 +346,7 @@ def lower_const_item(ctx: TreeSitterEmitContext, node) -> None:
     value_node = node.child_by_field_name("value")
     var_name = ctx.node_text(name_node) if name_node else "__const"
     raw_type = extract_type_from_field(ctx, node, "type")
-    type_hint = normalize_type_hint(raw_type, ctx.language)
+    type_hint = normalize_type_hint(raw_type, ctx.type_map)
 
     if value_node:
         val_reg = ctx.lower_expr(value_node)
@@ -374,7 +374,7 @@ def lower_static_item(ctx: TreeSitterEmitContext, node) -> None:
     value_node = node.child_by_field_name("value")
     var_name = ctx.node_text(name_node) if name_node else "__static"
     raw_type = extract_type_from_field(ctx, node, "type")
-    type_hint = normalize_type_hint(raw_type, ctx.language)
+    type_hint = normalize_type_hint(raw_type, ctx.type_map)
 
     if value_node:
         val_reg = ctx.lower_expr(value_node)

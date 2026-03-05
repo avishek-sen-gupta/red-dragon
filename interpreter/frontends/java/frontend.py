@@ -27,6 +27,28 @@ class JavaFrontend(BaseFrontend):
             block_node_types=frozenset({"block", "program"}),
         )
 
+    def _build_type_map(self) -> dict[str, str]:
+        return {
+            "int": "Int",
+            "long": "Int",
+            "short": "Int",
+            "byte": "Int",
+            "char": "Int",
+            "Integer": "Int",
+            "Long": "Int",
+            "Short": "Int",
+            "Byte": "Int",
+            "Character": "Int",
+            "double": "Float",
+            "float": "Float",
+            "Double": "Float",
+            "Float": "Float",
+            "boolean": "Bool",
+            "Boolean": "Bool",
+            "String": "String",
+            "void": "Any",
+        }
+
     def _build_expr_dispatch(self) -> dict[str, Callable]:
         return {
             "identifier": common_expr.lower_identifier,
