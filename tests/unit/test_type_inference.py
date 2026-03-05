@@ -383,6 +383,45 @@ class TestNullTypeResolver:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# CALL_FUNCTION
+# ---------------------------------------------------------------------------
+
+
+class TestCallFunctionInference:
+    def test_call_function_with_type_hint_sets_register_type(self):
+        """Constructor CALL_FUNCTION with type_hint → register gets that type."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(
+                Opcode.CALL_FUNCTION,
+                result_reg="%0",
+                operands=["Dog", "%1", "%2"],
+                type_hint="Dog",
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == "Dog"
+
+    def test_call_function_without_type_hint_leaves_register_untyped(self):
+        """Regular CALL_FUNCTION (no type_hint) → register has no type."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(
+                Opcode.CALL_FUNCTION,
+                result_reg="%0",
+                operands=["someFunction", "%1"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert "%0" not in env.register_types
+
+
+# ---------------------------------------------------------------------------
+# Immutability
+# ---------------------------------------------------------------------------
+
+
 class TestImmutability:
     def test_type_environment_is_frozen(self):
         instructions = [

@@ -57,6 +57,7 @@ def lower_object_creation(ctx: TreeSitterEmitContext, node) -> str:
         result_reg=reg,
         operands=[type_name] + arg_regs,
         node=node,
+        type_hint=type_name,
     )
     return reg
 

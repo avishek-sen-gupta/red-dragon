@@ -371,6 +371,7 @@ def lower_new_expr(ctx: TreeSitterEmitContext, node) -> str:
         result_reg=reg,
         operands=[type_name],
         node=node,
+        type_hint=type_name,
     )
     return reg
 
