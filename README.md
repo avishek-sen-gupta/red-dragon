@@ -520,6 +520,27 @@ The **Exercism suite** (`tests/unit/exercism/`) pulls canonical test data from [
 
 </details>
 
+## Code quality
+
+Static analysis tools run in CI as a report-only job (non-blocking). To run locally:
+
+```bash
+poetry run radon cc interpreter/ -s -n C       # cyclomatic complexity (grade C and above)
+poetry run radon mi interpreter/ -s -n B        # maintainability index (grade B and below)
+poetry run pylint interpreter/ --exit-zero      # linting (report only)
+poetry run lint-imports                         # architectural import contracts
+poetry run pydeps interpreter --no-show -T png  # dependency graph (requires graphviz)
+```
+
+| Tool | Purpose |
+|------|---------|
+| [radon](https://radon.readthedocs.io/) | Cyclomatic complexity and maintainability index |
+| [pylint](https://pylint.readthedocs.io/) | Static linting (configured in `.pylintrc`) |
+| [import-linter](https://import-linter.readthedocs.io/) | Architectural boundary contracts (configured in `.importlinter`) |
+| [pydeps](https://github.com/thebjorn/pydeps) | Module dependency visualization |
+
+Import-linter enforces two architectural contracts: the VM/executor/run layer must not import frontends, and the IR module must remain a leaf with no imports from other interpreter modules.
+
 ## Documentation
 
 - **[VM Design Document](docs/notes-on-vm-design.md)** — Comprehensive technical deep-dive into the VM architecture: IR design, CFG construction, state model, execution engine, call dispatch, symbolic execution, closures, LLM fallback, dataflow analysis, and end-to-end worked examples with code references

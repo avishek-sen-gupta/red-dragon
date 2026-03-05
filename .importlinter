@@ -1,0 +1,25 @@
+[importlinter]
+root_packages =
+    interpreter
+
+[importlinter:contract:vm-no-frontend]
+name = VM must not import frontends
+type = forbidden
+source_modules =
+    interpreter.vm
+    interpreter.executor
+forbidden_modules =
+    interpreter.frontends
+
+[importlinter:contract:ir-is-leaf]
+name = IR module must not import other interpreter modules
+type = forbidden
+source_modules =
+    interpreter.ir
+forbidden_modules =
+    interpreter.vm
+    interpreter.executor
+    interpreter.cfg
+    interpreter.frontends
+    interpreter.run
+    interpreter.backend

@@ -1,0 +1,46 @@
+[MAIN]
+# Scope: interpreter/ only (not tests)
+ignore=tests
+
+[MESSAGES CONTROL]
+# Disable rules that conflict with project style or are too noisy:
+# - too-few-public-methods: dataclasses and single-responsibility classes are common
+# - no-self-use: project bans static methods, so instance methods without self are expected
+# - missing-module-docstring, missing-class-docstring, missing-function-docstring: not required
+# - too-many-arguments: functional style often passes many explicit args
+# - too-many-instance-attributes: dataclasses can have many fields
+# - line-too-long: Black handles line length
+# - fixme: allow TODO/FIXME comments
+# - import-error: some optional deps may not be installed
+# - too-many-locals: functional decomposition sometimes needs locals
+# - too-many-branches: complex lowering logic in frontends
+# - too-many-statements: same reason
+# - too-many-return-statements: early-return style produces many returns
+# - duplicate-code: cross-language frontends share structural patterns
+# - broad-except: project avoids defensive programming but some exists
+# - unnecessary-lambda: sometimes used for clarity
+disable=
+    too-few-public-methods,
+    no-self-use,
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    too-many-arguments,
+    too-many-instance-attributes,
+    line-too-long,
+    fixme,
+    import-error,
+    too-many-locals,
+    too-many-branches,
+    too-many-statements,
+    too-many-return-statements,
+    duplicate-code,
+    broad-except,
+    unnecessary-lambda
+
+[FORMAT]
+max-line-length=120
+
+[BASIC]
+# Allow short variable names common in IR/compiler code (r0, op, ir, cfg, etc.)
+good-names=i,j,k,v,e,f,n,x,r,op,ir,fn,vm,bb,pc,lhs,rhs,cfg,src,dst
