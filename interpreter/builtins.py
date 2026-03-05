@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from .constants import ARR_ADDR_PREFIX
@@ -10,6 +11,8 @@ from .vm_types import HeapObject
 from .cobol.byte_builtins import BYTE_BUILTINS
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
+
+logger = logging.getLogger(__name__)
 
 
 def _builtin_len(args: list[Any], vm: VMState) -> Any:
@@ -38,7 +41,8 @@ def _builtin_range(args: list[Any], vm: VMState) -> Any:
 
 
 def _builtin_print(args: list[Any], vm: VMState) -> Any:
-    return None  # print returns None (the actual Python value)
+    logger.info("[VM print] %s", " ".join(str(a) for a in args))
+    return None
 
 
 def _builtin_int(args: list[Any], vm: VMState) -> Any:
