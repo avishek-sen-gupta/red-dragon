@@ -36,7 +36,7 @@ This document captures key architectural decisions made during the development o
 
 ### ADR-004: Heap materialisation for symbolic field access (2026-02-25)
 
-**Context:** When symbolic execution accesses `obj.field` on a symbolic object, repeated accesses to the same field were creating distinct symbolic values each time, breaking data-flow identity.
+**Context:** When the VM accesses `obj.field` on a symbolic object, repeated accesses to the same field were creating distinct symbolic values each time, breaking data-flow identity.
 
 **Decision:** Materialise a heap object for symbolic values on first field access. Subsequent accesses to the same field on the same object return the same symbolic value, maintaining referential consistency.
 

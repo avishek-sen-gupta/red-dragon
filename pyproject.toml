@@ -1,7 +1,7 @@
 [project]
 name = "red-dragon"
 version = "0.1.0"
-description = "Multi-language LLM-assisted symbolic execution and dataflow analysis"
+description = "Multi-language LLM-assisted code analysis and execution"
 authors = [
     {name = "asgupta"}
 ]
