@@ -27,6 +27,8 @@ _VALUE_PRODUCERS: frozenset[Opcode] = frozenset(
         Opcode.CALL_FUNCTION,
         Opcode.CALL_METHOD,
         Opcode.CALL_UNKNOWN,
+        Opcode.ALLOC_REGION,
+        Opcode.LOAD_REGION,
     }
 )
 
@@ -149,6 +151,12 @@ def _uses_of(instruction: IRInstruction) -> list[str]:
         return [operands[0]]
     if op == Opcode.THROW and len(operands) >= 1:
         return [operands[0]]
+    if op == Opcode.ALLOC_REGION:
+        return [o for o in operands if isinstance(o, str) and o.startswith("%")]
+    if op == Opcode.LOAD_REGION and len(operands) >= 2:
+        return [operands[0], operands[1]]
+    if op == Opcode.WRITE_REGION and len(operands) >= 4:
+        return [operands[0], operands[1], operands[3]]
     return []
 
 

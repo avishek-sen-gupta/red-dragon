@@ -367,7 +367,7 @@ vm = run(source, language="python", unresolved_call_strategy=UnresolvedCallStrat
 
 ## Dataflow analysis
 
-Iterative intraprocedural analysis on the CFG: **reaching definitions**, **def-use chains**, and **variable dependency graphs** (both direct and transitive closure).
+Iterative intraprocedural analysis on the CFG: **reaching definitions**, **def-use chains**, and **variable dependency graphs** (both direct and transitive closure). Covers all value-producing opcodes including byte-addressed memory region operations (`ALLOC_REGION`, `LOAD_REGION`, `WRITE_REGION`), ensuring complete dataflow tracking for COBOL programs.
 
 ### Example: dependency graph
 
