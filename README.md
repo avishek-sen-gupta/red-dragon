@@ -16,11 +16,40 @@ When source is complete and all dependencies are present, the entire pipeline (p
 
 Concretely, RedDragon:
 
-- **Parses and lowers** source in 15 languages via tree-sitter (with optional LLM-assisted repair of malformed syntax), COBOL via ProLeap parser bridge, or **any language** via full LLM-based lowering (including chunked lowering for large files) — each frontend owns its parsing internally; callers only provide `source: bytes`
-- **Produces** a universal flattened three-address code IR ([27 opcodes](docs/ir-reference.md), including 3 byte-addressed memory region opcodes and 2 named continuation opcodes) with structured source location traceability (every IR instruction from deterministic frontends carries its originating AST span; LLM frontends lack AST nodes and produce `NO_SOURCE_LOCATION`); **frontend type annotation extraction** populates a `TypeEnvironmentBuilder` during lowering (12 statically-typed frontends extract type annotations from tree-sitter ASTs and normalize them to canonical type names: `Int`, `Float`, `Bool`, `String`, etc.; the builder accumulates register types, variable types, function return types, and function parameter types directly, keeping IR instructions purely about computation and control flow) for type-aware execution backed by a pluggable **type ontology** (TypeGraph DAG with subtype queries, ConversionRules for operator coercion, TypeResolver for BINOP dispatch); a **static type inference pass** (`infer_types()`) accepts the pre-seeded `TypeEnvironmentBuilder` and propagates types through register and variable chains (CONST→STORE_VAR→LOAD_VAR→BINOP→UNOP→CALL_FUNCTION→CALL_UNKNOWN→CALL_METHOD→STORE_FIELD→LOAD_FIELD→STORE_INDEX→LOAD_INDEX→ALLOC_REGION→LOAD_REGION→RETURN), including **self/this class typing** (`param:self`/`param:this`/`param:$this` inside class scope automatically typed as the enclosing class, enabling field type tracking and CALL_METHOD typing on self/this for all OOP languages), **function return type inference** (12 frontends seed return types into the `TypeEnvironmentBuilder` during lowering; the inference pass propagates return types to CALL_FUNCTION result registers; unannotated functions get return types backfilled from typed RETURN expressions), **builtin return types** (`len`→Int, `str`→String, `range`→Array, `abs`→Number, etc.), **UNOP refinement** (`not`/`!`→Bool, `#`→Int), **class method return types** (class scope tracking via LABEL prefixes, method return type recording, CALL_METHOD dispatch with fallback to global function table), **class field type tracking** (STORE_FIELD records field types per class, LOAD_FIELD looks them up), **region tagging** (ALLOC_REGION→Region, LOAD_REGION→Array), **CALL_UNKNOWN resolution** (indirect calls through registers resolved via variable-to-function mapping with builtin fallback), **array element type tracking** (STORE_INDEX records element types per array register, LOAD_INDEX looks them up), and **function signature collection** (parameter names and types are collected from SYMBOLIC `param:` instructions and combined with return types into `FunctionSignature` records keyed by user-facing function name), producing an immutable `TypeEnvironment` lookup table — the LLM frontend uses the LLM as a **compiler frontend**, constrained by a formal IR schema with concrete patterns
+- **Parses and lowers** source in 15 languages via tree-sitter (with optional LLM-assisted repair), COBOL via ProLeap bridge, or **any language** via full LLM-based lowering — each frontend owns its parsing internally; callers only provide `source: bytes`
+- **Produces** a universal flattened three-address code [IR (27 opcodes)](docs/ir-reference.md) with structured source location traceability
+- **Extracts and infers types** — see [Type system](#type-system) below
 - **Builds** control flow graphs from IR instructions
 - **Analyses** data flow via iterative reaching definitions, def-use chains, and variable dependency graphs
-- **Executes** programs via a deterministic VM — tracking data flow through incomplete programs with missing imports or unknown externals entirely without LLM calls — with **write-time type coercion** in `apply_update` that coerces register values to their statically-inferred types using `TypeEnvironment` and `ConversionRules` at the point of write (e.g. Float→Int via `math.trunc` for array indices computed by division), so all downstream reads get correctly-typed values for free, and a configurable **LLM plausible-value resolver** that can replace symbolic placeholders with concrete values for unresolved function/method calls
+- **Executes** programs via a deterministic VM with **write-time type coercion** and a configurable **LLM plausible-value resolver** for unresolved calls — see [VM features](#vm-features) below
+
+### Type system
+
+RedDragon has a two-phase type system: **frontend extraction** and **static inference**.
+
+**Frontend type extraction** — 13 statically-typed frontends extract type annotations from tree-sitter ASTs during lowering and normalize them to canonical names (`Int`, `Float`, `Bool`, `String`, etc.). Seeds are accumulated in a `TypeEnvironmentBuilder` covering register types, variable types, function return types, and parameter types. IR instructions stay purely about computation and control flow.
+
+**Static type inference** — `infer_types()` accepts the pre-seeded builder and propagates types through register/variable chains across 15 opcodes (CONST through RETURN). The inference pass handles:
+
+- **Self/this class typing** — `param:self`/`param:this`/`param:$this` inside class scope are automatically typed as the enclosing class, enabling field tracking and method typing on self/this
+- **Function return types** — 13 frontends seed return types during lowering; the inference pass propagates them to CALL_FUNCTION result registers; unannotated functions get return types backfilled from typed RETURN expressions
+- **Builtin return types** — `len`→Int, `str`→String, `range`→Array, `abs`→Number, etc.
+- **UNOP refinement** — `not`/`!`→Bool, `#`→Int
+- **Class method return types** — class scope tracking via LABEL prefixes, CALL_METHOD dispatch with fallback to global function table
+- **Class field type tracking** — STORE_FIELD records field types per class, LOAD_FIELD looks them up
+- **CALL_UNKNOWN resolution** — indirect calls through registers resolved via variable-to-function mapping with builtin fallback
+- **Array element type tracking** — STORE_INDEX records element types per array register, LOAD_INDEX retrieves them
+- **Region tagging** — ALLOC_REGION→Region, LOAD_REGION→Array
+- **Function signature collection** — parameter names/types from SYMBOLIC `param:` instructions combined with return types into `FunctionSignature` records
+
+The result is an immutable `TypeEnvironment` lookup table, backed by a pluggable **type ontology** (TypeGraph DAG with subtype queries, ConversionRules for operator coercion, TypeResolver for BINOP dispatch).
+
+### VM features
+
+The VM executes programs deterministically, tracking data flow through incomplete programs with missing imports or unknown externals entirely **without LLM calls**.
+
+- **Write-time type coercion** — coerces register values to their statically-inferred types at the point of write (e.g. Float→Int via `math.trunc` for array indices), so all downstream reads get correctly-typed values
+- **LLM plausible-value resolver** — optionally replaces symbolic placeholders with concrete values for unresolved function/method calls
 
 ## How it works
 
@@ -343,7 +372,16 @@ result = factorial(5)
 Final state: result = 120  (67 steps, 0 LLM calls)
 ```
 
-The VM also handles classes with heap allocation, method dispatch, field access, closures with shared mutable environments (capture-by-reference — mutations inside closures persist across calls and are visible to sibling closures from the same scope), byte-addressed memory regions (`ALLOC_REGION`/`WRITE_REGION`/`LOAD_REGION` for COBOL-style REDEFINES overlays), named continuations (`SET_CONTINUATION`/`RESUME_CONTINUATION` for COBOL PERFORM return semantics), **data layout preservation** (COBOL field names, offsets, lengths, and type metadata are attached to `VMState.data_layout` after execution — enabling field-name-based memory inspection instead of raw byte offsets), and builtins (`len`, `range`, `print`, `int`, `str`, byte-manipulation primitives, etc.) — all deterministically. The interpreter's execution engine is split into focused modules: `interpreter/vm_types.py` (VM data types), `interpreter/cfg_types.py` (CFG data types), `interpreter/run_types.py` (pipeline config/stats types), `interpreter/registry.py` (function/class registry), `interpreter/builtins.py` (built-in function table), `interpreter/executor.py` (opcode handlers and dispatch), and `interpreter/cobol/` (COBOL type system, EBCDIC tables, and IR encoder/decoder builders).
+The VM also handles — all deterministically:
+
+- **Classes** — heap allocation, method dispatch, field access
+- **Closures** — shared mutable environments (capture-by-reference); mutations persist across calls and are visible to sibling closures
+- **Byte-addressed memory regions** — `ALLOC_REGION`/`WRITE_REGION`/`LOAD_REGION` for COBOL-style REDEFINES overlays
+- **Named continuations** — `SET_CONTINUATION`/`RESUME_CONTINUATION` for COBOL PERFORM return semantics
+- **Data layout preservation** — COBOL field names, offsets, lengths, and type metadata attached to `VMState.data_layout` after execution
+- **Builtins** — `len`, `range`, `print`, `int`, `str`, byte-manipulation primitives, etc.
+
+The execution engine is split into focused modules: `vm_types.py`, `cfg_types.py`, `run_types.py`, `registry.py`, `builtins.py`, `executor.py` (opcode handlers), and `cobol/` (COBOL type system, EBCDIC tables, IR encoder/decoder builders).
 
 ## Handling incomplete programs
 
@@ -476,18 +514,51 @@ poetry run pytest tests/integration/ -v  # integration tests only
 poetry run pytest tests/ -n 0 -v     # disable parallel execution
 ```
 
-Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls). Covers all 15 language frontends, LLM client/frontend/chunked frontend, CFG building, dataflow analysis, closures (including mutation persistence and accumulator semantics, cross-language via Rosetta — both nested-function and lambda/arrow-function forms), class/struct instantiation with method dispatch (12 languages: Python, Java, C#, Kotlin, Scala, JS, TS, PHP, Go, C++, Rust, Ruby) and field access (cross-language), exception handling structure (cross-language), **frontend type annotation extraction** (12 statically-typed frontends verified to populate `TypeEnvironmentBuilder` with register types, variable types, function return types, and parameter types from source-level annotations), **static type inference** (register and variable type propagation through CONST/SYMBOLIC/LOAD_VAR/STORE_VAR/BINOP/UNOP/CALL_FUNCTION/CALL_METHOD/STORE_FIELD/LOAD_FIELD/ALLOC_REGION/LOAD_REGION/RETURN chains, with TypeResolver-driven result types; builtin return types for `len`/`str`/`range`/`abs`/etc.; RETURN backfill for unannotated functions; UNOP refinement for `not`/`!`/`#`; class method return types via CALL_METHOD with class scope tracking; class field type tracking via STORE_FIELD/LOAD_FIELD; region tagging; constructor CALL_FUNCTION instructions in Java, C#, C++, and Scala seed register types via builder for return type inference; function signatures with parameter names/types and return types verified across 13 languages), VM execution, factory routing, and the composable API layer.
+Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integration/` (LLM calls, databases, external repos). Unit tests use dependency injection (no real LLM calls).
+
+**Coverage areas:**
+
+- **Language frontends** — all 15 tree-sitter frontends, LLM frontend, chunked LLM frontend
+- **CFG and dataflow** — CFG building, reaching definitions, def-use chains, dependency graphs
+- **Cross-language semantics** — closures (mutation persistence, accumulator semantics, nested-function and lambda forms), classes with method dispatch (12 languages), field access, exception handling, destructuring, variable scoping
+- **Frontend type extraction** — 13 statically-typed frontends verified to populate `TypeEnvironmentBuilder` with register types, variable types, function return types, parameter types, and this/self class typing from source-level annotations
+- **Static type inference** — type propagation through 15 opcode chains, builtin return types, RETURN backfill, UNOP refinement, class method/field tracking, region tagging, CALL_UNKNOWN resolution, array element tracking, function signatures across 13 languages
+- **VM execution** — deterministic execution, write-time type coercion, factory routing
+- **Composable API** — `lower_source`, `lower_and_infer`, `dump_ir`, `build_cfg_from_source`, etc.
 
 ### Rosetta cross-language suite
 
-The **Rosetta suite** (`tests/unit/rosetta/`) implements 15 cross-language test sets (8 algorithms + closures + closures-lambda + classes + exceptions + destructuring + nested functions + variable scoping) and verifies they produce clean, structurally consistent IR. 11 sets cover all 15 languages; the closures-lambda set covers the 5 languages with lambda/arrow-function closure syntax (Python, JavaScript, TypeScript, Kotlin, Scala); the destructuring set covers the 6 languages with dedicated destructuring lowering (Python, JavaScript, TypeScript, Rust, Scala, Kotlin); the nested functions set covers the 10 languages with genuine nested function syntax (Python, JavaScript, TypeScript, Rust, Lua, Ruby, Go, Kotlin, Scala, PHP). Each problem tests:
+The **Rosetta suite** (`tests/unit/rosetta/`) implements 15 cross-language test sets and verifies they produce clean, structurally consistent IR:
+
+- **8 algorithms + closures + classes + exceptions + variable scoping** — all 15 languages
+- **closures-lambda** — 5 languages with lambda/arrow syntax (Python, JS, TS, Kotlin, Scala)
+- **destructuring** — 6 languages (Python, JS, TS, Rust, Scala, Kotlin)
+- **nested functions** — 10 languages (Python, JS, TS, Rust, Lua, Ruby, Go, Kotlin, Scala, PHP)
+
+Each problem tests:
 
 - Entry label presence and minimum instruction count
 - Zero unsupported `SYMBOLIC` nodes
 - Required opcode presence and operator spot-checks
 - Aggregate cross-language variance
 
-**VM execution verification** runs 7 algorithms plus closures, classes, exceptions, destructuring, nested functions, and variable scoping through the VM and asserts correct computed results (factorial=120, fib(10)=55, gcd(48,18)=6, sorted arrays, interprocedural double_add(3,4)=14, closure make_adder(10)(5)=15, counter=3, try-body=-1, destructured a+b=15, nested outer(3)=11, callee(99)=198 with caller's x=42 preserved) with zero LLM calls. Additionally, **inner function scoping** is verified for 7 languages (Python, JavaScript, TypeScript, Rust, Go, Kotlin, Scala) — confirming that inner functions are inaccessible outside the enclosing function's scope (the VM produces a symbolic value instead of a concrete result).
+**VM execution verification** runs 7 algorithms plus closures, classes, exceptions, destructuring, nested functions, and variable scoping through the VM with zero LLM calls, asserting correct computed results:
+
+| Test | Expected |
+|------|----------|
+| factorial | 120 |
+| fib(10) | 55 |
+| gcd(48, 18) | 6 |
+| sorting | sorted arrays |
+| interprocedural double_add(3, 4) | 14 |
+| closure make_adder(10)(5) | 15 |
+| counter | 3 |
+| try-body | -1 |
+| destructured a+b | 15 |
+| nested outer(3) | 11 |
+| callee(99) with caller's x=42 | 198, x preserved |
+
+**Inner function scoping** is verified for 7 languages (Python, JavaScript, TypeScript, Rust, Go, Kotlin, Scala) — inner functions are inaccessible outside the enclosing scope (the VM produces a symbolic value instead of a concrete result).
 
 All frontends emit **canonical Python-form literals** (`"None"`, `"True"`, `"False"`) — language-native forms (`nil`, `null`, `undefined`, `NULL`, `true`, `false`) are canonicalized at lowering time.
 
