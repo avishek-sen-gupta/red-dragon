@@ -84,10 +84,10 @@ For programs with concrete inputs and no external dependencies, the entire execu
 
 ### Prerequisites
 
-- **Python >= 3.10** — [python.org](https://www.python.org/) or your package manager
-- **[Poetry](https://python-poetry.org/)** — `pipx install poetry`
-- **JDK 17+** (COBOL frontend only) — [adoptium.net](https://adoptium.net/) or `brew install openjdk@17`
-- **[Maven](https://maven.apache.org/)** (COBOL frontend only) — `brew install maven`
+- **Python >= 3.10**
+- **Poetry**
+- **JDK 17+** (COBOL frontend only)
+- **Maven** (COBOL frontend only)
 
 ### Full build (including COBOL)
 
