@@ -312,11 +312,14 @@ class TestCrossLanguageConsistency:
         _instructions, env = _lower_and_infer(self.SOURCES[lang], lang)
         return lang, env
 
-    def test_x_has_type(self, lang_env):
+    def test_x_typed_as_int(self, lang_env):
         lang, env = lang_env
         assert (
             "x" in env.var_types
         ), f"[{lang}] expected 'x' in var_types, got: {dict(env.var_types)}"
+        assert (
+            env.var_types["x"] == TypeName.INT
+        ), f"[{lang}] expected x typed as Int, got {env.var_types['x']!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -973,7 +976,7 @@ class Dog {
 
 class TestPythonFieldTypes:
     def test_self_field_store_and_load(self):
-        """Python `self.x = 42` then `y = self.x` → y typed as Int."""
+        """Python `self.age = 5` then `return self.age` → LOAD_FIELD result typed as Int."""
         instructions, env = _lower_and_infer(
             """\
 class Dog:
@@ -984,16 +987,25 @@ class Dog:
 """,
             "python",
         )
-        # Verify STORE_FIELD and LOAD_FIELD instructions exist
         store_fields = [i for i in instructions if i.opcode == Opcode.STORE_FIELD]
-        load_fields = [i for i in instructions if i.opcode == Opcode.LOAD_FIELD]
+        load_fields = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.LOAD_FIELD
+            and i.result_reg
+            and len(i.operands) >= 2
+            and str(i.operands[1]) == "age"
+        ]
         assert len(store_fields) >= 1, "Expected at least one STORE_FIELD"
-        assert len(load_fields) >= 1, "Expected at least one LOAD_FIELD"
+        assert len(load_fields) >= 1, "Expected at least one LOAD_FIELD for 'age'"
+        assert (
+            env.register_types[load_fields[0].result_reg] == TypeName.INT
+        ), f"Expected LOAD_FIELD result typed as Int, got {env.register_types.get(load_fields[0].result_reg)!r}"
 
 
 class TestJavaFieldTypes:
     def test_field_assignment_and_access(self):
-        """Java field store and load → typed."""
+        """Java field store and load → LOAD_FIELD result typed as Int."""
         instructions, env = _lower_and_infer(
             """\
 class Dog {
@@ -1005,9 +1017,19 @@ class Dog {
             "java",
         )
         store_fields = [i for i in instructions if i.opcode == Opcode.STORE_FIELD]
-        load_fields = [i for i in instructions if i.opcode == Opcode.LOAD_FIELD]
+        load_fields = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.LOAD_FIELD
+            and i.result_reg
+            and len(i.operands) >= 2
+            and str(i.operands[1]) == "age"
+        ]
         assert len(store_fields) >= 1, "Expected at least one STORE_FIELD"
-        assert len(load_fields) >= 1, "Expected at least one LOAD_FIELD"
+        assert len(load_fields) >= 1, "Expected at least one LOAD_FIELD for 'age'"
+        assert (
+            env.register_types[load_fields[0].result_reg] == TypeName.INT
+        ), f"Expected LOAD_FIELD result typed as Int, got {env.register_types.get(load_fields[0].result_reg)!r}"
 
 
 class TestPythonBuiltinReturnTypes:
@@ -1124,21 +1146,22 @@ class Dog {
             and str(i.operands[1]) == "age"
         ]
         assert len(store_fields) >= 1
-        # Check if the store's object register is typed
+        # Verify the store's object register is typed as Dog
         obj_reg = str(store_fields[0].operands[0])
-        obj_typed = obj_reg in env.register_types
-        if obj_typed:
-            # LOAD_FIELD on this.age should also be typed
-            load_fields = [
-                i
-                for i in instructions
-                if i.opcode == Opcode.LOAD_FIELD
-                and i.result_reg
-                and len(i.operands) >= 2
-                and str(i.operands[1]) == "age"
-            ]
-            assert len(load_fields) >= 1
-            assert env.register_types[load_fields[0].result_reg] == TypeName.INT
+        assert (
+            obj_reg in env.register_types
+        ), f"Expected STORE_FIELD object register {obj_reg} to be typed"
+        # LOAD_FIELD on this.age should also be typed
+        load_fields = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.LOAD_FIELD
+            and i.result_reg
+            and len(i.operands) >= 2
+            and str(i.operands[1]) == "age"
+        ]
+        assert len(load_fields) >= 1
+        assert env.register_types[load_fields[0].result_reg] == TypeName.INT
 
 
 class TestThisParamInFuncSignatures:

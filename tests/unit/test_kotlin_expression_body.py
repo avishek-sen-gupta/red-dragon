@@ -92,5 +92,11 @@ class TestKotlinBlockBodyUnchanged:
         func_body = _instructions_between_labels(instructions, "func_f", "end_f")
         returns = [i for i in func_body if i.opcode == Opcode.RETURN]
         assert len(returns) >= 1, "expected at least one RETURN in function body"
-        consts = _find_all(instructions, Opcode.CONST)
-        assert any("42" in i.operands for i in consts), "should contain literal 42"
+        return_reg = returns[0].operands[0]
+        consts = [
+            i
+            for i in func_body
+            if i.opcode == Opcode.CONST and i.result_reg == return_reg
+        ]
+        assert len(consts) >= 1, "RETURN register should come from a CONST"
+        assert "42" in consts[0].operands, "RETURN should carry literal 42"
