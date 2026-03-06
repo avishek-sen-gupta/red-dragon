@@ -13,6 +13,7 @@ from tree_sitter import Node
 
 from .cfg import CFG, build_cfg, cfg_to_mermaid, extract_function_instructions
 from .constants import Language
+from .default_conversion_rules import DefaultConversionRules
 from .frontend import get_frontend
 from .ir import IRInstruction
 from .ir_stats import count_opcodes
@@ -21,6 +22,9 @@ from .registry import build_registry
 from .run import execute_cfg_traced
 from .run_types import VMConfig
 from .trace_types import ExecutionTrace
+from .type_environment import TypeEnvironment
+from .type_inference import infer_types
+from .type_resolver import TypeResolver
 from . import constants
 
 logger = logging.getLogger(__name__)
@@ -60,6 +64,38 @@ def lower_source(
     logger.info("Lowering source (%s, frontend=%s)", lang, frontend_type)
     frontend = get_frontend(lang, frontend_type=frontend_type, llm_provider=backend)
     return frontend.lower(source.encode("utf-8"))
+
+
+def lower_and_infer(
+    source: str,
+    language: str | Language = Language.PYTHON,
+    frontend_type: str = constants.FRONTEND_DETERMINISTIC,
+    backend: str = "claude",
+) -> tuple[list[IRInstruction], TypeEnvironment]:
+    """Parse, lower, and run type inference with frontend-seeded type annotations.
+
+    Composes ``lower_source`` with ``infer_types``, propagating the frontend's
+    ``type_env_builder`` so that language-specific type seeds (e.g. Java's
+    ``int``, ``String``) are preserved in the resulting type environment.
+
+    Args:
+        source: The source code text.
+        language: Source language name (e.g. "python", "javascript", "java").
+        frontend_type: "deterministic", "llm", or "chunked_llm".
+        backend: LLM provider name when using an LLM frontend.
+
+    Returns:
+        A tuple of (instructions, type_environment).
+    """
+    lang = Language(language)
+    logger.info("lower_and_infer: language=%s, frontend=%s", lang, frontend_type)
+    frontend = get_frontend(lang, frontend_type=frontend_type, llm_provider=backend)
+    instructions = frontend.lower(source.encode("utf-8"))
+    resolver = TypeResolver(DefaultConversionRules())
+    env = infer_types(
+        instructions, resolver, type_env_builder=frontend.type_env_builder
+    )
+    return instructions, env
 
 
 def dump_ir(

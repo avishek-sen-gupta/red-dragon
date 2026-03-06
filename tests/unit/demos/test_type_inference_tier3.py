@@ -7,7 +7,7 @@ Exercises 3 features:
   3. STORE_INDEX / LOAD_INDEX (array element type tracking)
 """
 
-from interpreter.api import lower_source
+from interpreter.api import lower_and_infer
 from interpreter.default_conversion_rules import DefaultConversionRules
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
@@ -20,9 +20,7 @@ def _resolver():
 
 
 def _lower_and_infer(source: str, language: str):
-    instructions = lower_source(source, language=language)
-    env = infer_types(instructions, _resolver())
-    return instructions, env
+    return lower_and_infer(source, language=language)
 
 
 class TestSelfThisTyping:

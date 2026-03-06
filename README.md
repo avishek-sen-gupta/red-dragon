@@ -144,7 +144,7 @@ All CLI pipelines are available as composable functions — no argparse required
 #### Deterministic (no LLM calls)
 
 ```python
-from interpreter import lower_source, dump_ir, build_cfg_from_source, dump_cfg, dump_mermaid, extract_function_source, ir_stats, run
+from interpreter import lower_source, lower_and_infer, dump_ir, build_cfg_from_source, dump_cfg, dump_mermaid, extract_function_source, ir_stats, run
 from interpreter.constants import Language
 
 source = """
@@ -171,6 +171,11 @@ mermaid = dump_mermaid(source, function_name="factorial")
 
 # Extract raw source text of a named function (recursive — finds methods and nested functions)
 fn_source = extract_function_source(source, "factorial", language=Language.PYTHON)
+
+# Lower + type inference in one call (propagates frontend type seeds)
+instructions, env = lower_and_infer(source, language=Language.PYTHON)
+print(env.var_types)         # {"result": "Int", ...}
+print(env.func_signatures)   # {"factorial": FunctionSignature(params=(...), return_type="Int")}
 
 # Get opcode frequency counts
 stats = ir_stats(source, language=Language.PYTHON)  # e.g. {"CONST": 3, "STORE_VAR": 2, ...}
@@ -248,6 +253,7 @@ vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
 | Function | Returns | Purpose |
 |---|---|---|
 | `lower_source(source, language, frontend_type, backend)` | `list[IRInstruction]` | Parse + lower source to IR |
+| `lower_and_infer(source, language, frontend_type, backend)` | `(list[IRInstruction], TypeEnvironment)` | Lower + type inference with frontend type seeds |
 | `dump_ir(source, language, frontend_type, backend)` | `str` | IR text output |
 | `build_cfg_from_source(source, language, frontend_type, backend, function_name)` | `CFG` | Parse → lower → optionally slice → build CFG |
 | `dump_cfg(source, language, frontend_type, backend, function_name)` | `str` | CFG text output |

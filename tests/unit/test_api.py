@@ -4,6 +4,7 @@ import pytest
 
 from interpreter.api import (
     lower_source,
+    lower_and_infer,
     dump_ir,
     build_cfg_from_source,
     dump_cfg,
@@ -12,6 +13,7 @@ from interpreter.api import (
 )
 from interpreter.cfg import CFG
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.type_environment import TypeEnvironment
 
 SIMPLE_SOURCE = "x = 42\n"
 
@@ -211,6 +213,43 @@ class TestLowerSourceCobolRouting:
         assert get_frontend_calls[0] == {"language": "cobol", "frontend_type": "cobol"}
         assert len(fake_frontend.lower_calls) == 1
         assert result is fake_instructions
+
+
+JAVA_SOURCE = """\
+class Dog {
+    String name;
+    int age;
+
+    String getName() { return this.name; }
+    int getAge() { return this.age; }
+}
+"""
+
+
+class TestLowerAndInfer:
+    def test_returns_instructions_and_env(self):
+        instructions, env = lower_and_infer(SIMPLE_SOURCE)
+        assert isinstance(instructions, list)
+        assert all(isinstance(inst, IRInstruction) for inst in instructions)
+        assert isinstance(env, TypeEnvironment)
+
+    def test_default_language_is_python(self):
+        instructions, env = lower_and_infer("x = 42\n")
+        assert env.var_types["x"] == "Int"
+
+    def test_propagates_java_type_seeds(self):
+        instructions, env = lower_and_infer(JAVA_SOURCE, language="java")
+        assert "getName" in env.func_signatures
+        assert env.func_signatures["getName"].return_type == "String"
+        assert "getAge" in env.func_signatures
+        assert env.func_signatures["getAge"].return_type == "Int"
+
+    def test_java_this_param_in_func_signatures(self):
+        instructions, env = lower_and_infer(JAVA_SOURCE, language="java")
+        get_age_sig = env.func_signatures["getAge"]
+        this_params = [p for p in get_age_sig.params if p[0] == "this"]
+        assert len(this_params) == 1
+        assert this_params[0][1] == "Dog"
 
 
 class TestCompositionHierarchy:

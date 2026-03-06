@@ -107,6 +107,7 @@ class TreeSitterEmitContext:
         default_factory=TypeEnvironmentBuilder
     )
     _current_func_label: str = ""
+    _current_class_name: str = ""
 
     # ── utility methods ──────────────────────────────────────────
 
@@ -159,6 +160,12 @@ class TreeSitterEmitContext:
             and label.startswith(constants.CLASS_LABEL_PREFIX)
             and not label.startswith(constants.END_CLASS_LABEL_PREFIX)
         ):
+            self._current_class_name = label.removeprefix(
+                constants.CLASS_LABEL_PREFIX
+            ).rsplit("_", 1)[0]
+            self._current_func_label = ""
+        elif label and label.startswith(constants.END_CLASS_LABEL_PREFIX):
+            self._current_class_name = ""
             self._current_func_label = ""
         else:
             self._current_func_label = ""

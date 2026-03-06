@@ -13,7 +13,7 @@ Exercises all 6 new features:
 import logging
 import sys
 
-from interpreter.api import lower_source
+from interpreter.api import lower_and_infer
 from interpreter.constants import Language
 from interpreter.default_conversion_rules import DefaultConversionRules
 from interpreter.ir import Opcode
@@ -28,9 +28,7 @@ def _resolver():
 
 
 def _lower_and_infer(source: str, language: str):
-    instructions = lower_source(source, language=language)
-    env = infer_types(instructions, _resolver())
-    return instructions, env
+    return lower_and_infer(source, language=language)
 
 
 def _header(title: str) -> None:

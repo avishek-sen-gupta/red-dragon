@@ -65,6 +65,17 @@ class TestJavaTypeExtraction:
         _instructions, builder = self._parse("class M { double value = 3.14; }")
         assert builder.var_types.get("value") == "Float"
 
+    def test_this_param_seeded_in_instance_method(self):
+        _instructions, builder = self._parse("class Dog { int getAge() { return 1; } }")
+        this_params = [
+            pt
+            for pts in builder.func_param_types.values()
+            for pt in pts
+            if pt[0] == "this"
+        ]
+        assert len(this_params) >= 1
+        assert this_params[0][1] == "Dog"
+
 
 # ── Go ────────────────────────────────────────────────────────────
 
@@ -184,6 +195,19 @@ class TestCppTypeExtraction:
         assert len(param_types) >= 1
         assert param_types[0][1] == "Float"
 
+    def test_this_param_seeded_in_instance_method(self):
+        _instructions, builder = self._parse(
+            "class Dog { int getAge() { return 1; } };"
+        )
+        this_params = [
+            pt
+            for pts in builder.func_param_types.values()
+            for pt in pts
+            if pt[0] == "this"
+        ]
+        assert len(this_params) >= 1
+        assert this_params[0][1] == "Dog"
+
 
 # ── C# ────────────────────────────────────────────────────────────
 
@@ -210,6 +234,17 @@ class TestCSharpTypeExtraction:
         ]
         assert len(param_types) >= 1
         assert param_types[0][1] == "String"
+
+    def test_this_param_seeded_in_instance_method(self):
+        _instructions, builder = self._parse("class Dog { int GetAge() { return 1; } }")
+        this_params = [
+            pt
+            for pts in builder.func_param_types.values()
+            for pt in pts
+            if pt[0] == "this"
+        ]
+        assert len(this_params) >= 1
+        assert this_params[0][1] == "Dog"
 
 
 # ── Kotlin ────────────────────────────────────────────────────────
@@ -240,6 +275,19 @@ class TestKotlinTypeExtraction:
         _instructions, builder = self._parse('val name: String = "Alice"')
         assert builder.var_types.get("name") == "String"
 
+    def test_this_param_seeded_in_instance_method(self):
+        _instructions, builder = self._parse(
+            "class Dog { fun getAge(): Int { return 1 } }"
+        )
+        this_params = [
+            pt
+            for pts in builder.func_param_types.values()
+            for pt in pts
+            if pt[0] == "this"
+        ]
+        assert len(this_params) >= 1
+        assert this_params[0][1] == "Dog"
+
 
 # ── Scala ─────────────────────────────────────────────────────────
 
@@ -266,6 +314,40 @@ class TestScalaTypeExtraction:
     def test_val_string_carries_type_hint(self):
         _instructions, builder = self._parse('val name: String = "Alice"')
         assert builder.var_types.get("name") == "String"
+
+    def test_this_param_seeded_in_instance_method(self):
+        _instructions, builder = self._parse("class Dog { def getAge(): Int = 1 }")
+        this_params = [
+            pt
+            for pts in builder.func_param_types.values()
+            for pt in pts
+            if pt[0] == "this"
+        ]
+        assert len(this_params) >= 1
+        assert this_params[0][1] == "Dog"
+
+
+# ── JavaScript ────────────────────────────────────────────────────
+
+
+class TestJavaScriptTypeExtraction:
+    def _parse(self, source: str):
+        from interpreter.frontends.javascript import JavaScriptFrontend
+
+        frontend = JavaScriptFrontend(TreeSitterParserFactory(), "javascript")
+        instructions = frontend.lower(source.encode())
+        return instructions, frontend.type_env_builder
+
+    def test_this_param_seeded_in_instance_method(self):
+        _instructions, builder = self._parse("class Dog { getAge() { return 1; } }")
+        this_params = [
+            pt
+            for pts in builder.func_param_types.values()
+            for pt in pts
+            if pt[0] == "this"
+        ]
+        assert len(this_params) >= 1
+        assert this_params[0][1] == "Dog"
 
 
 # ── Pascal ────────────────────────────────────────────────────────
@@ -335,6 +417,17 @@ class TestTypeScriptTypeExtraction:
         ]
         assert len(param_types) >= 1
         assert param_types[0][1] == "String"
+
+    def test_this_param_seeded_in_instance_method(self):
+        _instructions, builder = self._parse("class Dog { getAge() { return 1; } }")
+        this_params = [
+            pt
+            for pts in builder.func_param_types.values()
+            for pt in pts
+            if pt[0] == "this"
+        ]
+        assert len(this_params) >= 1
+        assert this_params[0][1] == "Dog"
 
 
 # ── Python ────────────────────────────────────────────────────────
@@ -409,3 +502,16 @@ class TestPHPTypeExtraction:
         ]
         assert len(param_types) >= 1
         assert param_types[0][1] == "String"
+
+    def test_this_param_seeded_in_instance_method(self):
+        _instructions, builder = self._parse(
+            "<?php class Dog { function getAge() { return 1; } }"
+        )
+        this_params = [
+            pt
+            for pts in builder.func_param_types.values()
+            for pt in pts
+            if pt[0] == "$this"
+        ]
+        assert len(this_params) >= 1
+        assert this_params[0][1] == "Dog"
