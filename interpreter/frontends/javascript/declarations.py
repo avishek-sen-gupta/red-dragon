@@ -180,7 +180,8 @@ def _lower_method_def(ctx: TreeSitterEmitContext, node) -> None:
     return_hint = normalize_type_hint(raw_return.lstrip(": "), ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
 
     if not _has_static_modifier(node):
         _emit_this_param(ctx)
@@ -223,7 +224,8 @@ def lower_js_function_def(ctx: TreeSitterEmitContext, node) -> None:
     return_hint = normalize_type_hint(raw_return.lstrip(": "), ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
 
     if params_node:
         lower_js_params(ctx, params_node)

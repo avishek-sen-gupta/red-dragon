@@ -320,7 +320,7 @@ class TestCrossLanguageConsistency:
 
 
 # ---------------------------------------------------------------------------
-# Return type inference: LABEL type_hint → CALL_FUNCTION result typed
+# Return type inference: func_signatures → CALL_FUNCTION result typed
 # ---------------------------------------------------------------------------
 
 

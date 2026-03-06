@@ -12,6 +12,7 @@ import logging
 from interpreter.api import lower_source
 from interpreter.default_conversion_rules import DefaultConversionRules
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.type_inference import infer_types
 from interpreter.type_resolver import TypeResolver
 
@@ -120,18 +121,16 @@ def demo_call_unknown():
         IRInstruction(opcode=Opcode.LABEL, label="entry"),
         # Define function 'add' with return type Int
         IRInstruction(opcode=Opcode.BRANCH, label="end_add_0"),
-        IRInstruction(opcode=Opcode.LABEL, label="func_add_0", type_hint="Int"),
+        IRInstruction(opcode=Opcode.LABEL, label="func_add_0"),
         IRInstruction(
             opcode=Opcode.SYMBOLIC,
             result_reg="%0",
             operands=["param:a"],
-            type_hint="Int",
         ),
         IRInstruction(
             opcode=Opcode.SYMBOLIC,
             result_reg="%1",
             operands=["param:b"],
-            type_hint="Int",
         ),
         IRInstruction(opcode=Opcode.RETURN, operands=["%2"]),
         IRInstruction(opcode=Opcode.LABEL, label="end_add_0"),
@@ -151,7 +150,12 @@ def demo_call_unknown():
         ),
     ]
 
-    env = infer_types(instructions, _resolver())
+    builder = TypeEnvironmentBuilder(
+        func_return_types={"func_add_0": "Int"},
+        func_param_types={"func_add_0": [("a", "Int"), ("b", "Int")]},
+        register_types={"%0": "Int", "%1": "Int"},
+    )
+    env = infer_types(instructions, _resolver(), type_env_builder=builder)
 
     print("    Instruction sequence:")
     for inst in instructions:

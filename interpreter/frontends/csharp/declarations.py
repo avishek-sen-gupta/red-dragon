@@ -65,8 +65,8 @@ def _lower_csharp_declarator(
         Opcode.STORE_VAR,
         operands=[var_name, val_reg],
         node=node,
-        type_hint=type_hint,
     )
+    ctx.seed_var_type(var_name, type_hint)
 
 
 def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
@@ -104,7 +104,8 @@ def lower_method_decl(
     return_hint = normalize_type_hint(raw_return, ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
 
     if inject_this:
         _emit_this_param(ctx)

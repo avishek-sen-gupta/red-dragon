@@ -129,7 +129,6 @@ class TreeSitterEmitContext:
         label: str = "",
         source_location: SourceLocation = NO_SOURCE_LOCATION,
         node=None,
-        type_hint: str = "",
     ) -> IRInstruction:
         loc = (
             source_location
@@ -144,54 +143,47 @@ class TreeSitterEmitContext:
             label=label or None,
             source_location=loc,
         )
-        self._route_type_hint(opcode, result_reg, resolved_operands, label, type_hint)
+        self._track_label(opcode, label)
         self.instructions.append(inst)
         return inst
 
-    def _route_type_hint(
-        self,
-        opcode: Opcode,
-        result_reg: str,
-        operands: list[Any],
-        label: str,
-        type_hint: str,
-    ) -> None:
-        """Route a type_hint to the appropriate slot in the builder."""
-        if opcode == Opcode.LABEL:
-            if label and label.startswith(constants.FUNC_LABEL_PREFIX):
-                self._current_func_label = label
-                self.type_env_builder.func_param_types.setdefault(label, [])
-                if type_hint:
-                    self.type_env_builder.func_return_types[label] = type_hint
-            elif (
-                label
-                and label.startswith(constants.CLASS_LABEL_PREFIX)
-                and not label.startswith(constants.END_CLASS_LABEL_PREFIX)
-            ):
-                self._current_func_label = ""
-            else:
-                self._current_func_label = ""
+    def _track_label(self, opcode: Opcode, label: str) -> None:
+        """Track current function/class label for param type association."""
+        if opcode != Opcode.LABEL:
             return
+        if label and label.startswith(constants.FUNC_LABEL_PREFIX):
+            self._current_func_label = label
+            self.type_env_builder.func_param_types.setdefault(label, [])
+        elif (
+            label
+            and label.startswith(constants.CLASS_LABEL_PREFIX)
+            and not label.startswith(constants.END_CLASS_LABEL_PREFIX)
+        ):
+            self._current_func_label = ""
+        else:
+            self._current_func_label = ""
 
-        if opcode == Opcode.SYMBOLIC:
-            if type_hint and result_reg:
-                self.type_env_builder.register_types[result_reg] = type_hint
-            if self._current_func_label and operands:
-                operand = str(operands[0])
-                if operand.startswith("param:"):
-                    param_name = operand[len("param:") :]
-                    self.type_env_builder.func_param_types[
-                        self._current_func_label
-                    ].append((param_name, type_hint or ""))
-            return
+    def seed_func_return_type(self, func_label: str, return_type: str) -> None:
+        """Seed the return type for a function label."""
+        if return_type:
+            self.type_env_builder.func_return_types[func_label] = return_type
 
-        if opcode == Opcode.STORE_VAR and type_hint and operands:
-            self.type_env_builder.var_types[str(operands[0])] = type_hint
-            return
+    def seed_register_type(self, reg: str, type_name: str) -> None:
+        """Seed the type for a register."""
+        if reg and type_name:
+            self.type_env_builder.register_types[reg] = type_name
 
-        if opcode == Opcode.CALL_FUNCTION and type_hint and result_reg:
-            self.type_env_builder.register_types[result_reg] = type_hint
-            return
+    def seed_var_type(self, var_name: str, type_name: str) -> None:
+        """Seed the type for a variable."""
+        if var_name and type_name:
+            self.type_env_builder.var_types[var_name] = type_name
+
+    def seed_param_type(self, param_name: str, type_hint: str) -> None:
+        """Seed a parameter type for the current function."""
+        if self._current_func_label:
+            self.type_env_builder.func_param_types[self._current_func_label].append(
+                (param_name, type_hint or "")
+            )
 
     def node_text(self, node) -> str:
         return self.source[node.start_byte : node.end_byte].decode("utf-8")

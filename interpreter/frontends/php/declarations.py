@@ -24,36 +24,40 @@ def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 pname = ctx.node_text(name_node)
                 raw_type = extract_type_from_field(ctx, child, "type")
                 type_hint = normalize_type_hint(raw_type, ctx.type_map)
+                reg = ctx.fresh_reg()
                 ctx.emit(
                     Opcode.SYMBOLIC,
-                    result_reg=ctx.fresh_reg(),
+                    result_reg=reg,
                     operands=[f"{constants.PARAM_PREFIX}{pname}"],
                     node=child,
-                    type_hint=type_hint,
                 )
+                ctx.seed_register_type(reg, type_hint)
+                ctx.seed_param_type(pname, type_hint)
                 ctx.emit(
                     Opcode.STORE_VAR,
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
-                    type_hint=type_hint,
                 )
+                ctx.seed_var_type(pname, type_hint)
         elif child.type == "variadic_parameter":
             name_node = child.child_by_field_name("name")
             if name_node:
                 pname = ctx.node_text(name_node)
                 raw_type = extract_type_from_field(ctx, child, "type")
                 type_hint = normalize_type_hint(raw_type, ctx.type_map)
+                reg = ctx.fresh_reg()
                 ctx.emit(
                     Opcode.SYMBOLIC,
-                    result_reg=ctx.fresh_reg(),
+                    result_reg=reg,
                     operands=[f"{constants.PARAM_PREFIX}{pname}"],
                     node=child,
-                    type_hint=type_hint,
                 )
+                ctx.seed_register_type(reg, type_hint)
+                ctx.seed_param_type(pname, type_hint)
                 ctx.emit(
                     Opcode.STORE_VAR,
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
-                    type_hint=type_hint,
                 )
+                ctx.seed_var_type(pname, type_hint)
         elif child.type == "variable_name":
             pname = ctx.node_text(child)
             ctx.emit(
@@ -100,7 +104,8 @@ def lower_php_func_def(ctx: TreeSitterEmitContext, node) -> None:
     return_hint = normalize_type_hint(raw_return, ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
 
     if params_node:
         lower_php_params(ctx, params_node)
@@ -140,7 +145,8 @@ def lower_php_method_decl(ctx: TreeSitterEmitContext, node) -> None:
     return_hint = normalize_type_hint(raw_return, ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
 
     if not _has_static_modifier(node):
         _emit_this_param(ctx)

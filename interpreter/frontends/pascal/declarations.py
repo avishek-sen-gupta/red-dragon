@@ -137,8 +137,8 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
             Opcode.STORE_VAR,
             operands=[var_name, val_reg],
             node=node,
-            type_hint=type_hint,
         )
+        ctx.seed_var_type(var_name, type_hint)
 
 
 def _pascal_array_size(ctx: TreeSitterEmitContext, type_node) -> int:
@@ -189,7 +189,8 @@ def lower_pascal_proc(ctx: TreeSitterEmitContext, node) -> None:
     return_hint = extract_pascal_return_type(ctx, search_node)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
 
     if args_node:
         _lower_pascal_params(ctx, args_node)
@@ -257,18 +258,20 @@ def _lower_pascal_single_param(ctx: TreeSitterEmitContext, child) -> None:
         if id_node.type != "identifier":
             continue
         pname = ctx.node_text(id_node)
+        _sym_reg = ctx.fresh_reg()
         ctx.emit(
             Opcode.SYMBOLIC,
-            result_reg=ctx.fresh_reg(),
+            result_reg=_sym_reg,
             operands=[f"{constants.PARAM_PREFIX}{pname}"],
             node=child,
-            type_hint=type_hint,
         )
+        ctx.seed_register_type(_sym_reg, type_hint)
+        ctx.seed_param_type(pname, type_hint)
         ctx.emit(
             Opcode.STORE_VAR,
             operands=[pname, f"%{ctx.reg_counter - 1}"],
-            type_hint=type_hint,
         )
+        ctx.seed_var_type(pname, type_hint)
 
 
 def lower_pascal_decl_consts(ctx: TreeSitterEmitContext, node) -> None:

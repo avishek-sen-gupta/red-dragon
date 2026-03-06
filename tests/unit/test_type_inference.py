@@ -13,12 +13,11 @@ from interpreter.type_inference import infer_types, _infer_const_type
 from interpreter.type_resolver import TypeResolver
 
 
-def _make_inst(opcode, result_reg="", operands=None, type_hint="", label=""):
+def _make_inst(opcode, result_reg="", operands=None, label=""):
     return IRInstruction(
         opcode=opcode,
         result_reg=result_reg or None,
         operands=operands or [],
-        type_hint=type_hint,
         label=label or None,
     )
 
