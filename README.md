@@ -84,12 +84,10 @@ For programs with concrete inputs and no external dependencies, the entire execu
 
 ### Prerequisites
 
-| Dependency | Required for | Install |
-|------------|-------------|---------|
-| Python >= 3.10 | Core | [python.org](https://www.python.org/) or your package manager |
-| [Poetry](https://python-poetry.org/) | Dependency management | `pipx install poetry` |
-| JDK 17+ | COBOL frontend only | [adoptium.net](https://adoptium.net/) or `brew install openjdk@17` |
-| [Maven](https://maven.apache.org/) | Building ProLeap bridge | `brew install maven` or [maven.apache.org](https://maven.apache.org/install.html) |
+- **Python >= 3.10** — [python.org](https://www.python.org/) or your package manager
+- **[Poetry](https://python-poetry.org/)** — `pipx install poetry`
+- **JDK 17+** (COBOL frontend only) — [adoptium.net](https://adoptium.net/) or `brew install openjdk@17`
+- **[Maven](https://maven.apache.org/)** (COBOL frontend only) — `brew install maven`
 
 ### Full build (including COBOL)
 
