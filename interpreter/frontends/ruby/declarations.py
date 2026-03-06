@@ -9,6 +9,35 @@ from interpreter import constants
 from interpreter.frontends.ruby.expressions import lower_ruby_params
 
 
+def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> str:
+    """Lower a Ruby method body, returning the last expression's register if implicit return applies.
+
+    If the last named child is an expression (not a statement), it is lowered
+    via ``lower_expr`` and its register is returned. Otherwise all children are
+    lowered as statements and an empty string is returned.
+    """
+    children = [
+        c
+        for c in body_node.children
+        if c.is_named
+        and c.type not in ctx.constants.comment_types
+        and c.type not in ctx.constants.noise_types
+    ]
+    if not children:
+        return ""
+    *init, last = children
+    for child in init:
+        ctx.lower_stmt(child)
+    is_stmt = (
+        ctx.stmt_dispatch.get(last.type) is not None
+        or last.type in ctx.constants.block_node_types
+    )
+    if is_stmt:
+        ctx.lower_stmt(last)
+        return ""
+    return ctx.lower_expr(last)
+
+
 def _emit_self_param(ctx: TreeSitterEmitContext) -> None:
     """Emit ``SYMBOLIC param:self`` + ``STORE_VAR self`` for instance methods."""
     ctx.emit(
@@ -44,16 +73,20 @@ def lower_ruby_method(
     if params_node:
         lower_ruby_params(ctx, params_node)
 
+    expr_reg = ""
     if body_node:
-        ctx.lower_block(body_node)
+        expr_reg = _lower_body_with_implicit_return(ctx, body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    if expr_reg:
+        ctx.emit(Opcode.RETURN, operands=[expr_reg])
+    else:
+        none_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[ctx.constants.default_return_value],
+        )
+        ctx.emit(Opcode.RETURN, operands=[none_reg])
     ctx.emit(Opcode.LABEL, label=end_label)
 
     func_reg = ctx.fresh_reg()
@@ -139,16 +172,20 @@ def lower_ruby_singleton_method(ctx: TreeSitterEmitContext, node) -> None:
     if params_node:
         lower_ruby_params(ctx, params_node)
 
+    expr_reg = ""
     if body_node:
-        ctx.lower_block(body_node)
+        expr_reg = _lower_body_with_implicit_return(ctx, body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    if expr_reg:
+        ctx.emit(Opcode.RETURN, operands=[expr_reg])
+    else:
+        none_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[ctx.constants.default_return_value],
+        )
+        ctx.emit(Opcode.RETURN, operands=[none_reg])
     ctx.emit(Opcode.LABEL, label=end_label)
 
     func_reg = ctx.fresh_reg()

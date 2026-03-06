@@ -1384,3 +1384,19 @@ Updated tier classification: Tier 1 (11): Python, Java, C#, Kotlin, Scala, JS, T
 3. **Kotlin/Scala expression-bodied functions: return value not wired** — Kotlin `fun f() = 42` computes `const 42` but returns `const None`. Scala `def f() = 42` does not even capture the literal. Block-body functions with explicit `return` work correctly. Kotlin backfill test uses block body as workaround; Scala excluded from return backfill tests.
 
 **Consequences:** Test count increased from 9020 to 9243 (223 new test IDs). 3 new xfails document genuine frontend gaps. All 15 languages now have BINOP, comparison, and UNOP coverage. Field tracking covers 8 OOP languages, CALL_METHOD covers 9, and NEW_OBJECT covers 5 additional languages.
+
+---
+
+### ADR-080: Fix 3 IR lowering gaps in Scala, Kotlin, and Ruby frontends (2026-03-06)
+
+**Context:** ADR-079 exposed three frontend lowering gaps sharing the same root cause: function bodies unconditionally emit `CONST default_return_value` + `RETURN`, discarding the actual last expression value. This blocked return backfill, CALL_METHOD result typing, and field tracking for affected languages.
+
+**Decision:** Fix all three gaps with minimal, targeted changes to each frontend's declaration lowerer:
+
+1. **Scala expression-bodied functions** (`interpreter/frontends/scala/declarations.py`): In `lower_function_def`, detect whether `body_node` is a bare expression (not in `block_node_types` and no `stmt_dispatch` handler). If so, `lower_expr` it and emit RETURN with the result, skipping the default nil return. Fixes both `this.age` getters (GAP-001) and `def f() = 42` (GAP-003).
+
+2. **Kotlin expression-bodied functions** (`interpreter/frontends/kotlin/declarations.py`): `_lower_function_body` now returns the register of the last expression if the body is expression-bodied. `lower_function_decl` wires that register to RETURN instead of nil.
+
+3. **Ruby implicit return** (`interpreter/frontends/ruby/declarations.py`): New `_lower_body_with_implicit_return` helper detects when the last named child of a method body is an expression (not a statement). Both `lower_ruby_method` and `lower_ruby_singleton_method` use this helper.
+
+**Consequences:** All 3 xfail markers removed from `tests/integration/test_type_inference.py`. Scala added to `TestReturnBackfillAllLanguages`. Test count: 9258 passed, 4 skipped, 22 xfailed (down from 25 xfailed).
