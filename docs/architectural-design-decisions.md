@@ -1366,3 +1366,21 @@ Updated tier classification: Tier 1 (11): Python, Java, C#, Kotlin, Scala, JS, T
 **Decision:** Two-phase removal. **Phase 1:** Introduce `TypeEnvironmentBuilder` (mutable dataclass with `register_types`, `var_types`, `func_return_types`, `func_param_types` dicts and a `build()` method producing frozen `TypeEnvironment`). `TreeSitterEmitContext` gains a `type_env_builder` field and routing logic: `emit()` with `type_hint=` populates the builder instead of the instruction. `infer_types()` accepts a `type_env_builder` parameter and pre-populates its `_InferenceContext` from it, eliminating all `inst.type_hint` reads. `Frontend` ABC and subclasses expose `type_env_builder` property. `run.py` passes `frontend.type_env_builder` to `infer_types()`. **Phase 2:** Remove `type_hint` field from `IRInstruction` entirely. Replace `emit(..., type_hint=)` with explicit seed helpers (`seed_func_return_type`, `seed_register_type`, `seed_var_type`, `seed_param_type`) on `TreeSitterEmitContext`. Update ~60 frontend call sites across 13 language frontends. The `_route_type_hint` method is replaced by `_track_label` (label/function context tracking only) plus the four seed helpers.
 
 **Consequences:** IR instructions are now purely about computation and control flow — no type metadata. Type annotations flow directly from frontends into the builder, eliminating the extract-then-reassemble round-trip. The builder pattern makes type seeding explicit and testable. All 9104 tests pass (4 skipped, 22 xfailed).
+
+---
+
+### ADR-079: Comprehensive cross-language type inference integration tests (2026-03-06)
+
+**Context:** The type inference engine supports ~12 distinct inference scenarios (BINOP resolution, UNOP refinement, return backfill, typed param seeding, field tracking, CALL_METHOD return types, NEW_OBJECT typing), but integration tests only covered a subset per language. For example, BINOP resolution and UNOP refinement had zero cross-language tests.
+
+**Decision:** Add 10 new parametrized test classes to `tests/integration/test_type_inference.py`, covering every inference scenario across all applicable languages (up to 15). Each class uses `pytest.fixture(params=...)` with a `SOURCES` dict mapping language → source snippet, providing clear per-language failure messages. This TDD pass also exposed three IR lowering gaps documented below.
+
+**IR Lowering Gaps Discovered:**
+
+1. **Scala frontend: `this.field` in getter lowered as `LOAD_VAR` instead of `LOAD_FIELD`** — In Scala class methods, `this.age` access produces `load_var age` rather than `load_field %reg age`. `STORE_FIELD` via `this.age = ...` in setter works correctly. The getter path does not recognise the `field_access` node as a field dereference. Marked as `xfail` in `TestFieldTypeTrackingOOP`.
+
+2. **Ruby frontend: implicit return does not wire expression value to `RETURN`** — Ruby's `def get_age; @age; end` (implicit return) generates `LOAD_FIELD` for `@age` but returns `const None` instead of the loaded register. Explicit `return @age` is needed for the value to propagate. This prevents return backfill and CALL_METHOD result typing for implicit-return methods. Marked as `xfail` in `TestCallMethodReturnTypesOOP`.
+
+3. **Kotlin/Scala expression-bodied functions: return value not wired** — Kotlin `fun f() = 42` computes `const 42` but returns `const None`. Scala `def f() = 42` does not even capture the literal. Block-body functions with explicit `return` work correctly. Kotlin backfill test uses block body as workaround; Scala excluded from return backfill tests.
+
+**Consequences:** Test count increased from 9020 to 9243 (223 new test IDs). 3 new xfails document genuine frontend gaps. All 15 languages now have BINOP, comparison, and UNOP coverage. Field tracking covers 8 OOP languages, CALL_METHOD covers 9, and NEW_OBJECT covers 5 additional languages.
