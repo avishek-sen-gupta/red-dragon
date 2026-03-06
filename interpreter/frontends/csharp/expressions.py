@@ -80,8 +80,8 @@ def lower_object_creation(ctx: TreeSitterEmitContext, node) -> str:
         result_reg=reg,
         operands=[type_name] + arg_regs,
         node=node,
-        type_hint=type_name,
     )
+    ctx.seed_register_type(reg, type_name)
     return reg
 
 
@@ -653,15 +653,17 @@ def lower_csharp_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 pname = ctx.node_text(name_node)
                 raw_type = extract_type_from_field(ctx, child, "type")
                 type_hint = normalize_type_hint(raw_type, ctx.type_map)
+                param_reg = ctx.fresh_reg()
                 ctx.emit(
                     Opcode.SYMBOLIC,
-                    result_reg=ctx.fresh_reg(),
+                    result_reg=param_reg,
                     operands=[f"{constants.PARAM_PREFIX}{pname}"],
                     node=child,
-                    type_hint=type_hint,
                 )
+                ctx.seed_register_type(param_reg, type_hint)
+                ctx.seed_param_type(pname, type_hint)
                 ctx.emit(
                     Opcode.STORE_VAR,
-                    operands=[pname, f"%{ctx.reg_counter - 1}"],
-                    type_hint=type_hint,
+                    operands=[pname, param_reg],
                 )
+                ctx.seed_var_type(pname, type_hint)

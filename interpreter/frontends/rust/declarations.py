@@ -68,18 +68,20 @@ def lower_rust_param(ctx: TreeSitterEmitContext, child) -> None:
         return
     raw_type = extract_type_from_field(ctx, child, "type")
     type_hint = normalize_type_hint(raw_type, ctx.type_map)
+    reg = ctx.fresh_reg()
     ctx.emit(
         Opcode.SYMBOLIC,
-        result_reg=ctx.fresh_reg(),
+        result_reg=reg,
         operands=[f"{constants.PARAM_PREFIX}{pname}"],
         node=child,
-        type_hint=type_hint,
     )
+    ctx.seed_register_type(reg, type_hint)
+    ctx.seed_param_type(pname, type_hint)
     ctx.emit(
         Opcode.STORE_VAR,
         operands=[pname, f"%{ctx.reg_counter - 1}"],
-        type_hint=type_hint,
     )
+    ctx.seed_var_type(pname, type_hint)
 
 
 # ── Function definition ─────────────────────────────────────────────
@@ -99,7 +101,8 @@ def lower_function_def(ctx: TreeSitterEmitContext, node) -> None:
     return_hint = normalize_type_hint(raw_return, ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
 
     if params_node:
         lower_rust_params(ctx, params_node)
@@ -155,8 +158,8 @@ def lower_let_decl(ctx: TreeSitterEmitContext, node) -> None:
             Opcode.STORE_VAR,
             operands=[var_name, val_reg],
             node=node,
-            type_hint=type_hint,
         )
+        ctx.seed_var_type(var_name, type_hint)
 
 
 def _lower_tuple_destructure(
@@ -361,8 +364,8 @@ def lower_const_item(ctx: TreeSitterEmitContext, node) -> None:
         Opcode.STORE_VAR,
         operands=[var_name, val_reg],
         node=node,
-        type_hint=type_hint,
     )
+    ctx.seed_var_type(var_name, type_hint)
 
 
 # ── static item ──────────────────────────────────────────────────────
@@ -389,8 +392,8 @@ def lower_static_item(ctx: TreeSitterEmitContext, node) -> None:
         Opcode.STORE_VAR,
         operands=[var_name, val_reg],
         node=node,
-        type_hint=type_hint,
     )
+    ctx.seed_var_type(var_name, type_hint)
 
 
 # ── type alias ───────────────────────────────────────────────────────
