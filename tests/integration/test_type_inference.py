@@ -1442,6 +1442,7 @@ class TestReturnBackfillAllLanguages:
         "php": "<?php function f() { return 42; }",
         "typescript": "function f() { return 42; }",
         "kotlin": "fun f() { return 42 }",
+        "scala": "object M { def f() = 42 }",
     }
 
     @pytest.fixture(params=sorted(SOURCES.keys()), ids=lambda lang: lang)
@@ -1564,9 +1565,6 @@ end
 """,
     }
 
-    # Scala frontend gap: `this.age` in getter lowered as LOAD_VAR instead of LOAD_FIELD
-    XFAIL_LOAD_FIELD = {"scala"}
-
     @pytest.fixture(params=sorted(SOURCES.keys()), ids=lambda lang: lang)
     def lang_env(self, request):
         lang = request.param
@@ -1580,19 +1578,11 @@ end
 
     def test_load_field_exists(self, lang_env):
         lang, instructions, _env = lang_env
-        if lang in self.XFAIL_LOAD_FIELD:
-            pytest.xfail(
-                "Scala frontend: this.field lowered as LOAD_VAR, not LOAD_FIELD"
-            )
         load_fields = [i for i in instructions if i.opcode == Opcode.LOAD_FIELD]
         assert len(load_fields) >= 1, f"[{lang}] expected at least one LOAD_FIELD"
 
     def test_load_field_typed_as_int(self, lang_env):
         lang, instructions, env = lang_env
-        if lang in self.XFAIL_LOAD_FIELD:
-            pytest.xfail(
-                "Scala frontend: this.field lowered as LOAD_VAR, not LOAD_FIELD"
-            )
         load_fields = [
             i
             for i in instructions
@@ -1725,19 +1715,9 @@ age = d.get_age
         "typescript": "Float",
     }
 
-    # Ruby frontend gap: implicit return doesn't wire expression value to RETURN
-    XFAIL_LANGUAGES = {"ruby"}
-
     @pytest.fixture(params=sorted(SOURCES.keys()), ids=lambda lang: lang)
     def lang_env(self, request):
         lang = request.param
-        if lang in self.XFAIL_LANGUAGES:
-            request.applymarker(
-                pytest.mark.xfail(
-                    reason="Ruby frontend: implicit return does not wire expression to RETURN",
-                    strict=True,
-                )
-            )
         instructions, env = _lower_and_infer(self.SOURCES[lang], lang)
         return lang, instructions, env
 
