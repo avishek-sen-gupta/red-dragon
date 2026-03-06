@@ -1241,3 +1241,555 @@ class TestLuaFuncSignatures:
         sig = env.func_signatures["add"]
         assert sig.return_type == ""
         assert sig.params == (("a", ""), ("b", ""))
+
+
+# ---------------------------------------------------------------------------
+# Cross-language BINOP: int + int → Int
+# ---------------------------------------------------------------------------
+
+
+class TestBinopIntPlusInt:
+    """All 15 languages: `x = 3 + 4` → BINOP result typed as Int."""
+
+    SOURCES = {
+        "python": "x = 3 + 4",
+        "java": "class M { static int x = 3 + 4; }",
+        "typescript": "let x = 3 + 4;",
+        "kotlin": "val x = 3 + 4",
+        "scala": "val x = 3 + 4",
+        "csharp": "class M { static int x = 3 + 4; }",
+        "cpp": "int x = 3 + 4;",
+        "php": "<?php $x = 3 + 4;",
+        "c": "int x = 3 + 4;",
+        "go": "package main\n\nfunc main() {\n\tx := 3 + 4\n}",
+        "rust": "let x = 3 + 4;",
+        "pascal": "program test; var x: integer; begin x := 3 + 4; end.",
+        "javascript": "let x = 3 + 4;",
+        "ruby": "x = 3 + 4",
+        "lua": "local x = 3 + 4",
+    }
+
+    @pytest.fixture(params=sorted(SOURCES.keys()), ids=lambda lang: lang)
+    def lang_env(self, request):
+        lang = request.param
+        instructions, env = _lower_and_infer(self.SOURCES[lang], lang)
+        return lang, instructions, env
+
+    def test_binop_result_is_int(self, lang_env):
+        lang, instructions, env = lang_env
+        binops = [i for i in instructions if i.opcode == Opcode.BINOP and i.result_reg]
+        assert len(binops) >= 1, f"[{lang}] expected at least one BINOP"
+        result_type = env.register_types.get(binops[0].result_reg)
+        assert (
+            result_type == TypeName.INT
+        ), f"[{lang}] expected Int, got {result_type!r}"
+
+
+# ---------------------------------------------------------------------------
+# Cross-language BINOP: int + float → Float
+# ---------------------------------------------------------------------------
+
+
+class TestBinopIntPlusFloat:
+    """All 15 languages: `y = 3 + 4.0` → BINOP result typed as Float."""
+
+    SOURCES = {
+        "python": "y = 3 + 4.0",
+        "java": "class M { static double y = 3 + 4.0; }",
+        "typescript": "let y = 3 + 4.0;",
+        "kotlin": "val y = 3 + 4.0",
+        "scala": "val y = 3 + 4.0",
+        "csharp": "class M { static double y = 3 + 4.0; }",
+        "cpp": "double y = 3 + 4.0;",
+        "php": "<?php $y = 3 + 4.0;",
+        "c": "double y = 3 + 4.0;",
+        "go": "package main\n\nfunc main() {\n\ty := 3 + 4.0\n}",
+        "rust": "let y = 3.0 + 4.0;",
+        "pascal": "program test; var y: real; begin y := 3 + 4.0; end.",
+        "javascript": "let y = 3 + 4.0;",
+        "ruby": "y = 3 + 4.0",
+        "lua": "local y = 3 + 4.0",
+    }
+
+    @pytest.fixture(params=sorted(SOURCES.keys()), ids=lambda lang: lang)
+    def lang_env(self, request):
+        lang = request.param
+        instructions, env = _lower_and_infer(self.SOURCES[lang], lang)
+        return lang, instructions, env
+
+    def test_binop_result_is_float(self, lang_env):
+        lang, instructions, env = lang_env
+        binops = [i for i in instructions if i.opcode == Opcode.BINOP and i.result_reg]
+        assert len(binops) >= 1, f"[{lang}] expected at least one BINOP"
+        result_type = env.register_types.get(binops[0].result_reg)
+        assert (
+            result_type == TypeName.FLOAT
+        ), f"[{lang}] expected Float, got {result_type!r}"
+
+
+# ---------------------------------------------------------------------------
+# Cross-language BINOP: comparison → Bool
+# ---------------------------------------------------------------------------
+
+
+class TestBinopComparisonYieldsBool:
+    """All 15 languages: `y = 3 > 4` → BINOP result typed as Bool."""
+
+    SOURCES = {
+        "python": "y = 3 > 4",
+        "java": "class M { static boolean y = 3 > 4; }",
+        "typescript": "let y = 3 > 4;",
+        "kotlin": "val y = 3 > 4",
+        "scala": "val y = 3 > 4",
+        "csharp": "class M { static bool y = 3 > 4; }",
+        "cpp": "bool y = 3 > 4;",
+        "php": "<?php $y = 3 > 4;",
+        "c": "int y = 3 > 4;",
+        "go": "package main\n\nfunc main() {\n\ty := 3 > 4\n}",
+        "rust": "let y = 3 > 4;",
+        "pascal": "program test; var y: boolean; begin y := 3 > 4; end.",
+        "javascript": "let y = 3 > 4;",
+        "ruby": "y = 3 > 4",
+        "lua": "local y = 3 > 4",
+    }
+
+    @pytest.fixture(params=sorted(SOURCES.keys()), ids=lambda lang: lang)
+    def lang_env(self, request):
+        lang = request.param
+        instructions, env = _lower_and_infer(self.SOURCES[lang], lang)
+        return lang, instructions, env
+
+    def test_binop_result_is_bool(self, lang_env):
+        lang, instructions, env = lang_env
+        binops = [i for i in instructions if i.opcode == Opcode.BINOP and i.result_reg]
+        assert len(binops) >= 1, f"[{lang}] expected at least one BINOP"
+        result_type = env.register_types.get(binops[0].result_reg)
+        assert (
+            result_type == TypeName.BOOL
+        ), f"[{lang}] expected Bool, got {result_type!r}"
+
+
+# ---------------------------------------------------------------------------
+# Cross-language UNOP: not/! → Bool
+# ---------------------------------------------------------------------------
+
+
+class TestUnopNotBangYieldsBool:
+    """14 languages (excluding Pascal): `y = !true` → UNOP result typed as Bool."""
+
+    SOURCES = {
+        "python": "y = not True",
+        "java": "class M { static boolean y = !true; }",
+        "typescript": "let y = !true;",
+        "kotlin": "val y = !true",
+        "scala": "val y = !true",
+        "csharp": "class M { static bool y = !true; }",
+        "cpp": "bool y = !true;",
+        "php": "<?php $y = !true;",
+        "c": "int y = !1;",
+        "go": "package main\n\nfunc main() {\n\ty := !true\n}",
+        "rust": "let y = !true;",
+        "javascript": "let y = !true;",
+        "ruby": "y = !true",
+        "lua": "local y = not true",
+    }
+
+    @pytest.fixture(params=sorted(SOURCES.keys()), ids=lambda lang: lang)
+    def lang_env(self, request):
+        lang = request.param
+        instructions, env = _lower_and_infer(self.SOURCES[lang], lang)
+        return lang, instructions, env
+
+    def test_unop_result_is_bool(self, lang_env):
+        lang, instructions, env = lang_env
+        unops = [i for i in instructions if i.opcode == Opcode.UNOP and i.result_reg]
+        assert len(unops) >= 1, f"[{lang}] expected at least one UNOP"
+        result_type = env.register_types.get(unops[0].result_reg)
+        assert (
+            result_type == TypeName.BOOL
+        ), f"[{lang}] expected Bool, got {result_type!r}"
+
+
+# ---------------------------------------------------------------------------
+# Lua UNOP: # (length) → Int
+# ---------------------------------------------------------------------------
+
+
+class TestUnopLuaHashYieldsInt:
+    """Lua `local n = #t` → UNOP result typed as Int."""
+
+    def test_hash_length_operator_yields_int(self):
+        instructions, env = _lower_and_infer(
+            "local t = {1, 2, 3}\nlocal n = #t",
+            "lua",
+        )
+        unops = [i for i in instructions if i.opcode == Opcode.UNOP and i.result_reg]
+        assert len(unops) >= 1, "expected at least one UNOP for # operator"
+        result_type = env.register_types.get(unops[0].result_reg)
+        assert result_type == TypeName.INT, f"expected Int, got {result_type!r}"
+
+
+# ---------------------------------------------------------------------------
+# Return backfill: unannotated functions returning literals
+# ---------------------------------------------------------------------------
+
+
+class TestReturnBackfillAllLanguages:
+    """Languages where return type can be omitted: backfill from return literal."""
+
+    SOURCES = {
+        "lua": "function f()\n  return 42\nend",
+        "php": "<?php function f() { return 42; }",
+        "typescript": "function f() { return 42; }",
+        "kotlin": "fun f() { return 42 }",
+    }
+
+    @pytest.fixture(params=sorted(SOURCES.keys()), ids=lambda lang: lang)
+    def lang_env(self, request):
+        lang = request.param
+        _instructions, env = _lower_and_infer(self.SOURCES[lang], lang)
+        return lang, env
+
+    def test_return_type_backfilled_to_int(self, lang_env):
+        lang, env = lang_env
+        assert "f" in env.func_signatures, f"[{lang}] expected 'f' in func_signatures"
+        assert (
+            env.func_signatures["f"].return_type == TypeName.INT
+        ), f"[{lang}] expected return_type Int, got {env.func_signatures['f'].return_type!r}"
+
+
+# ---------------------------------------------------------------------------
+# Typed params seeding: SYMBOLIC register types from param annotations
+# ---------------------------------------------------------------------------
+
+
+class TestTypedParamsSeeding:
+    """Languages missing SYMBOLIC register type checks for typed params."""
+
+    SOURCES = {
+        "python": "def add(a: int, b: int) -> int:\n    return a + b",
+        "kotlin": "fun add(a: Int, b: Int): Int { return a + b }",
+        "scala": "def add(a: Int, b: Int): Int = a + b",
+        "php": "<?php function add(int $a, int $b): int { return $a + $b; }",
+        "rust": "fn add(a: i32, b: i32) -> i32 { a + b }",
+        "pascal": "program test; function add(a: integer; b: integer): integer; begin add := a + b; end; begin end.",
+    }
+
+    @pytest.fixture(params=sorted(SOURCES.keys()), ids=lambda lang: lang)
+    def lang_env(self, request):
+        lang = request.param
+        instructions, env = _lower_and_infer(self.SOURCES[lang], lang)
+        return lang, instructions, env
+
+    def test_param_registers_typed_as_int(self, lang_env):
+        lang, instructions, env = lang_env
+        symbolics = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.SYMBOLIC
+            and i.result_reg
+            and env.register_types.get(i.result_reg) == "Int"
+        ]
+        assert (
+            len(symbolics) >= 2
+        ), f"[{lang}] expected >= 2 Int-typed SYMBOLIC registers, got {len(symbolics)}"
+
+
+# ---------------------------------------------------------------------------
+# Field type tracking: STORE_FIELD + LOAD_FIELD on self/this
+# ---------------------------------------------------------------------------
+
+
+class TestFieldTypeTrackingOOP:
+    """OOP languages: this.age = 5 (store) then this.age (load) → LOAD_FIELD typed as Int."""
+
+    SOURCES = {
+        "csharp": """\
+class Dog {
+    int age;
+    void SetAge() { this.age = 5; }
+    int GetAge() { return this.age; }
+}
+""",
+        "cpp": """\
+class Dog {
+    int age;
+    void setAge() { this->age = 5; }
+    int getAge() { return this->age; }
+};
+""",
+        "javascript": """\
+class Dog {
+    constructor() { this.age = 5; }
+    getAge() { return this.age; }
+}
+""",
+        "typescript": """\
+class Dog {
+    age: number;
+    constructor() { this.age = 5; }
+    getAge(): number { return this.age; }
+}
+""",
+        "kotlin": """\
+class Dog {
+    var age: Int = 0
+    fun setAge() { this.age = 5 }
+    fun getAge(): Int { return this.age }
+}
+""",
+        "scala": """\
+class Dog {
+    var age: Int = 0
+    def setAge(): Unit = { this.age = 5 }
+    def getAge(): Int = this.age
+}
+""",
+        "php": """\
+<?php class Dog {
+    public $age;
+    function setAge() { $this->age = 5; }
+    function getAge(): int { return $this->age; }
+}
+""",
+        "ruby": """\
+class Dog
+    def initialize
+        @age = 5
+    end
+    def get_age
+        @age
+    end
+end
+""",
+    }
+
+    # Scala frontend gap: `this.age` in getter lowered as LOAD_VAR instead of LOAD_FIELD
+    XFAIL_LOAD_FIELD = {"scala"}
+
+    @pytest.fixture(params=sorted(SOURCES.keys()), ids=lambda lang: lang)
+    def lang_env(self, request):
+        lang = request.param
+        instructions, env = _lower_and_infer(self.SOURCES[lang], lang)
+        return lang, instructions, env
+
+    def test_store_field_exists(self, lang_env):
+        lang, instructions, _env = lang_env
+        store_fields = [i for i in instructions if i.opcode == Opcode.STORE_FIELD]
+        assert len(store_fields) >= 1, f"[{lang}] expected at least one STORE_FIELD"
+
+    def test_load_field_exists(self, lang_env):
+        lang, instructions, _env = lang_env
+        if lang in self.XFAIL_LOAD_FIELD:
+            pytest.xfail(
+                "Scala frontend: this.field lowered as LOAD_VAR, not LOAD_FIELD"
+            )
+        load_fields = [i for i in instructions if i.opcode == Opcode.LOAD_FIELD]
+        assert len(load_fields) >= 1, f"[{lang}] expected at least one LOAD_FIELD"
+
+    def test_load_field_typed_as_int(self, lang_env):
+        lang, instructions, env = lang_env
+        if lang in self.XFAIL_LOAD_FIELD:
+            pytest.xfail(
+                "Scala frontend: this.field lowered as LOAD_VAR, not LOAD_FIELD"
+            )
+        load_fields = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.LOAD_FIELD
+            and i.result_reg
+            and len(i.operands) >= 2
+            and str(i.operands[1]) == "age"
+        ]
+        assert len(load_fields) >= 1, f"[{lang}] expected LOAD_FIELD for 'age'"
+        result_type = env.register_types.get(load_fields[0].result_reg)
+        assert (
+            result_type == TypeName.INT
+        ), f"[{lang}] expected LOAD_FIELD result Int, got {result_type!r}"
+
+
+# ---------------------------------------------------------------------------
+# CALL_METHOD return types: typed method → call result typed
+# ---------------------------------------------------------------------------
+
+
+def _find_call_method_result(instructions, env, method_name):
+    """Find the CALL_METHOD for method_name and return its result register type."""
+    call = next(
+        (
+            i
+            for i in instructions
+            if i.opcode == Opcode.CALL_METHOD
+            and i.result_reg
+            and len(i.operands) >= 2
+            and str(i.operands[1]) == method_name
+        ),
+        None,
+    )
+    if call is None:
+        return None
+    return env.register_types.get(call.result_reg)
+
+
+class TestCallMethodReturnTypesOOP:
+    """OOP languages: class with typed method, then d.getAge() → CALL_METHOD result typed."""
+
+    SOURCES = {
+        "python": """\
+class Dog:
+    def get_age(self) -> int:
+        return 5
+
+d = Dog()
+age = d.get_age()
+""",
+        "csharp": """\
+class Dog {
+    int GetAge() { return 5; }
+    static void Main() {
+        Dog d = new Dog();
+        int age = d.GetAge();
+    }
+}
+""",
+        "cpp": """\
+class Dog {
+public:
+    int getAge() { return 5; }
+};
+int main() {
+    Dog d;
+    int age = d.getAge();
+}
+""",
+        "javascript": """\
+class Dog {
+    getAge() { return 5; }
+}
+let d = new Dog();
+let age = d.getAge();
+""",
+        "typescript": """\
+class Dog {
+    getAge(): number { return 5; }
+}
+let d = new Dog();
+let age = d.getAge();
+""",
+        "kotlin": """\
+class Dog {
+    fun getAge(): Int { return 5 }
+}
+val d = Dog()
+val age = d.getAge()
+""",
+        "scala": """\
+class Dog {
+    def getAge(): Int = 5
+}
+val d = new Dog()
+val age = d.getAge()
+""",
+        "php": """\
+<?php class Dog {
+    function getAge(): int { return 5; }
+}
+$d = new Dog();
+$age = $d->getAge();
+""",
+        "ruby": """\
+class Dog
+    def get_age
+        5
+    end
+end
+d = Dog.new
+age = d.get_age
+""",
+    }
+
+    METHOD_NAMES = {
+        "python": "get_age",
+        "csharp": "GetAge",
+        "cpp": "getAge",
+        "javascript": "getAge",
+        "typescript": "getAge",
+        "kotlin": "getAge",
+        "scala": "getAge",
+        "php": "getAge",
+        "ruby": "get_age",
+    }
+
+    # TypeScript maps `number` → Float (no separate int type)
+    EXPECTED_TYPES = {
+        "typescript": "Float",
+    }
+
+    # Ruby frontend gap: implicit return doesn't wire expression value to RETURN
+    XFAIL_LANGUAGES = {"ruby"}
+
+    @pytest.fixture(params=sorted(SOURCES.keys()), ids=lambda lang: lang)
+    def lang_env(self, request):
+        lang = request.param
+        if lang in self.XFAIL_LANGUAGES:
+            request.applymarker(
+                pytest.mark.xfail(
+                    reason="Ruby frontend: implicit return does not wire expression to RETURN",
+                    strict=True,
+                )
+            )
+        instructions, env = _lower_and_infer(self.SOURCES[lang], lang)
+        return lang, instructions, env
+
+    def test_call_method_result_typed(self, lang_env):
+        lang, instructions, env = lang_env
+        method_name = self.METHOD_NAMES[lang]
+        expected = self.EXPECTED_TYPES.get(lang, "Int")
+        result_type = _find_call_method_result(instructions, env, method_name)
+        assert (
+            result_type == expected
+        ), f"[{lang}] expected CALL_METHOD({method_name}) result {expected}, got {result_type!r}"
+
+
+# ---------------------------------------------------------------------------
+# NEW_OBJECT typing: new Dog() → register typed as "Dog"
+# ---------------------------------------------------------------------------
+
+
+class TestNewObjectTypingOOP:
+    """Languages missing new-object typing: new Dog() → register typed as Dog."""
+
+    SOURCES = {
+        "javascript": "class Dog {}\nlet d = new Dog();",
+        "typescript": "class Dog {}\nlet d = new Dog();",
+        "php": "<?php class Dog {}\n$d = new Dog();",
+        "ruby": "class Dog; end\nd = Dog.new",
+        "scala": "class Dog\nval d = new Dog()",
+    }
+
+    @pytest.fixture(params=sorted(SOURCES.keys()), ids=lambda lang: lang)
+    def lang_env(self, request):
+        lang = request.param
+        instructions, env = _lower_and_infer(self.SOURCES[lang], lang)
+        return lang, instructions, env
+
+    def test_new_object_register_typed_as_dog(self, lang_env):
+        lang, instructions, env = lang_env
+        # Check CALL_FUNCTION or NEW_OBJECT producing Dog-typed result
+        dog_typed = [
+            i
+            for i in instructions
+            if i.opcode in (Opcode.CALL_FUNCTION, Opcode.NEW_OBJECT)
+            and i.result_reg
+            and env.register_types.get(i.result_reg) == "Dog"
+        ]
+        # For Ruby, Dog.new is CALL_METHOD
+        if lang == "ruby":
+            dog_typed = [
+                i
+                for i in instructions
+                if i.result_reg and env.register_types.get(i.result_reg) == "Dog"
+            ]
+        assert (
+            len(dog_typed) >= 1
+        ), f"[{lang}] expected at least one register typed as 'Dog'"
