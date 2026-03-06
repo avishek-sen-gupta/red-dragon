@@ -1,4 +1,4 @@
-"""Integration test: type hints propagate through full pipeline (source -> frontend -> IR -> CFG)."""
+"""Integration test: type hints propagate through full pipeline (source -> frontend -> IR -> builder)."""
 
 from __future__ import annotations
 
@@ -39,11 +39,16 @@ class TestJavaTypeHintPropagation:
         """
         frontend = JavaFrontend(TreeSitterParserFactory(), "java")
         instructions = frontend.lower(source.encode())
+        builder = frontend.type_env_builder
 
-        # Parameters should carry type hints
+        # Parameters should carry type hints via builder register_types
         params = _find_symbolic_params(instructions)
-        int_params = [p for p in params if p.type_hint == "Int"]
-        float_params = [p for p in params if p.type_hint == "Float"]
+        int_params = [
+            p for p in params if builder.register_types.get(p.result_reg) == "Int"
+        ]
+        float_params = [
+            p for p in params if builder.register_types.get(p.result_reg) == "Float"
+        ]
 
         # 'a' and 'b' should have Int type hints
         assert len(int_params) >= 2, f"Expected >= 2 Int params, got {len(int_params)}"
@@ -52,13 +57,8 @@ class TestJavaTypeHintPropagation:
             len(float_params) >= 2
         ), f"Expected >= 2 Float params, got {len(float_params)}"
 
-        # Local variable 'sum' should have Int type hint in its STORE_VAR
-        sum_stores = [
-            i
-            for i in instructions
-            if i.opcode == Opcode.STORE_VAR and "sum" in i.operands
-        ]
-        assert any(i.type_hint == "Int" for i in sum_stores)
+        # Local variable 'sum' should have Int type hint via builder var_types
+        assert builder.var_types.get("sum") == "Int"
 
 
 class TestGoTypeHintPropagation:
@@ -74,18 +74,16 @@ class TestGoTypeHintPropagation:
         """
         frontend = GoFrontend(TreeSitterParserFactory(), "go")
         instructions = frontend.lower(source.encode())
+        builder = frontend.type_env_builder
 
-        # Parameters should carry type hints
+        # Parameters should carry type hints via builder register_types
         params = _find_symbolic_params(instructions)
-        int_params = [p for p in params if p.type_hint == "Int"]
+        int_params = [
+            p for p in params if builder.register_types.get(p.result_reg) == "Int"
+        ]
 
         # 'a' and 'b' should have Int type hints
         assert len(int_params) >= 2, f"Expected >= 2 Int params, got {len(int_params)}"
 
-        # 'counter' should have Int type hint
-        counter_stores = [
-            i
-            for i in instructions
-            if i.opcode == Opcode.STORE_VAR and "counter" in i.operands
-        ]
-        assert any(i.type_hint == "Int" for i in counter_stores)
+        # 'counter' should have Int type hint via builder var_types
+        assert builder.var_types.get("counter") == "Int"

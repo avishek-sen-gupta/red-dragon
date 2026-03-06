@@ -12,6 +12,7 @@ from interpreter.constants import TypeName
 from interpreter.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.type_environment import TypeEnvironment
+from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.type_resolver import TypeResolver
 
 logger = logging.getLogger(__name__)
@@ -57,51 +58,42 @@ class _InferenceContext:
 def infer_types(
     instructions: list[IRInstruction],
     type_resolver: TypeResolver,
+    type_env_builder: TypeEnvironmentBuilder = TypeEnvironmentBuilder(),
 ) -> TypeEnvironment:
     """Walk *instructions* once and return an immutable TypeEnvironment.
 
+    Pre-seeded type info from ``type_env_builder`` (populated by the
+    frontend during lowering) is merged first; the inference walk then
+    adds inferred types on top.
+
     Pure function — no mutation of the input instructions.
     """
-    ctx = _InferenceContext()
+    ctx = _InferenceContext(
+        register_types=dict(type_env_builder.register_types),
+        var_types=dict(type_env_builder.var_types),
+        func_return_types=dict(type_env_builder.func_return_types),
+        func_param_types={
+            k: list(v) for k, v in type_env_builder.func_param_types.items()
+        },
+    )
 
     for inst in instructions:
         _infer_instruction(inst, ctx, type_resolver)
 
-    # Build func_signatures from the label→name mappings only (user-facing names)
-    func_signatures = _build_func_signatures(ctx)
+    # Use builder for final assembly
+    final_builder = TypeEnvironmentBuilder(
+        register_types=ctx.register_types,
+        var_types=ctx.var_types,
+        func_return_types=ctx.func_return_types,
+        func_param_types=ctx.func_param_types,
+    )
 
     logger.debug(
-        "Type inference complete: %d register types, %d variable types, %d function signatures",
+        "Type inference complete: %d register types, %d variable types",
         len(ctx.register_types),
         len(ctx.var_types),
-        len(func_signatures),
     )
-    return TypeEnvironment(
-        register_types=MappingProxyType(ctx.register_types),
-        var_types=MappingProxyType(ctx.var_types),
-        func_signatures=MappingProxyType(func_signatures),
-    )
-
-
-def _build_func_signatures(ctx: _InferenceContext) -> dict[str, FunctionSignature]:
-    """Build signatures keyed only by user-facing function names.
-
-    Internal labels (func_add_0) are excluded — only names that came
-    through a <function:name@label> CONST mapping are included.
-    """
-    user_facing_names = {
-        name
-        for name in set(ctx.func_return_types) | set(ctx.func_param_types)
-        if not name.startswith("func_")
-    }
-
-    return {
-        name: FunctionSignature(
-            params=tuple(ctx.func_param_types.get(name, [])),
-            return_type=ctx.func_return_types.get(name, ""),
-        )
-        for name in user_facing_names
-    }
+    return final_builder.build()
 
 
 def _infer_instruction(
@@ -125,8 +117,7 @@ def _infer_label(
     if inst.label.startswith(constants.FUNC_LABEL_PREFIX):
         ctx.current_func_label = inst.label
         ctx.func_param_types.setdefault(inst.label, [])
-        if inst.type_hint:
-            ctx.func_return_types[inst.label] = inst.type_hint
+        # func_return_types are pre-seeded by the builder; no inst.type_hint read
     elif inst.label.startswith(
         constants.CLASS_LABEL_PREFIX
     ) and not inst.label.startswith(constants.END_CLASS_LABEL_PREFIX):
@@ -144,23 +135,28 @@ def _infer_symbolic(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if inst.type_hint and inst.result_reg:
-        ctx.register_types[inst.result_reg] = inst.type_hint
+    # register_types are pre-seeded by the builder; no inst.type_hint read
 
-    # Collect param types if inside a function
+    # Collect param types if inside a function (only if not already seeded)
     if ctx.current_func_label and inst.operands:
         operand = str(inst.operands[0])
         if operand.startswith("param:"):
             param_name = operand[len("param:") :]
-            param_type = inst.type_hint or ""
-            ctx.func_param_types[ctx.current_func_label].append(
-                (param_name, param_type)
+            # Skip param append when func already seeded in func_param_types
+            already_seeded = any(
+                p[0] == param_name
+                for p in ctx.func_param_types.get(ctx.current_func_label, [])
             )
+            if not already_seeded:
+                param_type = ctx.register_types.get(inst.result_reg, "")
+                ctx.func_param_types[ctx.current_func_label].append(
+                    (param_name, param_type)
+                )
 
     # self/this typing: assign class name when inside a class scope
     if (
         inst.result_reg
-        and not inst.type_hint
+        and inst.result_reg not in ctx.register_types
         and ctx.current_class_name
         and inst.operands
     ):
@@ -218,9 +214,10 @@ def _infer_store_var(
     name = inst.operands[0] if inst.operands else ""
     if not name:
         return
-    if inst.type_hint:
-        ctx.var_types[name] = inst.type_hint
-    elif len(inst.operands) >= 2:
+    # var_types may be pre-seeded by the builder; skip if already known
+    if name in ctx.var_types:
+        return
+    if len(inst.operands) >= 2:
         value_reg = str(inst.operands[1])
         if value_reg in ctx.register_types:
             ctx.var_types[name] = ctx.register_types[value_reg]
@@ -290,9 +287,12 @@ def _infer_call_function(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if inst.result_reg and inst.type_hint:
-        ctx.register_types[inst.result_reg] = inst.type_hint
-    elif inst.result_reg and inst.operands:
+    if not inst.result_reg:
+        return
+    # register_types may be pre-seeded by the builder (e.g., constructor type_hint)
+    if inst.result_reg in ctx.register_types:
+        return
+    if inst.operands:
         func_name = str(inst.operands[0])
         if func_name in ctx.func_return_types:
             ctx.register_types[inst.result_reg] = ctx.func_return_types[func_name]

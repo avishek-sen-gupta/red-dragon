@@ -2,10 +2,9 @@
 
 import pytest
 
-from interpreter.api import lower_source
-from interpreter.constants import TypeName
+from interpreter.constants import Language, TypeName
 from interpreter.default_conversion_rules import DefaultConversionRules
-from interpreter.function_signature import FunctionSignature
+from interpreter.frontend import get_frontend
 from interpreter.ir import Opcode
 from interpreter.type_inference import infer_types
 from interpreter.type_resolver import TypeResolver
@@ -16,8 +15,13 @@ def _resolver():
 
 
 def _lower_and_infer(source: str, language: str):
-    instructions = lower_source(source, language=language)
-    return instructions, infer_types(instructions, _resolver())
+    lang = Language(language)
+    frontend = get_frontend(lang)
+    instructions = frontend.lower(source.encode("utf-8"))
+    env = infer_types(
+        instructions, _resolver(), type_env_builder=frontend.type_env_builder
+    )
+    return instructions, env
 
 
 # ---------------------------------------------------------------------------
@@ -53,11 +57,11 @@ class M {
         symbolics = [
             i
             for i in instructions
-            if i.opcode == Opcode.SYMBOLIC and i.type_hint == "Int"
+            if i.opcode == Opcode.SYMBOLIC
+            and i.result_reg
+            and env.register_types.get(i.result_reg) == "Int"
         ]
         assert len(symbolics) >= 2
-        for sym in symbolics:
-            assert env.register_types[sym.result_reg] == "Int"
 
     def test_mixed_int_float(self):
         """Java `double y = a + 1` where a is int — BINOP produces Float."""
@@ -90,10 +94,11 @@ class M {
         call_fns = [
             i
             for i in instructions
-            if i.opcode == Opcode.CALL_FUNCTION and i.type_hint == "Dog"
+            if i.opcode == Opcode.CALL_FUNCTION
+            and i.result_reg
+            and env.register_types.get(i.result_reg) == "Dog"
         ]
         assert len(call_fns) >= 1
-        assert env.register_types[call_fns[0].result_reg] == "Dog"
 
     def test_string_variable(self):
         """Java String variable gets String type."""
@@ -129,10 +134,11 @@ class M {
         call_fns = [
             i
             for i in instructions
-            if i.opcode == Opcode.CALL_FUNCTION and i.type_hint == "Dog"
+            if i.opcode == Opcode.CALL_FUNCTION
+            and i.result_reg
+            and env.register_types.get(i.result_reg) == "Dog"
         ]
         assert len(call_fns) >= 1
-        assert env.register_types[call_fns[0].result_reg] == "Dog"
 
 
 # ---------------------------------------------------------------------------
@@ -154,10 +160,11 @@ int main() {
         call_fns = [
             i
             for i in instructions
-            if i.opcode == Opcode.CALL_FUNCTION and i.type_hint == "Dog"
+            if i.opcode == Opcode.CALL_FUNCTION
+            and i.result_reg
+            and env.register_types.get(i.result_reg) == "Dog"
         ]
         assert len(call_fns) >= 1
-        assert env.register_types[call_fns[0].result_reg] == "Dog"
 
 
 # ---------------------------------------------------------------------------
@@ -181,11 +188,11 @@ func add(a int, b int) int {
         symbolics = [
             i
             for i in instructions
-            if i.opcode == Opcode.SYMBOLIC and i.type_hint == "Int"
+            if i.opcode == Opcode.SYMBOLIC
+            and i.result_reg
+            and env.register_types.get(i.result_reg) == "Int"
         ]
         assert len(symbolics) >= 2
-        for sym in symbolics:
-            assert env.register_types[sym.result_reg] == "Int"
 
     def test_var_declarations(self):
         """Go var declarations carry types."""
@@ -225,7 +232,11 @@ function add(a: number, b: number): number {
             "typescript",
         )
         symbolics = [
-            i for i in instructions if i.opcode == Opcode.SYMBOLIC and i.type_hint
+            i
+            for i in instructions
+            if i.opcode == Opcode.SYMBOLIC
+            and i.result_reg
+            and env.register_types.get(i.result_reg)
         ]
         assert len(symbolics) >= 2
 
@@ -260,7 +271,9 @@ int add(int a, int b) {
         symbolics = [
             i
             for i in instructions
-            if i.opcode == Opcode.SYMBOLIC and i.type_hint == "Int"
+            if i.opcode == Opcode.SYMBOLIC
+            and i.result_reg
+            and env.register_types.get(i.result_reg) == "Int"
         ]
         assert len(symbolics) >= 2
 
@@ -311,20 +324,6 @@ class TestCrossLanguageConsistency:
 # ---------------------------------------------------------------------------
 
 
-def _find_func_label(instructions, func_name_prefix):
-    """Find the LABEL instruction for a function whose label starts with prefix."""
-    return next(
-        (
-            i
-            for i in instructions
-            if i.opcode == Opcode.LABEL
-            and i.label
-            and i.label.startswith(f"func_{func_name_prefix}")
-        ),
-        None,
-    )
-
-
 def _find_call_function_result(instructions, env, func_name):
     """Find the CALL_FUNCTION for func_name and return its result register type."""
     call = next(
@@ -345,7 +344,7 @@ def _find_call_function_result(instructions, env, func_name):
 
 class TestJavaReturnType:
     def test_function_label_has_return_type(self):
-        instructions, _env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             """\
 class M {
     static int add(int a, int b) { return a + b; }
@@ -353,9 +352,8 @@ class M {
 """,
             "java",
         )
-        label = _find_func_label(instructions, "add")
-        assert label is not None
-        assert label.type_hint == "Int"
+        assert "add" in env.func_signatures
+        assert env.func_signatures["add"].return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -375,7 +373,7 @@ class M {
 
 class TestCSharpReturnType:
     def test_function_label_has_return_type(self):
-        instructions, _env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             """\
 class M {
     static int Add(int a, int b) { return a + b; }
@@ -383,9 +381,8 @@ class M {
 """,
             "csharp",
         )
-        label = _find_func_label(instructions, "Add")
-        assert label is not None
-        assert label.type_hint == "Int"
+        assert "Add" in env.func_signatures
+        assert env.func_signatures["Add"].return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -405,13 +402,12 @@ class M {
 
 class TestCReturnType:
     def test_function_label_has_return_type(self):
-        instructions, _env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "int add(int a, int b) { return a + b; }",
             "c",
         )
-        label = _find_func_label(instructions, "add")
-        assert label is not None
-        assert label.type_hint == "Int"
+        assert "add" in env.func_signatures
+        assert env.func_signatures["add"].return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -430,13 +426,12 @@ int main() {
 
 class TestCppReturnType:
     def test_function_label_has_return_type(self):
-        instructions, _env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "int add(int a, int b) { return a + b; }",
             "cpp",
         )
-        label = _find_func_label(instructions, "add")
-        assert label is not None
-        assert label.type_hint == "Int"
+        assert "add" in env.func_signatures
+        assert env.func_signatures["add"].return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -455,7 +450,7 @@ int main() {
 
 class TestGoReturnType:
     def test_function_label_has_return_type(self):
-        instructions, _env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             """\
 package main
 
@@ -465,9 +460,8 @@ func add(a int, b int) int {
 """,
             "go",
         )
-        label = _find_func_label(instructions, "add")
-        assert label is not None
-        assert label.type_hint == "Int"
+        assert "add" in env.func_signatures
+        assert env.func_signatures["add"].return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -490,13 +484,12 @@ func main() {
 
 class TestRustReturnType:
     def test_function_label_has_return_type(self):
-        instructions, _env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "fn add(a: i32, b: i32) -> i32 { a + b }",
             "rust",
         )
-        label = _find_func_label(instructions, "add")
-        assert label is not None
-        assert label.type_hint == "Int"
+        assert "add" in env.func_signatures
+        assert env.func_signatures["add"].return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -514,13 +507,12 @@ fn main() {
 
 class TestKotlinReturnType:
     def test_function_label_has_return_type(self):
-        instructions, _env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "fun add(a: Int, b: Int): Int { return a + b }",
             "kotlin",
         )
-        label = _find_func_label(instructions, "add")
-        assert label is not None
-        assert label.type_hint == "Int"
+        assert "add" in env.func_signatures
+        assert env.func_signatures["add"].return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -538,13 +530,12 @@ fun main() {
 
 class TestScalaReturnType:
     def test_function_label_has_return_type(self):
-        instructions, _env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "def add(a: Int, b: Int): Int = a + b",
             "scala",
         )
-        label = _find_func_label(instructions, "add")
-        assert label is not None
-        assert label.type_hint == "Int"
+        assert "add" in env.func_signatures
+        assert env.func_signatures["add"].return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -560,13 +551,12 @@ val x = add(1, 2)
 
 class TestTypeScriptReturnType:
     def test_function_label_has_return_type(self):
-        instructions, _env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "function add(a: number, b: number): number { return a + b; }",
             "typescript",
         )
-        label = _find_func_label(instructions, "add")
-        assert label is not None
-        assert label.type_hint == "Float"
+        assert "add" in env.func_signatures
+        assert env.func_signatures["add"].return_type == "Float"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -582,13 +572,12 @@ let x = add(1, 2);
 
 class TestPythonReturnType:
     def test_function_label_has_return_type(self):
-        instructions, _env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "def add(a: int, b: int) -> int:\n    return a + b",
             "python",
         )
-        label = _find_func_label(instructions, "add")
-        assert label is not None
-        assert label.type_hint == "Int"
+        assert "add" in env.func_signatures
+        assert env.func_signatures["add"].return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -606,13 +595,12 @@ x = add(1, 2)
 
 class TestPHPReturnType:
     def test_function_label_has_return_type(self):
-        instructions, _env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "<?php function add(int $a, int $b): int { return $a + $b; }",
             "php",
         )
-        label = _find_func_label(instructions, "add")
-        assert label is not None
-        assert label.type_hint == "Int"
+        assert "add" in env.func_signatures
+        assert env.func_signatures["add"].return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -629,23 +617,21 @@ $x = add(1, 2);
 
 class TestPascalReturnType:
     def test_function_label_has_return_type(self):
-        instructions, _env = _lower_and_infer(
+        _instructions, env = _lower_and_infer(
             "program test; function add(a: integer; b: integer): integer; begin add := a + b; end; begin end.",
             "pascal",
         )
-        label = _find_func_label(instructions, "add")
-        assert label is not None
-        assert label.type_hint == "Int"
+        assert "add" in env.func_signatures
+        assert env.func_signatures["add"].return_type == "Int"
 
     def test_procedure_has_no_return_type(self):
-        """Pascal procedures (no return type) should have empty type_hint."""
-        instructions, _env = _lower_and_infer(
+        """Pascal procedures (no return type) should have empty return_type."""
+        _instructions, env = _lower_and_infer(
             "program test; procedure greet; begin end; begin end.",
             "pascal",
         )
-        label = _find_func_label(instructions, "greet")
-        assert label is not None
-        assert label.type_hint == ""
+        assert "greet" in env.func_signatures
+        assert env.func_signatures["greet"].return_type == ""
 
 
 # ---------------------------------------------------------------------------
@@ -655,21 +641,16 @@ class TestPascalReturnType:
 
 class TestJavaScriptNoReturnType:
     def test_function_label_has_no_return_type(self):
-        """JavaScript has no return type syntax — LABEL type_hint must be empty."""
-        instructions, _env = _lower_and_infer(
+        """JavaScript has no return type syntax — func_signatures return_type must be empty."""
+        _instructions, env = _lower_and_infer(
             "function add(a, b) { return a + b; }",
             "javascript",
         )
-        func_labels = [
-            i
-            for i in instructions
-            if i.opcode == Opcode.LABEL and i.label and i.label.startswith("func_")
-        ]
-        assert len(func_labels) >= 1
-        for label in func_labels:
-            assert (
-                label.type_hint == ""
-            ), f"JS function LABEL should have no return type, got {label.type_hint!r}"
+        assert "add" in env.func_signatures
+        sig = env.func_signatures["add"]
+        assert (
+            sig.return_type == ""
+        ), f"JS function should have no return type, got {sig.return_type!r}"
 
     def test_call_function_result_not_typed(self):
         """JavaScript CALL_FUNCTION result should not get a return type."""
@@ -686,40 +667,30 @@ let x = add(1, 2);
 
 class TestRubyNoReturnType:
     def test_function_label_has_no_return_type(self):
-        """Ruby has no return type syntax — LABEL type_hint must be empty."""
-        instructions, _env = _lower_and_infer(
+        """Ruby has no return type syntax — func_signatures return_type must be empty."""
+        _instructions, env = _lower_and_infer(
             "def add(a, b)\n  a + b\nend",
             "ruby",
         )
-        func_labels = [
-            i
-            for i in instructions
-            if i.opcode == Opcode.LABEL and i.label and i.label.startswith("func_")
-        ]
-        assert len(func_labels) >= 1
-        for label in func_labels:
-            assert (
-                label.type_hint == ""
-            ), f"Ruby function LABEL should have no return type, got {label.type_hint!r}"
+        assert "add" in env.func_signatures
+        sig = env.func_signatures["add"]
+        assert (
+            sig.return_type == ""
+        ), f"Ruby function should have no return type, got {sig.return_type!r}"
 
 
 class TestLuaNoReturnType:
     def test_function_label_has_no_return_type(self):
-        """Lua has no return type syntax — LABEL type_hint must be empty."""
-        instructions, _env = _lower_and_infer(
+        """Lua has no return type syntax — func_signatures return_type must be empty."""
+        _instructions, env = _lower_and_infer(
             "function add(a, b)\n  return a + b\nend",
             "lua",
         )
-        func_labels = [
-            i
-            for i in instructions
-            if i.opcode == Opcode.LABEL and i.label and i.label.startswith("func_")
-        ]
-        assert len(func_labels) >= 1
-        for label in func_labels:
-            assert (
-                label.type_hint == ""
-            ), f"Lua function LABEL should have no return type, got {label.type_hint!r}"
+        assert "add" in env.func_signatures
+        sig = env.func_signatures["add"]
+        assert (
+            sig.return_type == ""
+        ), f"Lua function should have no return type, got {sig.return_type!r}"
 
 
 # ---------------------------------------------------------------------------

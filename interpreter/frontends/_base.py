@@ -21,6 +21,7 @@ from ..frontend_observer import FrontendObserver, NullFrontendObserver
 from ..frontends.context import GrammarConstants, TreeSitterEmitContext
 from ..ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
 from ..parser import ParserFactory
+from ..type_environment_builder import TypeEnvironmentBuilder
 from .. import constants
 from ..constants import Language
 
@@ -88,6 +89,7 @@ class BaseFrontend(Frontend):
         self._parser_factory = parser_factory
         self._language = language
         self._observer = observer
+        self._type_env_builder: TypeEnvironmentBuilder = TypeEnvironmentBuilder()
         # Legacy state (used only by unconverted frontends)
         self._reg_counter: int = 0
         self._label_counter: int = 0
@@ -146,6 +148,10 @@ class BaseFrontend(Frontend):
             end_line=e[0] + 1,
             end_col=e[1],
         )
+
+    @property
+    def type_env_builder(self) -> TypeEnvironmentBuilder:
+        return self._type_env_builder
 
     # ── context-mode hooks (override in subclasses for pure-function dispatch) ──
 
@@ -207,6 +213,7 @@ class BaseFrontend(Frontend):
         )
         ctx.emit(Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)
         ctx.lower_block(root)
+        self._type_env_builder = ctx.type_env_builder
         return ctx.instructions
 
     # ── dispatchers ──────────────────────────────────────────────

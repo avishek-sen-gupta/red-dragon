@@ -566,7 +566,9 @@ def run(
     # 4c. Type inference
     conversion_rules = DefaultConversionRules()
     type_resolver = TypeResolver(conversion_rules)
-    type_env = infer_types(instructions, type_resolver)
+    type_env = infer_types(
+        instructions, type_resolver, type_env_builder=frontend.type_env_builder
+    )
 
     # 5. Execute via extract
     vm_config = VMConfig(
