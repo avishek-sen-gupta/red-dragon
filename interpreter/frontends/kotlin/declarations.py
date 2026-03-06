@@ -161,13 +161,27 @@ def _lower_kotlin_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 ctx.seed_var_type(pname, type_hint)
 
 
-def _lower_function_body(ctx: TreeSitterEmitContext, body_node) -> None:
-    """Lower function_body which wraps the actual block or expression."""
+def _lower_function_body(ctx: TreeSitterEmitContext, body_node) -> str:
+    """Lower function_body which wraps the actual block or expression.
+
+    Returns the register of the last expression if the body is
+    expression-bodied (e.g. ``fun f() = 42``), otherwise returns empty string.
+    """
+    last_reg = ""
     for child in body_node.children:
         if child.type in ("{", "}", "="):
             continue
         if child.is_named:
-            ctx.lower_stmt(child)
+            is_stmt = (
+                ctx.stmt_dispatch.get(child.type) is not None
+                or child.type in ctx.constants.block_node_types
+            )
+            if is_stmt:
+                ctx.lower_stmt(child)
+                last_reg = ""
+            else:
+                last_reg = ctx.lower_expr(child)
+    return last_reg
 
 
 def lower_function_decl(
@@ -203,14 +217,20 @@ def lower_function_decl(
     if params_node:
         _lower_kotlin_params(ctx, params_node)
 
+    expr_reg = ""
     if body_node:
-        _lower_function_body(ctx, body_node)
+        expr_reg = _lower_function_body(ctx, body_node)
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST, result_reg=none_reg, operands=[ctx.constants.default_return_value]
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    if expr_reg:
+        ctx.emit(Opcode.RETURN, operands=[expr_reg])
+    else:
+        none_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[ctx.constants.default_return_value],
+        )
+        ctx.emit(Opcode.RETURN, operands=[none_reg])
     ctx.emit(Opcode.LABEL, label=end_label)
 
     func_reg = ctx.fresh_reg()

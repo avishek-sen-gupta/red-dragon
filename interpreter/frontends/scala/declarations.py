@@ -154,16 +154,27 @@ def lower_function_def(
     if params_node:
         lower_scala_params(ctx, params_node)
 
+    expr_returned = False
     if body_node:
-        ctx.lower_block(body_node)
+        is_block = (
+            body_node.type in ctx.constants.block_node_types
+            or ctx.stmt_dispatch.get(body_node.type) is not None
+        )
+        if is_block:
+            ctx.lower_block(body_node)
+        else:
+            val_reg = ctx.lower_expr(body_node)
+            ctx.emit(Opcode.RETURN, operands=[val_reg])
+            expr_returned = True
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    if not expr_returned:
+        none_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[ctx.constants.default_return_value],
+        )
+        ctx.emit(Opcode.RETURN, operands=[none_reg])
     ctx.emit(Opcode.LABEL, label=end_label)
 
     func_reg = ctx.fresh_reg()
