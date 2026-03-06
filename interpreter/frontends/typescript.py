@@ -269,7 +269,8 @@ def _lower_ts_method_def(ctx: TreeSitterEmitContext, node) -> None:
     return_hint = normalize_type_hint(raw_return.lstrip(": "), ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
 
     if not _has_static_modifier(node):
         _emit_this_param(ctx)
@@ -363,18 +364,20 @@ def lower_ts_param(ctx: TreeSitterEmitContext, child) -> None:
         if pname_node:
             pname = ctx.node_text(pname_node)
             type_hint = _extract_ts_type_hint(ctx, child)
+            sym_reg = ctx.fresh_reg()
             ctx.emit(
                 Opcode.SYMBOLIC,
-                result_reg=ctx.fresh_reg(),
+                result_reg=sym_reg,
                 operands=[f"{constants.PARAM_PREFIX}{pname}"],
                 node=child,
-                type_hint=type_hint,
             )
+            ctx.seed_register_type(sym_reg, type_hint)
+            ctx.seed_param_type(pname, type_hint)
             ctx.emit(
                 Opcode.STORE_VAR,
                 operands=[pname, f"%{ctx.reg_counter - 1}"],
-                type_hint=type_hint,
             )
+            ctx.seed_var_type(pname, type_hint)
         return
     if child.type == "optional_parameter":
         pname_node = child.child_by_field_name("pattern")
@@ -385,18 +388,20 @@ def lower_ts_param(ctx: TreeSitterEmitContext, child) -> None:
         if pname_node:
             pname = ctx.node_text(pname_node)
             type_hint = _extract_ts_type_hint(ctx, child)
+            sym_reg = ctx.fresh_reg()
             ctx.emit(
                 Opcode.SYMBOLIC,
-                result_reg=ctx.fresh_reg(),
+                result_reg=sym_reg,
                 operands=[f"{constants.PARAM_PREFIX}{pname}"],
                 node=child,
-                type_hint=type_hint,
             )
+            ctx.seed_register_type(sym_reg, type_hint)
+            ctx.seed_param_type(pname, type_hint)
             ctx.emit(
                 Opcode.STORE_VAR,
                 operands=[pname, f"%{ctx.reg_counter - 1}"],
-                type_hint=type_hint,
             )
+            ctx.seed_var_type(pname, type_hint)
         return
     # Fall back to JS param handling
     from interpreter.frontends.javascript.expressions import lower_js_param
@@ -503,7 +508,8 @@ def lower_ts_function_def(ctx: TreeSitterEmitContext, node) -> None:
     return_hint = normalize_type_hint(raw_return.lstrip(": "), ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
 
     if params_node:
         lower_ts_params(ctx, params_node)

@@ -76,8 +76,8 @@ def lower_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 Opcode.STORE_VAR,
                 operands=[var_name, val_reg],
                 node=node,
-                type_hint=type_hint,
             )
+            ctx.seed_var_type(var_name, type_hint)
 
 
 def _lower_init_declarator(
@@ -110,8 +110,8 @@ def _lower_init_declarator(
         Opcode.STORE_VAR,
         operands=[var_name, val_reg],
         node=node,
-        type_hint=type_hint,
     )
+    ctx.seed_var_type(var_name, type_hint)
 
 
 def _find_function_declarator(node):
@@ -134,18 +134,20 @@ def lower_c_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 pname = extract_declarator_name(ctx, decl_node)
                 raw_type = extract_type_from_field(ctx, child, "type")
                 type_hint = normalize_type_hint(raw_type, ctx.type_map)
+                sym_reg = ctx.fresh_reg()
                 ctx.emit(
                     Opcode.SYMBOLIC,
-                    result_reg=ctx.fresh_reg(),
+                    result_reg=sym_reg,
                     operands=[f"{constants.PARAM_PREFIX}{pname}"],
                     node=child,
-                    type_hint=type_hint,
                 )
+                ctx.seed_register_type(sym_reg, type_hint)
+                ctx.seed_param_type(pname, type_hint)
                 ctx.emit(
                     Opcode.STORE_VAR,
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
-                    type_hint=type_hint,
                 )
+                ctx.seed_var_type(pname, type_hint)
 
 
 def lower_function_def_c(ctx: TreeSitterEmitContext, node) -> None:
@@ -181,7 +183,8 @@ def lower_function_def_c(ctx: TreeSitterEmitContext, node) -> None:
     return_hint = normalize_type_hint(raw_return, ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
 
     if params_node:
         lower_c_params(ctx, params_node)

@@ -26,8 +26,8 @@ def lower_local_var_decl(ctx: TreeSitterEmitContext, node) -> None:
                     Opcode.STORE_VAR,
                     operands=[ctx.node_text(name_node), val_reg],
                     node=node,
-                    type_hint=type_hint,
                 )
+                ctx.seed_var_type(ctx.node_text(name_node), type_hint)
             elif name_node:
                 val_reg = ctx.fresh_reg()
                 ctx.emit(
@@ -39,8 +39,8 @@ def lower_local_var_decl(ctx: TreeSitterEmitContext, node) -> None:
                     Opcode.STORE_VAR,
                     operands=[ctx.node_text(name_node), val_reg],
                     node=node,
-                    type_hint=type_hint,
                 )
+                ctx.seed_var_type(ctx.node_text(name_node), type_hint)
 
 
 def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
@@ -79,7 +79,8 @@ def lower_method_decl(
     return_hint = normalize_type_hint(raw_return, ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
 
     if inject_this:
         _emit_this_param(ctx)
@@ -248,8 +249,8 @@ def _lower_field_decl(ctx: TreeSitterEmitContext, node) -> None:
                     Opcode.STORE_VAR,
                     operands=[ctx.node_text(name_node), val_reg],
                     node=node,
-                    type_hint=type_hint,
                 )
+                ctx.seed_var_type(ctx.node_text(name_node), type_hint)
 
 
 def _lower_static_initializer(ctx: TreeSitterEmitContext, node) -> None:

@@ -74,7 +74,8 @@ def lower_go_func_decl(ctx: TreeSitterEmitContext, node) -> None:
     return_hint = normalize_type_hint(raw_return, ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
 
     if params_node:
         lower_go_params(ctx, params_node)
@@ -126,7 +127,8 @@ def lower_go_method_decl(ctx: TreeSitterEmitContext, node) -> None:
     return_hint = normalize_type_hint(raw_return, ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
 
     # Lower receiver as parameter
     if receiver_node:
@@ -162,18 +164,20 @@ def lower_go_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 pname = ctx.node_text(name_node)
                 raw_type = extract_type_from_field(ctx, child, "type")
                 type_hint = normalize_type_hint(raw_type, ctx.type_map)
+                param_reg = ctx.fresh_reg()
                 ctx.emit(
                     Opcode.SYMBOLIC,
-                    result_reg=ctx.fresh_reg(),
+                    result_reg=param_reg,
                     operands=[f"{constants.PARAM_PREFIX}{pname}"],
                     node=child,
-                    type_hint=type_hint,
                 )
+                ctx.seed_register_type(param_reg, type_hint)
+                ctx.seed_param_type(pname, type_hint)
                 ctx.emit(
                     Opcode.STORE_VAR,
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
-                    type_hint=type_hint,
                 )
+                ctx.seed_var_type(pname, type_hint)
         elif child.type == "identifier":
             pname = ctx.node_text(child)
             ctx.emit(
@@ -260,14 +264,16 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
     if value_node:
         val_regs = lower_expression_list(ctx, value_node)
         for name_node, val_reg in zip(names, val_regs):
+            name_str = ctx.node_text(name_node)
             ctx.emit(
                 Opcode.STORE_VAR,
-                operands=[ctx.node_text(name_node), val_reg],
+                operands=[name_str, val_reg],
                 node=parent_node,
-                type_hint=type_hint,
             )
+            ctx.seed_var_type(name_str, type_hint)
         # If more names than values (e.g. `var a, b int`), store None for remainder
         for name_node in names[len(val_regs) :]:
+            name_str = ctx.node_text(name_node)
             val_reg = ctx.fresh_reg()
             ctx.emit(
                 Opcode.CONST,
@@ -276,12 +282,13 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
             )
             ctx.emit(
                 Opcode.STORE_VAR,
-                operands=[ctx.node_text(name_node), val_reg],
+                operands=[name_str, val_reg],
                 node=parent_node,
-                type_hint=type_hint,
             )
+            ctx.seed_var_type(name_str, type_hint)
     else:
         for name_node in names:
+            name_str = ctx.node_text(name_node)
             val_reg = ctx.fresh_reg()
             ctx.emit(
                 Opcode.CONST,
@@ -290,10 +297,10 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
             )
             ctx.emit(
                 Opcode.STORE_VAR,
-                operands=[ctx.node_text(name_node), val_reg],
+                operands=[name_str, val_reg],
                 node=parent_node,
-                type_hint=type_hint,
             )
+            ctx.seed_var_type(name_str, type_hint)
 
 
 # -- Go: const declaration -------------------------------------------------

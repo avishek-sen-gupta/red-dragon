@@ -52,8 +52,8 @@ def lower_cpp_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 Opcode.STORE_VAR,
                 operands=[var_name, val_reg],
                 node=node,
-                type_hint=type_hint,
             )
+            ctx.seed_var_type(var_name, type_hint)
 
 
 def _extract_cpp_struct_type(ctx: TreeSitterEmitContext, node) -> str:
@@ -172,7 +172,8 @@ def lower_cpp_method(ctx: TreeSitterEmitContext, node) -> None:
     return_hint = normalize_type_hint(raw_return, ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
 
     _emit_this_param(ctx)
 
@@ -284,7 +285,8 @@ def lower_cpp_function_def(ctx: TreeSitterEmitContext, node) -> None:
     return_hint = normalize_type_hint(raw_return, ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label, type_hint=return_hint)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
 
     if params_node:
         lower_c_params(ctx, params_node)
