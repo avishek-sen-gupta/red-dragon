@@ -91,15 +91,20 @@ def lower_var_def(ctx: TreeSitterEmitContext, node) -> None:
 
 def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     """Emit ``SYMBOLIC param:this`` + ``STORE_VAR this`` for instance methods."""
+    param_reg = ctx.fresh_reg()
+    class_name = ctx._current_class_name
     ctx.emit(
         Opcode.SYMBOLIC,
-        result_reg=ctx.fresh_reg(),
+        result_reg=param_reg,
         operands=[f"{constants.PARAM_PREFIX}this"],
     )
+    ctx.seed_register_type(param_reg, class_name)
+    ctx.seed_param_type("this", class_name)
     ctx.emit(
         Opcode.STORE_VAR,
-        operands=["this", f"%{ctx.reg_counter - 1}"],
+        operands=["this", param_reg],
     )
+    ctx.seed_var_type("this", class_name)
 
 
 def lower_scala_params(ctx: TreeSitterEmitContext, params_node) -> None:
@@ -219,7 +224,10 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
 
     if body_node:
+        saved_class = ctx._current_class_name
+        ctx._current_class_name = class_name
         _lower_class_body_hoisted(ctx, body_node, inject_this=True)
+        ctx._current_class_name = saved_class
 
 
 def lower_object_def(ctx: TreeSitterEmitContext, node) -> None:
