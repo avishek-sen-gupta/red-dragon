@@ -8,6 +8,7 @@ from typing import Any
 from .constants import Language
 from .frontend_observer import FrontendObserver, NullFrontendObserver
 from .ir import IRInstruction
+from .type_environment_builder import TypeEnvironmentBuilder
 from . import constants
 
 _NO_REPAIR_CLIENT = object()  # sentinel — distinct from None
@@ -24,6 +25,15 @@ class Frontend(ABC):
         Override in language frontends that produce memory layouts (e.g. COBOL).
         """
         return {}
+
+    @property
+    def type_env_builder(self) -> TypeEnvironmentBuilder:
+        """Type seeds accumulated during lowering.
+
+        Override in frontends that populate type info during lowering.
+        Returns an empty builder by default.
+        """
+        return TypeEnvironmentBuilder()
 
 
 # Backward-compatibility re-export: code that imports PythonFrontend from here still works.

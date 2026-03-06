@@ -11,9 +11,11 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from interpreter import constants
 from interpreter.constants import Language
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
+from interpreter.type_environment_builder import TypeEnvironmentBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +102,12 @@ class TreeSitterEmitContext:
     stmt_dispatch: dict[str, Callable] = field(default_factory=dict)
     expr_dispatch: dict[str, Callable] = field(default_factory=dict)
 
+    # Type environment builder — accumulates type seeds during lowering
+    type_env_builder: TypeEnvironmentBuilder = field(
+        default_factory=TypeEnvironmentBuilder
+    )
+    _current_func_label: str = ""
+
     # ── utility methods ──────────────────────────────────────────
 
     def fresh_reg(self) -> str:
@@ -128,16 +136,62 @@ class TreeSitterEmitContext:
             if not source_location.is_unknown()
             else (self.source_loc(node) if node else NO_SOURCE_LOCATION)
         )
+        resolved_operands = operands or []
         inst = IRInstruction(
             opcode=opcode,
             result_reg=result_reg or None,
-            operands=operands or [],
+            operands=resolved_operands,
             label=label or None,
             source_location=loc,
-            type_hint=type_hint,
         )
+        self._route_type_hint(opcode, result_reg, resolved_operands, label, type_hint)
         self.instructions.append(inst)
         return inst
+
+    def _route_type_hint(
+        self,
+        opcode: Opcode,
+        result_reg: str,
+        operands: list[Any],
+        label: str,
+        type_hint: str,
+    ) -> None:
+        """Route a type_hint to the appropriate slot in the builder."""
+        if opcode == Opcode.LABEL:
+            if label and label.startswith(constants.FUNC_LABEL_PREFIX):
+                self._current_func_label = label
+                self.type_env_builder.func_param_types.setdefault(label, [])
+                if type_hint:
+                    self.type_env_builder.func_return_types[label] = type_hint
+            elif (
+                label
+                and label.startswith(constants.CLASS_LABEL_PREFIX)
+                and not label.startswith(constants.END_CLASS_LABEL_PREFIX)
+            ):
+                self._current_func_label = ""
+            else:
+                self._current_func_label = ""
+            return
+
+        if opcode == Opcode.SYMBOLIC:
+            if type_hint and result_reg:
+                self.type_env_builder.register_types[result_reg] = type_hint
+            if self._current_func_label and operands:
+                operand = str(operands[0])
+                if operand.startswith("param:"):
+                    param_name = operand[len("param:") :]
+                    self.type_env_builder.func_param_types[
+                        self._current_func_label
+                    ].append((param_name, type_hint or ""))
+            return
+
+        if opcode == Opcode.STORE_VAR and type_hint and operands:
+            self.type_env_builder.var_types[str(operands[0])] = type_hint
+            return
+
+        if opcode == Opcode.CALL_FUNCTION and type_hint and result_reg:
+            self.type_env_builder.register_types[result_reg] = type_hint
+            return
 
     def node_text(self, node) -> str:
         return self.source[node.start_byte : node.end_byte].decode("utf-8")

@@ -13,6 +13,7 @@ from interpreter.frontend import Frontend
 from interpreter.ir import IRInstruction
 from interpreter.llm_client import LLMClient
 from interpreter.parser import ParserFactory
+from interpreter.type_environment_builder import TypeEnvironmentBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,10 @@ class RepairingFrontendDecorator(Frontend):
     @property
     def data_layout(self) -> dict[str, dict]:
         return self._inner_frontend.data_layout
+
+    @property
+    def type_env_builder(self) -> TypeEnvironmentBuilder:
+        return self._inner_frontend.type_env_builder
 
     @property
     def last_lowered_source(self) -> bytes:
