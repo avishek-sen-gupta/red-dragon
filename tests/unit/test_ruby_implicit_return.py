@@ -114,6 +114,11 @@ end
         )
         returns = [i for i in func_body if i.opcode == Opcode.RETURN]
         assert len(returns) >= 1, "expected at least one RETURN"
+        load_fields = [i for i in func_body if i.opcode == Opcode.LOAD_FIELD]
+        assert len(load_fields) >= 1, "expected LOAD_FIELD for @age"
+        assert (
+            returns[0].operands[0] == load_fields[0].result_reg
+        ), "RETURN should reference the LOAD_FIELD result register for @age"
 
 
 class TestRubyImplicitReturnAssignmentIsNil:
