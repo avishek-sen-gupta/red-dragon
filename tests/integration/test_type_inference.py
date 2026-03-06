@@ -1141,6 +1141,95 @@ class Dog {
             assert env.register_types[load_fields[0].result_reg] == TypeName.INT
 
 
+class TestThisParamInFuncSignatures:
+    """Verify that this/$this param is seeded with class name in func_signatures."""
+
+    def test_java_this_param_in_func_signature(self):
+        _instructions, env = _lower_and_infer(
+            """\
+class Dog {
+    int age;
+    int getAge() { return this.age; }
+}
+""",
+            "java",
+        )
+        sig = env.func_signatures["getAge"]
+        this_params = [p for p in sig.params if p[0] == "this"]
+        assert len(this_params) == 1
+        assert this_params[0][1] == "Dog"
+
+    def test_cpp_this_param_in_func_signature(self):
+        _instructions, env = _lower_and_infer(
+            "class Vec3 { double length() { return 0; } };",
+            "cpp",
+        )
+        sig = env.func_signatures["length"]
+        this_params = [p for p in sig.params if p[0] == "this"]
+        assert len(this_params) == 1
+        assert this_params[0][1] == "Vec3"
+
+    def test_csharp_this_param_in_func_signature(self):
+        _instructions, env = _lower_and_infer(
+            "class Cat { int GetLives() { return 9; } }",
+            "csharp",
+        )
+        sig = env.func_signatures["GetLives"]
+        this_params = [p for p in sig.params if p[0] == "this"]
+        assert len(this_params) == 1
+        assert this_params[0][1] == "Cat"
+
+    def test_javascript_this_param_in_func_signature(self):
+        _instructions, env = _lower_and_infer(
+            "class Box { getSize() { return 1; } }",
+            "javascript",
+        )
+        sig = env.func_signatures["getSize"]
+        this_params = [p for p in sig.params if p[0] == "this"]
+        assert len(this_params) == 1
+        assert this_params[0][1] == "Box"
+
+    def test_typescript_this_param_in_func_signature(self):
+        _instructions, env = _lower_and_infer(
+            "class Box { getSize(): number { return 1; } }",
+            "typescript",
+        )
+        sig = env.func_signatures["getSize"]
+        this_params = [p for p in sig.params if p[0] == "this"]
+        assert len(this_params) == 1
+        assert this_params[0][1] == "Box"
+
+    def test_kotlin_this_param_in_func_signature(self):
+        _instructions, env = _lower_and_infer(
+            "class Circle { fun area(): Double { return 3.14 } }",
+            "kotlin",
+        )
+        sig = env.func_signatures["area"]
+        this_params = [p for p in sig.params if p[0] == "this"]
+        assert len(this_params) == 1
+        assert this_params[0][1] == "Circle"
+
+    def test_scala_this_param_in_func_signature(self):
+        _instructions, env = _lower_and_infer(
+            "class Circle { def area(): Double = 3.14 }",
+            "scala",
+        )
+        sig = env.func_signatures["area"]
+        this_params = [p for p in sig.params if p[0] == "this"]
+        assert len(this_params) == 1
+        assert this_params[0][1] == "Circle"
+
+    def test_php_this_param_in_func_signature(self):
+        _instructions, env = _lower_and_infer(
+            '<?php class User { function greet(): string { return "hi"; } }',
+            "php",
+        )
+        sig = env.func_signatures["greet"]
+        this_params = [p for p in sig.params if p[0] == "$this"]
+        assert len(this_params) == 1
+        assert this_params[0][1] == "User"
+
+
 class TestLuaFuncSignatures:
     def test_untyped_function_signature(self):
         """Lua function add(a, b) → params collected with empty types."""

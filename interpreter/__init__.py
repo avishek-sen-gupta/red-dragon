@@ -3,6 +3,7 @@
 from .run import run, execute_cfg, VMConfig, ExecutionStats  # noqa: F401
 from .api import (  # noqa: F401
     lower_source,
+    lower_and_infer,
     dump_ir,
     build_cfg_from_source,
     dump_cfg,

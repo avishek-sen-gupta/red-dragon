@@ -10,7 +10,7 @@ Exercises 6 features:
   6. ALLOC_REGION / LOAD_REGION tagging
 """
 
-from interpreter.api import lower_source
+from interpreter.api import lower_and_infer
 from interpreter.default_conversion_rules import DefaultConversionRules
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.type_inference import infer_types
@@ -22,9 +22,7 @@ def _resolver():
 
 
 def _lower_and_infer(source: str, language: str):
-    instructions = lower_source(source, language=language)
-    env = infer_types(instructions, _resolver())
-    return instructions, env
+    return lower_and_infer(source, language=language)
 
 
 class TestBuiltinReturnTypes:

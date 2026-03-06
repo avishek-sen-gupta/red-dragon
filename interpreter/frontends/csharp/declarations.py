@@ -71,15 +71,20 @@ def _lower_csharp_declarator(
 
 def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     """Emit ``SYMBOLIC param:this`` + ``STORE_VAR this`` for instance methods."""
+    param_reg = ctx.fresh_reg()
+    class_name = ctx._current_class_name
     ctx.emit(
         Opcode.SYMBOLIC,
-        result_reg=ctx.fresh_reg(),
+        result_reg=param_reg,
         operands=[f"{constants.PARAM_PREFIX}this"],
     )
+    ctx.seed_register_type(param_reg, class_name)
+    ctx.seed_param_type("this", class_name)
     ctx.emit(
         Opcode.STORE_VAR,
-        operands=["this", f"%{ctx.reg_counter - 1}"],
+        operands=["this", param_reg],
     )
+    ctx.seed_var_type("this", class_name)
 
 
 def _has_static_modifier(ctx: TreeSitterEmitContext, node) -> bool:
@@ -224,8 +229,11 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     )
     ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
 
+    saved_class = ctx._current_class_name
+    ctx._current_class_name = class_name
     for child in deferred:
         _lower_deferred_class_child(ctx, child)
+    ctx._current_class_name = saved_class
 
 
 def lower_field_decl(ctx: TreeSitterEmitContext, node) -> None:
