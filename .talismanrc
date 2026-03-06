@@ -50,3 +50,7 @@ fileignoreconfig:
   checksum: af467ca3418f518967b604d790de151f9b1a98fbbc19898769acf0109dfa903b
 - filename: interpreter/type_environment.py
   checksum: c50058f8627f2d1f4d71b169d53ff13ce56b2e8927f19cd960aea18723674844
+- filename: interpreter/type_environment_builder.py
+  checksum: d1f1d097499e4f1243d99fcebc23a1d40951058492b2aee0cde9e92cd3427785
+- filename: tests/unit/test_type_environment_builder.py
+  checksum: 48bac2a2c2dbe62007eed6e7a8e7af4e73ec3f84e6fef202d157c94515398ff9

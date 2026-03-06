@@ -8,6 +8,7 @@ from interpreter.default_conversion_rules import DefaultConversionRules
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.null_type_resolver import NullTypeResolver
 from interpreter.function_signature import FunctionSignature
+from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.type_inference import infer_types, _infer_const_type
 from interpreter.type_resolver import TypeResolver
 
@@ -79,11 +80,10 @@ class TestSymbolicInference:
     def test_symbolic_with_type_hint(self):
         instructions = [
             _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(
-                Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"], type_hint="Int"
-            ),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(register_types={"%0": "Int"})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%0"] == "Int"
 
     def test_symbolic_without_type_hint(self):
@@ -162,9 +162,10 @@ class TestStoreVarInference:
         instructions = [
             _make_inst(Opcode.LABEL, label="entry"),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
-            _make_inst(Opcode.STORE_VAR, operands=["x", "%0"], type_hint="Int"),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(var_types={"x": "Int"})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.var_types["x"] == "Int"
 
     def test_store_var_inherits_register_type(self):
@@ -177,13 +178,14 @@ class TestStoreVarInference:
         assert env.var_types["pi"] == TypeName.FLOAT
 
     def test_store_var_explicit_type_overrides_register(self):
-        """Declared type takes precedence over inferred register type."""
+        """Declared type (pre-seeded) takes precedence over inferred register type."""
         instructions = [
             _make_inst(Opcode.LABEL, label="entry"),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
-            _make_inst(Opcode.STORE_VAR, operands=["x", "%0"], type_hint="Float"),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(var_types={"x": "Float"})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.var_types["x"] == "Float"
 
 
@@ -197,10 +199,11 @@ class TestLoadVarInference:
         instructions = [
             _make_inst(Opcode.LABEL, label="entry"),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
-            _make_inst(Opcode.STORE_VAR, operands=["x", "%0"], type_hint="Int"),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"]),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(var_types={"x": "Int"})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%1"] == "Int"
 
     def test_load_var_unknown_variable(self):
@@ -369,17 +372,18 @@ class TestFullChain:
             _make_inst(Opcode.LABEL, label="entry"),
             # int x = 7
             _make_inst(Opcode.CONST, result_reg="%0", operands=["7"]),
-            _make_inst(Opcode.STORE_VAR, operands=["x", "%0"], type_hint="Int"),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
             # int y = 2
             _make_inst(Opcode.CONST, result_reg="%1", operands=["2"]),
-            _make_inst(Opcode.STORE_VAR, operands=["y", "%1"], type_hint="Int"),
+            _make_inst(Opcode.STORE_VAR, operands=["y", "%1"]),
             # z = x / y
             _make_inst(Opcode.LOAD_VAR, result_reg="%2", operands=["x"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="%3", operands=["y"]),
             _make_inst(Opcode.BINOP, result_reg="%4", operands=["/", "%2", "%3"]),
-            _make_inst(Opcode.STORE_VAR, operands=["z", "%4"], type_hint="Int"),
+            _make_inst(Opcode.STORE_VAR, operands=["z", "%4"]),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(var_types={"x": "Int", "y": "Int", "z": "Int"})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
 
         assert env.register_types["%0"] == TypeName.INT
         assert env.register_types["%1"] == TypeName.INT
@@ -398,16 +402,17 @@ class TestFullChain:
 
 class TestNullTypeResolver:
     def test_instruction_level_types_still_propagated(self):
-        """NullTypeResolver should still propagate SYMBOLIC/CONST/STORE_VAR hints."""
+        """NullTypeResolver should still propagate pre-seeded and CONST types."""
         instructions = [
             _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(
-                Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"], type_hint="Int"
-            ),
-            _make_inst(Opcode.STORE_VAR, operands=["x", "%0"], type_hint="Int"),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["3.14"]),
         ]
-        env = infer_types(instructions, _null_resolver())
+        builder = TypeEnvironmentBuilder(
+            register_types={"%0": "Int"}, var_types={"x": "Int"}
+        )
+        env = infer_types(instructions, _null_resolver(), type_env_builder=builder)
         assert env.register_types["%0"] == "Int"
         assert env.register_types["%1"] == TypeName.FLOAT
         assert env.var_types["x"] == "Int"
@@ -440,17 +445,17 @@ class TestNullTypeResolver:
 
 class TestCallFunctionInference:
     def test_call_function_with_type_hint_sets_register_type(self):
-        """Constructor CALL_FUNCTION with type_hint → register gets that type."""
+        """Constructor CALL_FUNCTION with pre-seeded type → register gets that type."""
         instructions = [
             _make_inst(Opcode.LABEL, label="entry"),
             _make_inst(
                 Opcode.CALL_FUNCTION,
                 result_reg="%0",
                 operands=["Dog", "%1", "%2"],
-                type_hint="Dog",
             ),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(register_types={"%0": "Dog"})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%0"] == "Dog"
 
     def test_call_function_without_type_hint_leaves_register_untyped(self):
@@ -478,15 +483,15 @@ class TestCallFunctionInference:
 
 
 class TestReturnTypeInference:
-    def test_label_with_type_hint_records_return_type(self):
-        """LABEL with type_hint records the function's return type."""
+    def test_label_with_pre_seeded_return_type(self):
+        """Pre-seeded func_return_types → recorded internally."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="func_add_0", type_hint="Int"),
+            _make_inst(Opcode.LABEL, label="func_add_0"),
             _make_inst(Opcode.RETURN, operands=["%0"]),
             _make_inst(Opcode.LABEL, label="end_add_0"),
         ]
-        env = infer_types(instructions, _default_resolver())
-        # Return type is recorded internally — verify via full chain below
+        builder = TypeEnvironmentBuilder(func_return_types={"func_add_0": "Int"})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         # LABEL itself produces no register type
         assert len(env.register_types) == 0
 
@@ -496,7 +501,7 @@ class TestReturnTypeInference:
             _make_inst(Opcode.LABEL, label="entry"),
             # Function definition with return type
             _make_inst(Opcode.BRANCH, label="end_add_0"),
-            _make_inst(Opcode.LABEL, label="func_add_0", type_hint="Int"),
+            _make_inst(Opcode.LABEL, label="func_add_0"),
             _make_inst(Opcode.RETURN, operands=["%0"]),
             _make_inst(Opcode.LABEL, label="end_add_0"),
             # Store function ref: add → func_add_0
@@ -515,14 +520,15 @@ class TestReturnTypeInference:
                 operands=["add", "%2", "%3"],
             ),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(func_return_types={"func_add_0": "Int"})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%4"] == "Int"
 
-    def test_constructor_type_hint_overrides_return_type(self):
-        """CALL_FUNCTION with explicit type_hint (constructor) overrides inferred return type."""
+    def test_constructor_pre_seeded_type_overrides_return_type(self):
+        """Pre-seeded register type (constructor) overrides inferred return type."""
         instructions = [
             _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.LABEL, label="func_Dog_0", type_hint="void"),
+            _make_inst(Opcode.LABEL, label="func_Dog_0"),
             _make_inst(Opcode.RETURN, operands=["%0"]),
             _make_inst(Opcode.LABEL, label="end_Dog_0"),
             _make_inst(
@@ -535,11 +541,14 @@ class TestReturnTypeInference:
                 Opcode.CALL_FUNCTION,
                 result_reg="%2",
                 operands=["Dog", "%1"],
-                type_hint="Dog",
             ),
         ]
-        env = infer_types(instructions, _default_resolver())
-        # Explicit type_hint on CALL_FUNCTION wins
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_Dog_0": "void"},
+            register_types={"%2": "Dog"},
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        # Pre-seeded register type wins
         assert env.register_types["%2"] == "Dog"
 
     def test_unknown_function_stays_untyped(self):
@@ -636,25 +645,25 @@ class TestBuiltinReturnTypes:
         env = infer_types(instructions, _default_resolver())
         assert "%0" not in env.register_types
 
-    def test_type_hint_takes_precedence_over_builtin(self):
-        """Explicit type_hint on CALL_FUNCTION overrides builtin table."""
+    def test_pre_seeded_type_takes_precedence_over_builtin(self):
+        """Pre-seeded register type on CALL_FUNCTION overrides builtin table."""
         instructions = [
             _make_inst(Opcode.LABEL, label="entry"),
             _make_inst(
                 Opcode.CALL_FUNCTION,
                 result_reg="%0",
                 operands=["len", "%1"],
-                type_hint="CustomType",
             ),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(register_types={"%0": "CustomType"})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%0"] == "CustomType"
 
     def test_user_defined_function_takes_precedence_over_builtin(self):
         """User-defined `len` function overrides builtin table."""
         instructions = [
             _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.LABEL, label="func_len_0", type_hint="String"),
+            _make_inst(Opcode.LABEL, label="func_len_0"),
             _make_inst(Opcode.RETURN, operands=["%0"]),
             _make_inst(Opcode.LABEL, label="end_len_0"),
             _make_inst(
@@ -664,7 +673,8 @@ class TestBuiltinReturnTypes:
             ),
             _make_inst(Opcode.CALL_FUNCTION, result_reg="%2", operands=["len", "%3"]),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(func_return_types={"func_len_0": "String"})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%2"] == "String"
 
 
@@ -723,7 +733,7 @@ class TestReturnBackfill:
         instructions = [
             _make_inst(Opcode.LABEL, label="entry"),
             _make_inst(Opcode.BRANCH, label="end_add_0"),
-            _make_inst(Opcode.LABEL, label="func_add_0", type_hint="Float"),
+            _make_inst(Opcode.LABEL, label="func_add_0"),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.RETURN, operands=["%0"]),
             _make_inst(Opcode.LABEL, label="end_add_0"),
@@ -734,7 +744,8 @@ class TestReturnBackfill:
             ),
             _make_inst(Opcode.STORE_VAR, operands=["add", "%1"]),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(func_return_types={"func_add_0": "Float"})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         # Float (from annotation) should NOT be overwritten by Int (from CONST 42)
         assert env.func_signatures["add"].return_type == "Float"
 
@@ -770,7 +781,7 @@ class TestCallMethodReturnTypes:
             # class Dog { getAge(): Int }
             _make_inst(Opcode.LABEL, label="class_Dog_0"),
             _make_inst(Opcode.BRANCH, label="end_getAge_0"),
-            _make_inst(Opcode.LABEL, label="func_getAge_0", type_hint="Int"),
+            _make_inst(Opcode.LABEL, label="func_getAge_0"),
             _make_inst(Opcode.RETURN, operands=["%0"]),
             _make_inst(Opcode.LABEL, label="end_getAge_0"),
             _make_inst(
@@ -788,7 +799,8 @@ class TestCallMethodReturnTypes:
                 operands=["%2", "getAge"],
             ),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(func_return_types={"func_getAge_0": "Int"})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%3"] == "Int"
 
     def test_unknown_method_stays_untyped(self):
@@ -811,7 +823,7 @@ class TestCallMethodReturnTypes:
             _make_inst(Opcode.LABEL, label="entry"),
             # Define function getAge with return type Int
             _make_inst(Opcode.BRANCH, label="end_getAge_0"),
-            _make_inst(Opcode.LABEL, label="func_getAge_0", type_hint="Int"),
+            _make_inst(Opcode.LABEL, label="func_getAge_0"),
             _make_inst(Opcode.RETURN, operands=["%0"]),
             _make_inst(Opcode.LABEL, label="end_getAge_0"),
             _make_inst(
@@ -826,7 +838,8 @@ class TestCallMethodReturnTypes:
                 operands=["%2", "getAge"],
             ),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(func_return_types={"func_getAge_0": "Int"})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%3"] == "Int"
 
     def test_class_scope_reset_on_new_class(self):
@@ -836,7 +849,7 @@ class TestCallMethodReturnTypes:
             # class Cat { speak(): String }
             _make_inst(Opcode.LABEL, label="class_Cat_0"),
             _make_inst(Opcode.BRANCH, label="end_speak_0"),
-            _make_inst(Opcode.LABEL, label="func_speak_0", type_hint="String"),
+            _make_inst(Opcode.LABEL, label="func_speak_0"),
             _make_inst(Opcode.RETURN, operands=["%0"]),
             _make_inst(Opcode.LABEL, label="end_speak_0"),
             _make_inst(
@@ -848,7 +861,7 @@ class TestCallMethodReturnTypes:
             # class Dog { bark(): Int }
             _make_inst(Opcode.LABEL, label="class_Dog_0"),
             _make_inst(Opcode.BRANCH, label="end_bark_0"),
-            _make_inst(Opcode.LABEL, label="func_bark_0", type_hint="Int"),
+            _make_inst(Opcode.LABEL, label="func_bark_0"),
             _make_inst(Opcode.RETURN, operands=["%0"]),
             _make_inst(Opcode.LABEL, label="end_bark_0"),
             _make_inst(
@@ -864,7 +877,13 @@ class TestCallMethodReturnTypes:
             _make_inst(Opcode.NEW_OBJECT, result_reg="%5", operands=["Dog"]),
             _make_inst(Opcode.CALL_METHOD, result_reg="%6", operands=["%5", "bark"]),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(
+            func_return_types={
+                "func_speak_0": "String",
+                "func_bark_0": "Int",
+            }
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%4"] == "String"
         assert env.register_types["%6"] == "Int"
 
@@ -970,17 +989,13 @@ class TestImmutability:
 
 class TestFunctionSignatures:
     def test_typed_params_collected(self):
-        """LABEL → SYMBOLIC params → CONST func ref → signatures include param types."""
+        """Pre-seeded func types → signatures include param types."""
         instructions = [
             _make_inst(Opcode.LABEL, label="entry"),
             _make_inst(Opcode.BRANCH, label="end_add_0"),
-            _make_inst(Opcode.LABEL, label="func_add_0", type_hint="Int"),
-            _make_inst(
-                Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"], type_hint="Int"
-            ),
-            _make_inst(
-                Opcode.SYMBOLIC, result_reg="%1", operands=["param:b"], type_hint="Int"
-            ),
+            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"]),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%1", operands=["param:b"]),
             _make_inst(Opcode.RETURN, operands=["%2"]),
             _make_inst(Opcode.LABEL, label="end_add_0"),
             _make_inst(
@@ -990,7 +1005,12 @@ class TestFunctionSignatures:
             ),
             _make_inst(Opcode.STORE_VAR, operands=["add", "%3"]),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(
+            register_types={"%0": "Int", "%1": "Int"},
+            func_return_types={"func_add_0": "Int"},
+            func_param_types={"func_add_0": [("a", "Int"), ("b", "Int")]},
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert "add" in env.func_signatures
         sig = env.func_signatures["add"]
         assert sig == FunctionSignature(
@@ -1023,10 +1043,8 @@ class TestFunctionSignatures:
         instructions = [
             _make_inst(Opcode.LABEL, label="entry"),
             _make_inst(Opcode.BRANCH, label="end_add_0"),
-            _make_inst(Opcode.LABEL, label="func_add_0", type_hint="Int"),
-            _make_inst(
-                Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"], type_hint="Int"
-            ),
+            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"]),
             _make_inst(Opcode.RETURN, operands=["%0"]),
             _make_inst(Opcode.LABEL, label="end_add_0"),
             _make_inst(
@@ -1036,7 +1054,12 @@ class TestFunctionSignatures:
             ),
             _make_inst(Opcode.STORE_VAR, operands=["add", "%1"]),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(
+            register_types={"%0": "Int"},
+            func_return_types={"func_add_0": "Int"},
+            func_param_types={"func_add_0": [("a", "Int")]},
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert "func_add_0" not in env.func_signatures
         assert "add" in env.func_signatures
 
@@ -1045,7 +1068,7 @@ class TestFunctionSignatures:
         instructions = [
             _make_inst(Opcode.LABEL, label="entry"),
             _make_inst(Opcode.BRANCH, label="end_main_0"),
-            _make_inst(Opcode.LABEL, label="func_main_0", type_hint="void"),
+            _make_inst(Opcode.LABEL, label="func_main_0"),
             _make_inst(Opcode.RETURN, operands=["%0"]),
             _make_inst(Opcode.LABEL, label="end_main_0"),
             _make_inst(
@@ -1055,7 +1078,8 @@ class TestFunctionSignatures:
             ),
             _make_inst(Opcode.STORE_VAR, operands=["main", "%1"]),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(func_return_types={"func_main_0": "void"})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.func_signatures["main"] == FunctionSignature(
             params=(), return_type="void"
         )
@@ -1066,13 +1090,9 @@ class TestFunctionSignatures:
             _make_inst(Opcode.LABEL, label="entry"),
             # func add
             _make_inst(Opcode.BRANCH, label="end_add_0"),
-            _make_inst(Opcode.LABEL, label="func_add_0", type_hint="Int"),
-            _make_inst(
-                Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"], type_hint="Int"
-            ),
-            _make_inst(
-                Opcode.SYMBOLIC, result_reg="%1", operands=["param:b"], type_hint="Int"
-            ),
+            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"]),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%1", operands=["param:b"]),
             _make_inst(Opcode.RETURN, operands=["%2"]),
             _make_inst(Opcode.LABEL, label="end_add_0"),
             _make_inst(
@@ -1083,13 +1103,8 @@ class TestFunctionSignatures:
             _make_inst(Opcode.STORE_VAR, operands=["add", "%3"]),
             # func greet
             _make_inst(Opcode.BRANCH, label="end_greet_0"),
-            _make_inst(Opcode.LABEL, label="func_greet_0", type_hint="String"),
-            _make_inst(
-                Opcode.SYMBOLIC,
-                result_reg="%4",
-                operands=["param:name"],
-                type_hint="String",
-            ),
+            _make_inst(Opcode.LABEL, label="func_greet_0"),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%4", operands=["param:name"]),
             _make_inst(Opcode.RETURN, operands=["%5"]),
             _make_inst(Opcode.LABEL, label="end_greet_0"),
             _make_inst(
@@ -1099,7 +1114,15 @@ class TestFunctionSignatures:
             ),
             _make_inst(Opcode.STORE_VAR, operands=["greet", "%6"]),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(
+            register_types={"%0": "Int", "%1": "Int", "%4": "String"},
+            func_return_types={"func_add_0": "Int", "func_greet_0": "String"},
+            func_param_types={
+                "func_add_0": [("a", "Int"), ("b", "Int")],
+                "func_greet_0": [("name", "String")],
+            },
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.func_signatures["add"] == FunctionSignature(
             params=(("a", "Int"), ("b", "Int")), return_type="Int"
         )
@@ -1112,7 +1135,7 @@ class TestFunctionSignatures:
         instructions = [
             _make_inst(Opcode.LABEL, label="entry"),
             _make_inst(Opcode.BRANCH, label="end_f_0"),
-            _make_inst(Opcode.LABEL, label="func_f_0", type_hint="Int"),
+            _make_inst(Opcode.LABEL, label="func_f_0"),
             _make_inst(Opcode.RETURN, operands=["%0"]),
             _make_inst(Opcode.LABEL, label="end_f_0"),
             _make_inst(
@@ -1122,7 +1145,8 @@ class TestFunctionSignatures:
             ),
             _make_inst(Opcode.STORE_VAR, operands=["f", "%1"]),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(func_return_types={"func_f_0": "Int"})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         with pytest.raises(TypeError):
             env.func_signatures["bogus"] = FunctionSignature(params=(), return_type="")
 
@@ -1250,19 +1274,14 @@ class TestSelfThisTyping:
         # LOAD_FIELD on self.age → Int
         assert env.register_types["%3"] == TypeName.INT
 
-    def test_param_self_with_explicit_type_hint_uses_type_hint(self):
-        """If param:self already has a type_hint, that takes priority."""
+    def test_param_self_with_pre_seeded_type_uses_pre_seeded(self):
+        """If param:self already has a pre-seeded type, that takes priority."""
         instructions = [
             _make_inst(Opcode.LABEL, label="entry"),
             _make_inst(Opcode.LABEL, label="class_Dog_0"),
             _make_inst(Opcode.BRANCH, label="end_f_0"),
             _make_inst(Opcode.LABEL, label="func_f_0"),
-            _make_inst(
-                Opcode.SYMBOLIC,
-                result_reg="%0",
-                operands=["param:self"],
-                type_hint="SpecialDog",
-            ),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:self"]),
             _make_inst(Opcode.RETURN, operands=[]),
             _make_inst(Opcode.LABEL, label="end_f_0"),
             _make_inst(
@@ -1272,8 +1291,9 @@ class TestSelfThisTyping:
             ),
             _make_inst(Opcode.LABEL, label="end_class_Dog_0"),
         ]
-        env = infer_types(instructions, _default_resolver())
-        # Explicit type_hint takes priority over class name
+        builder = TypeEnvironmentBuilder(register_types={"%0": "SpecialDog"})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        # Pre-seeded type takes priority over class name
         assert env.register_types["%0"] == "SpecialDog"
 
 
@@ -1289,7 +1309,7 @@ class TestCallUnknown:
             _make_inst(Opcode.LABEL, label="entry"),
             # Define function 'add' with return type Int
             _make_inst(Opcode.BRANCH, label="end_add_0"),
-            _make_inst(Opcode.LABEL, label="func_add_0", type_hint="Int"),
+            _make_inst(Opcode.LABEL, label="func_add_0"),
             _make_inst(Opcode.RETURN, operands=["%0"]),
             _make_inst(Opcode.LABEL, label="end_add_0"),
             _make_inst(
@@ -1306,14 +1326,15 @@ class TestCallUnknown:
                 operands=["%2", "%4"],
             ),
         ]
-        env = infer_types(instructions, _default_resolver())
+        builder = TypeEnvironmentBuilder(func_return_types={"func_add_0": "Int"})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%3"] == "Int"
 
     def test_target_resolves_to_builtin(self):
         """CALL_UNKNOWN target register → var_types name → builtin → typed."""
         instructions = [
             _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.STORE_VAR, operands=["len", "%0"], type_hint=""),
+            _make_inst(Opcode.STORE_VAR, operands=["len", "%0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="%1", operands=["len"]),
             _make_inst(
                 Opcode.CALL_UNKNOWN,
