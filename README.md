@@ -42,7 +42,7 @@ RedDragon has a two-phase type system: **frontend extraction** and **static infe
 - **Region tagging** — ALLOC_REGION→Region, LOAD_REGION→Array
 - **Function signature collection** — parameter names/types from SYMBOLIC `param:` instructions combined with return types into `FunctionSignature` records
 
-The result is an immutable `TypeEnvironment` lookup table, backed by a pluggable **type ontology** (TypeGraph DAG with subtype queries, ConversionRules for operator coercion, TypeResolver for BINOP dispatch).
+The result is an immutable `TypeEnvironment` lookup table, backed by a pluggable **type ontology** (TypeGraph DAG with subtype queries, ConversionRules for operator coercion, TypeResolver for BINOP dispatch). `ConversionRules` is an ABC — the default implementation (`DefaultConversionRules`) handles Int/Float promotion, Int division → floor division, Bool→Int coercion, and Float→Int truncation. Languages with different semantics (e.g. COBOL's fixed-point arithmetic or a language where `/` always produces Float) can supply their own subclass.
 
 ### VM features
 
