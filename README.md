@@ -6,7 +6,7 @@
 
 ![CI](https://github.com/avishek-sen-gupta/red-dragon/actions/workflows/ci.yml/badge.svg) [![Technical Presentation](https://img.shields.io/badge/Technical-slides-blue)](presentation/technical-presentation.html) [![Overview Presentation](https://img.shields.io/badge/Overview-slides-green)](presentation/overview-presentation.html) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE.md)
 
-**RedDragon** is an experiment in building infrastructure for **reverse-engineering frequently-incomplete code** — the kind found in legacy migrations, decompiled binaries, partial extracts, and codebases with missing dependencies. It explores three ideas:
+**RedDragon** is an experiment in building infrastructure for **analysing frequently-incomplete code** — the kind found in legacy code, decompiled binaries, partial extracts, and codebases with missing dependencies. It explores three ideas:
 
 1. **Deterministic language frontends with LLM-assisted repair** — tree-sitter frontends (15 languages) and a ProLeap bridge (COBOL) handle well-formed source deterministically. When tree-sitter hits malformed syntax, an optional **LLM repair loop** fixes only the broken fragments and re-parses, maximising deterministic coverage for real-world incomplete code. All paths produce the same universal [27-opcode IR](docs/ir-reference.md).
 2. **Full LLM frontends for unsupported languages** — for languages without a tree-sitter frontend, an LLM lowers source to IR entirely — supporting any language without new parser code. A chunked variant splits large files into per-function chunks via tree-sitter, lowering each independently. Both produce the same [27-opcode IR](docs/ir-reference.md).
@@ -640,4 +640,4 @@ This is an experimental project. Key limitations to be aware of:
 ## See Also
 
 - **[Codescry](https://github.com/avishek-sen-gupta/codescry)** — Repo surveying, integration detection, symbol resolution, and embedding-based signal classification
-- **[Rev-Eng TUI](https://github.com/avishek-sen-gupta/reddragon-codescry-tui)** — Terminal UI that integrates Red Dragon and Codescry for interactive top-down reverse engineering of codebases
+- **[Rev-Eng TUI](https://github.com/avishek-sen-gupta/reddragon-codescry-tui)** — Terminal UI that integrates Red Dragon and Codescry for interactive top-down analysis of codebases
