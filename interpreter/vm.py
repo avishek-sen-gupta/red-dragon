@@ -5,11 +5,11 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Any
 
-from .constants import TypeName
-from .conversion_rules import TypeConversionRules
-from .identity_conversion_rules import IdentityConversionRules
-from .type_environment import TypeEnvironment
-from .vm_types import (  # noqa: F401 — re-exported for backwards compatibility
+from interpreter.constants import TypeName
+from interpreter.conversion_rules import TypeConversionRules
+from interpreter.identity_conversion_rules import IdentityConversionRules
+from interpreter.type_environment import TypeEnvironment
+from interpreter.vm_types import (  # noqa: F401 — re-exported for backwards compatibility
     SymbolicValue,
     HeapObject,
     ClosureEnvironment,

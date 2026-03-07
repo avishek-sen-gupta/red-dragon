@@ -1,5 +1,7 @@
 """Tests for execute_cfg — calling the VM execution loop directly with hand-built CFGs."""
 
+import logging
+
 import pytest
 
 from interpreter.ir import IRInstruction, Opcode
@@ -169,7 +171,7 @@ class TestExecuteCfgBasic:
         assert stats.llm_calls == 0
         assert vm.current_frame.local_vars["sum"] == 8
 
-    def test_verbose_mode_produces_output(self, capsys):
+    def test_verbose_mode_produces_output(self, caplog):
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": "entry"}),
             (Opcode.CONST, {"result_reg": "%0", "operands": [1]}),
@@ -178,7 +180,7 @@ class TestExecuteCfgBasic:
         cfg, registry = _build_simple_cfg(instructions)
         config = VMConfig(verbose=True)
 
-        execute_cfg(cfg, "entry", registry, config)
+        with caplog.at_level(logging.INFO, logger="interpreter.run"):
+            execute_cfg(cfg, "entry", registry, config)
 
-        captured = capsys.readouterr()
-        assert "step" in captured.out.lower()
+        assert "step" in caplog.text.lower()

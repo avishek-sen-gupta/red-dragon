@@ -7,12 +7,12 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from .constants import Language
-from .frontend import Frontend
-from .ir import IRInstruction, Opcode
-from .llm_frontend import IRParsingError, LLMFrontend
-from .parser import ParserFactory
-from . import constants
+from interpreter.constants import Language
+from interpreter.frontend import Frontend
+from interpreter.ir import IRInstruction, Opcode
+from interpreter.llm_frontend import IRParsingError, LLMFrontend
+from interpreter.parser import ParserFactory
+from interpreter import constants
 
 logger = logging.getLogger(__name__)
 

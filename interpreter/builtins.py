@@ -5,10 +5,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .constants import ARR_ADDR_PREFIX
-from .vm import VMState, Operators, _is_symbolic, _heap_addr
-from .vm_types import HeapObject
-from .cobol.byte_builtins import BYTE_BUILTINS
+from interpreter.constants import ARR_ADDR_PREFIX
+from interpreter.vm import VMState, Operators, _is_symbolic, _heap_addr
+from interpreter.vm_types import HeapObject
+from interpreter.cobol.byte_builtins import BYTE_BUILTINS
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 

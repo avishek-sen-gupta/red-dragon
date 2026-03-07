@@ -11,21 +11,26 @@ from typing import Optional
 
 from tree_sitter import Node
 
-from .cfg import CFG, build_cfg, cfg_to_mermaid, extract_function_instructions
-from .constants import Language
-from .default_conversion_rules import DefaultTypeConversionRules
-from .frontend import get_frontend
-from .ir import IRInstruction
-from .ir_stats import count_opcodes
-from .parser import Parser, TreeSitterParserFactory
-from .registry import build_registry
-from .run import execute_cfg_traced
-from .run_types import VMConfig
-from .trace_types import ExecutionTrace
-from .type_environment import TypeEnvironment
-from .type_inference import infer_types
-from .type_resolver import TypeResolver
-from . import constants
+from interpreter.cfg import (
+    CFG,
+    build_cfg,
+    cfg_to_mermaid,
+    extract_function_instructions,
+)
+from interpreter.constants import Language
+from interpreter.default_conversion_rules import DefaultTypeConversionRules
+from interpreter.frontend import get_frontend
+from interpreter.ir import IRInstruction
+from interpreter.ir_stats import count_opcodes
+from interpreter.parser import Parser, TreeSitterParserFactory
+from interpreter.registry import build_registry
+from interpreter.run import execute_cfg_traced
+from interpreter.run_types import VMConfig
+from interpreter.trace_types import ExecutionTrace
+from interpreter.type_environment import TypeEnvironment
+from interpreter.type_inference import infer_types
+from interpreter.type_resolver import TypeResolver
+from interpreter import constants
 
 logger = logging.getLogger(__name__)
 

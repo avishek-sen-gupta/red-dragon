@@ -5,9 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .ir import IRInstruction, Opcode
-from .cfg import CFG
-from .vm import (
+from interpreter.ir import IRInstruction, Opcode
+from interpreter.cfg import CFG
+from interpreter.vm import (
     VMState,
     SymbolicValue,
     HeapObject,
@@ -26,10 +26,10 @@ from .vm import (
     _heap_addr,
     _parse_const,
 )
-from .registry import FunctionRegistry, _parse_func_ref, _parse_class_ref
-from .builtins import Builtins
-from .unresolved_call import UnresolvedCallResolver, SymbolicResolver
-from . import constants
+from interpreter.registry import FunctionRegistry, _parse_func_ref, _parse_class_ref
+from interpreter.builtins import Builtins
+from interpreter.unresolved_call import UnresolvedCallResolver, SymbolicResolver
+from interpreter import constants
 
 _DEFAULT_RESOLVER = SymbolicResolver()
 

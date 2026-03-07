@@ -6,9 +6,9 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from .ir import IRInstruction, Opcode
-from .cfg import CFG
-from . import constants
+from interpreter.ir import IRInstruction, Opcode
+from interpreter.cfg import CFG
+from interpreter import constants
 
 # ── Parse helpers ────────────────────────────────────────────────
 
