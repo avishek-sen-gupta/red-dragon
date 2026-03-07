@@ -38,6 +38,11 @@ class GrammarConstants:
     while_condition_field: str = "condition"
     while_body_field: str = "body"
 
+    # For loop
+    for_condition_field: str = "condition"
+    for_body_field: str = "body"
+    for_update_field: str = "update"
+
     # Call expression
     call_function_field: str = "function"
     call_arguments_field: str = "arguments"

@@ -83,7 +83,7 @@ def lower_ruby_call(ctx: TreeSitterEmitContext, node) -> str:
     """Lower Ruby method call with receiver, block, and raise handling."""
     receiver_node = node.child_by_field_name("receiver")
     method_node = node.child_by_field_name("method")
-    args_node = node.child_by_field_name("arguments")
+    args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = extract_call_args(ctx, args_node) if args_node else []
 
     # Detect block/do_block child and lower it as a closure argument
@@ -217,11 +217,11 @@ def lower_ruby_lambda(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.BRANCH, label=end_label)
     ctx.emit(Opcode.LABEL, label=func_label)
 
-    params_node = node.child_by_field_name("parameters")
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
     if params_node:
         lower_ruby_params(ctx, params_node)
 
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
     if body_node:
         # Inline the block body directly -- avoid dispatching a `block`
         # node to lower_ruby_block which would create a nested
@@ -321,9 +321,9 @@ def lower_element_reference(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_ruby_conditional(ctx: TreeSitterEmitContext, node) -> str:
     """Lower `condition ? true_expr : false_expr` as ternary."""
-    cond_node = node.child_by_field_name("condition")
-    true_node = node.child_by_field_name("consequence")
-    false_node = node.child_by_field_name("alternative")
+    cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
+    true_node = node.child_by_field_name(ctx.constants.if_consequence_field)
+    false_node = node.child_by_field_name(ctx.constants.if_alternative_field)
 
     cond_reg = ctx.lower_expr(cond_node)
     true_label = ctx.fresh_label("ternary_true")

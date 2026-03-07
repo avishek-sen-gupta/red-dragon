@@ -49,6 +49,10 @@ class BaseFrontend(Frontend):
     WHILE_CONDITION_FIELD: str = "condition"
     WHILE_BODY_FIELD: str = "body"
 
+    FOR_CONDITION_FIELD: str = "condition"
+    FOR_BODY_FIELD: str = "body"
+    FOR_UPDATE_FIELD: str = "update"
+
     CALL_FUNCTION_FIELD: str = "function"
     CALL_ARGUMENTS_FIELD: str = "arguments"
 
@@ -758,9 +762,9 @@ class BaseFrontend(Frontend):
     def _lower_c_style_for(self, node):
         """Lower a C-style for(init; cond; update) loop."""
         init_node = node.child_by_field_name("initializer")
-        cond_node = node.child_by_field_name("condition")
-        update_node = node.child_by_field_name("update")
-        body_node = node.child_by_field_name("body")
+        cond_node = node.child_by_field_name(self.FOR_CONDITION_FIELD)
+        update_node = node.child_by_field_name(self.FOR_UPDATE_FIELD)
+        body_node = node.child_by_field_name(self.FOR_BODY_FIELD)
 
         if init_node:
             self._lower_stmt(init_node)

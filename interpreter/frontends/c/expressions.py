@@ -49,8 +49,8 @@ def lower_subscript_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower assignment_expression (x = val)."""
-    left = node.child_by_field_name("left")
-    right = node.child_by_field_name("right")
+    left = node.child_by_field_name(ctx.constants.assign_left_field)
+    right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
     lower_c_store_target(ctx, left, val_reg, node)
     return val_reg
@@ -187,9 +187,9 @@ def lower_sizeof(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_ternary(ctx: TreeSitterEmitContext, node) -> str:
     """Lower conditional_expression (ternary operator)."""
-    cond_node = node.child_by_field_name("condition")
-    true_node = node.child_by_field_name("consequence")
-    false_node = node.child_by_field_name("alternative")
+    cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
+    true_node = node.child_by_field_name(ctx.constants.if_consequence_field)
+    false_node = node.child_by_field_name(ctx.constants.if_alternative_field)
 
     cond_reg = ctx.lower_expr(cond_node)
     true_label = ctx.fresh_label("ternary_true")

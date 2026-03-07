@@ -89,9 +89,9 @@ def lower_rust_param(ctx: TreeSitterEmitContext, child) -> None:
 
 def lower_function_def(ctx: TreeSitterEmitContext, node) -> None:
     """Lower Rust function_item with Rust-specific param handling."""
-    name_node = node.child_by_field_name("name")
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = ctx.node_text(name_node)
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -224,7 +224,7 @@ def _lower_struct_destructure(
 
 def lower_struct_def(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `struct Name { ... }`."""
-    name_node = node.child_by_field_name("name")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
     class_name = ctx.node_text(name_node) if name_node else "__anon_struct"
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
@@ -250,7 +250,7 @@ def lower_struct_def(ctx: TreeSitterEmitContext, node) -> None:
 def lower_impl_item(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `impl Type { ... }`."""
     type_node = node.child_by_field_name("type")
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     impl_name = ctx.node_text(type_node) if type_node else "__anon_impl"
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{impl_name}")
@@ -278,8 +278,8 @@ def lower_impl_item(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_trait_item(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `trait Name { ... }` like a class/impl block."""
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     trait_name = ctx.node_text(name_node) if name_node else "__anon_trait"
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{trait_name}")
@@ -307,8 +307,8 @@ def lower_trait_item(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_enum_item(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `enum Name { A, B(i32), ... }` as NEW_OBJECT + STORE_FIELD per variant."""
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     enum_name = ctx.node_text(name_node) if name_node else "__anon_enum"
 
     obj_reg = ctx.fresh_reg()
@@ -440,7 +440,7 @@ def lower_mod_item(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_function_signature(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `fn area(&self) -> f64;` as function stub (no body)."""
-    name_node = node.child_by_field_name("name")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
     func_name = ctx.node_text(name_node) if name_node else "__trait_fn"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
@@ -448,7 +448,7 @@ def lower_function_signature(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=func_label)
 
-    params_node = node.child_by_field_name("parameters")
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
     if params_node:
         lower_rust_params(ctx, params_node)
 

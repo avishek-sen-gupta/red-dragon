@@ -18,7 +18,7 @@ def lower_js_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
     for child in node.children:
         if child.type != "variable_declarator":
             continue
-        name_node = child.child_by_field_name("name")
+        name_node = child.child_by_field_name(ctx.constants.func_name_field)
         value_node = child.child_by_field_name("value")
         if name_node is None:
             continue
@@ -111,8 +111,8 @@ def _lower_array_destructure(
 
 
 def lower_js_class_def(ctx: TreeSitterEmitContext, node) -> None:
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node)
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
@@ -173,9 +173,9 @@ def _has_static_modifier(node) -> bool:
 
 
 def _lower_method_def(ctx: TreeSitterEmitContext, node) -> None:
-    name_node = node.child_by_field_name("name")
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = ctx.node_text(name_node)
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -217,9 +217,9 @@ def _lower_method_def(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_js_function_def(ctx: TreeSitterEmitContext, node) -> None:
     """Lower function_declaration using JS-specific param handling."""
-    name_node = node.child_by_field_name("name")
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = ctx.node_text(name_node)
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")

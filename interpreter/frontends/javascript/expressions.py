@@ -10,7 +10,7 @@ from interpreter.frontends.common.expressions import lower_const_literal
 
 
 def lower_js_subscript(ctx: TreeSitterEmitContext, node) -> str:
-    obj_node = node.child_by_field_name("object")
+    obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     idx_node = node.child_by_field_name("index")
     if obj_node is None or idx_node is None:
         return lower_const_literal(ctx, node)
@@ -27,7 +27,7 @@ def lower_js_subscript(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_js_attribute(ctx: TreeSitterEmitContext, node) -> str:
-    obj_node = node.child_by_field_name("object")
+    obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     prop_node = node.child_by_field_name("property")
     if obj_node is None or prop_node is None:
         return lower_const_literal(ctx, node)
@@ -44,12 +44,12 @@ def lower_js_attribute(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_js_call(ctx: TreeSitterEmitContext, node) -> str:
-    func_node = node.child_by_field_name("function")
-    args_node = node.child_by_field_name("arguments")
+    func_node = node.child_by_field_name(ctx.constants.call_function_field)
+    args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = _extract_js_call_args(ctx, args_node) if args_node else []
 
     if func_node and func_node.type == "member_expression":
-        obj_node = func_node.child_by_field_name("object")
+        obj_node = func_node.child_by_field_name(ctx.constants.attr_object_field)
         prop_node = func_node.child_by_field_name("property")
         if obj_node and prop_node:
             obj_reg = ctx.lower_expr(obj_node)
@@ -105,7 +105,7 @@ def lower_js_store_target(
             node=parent_node,
         )
     elif target.type == "member_expression":
-        obj_node = target.child_by_field_name("object")
+        obj_node = target.child_by_field_name(ctx.constants.attr_object_field)
         prop_node = target.child_by_field_name("property")
         if obj_node and prop_node:
             obj_reg = ctx.lower_expr(obj_node)
@@ -115,7 +115,7 @@ def lower_js_store_target(
                 node=parent_node,
             )
     elif target.type == "subscript_expression":
-        obj_node = target.child_by_field_name("object")
+        obj_node = target.child_by_field_name(ctx.constants.attr_object_field)
         idx_node = target.child_by_field_name("index")
         if obj_node and idx_node:
             obj_reg = ctx.lower_expr(obj_node)
@@ -134,8 +134,8 @@ def lower_js_store_target(
 
 
 def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
-    left = node.child_by_field_name("left")
-    right = node.child_by_field_name("right")
+    left = node.child_by_field_name(ctx.constants.assign_left_field)
+    right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
     lower_js_store_target(ctx, left, val_reg, node)
     return val_reg
@@ -173,8 +173,8 @@ def lower_js_object_literal(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_arrow_function(ctx: TreeSitterEmitContext, node) -> str:
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = f"__arrow_{ctx.label_counter}"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -216,9 +216,9 @@ def lower_arrow_function(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_ternary(ctx: TreeSitterEmitContext, node) -> str:
-    cond_node = node.child_by_field_name("condition")
-    true_node = node.child_by_field_name("consequence")
-    false_node = node.child_by_field_name("alternative")
+    cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
+    true_node = node.child_by_field_name(ctx.constants.if_consequence_field)
+    false_node = node.child_by_field_name(ctx.constants.if_alternative_field)
 
     cond_reg = ctx.lower_expr(cond_node)
     true_label = ctx.fresh_label("ternary_true")
@@ -251,7 +251,7 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> str:
 def lower_new_expression(ctx: TreeSitterEmitContext, node) -> str:
     """Lower `new Foo(args)` -> NEW_OBJECT(class) + CALL_METHOD('constructor', args)."""
     constructor_node = node.child_by_field_name("constructor")
-    args_node = node.child_by_field_name("arguments")
+    args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     class_name = ctx.node_text(constructor_node) if constructor_node else "Object"
     arg_regs = _extract_js_call_args(ctx, args_node) if args_node else []
 
@@ -343,9 +343,9 @@ def lower_spread_element(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_function_expression(ctx: TreeSitterEmitContext, node) -> str:
     """Lower anonymous function expression: same as function_declaration but anonymous."""
-    name_node = node.child_by_field_name("name")
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = ctx.node_text(name_node) if name_node else f"__anon_{ctx.label_counter}"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")

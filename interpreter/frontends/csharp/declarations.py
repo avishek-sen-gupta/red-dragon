@@ -97,9 +97,9 @@ def _has_static_modifier(ctx: TreeSitterEmitContext, node) -> bool:
 def lower_method_decl(
     ctx: TreeSitterEmitContext, node, inject_this: bool = False
 ) -> None:
-    name_node = node.child_by_field_name("name")
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = ctx.node_text(name_node) if name_node else "__anon"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -140,8 +140,8 @@ def lower_method_decl(
 
 
 def lower_constructor_decl(ctx: TreeSitterEmitContext, node) -> None:
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = "__init__"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -207,8 +207,8 @@ def _lower_deferred_class_child(ctx: TreeSitterEmitContext, child) -> None:
 
 
 def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
@@ -297,7 +297,7 @@ def _find_property_initializer(ctx: TreeSitterEmitContext, node):
 
 def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
     """Lower interface_declaration as NEW_OBJECT with STORE_INDEX per member."""
-    name_node = node.child_by_field_name("name")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
     if not name_node:
         return
     iface_name = ctx.node_text(name_node)
@@ -308,7 +308,7 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
         operands=[f"interface:{iface_name}"],
         node=node,
     )
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     if body_node:
         for i, child in enumerate(c for c in body_node.children if c.is_named):
             member_name_node = child.child_by_field_name("name")
@@ -327,7 +327,7 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
     """Lower enum_declaration as NEW_OBJECT with STORE_INDEX per member."""
-    name_node = node.child_by_field_name("name")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = next(
         (c for c in node.children if c.type == "enum_member_declaration_list"),
         None,
@@ -368,15 +368,15 @@ def lower_namespace(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_local_function_stmt(ctx: TreeSitterEmitContext, node) -> None:
     """Lower local functions inside method bodies -- like method_declaration."""
-    name_node = node.child_by_field_name("name")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
     if name_node is None:
         name_node = next((c for c in node.children if c.type == "identifier"), None)
-    params_node = node.child_by_field_name("parameters")
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
     if params_node is None:
         params_node = next(
             (c for c in node.children if c.type == "parameter_list"), None
         )
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
     if body_node is None:
         body_node = next((c for c in node.children if c.type == "block"), None)
 
@@ -440,7 +440,7 @@ def lower_event_decl(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_delegate_declaration(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `public delegate void Notify(string message);` as function stub."""
-    name_node = node.child_by_field_name("name")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
     func_name = ctx.node_text(name_node) if name_node else "__delegate"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
