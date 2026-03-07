@@ -1,4 +1,4 @@
-"""ConversionRules — ABC for type-driven operator and assignment coercion."""
+"""TypeConversionRules — ABC for type-driven operator and assignment coercion."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any, Callable
 from interpreter.conversion_result import ConversionResult
 
 
-class ConversionRules(ABC):
+class TypeConversionRules(ABC):
     """Abstract base for rules that map (operator, left_type, right_type)
     to a ConversionResult describing operand coercion and operator overrides,
     and (value_type, target_type) to an assignment coercer.

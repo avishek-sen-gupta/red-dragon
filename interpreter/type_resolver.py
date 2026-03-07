@@ -1,11 +1,11 @@
-"""TypeResolver — composes ConversionRules to resolve BINOP and assignment coercion."""
+"""TypeResolver — composes TypeConversionRules to resolve BINOP and assignment coercion."""
 
 from __future__ import annotations
 
 import logging
 from typing import Any, Callable
 
-from interpreter.conversion_rules import ConversionRules
+from interpreter.conversion_rules import TypeConversionRules
 from interpreter.conversion_result import (
     ConversionResult,
     IDENTITY_CONVERSION,
@@ -21,14 +21,14 @@ class TypeResolver:
     BINOP logic:
     - Both hints empty → identity (current VM behavior, no coercion).
     - One hint missing → assume the other's type (symmetric).
-    - Both present → delegate to the injected ConversionRules.
+    - Both present → delegate to the injected TypeConversionRules.
 
     Assignment logic:
     - Either hint empty → identity (no coercion without both types known).
-    - Both present → delegate to ConversionRules.coerce_assignment().
+    - Both present → delegate to TypeConversionRules.coerce_assignment().
     """
 
-    def __init__(self, conversion_rules: ConversionRules) -> None:
+    def __init__(self, conversion_rules: TypeConversionRules) -> None:
         self._conversion_rules = conversion_rules
 
     def resolve_binop(
