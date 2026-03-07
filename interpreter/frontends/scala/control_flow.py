@@ -15,8 +15,8 @@ def lower_if_stmt(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_while(ctx: TreeSitterEmitContext, node) -> None:
-    cond_node = node.child_by_field_name("condition")
-    body_node = node.child_by_field_name("body")
+    cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
+    body_node = node.child_by_field_name(ctx.constants.while_body_field)
 
     loop_label = ctx.fresh_label("while_cond")
     body_label = ctx.fresh_label("while_body")
@@ -125,8 +125,8 @@ def lower_for_expr(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
     """Lower do { body } while (condition)."""
-    body_node = node.child_by_field_name("body")
-    cond_node = node.child_by_field_name("condition")
+    body_node = node.child_by_field_name(ctx.constants.while_body_field)
+    cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
 
     body_label = ctx.fresh_label("do_body")
     end_label = ctx.fresh_label("do_end")

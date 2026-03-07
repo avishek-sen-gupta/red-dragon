@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 def lower_lua_if(ctx: TreeSitterEmitContext, node) -> None:
     """Lower if_statement with elseif_statement and else_statement children."""
-    condition_node = node.child_by_field_name("condition")
-    consequence_node = node.child_by_field_name("consequence")
+    condition_node = node.child_by_field_name(ctx.constants.if_condition_field)
+    consequence_node = node.child_by_field_name(ctx.constants.if_consequence_field)
 
     cond_reg = ctx.lower_expr(condition_node)
     true_label = ctx.fresh_label("if_true")
@@ -57,8 +57,8 @@ def _lower_lua_elseif_chain(
     current = elseif_nodes[0]
     remaining = elseif_nodes[1:]
 
-    cond_node = current.child_by_field_name("condition")
-    body_node = current.child_by_field_name("consequence")
+    cond_node = current.child_by_field_name(ctx.constants.if_condition_field)
+    body_node = current.child_by_field_name(ctx.constants.if_consequence_field)
 
     cond_reg = ctx.lower_expr(cond_node)
     true_label = ctx.fresh_label("elseif_true")
@@ -84,8 +84,8 @@ def _lower_lua_elseif_chain(
 
 def lower_lua_while(ctx: TreeSitterEmitContext, node) -> None:
     """Lower while_statement."""
-    cond_node = node.child_by_field_name("condition")
-    body_node = node.child_by_field_name("body")
+    cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
+    body_node = node.child_by_field_name(ctx.constants.while_body_field)
 
     loop_label = ctx.fresh_label("while_cond")
     body_label = ctx.fresh_label("while_body")
@@ -118,7 +118,7 @@ def lower_lua_for(ctx: TreeSitterEmitContext, node) -> None:
     generic_clause = next(
         (c for c in node.children if c.type == "for_generic_clause"), None
     )
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
     if numeric_clause:
         _lower_lua_for_numeric(ctx, numeric_clause, body_node, node)
@@ -259,8 +259,8 @@ def _lower_lua_for_generic(
 
 def lower_lua_repeat(ctx: TreeSitterEmitContext, node) -> None:
     """Lower repeat ... until cond (execute body first, then check)."""
-    body_node = node.child_by_field_name("body")
-    cond_node = node.child_by_field_name("condition")
+    body_node = node.child_by_field_name(ctx.constants.while_body_field)
+    cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
 
     body_label = ctx.fresh_label("repeat_body")
     end_label = ctx.fresh_label("repeat_end")

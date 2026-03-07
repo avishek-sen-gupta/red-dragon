@@ -93,8 +93,8 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
 
 def lower_class_specifier(ctx: TreeSitterEmitContext, node) -> None:
     """Lower class_specifier (C++ class with field_declaration_list body)."""
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
@@ -143,7 +143,7 @@ def lower_cpp_class_body(ctx: TreeSitterEmitContext, node) -> None:
 def lower_cpp_method(ctx: TreeSitterEmitContext, node) -> None:
     """Lower a function_definition inside a class/struct body, injecting param:this."""
     declarator_node = node.child_by_field_name("declarator")
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
     init_list_node = next(
         (c for c in node.children if c.type == "field_initializer_list"),
         None,
@@ -155,7 +155,9 @@ def lower_cpp_method(ctx: TreeSitterEmitContext, node) -> None:
     if declarator_node:
         if declarator_node.type == "function_declarator":
             name_node = declarator_node.child_by_field_name("declarator")
-            params_node = declarator_node.child_by_field_name("parameters")
+            params_node = declarator_node.child_by_field_name(
+                ctx.constants.func_params_field
+            )
             func_name = (
                 extract_declarator_name(ctx, name_node) if name_node else "__anon"
             )
@@ -163,7 +165,9 @@ def lower_cpp_method(ctx: TreeSitterEmitContext, node) -> None:
             func_decl = _find_function_declarator(declarator_node)
             if func_decl:
                 name_node = func_decl.child_by_field_name("declarator")
-                params_node = func_decl.child_by_field_name("parameters")
+                params_node = func_decl.child_by_field_name(
+                    ctx.constants.func_params_field
+                )
                 func_name = (
                     extract_declarator_name(ctx, name_node) if name_node else "__anon"
                 )
@@ -256,7 +260,7 @@ def lower_field_initializer_list(ctx: TreeSitterEmitContext, node) -> None:
 def lower_cpp_function_def(ctx: TreeSitterEmitContext, node) -> None:
     """Override C function_def to detect and lower field_initializer_list in constructors."""
     declarator_node = node.child_by_field_name("declarator")
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
     init_list_node = next(
         (c for c in node.children if c.type == "field_initializer_list"),
         None,
@@ -268,7 +272,9 @@ def lower_cpp_function_def(ctx: TreeSitterEmitContext, node) -> None:
     if declarator_node:
         if declarator_node.type == "function_declarator":
             name_node = declarator_node.child_by_field_name("declarator")
-            params_node = declarator_node.child_by_field_name("parameters")
+            params_node = declarator_node.child_by_field_name(
+                ctx.constants.func_params_field
+            )
             func_name = (
                 extract_declarator_name(ctx, name_node) if name_node else "__anon"
             )
@@ -276,7 +282,9 @@ def lower_cpp_function_def(ctx: TreeSitterEmitContext, node) -> None:
             func_decl = _find_function_declarator(declarator_node)
             if func_decl:
                 name_node = func_decl.child_by_field_name("declarator")
-                params_node = func_decl.child_by_field_name("parameters")
+                params_node = func_decl.child_by_field_name(
+                    ctx.constants.func_params_field
+                )
                 func_name = (
                     extract_declarator_name(ctx, name_node) if name_node else "__anon"
                 )
@@ -328,8 +336,8 @@ def lower_cpp_struct_body(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_cpp_struct_def(ctx: TreeSitterEmitContext, node) -> None:
     """Lower struct_specifier using C++ class body handling."""
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
 
     if name_node is None and body_node is None:
         return

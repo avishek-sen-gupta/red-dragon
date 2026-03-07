@@ -18,7 +18,7 @@ from interpreter.frontends.c.expressions import lower_c_store_target
 def lower_new_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower new T(args) as CALL_FUNCTION."""
     type_node = node.child_by_field_name("type")
-    args_node = node.child_by_field_name("arguments")
+    args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
     type_name = ctx.node_text(type_node) if type_node else "Object"
     reg = ctx.fresh_reg()
@@ -49,7 +49,7 @@ def lower_delete_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
     """Lower lambda_expression like an arrow function."""
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
     params_node = node.child_by_field_name("declarator")
 
     from interpreter.frontends.c.declarations import lower_c_params
@@ -179,8 +179,8 @@ def lower_cpp_subscript_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_cpp_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower assignment_expression with C++ subscript support."""
-    left = node.child_by_field_name("left")
-    right = node.child_by_field_name("right")
+    left = node.child_by_field_name(ctx.constants.assign_left_field)
+    right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
     lower_cpp_store_target(ctx, left, val_reg, node)
     return val_reg

@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 
 
 def lower_short_var_decl(ctx: TreeSitterEmitContext, node) -> None:
-    left = node.child_by_field_name("left")
-    right = node.child_by_field_name("right")
+    left = node.child_by_field_name(ctx.constants.assign_left_field)
+    right = node.child_by_field_name(ctx.constants.assign_right_field)
     left_names = extract_expression_list(ctx, left)
     right_regs = lower_expression_list(ctx, right)
 
@@ -42,8 +42,8 @@ def lower_short_var_decl(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_go_assignment(ctx: TreeSitterEmitContext, node) -> None:
-    left = node.child_by_field_name("left")
-    right = node.child_by_field_name("right")
+    left = node.child_by_field_name(ctx.constants.assign_left_field)
+    right = node.child_by_field_name(ctx.constants.assign_right_field)
     left_nodes = get_expression_list_children(left)
     right_regs = lower_expression_list(ctx, right)
 
@@ -57,9 +57,9 @@ _GO_MAIN_FUNC_NAME = "main"
 
 
 def lower_go_func_decl(ctx: TreeSitterEmitContext, node) -> None:
-    name_node = node.child_by_field_name("name")
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = ctx.node_text(name_node) if name_node else "__anon"
 
@@ -114,9 +114,9 @@ def _lower_go_main_hoisted(ctx: TreeSitterEmitContext, body_node) -> None:
 
 
 def lower_go_method_decl(ctx: TreeSitterEmitContext, node) -> None:
-    name_node = node.child_by_field_name("name")
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
     receiver_node = node.child_by_field_name("receiver")
 
     func_name = ctx.node_text(name_node) if name_node else "__anon"

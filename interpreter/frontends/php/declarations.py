@@ -97,9 +97,9 @@ def _has_static_modifier(node) -> bool:
 
 def lower_php_func_def(ctx: TreeSitterEmitContext, node) -> None:
     """Lower function definition."""
-    name_node = node.child_by_field_name("name")
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = ctx.node_text(name_node) if name_node else "__anon"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -138,9 +138,9 @@ def lower_php_func_def(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_php_method_decl(ctx: TreeSitterEmitContext, node) -> None:
     """Lower method declaration inside a class."""
-    name_node = node.child_by_field_name("name")
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = ctx.node_text(name_node) if name_node else "__anon"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -200,8 +200,8 @@ def _lower_php_class_body(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_php_class(ctx: TreeSitterEmitContext, node) -> None:
     """Lower class declaration."""
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
@@ -228,8 +228,8 @@ def lower_php_class(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_php_interface(ctx: TreeSitterEmitContext, node) -> None:
     """Lower interface_declaration like a class: BRANCH, LABEL, body, end."""
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     iface_name = ctx.node_text(name_node) if name_node else "__anon_interface"
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{iface_name}")
@@ -256,8 +256,8 @@ def lower_php_interface(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_php_trait(ctx: TreeSitterEmitContext, node) -> None:
     """Lower trait_declaration like a class: BRANCH, LABEL, body, end."""
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     trait_name = ctx.node_text(name_node) if name_node else "__anon_trait"
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{trait_name}")
@@ -311,8 +311,8 @@ def lower_php_function_static(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_php_enum(ctx: TreeSitterEmitContext, node) -> None:
     """Lower enum_declaration like a class: BRANCH, LABEL, body, end."""
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     enum_name = ctx.node_text(name_node) if name_node else "__anon_enum"
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{enum_name}")

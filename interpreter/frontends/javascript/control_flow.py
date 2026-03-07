@@ -24,9 +24,9 @@ def lower_js_alternative(ctx: TreeSitterEmitContext, alt_node, end_label: str) -
 
 
 def lower_js_if(ctx: TreeSitterEmitContext, node) -> None:
-    cond_node = node.child_by_field_name("condition")
-    body_node = node.child_by_field_name("consequence")
-    alt_node = node.child_by_field_name("alternative")
+    cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
+    body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
+    alt_node = node.child_by_field_name(ctx.constants.if_alternative_field)
 
     cond_reg = ctx.lower_expr(cond_node)
     true_label = ctx.fresh_label("if_true")
@@ -70,9 +70,9 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
         return
 
     # for...in — model as: keys(obj) -> index-based loop over keys array
-    left = node.child_by_field_name("left")
-    right = node.child_by_field_name("right")
-    body_node = node.child_by_field_name("body")
+    left = node.child_by_field_name(ctx.constants.assign_left_field)
+    right = node.child_by_field_name(ctx.constants.assign_right_field)
+    body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
     obj_reg = ctx.lower_expr(right)
     keys_reg = ctx.fresh_reg()
@@ -144,9 +144,9 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
     """Lower for (const x of iterable) as index-based iteration."""
-    left = node.child_by_field_name("left")
-    right = node.child_by_field_name("right")
-    body_node = node.child_by_field_name("body")
+    left = node.child_by_field_name(ctx.constants.assign_left_field)
+    right = node.child_by_field_name(ctx.constants.assign_right_field)
+    body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
     iter_reg = ctx.lower_expr(right)
     var_name = _extract_var_name(ctx, left) if left else "__for_of_var"
@@ -199,7 +199,7 @@ def _extract_var_name(ctx: TreeSitterEmitContext, node) -> str | None:
     if node.type in ("lexical_declaration", "variable_declaration"):
         for child in node.children:
             if child.type == "variable_declarator":
-                name_node = child.child_by_field_name("name")
+                name_node = child.child_by_field_name(ctx.constants.func_name_field)
                 if name_node:
                     return ctx.node_text(name_node)
     return None
@@ -276,8 +276,8 @@ def _lower_switch_case_body(ctx: TreeSitterEmitContext, case_node) -> None:
 
 def lower_do_statement(ctx: TreeSitterEmitContext, node) -> None:
     """Lower do { body } while (cond)."""
-    body_node = node.child_by_field_name("body")
-    cond_node = node.child_by_field_name("condition")
+    body_node = node.child_by_field_name(ctx.constants.while_body_field)
+    cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
 
     body_label = ctx.fresh_label("do_body")
     cond_label = ctx.fresh_label("do_cond")
@@ -316,7 +316,7 @@ def lower_labeled_statement(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_with_statement(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `with (obj) { body }` — lower object then body."""
-    object_node = node.child_by_field_name("object")
+    object_node = node.child_by_field_name(ctx.constants.attr_object_field)
     body_node = node.child_by_field_name("body")
     if object_node:
         ctx.lower_expr(object_node)

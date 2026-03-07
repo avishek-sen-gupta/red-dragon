@@ -14,9 +14,9 @@ from interpreter.frontends.common.exceptions import (
 
 def lower_cpp_if(ctx: TreeSitterEmitContext, node) -> None:
     """Override if lowering to handle C++ condition_clause wrapper."""
-    cond_node = node.child_by_field_name("condition")
-    body_node = node.child_by_field_name("consequence")
-    alt_node = node.child_by_field_name("alternative")
+    cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
+    body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
+    alt_node = node.child_by_field_name(ctx.constants.if_alternative_field)
 
     cond_reg = ctx.lower_expr(cond_node)
     true_label = ctx.fresh_label("if_true")
@@ -55,8 +55,8 @@ def lower_cpp_if(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_cpp_while(ctx: TreeSitterEmitContext, node) -> None:
     """Override while lowering to handle C++ condition_clause wrapper."""
-    cond_node = node.child_by_field_name("condition")
-    body_node = node.child_by_field_name("body")
+    cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
+    body_node = node.child_by_field_name(ctx.constants.while_body_field)
 
     loop_label = ctx.fresh_label("while_cond")
     body_label = ctx.fresh_label("while_body")
@@ -113,8 +113,8 @@ def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
     from interpreter.frontends.c.declarations import extract_declarator_name
 
     declarator_node = node.child_by_field_name("declarator")
-    right_node = node.child_by_field_name("right")
-    body_node = node.child_by_field_name("body")
+    right_node = node.child_by_field_name(ctx.constants.assign_right_field)
+    body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
     var_name = "__range_var"
     if declarator_node:

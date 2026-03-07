@@ -18,7 +18,7 @@ def lower_if_stmt(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_loop(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `loop { ... }` -- infinite loop."""
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.while_body_field)
     loop_label = ctx.fresh_label("loop_top")
     end_label = ctx.fresh_label("loop_end")
 
@@ -35,7 +35,7 @@ def lower_for(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `for pattern in value { body }`."""
     pattern_node = node.child_by_field_name("pattern")
     value_node = node.child_by_field_name("value")
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
     var_name = ctx.node_text(pattern_node) if pattern_node else "__for_var"
     iter_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()

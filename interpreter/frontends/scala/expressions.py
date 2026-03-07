@@ -13,7 +13,7 @@ from interpreter.frontends.common.expressions import (
 
 
 def lower_field_expr(ctx: TreeSitterEmitContext, node) -> str:
-    value_node = node.child_by_field_name("value")
+    value_node = node.child_by_field_name(ctx.constants.attr_object_field)
     field_node = node.child_by_field_name("field")
     if value_node is None or field_node is None:
         return lower_const_literal(ctx, node)
@@ -30,8 +30,8 @@ def lower_field_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
-    left = node.child_by_field_name("left")
-    right = node.child_by_field_name("right")
+    left = node.child_by_field_name(ctx.constants.assign_left_field)
+    right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
     lower_scala_store_target(ctx, left, val_reg, node)
     return val_reg
@@ -47,7 +47,7 @@ def lower_scala_store_target(
             node=parent_node,
         )
     elif target.type == "field_expression":
-        value_node = target.child_by_field_name("value")
+        value_node = target.child_by_field_name(ctx.constants.attr_object_field)
         field_node = target.child_by_field_name("field")
         if value_node and field_node:
             obj_reg = ctx.lower_expr(value_node)
@@ -66,9 +66,9 @@ def lower_scala_store_target(
 
 def lower_if_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower if as a value-producing expression."""
-    cond_node = node.child_by_field_name("condition")
-    body_node = node.child_by_field_name("consequence")
-    alt_node = node.child_by_field_name("alternative")
+    cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
+    body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
+    alt_node = node.child_by_field_name(ctx.constants.if_alternative_field)
 
     cond_reg = ctx.lower_expr(cond_node) if cond_node else ctx.fresh_reg()
     true_label = ctx.fresh_label("if_true")

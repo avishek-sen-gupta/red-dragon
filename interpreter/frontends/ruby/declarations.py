@@ -55,9 +55,9 @@ def lower_ruby_method(
     ctx: TreeSitterEmitContext, node, inject_self: bool = False
 ) -> None:
     """Lower Ruby method definition."""
-    name_node = node.child_by_field_name("name")
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     raw_name = ctx.node_text(name_node) if name_node else "__anon"
     func_name = "__init__" if (inject_self and raw_name == "initialize") else raw_name
@@ -105,8 +105,8 @@ def lower_ruby_method_stmt(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_ruby_class(ctx: TreeSitterEmitContext, node) -> None:
     """Lower Ruby class definition with method body handling."""
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
@@ -135,7 +135,7 @@ def lower_ruby_class(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_ruby_singleton_class(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `class << obj ... end` — lower the body."""
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     value_node = node.child_by_field_name("value")
 
     class_label = ctx.fresh_label("singleton_class")
@@ -155,10 +155,10 @@ def lower_ruby_singleton_class(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_ruby_singleton_method(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `def self.method_name(...) ... end` — like a regular method."""
-    name_node = node.child_by_field_name("name")
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
-    object_node = node.child_by_field_name("object")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
+    object_node = node.child_by_field_name(ctx.constants.attr_object_field)
 
     object_name = ctx.node_text(object_node) if object_node else "self"
     method_name = ctx.node_text(name_node) if name_node else "__anon"
@@ -199,8 +199,8 @@ def lower_ruby_singleton_method(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_ruby_module(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `module Name; ...; end` like a class."""
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     module_name = ctx.node_text(name_node) if name_node else "__anon_module"
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{module_name}")

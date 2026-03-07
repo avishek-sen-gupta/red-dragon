@@ -13,9 +13,9 @@ from interpreter.frontends.common.exceptions import (
 
 def lower_if(ctx: TreeSitterEmitContext, node) -> None:
     """C# if with else-if handled as nested if_statement."""
-    cond_node = node.child_by_field_name("condition")
-    body_node = node.child_by_field_name("consequence")
-    alt_node = node.child_by_field_name("alternative")
+    cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
+    body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
+    alt_node = node.child_by_field_name(ctx.constants.if_alternative_field)
 
     # If consequence field is not present, find the first block child
     if body_node is None:
@@ -61,9 +61,9 @@ def lower_if(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_foreach(ctx: TreeSitterEmitContext, node) -> None:
     """Lower foreach (Type var in collection) { body }."""
-    left_node = node.child_by_field_name("left")
-    right_node = node.child_by_field_name("right")
-    body_node = node.child_by_field_name("body")
+    left_node = node.child_by_field_name(ctx.constants.assign_left_field)
+    right_node = node.child_by_field_name(ctx.constants.assign_right_field)
+    body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
     iter_reg = ctx.lower_expr(right_node) if right_node else ctx.fresh_reg()
     var_name = ctx.node_text(left_node) if left_node else "__foreach_var"
@@ -113,8 +113,8 @@ def lower_throw(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
-    body_node = node.child_by_field_name("body")
-    cond_node = node.child_by_field_name("condition")
+    body_node = node.child_by_field_name(ctx.constants.while_body_field)
+    cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
 
     body_label = ctx.fresh_label("do_body")
     cond_label = ctx.fresh_label("do_cond")

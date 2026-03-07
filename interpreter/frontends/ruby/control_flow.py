@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 
 def lower_unless(ctx: TreeSitterEmitContext, node) -> None:
     """Lower unless — inverted if."""
-    cond_node = node.child_by_field_name("condition")
-    body_node = node.child_by_field_name("consequence")
-    alt_node = node.child_by_field_name("alternative")
+    cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
+    body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
+    alt_node = node.child_by_field_name(ctx.constants.if_alternative_field)
 
     cond_reg = ctx.lower_expr(cond_node)
     negated_reg = ctx.fresh_reg()
@@ -65,8 +65,8 @@ def lower_unless(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_until(ctx: TreeSitterEmitContext, node) -> None:
     """Lower until — inverted while."""
-    cond_node = node.child_by_field_name("condition")
-    body_node = node.child_by_field_name("body")
+    cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
+    body_node = node.child_by_field_name(ctx.constants.while_body_field)
 
     loop_label = ctx.fresh_label("until_cond")
     body_label = ctx.fresh_label("until_body")
@@ -104,7 +104,7 @@ def lower_ruby_for(ctx: TreeSitterEmitContext, node) -> None:
     """Lower Ruby for-in loop."""
     pattern_node = node.child_by_field_name("pattern")
     value_node = node.child_by_field_name("value")
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
     iter_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
     var_name = ctx.node_text(pattern_node) if pattern_node else "__for_var"
@@ -233,9 +233,9 @@ def lower_ruby_if(ctx: TreeSitterEmitContext, node) -> None:
     from interpreter.frontends.common.control_flow import lower_if
 
     # Ruby uses the same fields as the common lower_if
-    cond_node = node.child_by_field_name("condition")
-    body_node = node.child_by_field_name("consequence")
-    alt_node = node.child_by_field_name("alternative")
+    cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
+    body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
+    alt_node = node.child_by_field_name(ctx.constants.if_alternative_field)
 
     cond_reg = ctx.lower_expr(cond_node)
     true_label = ctx.fresh_label("if_true")
@@ -286,9 +286,9 @@ def _lower_ruby_alternative(
 
 def _lower_ruby_elsif(ctx: TreeSitterEmitContext, node, end_label: str) -> None:
     """Lower elsif clause."""
-    cond_node = node.child_by_field_name("condition")
-    body_node = node.child_by_field_name("consequence")
-    alt_node = node.child_by_field_name("alternative")
+    cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
+    body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
+    alt_node = node.child_by_field_name(ctx.constants.if_alternative_field)
 
     cond_reg = ctx.lower_expr(cond_node)
     true_label = ctx.fresh_label("elsif_true")

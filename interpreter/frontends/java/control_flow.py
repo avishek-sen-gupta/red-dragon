@@ -18,9 +18,9 @@ from interpreter.frontends.java.expressions import (
 
 def lower_if(ctx: TreeSitterEmitContext, node) -> None:
     """Java if with else-if handled as nested if_statement."""
-    cond_node = node.child_by_field_name("condition")
-    body_node = node.child_by_field_name("consequence")
-    alt_node = node.child_by_field_name("alternative")
+    cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
+    body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
+    alt_node = node.child_by_field_name(ctx.constants.if_alternative_field)
 
     cond_reg = ctx.lower_expr(cond_node)
     true_label = ctx.fresh_label("if_true")
@@ -63,7 +63,7 @@ def lower_enhanced_for(ctx: TreeSitterEmitContext, node) -> None:
     """Lower for (Type var : iterable) { body }."""
     name_node = node.child_by_field_name("name")
     value_node = node.child_by_field_name("value")
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
     iter_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
     var_name = ctx.node_text(name_node) if name_node else "__for_var"
@@ -238,8 +238,8 @@ def lower_java_switch_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_do_statement(ctx: TreeSitterEmitContext, node) -> None:
     """Lower do { body } while (condition);"""
-    body_node = node.child_by_field_name("body")
-    cond_node = node.child_by_field_name("condition")
+    body_node = node.child_by_field_name(ctx.constants.while_body_field)
+    cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
 
     body_label = ctx.fresh_label("do_body")
     cond_label = ctx.fresh_label("do_cond")
@@ -344,7 +344,7 @@ def lower_try(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_explicit_constructor_invocation(ctx: TreeSitterEmitContext, node) -> None:
     """Lower super(...) or this(...) explicit constructor calls."""
-    args_node = node.child_by_field_name("arguments")
+    args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
 
     first_named = next((c for c in node.children if c.type in ("super", "this")), None)
