@@ -17,6 +17,8 @@ Function parameter conventions (received via pre-populated registers):
 
 from __future__ import annotations
 
+from functools import reduce
+
 from interpreter.ir import IRInstruction, Opcode
 
 
@@ -31,6 +33,128 @@ class _RegCounter:
         name = f"%{self._prefix}_r{self._count}"
         self._count += 1
         return name
+
+
+def _encode_digit_step(
+    rc: _RegCounter,
+    source_list: str,
+    acc: tuple[str, list[IRInstruction]],
+    i: int,
+) -> tuple[str, list[IRInstruction]]:
+    """One step of zoned digit encoding: get digit, nibble_set, list_set.
+
+    Returns (new_result_reg, accumulated_instructions).
+    """
+    current_result, instructions = acc
+    digit = rc.next()
+    byte_val = rc.next()
+    new_result = rc.next()
+    return (
+        new_result,
+        instructions
+        + [
+            IRInstruction(
+                opcode=Opcode.CALL_FUNCTION,
+                result_reg=digit,
+                operands=["__list_get", source_list, i],
+            ),
+            IRInstruction(
+                opcode=Opcode.CALL_FUNCTION,
+                result_reg=byte_val,
+                operands=["__nibble_set", 0xF0, "low", digit],
+            ),
+            IRInstruction(
+                opcode=Opcode.CALL_FUNCTION,
+                result_reg=new_result,
+                operands=["__list_set", current_result, i, byte_val],
+            ),
+        ],
+    )
+
+
+def _decode_digit_step(
+    rc: _RegCounter,
+    source_list: str,
+    total_digits: int,
+    acc: tuple[str, list[IRInstruction]],
+    i: int,
+    offset: int = 0,
+) -> tuple[str, list[IRInstruction]]:
+    """One step of zoned digit decoding: get byte, nibble_get, multiply, add.
+
+    Returns (new_accum_reg, accumulated_instructions).
+    """
+    current_accum, instructions = acc
+    byte_reg = rc.next()
+    digit = rc.next()
+    power = 10 ** (total_digits - 1 - i)
+    contribution = rc.next()
+    new_accum = rc.next()
+    return (
+        new_accum,
+        instructions
+        + [
+            IRInstruction(
+                opcode=Opcode.CALL_FUNCTION,
+                result_reg=byte_reg,
+                operands=["__list_get", source_list, offset + i],
+            ),
+            IRInstruction(
+                opcode=Opcode.CALL_FUNCTION,
+                result_reg=digit,
+                operands=["__nibble_get", byte_reg, "low"],
+            ),
+            IRInstruction(
+                opcode=Opcode.BINOP,
+                result_reg=contribution,
+                operands=["*", digit, power],
+            ),
+            IRInstruction(
+                opcode=Opcode.BINOP,
+                result_reg=new_accum,
+                operands=["+", current_accum, contribution],
+            ),
+        ],
+    )
+
+
+def _accumulate_digit_step(
+    rc: _RegCounter,
+    source_list: str,
+    total_digits: int,
+    acc: tuple[str, list[IRInstruction]],
+    i: int,
+) -> tuple[str, list[IRInstruction]]:
+    """One step of raw digit accumulation (no nibble_get): get digit, multiply, add.
+
+    Returns (new_accum_reg, accumulated_instructions).
+    """
+    current_accum, instructions = acc
+    digit = rc.next()
+    power = 10 ** (total_digits - 1 - i)
+    contribution = rc.next()
+    new_accum = rc.next()
+    return (
+        new_accum,
+        instructions
+        + [
+            IRInstruction(
+                opcode=Opcode.CALL_FUNCTION,
+                result_reg=digit,
+                operands=["__list_get", source_list, i],
+            ),
+            IRInstruction(
+                opcode=Opcode.BINOP,
+                result_reg=contribution,
+                operands=["*", digit, power],
+            ),
+            IRInstruction(
+                opcode=Opcode.BINOP,
+                result_reg=new_accum,
+                operands=["+", current_accum, contribution],
+            ),
+        ],
+    )
 
 
 def build_encode_zoned_ir(
@@ -59,34 +183,12 @@ def build_encode_zoned_ir(
     )
 
     # For each digit position, set the low nibble to the digit value
-    for i in range(total_digits):
-        digit = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=digit,
-                operands=["__list_get", "%p_digits", i],
-            )
-        )
-
-        byte_val = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=byte_val,
-                operands=["__nibble_set", 0xF0, "low", digit],
-            )
-        )
-
-        new_result = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=new_result,
-                operands=["__list_set", result, i, byte_val],
-            )
-        )
-        result = new_result
+    result, digit_instructions = reduce(
+        lambda acc, i: _encode_digit_step(rc, "%p_digits", acc, i),
+        range(total_digits),
+        (result, []),
+    )
+    instructions.extend(digit_instructions)
 
     # Set sign nibble on the sign byte (high nibble)
     sign_byte = rc.next()
@@ -150,44 +252,12 @@ def build_decode_zoned_ir(
         IRInstruction(opcode=Opcode.CONST, result_reg=accum, operands=[0])
     )
 
-    for i in range(total_digits):
-        byte_reg = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=byte_reg,
-                operands=["__list_get", "%p_data", i],
-            )
-        )
-
-        digit = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=digit,
-                operands=["__nibble_get", byte_reg, "low"],
-            )
-        )
-
-        power = 10 ** (total_digits - 1 - i)
-        contribution = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.BINOP,
-                result_reg=contribution,
-                operands=["*", digit, power],
-            )
-        )
-
-        new_accum = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.BINOP,
-                result_reg=new_accum,
-                operands=["+", accum, contribution],
-            )
-        )
-        accum = new_accum
+    accum, decode_instructions = reduce(
+        lambda acc, i: _decode_digit_step(rc, "%p_data", total_digits, acc, i),
+        range(total_digits),
+        (accum, []),
+    )
+    instructions.extend(decode_instructions)
 
     # Apply decimal scaling
     if decimal_digits > 0:
@@ -305,34 +375,12 @@ def build_encode_zoned_separate_ir(
         )
     )
 
-    for i in range(total_digits):
-        digit = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=digit,
-                operands=["__list_get", "%p_digits", i],
-            )
-        )
-
-        byte_val = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=byte_val,
-                operands=["__nibble_set", 0xF0, "low", digit],
-            )
-        )
-
-        new_digits = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=new_digits,
-                operands=["__list_set", digits_list, i, byte_val],
-            )
-        )
-        digits_list = new_digits
+    digits_list, digit_instructions = reduce(
+        lambda acc, i: _encode_digit_step(rc, "%p_digits", acc, i),
+        range(total_digits),
+        (digits_list, []),
+    )
+    instructions.extend(digit_instructions)
 
     # Compute sign byte: 0xD → 0x60 ('-'), else → 0x4E ('+')
     is_neg = rc.next()
@@ -444,44 +492,14 @@ def build_decode_zoned_separate_ir(
         IRInstruction(opcode=Opcode.CONST, result_reg=accum, operands=[0])
     )
 
-    for i in range(total_digits):
-        byte_reg = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=byte_reg,
-                operands=["__list_get", "%p_data", digit_start + i],
-            )
-        )
-
-        digit = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=digit,
-                operands=["__nibble_get", byte_reg, "low"],
-            )
-        )
-
-        power = 10 ** (total_digits - 1 - i)
-        contribution = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.BINOP,
-                result_reg=contribution,
-                operands=["*", digit, power],
-            )
-        )
-
-        new_accum = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.BINOP,
-                result_reg=new_accum,
-                operands=["+", accum, contribution],
-            )
-        )
-        accum = new_accum
+    accum, decode_instructions = reduce(
+        lambda acc, i: _decode_digit_step(
+            rc, "%p_data", total_digits, acc, i, offset=digit_start
+        ),
+        range(total_digits),
+        (accum, []),
+    )
+    instructions.extend(decode_instructions)
 
     # Apply decimal scaling
     if decimal_digits > 0:
@@ -618,52 +636,51 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
     )
 
     # Pack nibble pairs into bytes (unrolled loop)
-    for i in range(byte_count):
+    def _pack_nibble_pair(
+        acc: tuple[str, list[IRInstruction]], i: int
+    ) -> tuple[str, list[IRInstruction]]:
+        current_result, insts = acc
         high_nibble = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=high_nibble,
-                operands=["__list_get", all_nibbles, i * 2],
-            )
-        )
-
         low_nibble = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=low_nibble,
-                operands=["__list_get", all_nibbles, i * 2 + 1],
-            )
-        )
-
         byte_with_high = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=byte_with_high,
-                operands=["__nibble_set", 0, "high", high_nibble],
-            )
-        )
-
         byte_complete = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=byte_complete,
-                operands=["__nibble_set", byte_with_high, "low", low_nibble],
-            )
+        new_result = rc.next()
+        return (
+            new_result,
+            insts
+            + [
+                IRInstruction(
+                    opcode=Opcode.CALL_FUNCTION,
+                    result_reg=high_nibble,
+                    operands=["__list_get", all_nibbles, i * 2],
+                ),
+                IRInstruction(
+                    opcode=Opcode.CALL_FUNCTION,
+                    result_reg=low_nibble,
+                    operands=["__list_get", all_nibbles, i * 2 + 1],
+                ),
+                IRInstruction(
+                    opcode=Opcode.CALL_FUNCTION,
+                    result_reg=byte_with_high,
+                    operands=["__nibble_set", 0, "high", high_nibble],
+                ),
+                IRInstruction(
+                    opcode=Opcode.CALL_FUNCTION,
+                    result_reg=byte_complete,
+                    operands=["__nibble_set", byte_with_high, "low", low_nibble],
+                ),
+                IRInstruction(
+                    opcode=Opcode.CALL_FUNCTION,
+                    result_reg=new_result,
+                    operands=["__list_set", current_result, i, byte_complete],
+                ),
+            ],
         )
 
-        new_result = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=new_result,
-                operands=["__list_set", result, i, byte_complete],
-            )
-        )
-        result = new_result
+    result, pack_instructions = reduce(
+        _pack_nibble_pair, range(byte_count), (result, [])
+    )
+    instructions.extend(pack_instructions)
 
     instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
 
@@ -683,36 +700,39 @@ def build_decode_comp3_ir(
     byte_count = (total_digits // 2) + 1
 
     # Extract all nibbles from all bytes
-    nibble_regs: list[str] = []
-    for i in range(byte_count):
+    def _extract_nibbles(
+        acc: tuple[list[str], list[IRInstruction]], i: int
+    ) -> tuple[list[str], list[IRInstruction]]:
+        regs, insts = acc
         byte_reg = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=byte_reg,
-                operands=["__list_get", "%p_data", i],
-            )
-        )
-
         high = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=high,
-                operands=["__nibble_get", byte_reg, "high"],
-            )
-        )
-        nibble_regs.append(high)
-
         low = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=low,
-                operands=["__nibble_get", byte_reg, "low"],
-            )
+        return (
+            regs + [high, low],
+            insts
+            + [
+                IRInstruction(
+                    opcode=Opcode.CALL_FUNCTION,
+                    result_reg=byte_reg,
+                    operands=["__list_get", "%p_data", i],
+                ),
+                IRInstruction(
+                    opcode=Opcode.CALL_FUNCTION,
+                    result_reg=high,
+                    operands=["__nibble_get", byte_reg, "high"],
+                ),
+                IRInstruction(
+                    opcode=Opcode.CALL_FUNCTION,
+                    result_reg=low,
+                    operands=["__nibble_get", byte_reg, "low"],
+                ),
+            ],
         )
-        nibble_regs.append(low)
+
+    nibble_regs, nibble_instructions = reduce(
+        _extract_nibbles, range(byte_count), ([], [])
+    )
+    instructions.extend(nibble_instructions)
 
     # Last nibble is sign, all others are digits
     sign_reg = nibble_regs[-1]
@@ -724,26 +744,35 @@ def build_decode_comp3_ir(
         IRInstruction(opcode=Opcode.CONST, result_reg=accum, operands=[0])
     )
 
-    for i, dreg in enumerate(digit_regs):
+    def _accumulate_dreg(
+        acc: tuple[str, list[IRInstruction]], pair: tuple[int, str]
+    ) -> tuple[str, list[IRInstruction]]:
+        current_accum, insts = acc
+        i, dreg = pair
         power = 10 ** (len(digit_regs) - 1 - i)
         contribution = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.BINOP,
-                result_reg=contribution,
-                operands=["*", dreg, power],
-            )
+        new_accum = rc.next()
+        return (
+            new_accum,
+            insts
+            + [
+                IRInstruction(
+                    opcode=Opcode.BINOP,
+                    result_reg=contribution,
+                    operands=["*", dreg, power],
+                ),
+                IRInstruction(
+                    opcode=Opcode.BINOP,
+                    result_reg=new_accum,
+                    operands=["+", current_accum, contribution],
+                ),
+            ],
         )
 
-        new_accum = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.BINOP,
-                result_reg=new_accum,
-                operands=["+", accum, contribution],
-            )
-        )
-        accum = new_accum
+    accum, accum_instructions = reduce(
+        _accumulate_dreg, enumerate(digit_regs), (accum, [])
+    )
+    instructions.extend(accum_instructions)
 
     # Apply decimal scaling
     if decimal_digits > 0:
@@ -830,35 +859,12 @@ def build_encode_binary_ir(
         IRInstruction(opcode=Opcode.CONST, result_reg=accum, operands=[0])
     )
 
-    for i in range(total_digits):
-        digit = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=digit,
-                operands=["__list_get", "%p_digits", i],
-            )
-        )
-
-        power = 10 ** (total_digits - 1 - i)
-        contribution = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.BINOP,
-                result_reg=contribution,
-                operands=["*", digit, power],
-            )
-        )
-
-        new_accum = rc.next()
-        instructions.append(
-            IRInstruction(
-                opcode=Opcode.BINOP,
-                result_reg=new_accum,
-                operands=["+", accum, contribution],
-            )
-        )
-        accum = new_accum
+    accum, accum_instructions = reduce(
+        lambda acc, i: _accumulate_digit_step(rc, "%p_digits", total_digits, acc, i),
+        range(total_digits),
+        (accum, []),
+    )
+    instructions.extend(accum_instructions)
 
     # Apply sign: sign_nibble == 0xD → negate
     is_neg = rc.next()

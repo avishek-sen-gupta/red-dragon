@@ -114,7 +114,7 @@ def _lower_init_declarator(
     ctx.seed_var_type(var_name, type_hint)
 
 
-def _find_function_declarator(node):
+def _find_function_declarator(node) -> object | None:
     """Recursively find function_declarator inside pointer/other declarators."""
     if node.type == "function_declarator":
         return node

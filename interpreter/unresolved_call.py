@@ -7,6 +7,8 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any
 
+from litellm.exceptions import OpenAIError
+
 from interpreter.ir import IRInstruction
 from interpreter.llm_client import LLMClient
 from interpreter.vm_types import (
@@ -213,7 +215,7 @@ class LLMPlausibleResolver(UnresolvedCallResolver):
                 max_tokens=512,
             )
             return self._parse_llm_response(raw, inst)
-        except Exception:
+        except (OpenAIError, OSError, json.JSONDecodeError, KeyError, ValueError):
             logger.warning(
                 "LLM plausible-value call failed for %s, falling back to symbolic",
                 call_desc,
@@ -240,7 +242,7 @@ class LLMPlausibleResolver(UnresolvedCallResolver):
                 max_tokens=512,
             )
             return self._parse_llm_response(raw, inst)
-        except Exception:
+        except (OpenAIError, OSError, json.JSONDecodeError, KeyError, ValueError):
             logger.warning(
                 "LLM plausible-value call failed for %s, falling back to symbolic",
                 call_desc,
