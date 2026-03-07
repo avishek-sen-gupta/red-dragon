@@ -1,16 +1,16 @@
-"""Tests for TypeConversionRules — DefaultConversionRules and IdentityConversionRules."""
+"""Tests for TypeConversionRules — DefaultTypeConversionRules and IdentityConversionRules."""
 
 from interpreter.constants import TypeName
 from interpreter.conversion_result import IDENTITY_CONVERSION
-from interpreter.default_conversion_rules import DefaultConversionRules
+from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.identity_conversion_rules import IdentityConversionRules
 
 
-def _rules() -> DefaultConversionRules:
-    return DefaultConversionRules()
+def _rules() -> DefaultTypeConversionRules:
+    return DefaultTypeConversionRules()
 
 
-class TestDefaultConversionRulesArithmetic:
+class TestDefaultTypeConversionRulesArithmetic:
     def test_int_plus_int_yields_int(self):
         result = _rules().resolve("+", TypeName.INT, TypeName.INT)
         assert result.result_type == TypeName.INT
@@ -56,7 +56,7 @@ class TestDefaultConversionRulesArithmetic:
         assert result.result_type == TypeName.FLOAT
 
 
-class TestDefaultConversionRulesComparison:
+class TestDefaultTypeConversionRulesComparison:
     def test_int_eq_int_yields_bool(self):
         result = _rules().resolve("==", TypeName.INT, TypeName.INT)
         assert result.result_type == TypeName.BOOL
@@ -70,7 +70,7 @@ class TestDefaultConversionRulesComparison:
         assert result.result_type == TypeName.BOOL
 
 
-class TestDefaultConversionRulesBoolPromotion:
+class TestDefaultTypeConversionRulesBoolPromotion:
     def test_bool_plus_int_coerces_bool_to_int(self):
         result = _rules().resolve("+", TypeName.BOOL, TypeName.INT)
         assert result.result_type == TypeName.INT
@@ -82,7 +82,7 @@ class TestDefaultConversionRulesBoolPromotion:
         assert result.right_coercer(False) == 0
 
 
-class TestDefaultConversionRulesFallback:
+class TestDefaultTypeConversionRulesFallback:
     def test_unknown_types_return_identity_coercers(self):
         result = _rules().resolve("+", "PackedDecimal", "PackedDecimal")
         assert result.left_coercer(42) == 42

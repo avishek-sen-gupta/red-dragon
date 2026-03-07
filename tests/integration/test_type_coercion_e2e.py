@@ -9,7 +9,7 @@ from types import MappingProxyType
 
 from interpreter.cfg import build_cfg
 from interpreter.constants import TypeName
-from interpreter.default_conversion_rules import DefaultConversionRules
+from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import build_registry
@@ -57,7 +57,7 @@ class TestTypeCoecionEndToEnd:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        conversion_rules = DefaultConversionRules()
+        conversion_rules = DefaultTypeConversionRules()
         type_resolver = TypeResolver(conversion_rules)
         type_env = infer_types(instructions, type_resolver)
 

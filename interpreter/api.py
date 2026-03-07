@@ -13,7 +13,7 @@ from tree_sitter import Node
 
 from .cfg import CFG, build_cfg, cfg_to_mermaid, extract_function_instructions
 from .constants import Language
-from .default_conversion_rules import DefaultConversionRules
+from .default_conversion_rules import DefaultTypeConversionRules
 from .frontend import get_frontend
 from .ir import IRInstruction
 from .ir_stats import count_opcodes
@@ -91,7 +91,7 @@ def lower_and_infer(
     logger.info("lower_and_infer: language=%s, frontend=%s", lang, frontend_type)
     frontend = get_frontend(lang, frontend_type=frontend_type, llm_provider=backend)
     instructions = frontend.lower(source.encode("utf-8"))
-    resolver = TypeResolver(DefaultConversionRules())
+    resolver = TypeResolver(DefaultTypeConversionRules())
     env = infer_types(
         instructions, resolver, type_env_builder=frontend.type_env_builder
     )

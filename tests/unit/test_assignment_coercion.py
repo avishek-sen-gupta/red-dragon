@@ -4,14 +4,14 @@ import math
 
 from interpreter.constants import TypeName
 from interpreter.conversion_result import _identity
-from interpreter.default_conversion_rules import DefaultConversionRules
+from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.identity_conversion_rules import IdentityConversionRules
 from interpreter.null_type_resolver import NullTypeResolver
 from interpreter.type_resolver import TypeResolver
 
 
-def _rules() -> DefaultConversionRules:
-    return DefaultConversionRules()
+def _rules() -> DefaultTypeConversionRules:
+    return DefaultTypeConversionRules()
 
 
 class TestDefaultAssignmentCoercionNarrowing:
@@ -79,22 +79,22 @@ class TestIdentityAssignmentCoercion:
 
 class TestTypeResolverAssignment:
     def test_float_to_int_delegates_to_rules(self):
-        resolver = TypeResolver(DefaultConversionRules())
+        resolver = TypeResolver(DefaultTypeConversionRules())
         coercer = resolver.resolve_assignment(TypeName.FLOAT, TypeName.INT)
         assert coercer(3.7) == 3
 
     def test_both_hints_empty_returns_identity(self):
-        resolver = TypeResolver(DefaultConversionRules())
+        resolver = TypeResolver(DefaultTypeConversionRules())
         coercer = resolver.resolve_assignment("", "")
         assert coercer is _identity
 
     def test_value_hint_empty_returns_identity(self):
-        resolver = TypeResolver(DefaultConversionRules())
+        resolver = TypeResolver(DefaultTypeConversionRules())
         coercer = resolver.resolve_assignment("", TypeName.INT)
         assert coercer is _identity
 
     def test_target_hint_empty_returns_identity(self):
-        resolver = TypeResolver(DefaultConversionRules())
+        resolver = TypeResolver(DefaultTypeConversionRules())
         coercer = resolver.resolve_assignment(TypeName.FLOAT, "")
         assert coercer is _identity
 

@@ -3,7 +3,7 @@
 from types import MappingProxyType
 
 from interpreter.constants import TypeName
-from interpreter.default_conversion_rules import DefaultConversionRules
+from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.function_signature import FunctionSignature
 from interpreter.identity_conversion_rules import IdentityConversionRules
 from interpreter.type_environment import TypeEnvironment
@@ -26,7 +26,7 @@ def _type_env_with(register_types: dict[str, str]) -> TypeEnvironment:
 
 
 _EMPTY_TYPE_ENV = _type_env_with({})
-_DEFAULT_RULES = DefaultConversionRules()
+_DEFAULT_RULES = DefaultTypeConversionRules()
 _IDENTITY_RULES = IdentityConversionRules()
 
 
