@@ -286,7 +286,7 @@ class Operators:
             return cls.UNCOMPUTABLE
         try:
             return fn(lhs, rhs)
-        except Exception:
+        except (TypeError, ArithmeticError, AttributeError):
             return cls.UNCOMPUTABLE
 
     @classmethod
@@ -306,6 +306,6 @@ class Operators:
                 return not operand
             if op == "!!":
                 return operand
-        except Exception:
+        except (TypeError, ArithmeticError, AttributeError):
             pass
         return cls.UNCOMPUTABLE
