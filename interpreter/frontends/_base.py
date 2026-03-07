@@ -16,14 +16,14 @@ import logging
 import time
 from typing import Any, Callable
 
-from ..frontend import Frontend
-from ..frontend_observer import FrontendObserver, NullFrontendObserver
-from ..frontends.context import GrammarConstants, TreeSitterEmitContext
-from ..ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
-from ..parser import ParserFactory
-from ..type_environment_builder import TypeEnvironmentBuilder
-from .. import constants
-from ..constants import Language
+from interpreter.frontend import Frontend
+from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
+from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
+from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
+from interpreter.parser import ParserFactory
+from interpreter.type_environment_builder import TypeEnvironmentBuilder
+from interpreter import constants
+from interpreter.constants import Language
 
 logger = logging.getLogger(__name__)
 

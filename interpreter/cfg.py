@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from .ir import IRInstruction, Opcode
-from . import constants
-from .cfg_types import (
+from interpreter.ir import IRInstruction, Opcode
+from interpreter import constants
+from interpreter.cfg_types import (
     BasicBlock,
     CFG,
 )  # noqa: F401 — re-exported for backwards compatibility

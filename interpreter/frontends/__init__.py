@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Callable
 
-from ._base import BaseFrontend
-from ..constants import Language
-from ..frontend_observer import FrontendObserver, NullFrontendObserver
-from ..parser import TreeSitterParserFactory
+from interpreter.frontends._base import BaseFrontend
+from interpreter.constants import Language
+from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
+from interpreter.parser import TreeSitterParserFactory
 
 # Lazy imports to avoid loading all frontends at startup
 _FRONTEND_CLASSES: dict[Language, str] = {

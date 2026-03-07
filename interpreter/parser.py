@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from .constants import Language
+from interpreter.constants import Language
 
 
 class ParserFactory(ABC):
