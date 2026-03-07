@@ -9,7 +9,7 @@ fileignoreconfig:
 - filename: docs/notes-on-vm-design.md
   checksum: a100eb0b5f8f99850b8675cdccb090fd9dc24b821f30f41314ddac35bb15f889
 - filename: docs/architectural-design-decisions.md
-  checksum: fd4b931855f8402e1e7b3c01625362fad41b4f4402ff94118b8bbea2c145eaab
+  checksum: 2c4f146864954d6079b76c7e106a14548e390accff36c8ae0d5457a37011493d
 - filename: tests/unit/exercism/exercises/pangram/canonical_data.json
   checksum: fe0ff5850a9bcb260242e145ea21e3e4ddc1b9c5ac41045fdfa714f8d950de85
 - filename: tests/unit/exercism/exercises/pangram/solutions/rust.rs

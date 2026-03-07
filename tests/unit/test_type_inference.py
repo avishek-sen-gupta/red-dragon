@@ -491,6 +491,155 @@ class TestCallFunctionInference:
 
 
 # ---------------------------------------------------------------------------
+# Forward reference resolution (fixpoint)
+# ---------------------------------------------------------------------------
+
+
+class TestForwardReferenceResolution:
+    def test_call_before_definition_resolves_return_type(self):
+        """main() calls helper() which is defined later → %0 gets helper's return type."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            # main calls helper (defined later)
+            _make_inst(Opcode.BRANCH, label="end_main_0"),
+            _make_inst(Opcode.LABEL, label="func_main_0"),
+            _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["helper"]),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_main_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:main@func_main_0>"],
+            ),
+            # helper defined after main
+            _make_inst(Opcode.BRANCH, label="end_helper_0"),
+            _make_inst(Opcode.LABEL, label="func_helper_0"),
+            _make_inst(Opcode.CONST, result_reg="%2", operands=["42"]),
+            _make_inst(Opcode.RETURN, operands=["%2"]),
+            _make_inst(Opcode.LABEL, label="end_helper_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%3",
+                operands=["<function:helper@func_helper_0>"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == TypeName.INT
+
+    def test_forward_ref_cascades_to_caller_return_type(self):
+        """main() returns helper() result → main's return type also resolves."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.BRANCH, label="end_main_0"),
+            _make_inst(Opcode.LABEL, label="func_main_0"),
+            _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["helper"]),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_main_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:main@func_main_0>"],
+            ),
+            _make_inst(Opcode.BRANCH, label="end_helper_0"),
+            _make_inst(Opcode.LABEL, label="func_helper_0"),
+            _make_inst(Opcode.CONST, result_reg="%2", operands=["42"]),
+            _make_inst(Opcode.RETURN, operands=["%2"]),
+            _make_inst(Opcode.LABEL, label="end_helper_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%3",
+                operands=["<function:helper@func_helper_0>"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.func_signatures["main"].return_type == TypeName.INT
+
+    def test_forward_ref_store_var_propagates(self):
+        """result = helper() where helper is defined later → var_types["result"] typed."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["helper"]),
+            _make_inst(Opcode.STORE_VAR, operands=["result", "%0"]),
+            # helper defined later
+            _make_inst(Opcode.BRANCH, label="end_helper_0"),
+            _make_inst(Opcode.LABEL, label="func_helper_0"),
+            _make_inst(Opcode.CONST, result_reg="%1", operands=['"hello"']),
+            _make_inst(Opcode.RETURN, operands=["%1"]),
+            _make_inst(Opcode.LABEL, label="end_helper_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%2",
+                operands=["<function:helper@func_helper_0>"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == TypeName.STRING
+        assert env.var_types["result"] == TypeName.STRING
+
+    def test_three_function_chain_resolves(self):
+        """a() calls b() calls c() — all defined in reverse order → all resolve."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            # a calls b
+            _make_inst(Opcode.BRANCH, label="end_a_0"),
+            _make_inst(Opcode.LABEL, label="func_a_0"),
+            _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["b"]),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_a_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:a@func_a_0>"],
+            ),
+            # b calls c
+            _make_inst(Opcode.BRANCH, label="end_b_0"),
+            _make_inst(Opcode.LABEL, label="func_b_0"),
+            _make_inst(Opcode.CALL_FUNCTION, result_reg="%2", operands=["c"]),
+            _make_inst(Opcode.RETURN, operands=["%2"]),
+            _make_inst(Opcode.LABEL, label="end_b_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%3",
+                operands=["<function:b@func_b_0>"],
+            ),
+            # c returns a constant
+            _make_inst(Opcode.BRANCH, label="end_c_0"),
+            _make_inst(Opcode.LABEL, label="func_c_0"),
+            _make_inst(Opcode.CONST, result_reg="%4", operands=["3.14"]),
+            _make_inst(Opcode.RETURN, operands=["%4"]),
+            _make_inst(Opcode.LABEL, label="end_c_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%5",
+                operands=["<function:c@func_c_0>"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.func_signatures["c"].return_type == TypeName.FLOAT
+        assert env.func_signatures["b"].return_type == TypeName.FLOAT
+        assert env.func_signatures["a"].return_type == TypeName.FLOAT
+
+    def test_no_forward_ref_converges_in_one_pass(self):
+        """When all definitions precede calls, inference still works (no regression)."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.BRANCH, label="end_helper_0"),
+            _make_inst(Opcode.LABEL, label="func_helper_0"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_helper_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:helper@func_helper_0>"],
+            ),
+            _make_inst(Opcode.CALL_FUNCTION, result_reg="%2", operands=["helper"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%2"] == TypeName.INT
+
+
+# ---------------------------------------------------------------------------
 # Immutability
 # ---------------------------------------------------------------------------
 

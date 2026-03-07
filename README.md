@@ -29,7 +29,7 @@ RedDragon has a two-phase type system: **frontend extraction** and **static infe
 
 **Frontend type extraction** — 13 statically-typed frontends extract type annotations from tree-sitter ASTs during lowering and normalize them to canonical names (`Int`, `Float`, `Bool`, `String`, etc.). Seeds are accumulated in a `TypeEnvironmentBuilder` covering register types, variable types, function return types, and parameter types. IR instructions stay purely about computation and control flow.
 
-**Static type inference** — `infer_types()` accepts the pre-seeded builder and propagates types through register/variable chains across 15 opcodes (CONST through RETURN). The inference pass handles:
+**Static type inference** — `infer_types()` accepts the pre-seeded builder and propagates types through register/variable chains across 15 opcodes (CONST through RETURN). The pass runs to fixpoint, resolving forward references where a function calls another function defined later in the IR. The inference pass handles:
 
 - **Self/this class typing** — `param:self`/`param:this`/`param:$this` inside class scope are automatically typed as the enclosing class, enabling field tracking and method typing on self/this
 - **Function return types** — 13 frontends seed return types during lowering; the inference pass propagates them to CALL_FUNCTION result registers; unannotated functions get return types backfilled from typed RETURN expressions

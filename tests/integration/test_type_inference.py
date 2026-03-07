@@ -1921,3 +1921,70 @@ class TestBuiltinMethodReturnTypesKotlin:
             'fun main() { val x = "hello".contains("l") }', "kotlin"
         )
         assert env.var_types["x"] == TypeName.BOOL
+
+
+# ---------------------------------------------------------------------------
+# Forward reference resolution (fixpoint) — ADR-082
+# ---------------------------------------------------------------------------
+
+
+class TestForwardReferencePython:
+    def test_call_before_def_resolves_return_type(self):
+        """Python: main() calls helper() defined later → return type resolves."""
+        source = """\
+def main():
+    return helper()
+
+def helper():
+    return 42
+"""
+        _instructions, env = _lower_and_infer(source, "python")
+        assert env.func_signatures["helper"].return_type == TypeName.INT
+        assert env.func_signatures["main"].return_type == TypeName.INT
+
+    def test_forward_ref_var_assignment(self):
+        """Python: x = helper() where helper is defined later → x typed."""
+        source = """\
+def compute():
+    x = make_value()
+    return x
+
+def make_value():
+    return 3.14
+"""
+        _instructions, env = _lower_and_infer(source, "python")
+        assert env.func_signatures["make_value"].return_type == TypeName.FLOAT
+
+
+class TestForwardReferenceJavaScript:
+    def test_call_before_def_resolves_return_type(self):
+        """JavaScript: main() calls helper() defined later → return type resolves."""
+        source = """\
+function main() {
+    return helper();
+}
+
+function helper() {
+    return 42;
+}
+"""
+        _instructions, env = _lower_and_infer(source, "javascript")
+        assert env.func_signatures["helper"].return_type == TypeName.INT
+        assert env.func_signatures["main"].return_type == TypeName.INT
+
+
+class TestForwardReferenceRuby:
+    def test_call_before_def_resolves_return_type(self):
+        """Ruby: main() calls helper() defined later → return type resolves."""
+        source = """\
+def main()
+    return helper()
+end
+
+def helper()
+    return 42
+end
+"""
+        _instructions, env = _lower_and_infer(source, "ruby")
+        assert env.func_signatures["helper"].return_type == TypeName.INT
+        assert env.func_signatures["main"].return_type == TypeName.INT

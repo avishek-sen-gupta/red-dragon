@@ -1414,3 +1414,13 @@ Updated tier classification: Tier 1 (11): Python, Java, C#, Kotlin, Scala, JS, T
 2. **UNOP `~` → Int**: Added `"~": TypeName.INT` to `_UNOP_FIXED_TYPES`.
 
 **Consequences:** Test count: 9289 passed, 4 skipped, 22 xfailed (31 new tests: 8 unit, 23 integration across Python/JavaScript/Java/Ruby/Kotlin). Builtin method types now propagate through STORE_VAR, BINOP, and downstream instructions without requiring frontend type annotations.
+
+---
+
+### ADR-082: Fixpoint type inference for forward reference resolution (2026-03-07)
+
+**Context:** The type inference pass (`infer_types`) walked the IR instruction list once, top-to-bottom. When function A calls function B and B is defined later in the IR (common in Python, JavaScript, Ruby where source order doesn't match call order), the call site has no return type information — B's RETURN hasn't been processed yet. This cascades: A's return type also can't be backfilled, and variables assigned from A's result stay untyped.
+
+**Decision:** Replace the single `for inst in instructions` loop with a fixpoint loop that repeats until no new types are discovered. Convergence is measured by `len(register_types) + len(func_return_types)` — when neither dict grows, the loop terminates. All existing handler guards (`if result_reg in register_types: return`, `if func_label in func_return_types: return`, etc.) are already correct for multi-pass: they prevent clobbering types from earlier passes while allowing unfilled gaps to be resolved on subsequent passes.
+
+**Consequences:** Test count: 9298 passed, 4 skipped, 22 xfailed (9 new tests: 5 unit, 4 integration across Python/JavaScript/Ruby). Forward reference chains of arbitrary depth resolve correctly (tested with a→b→c chain). Programs without forward references converge in one pass (no performance regression). The fixpoint loop typically runs 2 passes for real code with forward references.
