@@ -118,8 +118,8 @@ def lower_php_heredoc(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_php_func_call(ctx: TreeSitterEmitContext, node) -> str:
     """Lower function_call_expression: name(args) or dynamic call."""
-    func_node = node.child_by_field_name("function")
-    args_node = node.child_by_field_name("arguments")
+    func_node = node.child_by_field_name(ctx.constants.call_function_field)
+    args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
 
     if func_node and func_node.type in ("name", "qualified_name"):
@@ -147,9 +147,9 @@ def lower_php_func_call(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_php_method_call(ctx: TreeSitterEmitContext, node) -> str:
     """Lower $obj->method(args) as CALL_METHOD."""
-    obj_node = node.child_by_field_name("object")
+    obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     name_node = node.child_by_field_name("name")
-    args_node = node.child_by_field_name("arguments")
+    args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
 
     obj_reg = ctx.lower_expr(obj_node) if obj_node else ctx.fresh_reg()
@@ -166,7 +166,7 @@ def lower_php_method_call(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_php_member_access(ctx: TreeSitterEmitContext, node) -> str:
     """Lower $obj->field as LOAD_FIELD."""
-    obj_node = node.child_by_field_name("object")
+    obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     name_node = node.child_by_field_name("name")
     if obj_node is None or name_node is None:
         return lower_const_literal(ctx, node)
@@ -201,8 +201,8 @@ def lower_php_subscript(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_php_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower assignment expression ($x = expr)."""
-    left = node.child_by_field_name("left")
-    right = node.child_by_field_name("right")
+    left = node.child_by_field_name(ctx.constants.assign_left_field)
+    right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
     lower_php_store_target(ctx, left, val_reg, node)
     return val_reg
@@ -210,8 +210,8 @@ def lower_php_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_php_augmented_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower augmented assignment ($x += expr)."""
-    left = node.child_by_field_name("left")
-    right = node.child_by_field_name("right")
+    left = node.child_by_field_name(ctx.constants.assign_left_field)
+    right = node.child_by_field_name(ctx.constants.assign_right_field)
     op_node = [c for c in node.children if c.type not in (left.type, right.type)][0]
     op_text = ctx.node_text(op_node).rstrip("=")
     lhs_reg = ctx.lower_expr(left)
@@ -238,7 +238,7 @@ def lower_php_store_target(
             node=parent_node,
         )
     elif target.type == "member_access_expression":
-        obj_node = target.child_by_field_name("object")
+        obj_node = target.child_by_field_name(ctx.constants.attr_object_field)
         name_node = target.child_by_field_name("name")
         if obj_node and name_node:
             obj_reg = ctx.lower_expr(obj_node)
@@ -275,9 +275,9 @@ def lower_php_cast(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_php_ternary(ctx: TreeSitterEmitContext, node) -> str:
     """Lower ternary / conditional expression ($cond ? $a : $b)."""
-    cond_node = node.child_by_field_name("condition")
+    cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     true_node = node.child_by_field_name("body")
-    false_node = node.child_by_field_name("alternative")
+    false_node = node.child_by_field_name(ctx.constants.if_alternative_field)
 
     if cond_node is None:
         return lower_const_literal(ctx, node)
@@ -326,7 +326,7 @@ def lower_php_throw_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_php_object_creation(ctx: TreeSitterEmitContext, node) -> str:
     """Lower ``new Foo(args)`` -> NEW_OBJECT + CALL_METHOD('__construct')."""
-    name_node = node.child_by_field_name("name")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
     if name_node is None:
         name_node = next((c for c in node.children if c.type == "name"), None)
     args_node = next((c for c in node.children if c.type == "arguments"), None)
@@ -496,8 +496,8 @@ def lower_php_arrow_function(ctx: TreeSitterEmitContext, node) -> str:
     """Lower fn($x) => expr as a function definition with implicit return."""
     from interpreter.frontends.php.declarations import lower_php_params
 
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = f"__arrow_{ctx.label_counter}"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -535,7 +535,7 @@ def lower_php_scoped_call(ctx: TreeSitterEmitContext, node) -> str:
     """Lower ClassName::method(args) as CALL_FUNCTION with qualified name."""
     scope_node = node.child_by_field_name("scope")
     name_node = node.child_by_field_name("name")
-    args_node = node.child_by_field_name("arguments")
+    args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
 
     scope_name = ctx.node_text(scope_node) if scope_node else "Unknown"
     method_name = ctx.node_text(name_node) if name_node else "unknown"
@@ -558,8 +558,8 @@ def lower_php_anonymous_function(ctx: TreeSitterEmitContext, node) -> str:
     from interpreter.frontends.php.declarations import lower_php_params
     from interpreter.frontends.php.control_flow import lower_php_compound
 
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = f"__anon_{ctx.label_counter}"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -594,7 +594,7 @@ def lower_php_anonymous_function(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_php_nullsafe_member_access(ctx: TreeSitterEmitContext, node) -> str:
     """Lower $obj?->field as LOAD_FIELD (null-safety is semantic)."""
-    obj_node = node.child_by_field_name("object")
+    obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     name_node = node.child_by_field_name("name")
     if obj_node is None or name_node is None:
         return lower_const_literal(ctx, node)
@@ -660,8 +660,8 @@ def lower_php_yield(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_php_reference_assignment(ctx: TreeSitterEmitContext, node) -> str:
     """Lower $x = &$y as STORE_VAR (ignore reference semantics)."""
-    left = node.child_by_field_name("left")
-    right = node.child_by_field_name("right")
+    left = node.child_by_field_name(ctx.constants.assign_left_field)
+    right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right) if right else ctx.fresh_reg()
     if left:
         lower_php_store_target(ctx, left, val_reg, node)
@@ -693,9 +693,9 @@ def lower_php_include(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_php_nullsafe_method_call(ctx: TreeSitterEmitContext, node) -> str:
     """Lower ``$obj?->method(args)`` like regular method call."""
-    obj_node = node.child_by_field_name("object")
+    obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     name_node = node.child_by_field_name("name")
-    args_node = node.child_by_field_name("arguments")
+    args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
 
     obj_reg = ctx.lower_expr(obj_node) if obj_node else ctx.fresh_reg()
     method_name = ctx.node_text(name_node) if name_node else "__unknown"

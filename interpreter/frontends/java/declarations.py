@@ -72,9 +72,9 @@ def _has_static_modifier(node) -> bool:
 def lower_method_decl(
     ctx: TreeSitterEmitContext, node, inject_this: bool = False
 ) -> None:
-    name_node = node.child_by_field_name("name")
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = ctx.node_text(name_node) if name_node else "__anon"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -152,8 +152,8 @@ def _lower_deferred_class_child(ctx: TreeSitterEmitContext, child) -> None:
 
 
 def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
@@ -183,8 +183,8 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_record_decl(ctx: TreeSitterEmitContext, node) -> None:
     """Lower record_declaration like class_declaration."""
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     record_name = ctx.node_text(name_node) if name_node else "__anon_record"
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{record_name}")
@@ -213,8 +213,8 @@ def lower_record_decl(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def _lower_constructor_decl(ctx: TreeSitterEmitContext, node) -> None:
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = "__init__"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -276,7 +276,7 @@ def _lower_static_initializer(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
     """Lower interface_declaration as NEW_OBJECT with STORE_INDEX per member."""
-    name_node = node.child_by_field_name("name")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
     if not name_node:
         return
     iface_name = ctx.node_text(name_node)
@@ -287,7 +287,7 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
         operands=[f"interface:{iface_name}"],
         node=node,
     )
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     if body_node:
         for i, child in enumerate(c for c in body_node.children if c.is_named):
             member_name_node = child.child_by_field_name("name")
@@ -306,8 +306,8 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
     """Lower enum_declaration as NEW_OBJECT with STORE_INDEX per member."""
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     if name_node:
         enum_name = ctx.node_text(name_node)
         obj_reg = ctx.fresh_reg()
@@ -337,7 +337,7 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_annotation_type_decl(ctx: TreeSitterEmitContext, node) -> None:
     """Lower @interface Name { ... } like interface declaration."""
-    name_node = node.child_by_field_name("name")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
     if not name_node:
         return
     annot_name = ctx.node_text(name_node)
@@ -348,7 +348,7 @@ def lower_annotation_type_decl(ctx: TreeSitterEmitContext, node) -> None:
         operands=[f"annotation:{annot_name}"],
         node=node,
     )
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     if body_node:
         for i, child in enumerate(c for c in body_node.children if c.is_named):
             member_name_node = child.child_by_field_name("name")

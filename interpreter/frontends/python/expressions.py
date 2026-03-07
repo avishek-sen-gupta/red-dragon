@@ -44,8 +44,8 @@ def lower_tuple_unpack(
 
 
 def lower_call(ctx: TreeSitterEmitContext, node) -> str:
-    func_node = node.child_by_field_name("function")
-    args_node = node.child_by_field_name("arguments")
+    func_node = node.child_by_field_name(ctx.constants.call_function_field)
+    args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
 
     # When a generator expression is the sole argument, tree-sitter
     # makes it the arguments node directly (not wrapped in argument_list).
@@ -62,8 +62,8 @@ def lower_call(ctx: TreeSitterEmitContext, node) -> str:
 
     # Method call: obj.method(...)
     if func_node and func_node.type == "attribute":
-        obj_node = func_node.child_by_field_name("object")
-        attr_node = func_node.child_by_field_name("attribute")
+        obj_node = func_node.child_by_field_name(ctx.constants.attr_object_field)
+        attr_node = func_node.child_by_field_name(ctx.constants.attr_attribute_field)
         obj_reg = ctx.lower_expr(obj_node)
         method_name = ctx.node_text(attr_node)
         reg = ctx.fresh_reg()
@@ -348,7 +348,11 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.LABEL, label=store_label)
     # Evaluate key and value from pair
     key_node = pair_node.child_by_field_name("key") if pair_node else None
-    val_node = pair_node.child_by_field_name("value") if pair_node else None
+    val_node = (
+        pair_node.child_by_field_name(ctx.constants.subscript_value_field)
+        if pair_node
+        else None
+    )
     key_reg = ctx.lower_expr(key_node) if key_node else ctx.fresh_reg()
     val_reg = ctx.lower_expr(val_node) if val_node else ctx.fresh_reg()
     ctx.emit(Opcode.STORE_INDEX, operands=[result_obj, key_reg, val_reg])
@@ -386,7 +390,7 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
             _lower_python_param(ctx, child)
 
     # Lower body expression and return
-    body_node = node.child_by_field_name("body") or next(
+    body_node = node.child_by_field_name(ctx.constants.func_body_field) or next(
         (
             c
             for c in node.children
@@ -418,7 +422,7 @@ def _lower_python_param(ctx: TreeSitterEmitContext, child) -> None:
     if child.type == "identifier":
         pname = ctx.node_text(child)
     elif child.type == "default_parameter":
-        pname_node = child.child_by_field_name("name")
+        pname_node = child.child_by_field_name(ctx.constants.func_name_field)
         if not pname_node:
             return
         pname = ctx.node_text(pname_node)
@@ -431,7 +435,7 @@ def _lower_python_param(ctx: TreeSitterEmitContext, child) -> None:
             return
         pname = ctx.node_text(id_node)
     elif child.type == "typed_default_parameter":
-        pname_node = child.child_by_field_name("name")
+        pname_node = child.child_by_field_name(ctx.constants.func_name_field)
         if not pname_node:
             return
         pname = ctx.node_text(pname_node)
@@ -614,8 +618,8 @@ def lower_splat_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_named_expression(ctx: TreeSitterEmitContext, node) -> str:
     """Lower (y := expr) as lower value, STORE_VAR name, return register."""
-    name_node = node.child_by_field_name("name")
-    value_node = node.child_by_field_name("value")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    value_node = node.child_by_field_name(ctx.constants.subscript_value_field)
     val_reg = ctx.lower_expr(value_node)
     var_name = ctx.node_text(name_node)
     ctx.emit(

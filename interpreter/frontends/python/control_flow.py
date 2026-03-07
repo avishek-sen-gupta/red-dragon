@@ -104,9 +104,9 @@ def _lower_python_elif_chain(
 
 
 def lower_for(ctx: TreeSitterEmitContext, node) -> None:
-    left = node.child_by_field_name("left")
-    right = node.child_by_field_name("right")
-    body_node = node.child_by_field_name("body")
+    left = node.child_by_field_name(ctx.constants.assign_left_field)
+    right = node.child_by_field_name(ctx.constants.assign_right_field)
+    body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
     iter_reg = ctx.lower_expr(right)
     idx_reg = ctx.fresh_reg()
@@ -269,7 +269,7 @@ def lower_decorated_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.lower_stmt(definition)
 
     # Extract the defined name
-    name_node = definition.child_by_field_name("name")
+    name_node = definition.child_by_field_name(ctx.constants.func_name_field)
     func_name = ctx.node_text(name_node)
 
     # Apply decorators bottom-up (last decorator applied first)
@@ -341,7 +341,7 @@ def lower_delete(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_import(ctx: TreeSitterEmitContext, node) -> None:
     """Lower import module as CALL_FUNCTION('import', module) + STORE_VAR."""
-    name_node = node.child_by_field_name("name")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
     module_name = ctx.node_text(name_node) if name_node else "unknown"
     import_reg = ctx.fresh_reg()
     ctx.emit(
@@ -410,9 +410,9 @@ def lower_match(ctx: TreeSitterEmitContext, node) -> None:
         pattern_node = next(
             (c for c in case_node.children if c.type == "case_pattern"), None
         )
-        case_body = case_node.child_by_field_name("consequence") or next(
-            (c for c in case_node.children if c.type == "block"), None
-        )
+        case_body = case_node.child_by_field_name(
+            ctx.constants.if_consequence_field
+        ) or next((c for c in case_node.children if c.type == "block"), None)
 
         # Extract the inner pattern value from case_pattern
         inner_pattern = (

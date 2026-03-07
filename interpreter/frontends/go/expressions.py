@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 
 def lower_go_call(ctx: TreeSitterEmitContext, node) -> str:
-    func_node = node.child_by_field_name("function")
-    args_node = node.child_by_field_name("arguments")
+    func_node = node.child_by_field_name(ctx.constants.call_function_field)
+    args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = extract_call_args(ctx, args_node) if args_node else []
 
     # Method call via selector: obj.Method(...)
@@ -244,8 +244,8 @@ def lower_func_literal(ctx: TreeSitterEmitContext, node) -> str:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=func_label)

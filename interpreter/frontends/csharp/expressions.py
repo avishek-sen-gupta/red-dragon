@@ -19,8 +19,8 @@ from interpreter.frontends.type_extraction import (
 
 def lower_invocation(ctx: TreeSitterEmitContext, node) -> str:
     """Lower invocation_expression (function field, arguments field)."""
-    func_node = node.child_by_field_name("function")
-    args_node = node.child_by_field_name("arguments")
+    func_node = node.child_by_field_name(ctx.constants.call_function_field)
+    args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
 
     if func_node and func_node.type == "member_access_expression":
@@ -71,7 +71,7 @@ def lower_invocation(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_object_creation(ctx: TreeSitterEmitContext, node) -> str:
     type_node = node.child_by_field_name("type")
-    args_node = node.child_by_field_name("arguments")
+    args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
     type_name = ctx.node_text(type_node) if type_node else "Object"
     reg = ctx.fresh_reg()
@@ -182,8 +182,8 @@ def lower_initializer_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
-    left = node.child_by_field_name("left")
-    right = node.child_by_field_name("right")
+    left = node.child_by_field_name(ctx.constants.assign_left_field)
+    right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
     lower_csharp_store_target(ctx, left, val_reg, node)
     return val_reg
@@ -200,9 +200,9 @@ def lower_cast_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_ternary(ctx: TreeSitterEmitContext, node) -> str:
-    cond_node = node.child_by_field_name("condition")
-    true_node = node.child_by_field_name("consequence")
-    false_node = node.child_by_field_name("alternative")
+    cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
+    true_node = node.child_by_field_name(ctx.constants.if_consequence_field)
+    false_node = node.child_by_field_name(ctx.constants.if_alternative_field)
 
     cond_reg = ctx.lower_expr(cond_node)
     true_label = ctx.fresh_label("ternary_true")
@@ -309,12 +309,12 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.LABEL, label=func_label)
 
     # Lower parameters
-    params_node = node.child_by_field_name("parameters")
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
     if params_node:
         lower_csharp_params(ctx, params_node)
 
     # Lower body
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
     if body_node and body_node.type == "block":
         ctx.lower_block(body_node)
     elif body_node:
@@ -543,7 +543,7 @@ def lower_is_pattern_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_implicit_object_creation(ctx: TreeSitterEmitContext, node) -> str:
     """Lower `new()` or `new() { ... }` as NEW_OBJECT + CALL_METHOD constructor."""
-    args_node = node.child_by_field_name("arguments")
+    args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = (
         [
             ctx.lower_expr(c)

@@ -19,9 +19,9 @@ logger = logging.getLogger(__name__)
 
 
 def lower_go_if(ctx: TreeSitterEmitContext, node) -> None:
-    cond_node = node.child_by_field_name("condition")
-    body_node = node.child_by_field_name("consequence")
-    alt_node = node.child_by_field_name("alternative")
+    cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
+    body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
+    alt_node = node.child_by_field_name(ctx.constants.if_alternative_field)
 
     cond_reg = ctx.lower_expr(cond_node)
     true_label = ctx.fresh_label("if_true")
@@ -64,7 +64,7 @@ def lower_go_if(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_go_for(ctx: TreeSitterEmitContext, node) -> None:
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
     # Look for for_clause (C-style) or range_clause
     for_clause = next((c for c in node.children if c.type == "for_clause"), None)
@@ -81,8 +81,8 @@ def lower_go_for(ctx: TreeSitterEmitContext, node) -> None:
 
 def _lower_go_for_clause(ctx: TreeSitterEmitContext, clause, body_node, parent) -> None:
     init_node = clause.child_by_field_name("initializer")
-    cond_node = clause.child_by_field_name("condition")
-    update_node = clause.child_by_field_name("update")
+    cond_node = clause.child_by_field_name(ctx.constants.for_condition_field)
+    update_node = clause.child_by_field_name(ctx.constants.for_update_field)
 
     if init_node:
         ctx.lower_stmt(init_node)
@@ -118,8 +118,8 @@ def _lower_go_for_clause(ctx: TreeSitterEmitContext, clause, body_node, parent) 
 
 def _lower_go_range(ctx: TreeSitterEmitContext, clause, body_node, parent) -> None:
     # for k, v := range expr { body }
-    left = clause.child_by_field_name("left")
-    right = clause.child_by_field_name("right")
+    left = clause.child_by_field_name(ctx.constants.assign_left_field)
+    right = clause.child_by_field_name(ctx.constants.assign_right_field)
 
     iter_reg = ctx.lower_expr(right) if right else ctx.fresh_reg()
     var_names = extract_expression_list(ctx, left) if left else ["__range_var"]
@@ -526,8 +526,8 @@ def lower_goto_stmt(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_receive_stmt(ctx: TreeSitterEmitContext, node) -> None:
     """Lower receive_statement: v := <-ch -> CALL_FUNCTION('chan_recv', ch) + STORE_VAR."""
-    left = node.child_by_field_name("left")
-    right = node.child_by_field_name("right")
+    left = node.child_by_field_name(ctx.constants.assign_left_field)
+    right = node.child_by_field_name(ctx.constants.assign_right_field)
 
     if right:
         chan_reg = ctx.lower_expr(right)

@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
     """Lower do { body } while (cond);"""
-    body_node = node.child_by_field_name("body")
-    cond_node = node.child_by_field_name("condition")
+    body_node = node.child_by_field_name(ctx.constants.while_body_field)
+    cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
 
     body_label = ctx.fresh_label("do_body")
     cond_label = ctx.fresh_label("do_cond")

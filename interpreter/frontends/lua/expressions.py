@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 def lower_lua_call(ctx: TreeSitterEmitContext, node) -> str:
     """Lower function_call -- name field is identifier or method_index_expression."""
     name_node = node.child_by_field_name("name")
-    args_node = node.child_by_field_name("arguments")
+    args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = extract_call_args(ctx, args_node) if args_node else []
 
     if name_node is None:
@@ -194,8 +194,8 @@ def lower_lua_function_definition(ctx: TreeSitterEmitContext, node) -> str:
     """
     from interpreter.frontends.common.declarations import lower_params
 
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     anon_name = ctx.fresh_label("anon_fn")
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{anon_name}")

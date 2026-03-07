@@ -110,9 +110,9 @@ def lower_lua_store_target(
 
 def lower_lua_function_declaration(ctx: TreeSitterEmitContext, node) -> None:
     """Lower function_declaration with name, parameters, body fields."""
-    name_node = node.child_by_field_name("name")
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = ctx.node_text(name_node) if name_node else "__anon"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")

@@ -155,9 +155,9 @@ def lower_while(ctx: TreeSitterEmitContext, node) -> None:
 def lower_c_style_for(ctx: TreeSitterEmitContext, node) -> None:
     """Lower a C-style for(init; cond; update) loop."""
     init_node = node.child_by_field_name("initializer")
-    cond_node = node.child_by_field_name("condition")
-    update_node = node.child_by_field_name("update")
-    body_node = node.child_by_field_name("body")
+    cond_node = node.child_by_field_name(ctx.constants.for_condition_field)
+    update_node = node.child_by_field_name(ctx.constants.for_update_field)
+    body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
     if init_node:
         ctx.lower_stmt(init_node)

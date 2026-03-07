@@ -133,9 +133,9 @@ def lower_scala_params(ctx: TreeSitterEmitContext, params_node) -> None:
 def lower_function_def(
     ctx: TreeSitterEmitContext, node, inject_this: bool = False
 ) -> None:
-    name_node = node.child_by_field_name("name")
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = ctx.node_text(name_node) if name_node else "__anon"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -213,8 +213,8 @@ def _lower_class_body_hoisted(
 
 
 def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
@@ -242,8 +242,8 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_object_def(ctx: TreeSitterEmitContext, node) -> None:
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     obj_name = ctx.node_text(name_node) if name_node else "__anon_object"
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{obj_name}")
@@ -269,8 +269,8 @@ def lower_object_def(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_trait_def(ctx: TreeSitterEmitContext, node) -> None:
     """Lower trait_definition like class_definition."""
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     trait_name = ctx.node_text(name_node) if name_node else "__anon_trait"
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{trait_name}")
@@ -295,7 +295,7 @@ def lower_trait_def(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_function_declaration(ctx: TreeSitterEmitContext, node) -> None:
     """Lower abstract function declaration (no body) as function stub."""
-    name_node = node.child_by_field_name("name")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
     func_name = ctx.node_text(name_node) if name_node else "__abstract"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")

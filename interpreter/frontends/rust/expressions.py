@@ -62,9 +62,9 @@ def lower_deref_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_if_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower Rust if expression (value-producing)."""
-    cond_node = node.child_by_field_name("condition")
-    body_node = node.child_by_field_name("consequence")
-    alt_node = node.child_by_field_name("alternative")
+    cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
+    body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
+    alt_node = node.child_by_field_name(ctx.constants.if_alternative_field)
 
     cond_reg = ctx.lower_expr(cond_node)
     true_label = ctx.fresh_label("if_true")
@@ -235,8 +235,8 @@ def lower_block_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_closure_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower Rust closure expression |params| body."""
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = f"__closure_{ctx.label_counter}"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -295,8 +295,8 @@ def _lower_closure_params(ctx: TreeSitterEmitContext, params_node) -> None:
 
 def lower_struct_instantiation(ctx: TreeSitterEmitContext, node) -> str:
     """Lower struct_expression: Point { x: 1, y: 2 }."""
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     struct_name = ctx.node_text(name_node) if name_node else "Struct"
 
     obj_reg = ctx.fresh_reg()
@@ -513,8 +513,8 @@ def lower_break_as_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower assignment_expression: left = right (value-producing)."""
-    left = node.child_by_field_name("left")
-    right = node.child_by_field_name("right")
+    left = node.child_by_field_name(ctx.constants.assign_left_field)
+    right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
     lower_rust_store_target(ctx, left, val_reg, node)
     return val_reg
@@ -522,8 +522,8 @@ def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_compound_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower compound_assignment_expr: left += right."""
-    left = node.child_by_field_name("left")
-    right = node.child_by_field_name("right")
+    left = node.child_by_field_name(ctx.constants.assign_left_field)
+    right = node.child_by_field_name(ctx.constants.assign_right_field)
     op_node = node.child_by_field_name("operator")
     op_text = ctx.node_text(op_node).rstrip("=") if op_node else "+"
     lhs_reg = ctx.lower_expr(left)

@@ -55,7 +55,7 @@ def lower_php_echo(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_php_if(ctx: TreeSitterEmitContext, node) -> None:
     """Lower PHP if statement with else_clause / else_if_clause support."""
-    cond_node = node.child_by_field_name("condition")
+    cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     body_node = node.child_by_field_name("body")
 
     cond_reg = ctx.lower_expr(cond_node)
@@ -100,7 +100,7 @@ def lower_php_if(ctx: TreeSitterEmitContext, node) -> None:
 def _lower_php_else_clause(ctx: TreeSitterEmitContext, node, end_label: str) -> None:
     """Lower else_if_clause or else_clause."""
     if node.type == "else_if_clause":
-        cond_node = node.child_by_field_name("condition")
+        cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
         body_node = node.child_by_field_name("body")
         cond_reg = ctx.lower_expr(cond_node)
         true_label = ctx.fresh_label("elseif_true")
@@ -130,7 +130,7 @@ def _lower_php_else_clause(ctx: TreeSitterEmitContext, node, end_label: str) -> 
 
 def lower_php_foreach(ctx: TreeSitterEmitContext, node) -> None:
     """Lower foreach ($arr as $v) or foreach ($arr as $k => $v) as index-based loop."""
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
     # Extract iterable, value var, and optional key var from children
     named_children = [c for c in node.children if c.is_named]
@@ -297,8 +297,8 @@ def lower_php_switch(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_php_do(ctx: TreeSitterEmitContext, node) -> None:
     """Lower do { body } while (condition);"""
-    body_node = node.child_by_field_name("body")
-    cond_node = node.child_by_field_name("condition")
+    body_node = node.child_by_field_name(ctx.constants.while_body_field)
+    cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
 
     body_label = ctx.fresh_label("do_body")
     cond_label = ctx.fresh_label("do_cond")

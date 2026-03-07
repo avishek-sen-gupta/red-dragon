@@ -118,7 +118,7 @@ def lower_satisfies_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
     """Lower interface_declaration as NEW_OBJECT with STORE_INDEX per member."""
-    name_node = node.child_by_field_name("name")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
     if not name_node:
         return
     iface_name = ctx.node_text(name_node)
@@ -129,10 +129,10 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
         operands=[f"interface:{iface_name}"],
         node=node,
     )
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     if body_node:
         for i, child in enumerate(c for c in body_node.children if c.is_named):
-            member_name_node = child.child_by_field_name("name")
+            member_name_node = child.child_by_field_name(ctx.constants.func_name_field)
             member_name = (
                 ctx.node_text(member_name_node)
                 if member_name_node
@@ -147,8 +147,8 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     if name_node:
         enum_name = ctx.node_text(name_node)
         obj_reg = ctx.fresh_reg()
@@ -174,7 +174,7 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_ts_field_definition(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `public name: type` or `public name = expr` as STORE_VAR."""
-    name_node = node.child_by_field_name("name")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
     if name_node is None:
         name_node = next(
             (c for c in node.children if c.type == "property_identifier"),
@@ -208,8 +208,8 @@ def lower_ts_export_statement(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_ts_class_def(ctx: TreeSitterEmitContext, node) -> None:
     """Lower class_declaration using TS-specific param handling for methods."""
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node)
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
@@ -257,9 +257,9 @@ def _lower_ts_method_def(ctx: TreeSitterEmitContext, node) -> None:
         _has_static_modifier,
     )
 
-    name_node = node.child_by_field_name("name")
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = ctx.node_text(name_node)
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -301,7 +301,7 @@ def _lower_ts_method_def(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_ts_abstract_method(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `abstract speak(): string` as a function stub."""
-    name_node = node.child_by_field_name("name")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
     func_name = ctx.node_text(name_node) if name_node else "__abstract"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
@@ -329,7 +329,7 @@ def lower_ts_abstract_method(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_ts_internal_module(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `namespace Geometry { ... }` -- descend into body."""
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
     if body_node:
         ctx.lower_block(body_node)
 
@@ -416,8 +416,8 @@ def lower_ts_params(ctx: TreeSitterEmitContext, params_node) -> None:
 
 def lower_ts_arrow_function(ctx: TreeSitterEmitContext, node) -> str:
     """Lower arrow function using TS-specific param handling."""
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = f"__arrow_{ctx.label_counter}"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -459,9 +459,9 @@ def lower_ts_arrow_function(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_ts_function_expression(ctx: TreeSitterEmitContext, node) -> str:
     """Lower anonymous function expression using TS-specific param handling."""
-    name_node = node.child_by_field_name("name")
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = ctx.node_text(name_node) if name_node else f"__anon_{ctx.label_counter}"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -496,9 +496,9 @@ def lower_ts_function_expression(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_ts_function_def(ctx: TreeSitterEmitContext, node) -> None:
     """Lower function_declaration using TS-specific param handling."""
-    name_node = node.child_by_field_name("name")
-    params_node = node.child_by_field_name("parameters")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = ctx.node_text(name_node)
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")

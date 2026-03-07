@@ -153,7 +153,7 @@ def lower_c_params(ctx: TreeSitterEmitContext, params_node) -> None:
 def lower_function_def_c(ctx: TreeSitterEmitContext, node) -> None:
     """Lower function_definition with nested function_declarator."""
     declarator_node = node.child_by_field_name("declarator")
-    body_node = node.child_by_field_name("body")
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = "__anon"
     params_node = None
@@ -161,7 +161,9 @@ def lower_function_def_c(ctx: TreeSitterEmitContext, node) -> None:
     if declarator_node:
         if declarator_node.type == "function_declarator":
             name_node = declarator_node.child_by_field_name("declarator")
-            params_node = declarator_node.child_by_field_name("parameters")
+            params_node = declarator_node.child_by_field_name(
+                ctx.constants.func_params_field
+            )
             func_name = (
                 extract_declarator_name(ctx, name_node) if name_node else "__anon"
             )
@@ -169,7 +171,9 @@ def lower_function_def_c(ctx: TreeSitterEmitContext, node) -> None:
             func_decl = _find_function_declarator(declarator_node)
             if func_decl:
                 name_node = func_decl.child_by_field_name("declarator")
-                params_node = func_decl.child_by_field_name("parameters")
+                params_node = func_decl.child_by_field_name(
+                    ctx.constants.func_params_field
+                )
                 func_name = (
                     extract_declarator_name(ctx, name_node) if name_node else "__anon"
                 )
@@ -212,8 +216,8 @@ def lower_function_def_c(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_struct_def(ctx: TreeSitterEmitContext, node) -> None:
     """Lower struct_specifier as class."""
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
 
     if name_node is None and body_node is None:
         return
@@ -274,8 +278,8 @@ def lower_struct_field(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_enum_def(ctx: TreeSitterEmitContext, node) -> None:
     """Lower enum_specifier as NEW_OBJECT + STORE_FIELD per enumerator."""
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
 
     if name_node is None and body_node is None:
         return
@@ -320,8 +324,8 @@ def lower_enum_def(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_union_def(ctx: TreeSitterEmitContext, node) -> None:
     """Lower union_specifier like struct_specifier."""
-    name_node = node.child_by_field_name("name")
-    body_node = node.child_by_field_name("body")
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
 
     if name_node is None and body_node is None:
         return
@@ -386,7 +390,7 @@ def lower_preproc_function_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=func_label)
 
-    params_node = node.child_by_field_name("parameters")
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
     if params_node:
         lower_c_params(ctx, params_node)
 
