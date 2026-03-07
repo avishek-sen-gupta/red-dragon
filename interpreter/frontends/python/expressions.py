@@ -11,6 +11,7 @@ from interpreter.frontends.common.expressions import (
     lower_interpolated_string_parts,
     lower_store_target as common_lower_store_target,
 )
+from interpreter.frontends.python.node_types import PythonNodeType
 
 # ── store target (with tuple unpack) ──────────────────────────
 
@@ -19,7 +20,7 @@ def lower_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
     """Python-specific store target that adds tuple/pattern_list unpacking."""
-    if target.type in ("pattern_list", "tuple_pattern"):
+    if target.type in (PythonNodeType.PATTERN_LIST, PythonNodeType.TUPLE_PATTERN):
         lower_tuple_unpack(ctx, target, val_reg, parent_node)
         return
     common_lower_store_target(ctx, target, val_reg, parent_node)
@@ -28,7 +29,9 @@ def lower_store_target(
 def lower_tuple_unpack(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
-    for i, child in enumerate(c for c in target.children if c.type != ","):
+    for i, child in enumerate(
+        c for c in target.children if c.type != PythonNodeType.COMMA
+    ):
         idx_reg = ctx.fresh_reg()
         ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
         elem_reg = ctx.fresh_reg()
@@ -49,19 +52,24 @@ def lower_call(ctx: TreeSitterEmitContext, node) -> str:
 
     # When a generator expression is the sole argument, tree-sitter
     # makes it the arguments node directly (not wrapped in argument_list).
-    if args_node and args_node.type == "generator_expression":
+    if args_node and args_node.type == PythonNodeType.GENERATOR_EXPRESSION:
         arg_regs = [ctx.lower_expr(args_node)]
     elif args_node:
         arg_regs = [
             ctx.lower_expr(c)
             for c in args_node.children
-            if c.type not in ("(", ")", ",")
+            if c.type
+            not in (
+                PythonNodeType.OPEN_PAREN,
+                PythonNodeType.CLOSE_PAREN,
+                PythonNodeType.COMMA,
+            )
         ]
     else:
         arg_regs = []
 
     # Method call: obj.method(...)
-    if func_node and func_node.type == "attribute":
+    if func_node and func_node.type == PythonNodeType.ATTRIBUTE:
         obj_node = func_node.child_by_field_name(ctx.constants.attr_object_field)
         attr_node = func_node.child_by_field_name(ctx.constants.attr_attribute_field)
         obj_reg = ctx.lower_expr(obj_node)
@@ -76,7 +84,7 @@ def lower_call(ctx: TreeSitterEmitContext, node) -> str:
         return reg
 
     # Plain function call
-    if func_node and func_node.type == "identifier":
+    if func_node and func_node.type == PythonNodeType.IDENTIFIER:
         func_name = ctx.node_text(func_node)
         reg = ctx.fresh_reg()
         ctx.emit(
@@ -103,7 +111,16 @@ def lower_call(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_tuple_literal(ctx: TreeSitterEmitContext, node) -> str:
-    elems = [c for c in node.children if c.type not in ("(", ")", ",")]
+    elems = [
+        c
+        for c in node.children
+        if c.type
+        not in (
+            PythonNodeType.OPEN_PAREN,
+            PythonNodeType.CLOSE_PAREN,
+            PythonNodeType.COMMA,
+        )
+    ]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
@@ -125,7 +142,11 @@ def lower_tuple_literal(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_conditional_expr(ctx: TreeSitterEmitContext, node) -> str:
-    children = [c for c in node.children if c.type not in ("if", "else")]
+    children = [
+        c
+        for c in node.children
+        if c.type not in (PythonNodeType.IF_KEYWORD, PythonNodeType.ELSE_KEYWORD)
+    ]
     true_expr = children[0]
     cond_expr = children[1]
     false_expr = children[2]
@@ -165,8 +186,8 @@ def lower_list_comprehension(ctx: TreeSitterEmitContext, node) -> str:
     """Desugar [expr for var in iterable if cond] into index-based loop."""
     children = [c for c in node.children if c.is_named]
     body_expr = children[0] if children else None
-    for_clauses = [c for c in children if c.type == "for_in_clause"]
-    if_clauses = [c for c in children if c.type == "if_clause"]
+    for_clauses = [c for c in children if c.type == PythonNodeType.FOR_IN_CLAUSE]
+    if_clauses = [c for c in children if c.type == PythonNodeType.IF_CLAUSE]
 
     # Create result array
     result_arr = ctx.fresh_reg()
@@ -291,9 +312,11 @@ def _lower_comprehension_loop(
 def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> str:
     """Desugar {k: v for var in iterable if cond} into loop."""
     children = [c for c in node.children if c.is_named]
-    pair_node = next((c for c in children if c.type == "pair"), None)
-    for_clause = next((c for c in children if c.type == "for_in_clause"), None)
-    if_clauses = [c for c in children if c.type == "if_clause"]
+    pair_node = next((c for c in children if c.type == PythonNodeType.PAIR), None)
+    for_clause = next(
+        (c for c in children if c.type == PythonNodeType.FOR_IN_CLAUSE), None
+    )
+    if_clauses = [c for c in children if c.type == PythonNodeType.IF_CLAUSE]
 
     # Create result object
     result_obj = ctx.fresh_reg()
@@ -383,7 +406,7 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
 
     # Lower parameters
     params_node = next(
-        (c for c in node.children if c.type == "lambda_parameters"), None
+        (c for c in node.children if c.type == PythonNodeType.LAMBDA_PARAMETERS), None
     )
     if params_node:
         for child in params_node.children:
@@ -394,7 +417,7 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
         (
             c
             for c in node.children
-            if c.is_named and c.type not in ("lambda_parameters",)
+            if c.is_named and c.type not in (PythonNodeType.LAMBDA_PARAMETERS,)
         ),
         None,
     )
@@ -416,25 +439,30 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
 
 def _lower_python_param(ctx: TreeSitterEmitContext, child) -> None:
     """Lower a single Python parameter to SYMBOLIC + STORE_VAR."""
-    if child.type in ("(", ")", ",", ":"):
+    if child.type in (
+        PythonNodeType.OPEN_PAREN,
+        PythonNodeType.CLOSE_PAREN,
+        PythonNodeType.COMMA,
+        PythonNodeType.COLON,
+    ):
         return
 
-    if child.type == "identifier":
+    if child.type == PythonNodeType.IDENTIFIER:
         pname = ctx.node_text(child)
-    elif child.type == "default_parameter":
+    elif child.type == PythonNodeType.DEFAULT_PARAMETER:
         pname_node = child.child_by_field_name(ctx.constants.func_name_field)
         if not pname_node:
             return
         pname = ctx.node_text(pname_node)
-    elif child.type == "typed_parameter":
+    elif child.type == PythonNodeType.TYPED_PARAMETER:
         id_node = next(
-            (sub for sub in child.children if sub.type == "identifier"),
+            (sub for sub in child.children if sub.type == PythonNodeType.IDENTIFIER),
             None,
         )
         if not id_node:
             return
         pname = ctx.node_text(id_node)
-    elif child.type == "typed_default_parameter":
+    elif child.type == PythonNodeType.TYPED_DEFAULT_PARAMETER:
         pname_node = child.child_by_field_name(ctx.constants.func_name_field)
         if not pname_node:
             return
@@ -461,8 +489,8 @@ def lower_generator_expression(ctx: TreeSitterEmitContext, node) -> str:
     """Lower (expr for var in iterable) like list_comprehension but as generator."""
     children = [c for c in node.children if c.is_named]
     body_expr = children[0] if children else None
-    for_clauses = [c for c in children if c.type == "for_in_clause"]
-    if_clauses = [c for c in children if c.type == "if_clause"]
+    for_clauses = [c for c in children if c.type == PythonNodeType.FOR_IN_CLAUSE]
+    if_clauses = [c for c in children if c.type == PythonNodeType.IF_CLAUSE]
 
     result_arr = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
@@ -510,8 +538,8 @@ def lower_set_comprehension(ctx: TreeSitterEmitContext, node) -> str:
     """Lower {expr for var in iterable} as set comprehension."""
     children = [c for c in node.children if c.is_named]
     body_expr = children[0] if children else None
-    for_clauses = [c for c in children if c.type == "for_in_clause"]
-    if_clauses = [c for c in children if c.type == "if_clause"]
+    for_clauses = [c for c in children if c.type == PythonNodeType.FOR_IN_CLAUSE]
+    if_clauses = [c for c in children if c.type == PythonNodeType.IF_CLAUSE]
 
     result_obj = ctx.fresh_reg()
     ctx.emit(
@@ -546,7 +574,16 @@ def lower_set_comprehension(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_set_literal(ctx: TreeSitterEmitContext, node) -> str:
     """Lower {1, 2, 3} as NEW_OBJECT('set') + STORE_INDEX per element."""
-    elems = [c for c in node.children if c.type not in ("{", "}", ",")]
+    elems = [
+        c
+        for c in node.children
+        if c.type
+        not in (
+            PythonNodeType.OPEN_BRACE,
+            PythonNodeType.CLOSE_BRACE,
+            PythonNodeType.COMMA,
+        )
+    ]
     obj_reg = ctx.fresh_reg()
     ctx.emit(
         Opcode.NEW_OBJECT,
@@ -636,14 +673,18 @@ def lower_named_expression(ctx: TreeSitterEmitContext, node) -> str:
 def lower_slice(ctx: TreeSitterEmitContext, node) -> str:
     """Lower a[1:3] or a[1:3:2] as CALL_FUNCTION('slice', start, stop, step)."""
     all_children = list(node.children)
-    colons = [i for i, c in enumerate(all_children) if c.type == ":"]
+    colons = [i for i, c in enumerate(all_children) if c.type == PythonNodeType.COLON]
 
     start_reg = _lower_slice_none(ctx)
     stop_reg = _lower_slice_none(ctx)
     step_reg = _lower_slice_none(ctx)
 
     named_before_first_colon = (
-        [c for c in all_children[: colons[0]] if c.type != ":" and c.is_named]
+        [
+            c
+            for c in all_children[: colons[0]]
+            if c.type != PythonNodeType.COLON and c.is_named
+        ]
         if colons
         else []
     )
@@ -651,17 +692,25 @@ def lower_slice(ctx: TreeSitterEmitContext, node) -> str:
         [
             c
             for c in all_children[colons[0] + 1 : colons[1]]
-            if c.type != ":" and c.is_named
+            if c.type != PythonNodeType.COLON and c.is_named
         ]
         if len(colons) >= 2
         else (
-            [c for c in all_children[colons[0] + 1 :] if c.type != ":" and c.is_named]
+            [
+                c
+                for c in all_children[colons[0] + 1 :]
+                if c.type != PythonNodeType.COLON and c.is_named
+            ]
             if colons
             else []
         )
     )
     named_after_second_colon = (
-        [c for c in all_children[colons[1] + 1 :] if c.type != ":" and c.is_named]
+        [
+            c
+            for c in all_children[colons[1] + 1 :]
+            if c.type != PythonNodeType.COLON and c.is_named
+        ]
         if len(colons) >= 2
         else []
     )
@@ -710,7 +759,16 @@ def lower_noop_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_list_pattern(ctx: TreeSitterEmitContext, node) -> str:
     """Lower [p1, p2, ...] pattern in match/case like a list literal."""
-    elems = [c for c in node.children if c.type not in ("[", "]", ",")]
+    elems = [
+        c
+        for c in node.children
+        if c.type
+        not in (
+            PythonNodeType.OPEN_BRACKET,
+            PythonNodeType.CLOSE_BRACKET,
+            PythonNodeType.COMMA,
+        )
+    ]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
@@ -740,7 +798,17 @@ def lower_dict_pattern(ctx: TreeSitterEmitContext, node) -> str:
         operands=["dict_pattern"],
         node=node,
     )
-    pairs = [c for c in node.children if c.is_named and c.type not in ("{", "}", ",")]
+    pairs = [
+        c
+        for c in node.children
+        if c.is_named
+        and c.type
+        not in (
+            PythonNodeType.OPEN_BRACE,
+            PythonNodeType.CLOSE_BRACE,
+            PythonNodeType.COMMA,
+        )
+    ]
     for pair in pairs:
         named = [ch for ch in pair.children if ch.is_named]
         if len(named) >= 2:
@@ -772,15 +840,17 @@ def lower_case_pattern(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_python_string(ctx: TreeSitterEmitContext, node) -> str:
     """Lower string nodes, decomposing f-strings into parts + concatenation."""
-    has_interpolation = any(c.type == "interpolation" for c in node.children)
+    has_interpolation = any(
+        c.type == PythonNodeType.INTERPOLATION for c in node.children
+    )
     if not has_interpolation:
         return lower_const_literal(ctx, node)
 
     parts: list[str] = []
     for child in node.children:
-        if child.type == "interpolation":
+        if child.type == PythonNodeType.INTERPOLATION:
             parts.append(lower_interpolation(ctx, child))
-        elif child.type == "string_content":
+        elif child.type == PythonNodeType.STRING_CONTENT:
             frag_reg = ctx.fresh_reg()
             ctx.emit(
                 Opcode.CONST,
@@ -799,7 +869,9 @@ def lower_interpolation(ctx: TreeSitterEmitContext, node) -> str:
     named_children = [
         c
         for c in node.children
-        if c.is_named and c.type not in ("format_specifier", "type_conversion")
+        if c.is_named
+        and c.type
+        not in (PythonNodeType.FORMAT_SPECIFIER, PythonNodeType.TYPE_CONVERSION)
     ]
     if not named_children:
         return lower_noop_expr(ctx, node)

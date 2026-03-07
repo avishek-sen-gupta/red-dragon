@@ -13,6 +13,7 @@ from interpreter.frontends.python.expressions import (
     _emit_for_increment,
     lower_store_target,
 )
+from interpreter.frontends.python.node_types import PythonNodeType
 
 _WILDCARD_PATTERN = "_"
 
@@ -30,8 +31,10 @@ def lower_python_if(ctx: TreeSitterEmitContext, node) -> None:
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
 
-    elif_clauses = [c for c in node.children if c.type == "elif_clause"]
-    else_clause = next((c for c in node.children if c.type == "else_clause"), None)
+    elif_clauses = [c for c in node.children if c.type == PythonNodeType.ELIF_CLAUSE]
+    else_clause = next(
+        (c for c in node.children if c.type == PythonNodeType.ELSE_CLAUSE), None
+    )
     has_alternative = len(elif_clauses) > 0 or else_clause is not None
 
     cond_reg = ctx.lower_expr(cond_node)
@@ -159,29 +162,33 @@ def lower_try(ctx: TreeSitterEmitContext, node) -> None:
     finally_node = None
     else_node = None
     for child in node.children:
-        if child.type == "except_clause":
+        if child.type == PythonNodeType.EXCEPT_CLAUSE:
             exc_var = None
             exc_type = None
             # except ExcType as var: ...
             for sub in child.children:
-                if sub.type == "as_pattern":
+                if sub.type == PythonNodeType.AS_PATTERN:
                     # as_pattern children: type, "as", name
                     parts = [c for c in sub.children if c.is_named]
                     if parts:
                         exc_type = ctx.node_text(parts[0])
                     if len(parts) >= 2:
                         exc_var = ctx.node_text(parts[-1])
-                elif sub.type == "identifier" and exc_type is None:
+                elif sub.type == PythonNodeType.IDENTIFIER and exc_type is None:
                     exc_type = ctx.node_text(sub)
-            exc_body = next((c for c in child.children if c.type == "block"), None)
+            exc_body = next(
+                (c for c in child.children if c.type == PythonNodeType.BLOCK), None
+            )
             catch_clauses.append(
                 {"body": exc_body, "variable": exc_var, "type": exc_type}
             )
-        elif child.type == "finally_clause":
-            finally_node = next((c for c in child.children if c.type == "block"), None)
-        elif child.type == "else_clause":
+        elif child.type == PythonNodeType.FINALLY_CLAUSE:
+            finally_node = next(
+                (c for c in child.children if c.type == PythonNodeType.BLOCK), None
+            )
+        elif child.type == PythonNodeType.ELSE_CLAUSE:
             else_node = child.child_by_field_name("body") or next(
-                (c for c in child.children if c.type == "block"), None
+                (c for c in child.children if c.type == PythonNodeType.BLOCK), None
             )
     lower_try_catch(ctx, node, body_node, catch_clauses, finally_node, else_node)
 
@@ -191,11 +198,13 @@ def lower_try(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_with(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `with ctx as var: body` into __enter__/__exit__ calls."""
-    with_clause = next((c for c in node.children if c.type == "with_clause"), None)
+    with_clause = next(
+        (c for c in node.children if c.type == PythonNodeType.WITH_CLAUSE), None
+    )
     body_node = node.child_by_field_name("body")
 
     with_items = (
-        [c for c in with_clause.children if c.type == "with_item"]
+        [c for c in with_clause.children if c.type == PythonNodeType.WITH_ITEM]
         if with_clause
         else []
     )
@@ -204,7 +213,9 @@ def lower_with(ctx: TreeSitterEmitContext, node) -> None:
     enter_info: list[tuple[str, str | None]] = []  # (ctx_reg, var_name or None)
 
     for item in with_items:
-        as_pat = next((c for c in item.children if c.type == "as_pattern"), None)
+        as_pat = next(
+            (c for c in item.children if c.type == PythonNodeType.AS_PATTERN), None
+        )
         if as_pat:
             named = [c for c in as_pat.children if c.is_named]
             ctx_expr = named[0]
@@ -213,7 +224,11 @@ def lower_with(ctx: TreeSitterEmitContext, node) -> None:
             var_name = (
                 ctx.node_text(
                     next(
-                        (c for c in target_node.children if c.type == "identifier"),
+                        (
+                            c
+                            for c in target_node.children
+                            if c.type == PythonNodeType.IDENTIFIER
+                        ),
                         target_node,
                     )
                 )
@@ -255,12 +270,13 @@ def lower_with(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_decorated_def(ctx: TreeSitterEmitContext, node) -> None:
     """Lower @dec def/class into define, then wrap with decorator calls."""
-    decorators = [c for c in node.children if c.type == "decorator"]
+    decorators = [c for c in node.children if c.type == PythonNodeType.DECORATOR]
     definition = next(
         (
             c
             for c in node.children
-            if c.type in ("function_definition", "class_definition")
+            if c.type
+            in (PythonNodeType.FUNCTION_DEFINITION, PythonNodeType.CLASS_DEFINITION)
         ),
         None,
     )
@@ -316,7 +332,7 @@ def lower_delete(ctx: TreeSitterEmitContext, node) -> None:
         if not child.is_named:
             continue
         # expression_list wraps multiple targets
-        if child.type == "expression_list":
+        if child.type == PythonNodeType.EXPRESSION_LIST:
             for target in child.children:
                 if target.is_named:
                     target_reg = ctx.lower_expr(target)
@@ -371,7 +387,7 @@ def lower_import_from(ctx: TreeSitterEmitContext, node) -> None:
     imported_names = [
         c
         for c in node.children
-        if c.is_named and c.type == "dotted_name" and c != module_node
+        if c.is_named and c.type == PythonNodeType.DOTTED_NAME and c != module_node
     ]
 
     for name_node in imported_names:
@@ -401,18 +417,23 @@ def lower_match(ctx: TreeSitterEmitContext, node) -> None:
     subject_reg = ctx.lower_expr(subject_node)
 
     case_clauses = (
-        [c for c in body_node.children if c.type == "case_clause"] if body_node else []
+        [c for c in body_node.children if c.type == PythonNodeType.CASE_CLAUSE]
+        if body_node
+        else []
     )
 
     end_label = ctx.fresh_label("match_end")
 
     for case_node in case_clauses:
         pattern_node = next(
-            (c for c in case_node.children if c.type == "case_pattern"), None
+            (c for c in case_node.children if c.type == PythonNodeType.CASE_PATTERN),
+            None,
         )
         case_body = case_node.child_by_field_name(
             ctx.constants.if_consequence_field
-        ) or next((c for c in case_node.children if c.type == "block"), None)
+        ) or next(
+            (c for c in case_node.children if c.type == PythonNodeType.BLOCK), None
+        )
 
         # Extract the inner pattern value from case_pattern
         inner_pattern = (

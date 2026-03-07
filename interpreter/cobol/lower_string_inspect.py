@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from interpreter.cobol.cobol_constants import BuiltinName, DelimiterMode, InspectType
 from interpreter.cobol.cobol_statements import (
     InspectStatement,
     StringStatement,
@@ -40,7 +41,7 @@ def lower_string(
         else:
             src_str_reg = ctx.const_to_reg(str(sending.value))
 
-        if sending.delimited_by == "SIZE":
+        if sending.delimited_by == DelimiterMode.SIZE:
             part_regs.append(src_str_reg)
         else:
             delim_reg = ctx.const_to_reg(
@@ -50,19 +51,19 @@ def lower_string(
             ctx.emit(
                 Opcode.CALL_FUNCTION,
                 result_reg=find_pos,
-                operands=["__string_find", src_str_reg, delim_reg],
+                operands=[BuiltinName.STRING_FIND, src_str_reg, delim_reg],
             )
             parts = ctx.fresh_reg()
             ctx.emit(
                 Opcode.CALL_FUNCTION,
                 result_reg=parts,
-                operands=["__string_split", src_str_reg, delim_reg],
+                operands=[BuiltinName.STRING_SPLIT, src_str_reg, delim_reg],
             )
             first_part = ctx.fresh_reg()
             ctx.emit(
                 Opcode.CALL_FUNCTION,
                 result_reg=first_part,
-                operands=["__list_get", parts, 0],
+                operands=[BuiltinName.LIST_GET, parts, 0],
             )
             part_regs.append(first_part)
 
@@ -77,7 +78,7 @@ def lower_string(
             ctx.emit(
                 Opcode.CALL_FUNCTION,
                 result_reg=new_concat,
-                operands=["__string_concat_pair", concat_reg, next_reg],
+                operands=[BuiltinName.STRING_CONCAT_PAIR, concat_reg, next_reg],
             )
             concat_reg = new_concat
 
@@ -121,7 +122,7 @@ def lower_unstring(
         ctx.emit(
             Opcode.CALL_FUNCTION,
             result_reg=part_reg,
-            operands=["__list_get", parts_reg, idx_reg],
+            operands=[BuiltinName.LIST_GET, parts_reg, idx_reg],
         )
         ctx.emit_encode_and_write(
             region_reg, target_ref.fl, part_reg, target_ref.offset_reg
@@ -143,9 +144,9 @@ def lower_inspect(
     decoded_reg = ctx.emit_decode_field(region_reg, source_fl, source_ref.offset_reg)
     src_str_reg = ctx.emit_to_string(decoded_reg)
 
-    if stmt.inspect_type == "TALLYING":
+    if stmt.inspect_type == InspectType.TALLYING:
         lower_inspect_tallying(ctx, stmt, src_str_reg, layout, region_reg)
-    elif stmt.inspect_type == "REPLACING":
+    elif stmt.inspect_type == InspectType.REPLACING:
         lower_inspect_replacing(ctx, stmt, src_str_reg, source_fl, layout, region_reg)
 
 

@@ -741,7 +741,7 @@ def _try_class_constructor_call(
     params = registry.func_params.get(init_label, [])
     new_vars: dict[str, Any] = {}
     # Python emits self as explicit first param; Java/C++/C# do not
-    has_explicit_self = bool(params) and params[0] == "self"
+    has_explicit_self = bool(params) and params[0] == constants.PARAM_SELF
     if has_explicit_self:
         # Python-style: first param is self/this, rest are constructor args
         new_vars[params[0]] = addr
@@ -750,7 +750,7 @@ def _try_class_constructor_call(
                 new_vars[params[i + 1]] = _serialize_value(arg)
     else:
         # Java/C++/C#-style: this is implicit, all params are constructor args
-        new_vars["this"] = addr
+        new_vars[constants.PARAM_THIS] = addr
         for i, arg in enumerate(args):
             if i < len(params):
                 new_vars[params[i]] = _serialize_value(arg)

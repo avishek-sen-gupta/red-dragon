@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 
+from interpreter.cobol.cobol_constants import ByteConstants
 from interpreter.cobol.data_filters import align_decimal, left_adjust
 
 logger = logging.getLogger(__name__)
@@ -42,11 +43,11 @@ def encode_comp3(
 
     # Determine sign nibble
     if not signed:
-        sign_nibble = 0x0F
+        sign_nibble = ByteConstants.SIGN_NIBBLE_UNSIGNED
     elif negative and any(ch != "0" for ch in digit_str):
-        sign_nibble = 0x0D
+        sign_nibble = ByteConstants.SIGN_NIBBLE_NEGATIVE
     else:
-        sign_nibble = 0x0C
+        sign_nibble = ByteConstants.SIGN_NIBBLE_POSITIVE
 
     byte_count = (total_digits // 2) + 1
     result = bytearray(byte_count)
@@ -94,14 +95,14 @@ def decode_comp3(data: bytes, decimal_digits: int) -> float:
     # Extract all nibbles
     nibbles = []
     for b in data:
-        nibbles.append((b >> 4) & 0x0F)
-        nibbles.append(b & 0x0F)
+        nibbles.append((b >> 4) & ByteConstants.NIBBLE_MASK)
+        nibbles.append(b & ByteConstants.NIBBLE_MASK)
 
     # Last nibble is sign
     sign_nibble = nibbles[-1]
     digit_nibbles = nibbles[:-1]
 
-    negative = sign_nibble == 0x0D
+    negative = sign_nibble == ByteConstants.SIGN_NIBBLE_NEGATIVE
 
     int_value = sum(
         d * (10 ** (len(digit_nibbles) - 1 - i)) for i, d in enumerate(digit_nibbles)

@@ -9,6 +9,14 @@ from __future__ import annotations
 import struct
 from typing import Any
 
+from interpreter.cobol.cobol_constants import (
+    BuiltinName,
+    ByteConstants,
+    CobolEncoding,
+    NibblePosition,
+    ReplaceMode,
+    TallyMode,
+)
 from interpreter.cobol.ebcdic_table import EbcdicTable
 from interpreter.vm import Operators, _is_symbolic
 
@@ -26,10 +34,10 @@ def _builtin_nibble_get(args: list[Any], vm: Any) -> Any:
     byte_val, position = args[0], args[1]
     if not isinstance(byte_val, int) or not isinstance(position, str):
         return _UNCOMPUTABLE
-    if position == "high":
-        return (byte_val >> 4) & 0x0F
-    if position == "low":
-        return byte_val & 0x0F
+    if position == NibblePosition.HIGH:
+        return (byte_val >> 4) & ByteConstants.NIBBLE_MASK
+    if position == NibblePosition.LOW:
+        return byte_val & ByteConstants.NIBBLE_MASK
     return _UNCOMPUTABLE
 
 
@@ -48,10 +56,12 @@ def _builtin_nibble_set(args: list[Any], vm: Any) -> Any:
         or not isinstance(nibble, int)
     ):
         return _UNCOMPUTABLE
-    if position == "high":
-        return (nibble << 4) | (byte_val & 0x0F)
-    if position == "low":
-        return (byte_val & 0xF0) | (nibble & 0x0F)
+    if position == NibblePosition.HIGH:
+        return (nibble << 4) | (byte_val & ByteConstants.NIBBLE_MASK)
+    if position == NibblePosition.LOW:
+        return (byte_val & ByteConstants.HIGH_NIBBLE_MASK) | (
+            nibble & ByteConstants.NIBBLE_MASK
+        )
     return _UNCOMPUTABLE
 
 
@@ -65,7 +75,7 @@ def _builtin_byte_from_int(args: list[Any], vm: Any) -> Any:
         return _UNCOMPUTABLE
     if not isinstance(args[0], int):
         return _UNCOMPUTABLE
-    return args[0] & 0xFF
+    return args[0] & ByteConstants.BYTE_MASK
 
 
 def _builtin_int_from_byte(args: list[Any], vm: Any) -> Any:
@@ -93,10 +103,10 @@ def _builtin_bytes_to_string(args: list[Any], vm: Any) -> Any:
     if not isinstance(byte_list, list) or not isinstance(encoding, str):
         return _UNCOMPUTABLE
     raw = bytes(byte_list)
-    if encoding == "ebcdic":
+    if encoding == CobolEncoding.EBCDIC:
         ascii_bytes = EbcdicTable.ebcdic_to_ascii(raw)
         return ascii_bytes.decode("ascii", errors="replace")
-    if encoding == "ascii":
+    if encoding == CobolEncoding.ASCII:
         return raw.decode("ascii", errors="replace")
     return _UNCOMPUTABLE
 
@@ -112,11 +122,11 @@ def _builtin_string_to_bytes(args: list[Any], vm: Any) -> Any:
     string, encoding = args[0], args[1]
     if not isinstance(string, str) or not isinstance(encoding, str):
         return _UNCOMPUTABLE
-    if encoding == "ebcdic":
+    if encoding == CobolEncoding.EBCDIC:
         ascii_bytes = string.encode("ascii", errors="replace")
         ebcdic_bytes = EbcdicTable.ascii_to_ebcdic(ascii_bytes)
         return list(ebcdic_bytes)
-    if encoding == "ascii":
+    if encoding == CobolEncoding.ASCII:
         return list(string.encode("ascii", errors="replace"))
     return _UNCOMPUTABLE
 
@@ -262,13 +272,13 @@ def _builtin_cobol_prepare_sign(args: list[Any], vm: Any) -> Any:
     if not isinstance(value_str, str):
         return _UNCOMPUTABLE
     if not signed:
-        return 0x0F
+        return ByteConstants.SIGN_NIBBLE_UNSIGNED
     negative = value_str.startswith("-")
     clean = value_str.lstrip("+-").replace(".", "")
     has_nonzero = any(ch != "0" for ch in clean if ch.isdigit())
     if negative and has_nonzero:
-        return 0x0D
-    return 0x0C
+        return ByteConstants.SIGN_NIBBLE_NEGATIVE
+    return ByteConstants.SIGN_NIBBLE_POSITIVE
 
 
 def _builtin_string_find(args: list[Any], vm: Any) -> Any:
@@ -316,9 +326,9 @@ def _builtin_string_count(args: list[Any], vm: Any) -> Any:
         or not isinstance(mode, str)
     ):
         return _UNCOMPUTABLE
-    if mode == "all":
+    if mode == TallyMode.ALL:
         return source.count(pattern) if pattern else 0
-    if mode == "leading":
+    if mode == TallyMode.LEADING:
         count = 0
         pos = 0
         while pos <= len(source) - len(pattern) and pattern:
@@ -328,7 +338,7 @@ def _builtin_string_count(args: list[Any], vm: Any) -> Any:
             else:
                 break
         return count
-    if mode == "characters":
+    if mode == TallyMode.CHARACTERS:
         return len(source)
     return _UNCOMPUTABLE
 
@@ -351,11 +361,11 @@ def _builtin_string_replace(args: list[Any], vm: Any) -> Any:
         return _UNCOMPUTABLE
     if not from_pat:
         return source
-    if mode == "all":
+    if mode == ReplaceMode.ALL:
         return source.replace(from_pat, to_pat)
-    if mode == "first":
+    if mode == ReplaceMode.FIRST:
         return source.replace(from_pat, to_pat, 1)
-    if mode == "leading":
+    if mode == ReplaceMode.LEADING:
         result = source
         while result.startswith(from_pat):
             result = to_pat + result[len(from_pat) :]
@@ -465,33 +475,33 @@ def _builtin_cobol_blank_when_zero(args: list[Any], vm: Any) -> Any:
         is_zero = float(str(value_str)) == 0.0
     except (ValueError, TypeError):
         return encoded_bytes
-    return [0x40] * byte_length if is_zero else encoded_bytes
+    return [ByteConstants.EBCDIC_SPACE] * byte_length if is_zero else encoded_bytes
 
 
 BYTE_BUILTINS: dict[str, Any] = {
-    "__nibble_get": _builtin_nibble_get,
-    "__nibble_set": _builtin_nibble_set,
-    "__byte_from_int": _builtin_byte_from_int,
-    "__int_from_byte": _builtin_int_from_byte,
-    "__bytes_to_string": _builtin_bytes_to_string,
-    "__string_to_bytes": _builtin_string_to_bytes,
-    "__list_get": _builtin_list_get,
-    "__list_set": _builtin_list_set,
-    "__list_len": _builtin_list_len,
-    "__list_slice": _builtin_list_slice,
-    "__list_concat": _builtin_list_concat,
-    "__make_list": _builtin_make_list,
-    "__cobol_prepare_digits": _builtin_cobol_prepare_digits,
-    "__cobol_prepare_sign": _builtin_cobol_prepare_sign,
-    "__string_find": _builtin_string_find,
-    "__string_split": _builtin_string_split,
-    "__string_count": _builtin_string_count,
-    "__string_replace": _builtin_string_replace,
-    "__string_concat": _builtin_string_concat,
-    "__string_concat_pair": _builtin_string_concat_pair,
-    "__int_to_binary_bytes": _builtin_int_to_binary_bytes,
-    "__binary_bytes_to_int": _builtin_binary_bytes_to_int,
-    "__float_to_bytes": _builtin_float_to_bytes,
-    "__bytes_to_float": _builtin_bytes_to_float,
-    "__cobol_blank_when_zero": _builtin_cobol_blank_when_zero,
+    BuiltinName.NIBBLE_GET: _builtin_nibble_get,
+    BuiltinName.NIBBLE_SET: _builtin_nibble_set,
+    BuiltinName.BYTE_FROM_INT: _builtin_byte_from_int,
+    BuiltinName.INT_FROM_BYTE: _builtin_int_from_byte,
+    BuiltinName.BYTES_TO_STRING: _builtin_bytes_to_string,
+    BuiltinName.STRING_TO_BYTES: _builtin_string_to_bytes,
+    BuiltinName.LIST_GET: _builtin_list_get,
+    BuiltinName.LIST_SET: _builtin_list_set,
+    BuiltinName.LIST_LEN: _builtin_list_len,
+    BuiltinName.LIST_SLICE: _builtin_list_slice,
+    BuiltinName.LIST_CONCAT: _builtin_list_concat,
+    BuiltinName.MAKE_LIST: _builtin_make_list,
+    BuiltinName.COBOL_PREPARE_DIGITS: _builtin_cobol_prepare_digits,
+    BuiltinName.COBOL_PREPARE_SIGN: _builtin_cobol_prepare_sign,
+    BuiltinName.STRING_FIND: _builtin_string_find,
+    BuiltinName.STRING_SPLIT: _builtin_string_split,
+    BuiltinName.STRING_COUNT: _builtin_string_count,
+    BuiltinName.STRING_REPLACE: _builtin_string_replace,
+    BuiltinName.STRING_CONCAT: _builtin_string_concat,
+    BuiltinName.STRING_CONCAT_PAIR: _builtin_string_concat_pair,
+    BuiltinName.INT_TO_BINARY_BYTES: _builtin_int_to_binary_bytes,
+    BuiltinName.BINARY_BYTES_TO_INT: _builtin_binary_bytes_to_int,
+    BuiltinName.FLOAT_TO_BYTES: _builtin_float_to_bytes,
+    BuiltinName.BYTES_TO_FLOAT: _builtin_bytes_to_float,
+    BuiltinName.COBOL_BLANK_WHEN_ZERO: _builtin_cobol_blank_when_zero,
 }

@@ -19,6 +19,12 @@ from __future__ import annotations
 
 from functools import reduce
 
+from interpreter.cobol.cobol_constants import (
+    BuiltinName,
+    ByteConstants,
+    CobolEncoding,
+    NibblePosition,
+)
 from interpreter.ir import IRInstruction, Opcode
 
 
@@ -56,17 +62,22 @@ def _encode_digit_step(
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg=digit,
-                operands=["__list_get", source_list, i],
+                operands=[BuiltinName.LIST_GET, source_list, i],
             ),
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg=byte_val,
-                operands=["__nibble_set", 0xF0, "low", digit],
+                operands=[
+                    BuiltinName.NIBBLE_SET,
+                    ByteConstants.ZONE_NIBBLE_UNSIGNED,
+                    NibblePosition.LOW,
+                    digit,
+                ],
             ),
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg=new_result,
-                operands=["__list_set", current_result, i, byte_val],
+                operands=[BuiltinName.LIST_SET, current_result, i, byte_val],
             ),
         ],
     )
@@ -97,12 +108,12 @@ def _decode_digit_step(
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg=byte_reg,
-                operands=["__list_get", source_list, offset + i],
+                operands=[BuiltinName.LIST_GET, source_list, offset + i],
             ),
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg=digit,
-                operands=["__nibble_get", byte_reg, "low"],
+                operands=[BuiltinName.NIBBLE_GET, byte_reg, NibblePosition.LOW],
             ),
             IRInstruction(
                 opcode=Opcode.BINOP,
@@ -141,7 +152,7 @@ def _accumulate_digit_step(
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg=digit,
-                operands=["__list_get", source_list, i],
+                operands=[BuiltinName.LIST_GET, source_list, i],
             ),
             IRInstruction(
                 opcode=Opcode.BINOP,
@@ -178,7 +189,11 @@ def build_encode_zoned_ir(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=result,
-            operands=["__make_list", total_digits, 0xF0],
+            operands=[
+                BuiltinName.MAKE_LIST,
+                total_digits,
+                ByteConstants.ZONE_NIBBLE_UNSIGNED,
+            ],
         )
     )
 
@@ -196,7 +211,7 @@ def build_encode_zoned_ir(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=sign_byte,
-            operands=["__list_get", result, sign_byte_index],
+            operands=[BuiltinName.LIST_GET, result, sign_byte_index],
         )
     )
 
@@ -205,7 +220,12 @@ def build_encode_zoned_ir(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=signed_byte,
-            operands=["__nibble_set", sign_byte, "high", "%p_sign_nibble"],
+            operands=[
+                BuiltinName.NIBBLE_SET,
+                sign_byte,
+                NibblePosition.HIGH,
+                "%p_sign_nibble",
+            ],
         )
     )
 
@@ -214,7 +234,7 @@ def build_encode_zoned_ir(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=final_result,
-            operands=["__list_set", result, sign_byte_index, signed_byte],
+            operands=[BuiltinName.LIST_SET, result, sign_byte_index, signed_byte],
         )
     )
 
@@ -289,7 +309,7 @@ def build_decode_zoned_ir(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=sign_byte,
-            operands=["__list_get", "%p_data", sign_byte_index],
+            operands=[BuiltinName.LIST_GET, "%p_data", sign_byte_index],
         )
     )
 
@@ -298,7 +318,7 @@ def build_decode_zoned_ir(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=sign_nibble,
-            operands=["__nibble_get", sign_byte, "high"],
+            operands=[BuiltinName.NIBBLE_GET, sign_byte, NibblePosition.HIGH],
         )
     )
 
@@ -308,7 +328,7 @@ def build_decode_zoned_ir(
         IRInstruction(
             opcode=Opcode.BINOP,
             result_reg=is_neg,
-            operands=["==", sign_nibble, 0x0D],
+            operands=["==", sign_nibble, ByteConstants.SIGN_NIBBLE_NEGATIVE],
         )
     )
 
@@ -371,7 +391,11 @@ def build_encode_zoned_separate_ir(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=digits_list,
-            operands=["__make_list", total_digits, 0xF0],
+            operands=[
+                BuiltinName.MAKE_LIST,
+                total_digits,
+                ByteConstants.ZONE_NIBBLE_UNSIGNED,
+            ],
         )
     )
 
@@ -388,7 +412,7 @@ def build_encode_zoned_separate_ir(
         IRInstruction(
             opcode=Opcode.BINOP,
             result_reg=is_neg,
-            operands=["==", "%p_sign_nibble", 0x0D],
+            operands=["==", "%p_sign_nibble", ByteConstants.SIGN_NIBBLE_NEGATIVE],
         )
     )
 
@@ -398,7 +422,7 @@ def build_encode_zoned_separate_ir(
         IRInstruction(
             opcode=Opcode.BINOP,
             result_reg=neg_offset,
-            operands=["*", is_neg, 0x12],
+            operands=["*", is_neg, ByteConstants.EBCDIC_SIGN_OFFSET],
         )
     )
 
@@ -407,7 +431,7 @@ def build_encode_zoned_separate_ir(
         IRInstruction(
             opcode=Opcode.BINOP,
             result_reg=sign_byte_val,
-            operands=["+", 0x4E, neg_offset],
+            operands=["+", ByteConstants.EBCDIC_PLUS, neg_offset],
         )
     )
 
@@ -417,7 +441,7 @@ def build_encode_zoned_separate_ir(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=sign_list,
-            operands=["__make_list", 1, 0],
+            operands=[BuiltinName.MAKE_LIST, 1, 0],
         )
     )
 
@@ -426,7 +450,7 @@ def build_encode_zoned_separate_ir(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=sign_list_set,
-            operands=["__list_set", sign_list, 0, sign_byte_val],
+            operands=[BuiltinName.LIST_SET, sign_list, 0, sign_byte_val],
         )
     )
 
@@ -437,7 +461,7 @@ def build_encode_zoned_separate_ir(
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg=final_result,
-                operands=["__list_concat", sign_list_set, digits_list],
+                operands=[BuiltinName.LIST_CONCAT, sign_list_set, digits_list],
             )
         )
     else:
@@ -446,7 +470,7 @@ def build_encode_zoned_separate_ir(
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg=final_result,
-                operands=["__list_concat", digits_list, sign_list_set],
+                operands=[BuiltinName.LIST_CONCAT, digits_list, sign_list_set],
             )
         )
 
@@ -479,7 +503,7 @@ def build_decode_zoned_separate_ir(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=sign_byte,
-            operands=["__list_get", "%p_data", sign_byte_index],
+            operands=[BuiltinName.LIST_GET, "%p_data", sign_byte_index],
         )
     )
 
@@ -530,7 +554,7 @@ def build_decode_zoned_separate_ir(
         IRInstruction(
             opcode=Opcode.BINOP,
             result_reg=is_neg,
-            operands=["==", sign_byte, 0x60],
+            operands=["==", sign_byte, ByteConstants.EBCDIC_MINUS],
         )
     )
 
@@ -582,7 +606,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg=zero_list,
-                operands=["__make_list", 1, 0],
+                operands=[BuiltinName.MAKE_LIST, 1, 0],
             )
         )
 
@@ -591,7 +615,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg=nibbles,
-                operands=["__list_concat", zero_list, "%p_digits"],
+                operands=[BuiltinName.LIST_CONCAT, zero_list, "%p_digits"],
             )
         )
     else:
@@ -603,7 +627,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=sign_list,
-            operands=["__make_list", 1, 0],
+            operands=[BuiltinName.MAKE_LIST, 1, 0],
         )
     )
 
@@ -612,7 +636,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=sign_list_set,
-            operands=["__list_set", sign_list, 0, "%p_sign_nibble"],
+            operands=[BuiltinName.LIST_SET, sign_list, 0, "%p_sign_nibble"],
         )
     )
 
@@ -621,7 +645,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=all_nibbles,
-            operands=["__list_concat", nibbles, sign_list_set],
+            operands=[BuiltinName.LIST_CONCAT, nibbles, sign_list_set],
         )
     )
 
@@ -631,7 +655,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=result,
-            operands=["__make_list", byte_count, 0],
+            operands=[BuiltinName.MAKE_LIST, byte_count, 0],
         )
     )
 
@@ -652,27 +676,37 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
                 IRInstruction(
                     opcode=Opcode.CALL_FUNCTION,
                     result_reg=high_nibble,
-                    operands=["__list_get", all_nibbles, i * 2],
+                    operands=[BuiltinName.LIST_GET, all_nibbles, i * 2],
                 ),
                 IRInstruction(
                     opcode=Opcode.CALL_FUNCTION,
                     result_reg=low_nibble,
-                    operands=["__list_get", all_nibbles, i * 2 + 1],
+                    operands=[BuiltinName.LIST_GET, all_nibbles, i * 2 + 1],
                 ),
                 IRInstruction(
                     opcode=Opcode.CALL_FUNCTION,
                     result_reg=byte_with_high,
-                    operands=["__nibble_set", 0, "high", high_nibble],
+                    operands=[
+                        BuiltinName.NIBBLE_SET,
+                        0,
+                        NibblePosition.HIGH,
+                        high_nibble,
+                    ],
                 ),
                 IRInstruction(
                     opcode=Opcode.CALL_FUNCTION,
                     result_reg=byte_complete,
-                    operands=["__nibble_set", byte_with_high, "low", low_nibble],
+                    operands=[
+                        BuiltinName.NIBBLE_SET,
+                        byte_with_high,
+                        NibblePosition.LOW,
+                        low_nibble,
+                    ],
                 ),
                 IRInstruction(
                     opcode=Opcode.CALL_FUNCTION,
                     result_reg=new_result,
-                    operands=["__list_set", current_result, i, byte_complete],
+                    operands=[BuiltinName.LIST_SET, current_result, i, byte_complete],
                 ),
             ],
         )
@@ -714,17 +748,17 @@ def build_decode_comp3_ir(
                 IRInstruction(
                     opcode=Opcode.CALL_FUNCTION,
                     result_reg=byte_reg,
-                    operands=["__list_get", "%p_data", i],
+                    operands=[BuiltinName.LIST_GET, "%p_data", i],
                 ),
                 IRInstruction(
                     opcode=Opcode.CALL_FUNCTION,
                     result_reg=high,
-                    operands=["__nibble_get", byte_reg, "high"],
+                    operands=[BuiltinName.NIBBLE_GET, byte_reg, NibblePosition.HIGH],
                 ),
                 IRInstruction(
                     opcode=Opcode.CALL_FUNCTION,
                     result_reg=low,
-                    operands=["__nibble_get", byte_reg, "low"],
+                    operands=[BuiltinName.NIBBLE_GET, byte_reg, NibblePosition.LOW],
                 ),
             ],
         )
@@ -803,7 +837,7 @@ def build_decode_comp3_ir(
         IRInstruction(
             opcode=Opcode.BINOP,
             result_reg=is_neg,
-            operands=["==", sign_reg, 0x0D],
+            operands=["==", sign_reg, ByteConstants.SIGN_NIBBLE_NEGATIVE],
         )
     )
 
@@ -872,7 +906,7 @@ def build_encode_binary_ir(
         IRInstruction(
             opcode=Opcode.BINOP,
             result_reg=is_neg,
-            operands=["==", "%p_sign_nibble", 0x0D],
+            operands=["==", "%p_sign_nibble", ByteConstants.SIGN_NIBBLE_NEGATIVE],
         )
     )
 
@@ -910,7 +944,7 @@ def build_encode_binary_ir(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=result,
             operands=[
-                "__int_to_binary_bytes",
+                BuiltinName.INT_TO_BINARY_BYTES,
                 signed_value,
                 byte_count,
                 signed,
@@ -939,7 +973,7 @@ def build_decode_binary_ir(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=int_val,
-            operands=["__binary_bytes_to_int", "%p_data", signed],
+            operands=[BuiltinName.BINARY_BYTES_TO_INT, "%p_data", signed],
         )
     )
 
@@ -984,7 +1018,7 @@ def build_encode_float_ir(func_name: str, byte_count: int) -> list[IRInstruction
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=result,
-            operands=["__float_to_bytes", "%p_float_value", byte_count],
+            operands=[BuiltinName.FLOAT_TO_BYTES, "%p_float_value", byte_count],
         )
     )
 
@@ -1006,7 +1040,7 @@ def build_decode_float_ir(func_name: str, byte_count: int) -> list[IRInstruction
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=result,
-            operands=["__bytes_to_float", "%p_data", byte_count],
+            operands=[BuiltinName.BYTES_TO_FLOAT, "%p_data", byte_count],
         )
     )
 
@@ -1029,7 +1063,7 @@ def build_encode_alphanumeric_ir(func_name: str, length: int) -> list[IRInstruct
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=ebcdic_bytes,
-            operands=["__string_to_bytes", "%p_value", "ebcdic"],
+            operands=[BuiltinName.STRING_TO_BYTES, "%p_value", CobolEncoding.EBCDIC],
         )
     )
 
@@ -1039,7 +1073,7 @@ def build_encode_alphanumeric_ir(func_name: str, length: int) -> list[IRInstruct
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=padding,
-            operands=["__make_list", length, 0x40],
+            operands=[BuiltinName.MAKE_LIST, length, ByteConstants.EBCDIC_SPACE],
         )
     )
 
@@ -1050,7 +1084,7 @@ def build_encode_alphanumeric_ir(func_name: str, length: int) -> list[IRInstruct
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=combined,
-            operands=["__list_concat", ebcdic_bytes, padding],
+            operands=[BuiltinName.LIST_CONCAT, ebcdic_bytes, padding],
         )
     )
 
@@ -1059,7 +1093,7 @@ def build_encode_alphanumeric_ir(func_name: str, length: int) -> list[IRInstruct
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=result,
-            operands=["__list_slice", combined, 0, length],
+            operands=[BuiltinName.LIST_SLICE, combined, 0, length],
         )
     )
 
@@ -1088,7 +1122,7 @@ def build_encode_alphanumeric_justified_ir(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=ebcdic_bytes,
-            operands=["__string_to_bytes", "%p_value", "ebcdic"],
+            operands=[BuiltinName.STRING_TO_BYTES, "%p_value", CobolEncoding.EBCDIC],
         )
     )
 
@@ -1098,7 +1132,7 @@ def build_encode_alphanumeric_justified_ir(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=padding,
-            operands=["__make_list", length, 0x40],
+            operands=[BuiltinName.MAKE_LIST, length, ByteConstants.EBCDIC_SPACE],
         )
     )
 
@@ -1108,7 +1142,7 @@ def build_encode_alphanumeric_justified_ir(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=combined,
-            operands=["__list_concat", padding, ebcdic_bytes],
+            operands=[BuiltinName.LIST_CONCAT, padding, ebcdic_bytes],
         )
     )
 
@@ -1118,7 +1152,7 @@ def build_encode_alphanumeric_justified_ir(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=combined_len,
-            operands=["__list_len", combined],
+            operands=[BuiltinName.LIST_LEN, combined],
         )
     )
 
@@ -1145,7 +1179,7 @@ def build_encode_alphanumeric_justified_ir(
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=result,
-            operands=["__list_slice", combined, start_offset, end_offset],
+            operands=[BuiltinName.LIST_SLICE, combined, start_offset, end_offset],
         )
     )
 
@@ -1168,7 +1202,7 @@ def build_decode_alphanumeric_ir(func_name: str) -> list[IRInstruction]:
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=result,
-            operands=["__bytes_to_string", "%p_data", "ebcdic"],
+            operands=[BuiltinName.BYTES_TO_STRING, "%p_data", CobolEncoding.EBCDIC],
         )
     )
 
@@ -1197,7 +1231,7 @@ def build_string_delimit_ir(func_name: str) -> list[IRInstruction]:
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=pos,
-            operands=["__string_find", "%p_source", "%p_delimiter"],
+            operands=[BuiltinName.STRING_FIND, "%p_source", "%p_delimiter"],
         )
     )
 
@@ -1227,7 +1261,7 @@ def build_string_split_ir(func_name: str) -> list[IRInstruction]:
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=result,
-            operands=["__string_split", "%p_source", "%p_delimiter"],
+            operands=[BuiltinName.STRING_SPLIT, "%p_source", "%p_delimiter"],
         )
     )
 
@@ -1250,7 +1284,7 @@ def build_inspect_tally_ir(func_name: str) -> list[IRInstruction]:
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=result,
-            operands=["__string_count", "%p_source", "%p_pattern", "%p_mode"],
+            operands=[BuiltinName.STRING_COUNT, "%p_source", "%p_pattern", "%p_mode"],
         )
     )
 
@@ -1273,7 +1307,13 @@ def build_inspect_replace_ir(func_name: str) -> list[IRInstruction]:
         IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg=result,
-            operands=["__string_replace", "%p_source", "%p_from", "%p_to", "%p_mode"],
+            operands=[
+                BuiltinName.STRING_REPLACE,
+                "%p_source",
+                "%p_from",
+                "%p_to",
+                "%p_mode",
+            ],
         )
     )
 

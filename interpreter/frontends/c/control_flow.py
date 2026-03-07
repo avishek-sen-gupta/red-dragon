@@ -6,6 +6,7 @@ import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
+from interpreter.frontends.c.node_types import CNodeType
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
     ctx.break_target_stack.append(end_label)
 
     cases = (
-        [c for c in body_node.children if c.type == "case_statement"]
+        [c for c in body_node.children if c.type == CNodeType.CASE_STATEMENT]
         if body_node
         else []
     )
@@ -61,7 +62,9 @@ def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
         body_stmts = [
             c
             for c in case.children
-            if c.is_named and c.type not in ("case", "default") and c != value_node
+            if c.is_named
+            and c.type not in (CNodeType.CASE, CNodeType.DEFAULT)
+            and c != value_node
         ]
 
         arm_label = ctx.fresh_label("case_arm")
@@ -111,7 +114,7 @@ def lower_case_as_block(ctx: TreeSitterEmitContext, node) -> None:
 def lower_goto(ctx: TreeSitterEmitContext, node) -> None:
     """Lower goto_statement as BRANCH user_{label}."""
     label_node = next(
-        (c for c in node.children if c.type == "statement_identifier"), None
+        (c for c in node.children if c.type == CNodeType.STATEMENT_IDENTIFIER), None
     )
     if label_node:
         target_label = f"user_{ctx.node_text(label_node)}"
@@ -127,11 +130,11 @@ def lower_goto(ctx: TreeSitterEmitContext, node) -> None:
 def lower_labeled_stmt(ctx: TreeSitterEmitContext, node) -> None:
     """Lower labeled_statement: emit label then lower the inner statement."""
     label_node = next(
-        (c for c in node.children if c.type == "statement_identifier"), None
+        (c for c in node.children if c.type == CNodeType.STATEMENT_IDENTIFIER), None
     )
     if label_node:
         ctx.emit(Opcode.LABEL, label=f"user_{ctx.node_text(label_node)}")
     # Lower the actual statement within the label
     for child in node.children:
-        if child.is_named and child.type != "statement_identifier":
+        if child.is_named and child.type != CNodeType.STATEMENT_IDENTIFIER:
             ctx.lower_stmt(child)

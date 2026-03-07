@@ -16,6 +16,7 @@ from interpreter.frontends.kotlin.expressions import (
     lower_if_expr,
     lower_kotlin_store_target,
 )
+from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ def lower_while_stmt(ctx: TreeSitterEmitContext, node) -> None:
     cond_node = named_children[0] if named_children else None
     body_node = (
         next(
-            (c for c in node.children if c.type == "control_structure_body"),
+            (c for c in node.children if c.type == KNT.CONTROL_STRUCTURE_BODY),
             None,
         )
         if len(named_children) > 1
@@ -92,7 +93,7 @@ def _find_for_iterable(ctx: TreeSitterEmitContext, node) -> object | None:
     """Find the iterable expression in a for statement (after 'in' keyword)."""
     found_in = False
     for child in node.children:
-        if found_in and child.is_named and child.type != "control_structure_body":
+        if found_in and child.is_named and child.type != KNT.CONTROL_STRUCTURE_BODY:
             return child
         if ctx.node_text(child) == "in":
             found_in = True
@@ -100,10 +101,10 @@ def _find_for_iterable(ctx: TreeSitterEmitContext, node) -> object | None:
 
 
 def _extract_for_var_name(ctx: TreeSitterEmitContext, var_node) -> str:
-    if var_node.type == "simple_identifier":
+    if var_node.type == KNT.SIMPLE_IDENTIFIER:
         return ctx.node_text(var_node)
     id_node = next(
-        (c for c in var_node.children if c.type == "simple_identifier"),
+        (c for c in var_node.children if c.type == KNT.SIMPLE_IDENTIFIER),
         None,
     )
     return ctx.node_text(id_node) if id_node else "__for_var"
@@ -116,12 +117,12 @@ def lower_for_stmt(ctx: TreeSitterEmitContext, node) -> None:
         (
             c
             for c in named_children
-            if c.type in ("variable_declaration", "simple_identifier")
+            if c.type in (KNT.VARIABLE_DECLARATION, KNT.SIMPLE_IDENTIFIER)
         ),
         None,
     )
     body_node = next(
-        (c for c in node.children if c.type == "control_structure_body"),
+        (c for c in node.children if c.type == KNT.CONTROL_STRUCTURE_BODY),
         None,
     )
     # Iterable is the expression between "in" and body
@@ -176,7 +177,7 @@ def lower_for_stmt(ctx: TreeSitterEmitContext, node) -> None:
 def lower_jump_expr(ctx: TreeSitterEmitContext, node) -> None:
     text = ctx.node_text(node)
     if text.startswith("return"):
-        children = [c for c in node.children if c.type != "return"]
+        children = [c for c in node.children if c.type != KNT.RETURN]
         if children:
             val_reg = ctx.lower_expr(children[0])
         else:
@@ -207,12 +208,16 @@ def lower_jump_expr(ctx: TreeSitterEmitContext, node) -> None:
 def lower_do_while_stmt(ctx: TreeSitterEmitContext, node) -> None:
     """Lower do { body } while (cond) loop."""
     body_node = next(
-        (c for c in node.children if c.type == "control_structure_body"),
+        (c for c in node.children if c.type == KNT.CONTROL_STRUCTURE_BODY),
         None,
     )
     # Condition is a named child that's not the body
     cond_node = next(
-        (c for c in node.children if c.is_named and c.type != "control_structure_body"),
+        (
+            c
+            for c in node.children
+            if c.is_named and c.type != KNT.CONTROL_STRUCTURE_BODY
+        ),
         None,
     )
 
@@ -247,35 +252,35 @@ def _extract_try_parts(ctx: TreeSitterEmitContext, node):
         (
             c
             for c in node.children
-            if c.type in ("statements", "control_structure_body")
+            if c.type in (KNT.STATEMENTS, KNT.CONTROL_STRUCTURE_BODY)
         ),
         None,
     )
     catch_clauses = []
     finally_node = None
     for child in node.children:
-        if child.type == "catch_block":
+        if child.type == KNT.CATCH_BLOCK:
             # catch_block children: "catch", "(", annotation*, simple_identifier (type), simple_identifier (var), ")", statements
-            ids = [c for c in child.children if c.type == "simple_identifier"]
+            ids = [c for c in child.children if c.type == KNT.SIMPLE_IDENTIFIER]
             exc_type = ctx.node_text(ids[0]) if ids else None
             exc_var = ctx.node_text(ids[1]) if len(ids) > 1 else None
             catch_body = next(
                 (
                     c
                     for c in child.children
-                    if c.type in ("statements", "control_structure_body")
+                    if c.type in (KNT.STATEMENTS, KNT.CONTROL_STRUCTURE_BODY)
                 ),
                 None,
             )
             catch_clauses.append(
                 {"body": catch_body, "variable": exc_var, "type": exc_type}
             )
-        elif child.type == "finally_block":
+        elif child.type == KNT.FINALLY_BLOCK:
             finally_node = next(
                 (
                     c
                     for c in child.children
-                    if c.type in ("statements", "control_structure_body")
+                    if c.type in (KNT.STATEMENTS, KNT.CONTROL_STRUCTURE_BODY)
                 ),
                 None,
             )

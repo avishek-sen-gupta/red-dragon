@@ -7,6 +7,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode
 from interpreter.frontends.common.exceptions import lower_try_catch
 from interpreter.frontends.scala.expressions import lower_if_expr, lower_match_expr
+from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 
 
 def lower_if_stmt(ctx: TreeSitterEmitContext, node) -> None:
@@ -46,7 +47,9 @@ def lower_match_stmt(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_for_expr(ctx: TreeSitterEmitContext, node) -> None:
     """Lower for-comprehension: for (generators) body / for (generators) yield body."""
-    enumerators_node = next((c for c in node.children if c.type == "enumerators"), None)
+    enumerators_node = next(
+        (c for c in node.children if c.type == NT.ENUMERATORS), None
+    )
     # Body is the last named child (after the enumerators and yield keyword)
     named_children = [c for c in node.children if c.is_named]
     body_node = named_children[-1] if named_children else None
@@ -55,12 +58,12 @@ def lower_for_expr(ctx: TreeSitterEmitContext, node) -> None:
         body_node = None
 
     generators = (
-        [c for c in enumerators_node.children if c.type == "enumerator"]
+        [c for c in enumerators_node.children if c.type == NT.ENUMERATOR]
         if enumerators_node
         else []
     )
     guards = (
-        [c for c in enumerators_node.children if c.type == "guard"]
+        [c for c in enumerators_node.children if c.type == NT.GUARD]
         if enumerators_node
         else []
     )
@@ -155,14 +158,16 @@ def _extract_try_parts(ctx: TreeSitterEmitContext, node):
     catch_clauses: list[dict] = []
     finally_node = None
     for child in node.children:
-        if child.type == "catch_clause":
+        if child.type == NT.CATCH_CLAUSE:
             # Scala catch clause has a case_block child (not a named "body" field)
             catch_body_node = next(
-                (c for c in child.children if c.type == "case_block"), None
+                (c for c in child.children if c.type == NT.CASE_BLOCK), None
             )
             if catch_body_node:
                 # Each case_clause in the catch body is a separate handler
-                cases = [c for c in catch_body_node.children if c.type == "case_clause"]
+                cases = [
+                    c for c in catch_body_node.children if c.type == NT.CASE_CLAUSE
+                ]
                 if cases:
                     for case in cases:
                         pattern = case.child_by_field_name("pattern")
@@ -172,7 +177,11 @@ def _extract_try_parts(ctx: TreeSitterEmitContext, node):
                         if pattern:
                             # typed_pattern: identifier : Type
                             id_node = next(
-                                (c for c in pattern.children if c.type == "identifier"),
+                                (
+                                    c
+                                    for c in pattern.children
+                                    if c.type == NT.IDENTIFIER
+                                ),
                                 None,
                             )
                             exc_var = ctx.node_text(id_node) if id_node else None
@@ -180,7 +189,7 @@ def _extract_try_parts(ctx: TreeSitterEmitContext, node):
                                 (
                                     c
                                     for c in pattern.children
-                                    if c.type == "type_identifier"
+                                    if c.type == NT.TYPE_IDENTIFIER
                                 ),
                                 None,
                             )
@@ -201,9 +210,9 @@ def _extract_try_parts(ctx: TreeSitterEmitContext, node):
                     catch_clauses.append(
                         {"body": catch_body_node, "variable": None, "type": None}
                     )
-        elif child.type == "finally_clause":
+        elif child.type == NT.FINALLY_CLAUSE:
             finally_node = child.child_by_field_name("body") or next(
-                (c for c in child.children if c.type == "block"), None
+                (c for c in child.children if c.type == NT.BLOCK), None
             )
     return body_node, catch_clauses, finally_node
 

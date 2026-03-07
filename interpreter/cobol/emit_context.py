@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
+from interpreter.cobol.cobol_constants import BuiltinName, ByteConstants
 from interpreter.cobol.cobol_types import CobolDataCategory
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_filters import align_decimal, left_adjust
@@ -277,7 +278,7 @@ class EmitContext:
         self.emit(
             Opcode.CALL_FUNCTION,
             result_reg=result,
-            operands=["__make_list", byte_length, 0x40],
+            operands=[BuiltinName.MAKE_LIST, byte_length, ByteConstants.EBCDIC_SPACE],
         )
         return result
 
@@ -323,11 +324,11 @@ class EmitContext:
         digits = [int(ch) if ch.isdigit() else 0 for ch in digit_str]
 
         if not td.signed:
-            sign_nibble = 0x0F
+            sign_nibble = ByteConstants.SIGN_NIBBLE_UNSIGNED
         elif negative and any(d != 0 for d in digits):
-            sign_nibble = 0x0D
+            sign_nibble = ByteConstants.SIGN_NIBBLE_NEGATIVE
         else:
-            sign_nibble = 0x0C
+            sign_nibble = ByteConstants.SIGN_NIBBLE_POSITIVE
 
         digits_reg = self.fresh_reg()
         self.emit(Opcode.CONST, result_reg=digits_reg, operands=[digits])
@@ -431,7 +432,7 @@ class EmitContext:
             Opcode.CALL_FUNCTION,
             result_reg=result,
             operands=[
-                "__cobol_blank_when_zero",
+                BuiltinName.COBOL_BLANK_WHEN_ZERO,
                 encoded_reg,
                 value_str_reg,
                 length_reg,
@@ -486,7 +487,7 @@ class EmitContext:
             Opcode.CALL_FUNCTION,
             result_reg=digits_reg,
             operands=[
-                "__cobol_prepare_digits",
+                BuiltinName.COBOL_PREPARE_DIGITS,
                 value_str_reg,
                 td.total_digits,
                 td.decimal_digits,
@@ -499,7 +500,7 @@ class EmitContext:
             Opcode.CALL_FUNCTION,
             result_reg=sign_reg,
             operands=[
-                "__cobol_prepare_sign",
+                BuiltinName.COBOL_PREPARE_SIGN,
                 value_str_reg,
                 td.signed,
             ],
