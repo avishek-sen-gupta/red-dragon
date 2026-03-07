@@ -1,4 +1,4 @@
-"""Tests for ConversionRules — DefaultConversionRules and IdentityConversionRules."""
+"""Tests for TypeConversionRules — DefaultConversionRules and IdentityConversionRules."""
 
 from interpreter.constants import TypeName
 from interpreter.conversion_result import IDENTITY_CONVERSION

@@ -6,7 +6,7 @@ from types import MappingProxyType
 from typing import Any
 
 from .constants import TypeName
-from .conversion_rules import ConversionRules
+from .conversion_rules import TypeConversionRules
 from .identity_conversion_rules import IdentityConversionRules
 from .type_environment import TypeEnvironment
 from .vm_types import (  # noqa: F401 — re-exported for backwards compatibility
@@ -38,7 +38,7 @@ def _coerce_value(
     val: Any,
     reg: str,
     type_env: TypeEnvironment,
-    conversion_rules: ConversionRules,
+    conversion_rules: TypeConversionRules,
 ) -> Any:
     """Coerce *val* to the type declared for *reg* in *type_env*.
 
@@ -61,7 +61,7 @@ def apply_update(
     vm: VMState,
     update: StateUpdate,
     type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
-    conversion_rules: ConversionRules = _IDENTITY_RULES,
+    conversion_rules: TypeConversionRules = _IDENTITY_RULES,
 ):
     """Mechanically apply a StateUpdate to the VM."""
     frame = vm.current_frame
@@ -225,7 +225,7 @@ def _resolve_typed_reg(
     vm: VMState,
     operand: str,
     type_env: TypeEnvironment,
-    conversion_rules: ConversionRules,
+    conversion_rules: TypeConversionRules,
 ) -> Any:
     """Resolve a register value and coerce it to the type declared by *type_env*.
 

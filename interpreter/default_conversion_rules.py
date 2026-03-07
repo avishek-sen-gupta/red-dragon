@@ -7,7 +7,7 @@ import math
 from typing import Any, Callable
 
 from interpreter.constants import TypeName
-from interpreter.conversion_rules import ConversionRules
+from interpreter.conversion_rules import TypeConversionRules
 from interpreter.conversion_result import (
     ConversionResult,
     IDENTITY_CONVERSION,
@@ -33,7 +33,7 @@ def _truncate_to_int(x: Any) -> int:
     return math.trunc(x)
 
 
-class DefaultConversionRules(ConversionRules):
+class DefaultConversionRules(TypeConversionRules):
     """Default coercion table for the standard type ontology.
 
     Handles Int/Float promotion, Int division → floor division,
