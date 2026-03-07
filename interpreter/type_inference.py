@@ -125,11 +125,13 @@ def infer_types(
     type_resolver: TypeResolver,
     type_env_builder: TypeEnvironmentBuilder = TypeEnvironmentBuilder(),
 ) -> TypeEnvironment:
-    """Walk *instructions* once and return an immutable TypeEnvironment.
+    """Walk *instructions* to fixpoint and return an immutable TypeEnvironment.
 
     Pre-seeded type info from ``type_env_builder`` (populated by the
     frontend during lowering) is merged first; the inference walk then
-    adds inferred types on top.
+    adds inferred types on top.  The walk repeats until no new types are
+    discovered, resolving forward references (e.g. function A calls
+    function B which is defined later in the IR).
 
     Pure function — no mutation of the input instructions.
     """
@@ -142,8 +144,17 @@ def infer_types(
         },
     )
 
-    for inst in instructions:
-        _infer_instruction(inst, ctx, type_resolver)
+    prev_size = -1
+    current_size = 0
+    passes = 0
+    while current_size > prev_size:
+        prev_size = current_size
+        for inst in instructions:
+            _infer_instruction(inst, ctx, type_resolver)
+        current_size = len(ctx.register_types) + len(ctx.func_return_types)
+        passes += 1
+
+    logger.debug("Type inference converged after %d pass(es)", passes)
 
     # Use builder for final assembly
     final_builder = TypeEnvironmentBuilder(
