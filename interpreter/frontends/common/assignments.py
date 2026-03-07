@@ -6,6 +6,7 @@ Extracted from BaseFrontend: assignment, augmented_assignment, expression_statem
 from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.common.node_types import CommonNodeType
 
 from interpreter.ir import Opcode
 from interpreter.frontends.common.expressions import lower_store_target
@@ -37,7 +38,7 @@ def lower_augmented_assignment(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_return(ctx: TreeSitterEmitContext, node) -> None:
     """Lower a return statement."""
-    children = [c for c in node.children if c.type != "return"]
+    children = [c for c in node.children if c.type != CommonNodeType.RETURN]
     if children:
         val_reg = ctx.lower_expr(children[0])
     else:
@@ -62,7 +63,7 @@ def lower_expression_statement(ctx: TreeSitterEmitContext, node) -> None:
     reachable.
     """
     for child in node.children:
-        if child.type not in (";",) and child.is_named:
+        if child.type not in (CommonNodeType.SEMICOLON,) and child.is_named:
             ctx.lower_stmt(child)
             return
     for child in node.children:

@@ -10,6 +10,7 @@ from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.ir import IRInstruction
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter import constants
+from interpreter.constants import LLMProvider
 
 _NO_REPAIR_CLIENT = object()  # sentinel — distinct from None
 
@@ -51,7 +52,7 @@ def __getattr__(name: str):
 def get_frontend(
     language: Language,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
-    llm_provider: str = "claude",
+    llm_provider: str = LLMProvider.CLAUDE,
     llm_client: Any = None,
     observer: FrontendObserver = NullFrontendObserver(),
     repair_client: Any = _NO_REPAIR_CLIENT,

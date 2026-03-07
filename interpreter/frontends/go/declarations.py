@@ -17,6 +17,7 @@ from interpreter.frontends.go.expressions import (
     lower_expression_list,
     lower_go_store_target,
 )
+from interpreter.frontends.go.node_types import GoNodeType
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +159,7 @@ def lower_go_method_decl(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_go_params(ctx: TreeSitterEmitContext, params_node) -> None:
     for child in params_node.children:
-        if child.type == "parameter_declaration":
+        if child.type == GoNodeType.PARAMETER_DECLARATION:
             name_node = child.child_by_field_name("name")
             if name_node:
                 pname = ctx.node_text(name_node)
@@ -178,7 +179,7 @@ def lower_go_params(ctx: TreeSitterEmitContext, params_node) -> None:
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
                 )
                 ctx.seed_var_type(pname, type_hint)
-        elif child.type == "identifier":
+        elif child.type == GoNodeType.IDENTIFIER:
             pname = ctx.node_text(child)
             ctx.emit(
                 Opcode.SYMBOLIC,
@@ -197,12 +198,12 @@ def lower_go_params(ctx: TreeSitterEmitContext, params_node) -> None:
 
 def lower_go_type_decl(ctx: TreeSitterEmitContext, node) -> None:
     for child in node.children:
-        if child.type == "type_spec":
+        if child.type == GoNodeType.TYPE_SPEC:
             name_node = child.child_by_field_name("name")
             type_node = child.child_by_field_name("type")
             if name_node:
                 type_name = ctx.node_text(name_node)
-                if type_node and type_node.type == "struct_type":
+                if type_node and type_node.type == GoNodeType.STRUCT_TYPE:
                     _lower_go_struct_type(ctx, type_name, type_node, node)
                 else:
                     reg = ctx.fresh_reg()
@@ -242,21 +243,21 @@ def _lower_go_struct_type(
 
 
 def lower_go_var_decl(ctx: TreeSitterEmitContext, node) -> None:
-    specs = [c for c in node.children if c.type == "var_spec"]
+    specs = [c for c in node.children if c.type == GoNodeType.VAR_SPEC]
     # Handle var (...) block form: var_spec_list contains var_spec children
     spec_list = next(
-        (c for c in node.children if c.type == "var_spec_list"),
+        (c for c in node.children if c.type == GoNodeType.VAR_SPEC_LIST),
         None,
     )
     if spec_list is not None:
-        specs = [c for c in spec_list.children if c.type == "var_spec"]
+        specs = [c for c in spec_list.children if c.type == GoNodeType.VAR_SPEC]
     for spec in specs:
         _lower_var_spec(ctx, spec, node)
 
 
 def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
     """Lower a single var_spec, supporting multiple names: `var a, b = 1, 2`."""
-    names = [c for c in spec.children if c.type == "identifier"]
+    names = [c for c in spec.children if c.type == GoNodeType.IDENTIFIER]
     value_node = spec.child_by_field_name("value")
     raw_type = extract_type_from_field(ctx, spec, "type")
     type_hint = normalize_type_hint(raw_type, ctx.type_map)
@@ -309,7 +310,7 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
 def lower_go_const_decl(ctx: TreeSitterEmitContext, node) -> None:
     """Lower const_declaration: iterate const_spec children."""
     for child in node.children:
-        if child.type == "const_spec":
+        if child.type == GoNodeType.CONST_SPEC:
             _lower_const_spec(ctx, child)
 
 

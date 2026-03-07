@@ -7,6 +7,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter.frontends.common.expressions import lower_const_literal
+from interpreter.frontends.c.node_types import CNodeType
 
 logger = logging.getLogger(__name__)
 
@@ -60,13 +61,13 @@ def lower_c_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
     """C-specific store target handling (field_expression, subscript, pointer)."""
-    if target.type == "identifier":
+    if target.type == CNodeType.IDENTIFIER:
         ctx.emit(
             Opcode.STORE_VAR,
             operands=[ctx.node_text(target), val_reg],
             node=parent_node,
         )
-    elif target.type == "field_expression":
+    elif target.type == CNodeType.FIELD_EXPRESSION:
         obj_node = target.child_by_field_name("argument")
         field_node = target.child_by_field_name("field")
         if obj_node and field_node:
@@ -76,7 +77,7 @@ def lower_c_store_target(
                 operands=[obj_reg, ctx.node_text(field_node), val_reg],
                 node=parent_node,
             )
-    elif target.type == "subscript_expression":
+    elif target.type == CNodeType.SUBSCRIPT_EXPRESSION:
         arr_node = target.child_by_field_name("argument")
         idx_node = target.child_by_field_name("index")
         if arr_node and idx_node:
@@ -87,7 +88,7 @@ def lower_c_store_target(
                 operands=[arr_reg, idx_reg, val_reg],
                 node=parent_node,
             )
-    elif target.type == "pointer_expression":
+    elif target.type == CNodeType.POINTER_EXPRESSION:
         # *ptr = val -> lower_expr(ptr_operand) -> STORE_FIELD ptr_reg, "*", val_reg
         operand_node = target.child_by_field_name("argument")
         if operand_node is None:
@@ -158,7 +159,7 @@ def lower_pointer_expr(ctx: TreeSitterEmitContext, node) -> str:
 def lower_sizeof(ctx: TreeSitterEmitContext, node) -> str:
     """Lower sizeof(type) or sizeof(expr) as CALL_FUNCTION sizeof(arg)."""
     type_node = next(
-        (c for c in node.children if c.type == "type_descriptor"),
+        (c for c in node.children if c.type == CNodeType.TYPE_DESCRIPTOR),
         None,
     )
     if type_node:
@@ -170,7 +171,7 @@ def lower_sizeof(ctx: TreeSitterEmitContext, node) -> str:
         )
     else:
         expr_node = next(
-            (c for c in node.children if c.is_named and c.type != "sizeof"),
+            (c for c in node.children if c.is_named and c.type != CNodeType.SIZEOF),
             None,
         )
         arg_reg = ctx.lower_expr(expr_node) if expr_node else ctx.fresh_reg()
@@ -231,11 +232,11 @@ def lower_comma_expr(ctx: TreeSitterEmitContext, node) -> str:
 def lower_compound_literal(ctx: TreeSitterEmitContext, node) -> str:
     """Lower (type){elem1, elem2, ...} as NEW_OBJECT + STORE_INDEX per element."""
     type_node = next(
-        (c for c in node.children if c.type == "type_descriptor"),
+        (c for c in node.children if c.type == CNodeType.TYPE_DESCRIPTOR),
         None,
     )
     init_node = next(
-        (c for c in node.children if c.type == "initializer_list"),
+        (c for c in node.children if c.type == CNodeType.INITIALIZER_LIST),
         None,
     )
     type_name = ctx.node_text(type_node) if type_node else "compound"
@@ -282,7 +283,11 @@ def lower_initializer_list(ctx: TreeSitterEmitContext, node) -> str:
 def lower_initializer_pair(ctx: TreeSitterEmitContext, node) -> str:
     """Lower `.field = value` — lower the value (field binding handled by parent)."""
     value_node = next(
-        (c for c in node.children if c.is_named and c.type != "field_designator"),
+        (
+            c
+            for c in node.children
+            if c.is_named and c.type != CNodeType.FIELD_DESIGNATOR
+        ),
         None,
     )
     if value_node:

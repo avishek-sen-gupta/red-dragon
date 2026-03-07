@@ -13,6 +13,7 @@ from interpreter.frontends.common.expressions import (
     lower_canonical_none,
 )
 from interpreter.frontends.c.expressions import lower_c_store_target
+from interpreter.frontends.cpp.node_types import CppNodeType
 
 
 def lower_new_expr(ctx: TreeSitterEmitContext, node) -> str:
@@ -63,13 +64,13 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
 
     if params_node:
         param_list = next(
-            (c for c in params_node.children if c.type == "parameter_list"),
+            (c for c in params_node.children if c.type == CppNodeType.PARAMETER_LIST),
             params_node,
         )
         lower_c_params(ctx, param_list)
 
     if body_node:
-        if body_node.type == "compound_statement":
+        if body_node.type == CppNodeType.COMPOUND_STATEMENT:
             ctx.lower_block(body_node)
         else:
             val_reg = ctx.lower_expr(body_node)
@@ -107,7 +108,9 @@ def lower_qualified_id(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower throw as an expression (C++ throw can appear in expressions)."""
-    children = [c for c in node.children if c.type != "throw" and c.is_named]
+    children = [
+        c for c in node.children if c.type != CppNodeType.THROW_KEYWORD and c.is_named
+    ]
     if children:
         val_reg = ctx.lower_expr(children[0])
     else:
@@ -159,7 +162,7 @@ def lower_cpp_subscript_expr(ctx: TreeSitterEmitContext, node) -> str:
         return lower_const_literal(ctx, node)
     obj_reg = ctx.lower_expr(named_children[0])
     suffix = next(
-        (c for c in node.children if c.type == "subscript_argument_list"),
+        (c for c in node.children if c.type == CppNodeType.SUBSCRIPT_ARGUMENT_LIST),
         None,
     )
     if suffix:
@@ -190,7 +193,7 @@ def lower_cpp_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
     """Override C store target to handle C++ subscript_expression with subscript_argument_list."""
-    if target.type == "subscript_expression":
+    if target.type == CppNodeType.SUBSCRIPT_EXPRESSION:
         arr_node = target.child_by_field_name("argument")
         idx_node = target.child_by_field_name("index")
         if arr_node and idx_node:
@@ -202,7 +205,11 @@ def lower_cpp_store_target(
             return
         obj_reg = ctx.lower_expr(named_children[0])
         suffix = next(
-            (c for c in target.children if c.type == "subscript_argument_list"),
+            (
+                c
+                for c in target.children
+                if c.type == CppNodeType.SUBSCRIPT_ARGUMENT_LIST
+            ),
             None,
         )
         if suffix:

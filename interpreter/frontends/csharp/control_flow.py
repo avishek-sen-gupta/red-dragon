@@ -9,6 +9,7 @@ from interpreter.frontends.common.exceptions import (
     lower_raise_or_throw,
     lower_try_catch,
 )
+from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
 
 
 def lower_if(ctx: TreeSitterEmitContext, node) -> None:
@@ -19,7 +20,7 @@ def lower_if(ctx: TreeSitterEmitContext, node) -> None:
 
     # If consequence field is not present, find the first block child
     if body_node is None:
-        body_node = next((c for c in node.children if c.type == "block"), None)
+        body_node = next((c for c in node.children if c.type == NT.BLOCK), None)
 
     cond_reg = ctx.lower_expr(cond_node)
     true_label = ctx.fresh_label("if_true")
@@ -48,11 +49,11 @@ def lower_if(ctx: TreeSitterEmitContext, node) -> None:
 
     if alt_node:
         ctx.emit(Opcode.LABEL, label=false_label)
-        if alt_node.type == "if_statement":
+        if alt_node.type == NT.IF_STATEMENT:
             lower_if(ctx, alt_node)
         else:
             for child in alt_node.children:
-                if child.type not in ("else",) and child.is_named:
+                if child.type not in (NT.ELSE,) and child.is_named:
                     ctx.lower_stmt(child)
         ctx.emit(Opcode.BRANCH, label=end_label)
 
@@ -152,17 +153,17 @@ def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
     ctx.break_target_stack.append(end_label)
 
     sections = (
-        [c for c in body_node.children if c.type == "switch_section"]
+        [c for c in body_node.children if c.type == NT.SWITCH_SECTION]
         if body_node
         else []
     )
 
     for section in sections:
         pattern_node = next(
-            (c for c in section.children if c.type == "constant_pattern"), None
+            (c for c in section.children if c.type == NT.CONSTANT_PATTERN), None
         )
         body_stmts = [
-            c for c in section.children if c.is_named and c.type != "constant_pattern"
+            c for c in section.children if c.is_named and c.type != NT.CONSTANT_PATTERN
         ]
 
         arm_label = ctx.fresh_label("case_arm")
@@ -211,7 +212,7 @@ def lower_switch_expr(ctx: TreeSitterEmitContext, node) -> str:
     result_var = f"__switch_expr_{ctx.label_counter}"
     end_label = ctx.fresh_label("switch_expr_end")
 
-    arms = [c for c in node.children if c.type == "switch_expression_arm"]
+    arms = [c for c in node.children if c.type == NT.SWITCH_EXPRESSION_ARM]
 
     for arm in arms:
         arm_children = [c for c in arm.children if c.is_named]
@@ -224,8 +225,8 @@ def lower_switch_expr(ctx: TreeSitterEmitContext, node) -> str:
         next_label = ctx.fresh_label("switch_arm_next")
 
         # Discard pattern _ as default
-        is_default = pattern_node.type == "discard" or (
-            pattern_node.type == "identifier" and ctx.node_text(pattern_node) == "_"
+        is_default = pattern_node.type == NT.DISCARD or (
+            pattern_node.type == NT.IDENTIFIER and ctx.node_text(pattern_node) == "_"
         )
 
         if is_default:
@@ -262,9 +263,9 @@ def lower_try(ctx: TreeSitterEmitContext, node) -> None:
     catch_clauses: list[dict] = []
     finally_node = None
     for child in node.children:
-        if child.type == "catch_clause":
+        if child.type == NT.CATCH_CLAUSE:
             decl_node = next(
-                (c for c in child.children if c.type == "catch_declaration"),
+                (c for c in child.children if c.type == NT.CATCH_DECLARATION),
                 None,
             )
             exc_var = None
@@ -274,9 +275,9 @@ def lower_try(ctx: TreeSitterEmitContext, node) -> None:
                     (
                         c
                         for c in decl_node.children
-                        if c.type == "identifier"
-                        or c.type == "qualified_name"
-                        or c.type == "generic_name"
+                        if c.type == NT.IDENTIFIER
+                        or c.type == NT.QUALIFIED_NAME
+                        or c.type == NT.GENERIC_NAME
                     ),
                     None,
                 )
@@ -284,7 +285,7 @@ def lower_try(ctx: TreeSitterEmitContext, node) -> None:
                     (
                         c
                         for c in decl_node.children
-                        if c.type == "identifier" and c != type_node
+                        if c.type == NT.IDENTIFIER and c != type_node
                     ),
                     None,
                 )
@@ -293,15 +294,15 @@ def lower_try(ctx: TreeSitterEmitContext, node) -> None:
                 if name_node:
                     exc_var = ctx.node_text(name_node)
             catch_body = child.child_by_field_name("body") or next(
-                (c for c in child.children if c.type == "block"),
+                (c for c in child.children if c.type == NT.BLOCK),
                 None,
             )
             catch_clauses.append(
                 {"body": catch_body, "variable": exc_var, "type": exc_type}
             )
-        elif child.type == "finally_clause":
+        elif child.type == NT.FINALLY_CLAUSE:
             finally_node = next(
-                (c for c in child.children if c.type == "block"),
+                (c for c in child.children if c.type == NT.BLOCK),
                 None,
             )
     lower_try_catch(ctx, node, body_node, catch_clauses, finally_node)
@@ -319,7 +320,7 @@ def lower_lock_stmt(ctx: TreeSitterEmitContext, node) -> None:
     named_children = [c for c in node.children if c.is_named]
     if named_children:
         ctx.lower_expr(named_children[0])
-    body_node = next((c for c in named_children if c.type == "block"), None)
+    body_node = next((c for c in named_children if c.type == NT.BLOCK), None)
     if body_node:
         ctx.lower_block(body_node)
 
@@ -328,28 +329,28 @@ def lower_using_stmt(ctx: TreeSitterEmitContext, node) -> None:
     """Lower using(resource) { body }: lower resource, then body."""
     named_children = [c for c in node.children if c.is_named]
     for child in named_children:
-        if child.type == "variable_declaration":
+        if child.type == NT.VARIABLE_DECLARATION:
             from interpreter.frontends.csharp.declarations import (
                 lower_variable_declaration,
             )
 
             lower_variable_declaration(ctx, child)
-        elif child.type == "block":
+        elif child.type == NT.BLOCK:
             ctx.lower_block(child)
-        elif child.type not in ("block",):
+        elif child.type not in (NT.BLOCK,):
             ctx.lower_expr(child)
 
 
 def lower_checked_stmt(ctx: TreeSitterEmitContext, node) -> None:
     """Lower checked { body }: just lower the body block."""
-    body_node = next((c for c in node.children if c.type == "block"), None)
+    body_node = next((c for c in node.children if c.type == NT.BLOCK), None)
     if body_node:
         ctx.lower_block(body_node)
 
 
 def lower_fixed_stmt(ctx: TreeSitterEmitContext, node) -> None:
     """Lower fixed(decl) { body }: just lower the body block."""
-    body_node = next((c for c in node.children if c.type == "block"), None)
+    body_node = next((c for c in node.children if c.type == NT.BLOCK), None)
     if body_node:
         ctx.lower_block(body_node)
 

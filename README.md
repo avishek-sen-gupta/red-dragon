@@ -246,12 +246,13 @@ print(frame.local_vars["y"])  # 7   (resolved by LLM)
 # LLM frontend for an unsupported language (no tree-sitter frontend needed)
 from interpreter.llm_client import get_llm_client
 from interpreter.llm_frontend import LLMFrontend
+from interpreter.constants import LLMProvider
 from interpreter.cfg import build_cfg
 from interpreter.registry import build_registry
 from interpreter import execute_cfg, VMConfig
 
 haskell_source = "factorial 0 = 1\nfactorial n = n * factorial (n - 1)\nx = factorial 5\n"
-llm_client = get_llm_client(provider="claude")
+llm_client = get_llm_client(provider=LLMProvider.CLAUDE)  # or "claude" (StrEnum)
 frontend = LLMFrontend(llm_client=llm_client, language="haskell")
 instructions = frontend.lower(haskell_source.encode("utf-8"))
 

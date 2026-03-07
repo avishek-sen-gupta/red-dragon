@@ -11,10 +11,13 @@ from interpreter.frontends.common.expressions import (
     lower_const_literal,
     extract_call_args_unwrap,
 )
+from interpreter.frontends.php.node_types import PHPNodeType
 
 logger = logging.getLogger(__name__)
 
-_NON_INTERPOLATION_TYPES = frozenset({"string_content", "escape_sequence"})
+_NON_INTERPOLATION_TYPES = frozenset(
+    {PHPNodeType.STRING_CONTENT, PHPNodeType.ESCAPE_SEQUENCE}
+)
 
 
 def lower_php_variable(ctx: TreeSitterEmitContext, node) -> str:
@@ -49,15 +52,15 @@ def _lower_php_interpolated_children(ctx: TreeSitterEmitContext, children, node)
 def _is_interpolation_relevant(child) -> bool:
     """Return True if the child should contribute to interpolation."""
     return (
-        child.type == "string_content"
-        or child.type == "variable_name"
+        child.type == PHPNodeType.STRING_CONTENT
+        or child.type == PHPNodeType.VARIABLE_NAME
         or child.is_named
     )
 
 
 def _lower_interpolated_child(ctx: TreeSitterEmitContext, child) -> str:
     """Lower a single interpolation child to a register."""
-    if child.type == "string_content":
+    if child.type == PHPNodeType.STRING_CONTENT:
         frag_reg = ctx.fresh_reg()
         ctx.emit(
             Opcode.CONST,
@@ -66,7 +69,7 @@ def _lower_interpolated_child(ctx: TreeSitterEmitContext, child) -> str:
             node=child,
         )
         return frag_reg
-    if child.type == "variable_name":
+    if child.type == PHPNodeType.VARIABLE_NAME:
         return lower_php_variable(ctx, child)
     return ctx.lower_expr(child)
 
@@ -104,7 +107,7 @@ def lower_php_encapsed_string(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_php_heredoc(ctx: TreeSitterEmitContext, node) -> str:
     """Lower PHP heredoc (<<<EOT ... EOT), decomposing interpolation inside heredoc_body."""
-    body = next((c for c in node.children if c.type == "heredoc_body"), None)
+    body = next((c for c in node.children if c.type == PHPNodeType.HEREDOC_BODY), None)
     if body is None:
         return lower_const_literal(ctx, node)
 
@@ -122,7 +125,7 @@ def lower_php_func_call(ctx: TreeSitterEmitContext, node) -> str:
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
 
-    if func_node and func_node.type in ("name", "qualified_name"):
+    if func_node and func_node.type in (PHPNodeType.NAME, PHPNodeType.QUALIFIED_NAME):
         func_name = ctx.node_text(func_node)
         reg = ctx.fresh_reg()
         ctx.emit(
@@ -231,13 +234,13 @@ def lower_php_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
     """Store to a PHP target: variable_name, member_access, subscript, or fallback."""
-    if target.type in ("variable_name", "name"):
+    if target.type in (PHPNodeType.VARIABLE_NAME, PHPNodeType.NAME):
         ctx.emit(
             Opcode.STORE_VAR,
             operands=[ctx.node_text(target), val_reg],
             node=parent_node,
         )
-    elif target.type == "member_access_expression":
+    elif target.type == PHPNodeType.MEMBER_ACCESS_EXPRESSION:
         obj_node = target.child_by_field_name(ctx.constants.attr_object_field)
         name_node = target.child_by_field_name("name")
         if obj_node and name_node:
@@ -247,7 +250,7 @@ def lower_php_store_target(
                 operands=[obj_reg, ctx.node_text(name_node), val_reg],
                 node=parent_node,
             )
-    elif target.type == "subscript_expression":
+    elif target.type == PHPNodeType.SUBSCRIPT_EXPRESSION:
         children = [c for c in target.children if c.is_named]
         if len(children) >= 2:
             obj_reg = ctx.lower_expr(children[0])
@@ -328,8 +331,10 @@ def lower_php_object_creation(ctx: TreeSitterEmitContext, node) -> str:
     """Lower ``new Foo(args)`` -> NEW_OBJECT + CALL_METHOD('__construct')."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     if name_node is None:
-        name_node = next((c for c in node.children if c.type == "name"), None)
-    args_node = next((c for c in node.children if c.type == "arguments"), None)
+        name_node = next((c for c in node.children if c.type == PHPNodeType.NAME), None)
+    args_node = next(
+        (c for c in node.children if c.type == PHPNodeType.ARGUMENTS), None
+    )
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
     type_name = ctx.node_text(name_node) if name_node else "Object"
 
@@ -356,7 +361,9 @@ def lower_php_array(ctx: TreeSitterEmitContext, node) -> str:
     Value-only elements: NEW_ARRAY + STORE_INDEX per element.
     Key-value elements: NEW_OBJECT + STORE_INDEX with key.
     """
-    elements = [c for c in node.children if c.type == "array_element_initializer"]
+    elements = [
+        c for c in node.children if c.type == PHPNodeType.ARRAY_ELEMENT_INITIALIZER
+    ]
 
     # Determine if associative (any element has =>)
     is_associative = any(
@@ -431,13 +438,21 @@ def lower_php_match_expression(ctx: TreeSitterEmitContext, node) -> str:
     result_var = f"__match_{ctx.label_counter}"
 
     arms = (
-        [c for c in body_node.children if c.type == "match_conditional_expression"]
+        [
+            c
+            for c in body_node.children
+            if c.type == PHPNodeType.MATCH_CONDITIONAL_EXPRESSION
+        ]
         if body_node
         else []
     )
     default_arm = (
         next(
-            (c for c in body_node.children if c.type == "match_default_expression"),
+            (
+                c
+                for c in body_node.children
+                if c.type == PHPNodeType.MATCH_DEFAULT_EXPRESSION
+            ),
             None,
         )
         if body_node
@@ -703,7 +718,9 @@ def lower_php_nullsafe_method_call(ctx: TreeSitterEmitContext, node) -> str:
         [
             ctx.lower_expr(c)
             for c in args_node.children
-            if c.is_named and c.type not in ("(", ")", ",")
+            if c.is_named
+            and c.type
+            not in (PHPNodeType.OPEN_PAREN, PHPNodeType.CLOSE_PAREN, PHPNodeType.COMMA)
         ]
         if args_node
         else []

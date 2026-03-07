@@ -15,6 +15,7 @@ from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
 )
+from interpreter.frontends.java.node_types import JavaNodeType
 
 
 def lower_method_invocation(ctx: TreeSitterEmitContext, node) -> str:
@@ -135,7 +136,7 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
         _lower_lambda_params(ctx, params_node)
 
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
-    if body_node and body_node.type == "block":
+    if body_node and body_node.type == JavaNodeType.BLOCK:
         ctx.lower_block(body_node)
         none_reg = ctx.fresh_reg()
         ctx.emit(
@@ -164,11 +165,11 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
 
 def _lower_lambda_params(ctx: TreeSitterEmitContext, params_node) -> None:
     """Lower parameters for lambda expressions."""
-    if params_node.type == "formal_parameters":
+    if params_node.type == JavaNodeType.FORMAL_PARAMETERS:
         lower_java_params(ctx, params_node)
     else:
         for child in params_node.children:
-            if child.type == "identifier":
+            if child.type == JavaNodeType.IDENTIFIER:
                 pname = ctx.node_text(child)
                 ctx.emit(
                     Opcode.SYMBOLIC,
@@ -202,7 +203,7 @@ def lower_array_access(ctx: TreeSitterEmitContext, node) -> str:
 def lower_array_creation(ctx: TreeSitterEmitContext, node) -> str:
     """Lower array_creation_expression or standalone array_initializer."""
     # Handle standalone array_initializer: {1, 2, 3}
-    if node.type == "array_initializer":
+    if node.type == JavaNodeType.ARRAY_INITIALIZER:
         elements = [c for c in node.children if c.is_named]
         size_reg = ctx.fresh_reg()
         ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elements))])
@@ -222,7 +223,7 @@ def lower_array_creation(ctx: TreeSitterEmitContext, node) -> str:
 
     # array_creation_expression: look for array_initializer child
     init_node = next(
-        (c for c in node.children if c.type == "array_initializer"),
+        (c for c in node.children if c.type == JavaNodeType.ARRAY_INITIALIZER),
         None,
     )
     if init_node is not None:
@@ -245,7 +246,7 @@ def lower_array_creation(ctx: TreeSitterEmitContext, node) -> str:
 
     # Sized array without initializer: new int[5]
     dims_node = next(
-        (c for c in node.children if c.type == "dimensions_expr"),
+        (c for c in node.children if c.type == JavaNodeType.DIMENSIONS_EXPR),
         None,
     )
     if dims_node:
@@ -275,13 +276,13 @@ def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
 def lower_java_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
-    if target.type == "identifier":
+    if target.type == JavaNodeType.IDENTIFIER:
         ctx.emit(
             Opcode.STORE_VAR,
             operands=[ctx.node_text(target), val_reg],
             node=parent_node,
         )
-    elif target.type == "field_access":
+    elif target.type == JavaNodeType.FIELD_ACCESS:
         obj_node = target.child_by_field_name(ctx.constants.attr_object_field)
         field_node = target.child_by_field_name("field")
         if obj_node and field_node:
@@ -291,7 +292,7 @@ def lower_java_store_target(
                 operands=[obj_reg, ctx.node_text(field_node), val_reg],
                 node=parent_node,
             )
-    elif target.type == "array_access":
+    elif target.type == JavaNodeType.ARRAY_ACCESS:
         arr_node = target.child_by_field_name("array")
         idx_node = target.child_by_field_name("index")
         if arr_node and idx_node:
@@ -401,7 +402,7 @@ def lower_throw_as_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_java_params(ctx: TreeSitterEmitContext, params_node) -> None:
     for child in params_node.children:
-        if child.type == "formal_parameter":
+        if child.type == JavaNodeType.FORMAL_PARAMETER:
             name_node = child.child_by_field_name("name")
             if name_node:
                 pname = ctx.node_text(name_node)
@@ -421,7 +422,7 @@ def lower_java_params(ctx: TreeSitterEmitContext, params_node) -> None:
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
                 )
                 ctx.seed_var_type(pname, type_hint)
-        elif child.type == "spread_parameter":
+        elif child.type == JavaNodeType.SPREAD_PARAMETER:
             name_node = child.child_by_field_name("name")
             if name_node:
                 pname = ctx.node_text(name_node)

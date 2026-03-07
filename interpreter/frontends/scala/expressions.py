@@ -10,6 +10,7 @@ from interpreter.frontends.common.expressions import (
     lower_const_literal,
     lower_interpolated_string_parts,
 )
+from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 
 
 def lower_field_expr(ctx: TreeSitterEmitContext, node) -> str:
@@ -40,13 +41,13 @@ def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
 def lower_scala_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
-    if target.type == "identifier":
+    if target.type == NT.IDENTIFIER:
         ctx.emit(
             Opcode.STORE_VAR,
             operands=[ctx.node_text(target), val_reg],
             node=parent_node,
         )
-    elif target.type == "field_expression":
+    elif target.type == NT.FIELD_EXPRESSION:
         value_node = target.child_by_field_name(ctx.constants.attr_object_field)
         field_node = target.child_by_field_name("field")
         if value_node and field_node:
@@ -118,7 +119,7 @@ def _lower_body_as_expr(ctx: TreeSitterEmitContext, body_node) -> str:
             operands=[ctx.constants.none_literal],
         )
         return reg
-    if body_node.type == "block":
+    if body_node.type == NT.BLOCK:
         return lower_block_expr(ctx, body_node)
     return ctx.lower_expr(body_node)
 
@@ -132,7 +133,7 @@ def lower_match_expr(ctx: TreeSitterEmitContext, node) -> str:
     end_label = ctx.fresh_label("match_end")
 
     clauses = (
-        [c for c in body_node.children if c.type == "case_clause"] if body_node else []
+        [c for c in body_node.children if c.type == NT.CASE_CLAUSE] if body_node else []
     )
 
     for clause in clauses:
@@ -142,7 +143,7 @@ def lower_match_expr(ctx: TreeSitterEmitContext, node) -> str:
         arm_label = ctx.fresh_label("case_arm")
         next_label = ctx.fresh_label("case_next")
 
-        if pattern_node and pattern_node.type == "wildcard":
+        if pattern_node and pattern_node.type == NT.WILDCARD:
             ctx.emit(Opcode.BRANCH, label=arm_label)
         elif pattern_node:
             pattern_reg = ctx.lower_expr(pattern_node)
@@ -186,7 +187,7 @@ def lower_block_expr(ctx: TreeSitterEmitContext, node) -> str:
     children = [
         c
         for c in node.children
-        if c.type not in ("{", "}", ";")
+        if c.type not in (NT.LBRACE, NT.RBRACE, NT.SEMICOLON)
         and c.type not in ctx.constants.comment_types
         and c.type not in ctx.constants.noise_types
         and c.is_named
@@ -245,7 +246,7 @@ def lower_continue_as_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_return_expr(ctx: TreeSitterEmitContext, node) -> str:
-    children = [c for c in node.children if c.type != "return"]
+    children = [c for c in node.children if c.type != NT.RETURN]
     if children:
         val_reg = ctx.lower_expr(children[0])
     else:
@@ -275,7 +276,7 @@ def lower_wildcard(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> str:
-    elems = [c for c in node.children if c.type not in ("(", ")", ",")]
+    elems = [c for c in node.children if c.type not in (NT.LPAREN, NT.RPAREN, NT.COMMA)]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
@@ -303,14 +304,14 @@ def lower_lambda_expr(ctx: TreeSitterEmitContext, node) -> str:
 
     # Extract lambda parameters: bindings -> binding -> identifier
     bindings_node = next(
-        (c for c in node.children if c.type == "bindings"),
+        (c for c in node.children if c.type == NT.BINDINGS),
         None,
     )
     if bindings_node:
         for child in bindings_node.children:
-            if child.type == "binding":
+            if child.type == NT.BINDING:
                 id_node = next(
-                    (c for c in child.children if c.type == "identifier"),
+                    (c for c in child.children if c.type == NT.IDENTIFIER),
                     None,
                 )
                 if id_node:
@@ -332,7 +333,7 @@ def lower_lambda_expr(ctx: TreeSitterEmitContext, node) -> str:
         c
         for c in node.children
         if c.is_named
-        and c.type != "bindings"
+        and c.type != NT.BINDINGS
         and c.type not in ctx.constants.comment_types
     ]
     for child in named_children[:-1]:
@@ -390,7 +391,7 @@ def lower_symbolic_node(ctx: TreeSitterEmitContext, node) -> str:
 def lower_scala_interpolated_string(ctx: TreeSitterEmitContext, node) -> str:
     """Lower interpolated_string_expression: s"..." / f"..." / raw"..."."""
     interp_string = next(
-        (c for c in node.children if c.type == "interpolated_string"),
+        (c for c in node.children if c.type == NT.INTERPOLATED_STRING),
         None,
     )
     if interp_string is None:
@@ -400,7 +401,7 @@ def lower_scala_interpolated_string(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_scala_interpolated_string_body(ctx: TreeSitterEmitContext, node) -> str:
     """Lower interpolated_string, extracting literal gaps and interpolation children."""
-    interpolations = [c for c in node.children if c.type == "interpolation"]
+    interpolations = [c for c in node.children if c.type == NT.INTERPOLATION]
     if not interpolations:
         return lower_const_literal(ctx, node)
 
@@ -409,9 +410,9 @@ def lower_scala_interpolated_string_body(ctx: TreeSitterEmitContext, node) -> st
     content_end = node.end_byte - 1  # skip closing "
 
     for child in node.children:
-        if child.type == '"':
+        if child.type == NT.DOUBLE_QUOTE:
             continue
-        if child.type == "interpolation":
+        if child.type == NT.INTERPOLATION:
             # Emit literal gap before this interpolation
             gap_text = ctx.source[content_start : child.start_byte].decode("utf-8")
             if gap_text:
@@ -460,7 +461,7 @@ def lower_try_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower throw_expression: throw expr -> lower expr, emit THROW, return reg."""
-    children = [c for c in node.children if c.type != "throw" and c.is_named]
+    children = [c for c in node.children if c.type != NT.THROW and c.is_named]
     if children:
         val_reg = ctx.lower_expr(children[0])
     else:
@@ -481,7 +482,7 @@ def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> str:
 def lower_case_class_pattern(ctx: TreeSitterEmitContext, node) -> str:
     """Lower case class pattern like Circle(r) in match arms."""
     type_node = next(
-        (c for c in node.children if c.type in ("type_identifier", "identifier")),
+        (c for c in node.children if c.type in (NT.TYPE_IDENTIFIER, NT.IDENTIFIER)),
         None,
     )
     class_name = ctx.node_text(type_node) if type_node else ctx.node_text(node)
@@ -497,7 +498,7 @@ def lower_case_class_pattern(ctx: TreeSitterEmitContext, node) -> str:
     inner_bindings = [
         c
         for c in node.children
-        if c.is_named and c.type not in ("type_identifier", "identifier")
+        if c.is_named and c.type not in (NT.TYPE_IDENTIFIER, NT.IDENTIFIER)
     ]
     for i, child in enumerate(inner_bindings):
         child_reg = ctx.lower_expr(child)
@@ -525,7 +526,11 @@ def lower_guard(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_tuple_pattern_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower (a, b) pattern in match as tuple literal."""
-    elems = [c for c in node.children if c.type not in ("(", ")", ",") and c.is_named]
+    elems = [
+        c
+        for c in node.children
+        if c.type not in (NT.LPAREN, NT.RPAREN, NT.COMMA) and c.is_named
+    ]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
@@ -550,7 +555,7 @@ def lower_infix_pattern(ctx: TreeSitterEmitContext, node) -> str:
         left_reg = ctx.lower_expr(named_children[0])
         right_reg = ctx.lower_expr(named_children[-1])
         op_node = next(
-            (c for c in node.children if c.type == "operator_identifier"),
+            (c for c in node.children if c.type == NT.OPERATOR_IDENTIFIER),
             None,
         )
         op = ctx.node_text(op_node) if op_node else "::"

@@ -11,6 +11,7 @@ from interpreter.frontends.common.expressions import (
     lower_const_literal,
     lower_interpolated_string_parts,
 )
+from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
@@ -23,7 +24,7 @@ def lower_invocation(ctx: TreeSitterEmitContext, node) -> str:
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
 
-    if func_node and func_node.type == "member_access_expression":
+    if func_node and func_node.type == NT.MEMBER_ACCESS_EXPRESSION:
         obj_node = func_node.child_by_field_name("expression")
         name_node = func_node.child_by_field_name("name")
         if obj_node and name_node:
@@ -38,7 +39,7 @@ def lower_invocation(ctx: TreeSitterEmitContext, node) -> str:
             )
             return reg
 
-    if func_node and func_node.type == "identifier":
+    if func_node and func_node.type == NT.IDENTIFIER:
         func_name = ctx.node_text(func_node)
         reg = ctx.fresh_reg()
         ctx.emit(
@@ -112,12 +113,12 @@ def _extract_bracket_index(ctx: TreeSitterEmitContext, bracket_node) -> str:
             operands=["unknown_index"],
         )
         return reg
-    if bracket_node.type == "bracketed_argument_list":
+    if bracket_node.type == NT.BRACKETED_ARGUMENT_LIST:
         args = [c for c in bracket_node.children if c.is_named]
         if args:
             inner = args[0]
             # argument node wraps the actual expression
-            if inner.type == "argument":
+            if inner.type == NT.ARGUMENT:
                 expr_children = [c for c in inner.children if c.is_named]
                 return (
                     ctx.lower_expr(expr_children[0])
@@ -146,7 +147,7 @@ def lower_element_access(ctx: TreeSitterEmitContext, node) -> str:
             (
                 c
                 for c in node.children
-                if c.is_named and c.type == "bracketed_argument_list"
+                if c.is_named and c.type == NT.BRACKETED_ARGUMENT_LIST
             ),
             None,
         )
@@ -163,7 +164,11 @@ def lower_element_access(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_initializer_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower initializer_expression {a, b, c} as NEW_ARRAY + STORE_INDEX."""
-    elems = [c for c in node.children if c.is_named and c.type not in ("{", "}", ",")]
+    elems = [
+        c
+        for c in node.children
+        if c.is_named and c.type not in (NT.LBRACE, NT.RBRACE, ",")
+    ]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
@@ -235,7 +240,7 @@ def lower_typeof(ctx: TreeSitterEmitContext, node) -> str:
     """Lower typeof_expression: typeof(Type)."""
     named_children = [c for c in node.children if c.is_named]
     type_node = next(
-        (c for c in named_children if c.type != "typeof"),
+        (c for c in named_children if c.type != NT.TYPEOF),
         named_children[0] if named_children else None,
     )
     type_name = ctx.node_text(type_node) if type_node else "Object"
@@ -315,7 +320,7 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
 
     # Lower body
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
-    if body_node and body_node.type == "block":
+    if body_node and body_node.type == NT.BLOCK:
         ctx.lower_block(body_node)
     elif body_node:
         # Expression body -- evaluate and return
@@ -323,7 +328,7 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
         ctx.emit(Opcode.RETURN, operands=[body_reg])
 
     # Implicit return for block bodies (if no explicit return)
-    if body_node and body_node.type == "block":
+    if body_node and body_node.type == NT.BLOCK:
         none_reg = ctx.fresh_reg()
         ctx.emit(
             Opcode.CONST,
@@ -350,7 +355,7 @@ def lower_array_creation(ctx: TreeSitterEmitContext, node) -> str:
     init_node = node.child_by_field_name("initializer")
     if init_node is None:
         init_node = next(
-            (c for c in node.children if c.type == "initializer_expression"),
+            (c for c in node.children if c.type == NT.INITIALIZER_EXPRESSION),
             None,
         )
 
@@ -377,10 +382,10 @@ def lower_array_creation(ctx: TreeSitterEmitContext, node) -> str:
         c
         for c in node.children
         if c.is_named
-        and c.type not in ("predefined_type", "type_identifier", "array_type")
+        and c.type not in (NT.PREDEFINED_TYPE, NT.TYPE_IDENTIFIER, NT.ARRAY_TYPE)
     ]
     size_node = size_children[0] if size_children else None
-    if size_node and size_node.type not in ("initializer_expression",):
+    if size_node and size_node.type not in (NT.INITIALIZER_EXPRESSION,):
         size_reg = ctx.lower_expr(size_node)
     else:
         size_reg = ctx.fresh_reg()
@@ -397,21 +402,21 @@ def lower_array_creation(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_csharp_interpolated_string(ctx: TreeSitterEmitContext, node) -> str:
     """Lower C# $\"...{expr}...\" into CONST + expr + BINOP '+' chain."""
-    has_interpolation = any(c.type == "interpolation" for c in node.children)
+    has_interpolation = any(c.type == NT.INTERPOLATION for c in node.children)
     if not has_interpolation:
         return lower_const_literal(ctx, node)
 
     _INTERPOLATION_NOISE = frozenset(
         {
-            "interpolation_brace",
-            "interpolation_format_clause",
-            "interpolation_alignment_clause",
+            NT.INTERPOLATION_BRACE,
+            NT.INTERPOLATION_FORMAT_CLAUSE,
+            NT.INTERPOLATION_ALIGNMENT_CLAUSE,
         }
     )
 
     parts: list[str] = []
     for child in node.children:
-        if child.type == "string_content":
+        if child.type == NT.STRING_CONTENT:
             frag_reg = ctx.fresh_reg()
             ctx.emit(
                 Opcode.CONST,
@@ -420,7 +425,7 @@ def lower_csharp_interpolated_string(ctx: TreeSitterEmitContext, node) -> str:
                 node=child,
             )
             parts.append(frag_reg)
-        elif child.type == "interpolation":
+        elif child.type == NT.INTERPOLATION:
             named = [
                 c
                 for c in child.children
@@ -462,10 +467,10 @@ def lower_conditional_access(ctx: TreeSitterEmitContext, node) -> str:
     obj_reg = ctx.lower_expr(named[0])
     # The second named child is typically member_binding_expression
     binding_node = named[1]
-    if binding_node.type == "member_binding_expression":
+    if binding_node.type == NT.MEMBER_BINDING_EXPRESSION:
         # Extract the field name from member_binding_expression
         field_node = next(
-            (c for c in binding_node.children if c.type == "identifier"), None
+            (c for c in binding_node.children if c.type == NT.IDENTIFIER), None
         )
         field_name = ctx.node_text(field_node) if field_node else "unknown"
     else:
@@ -482,7 +487,7 @@ def lower_conditional_access(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_member_binding(ctx: TreeSitterEmitContext, node) -> str:
     """Lower .Field part of conditional access -- standalone fallback."""
-    field_node = next((c for c in node.children if c.type == "identifier"), None)
+    field_node = next((c for c in node.children if c.type == NT.IDENTIFIER), None)
     field_name = ctx.node_text(field_node) if field_node else "unknown"
     reg = ctx.fresh_reg()
     ctx.emit(
@@ -496,7 +501,7 @@ def lower_member_binding(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower tuple (a, b, c) as NEW_ARRAY with elements."""
-    arguments = [c for c in node.children if c.type == "argument"]
+    arguments = [c for c in node.children if c.type == NT.ARGUMENT]
     elem_regs = [
         ctx.lower_expr(next((gc for gc in arg.children if gc.is_named), arg))
         for arg in arguments
@@ -597,13 +602,13 @@ def lower_linq_clause(ctx: TreeSitterEmitContext, node) -> str:
 def lower_csharp_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
-    if target.type == "identifier":
+    if target.type == NT.IDENTIFIER:
         ctx.emit(
             Opcode.STORE_VAR,
             operands=[ctx.node_text(target), val_reg],
             node=parent_node,
         )
-    elif target.type == "member_access_expression":
+    elif target.type == NT.MEMBER_ACCESS_EXPRESSION:
         obj_node = target.child_by_field_name("expression")
         name_node = target.child_by_field_name("name")
         if obj_node and name_node:
@@ -613,7 +618,7 @@ def lower_csharp_store_target(
                 operands=[obj_reg, ctx.node_text(name_node), val_reg],
                 node=parent_node,
             )
-    elif target.type == "element_access_expression":
+    elif target.type == NT.ELEMENT_ACCESS_EXPRESSION:
         obj_node = target.child_by_field_name("expression")
         bracket_node = target.child_by_field_name("subscript")
         if obj_node:
@@ -623,7 +628,7 @@ def lower_csharp_store_target(
                     (
                         c
                         for c in target.children
-                        if c.is_named and c.type == "bracketed_argument_list"
+                        if c.is_named and c.type == NT.BRACKETED_ARGUMENT_LIST
                     ),
                     None,
                 )
@@ -647,7 +652,7 @@ def lower_csharp_store_target(
 def lower_csharp_params(ctx: TreeSitterEmitContext, params_node) -> None:
     """Lower C# formal parameters (parameter nodes)."""
     for child in params_node.children:
-        if child.type == "parameter":
+        if child.type == NT.PARAMETER:
             name_node = child.child_by_field_name("name")
             if name_node:
                 pname = ctx.node_text(name_node)

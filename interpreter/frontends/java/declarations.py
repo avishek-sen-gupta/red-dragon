@@ -11,13 +11,14 @@ from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
 )
+from interpreter.frontends.java.node_types import JavaNodeType
 
 
 def lower_local_var_decl(ctx: TreeSitterEmitContext, node) -> None:
     raw_type = extract_type_from_field(ctx, node, "type")
     type_hint = normalize_type_hint(raw_type, ctx.type_map)
     for child in node.children:
-        if child.type == "variable_declarator":
+        if child.type == JavaNodeType.VARIABLE_DECLARATOR:
             name_node = child.child_by_field_name("name")
             value_node = child.child_by_field_name("value")
             if name_node and value_node:
@@ -53,18 +54,19 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
         operands=[f"{constants.PARAM_PREFIX}this"],
     )
     ctx.seed_register_type(param_reg, class_name)
-    ctx.seed_param_type("this", class_name)
+    ctx.seed_param_type(constants.PARAM_THIS, class_name)
     ctx.emit(
         Opcode.STORE_VAR,
-        operands=["this", param_reg],
+        operands=[constants.PARAM_THIS, param_reg],
     )
-    ctx.seed_var_type("this", class_name)
+    ctx.seed_var_type(constants.PARAM_THIS, class_name)
 
 
 def _has_static_modifier(node) -> bool:
     """Return True if *node* has a ``static`` modifier."""
     return any(
-        c.type == "modifiers" and any(m.type == "static" for m in c.children)
+        c.type == JavaNodeType.MODIFIERS
+        and any(m.type == JavaNodeType.STATIC for m in c.children)
         for c in node.children
     )
 
@@ -119,8 +121,12 @@ def lower_method_decl_stmt(ctx: TreeSitterEmitContext, node) -> None:
     lower_method_decl(ctx, node)
 
 
-_CLASS_BODY_METHOD_TYPES = frozenset({"method_declaration", "constructor_declaration"})
-_CLASS_BODY_SKIP_TYPES = frozenset({"modifiers", "marker_annotation", "annotation"})
+_CLASS_BODY_METHOD_TYPES = frozenset(
+    {JavaNodeType.METHOD_DECLARATION, JavaNodeType.CONSTRUCTOR_DECLARATION}
+)
+_CLASS_BODY_SKIP_TYPES = frozenset(
+    {JavaNodeType.MODIFIERS, JavaNodeType.MARKER_ANNOTATION, JavaNodeType.ANNOTATION}
+)
 
 
 def _lower_class_body(ctx: TreeSitterEmitContext, node) -> list:
@@ -139,13 +145,13 @@ def _lower_class_body(ctx: TreeSitterEmitContext, node) -> list:
 
 def _lower_deferred_class_child(ctx: TreeSitterEmitContext, child) -> None:
     """Lower a single deferred class-body child at top level."""
-    if child.type == "method_declaration":
+    if child.type == JavaNodeType.METHOD_DECLARATION:
         lower_method_decl(ctx, child, inject_this=not _has_static_modifier(child))
-    elif child.type == "constructor_declaration":
+    elif child.type == JavaNodeType.CONSTRUCTOR_DECLARATION:
         _lower_constructor_decl(ctx, child)
-    elif child.type == "field_declaration":
+    elif child.type == JavaNodeType.FIELD_DECLARATION:
         _lower_field_decl(ctx, child)
-    elif child.type == "static_initializer":
+    elif child.type == JavaNodeType.STATIC_INITIALIZER:
         _lower_static_initializer(ctx, child)
     else:
         ctx.lower_stmt(child)
@@ -251,7 +257,7 @@ def _lower_field_decl(ctx: TreeSitterEmitContext, node) -> None:
     raw_type = extract_type_from_field(ctx, node, "type")
     type_hint = normalize_type_hint(raw_type, ctx.type_map)
     for child in node.children:
-        if child.type == "variable_declarator":
+        if child.type == JavaNodeType.VARIABLE_DECLARATOR:
             name_node = child.child_by_field_name("name")
             value_node = child.child_by_field_name("value")
             if name_node and value_node:
@@ -267,7 +273,7 @@ def _lower_field_decl(ctx: TreeSitterEmitContext, node) -> None:
 def _lower_static_initializer(ctx: TreeSitterEmitContext, node) -> None:
     """Lower static { ... } — find the block child and lower it."""
     block_node = next(
-        (c for c in node.children if c.type == "block"),
+        (c for c in node.children if c.type == JavaNodeType.BLOCK),
         None,
     )
     if block_node:
@@ -319,7 +325,7 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
         )
         if body_node:
             for i, child in enumerate(
-                c for c in body_node.children if c.type == "enum_constant"
+                c for c in body_node.children if c.type == JavaNodeType.ENUM_CONSTANT
             ):
                 member_name_node = child.child_by_field_name("name")
                 member_name = (

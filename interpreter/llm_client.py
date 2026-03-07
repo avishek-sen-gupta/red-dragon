@@ -7,7 +7,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from interpreter.constants import LLMProvider
+
 logger = logging.getLogger(__name__)
+
+_ROLE_SYSTEM = "system"
+_ROLE_USER = "user"
 
 _LAZY_IMPORT = object()
 
@@ -31,14 +36,14 @@ class _ProviderDefaults:
     base_url: str = ""
 
 
-_PROVIDER_DEFAULTS: dict[str, _ProviderDefaults] = {
-    "claude": _ProviderDefaults(model="claude-sonnet-4-20250514"),
-    "openai": _ProviderDefaults(model="gpt-4o"),
-    "ollama": _ProviderDefaults(
+_PROVIDER_DEFAULTS: dict[LLMProvider, _ProviderDefaults] = {
+    LLMProvider.CLAUDE: _ProviderDefaults(model="claude-sonnet-4-20250514"),
+    LLMProvider.OPENAI: _ProviderDefaults(model="gpt-4o"),
+    LLMProvider.OLLAMA: _ProviderDefaults(
         model="qwen2.5-coder:7b-instruct",
         base_url="http://localhost:11434",
     ),
-    "huggingface": _ProviderDefaults(model=""),
+    LLMProvider.HUGGINGFACE: _ProviderDefaults(model=""),
 }
 
 _HF_ENDPOINT_REGISTRY: dict[str, str] = {
@@ -46,7 +51,7 @@ _HF_ENDPOINT_REGISTRY: dict[str, str] = {
 }
 
 
-def _resolve_model(provider: str, model: str, base_url: str) -> tuple[str, str]:
+def _resolve_model(provider: LLMProvider, model: str, base_url: str) -> tuple[str, str]:
     """Resolve provider + model into a LiteLLM model string and api_base.
 
     Returns:
@@ -62,16 +67,16 @@ def _resolve_model(provider: str, model: str, base_url: str) -> tuple[str, str]:
     resolved_model = model or defaults.model
     resolved_base = base_url or defaults.base_url
 
-    if provider == "claude":
+    if provider == LLMProvider.CLAUDE:
         return (resolved_model, "")
 
-    if provider == "openai":
+    if provider == LLMProvider.OPENAI:
         return (resolved_model, "")
 
-    if provider == "ollama":
+    if provider == LLMProvider.OLLAMA:
         return (f"ollama/{resolved_model}", resolved_base)
 
-    if provider == "huggingface":
+    if provider == LLMProvider.HUGGINGFACE:
         default_key = model or next(iter(_HF_ENDPOINT_REGISTRY), "")
         resolved_base = base_url or _HF_ENDPOINT_REGISTRY.get(default_key, "")
         if not resolved_base:
@@ -114,8 +119,8 @@ class LiteLLMClient(LLMClient):
         kwargs: dict[str, Any] = {
             "model": self._model,
             "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message},
+                {"role": _ROLE_SYSTEM, "content": system_prompt},
+                {"role": _ROLE_USER, "content": user_message},
             ],
             "max_tokens": max_tokens,
         }
@@ -127,7 +132,7 @@ class LiteLLMClient(LLMClient):
 
 
 def get_llm_client(
-    provider: str = "claude",
+    provider: str = LLMProvider.CLAUDE,
     model: str = "",
     completion_fn: Callable[..., Any] = _LAZY_IMPORT,
     base_url: str = "",

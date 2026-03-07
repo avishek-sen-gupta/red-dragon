@@ -12,6 +12,7 @@ from interpreter.frontends.pascal.pascal_constants import (
     K_UNARY_MAP,
     KEYWORD_NOISE,
 )
+from interpreter.frontends.pascal.node_types import PascalNodeType
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +52,12 @@ def lower_pascal_binop(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_pascal_call(ctx: TreeSitterEmitContext, node) -> str:
     """Lower exprCall -- children: identifier, (, exprArgs, )."""
-    id_node = next((c for c in node.children if c.type == "identifier"), None)
-    args_node = next((c for c in node.children if c.type == "exprArgs"), None)
+    id_node = next(
+        (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
+    )
+    args_node = next(
+        (c for c in node.children if c.type == PascalNodeType.EXPR_ARGS), None
+    )
     arg_regs = _extract_pascal_args(ctx, args_node)
 
     if id_node:
@@ -133,7 +138,9 @@ def lower_pascal_subscript(ctx: TreeSitterEmitContext, node) -> str:
     if not named_children:
         return lower_const_literal(ctx, node)
     obj_node = named_children[0]
-    args_node = next((c for c in node.children if c.type == "exprArgs"), None)
+    args_node = next(
+        (c for c in node.children if c.type == PascalNodeType.EXPR_ARGS), None
+    )
     obj_reg = ctx.lower_expr(obj_node)
     if args_node:
         idx_children = [

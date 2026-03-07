@@ -18,6 +18,7 @@ from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
 from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.typescript_node_types import TypeScriptNodeType
 
 
 class TypeScriptFrontend(JavaScriptFrontend):
@@ -31,8 +32,8 @@ class TypeScriptFrontend(JavaScriptFrontend):
             attribute_node_type=js_constants.attribute_node_type,
             subscript_value_field=js_constants.subscript_value_field,
             subscript_index_field=js_constants.subscript_index_field,
-            comment_types=frozenset({"comment"}),
-            noise_types=frozenset({"\n"}),
+            comment_types=frozenset({TypeScriptNodeType.COMMENT}),
+            noise_types=frozenset({TypeScriptNodeType.NEWLINE_CHAR}),
             block_node_types=js_constants.block_node_types,
         )
 
@@ -53,35 +54,35 @@ class TypeScriptFrontend(JavaScriptFrontend):
         dispatch = super()._build_expr_dispatch()
         dispatch.update(
             {
-                "type_identifier": common_expr.lower_identifier,
-                "predefined_type": common_expr.lower_const_literal,
-                "as_expression": lower_as_expression,
-                "non_null_expression": lower_non_null_expr,
-                "satisfies_expression": lower_satisfies_expr,
-                "arrow_function": lower_ts_arrow_function,
-                "function": lower_ts_function_expression,
-                "function_expression": lower_ts_function_expression,
-                "generator_function": lower_ts_function_expression,
-                "generator_function_declaration": lower_ts_function_def,
+                TypeScriptNodeType.TYPE_IDENTIFIER: common_expr.lower_identifier,
+                TypeScriptNodeType.PREDEFINED_TYPE: common_expr.lower_const_literal,
+                TypeScriptNodeType.AS_EXPRESSION: lower_as_expression,
+                TypeScriptNodeType.NON_NULL_EXPRESSION: lower_non_null_expr,
+                TypeScriptNodeType.SATISFIES_EXPRESSION: lower_satisfies_expr,
+                TypeScriptNodeType.ARROW_FUNCTION: lower_ts_arrow_function,
+                TypeScriptNodeType.FUNCTION: lower_ts_function_expression,
+                TypeScriptNodeType.FUNCTION_EXPRESSION: lower_ts_function_expression,
+                TypeScriptNodeType.GENERATOR_FUNCTION: lower_ts_function_expression,
+                TypeScriptNodeType.GENERATOR_FUNCTION_DECLARATION: lower_ts_function_def,
             }
         )
         return dispatch
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:
         dispatch = super()._build_stmt_dispatch()
-        dispatch["function_declaration"] = lower_ts_function_def
-        dispatch["class_declaration"] = lower_ts_class_def
+        dispatch[TypeScriptNodeType.FUNCTION_DECLARATION] = lower_ts_function_def
+        dispatch[TypeScriptNodeType.CLASS_DECLARATION] = lower_ts_class_def
         dispatch.update(
             {
-                "interface_declaration": lower_interface_decl,
-                "enum_declaration": lower_enum_decl,
-                "type_alias_declaration": lambda ctx, node: None,
-                "export_statement": lower_ts_export_statement,
-                "import_statement": lambda ctx, node: None,
-                "abstract_class_declaration": lower_ts_class_def,
-                "public_field_definition": lower_ts_field_definition,
-                "abstract_method_signature": lower_ts_abstract_method,
-                "internal_module": lower_ts_internal_module,
+                TypeScriptNodeType.INTERFACE_DECLARATION: lower_interface_decl,
+                TypeScriptNodeType.ENUM_DECLARATION: lower_enum_decl,
+                TypeScriptNodeType.TYPE_ALIAS_DECLARATION: lambda ctx, node: None,
+                TypeScriptNodeType.EXPORT_STATEMENT: lower_ts_export_statement,
+                TypeScriptNodeType.IMPORT_STATEMENT: lambda ctx, node: None,
+                TypeScriptNodeType.ABSTRACT_CLASS_DECLARATION: lower_ts_class_def,
+                TypeScriptNodeType.PUBLIC_FIELD_DEFINITION: lower_ts_field_definition,
+                TypeScriptNodeType.ABSTRACT_METHOD_SIGNATURE: lower_ts_abstract_method,
+                TypeScriptNodeType.INTERNAL_MODULE: lower_ts_internal_module,
             }
         )
         return dispatch
@@ -177,7 +178,11 @@ def lower_ts_field_definition(ctx: TreeSitterEmitContext, node) -> None:
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     if name_node is None:
         name_node = next(
-            (c for c in node.children if c.type == "property_identifier"),
+            (
+                c
+                for c in node.children
+                if c.type == TypeScriptNodeType.PROPERTY_IDENTIFIER
+            ),
             None,
         )
     if name_node is None:
@@ -202,7 +207,7 @@ def lower_ts_field_definition(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_ts_export_statement(ctx: TreeSitterEmitContext, node) -> None:
     for child in node.children:
-        if child.is_named and child.type != "export":
+        if child.is_named and child.type != TypeScriptNodeType.EXPORT:
             ctx.lower_stmt(child)
 
 
@@ -220,15 +225,15 @@ def lower_ts_class_def(ctx: TreeSitterEmitContext, node) -> None:
 
     if body_node:
         for child in body_node.children:
-            if child.type == "method_definition":
+            if child.type == TypeScriptNodeType.METHOD_DEFINITION:
                 _lower_ts_method_def(ctx, child)
-            elif child.type == "class_static_block":
+            elif child.type == TypeScriptNodeType.CLASS_STATIC_BLOCK:
                 from interpreter.frontends.javascript.declarations import (
                     lower_class_static_block,
                 )
 
                 lower_class_static_block(ctx, child)
-            elif child.type == "field_definition":
+            elif child.type == TypeScriptNodeType.FIELD_DEFINITION:
                 from interpreter.frontends.javascript.expressions import (
                     lower_js_field_definition,
                 )
@@ -353,13 +358,20 @@ def _extract_ts_type_hint(ctx: TreeSitterEmitContext, param_node) -> str:
 
 def lower_ts_param(ctx: TreeSitterEmitContext, child) -> None:
     """Lower a single TS parameter, extracting type annotations."""
-    if child.type in ("(", ")", ",", ":", "type_annotation"):
+    if child.type in (
+        TypeScriptNodeType.OPEN_PAREN,
+        TypeScriptNodeType.CLOSE_PAREN,
+        TypeScriptNodeType.COMMA,
+        TypeScriptNodeType.COLON,
+        TypeScriptNodeType.TYPE_ANNOTATION,
+    ):
         return
-    if child.type == "required_parameter":
+    if child.type == TypeScriptNodeType.REQUIRED_PARAMETER:
         pname_node = child.child_by_field_name("pattern")
         if pname_node is None:
             pname_node = next(
-                (c for c in child.children if c.type == "identifier"), None
+                (c for c in child.children if c.type == TypeScriptNodeType.IDENTIFIER),
+                None,
             )
         if pname_node:
             pname = ctx.node_text(pname_node)
@@ -379,11 +391,12 @@ def lower_ts_param(ctx: TreeSitterEmitContext, child) -> None:
             )
             ctx.seed_var_type(pname, type_hint)
         return
-    if child.type == "optional_parameter":
+    if child.type == TypeScriptNodeType.OPTIONAL_PARAMETER:
         pname_node = child.child_by_field_name("pattern")
         if pname_node is None:
             pname_node = next(
-                (c for c in child.children if c.type == "identifier"), None
+                (c for c in child.children if c.type == TypeScriptNodeType.IDENTIFIER),
+                None,
             )
         if pname_node:
             pname = ctx.node_text(pname_node)
@@ -427,13 +440,13 @@ def lower_ts_arrow_function(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.LABEL, label=func_label)
 
     if params_node:
-        if params_node.type == "identifier":
+        if params_node.type == TypeScriptNodeType.IDENTIFIER:
             lower_ts_param(ctx, params_node)
         else:
             lower_ts_params(ctx, params_node)
 
     if body_node:
-        if body_node.type == "statement_block":
+        if body_node.type == TypeScriptNodeType.STATEMENT_BLOCK:
             ctx.lower_block(body_node)
         else:
             val_reg = ctx.lower_expr(body_node)

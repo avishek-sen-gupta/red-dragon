@@ -11,6 +11,7 @@ from interpreter.frontends.go.expressions import (
     lower_expression_list,
     lower_go_store_target,
 )
+from interpreter.frontends.go.node_types import GoNodeType
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ def lower_go_if(ctx: TreeSitterEmitContext, node) -> None:
     if alt_node:
         ctx.emit(Opcode.LABEL, label=false_label)
         # alt_node may be a block (else) or an if_statement (else if)
-        if alt_node.type == "if_statement":
+        if alt_node.type == GoNodeType.IF_STATEMENT:
             lower_go_if(ctx, alt_node)
         else:
             ctx.lower_block(alt_node)
@@ -67,8 +68,12 @@ def lower_go_for(ctx: TreeSitterEmitContext, node) -> None:
     body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
     # Look for for_clause (C-style) or range_clause
-    for_clause = next((c for c in node.children if c.type == "for_clause"), None)
-    range_clause = next((c for c in node.children if c.type == "range_clause"), None)
+    for_clause = next(
+        (c for c in node.children if c.type == GoNodeType.FOR_CLAUSE), None
+    )
+    range_clause = next(
+        (c for c in node.children if c.type == GoNodeType.RANGE_CLAUSE), None
+    )
 
     if for_clause:
         _lower_go_for_clause(ctx, for_clause, body_node, node)
@@ -181,7 +186,13 @@ def _lower_go_bare_for(ctx: TreeSitterEmitContext, node, body_node) -> None:
             c
             for c in node.children
             if c.is_named
-            and c.type not in ("for_clause", "range_clause", "block", "for")
+            and c.type
+            not in (
+                GoNodeType.FOR_CLAUSE,
+                GoNodeType.RANGE_CLAUSE,
+                GoNodeType.BLOCK,
+                GoNodeType.FOR,
+            )
         ),
         None,
     )
@@ -254,7 +265,7 @@ def lower_go_dec(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_go_return(ctx: TreeSitterEmitContext, node) -> None:
-    children = [c for c in node.children if c.type != "return" and c.is_named]
+    children = [c for c in node.children if c.type != GoNodeType.RETURN and c.is_named]
     if not children:
         val_reg = ctx.fresh_reg()
         ctx.emit(
@@ -269,7 +280,7 @@ def lower_go_return(ctx: TreeSitterEmitContext, node) -> None:
         )
         return
     # If expression_list, lower each value
-    if len(children) == 1 and children[0].type == "expression_list":
+    if len(children) == 1 and children[0].type == GoNodeType.EXPRESSION_LIST:
         regs = lower_expression_list(ctx, children[0])
     else:
         regs = [ctx.lower_expr(c) for c in children]
@@ -287,7 +298,7 @@ def lower_go_return(ctx: TreeSitterEmitContext, node) -> None:
 def lower_defer_stmt(ctx: TreeSitterEmitContext, node) -> None:
     """Lower defer statement: lower call child, then CALL_FUNCTION('defer', call_reg)."""
     call_node = next(
-        (c for c in node.children if c.is_named and c.type != "defer"),
+        (c for c in node.children if c.is_named and c.type != GoNodeType.DEFER),
         None,
     )
     if not call_node:
@@ -307,7 +318,7 @@ def lower_defer_stmt(ctx: TreeSitterEmitContext, node) -> None:
 def lower_go_stmt(ctx: TreeSitterEmitContext, node) -> None:
     """Lower go statement: lower call child, then CALL_FUNCTION('go', call_reg)."""
     call_node = next(
-        (c for c in node.children if c.is_named and c.type != "go"),
+        (c for c in node.children if c.is_named and c.type != GoNodeType.GO),
         None,
     )
     if not call_node:
@@ -334,17 +345,23 @@ def lower_expression_switch(ctx: TreeSitterEmitContext, node) -> None:
     )
 
     end_label = ctx.fresh_label("switch_end")
-    cases = [c for c in node.children if c.type in ("expression_case", "default_case")]
+    cases = [
+        c
+        for c in node.children
+        if c.type in (GoNodeType.EXPRESSION_CASE, GoNodeType.DEFAULT_CASE)
+    ]
 
     ctx.push_loop(end_label, end_label)
     for case in cases:
-        if case.type == "default_case":
+        if case.type == GoNodeType.DEFAULT_CASE:
             body_children = [c for c in case.children if c.is_named]
             for child in body_children:
                 ctx.lower_stmt(child)
             ctx.emit(Opcode.BRANCH, label=end_label)
         else:
-            value_nodes = [c for c in case.children if c.type == "expression_list"]
+            value_nodes = [
+                c for c in case.children if c.type == GoNodeType.EXPRESSION_LIST
+            ]
             body_label = ctx.fresh_label("case_body")
             next_label = ctx.fresh_label("case_next")
 
@@ -370,7 +387,9 @@ def lower_expression_switch(ctx: TreeSitterEmitContext, node) -> None:
 
             ctx.emit(Opcode.LABEL, label=body_label)
             body_children = [
-                c for c in case.children if c.is_named and c.type != "expression_list"
+                c
+                for c in case.children
+                if c.is_named and c.type != GoNodeType.EXPRESSION_LIST
             ]
             for child in body_children:
                 ctx.lower_stmt(child)
@@ -393,7 +412,9 @@ def _make_const_val(ctx: TreeSitterEmitContext, value: str) -> str:
 
 def lower_type_switch(ctx: TreeSitterEmitContext, node) -> None:
     """Lower type_switch_statement with CALL_FUNCTION('type_check') per case."""
-    header = next((c for c in node.children if c.type == "type_switch_header"), None)
+    header = next(
+        (c for c in node.children if c.type == GoNodeType.TYPE_SWITCH_HEADER), None
+    )
     expr_reg = ctx.fresh_reg()
     if header:
         named = [c for c in header.children if c.is_named]
@@ -401,18 +422,24 @@ def lower_type_switch(ctx: TreeSitterEmitContext, node) -> None:
             expr_reg = ctx.lower_expr(named[-1])
 
     end_label = ctx.fresh_label("type_switch_end")
-    cases = [c for c in node.children if c.type in ("type_case", "default_case")]
+    cases = [
+        c
+        for c in node.children
+        if c.type in (GoNodeType.TYPE_CASE, GoNodeType.DEFAULT_CASE)
+    ]
 
     ctx.push_loop(end_label, end_label)
     for case in cases:
-        if case.type == "default_case":
+        if case.type == GoNodeType.DEFAULT_CASE:
             body_children = [c for c in case.children if c.is_named]
             for child in body_children:
                 ctx.lower_stmt(child)
             ctx.emit(Opcode.BRANCH, label=end_label)
         else:
             type_nodes = [
-                c for c in case.children if c.type not in ("case", ":") and c.is_named
+                c
+                for c in case.children
+                if c.type not in (GoNodeType.CASE, GoNodeType.COLON) and c.is_named
             ]
             body_label = ctx.fresh_label("type_case_body")
             next_label = ctx.fresh_label("type_case_next")
@@ -452,7 +479,9 @@ def lower_select_stmt(ctx: TreeSitterEmitContext, node) -> None:
     """Lower select_statement: lower each communication_case."""
     end_label = ctx.fresh_label("select_end")
     cases = [
-        c for c in node.children if c.type in ("communication_case", "default_case")
+        c
+        for c in node.children
+        if c.type in (GoNodeType.COMMUNICATION_CASE, GoNodeType.DEFAULT_CASE)
     ]
 
     for case in cases:
@@ -494,12 +523,14 @@ def lower_send_stmt(ctx: TreeSitterEmitContext, node) -> None:
 def lower_labeled_stmt(ctx: TreeSitterEmitContext, node) -> None:
     """Lower labeled_statement: LABEL(name) + lower body."""
     label_node = next(
-        (c for c in node.children if c.type == "label_name"),
+        (c for c in node.children if c.type == GoNodeType.LABEL_NAME),
         None,
     )
     label_name = ctx.node_text(label_node) if label_node else "__label"
     ctx.emit(Opcode.LABEL, label=label_name)
-    body_children = [c for c in node.children if c.is_named and c.type != "label_name"]
+    body_children = [
+        c for c in node.children if c.is_named and c.type != GoNodeType.LABEL_NAME
+    ]
     for child in body_children:
         ctx.lower_stmt(child)
 
@@ -510,7 +541,7 @@ def lower_labeled_stmt(ctx: TreeSitterEmitContext, node) -> None:
 def lower_goto_stmt(ctx: TreeSitterEmitContext, node) -> None:
     """Lower goto_statement as BRANCH(label_name)."""
     label_node = next(
-        (c for c in node.children if c.type == "label_name"),
+        (c for c in node.children if c.type == GoNodeType.LABEL_NAME),
         None,
     )
     label_name = ctx.node_text(label_node) if label_node else "__unknown_label"
@@ -534,7 +565,7 @@ def lower_receive_stmt(ctx: TreeSitterEmitContext, node) -> None:
     else:
         # Bare receive -- find the unary_expression child (<-ch)
         unary = next(
-            (c for c in node.children if c.type == "unary_expression"),
+            (c for c in node.children if c.type == GoNodeType.UNARY_EXPRESSION),
             None,
         )
         chan_reg = ctx.lower_expr(unary) if unary else ctx.fresh_reg()

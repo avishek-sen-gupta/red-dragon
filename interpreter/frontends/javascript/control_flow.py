@@ -9,15 +9,16 @@ from interpreter.frontends.common.exceptions import (
     lower_raise_or_throw,
     lower_try_catch,
 )
+from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
 
 
 def lower_js_alternative(ctx: TreeSitterEmitContext, alt_node, end_label: str) -> None:
     alt_type = alt_node.type
-    if alt_type == "else_clause":
+    if alt_type == JSN.ELSE_CLAUSE:
         for child in alt_node.children:
-            if child.type not in ("else",):
+            if child.type not in (JSN.ELSE,):
                 ctx.lower_stmt(child)
-    elif alt_type == "if_statement":
+    elif alt_type == JSN.IF_STATEMENT:
         lower_js_if(ctx, alt_node)
     else:
         ctx.lower_block(alt_node)
@@ -194,11 +195,11 @@ def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
 
 def _extract_var_name(ctx: TreeSitterEmitContext, node) -> str | None:
     """Extract variable name from a declaration or identifier."""
-    if node.type == "identifier":
+    if node.type == JSN.IDENTIFIER:
         return ctx.node_text(node)
-    if node.type in ("lexical_declaration", "variable_declaration"):
+    if node.type in (JSN.LEXICAL_DECLARATION, JSN.VARIABLE_DECLARATION):
         for child in node.children:
-            if child.type == "variable_declarator":
+            if child.type == JSN.VARIABLE_DECLARATOR:
                 name_node = child.child_by_field_name(ctx.constants.func_name_field)
                 if name_node:
                     return ctx.node_text(name_node)
@@ -235,10 +236,12 @@ def lower_switch_statement(ctx: TreeSitterEmitContext, node) -> None:
 
     if body_node:
         cases = [
-            c for c in body_node.children if c.type in ("switch_case", "switch_default")
+            c
+            for c in body_node.children
+            if c.type in (JSN.SWITCH_CASE, JSN.SWITCH_DEFAULT)
         ]
         for case_node in cases:
-            if case_node.type == "switch_case":
+            if case_node.type == JSN.SWITCH_CASE:
                 value_child = case_node.child_by_field_name("value")
                 if value_child:
                     case_reg = ctx.lower_expr(value_child)
@@ -260,7 +263,7 @@ def lower_switch_statement(ctx: TreeSitterEmitContext, node) -> None:
                     _lower_switch_case_body(ctx, case_node)
                     ctx.emit(Opcode.BRANCH, label=end_label)
                     ctx.emit(Opcode.LABEL, label=next_label)
-            elif case_node.type == "switch_default":
+            elif case_node.type == JSN.SWITCH_DEFAULT:
                 _lower_switch_case_body(ctx, case_node)
 
     ctx.break_target_stack.pop()
@@ -270,7 +273,7 @@ def lower_switch_statement(ctx: TreeSitterEmitContext, node) -> None:
 def _lower_switch_case_body(ctx: TreeSitterEmitContext, case_node) -> None:
     """Lower the body statements of a switch case/default clause."""
     for child in case_node.children:
-        if child.is_named and child.type not in ("switch_case", "switch_default"):
+        if child.is_named and child.type not in (JSN.SWITCH_CASE, JSN.SWITCH_DEFAULT):
             ctx.lower_stmt(child)
 
 

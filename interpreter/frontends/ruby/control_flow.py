@@ -7,6 +7,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.frontends.ruby.node_types import RubyNodeType
 
 logger = logging.getLogger(__name__)
 
@@ -157,9 +158,9 @@ def lower_case(ctx: TreeSitterEmitContext, node) -> None:
     value_node = node.child_by_field_name("value")
     val_reg = ctx.lower_expr(value_node) if value_node else ""
 
-    when_clauses = [c for c in node.children if c.type == "when"]
+    when_clauses = [c for c in node.children if c.type == RubyNodeType.WHEN]
     else_clause = next(
-        (c for c in node.children if c.type == "else"),
+        (c for c in node.children if c.type == RubyNodeType.ELSE),
         None,
     )
     end_label = ctx.fresh_label("case_end")
@@ -170,14 +171,20 @@ def lower_case(ctx: TreeSitterEmitContext, node) -> None:
 
         # Extract pattern(s) and body from when clause
         pattern_node = next(
-            (c for c in when_node.children if c.type == "pattern"),
+            (c for c in when_node.children if c.type == RubyNodeType.PATTERN),
             None,
         )
         when_patterns = [
             c
             for c in when_node.children
             if c.is_named
-            and c.type not in ("when", "then", "pattern", "body_statement")
+            and c.type
+            not in (
+                RubyNodeType.WHEN,
+                RubyNodeType.THEN,
+                RubyNodeType.PATTERN,
+                RubyNodeType.BODY_STATEMENT,
+            )
         ]
         body_node = when_node.child_by_field_name("body")
 
@@ -274,11 +281,14 @@ def _lower_ruby_alternative(
 ) -> None:
     """Lower an else/elsif alternative block."""
     alt_type = alt_node.type
-    if alt_type == "elsif":
+    if alt_type == RubyNodeType.ELSIF:
         _lower_ruby_elsif(ctx, alt_node, end_label)
-    elif alt_type in ("else", "else_clause"):
+    elif alt_type in (RubyNodeType.ELSE, RubyNodeType.ELSE_CLAUSE):
         for child in alt_node.children:
-            if child.type not in ("else", ":") and child.is_named:
+            if (
+                child.type not in (RubyNodeType.ELSE, RubyNodeType.COLON)
+                and child.is_named
+            ):
                 ctx.lower_stmt(child)
     else:
         ctx.lower_block(alt_node)
@@ -474,7 +484,7 @@ def lower_begin(ctx: TreeSitterEmitContext, node) -> None:
     """Lower begin...rescue...else...ensure...end."""
     container = node
     body_stmt = next(
-        (c for c in node.children if c.type == "body_statement"),
+        (c for c in node.children if c.type == RubyNodeType.BODY_STATEMENT),
         None,
     )
     if body_stmt is not None:
@@ -486,37 +496,41 @@ def lower_begin(ctx: TreeSitterEmitContext, node) -> None:
     else_node = None
 
     for child in container.children:
-        if child.type == "rescue":
+        if child.type == RubyNodeType.RESCUE:
             exc_var = None
             exc_type = None
             exceptions_node = next(
-                (c for c in child.children if c.type == "exceptions"),
+                (c for c in child.children if c.type == RubyNodeType.EXCEPTIONS),
                 None,
             )
             if exceptions_node:
                 exc_type = ctx.node_text(exceptions_node)
             var_node = next(
-                (c for c in child.children if c.type == "exception_variable"),
+                (
+                    c
+                    for c in child.children
+                    if c.type == RubyNodeType.EXCEPTION_VARIABLE
+                ),
                 None,
             )
             if var_node:
                 # exception_variable contains => and identifier
                 id_node = next(
-                    (c for c in var_node.children if c.type == "identifier"),
+                    (c for c in var_node.children if c.type == RubyNodeType.IDENTIFIER),
                     None,
                 )
                 exc_var = ctx.node_text(id_node) if id_node else None
             rescue_body = child.child_by_field_name("body") or next(
-                (c for c in child.children if c.type == "then"),
+                (c for c in child.children if c.type == RubyNodeType.THEN),
                 None,
             )
             catch_clauses.append(
                 {"body": rescue_body, "variable": exc_var, "type": exc_type}
             )
-        elif child.type == "ensure":
+        elif child.type == RubyNodeType.ENSURE:
             # ensure children: "ensure" keyword + body statements
             finally_node = child
-        elif child.type == "else":
+        elif child.type == RubyNodeType.ELSE:
             else_node = child
         else:
             body_children.append(child)
@@ -612,10 +626,12 @@ def _lower_try_catch_ruby(
 def lower_ruby_in_clause(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `in pattern then body` clause — treated as a when-like arm."""
     named_children = [
-        c for c in node.children if c.is_named and c.type not in ("then", "in")
+        c
+        for c in node.children
+        if c.is_named and c.type not in (RubyNodeType.THEN, RubyNodeType.IN)
     ]
     for child in named_children:
-        if child.type == "body_statement":
+        if child.type == RubyNodeType.BODY_STATEMENT:
             ctx.lower_block(child)
         else:
             ctx.lower_expr(child)

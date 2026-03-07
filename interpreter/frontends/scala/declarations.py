@@ -10,17 +10,18 @@ from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
 )
+from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 
 
 def _extract_pattern_name(ctx: TreeSitterEmitContext, pattern_node) -> str:
     """Extract name from a pattern node (identifier, typed_pattern, etc.)."""
     if pattern_node is None:
         return "__unknown"
-    if pattern_node.type == "identifier":
+    if pattern_node.type == NT.IDENTIFIER:
         return ctx.node_text(pattern_node)
     # typed_pattern or other wrapper: find the identifier inside
     id_child = next(
-        (c for c in pattern_node.children if c.type == "identifier"),
+        (c for c in pattern_node.children if c.type == NT.IDENTIFIER),
         None,
     )
     if id_child:
@@ -33,7 +34,9 @@ def _lower_scala_tuple_destructure(
 ) -> None:
     """Lower `val (a, b) = expr` — emit LOAD_INDEX + STORE_VAR per element."""
     named_children = [
-        c for c in pattern_node.children if c.type not in ("(", ")", ",") and c.is_named
+        c
+        for c in pattern_node.children
+        if c.type not in (NT.LPAREN, NT.RPAREN, NT.COMMA) and c.is_named
     ]
     for i, child in enumerate(named_children):
         var_name = _extract_pattern_name(ctx, child)
@@ -69,7 +72,7 @@ def _lower_val_or_var_def(ctx: TreeSitterEmitContext, node) -> None:
             operands=[ctx.constants.none_literal],
         )
 
-    if pattern_node is not None and pattern_node.type == "tuple_pattern":
+    if pattern_node is not None and pattern_node.type == NT.TUPLE_PATTERN:
         _lower_scala_tuple_destructure(ctx, pattern_node, val_reg, node)
     else:
         var_name = _extract_pattern_name(ctx, pattern_node)
@@ -109,7 +112,7 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
 
 def lower_scala_params(ctx: TreeSitterEmitContext, params_node) -> None:
     for child in params_node.children:
-        if child.type == "parameter":
+        if child.type == NT.PARAMETER:
             name_node = child.child_by_field_name("name")
             if name_node:
                 pname = ctx.node_text(name_node)
@@ -186,7 +189,7 @@ def lower_function_def(
     ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
 
 
-_CLASS_BODY_FUNC_TYPES = frozenset({"function_definition"})
+_CLASS_BODY_FUNC_TYPES = frozenset({NT.FUNCTION_DEFINITION})
 
 
 def _lower_class_body_hoisted(

@@ -10,6 +10,7 @@ from interpreter.frontends.common.exceptions import (
     lower_raise_or_throw,
     lower_try_catch,
 )
+from interpreter.frontends.php.node_types import PHPNodeType
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +18,16 @@ logger = logging.getLogger(__name__)
 def lower_php_compound(ctx: TreeSitterEmitContext, node) -> None:
     """Lower compound_statement (block with braces)."""
     for child in node.children:
-        if child.type not in ("{", "}") and child.is_named:
+        if (
+            child.type not in (PHPNodeType.OPEN_BRACE, PHPNodeType.CLOSE_BRACE)
+            and child.is_named
+        ):
             ctx.lower_stmt(child)
 
 
 def lower_php_return(ctx: TreeSitterEmitContext, node) -> None:
     """Lower return statement with PHP-specific filtering."""
-    children = [c for c in node.children if c.type != "return" and c.is_named]
+    children = [c for c in node.children if c.type != PHPNodeType.RETURN and c.is_named]
     if children:
         val_reg = ctx.lower_expr(children[0])
     else:
@@ -42,7 +46,7 @@ def lower_php_return(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_php_echo(ctx: TreeSitterEmitContext, node) -> None:
     """Lower echo statement as CALL_FUNCTION('echo', args)."""
-    children = [c for c in node.children if c.type != "echo" and c.is_named]
+    children = [c for c in node.children if c.type != PHPNodeType.ECHO and c.is_named]
     arg_regs = [ctx.lower_expr(c) for c in children]
     reg = ctx.fresh_reg()
     ctx.emit(
@@ -64,7 +68,9 @@ def lower_php_if(ctx: TreeSitterEmitContext, node) -> None:
 
     # Collect else_clause children
     else_clauses = [
-        c for c in node.children if c.type in ("else_clause", "else_if_clause")
+        c
+        for c in node.children
+        if c.type in (PHPNodeType.ELSE_CLAUSE, PHPNodeType.ELSE_IF_CLAUSE)
     ]
 
     if else_clauses:
@@ -99,7 +105,7 @@ def lower_php_if(ctx: TreeSitterEmitContext, node) -> None:
 
 def _lower_php_else_clause(ctx: TreeSitterEmitContext, node, end_label: str) -> None:
     """Lower else_if_clause or else_clause."""
-    if node.type == "else_if_clause":
+    if node.type == PHPNodeType.ELSE_IF_CLAUSE:
         cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
         body_node = node.child_by_field_name("body")
         cond_reg = ctx.lower_expr(cond_node)
@@ -119,10 +125,18 @@ def _lower_php_else_clause(ctx: TreeSitterEmitContext, node, end_label: str) -> 
         ctx.emit(Opcode.BRANCH, label=end_label)
 
         ctx.emit(Opcode.LABEL, label=false_label)
-    elif node.type == "else_clause":
+    elif node.type == PHPNodeType.ELSE_CLAUSE:
         for child in node.children:
-            if child.type not in ("else", "{", "}") and child.is_named:
-                if child.type == "compound_statement":
+            if (
+                child.type
+                not in (
+                    PHPNodeType.ELSE,
+                    PHPNodeType.OPEN_BRACE,
+                    PHPNodeType.CLOSE_BRACE,
+                )
+                and child.is_named
+            ):
+                if child.type == PHPNodeType.COMPOUND_STATEMENT:
                     lower_php_compound(ctx, child)
                 else:
                     ctx.lower_stmt(child)
@@ -141,7 +155,7 @@ def lower_php_foreach(ctx: TreeSitterEmitContext, node) -> None:
 
     key_var = None
     value_var = None
-    if binding_node and binding_node.type == "pair":
+    if binding_node and binding_node.type == PHPNodeType.PAIR:
         # $k => $v
         pair_named = [c for c in binding_node.children if c.is_named]
         key_var = ctx.node_text(pair_named[0]) if pair_named else None
@@ -209,32 +223,37 @@ def lower_php_try(ctx: TreeSitterEmitContext, node) -> None:
     catch_clauses: list[dict] = []
     finally_node = None
     for child in node.children:
-        if child.type == "catch_clause":
+        if child.type == PHPNodeType.CATCH_CLAUSE:
             # PHP catch_clause: type(s) and variable_name
             type_node = next(
                 (
                     c
                     for c in child.children
-                    if c.type in ("named_type", "name", "qualified_name")
+                    if c.type
+                    in (
+                        PHPNodeType.NAMED_TYPE,
+                        PHPNodeType.NAME,
+                        PHPNodeType.QUALIFIED_NAME,
+                    )
                 ),
                 None,
             )
             var_node = next(
-                (c for c in child.children if c.type == "variable_name"),
+                (c for c in child.children if c.type == PHPNodeType.VARIABLE_NAME),
                 None,
             )
             exc_type = ctx.node_text(type_node) if type_node else None
             exc_var = ctx.node_text(var_node) if var_node else None
             catch_body = child.child_by_field_name("body") or next(
-                (c for c in child.children if c.type == "compound_statement"),
+                (c for c in child.children if c.type == PHPNodeType.COMPOUND_STATEMENT),
                 None,
             )
             catch_clauses.append(
                 {"body": catch_body, "variable": exc_var, "type": exc_type}
             )
-        elif child.type == "finally_clause":
+        elif child.type == PHPNodeType.FINALLY_CLAUSE:
             finally_node = next(
-                (c for c in child.children if c.type == "compound_statement"),
+                (c for c in child.children if c.type == PHPNodeType.COMPOUND_STATEMENT),
                 None,
             )
     lower_try_catch(ctx, node, body_node, catch_clauses, finally_node)
@@ -254,14 +273,14 @@ def lower_php_switch(ctx: TreeSitterEmitContext, node) -> None:
         [
             c
             for c in body_node.children
-            if c.type in ("case_statement", "default_statement")
+            if c.type in (PHPNodeType.CASE_STATEMENT, PHPNodeType.DEFAULT_STATEMENT)
         ]
         if body_node
         else []
     )
 
     for case in cases:
-        is_default = case.type == "default_statement"
+        is_default = case.type == PHPNodeType.DEFAULT_STATEMENT
         value_node = case.child_by_field_name("value")
         body_stmts = [c for c in case.children if c.is_named and c != value_node]
 
@@ -327,7 +346,9 @@ def lower_php_do(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_php_namespace(ctx: TreeSitterEmitContext, node) -> None:
     """Lower namespace definition: just lower the body compound_statement."""
-    body_node = next((c for c in node.children if c.type == "compound_statement"), None)
+    body_node = next(
+        (c for c in node.children if c.type == PHPNodeType.COMPOUND_STATEMENT), None
+    )
     if body_node:
         lower_php_compound(ctx, body_node)
 
@@ -336,7 +357,7 @@ def lower_php_named_label(ctx: TreeSitterEmitContext, node) -> None:
     """Lower name: as LABEL user_{name}."""
     name_node = node.child_by_field_name("name")
     if not name_node:
-        name_node = next((c for c in node.children if c.type == "name"), None)
+        name_node = next((c for c in node.children if c.type == PHPNodeType.NAME), None)
     if name_node:
         label_name = f"user_{ctx.node_text(name_node)}"
         ctx.emit(
@@ -354,7 +375,7 @@ def lower_php_goto(ctx: TreeSitterEmitContext, node) -> None:
     """Lower goto name; as BRANCH user_{name}."""
     name_node = node.child_by_field_name("label")
     if not name_node:
-        name_node = next((c for c in node.children if c.type == "name"), None)
+        name_node = next((c for c in node.children if c.type == PHPNodeType.NAME), None)
     if name_node:
         target_label = f"user_{ctx.node_text(name_node)}"
         ctx.emit(

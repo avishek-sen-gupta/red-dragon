@@ -6,6 +6,7 @@ Extracted from BaseFrontend: function_def, params, class_def, var_declaration.
 from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.common.node_types import CommonNodeType
 
 from interpreter.ir import Opcode
 from interpreter import constants
@@ -65,7 +66,13 @@ def lower_params(ctx: TreeSitterEmitContext, params_node) -> None:
 
 def lower_param(ctx: TreeSitterEmitContext, child) -> None:
     """Lower a single function parameter to SYMBOLIC + STORE_VAR."""
-    if child.type in ("(", ")", ",", ":", "->"):
+    if child.type in (
+        CommonNodeType.OPEN_PAREN,
+        CommonNodeType.CLOSE_PAREN,
+        CommonNodeType.COMMA,
+        CommonNodeType.COLON,
+        CommonNodeType.ARROW,
+    ):
         return
     pname = extract_param_name(ctx, child)
     if pname is None:
@@ -90,7 +97,7 @@ def lower_param(ctx: TreeSitterEmitContext, child) -> None:
 
 def extract_param_name(ctx: TreeSitterEmitContext, child) -> str | None:
     """Extract parameter name from a parameter node."""
-    if child.type == "identifier":
+    if child.type == CommonNodeType.IDENTIFIER:
         return ctx.node_text(child)
     # Try common field names
     for field in ("name", "pattern"):
@@ -99,7 +106,7 @@ def extract_param_name(ctx: TreeSitterEmitContext, child) -> str | None:
             return ctx.node_text(name_node)
     # Try first identifier child
     id_node = next(
-        (sub for sub in child.children if sub.type == "identifier"),
+        (sub for sub in child.children if sub.type == CommonNodeType.IDENTIFIER),
         None,
     )
     if id_node:
@@ -135,7 +142,7 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
 def lower_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
     """Lower a variable declaration with name/value fields or declarators."""
     for child in node.children:
-        if child.type == "variable_declarator":
+        if child.type == CommonNodeType.VARIABLE_DECLARATOR:
             name_node = child.child_by_field_name("name")
             value_node = child.child_by_field_name("value")
             if name_node and value_node:

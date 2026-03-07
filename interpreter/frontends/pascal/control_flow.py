@@ -5,9 +5,11 @@ from __future__ import annotations
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
+from interpreter.constants import DEFAULT_EXCEPTION_TYPE
 from interpreter.ir import Opcode
 from interpreter.frontends.common.exceptions import lower_try_catch
 from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
+from interpreter.frontends.pascal.node_types import PascalNodeType
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +26,7 @@ def lower_pascal_program(ctx: TreeSitterEmitContext, node) -> None:
     for child in node.children:
         if child.type in KEYWORD_NOISE:
             continue
-        if child.type == "moduleName":
+        if child.type == PascalNodeType.MODULE_NAME:
             continue
         if child.is_named:
             ctx.lower_stmt(child)
@@ -148,7 +150,7 @@ def lower_pascal_for(ctx: TreeSitterEmitContext, node) -> None:
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
     ]
 
-    if len(named_children) >= 3 and named_children[0].type == "assignment":
+    if len(named_children) >= 3 and named_children[0].type == PascalNodeType.ASSIGNMENT:
         assignment_node = named_children[0]
         assign_children = [
             c
@@ -172,7 +174,7 @@ def lower_pascal_for(ctx: TreeSitterEmitContext, node) -> None:
         return
 
     # Determine direction: kTo or kDownto
-    is_downto = any(c.type == "kDownto" for c in node.children)
+    is_downto = any(c.type == PascalNodeType.K_DOWNTO for c in node.children)
 
     var_name = ctx.node_text(var_node)
     start_reg = ctx.lower_expr(start_node)
@@ -234,8 +236,10 @@ def lower_pascal_case(ctx: TreeSitterEmitContext, node) -> None:
     selector_node = named_children[0]
     selector_reg = ctx.lower_expr(selector_node)
 
-    case_cases = [c for c in node.children if c.type == "caseCase"]
-    else_case = next((c for c in node.children if c.type == "kElse"), None)
+    case_cases = [c for c in node.children if c.type == PascalNodeType.CASE_CASE]
+    else_case = next(
+        (c for c in node.children if c.type == PascalNodeType.K_ELSE), None
+    )
 
     end_label = ctx.fresh_label("case_end")
 
@@ -248,7 +252,7 @@ def lower_pascal_case(ctx: TreeSitterEmitContext, node) -> None:
         # Children after kElse are the else-body statements
         found_else = False
         for child in node.children:
-            if child.type == "kElse":
+            if child.type == PascalNodeType.K_ELSE:
                 found_else = True
                 continue
             if found_else and child.is_named and child.type not in KEYWORD_NOISE:
@@ -261,11 +265,13 @@ def _lower_pascal_case_branch(
     ctx: TreeSitterEmitContext, case_node, selector_reg: str, end_label: str
 ) -> None:
     """Lower a single caseCase -- extract caseLabel values, BINOP == + BRANCH_IF."""
-    labels = [c for c in case_node.children if c.type == "caseLabel"]
+    labels = [c for c in case_node.children if c.type == PascalNodeType.CASE_LABEL]
     body_children = [
         c
         for c in case_node.children
-        if c.is_named and c.type not in KEYWORD_NOISE and c.type != "caseLabel"
+        if c.is_named
+        and c.type not in KEYWORD_NOISE
+        and c.type != PascalNodeType.CASE_LABEL
     ]
 
     true_label = ctx.fresh_label("case_match")
@@ -372,28 +378,36 @@ def _extract_pascal_try_parts(ctx: TreeSitterEmitContext, node):
     in_finally = False
 
     for child in node.children:
-        if child.type == "kExcept":
+        if child.type == PascalNodeType.K_EXCEPT:
             in_except = True
             in_finally = False
             continue
-        if child.type == "kFinally":
+        if child.type == PascalNodeType.K_FINALLY:
             in_finally = True
             in_except = False
             continue
-        if child.type in ("kTry", "kEnd", ";"):
+        if child.type in (
+            PascalNodeType.K_TRY,
+            PascalNodeType.K_END,
+            PascalNodeType.SEMICOLON,
+        ):
             continue
 
-        if not in_except and not in_finally and child.type == "statements":
+        if not in_except and not in_finally and child.type == PascalNodeType.STATEMENTS:
             body_node = child
-        elif in_except and child.type == "exceptionHandler":
-            id_node = next((c for c in child.children if c.type == "identifier"), None)
-            type_node = next((c for c in child.children if c.type == "typeref"), None)
+        elif in_except and child.type == PascalNodeType.EXCEPTION_HANDLER:
+            id_node = next(
+                (c for c in child.children if c.type == PascalNodeType.IDENTIFIER), None
+            )
+            type_node = next(
+                (c for c in child.children if c.type == PascalNodeType.TYPEREF), None
+            )
             # The handler body is everything after kDo
             body_children = [
                 c
                 for c in child.children
                 if c.is_named
-                and c.type not in ("identifier", "typeref")
+                and c.type not in (PascalNodeType.IDENTIFIER, PascalNodeType.TYPEREF)
                 and c.type not in KEYWORD_NOISE
             ]
             # Use the first non-identifier/non-typeref named child as body
@@ -402,19 +416,23 @@ def _extract_pascal_try_parts(ctx: TreeSitterEmitContext, node):
                 {
                     "body": handler_body,
                     "variable": ctx.node_text(id_node) if id_node else None,
-                    "type": (ctx.node_text(type_node) if type_node else "Exception"),
+                    "type": (
+                        ctx.node_text(type_node)
+                        if type_node
+                        else DEFAULT_EXCEPTION_TYPE
+                    ),
                 }
             )
-        elif in_except and child.type == "statements":
+        elif in_except and child.type == PascalNodeType.STATEMENTS:
             # Bare except block without "on E: Exception do" wrapper
             catch_clauses.append(
                 {
                     "body": child,
                     "variable": None,
-                    "type": "Exception",
+                    "type": DEFAULT_EXCEPTION_TYPE,
                 }
             )
-        elif in_finally and child.type == "statements":
+        elif in_finally and child.type == PascalNodeType.STATEMENTS:
             finally_node = child
 
     return body_node, catch_clauses, finally_node
@@ -424,7 +442,9 @@ def lower_pascal_exception_handler(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `on E: Exception do statement` -- extract variable, lower body."""
     from interpreter import constants
 
-    id_node = next((c for c in node.children if c.type == "identifier"), None)
+    id_node = next(
+        (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
+    )
     if id_node:
         var_name = ctx.node_text(id_node)
         reg = ctx.fresh_reg()
@@ -440,7 +460,7 @@ def lower_pascal_exception_handler(ctx: TreeSitterEmitContext, node) -> None:
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
     ]
     for child in named_children:
-        if child.type != "identifier":
+        if child.type != PascalNodeType.IDENTIFIER:
             ctx.lower_stmt(child)
 
 

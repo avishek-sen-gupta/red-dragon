@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import logging
 
+from interpreter.cobol.cobol_constants import ByteConstants
 from interpreter.cobol.ebcdic_table import EbcdicTable
 
 logger = logging.getLogger(__name__)
 
-EBCDIC_SPACE = 0x40
+EBCDIC_SPACE = ByteConstants.EBCDIC_SPACE
 
 
 def encode_alphanumeric(value: str, length: int) -> bytes:

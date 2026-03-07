@@ -14,6 +14,7 @@ from interpreter.frontends.java.expressions import (
     extract_call_args_unwrap,
     lower_java_store_target,
 )
+from interpreter.frontends.java.node_types import JavaNodeType
 
 
 def lower_if(ctx: TreeSitterEmitContext, node) -> None:
@@ -48,11 +49,11 @@ def lower_if(ctx: TreeSitterEmitContext, node) -> None:
 
     if alt_node:
         ctx.emit(Opcode.LABEL, label=false_label)
-        if alt_node.type == "if_statement":
+        if alt_node.type == JavaNodeType.IF_STATEMENT:
             lower_if(ctx, alt_node)
         else:
             for child in alt_node.children:
-                if child.type not in ("else",) and child.is_named:
+                if child.type not in (JavaNodeType.ELSE,) and child.is_named:
                     ctx.lower_stmt(child)
         ctx.emit(Opcode.BRANCH, label=end_label)
 
@@ -120,15 +121,23 @@ def lower_java_switch(ctx: TreeSitterEmitContext, node) -> None:
     ctx.break_target_stack.append(end_label)
 
     groups = (
-        [c for c in body_node.children if c.type == "switch_block_statement_group"]
+        [
+            c
+            for c in body_node.children
+            if c.type == JavaNodeType.SWITCH_BLOCK_STATEMENT_GROUP
+        ]
         if body_node
         else []
     )
 
     for group in groups:
-        label_node = next((c for c in group.children if c.type == "switch_label"), None)
+        label_node = next(
+            (c for c in group.children if c.type == JavaNodeType.SWITCH_LABEL), None
+        )
         body_stmts = [
-            c for c in group.children if c.is_named and c.type != "switch_label"
+            c
+            for c in group.children
+            if c.is_named and c.type != JavaNodeType.SWITCH_LABEL
         ]
 
         arm_label = ctx.fresh_label("case_arm")
@@ -182,16 +191,21 @@ def lower_java_switch_expr(ctx: TreeSitterEmitContext, node) -> str:
         [
             c
             for c in body_node.children
-            if c.type in ("switch_block_statement_group", "switch_rule")
+            if c.type
+            in (JavaNodeType.SWITCH_BLOCK_STATEMENT_GROUP, JavaNodeType.SWITCH_RULE)
         ]
         if body_node
         else []
     )
 
     for group in groups:
-        label_node = next((c for c in group.children if c.type == "switch_label"), None)
+        label_node = next(
+            (c for c in group.children if c.type == JavaNodeType.SWITCH_LABEL), None
+        )
         body_stmts = [
-            c for c in group.children if c.is_named and c.type != "switch_label"
+            c
+            for c in group.children
+            if c.is_named and c.type != JavaNodeType.SWITCH_LABEL
         ]
 
         arm_label = ctx.fresh_label("case_arm")
@@ -297,7 +311,7 @@ def lower_synchronized_statement(ctx: TreeSitterEmitContext, node) -> None:
     """Lower synchronized(expr) { body } — lower lock expr and body."""
     body_node = node.child_by_field_name("body")
     lock_node = next(
-        (c for c in node.children if c.type == "parenthesized_expression"),
+        (c for c in node.children if c.type == JavaNodeType.PARENTHESIZED_EXPRESSION),
         None,
     )
     if lock_node:
@@ -315,9 +329,13 @@ def lower_try(ctx: TreeSitterEmitContext, node) -> None:
     catch_clauses: list[dict] = []
     finally_node = None
     for child in node.children:
-        if child.type == "catch_clause":
+        if child.type == JavaNodeType.CATCH_CLAUSE:
             param_node = next(
-                (c for c in child.children if c.type == "catch_formal_parameter"),
+                (
+                    c
+                    for c in child.children
+                    if c.type == JavaNodeType.CATCH_FORMAL_PARAMETER
+                ),
                 None,
             )
             exc_var = None
@@ -334,9 +352,9 @@ def lower_try(ctx: TreeSitterEmitContext, node) -> None:
             catch_clauses.append(
                 {"body": catch_body, "variable": exc_var, "type": exc_type}
             )
-        elif child.type == "finally_clause":
+        elif child.type == JavaNodeType.FINALLY_CLAUSE:
             finally_node = child.child_by_field_name("body") or next(
-                (c for c in child.children if c.type == "block"),
+                (c for c in child.children if c.type == JavaNodeType.BLOCK),
                 None,
             )
     lower_try_catch(ctx, node, body_node, catch_clauses, finally_node)
@@ -347,7 +365,10 @@ def lower_explicit_constructor_invocation(ctx: TreeSitterEmitContext, node) -> N
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
 
-    first_named = next((c for c in node.children if c.type in ("super", "this")), None)
+    first_named = next(
+        (c for c in node.children if c.type in (JavaNodeType.SUPER, JavaNodeType.THIS)),
+        None,
+    )
     target_name = first_named.type if first_named else "super"
 
     ctx.emit(

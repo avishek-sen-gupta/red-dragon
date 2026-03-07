@@ -11,14 +11,19 @@ from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
 )
+from interpreter.frontends.php.node_types import PHPNodeType
 
 
 def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
     """Lower PHP function parameters."""
     for child in params_node.children:
-        if child.type in ("(", ")", ","):
+        if child.type in (
+            PHPNodeType.OPEN_PAREN,
+            PHPNodeType.CLOSE_PAREN,
+            PHPNodeType.COMMA,
+        ):
             continue
-        if child.type == "simple_parameter":
+        if child.type == PHPNodeType.SIMPLE_PARAMETER:
             name_node = child.child_by_field_name("name")
             if name_node:
                 pname = ctx.node_text(name_node)
@@ -38,7 +43,7 @@ def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
                 )
                 ctx.seed_var_type(pname, type_hint)
-        elif child.type == "variadic_parameter":
+        elif child.type == PHPNodeType.VARIADIC_PARAMETER:
             name_node = child.child_by_field_name("name")
             if name_node:
                 pname = ctx.node_text(name_node)
@@ -58,7 +63,7 @@ def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
                 )
                 ctx.seed_var_type(pname, type_hint)
-        elif child.type == "variable_name":
+        elif child.type == PHPNodeType.VARIABLE_NAME:
             pname = ctx.node_text(child)
             ctx.emit(
                 Opcode.SYMBOLIC,
@@ -82,17 +87,17 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
         operands=[f"{constants.PARAM_PREFIX}$this"],
     )
     ctx.seed_register_type(param_reg, class_name)
-    ctx.seed_param_type("$this", class_name)
+    ctx.seed_param_type(constants.PARAM_PHP_THIS, class_name)
     ctx.emit(
         Opcode.STORE_VAR,
-        operands=["$this", param_reg],
+        operands=[constants.PARAM_PHP_THIS, param_reg],
     )
-    ctx.seed_var_type("$this", class_name)
+    ctx.seed_var_type(constants.PARAM_PHP_THIS, class_name)
 
 
 def _has_static_modifier(node) -> bool:
     """Return True if *node* has a ``static_modifier`` child."""
-    return any(c.type == "static_modifier" for c in node.children)
+    return any(c.type == PHPNodeType.STATIC_MODIFIER for c in node.children)
 
 
 def lower_php_func_def(ctx: TreeSitterEmitContext, node) -> None:
@@ -183,17 +188,17 @@ def lower_php_method_decl(ctx: TreeSitterEmitContext, node) -> None:
 def _lower_php_class_body(ctx: TreeSitterEmitContext, node) -> None:
     """Lower declaration_list body of a PHP class."""
     for child in node.children:
-        if child.type == "method_declaration":
+        if child.type == PHPNodeType.METHOD_DECLARATION:
             lower_php_method_decl(ctx, child)
-        elif child.type == "property_declaration":
+        elif child.type == PHPNodeType.PROPERTY_DECLARATION:
             lower_php_property_declaration(ctx, child)
         elif child.is_named and child.type not in (
-            "visibility_modifier",
-            "static_modifier",
-            "abstract_modifier",
-            "final_modifier",
-            "{",
-            "}",
+            PHPNodeType.VISIBILITY_MODIFIER,
+            PHPNodeType.STATIC_MODIFIER,
+            PHPNodeType.ABSTRACT_MODIFIER,
+            PHPNodeType.FINAL_MODIFIER,
+            PHPNodeType.OPEN_BRACE,
+            PHPNodeType.CLOSE_BRACE,
         ):
             ctx.lower_stmt(child)
 
@@ -285,7 +290,7 @@ def lower_php_trait(ctx: TreeSitterEmitContext, node) -> None:
 def lower_php_function_static(ctx: TreeSitterEmitContext, node) -> None:
     """Lower static $x = val; declarations inside functions."""
     for child in node.children:
-        if child.type == "static_variable_declaration":
+        if child.type == PHPNodeType.STATIC_VARIABLE_DECLARATION:
             name_node = child.child_by_field_name("name")
             value_node = child.child_by_field_name("value")
             if name_node and value_node:
@@ -340,19 +345,23 @@ def lower_php_enum(ctx: TreeSitterEmitContext, node) -> None:
 def lower_php_property_declaration(ctx: TreeSitterEmitContext, node) -> None:
     """Lower property declarations inside classes, e.g. public $x = 10;"""
     for child in node.children:
-        if child.type == "property_element":
+        if child.type == PHPNodeType.PROPERTY_ELEMENT:
             name_node = next(
-                (c for c in child.children if c.type == "variable_name"), None
+                (c for c in child.children if c.type == PHPNodeType.VARIABLE_NAME), None
             )
             value_node = next(
-                (c for c in child.children if c.is_named and c.type != "variable_name"),
+                (
+                    c
+                    for c in child.children
+                    if c.is_named and c.type != PHPNodeType.VARIABLE_NAME
+                ),
                 None,
             )
             if name_node and value_node:
                 val_reg = ctx.lower_expr(value_node)
                 ctx.emit(
                     Opcode.STORE_FIELD,
-                    operands=["self", ctx.node_text(name_node), val_reg],
+                    operands=[constants.PARAM_SELF, ctx.node_text(name_node), val_reg],
                     node=node,
                 )
             elif name_node:
@@ -364,7 +373,7 @@ def lower_php_property_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 )
                 ctx.emit(
                     Opcode.STORE_FIELD,
-                    operands=["self", ctx.node_text(name_node), val_reg],
+                    operands=[constants.PARAM_SELF, ctx.node_text(name_node), val_reg],
                     node=node,
                 )
 
@@ -391,7 +400,7 @@ def lower_php_enum_case(ctx: TreeSitterEmitContext, node) -> None:
     """Lower enum case inside an enum_declaration as STORE_FIELD."""
     name_node = node.child_by_field_name("name")
     value_node = next(
-        (c for c in node.children if c.is_named and c.type not in ("name",)),
+        (c for c in node.children if c.is_named and c.type not in (PHPNodeType.NAME,)),
         None,
     )
     if name_node:
@@ -407,7 +416,7 @@ def lower_php_enum_case(ctx: TreeSitterEmitContext, node) -> None:
             )
         ctx.emit(
             Opcode.STORE_FIELD,
-            operands=["self", case_name, val_reg],
+            operands=[constants.PARAM_SELF, case_name, val_reg],
             node=node,
         )
 
@@ -415,7 +424,7 @@ def lower_php_enum_case(ctx: TreeSitterEmitContext, node) -> None:
 def lower_php_global_declaration(ctx: TreeSitterEmitContext, node) -> None:
     """Lower ``global $config;`` -- STORE_VAR for each variable."""
     for child in node.children:
-        if child.type == "variable_name":
+        if child.type == PHPNodeType.VARIABLE_NAME:
             var_name = ctx.node_text(child)
             reg = ctx.fresh_reg()
             ctx.emit(

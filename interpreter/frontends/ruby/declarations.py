@@ -7,6 +7,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.ruby.expressions import lower_ruby_params
+from interpreter.frontends.ruby.node_types import RubyNodeType
 
 
 def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> str:
@@ -47,7 +48,7 @@ def _emit_self_param(ctx: TreeSitterEmitContext) -> None:
     )
     ctx.emit(
         Opcode.STORE_VAR,
-        operands=["self", f"%{ctx.reg_counter - 1}"],
+        operands=[constants.PARAM_SELF, f"%{ctx.reg_counter - 1}"],
     )
 
 
@@ -116,7 +117,7 @@ def lower_ruby_class(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=class_label)
     if body_node:
         for child in body_node.children:
-            if child.type == "method":
+            if child.type == RubyNodeType.METHOD:
                 lower_ruby_method(ctx, child, inject_self=True)
             elif child.is_named:
                 ctx.lower_stmt(child)

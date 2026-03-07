@@ -6,6 +6,7 @@ Extracted from BaseFrontend: if/elif/while/for/break/continue.
 from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.common.node_types import CommonNodeType
 
 from interpreter.ir import Opcode
 
@@ -50,15 +51,20 @@ def lower_if(ctx: TreeSitterEmitContext, node) -> None:
 def lower_alternative(ctx: TreeSitterEmitContext, alt_node, end_label: str) -> None:
     """Lower an else/elif/else-if alternative block."""
     alt_type = alt_node.type
-    if alt_type in ("elif_clause",):
+    if alt_type in (CommonNodeType.ELIF_CLAUSE,):
         lower_elif(ctx, alt_node, end_label)
-    elif alt_type in ("else_clause", "else"):
+    elif alt_type in (CommonNodeType.ELSE_CLAUSE, CommonNodeType.ELSE):
         body = alt_node.child_by_field_name("body")
         if body:
             ctx.lower_block(body)
         else:
             for child in alt_node.children:
-                if child.type not in ("else", ":", "{", "}"):
+                if child.type not in (
+                    CommonNodeType.ELSE,
+                    CommonNodeType.COLON,
+                    CommonNodeType.OPEN_BRACE,
+                    CommonNodeType.CLOSE_BRACE,
+                ):
                     ctx.lower_stmt(child)
     else:
         ctx.lower_block(alt_node)

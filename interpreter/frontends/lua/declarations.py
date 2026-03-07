@@ -8,6 +8,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.common.declarations import lower_params
+from interpreter.frontends.lua.node_types import LuaNodeType
 
 logger = logging.getLogger(__name__)
 
@@ -15,12 +16,12 @@ logger = logging.getLogger(__name__)
 def lower_lua_variable_declaration(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `local x = expr` -- variable_declaration wraps assignment_statement."""
     for child in node.children:
-        if child.type == "assignment_statement":
+        if child.type == LuaNodeType.ASSIGNMENT_STATEMENT:
             lower_lua_assignment(ctx, child)
             return
     # Local declaration without assignment: local x
     for child in node.children:
-        if child.type == "identifier":
+        if child.type == LuaNodeType.IDENTIFIER:
             val_reg = ctx.fresh_reg()
             ctx.emit(
                 Opcode.CONST,
@@ -36,9 +37,11 @@ def lower_lua_variable_declaration(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_lua_assignment(ctx: TreeSitterEmitContext, node) -> None:
     """Lower assignment_statement with variable_list and expression_list."""
-    var_list_node = next((c for c in node.children if c.type == "variable_list"), None)
+    var_list_node = next(
+        (c for c in node.children if c.type == LuaNodeType.VARIABLE_LIST), None
+    )
     expr_list_node = next(
-        (c for c in node.children if c.type == "expression_list"), None
+        (c for c in node.children if c.type == LuaNodeType.EXPRESSION_LIST), None
     )
 
     if var_list_node is None or expr_list_node is None:
@@ -73,13 +76,13 @@ def lower_lua_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
     """Lua-specific store target supporting dot_index and bracket_index."""
-    if target.type == "identifier":
+    if target.type == LuaNodeType.IDENTIFIER:
         ctx.emit(
             Opcode.STORE_VAR,
             operands=[ctx.node_text(target), val_reg],
             node=parent_node,
         )
-    elif target.type == "dot_index_expression":
+    elif target.type == LuaNodeType.DOT_INDEX_EXPRESSION:
         obj_node = target.child_by_field_name("table")
         field_node = target.child_by_field_name("field")
         if obj_node and field_node:
@@ -89,7 +92,7 @@ def lower_lua_store_target(
                 operands=[obj_reg, ctx.node_text(field_node), val_reg],
                 node=parent_node,
             )
-    elif target.type == "bracket_index_expression":
+    elif target.type == LuaNodeType.BRACKET_INDEX_EXPRESSION:
         obj_node = target.child_by_field_name("table")
         idx_node = target.child_by_field_name("field")
         if obj_node and idx_node:
@@ -147,7 +150,7 @@ def lower_lua_function_declaration(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_lua_return(ctx: TreeSitterEmitContext, node) -> None:
     """Lower return statement."""
-    children = [c for c in node.children if c.type != "return" and c.is_named]
+    children = [c for c in node.children if c.type != LuaNodeType.RETURN and c.is_named]
     if children:
         val_reg = ctx.lower_expr(children[0])
     else:

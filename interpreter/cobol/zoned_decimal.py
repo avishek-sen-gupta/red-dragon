@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 
+from interpreter.cobol.cobol_constants import ByteConstants
 from interpreter.cobol.data_filters import align_decimal, left_adjust
 from interpreter.cobol.ebcdic_table import EbcdicTable
 
@@ -44,19 +45,19 @@ def encode_zoned(
     result = bytearray(total_digits)
     for i, ch in enumerate(digit_str):
         digit = int(ch) if ch.isdigit() else 0
-        zone = 0xF0
+        zone = ByteConstants.ZONE_NIBBLE_UNSIGNED
         result[i] = zone | digit
 
     # Set sign nibble on last byte
     if total_digits > 0:
-        last_digit = result[-1] & 0x0F
+        last_digit = result[-1] & ByteConstants.NIBBLE_MASK
         if not signed:
-            result[-1] = 0xF0 | last_digit
-        elif negative and any(b & 0x0F for b in result):
+            result[-1] = ByteConstants.ZONE_NIBBLE_UNSIGNED | last_digit
+        elif negative and any(b & ByteConstants.NIBBLE_MASK for b in result):
             # Only encode negative if value is non-zero
-            result[-1] = 0xD0 | last_digit
+            result[-1] = ByteConstants.SIGN_ZONE_NEGATIVE | last_digit
         else:
-            result[-1] = 0xC0 | last_digit
+            result[-1] = ByteConstants.SIGN_ZONE_POSITIVE | last_digit
 
     logger.debug(
         "encode_zoned(%r, digits=%d, dec=%d, signed=%s) → %s",
@@ -82,9 +83,9 @@ def decode_zoned(data: bytes, decimal_digits: int) -> float:
     if not data:
         return 0.0
 
-    digits = [b & 0x0F for b in data]
-    sign_nibble = (data[-1] >> 4) & 0x0F
-    negative = sign_nibble == 0x0D
+    digits = [b & ByteConstants.NIBBLE_MASK for b in data]
+    sign_nibble = (data[-1] >> 4) & ByteConstants.NIBBLE_MASK
+    negative = sign_nibble == ByteConstants.SIGN_NIBBLE_NEGATIVE
 
     int_value = sum(d * (10 ** (len(digits) - 1 - i)) for i, d in enumerate(digits))
 

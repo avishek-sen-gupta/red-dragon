@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 
 from interpreter import constants
-from interpreter.constants import TypeName
+from interpreter.constants import CanonicalLiteral, TypeName
 from interpreter.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.type_environment import TypeEnvironment
@@ -97,7 +97,7 @@ _BUILTIN_METHOD_RETURN_TYPES: dict[str, str] = {
     "toList": TypeName.ARRAY,
 }
 
-_SELF_PARAM_NAMES = frozenset({"self", "this", "$this"})
+_SELF_PARAM_NAMES = constants.SELF_PARAM_NAMES
 
 _FUNC_REF_PATTERN = re.compile(r"<function:")
 _FUNC_REF_EXTRACT = re.compile(constants.FUNC_REF_PATTERN)
@@ -538,9 +538,9 @@ _DISPATCH: dict[Opcode, callable] = {
 
 def _infer_const_type(raw: str) -> str:
     """Infer a canonical type from a CONST literal string."""
-    if raw in ("True", "False"):
+    if raw in (CanonicalLiteral.TRUE, CanonicalLiteral.FALSE):
         return TypeName.BOOL
-    if raw == "None":
+    if raw == CanonicalLiteral.NONE:
         return ""
     if _FUNC_REF_PATTERN.search(str(raw)):
         return ""

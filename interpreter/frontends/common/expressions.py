@@ -7,6 +7,7 @@ the expression's value.
 from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.frontends.common.node_types import CommonNodeType
 
 from interpreter.ir import Opcode
 
@@ -77,7 +78,11 @@ def lower_identifier(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_paren(ctx: TreeSitterEmitContext, node) -> str:
     inner = next(
-        (c for c in node.children if c.type not in ("(", ")")),
+        (
+            c
+            for c in node.children
+            if c.type not in (CommonNodeType.OPEN_PAREN, CommonNodeType.CLOSE_PAREN)
+        ),
         None,
     )
     if inner is None:
@@ -86,7 +91,11 @@ def lower_paren(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_binop(ctx: TreeSitterEmitContext, node) -> str:
-    children = [c for c in node.children if c.type not in ("(", ")")]
+    children = [
+        c
+        for c in node.children
+        if c.type not in (CommonNodeType.OPEN_PAREN, CommonNodeType.CLOSE_PAREN)
+    ]
     lhs_reg = ctx.lower_expr(children[0])
     op = ctx.node_text(children[1])
     rhs_reg = ctx.lower_expr(children[2])
@@ -101,7 +110,11 @@ def lower_binop(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_comparison(ctx: TreeSitterEmitContext, node) -> str:
-    children = [c for c in node.children if c.type not in ("(", ")")]
+    children = [
+        c
+        for c in node.children
+        if c.type not in (CommonNodeType.OPEN_PAREN, CommonNodeType.CLOSE_PAREN)
+    ]
     lhs_reg = ctx.lower_expr(children[0])
     op = ctx.node_text(children[1])
     rhs_reg = ctx.lower_expr(children[2])
@@ -116,7 +129,11 @@ def lower_comparison(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_unop(ctx: TreeSitterEmitContext, node) -> str:
-    children = [c for c in node.children if c.type not in ("(", ")")]
+    children = [
+        c
+        for c in node.children
+        if c.type not in (CommonNodeType.OPEN_PAREN, CommonNodeType.CLOSE_PAREN)
+    ]
     op = ctx.node_text(children[0])
     operand_reg = ctx.lower_expr(children[1])
     reg = ctx.fresh_reg()
@@ -141,11 +158,11 @@ def lower_call_impl(ctx: TreeSitterEmitContext, func_node, args_node, node) -> s
     # Method call: obj.method(...)
     if func_node and func_node.type in (
         ctx.constants.attribute_node_type,
-        "member_expression",
-        "selector_expression",
-        "member_access_expression",
-        "field_access",
-        "method_index_expression",
+        CommonNodeType.MEMBER_EXPRESSION,
+        CommonNodeType.SELECTOR_EXPRESSION,
+        CommonNodeType.MEMBER_ACCESS_EXPRESSION,
+        CommonNodeType.FIELD_ACCESS,
+        CommonNodeType.METHOD_INDEX_EXPRESSION,
     ):
         obj_node = func_node.child_by_field_name(ctx.constants.attr_object_field)
         attr_node = func_node.child_by_field_name(ctx.constants.attr_attribute_field)
@@ -166,7 +183,7 @@ def lower_call_impl(ctx: TreeSitterEmitContext, func_node, args_node, node) -> s
             return reg
 
     # Plain function call
-    if func_node and func_node.type == "identifier":
+    if func_node and func_node.type == CommonNodeType.IDENTIFIER:
         func_name = ctx.node_text(func_node)
         reg = ctx.fresh_reg()
         ctx.emit(
@@ -204,7 +221,15 @@ def extract_call_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
     return [
         ctx.lower_expr(c)
         for c in args_node.children
-        if c.type not in ("(", ")", ",", "argument", "value_argument") and c.is_named
+        if c.type
+        not in (
+            CommonNodeType.OPEN_PAREN,
+            CommonNodeType.CLOSE_PAREN,
+            CommonNodeType.COMMA,
+            CommonNodeType.ARGUMENT,
+            CommonNodeType.VALUE_ARGUMENT,
+        )
+        and c.is_named
     ]
 
 
@@ -214,9 +239,13 @@ def extract_call_args_unwrap(ctx: TreeSitterEmitContext, args_node) -> list[str]
         return []
     regs: list[str] = []
     for c in args_node.children:
-        if c.type in ("(", ")", ","):
+        if c.type in (
+            CommonNodeType.OPEN_PAREN,
+            CommonNodeType.CLOSE_PAREN,
+            CommonNodeType.COMMA,
+        ):
             continue
-        if c.type in ("argument", "value_argument"):
+        if c.type in (CommonNodeType.ARGUMENT, CommonNodeType.VALUE_ARGUMENT):
             inner = next(
                 (gc for gc in c.children if gc.is_named),
                 None,
@@ -308,7 +337,16 @@ def lower_update_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_list_literal(ctx: TreeSitterEmitContext, node) -> str:
-    elems = [c for c in node.children if c.type not in ("[", "]", ",")]
+    elems = [
+        c
+        for c in node.children
+        if c.type
+        not in (
+            CommonNodeType.OPEN_BRACKET,
+            CommonNodeType.CLOSE_BRACKET,
+            CommonNodeType.COMMA,
+        )
+    ]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
@@ -335,7 +373,7 @@ def lower_dict_literal(ctx: TreeSitterEmitContext, node) -> str:
         node=node,
     )
     for child in node.children:
-        if child.type == "pair":
+        if child.type == CommonNodeType.PAIR:
             key_node = child.child_by_field_name("key")
             val_node = child.child_by_field_name("value")
             key_reg = ctx.lower_expr(key_node)
@@ -350,7 +388,7 @@ def lower_dict_literal(ctx: TreeSitterEmitContext, node) -> str:
 def lower_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
-    if target.type == "identifier":
+    if target.type == CommonNodeType.IDENTIFIER:
         ctx.emit(
             Opcode.STORE_VAR,
             operands=[ctx.node_text(target), val_reg],
@@ -358,10 +396,10 @@ def lower_store_target(
         )
     elif target.type in (
         ctx.constants.attribute_node_type,
-        "member_expression",
-        "selector_expression",
-        "member_access_expression",
-        "field_access",
+        CommonNodeType.MEMBER_EXPRESSION,
+        CommonNodeType.SELECTOR_EXPRESSION,
+        CommonNodeType.MEMBER_ACCESS_EXPRESSION,
+        CommonNodeType.FIELD_ACCESS,
     ):
         obj_node = target.child_by_field_name(ctx.constants.attr_object_field)
         attr_node = target.child_by_field_name(ctx.constants.attr_attribute_field)
@@ -376,7 +414,7 @@ def lower_store_target(
                 operands=[obj_reg, ctx.node_text(attr_node), val_reg],
                 node=parent_node,
             )
-    elif target.type == "subscript":
+    elif target.type == CommonNodeType.SUBSCRIPT:
         obj_node = target.child_by_field_name(ctx.constants.subscript_value_field)
         idx_node = target.child_by_field_name(ctx.constants.subscript_index_field)
         if obj_node and idx_node:

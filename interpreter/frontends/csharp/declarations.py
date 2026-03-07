@@ -7,6 +7,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.csharp.expressions import lower_csharp_params
+from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
@@ -16,7 +17,7 @@ from interpreter.frontends.type_extraction import (
 def lower_local_decl_stmt(ctx: TreeSitterEmitContext, node) -> None:
     """Lower local_declaration_statement -> variable_declaration -> variable_declarator."""
     for child in node.children:
-        if child.type == "variable_declaration":
+        if child.type == NT.VARIABLE_DECLARATION:
             lower_variable_declaration(ctx, child)
 
 
@@ -25,7 +26,7 @@ def lower_variable_declaration(ctx: TreeSitterEmitContext, node) -> None:
     raw_type = extract_type_from_field(ctx, node, "type")
     type_hint = normalize_type_hint(raw_type, ctx.type_map)
     for child in node.children:
-        if child.type == "variable_declarator":
+        if child.type == NT.VARIABLE_DECLARATOR:
             _lower_csharp_declarator(ctx, child, type_hint=type_hint)
 
 
@@ -41,9 +42,9 @@ def _lower_csharp_declarator(
     value_node = None
     found_equals = False
     for child in node.children:
-        if child.type == "identifier" and name_node is None:
+        if child.type == NT.IDENTIFIER and name_node is None:
             name_node = child
-        elif child.type == "=" or ctx.node_text(child) == "=":
+        elif child.type == NT.EQUALS_SIGN or ctx.node_text(child) == "=":
             found_equals = True
         elif found_equals and child.is_named and value_node is None:
             value_node = child
@@ -90,7 +91,7 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
 def _has_static_modifier(ctx: TreeSitterEmitContext, node) -> bool:
     """Return True if *node* has a ``static`` modifier."""
     return any(
-        c.type == "modifier" and ctx.node_text(c) == "static" for c in node.children
+        c.type == NT.MODIFIER and ctx.node_text(c) == "static" for c in node.children
     )
 
 
@@ -174,8 +175,12 @@ def lower_constructor_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
 
 
-_CLASS_BODY_METHOD_TYPES = frozenset({"method_declaration", "constructor_declaration"})
-_CLASS_BODY_SKIP_TYPES = frozenset({"modifier", "attribute_list", "{", "}"})
+_CLASS_BODY_METHOD_TYPES = frozenset(
+    {NT.METHOD_DECLARATION, NT.CONSTRUCTOR_DECLARATION}
+)
+_CLASS_BODY_SKIP_TYPES = frozenset(
+    {NT.MODIFIER, NT.ATTRIBUTE_LIST, NT.LBRACE, NT.RBRACE}
+)
 
 
 def _lower_class_body(ctx: TreeSitterEmitContext, node) -> list:
@@ -194,13 +199,13 @@ def _lower_class_body(ctx: TreeSitterEmitContext, node) -> list:
 
 def _lower_deferred_class_child(ctx: TreeSitterEmitContext, child) -> None:
     """Lower a single deferred class-body child at top level."""
-    if child.type == "method_declaration":
+    if child.type == NT.METHOD_DECLARATION:
         lower_method_decl(ctx, child, inject_this=not _has_static_modifier(ctx, child))
-    elif child.type == "constructor_declaration":
+    elif child.type == NT.CONSTRUCTOR_DECLARATION:
         lower_constructor_decl(ctx, child)
-    elif child.type == "field_declaration":
+    elif child.type == NT.FIELD_DECLARATION:
         lower_field_decl(ctx, child)
-    elif child.type == "property_declaration":
+    elif child.type == NT.PROPERTY_DECLARATION:
         lower_property_decl(ctx, child)
     else:
         ctx.lower_stmt(child)
@@ -239,7 +244,7 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
 def lower_field_decl(ctx: TreeSitterEmitContext, node) -> None:
     """Lower a field declaration inside a class body."""
     for child in node.children:
-        if child.type == "variable_declaration":
+        if child.type == NT.VARIABLE_DECLARATION:
             lower_variable_declaration(ctx, child)
 
 
@@ -273,12 +278,14 @@ def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
     )
 
     # Lower accessor bodies (get { ... } / set { ... }) if present
-    accessor_list = next((c for c in node.children if c.type == "accessor_list"), None)
+    accessor_list = next((c for c in node.children if c.type == NT.ACCESSOR_LIST), None)
     if accessor_list:
         for accessor in (
-            c for c in accessor_list.children if c.type == "accessor_declaration"
+            c for c in accessor_list.children if c.type == NT.ACCESSOR_DECLARATION
         ):
-            body_block = next((b for b in accessor.children if b.type == "block"), None)
+            body_block = next(
+                (b for b in accessor.children if b.type == NT.BLOCK), None
+            )
             if body_block:
                 ctx.lower_block(body_block)
 
@@ -290,7 +297,7 @@ def _find_property_initializer(ctx: TreeSitterEmitContext, node) -> object | Non
         if not child.is_named and ctx.node_text(child) == "=":
             found_eq = True
             continue
-        if found_eq and child.is_named and child.type != "accessor_list":
+        if found_eq and child.is_named and child.type != NT.ACCESSOR_LIST:
             return child
     return None
 
@@ -329,7 +336,7 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
     """Lower enum_declaration as NEW_OBJECT with STORE_INDEX per member."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = next(
-        (c for c in node.children if c.type == "enum_member_declaration_list"),
+        (c for c in node.children if c.type == NT.ENUM_MEMBER_DECLARATION_LIST),
         None,
     )
     if name_node:
@@ -343,7 +350,7 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
         )
         if body_node:
             for i, child in enumerate(
-                c for c in body_node.children if c.type == "enum_member_declaration"
+                c for c in body_node.children if c.type == NT.ENUM_MEMBER_DECLARATION
             ):
                 member_name_node = child.child_by_field_name("name")
                 member_name = (
@@ -370,15 +377,15 @@ def lower_local_function_stmt(ctx: TreeSitterEmitContext, node) -> None:
     """Lower local functions inside method bodies -- like method_declaration."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     if name_node is None:
-        name_node = next((c for c in node.children if c.type == "identifier"), None)
+        name_node = next((c for c in node.children if c.type == NT.IDENTIFIER), None)
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     if params_node is None:
         params_node = next(
-            (c for c in node.children if c.type == "parameter_list"), None
+            (c for c in node.children if c.type == NT.PARAMETER_LIST), None
         )
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
     if body_node is None:
-        body_node = next((c for c in node.children if c.type == "block"), None)
+        body_node = next((c for c in node.children if c.type == NT.BLOCK), None)
 
     func_name = ctx.node_text(name_node) if name_node else "__local_fn"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -414,7 +421,7 @@ def lower_local_function_stmt(ctx: TreeSitterEmitContext, node) -> None:
 def lower_event_field_decl(ctx: TreeSitterEmitContext, node) -> None:
     """Lower event_field_declaration by delegating to variable_declaration child."""
     for child in node.children:
-        if child.type == "variable_declaration":
+        if child.type == NT.VARIABLE_DECLARATION:
             lower_variable_declaration(ctx, child)
 
 

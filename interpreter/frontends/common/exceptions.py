@@ -9,6 +9,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.constants import DEFAULT_EXCEPTION_TYPE
 
 
 def lower_try_catch(
@@ -56,7 +57,7 @@ def lower_try_catch(
     # ── catch clauses ──
     for i, clause in enumerate(catch_clauses):
         ctx.emit(Opcode.LABEL, label=catch_labels[i])
-        exc_type = clause.get("type", "Exception") or "Exception"
+        exc_type = clause.get("type", DEFAULT_EXCEPTION_TYPE) or DEFAULT_EXCEPTION_TYPE
         exc_reg = ctx.fresh_reg()
         ctx.emit(
             Opcode.SYMBOLIC,

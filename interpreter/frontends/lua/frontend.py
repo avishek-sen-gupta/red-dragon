@@ -12,6 +12,7 @@ from interpreter.frontends.common import assignments as common_assign
 from interpreter.frontends.lua import expressions as lua_expr
 from interpreter.frontends.lua import control_flow as lua_cf
 from interpreter.frontends.lua import declarations as lua_decl
+from interpreter.frontends.lua.node_types import LuaNodeType
 
 
 class LuaFrontend(BaseFrontend):
@@ -21,47 +22,47 @@ class LuaFrontend(BaseFrontend):
         return GrammarConstants(
             attr_object_field="table",
             attr_attribute_field="field",
-            comment_types=frozenset({"comment"}),
-            noise_types=frozenset({"hash_bang_line", "\n"}),
-            block_node_types=frozenset({"block", "chunk"}),
-            paren_expr_type="parenthesized_expression",
+            comment_types=frozenset({LuaNodeType.COMMENT}),
+            noise_types=frozenset({LuaNodeType.HASH_BANG_LINE, LuaNodeType.NEWLINE}),
+            block_node_types=frozenset({LuaNodeType.BLOCK, LuaNodeType.CHUNK}),
+            paren_expr_type=LuaNodeType.PARENTHESIZED_EXPRESSION,
         )
 
     def _build_expr_dispatch(self) -> dict[str, Callable]:
         return {
-            "identifier": common_expr.lower_identifier,
-            "number": common_expr.lower_const_literal,
-            "string": common_expr.lower_const_literal,
-            "true": common_expr.lower_canonical_true,
-            "false": common_expr.lower_canonical_false,
-            "nil": common_expr.lower_canonical_none,
-            "binary_expression": common_expr.lower_binop,
-            "unary_expression": common_expr.lower_unop,
-            "parenthesized_expression": common_expr.lower_paren,
-            "function_call": lua_expr.lower_lua_call,
-            "dot_index_expression": lua_expr.lower_dot_index,
-            "bracket_index_expression": lua_expr.lower_bracket_index,
-            "table_constructor": lua_expr.lower_table_constructor,
-            "expression_list": lua_expr.lower_expression_list,
-            "function_definition": lua_expr.lower_lua_function_definition,
-            "vararg_expression": lua_expr.lower_lua_vararg,
-            "string_content": common_expr.lower_const_literal,
-            "escape_sequence": common_expr.lower_const_literal,
+            LuaNodeType.IDENTIFIER: common_expr.lower_identifier,
+            LuaNodeType.NUMBER: common_expr.lower_const_literal,
+            LuaNodeType.STRING: common_expr.lower_const_literal,
+            LuaNodeType.TRUE: common_expr.lower_canonical_true,
+            LuaNodeType.FALSE: common_expr.lower_canonical_false,
+            LuaNodeType.NIL: common_expr.lower_canonical_none,
+            LuaNodeType.BINARY_EXPRESSION: common_expr.lower_binop,
+            LuaNodeType.UNARY_EXPRESSION: common_expr.lower_unop,
+            LuaNodeType.PARENTHESIZED_EXPRESSION: common_expr.lower_paren,
+            LuaNodeType.FUNCTION_CALL: lua_expr.lower_lua_call,
+            LuaNodeType.DOT_INDEX_EXPRESSION: lua_expr.lower_dot_index,
+            LuaNodeType.BRACKET_INDEX_EXPRESSION: lua_expr.lower_bracket_index,
+            LuaNodeType.TABLE_CONSTRUCTOR: lua_expr.lower_table_constructor,
+            LuaNodeType.EXPRESSION_LIST: lua_expr.lower_expression_list,
+            LuaNodeType.FUNCTION_DEFINITION: lua_expr.lower_lua_function_definition,
+            LuaNodeType.VARARG_EXPRESSION: lua_expr.lower_lua_vararg,
+            LuaNodeType.STRING_CONTENT: common_expr.lower_const_literal,
+            LuaNodeType.ESCAPE_SEQUENCE: common_expr.lower_const_literal,
         }
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:
         return {
-            "variable_declaration": lua_decl.lower_lua_variable_declaration,
-            "assignment_statement": lua_decl.lower_lua_assignment,
-            "function_declaration": lua_decl.lower_lua_function_declaration,
-            "if_statement": lua_cf.lower_lua_if,
-            "while_statement": lua_cf.lower_lua_while,
-            "for_statement": lua_cf.lower_lua_for,
-            "repeat_statement": lua_cf.lower_lua_repeat,
-            "return_statement": lua_decl.lower_lua_return,
-            "do_statement": lua_cf.lower_lua_do,
-            "expression_statement": common_assign.lower_expression_statement,
-            "break_statement": common_cf.lower_break,
-            "goto_statement": lua_cf.lower_lua_goto,
-            "label_statement": lua_cf.lower_lua_label,
+            LuaNodeType.VARIABLE_DECLARATION: lua_decl.lower_lua_variable_declaration,
+            LuaNodeType.ASSIGNMENT_STATEMENT: lua_decl.lower_lua_assignment,
+            LuaNodeType.FUNCTION_DECLARATION: lua_decl.lower_lua_function_declaration,
+            LuaNodeType.IF_STATEMENT: lua_cf.lower_lua_if,
+            LuaNodeType.WHILE_STATEMENT: lua_cf.lower_lua_while,
+            LuaNodeType.FOR_STATEMENT: lua_cf.lower_lua_for,
+            LuaNodeType.REPEAT_STATEMENT: lua_cf.lower_lua_repeat,
+            LuaNodeType.RETURN_STATEMENT: lua_decl.lower_lua_return,
+            LuaNodeType.DO_STATEMENT: lua_cf.lower_lua_do,
+            LuaNodeType.EXPRESSION_STATEMENT: common_assign.lower_expression_statement,
+            LuaNodeType.BREAK_STATEMENT: common_cf.lower_break,
+            LuaNodeType.GOTO_STATEMENT: lua_cf.lower_lua_goto,
+            LuaNodeType.LABEL_STATEMENT: lua_cf.lower_lua_label,
         }

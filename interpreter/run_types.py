@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from interpreter.constants import LLMProvider
+
 
 class UnresolvedCallStrategy(Enum):
     """Strategy for resolving calls to unknown functions/methods."""
@@ -18,7 +20,7 @@ class UnresolvedCallStrategy(Enum):
 class VMConfig:
     """Groups VM execution configuration."""
 
-    backend: str = "claude"
+    backend: str = LLMProvider.CLAUDE
     max_steps: int = 100
     verbose: bool = False
     unresolved_call_strategy: UnresolvedCallStrategy = UnresolvedCallStrategy.SYMBOLIC

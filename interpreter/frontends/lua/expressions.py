@@ -11,6 +11,7 @@ from interpreter.frontends.common.expressions import (
     extract_call_args,
     lower_const_literal,
 )
+from interpreter.frontends.lua.node_types import LuaNodeType
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ def lower_lua_call(ctx: TreeSitterEmitContext, node) -> str:
         return reg
 
     # Method call: obj:method(args)
-    if name_node.type == "method_index_expression":
+    if name_node.type == LuaNodeType.METHOD_INDEX_EXPRESSION:
         table_node = name_node.child_by_field_name("table")
         method_node = name_node.child_by_field_name("method")
         if table_node and method_node:
@@ -54,7 +55,7 @@ def lower_lua_call(ctx: TreeSitterEmitContext, node) -> str:
             return reg
 
     # Dot-indexed call: obj.method(args)
-    if name_node.type == "dot_index_expression":
+    if name_node.type == LuaNodeType.DOT_INDEX_EXPRESSION:
         table_node = name_node.child_by_field_name("table")
         field_node = name_node.child_by_field_name("field")
         if table_node and field_node:
@@ -70,7 +71,7 @@ def lower_lua_call(ctx: TreeSitterEmitContext, node) -> str:
             return reg
 
     # Plain function call
-    if name_node.type == "identifier":
+    if name_node.type == LuaNodeType.IDENTIFIER:
         func_name = ctx.node_text(name_node)
         reg = ctx.fresh_reg()
         ctx.emit(
@@ -140,7 +141,7 @@ def lower_table_constructor(ctx: TreeSitterEmitContext, node) -> str:
     )
     positional_idx = 1
     for child in node.children:
-        if child.type == "field":
+        if child.type == LuaNodeType.FIELD:
             name_node = child.child_by_field_name("name")
             value_node = child.child_by_field_name("value")
             if name_node and value_node:

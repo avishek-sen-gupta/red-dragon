@@ -8,6 +8,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.common.expressions import lower_const_literal
+from interpreter.frontends.rust.node_types import RustNodeType
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,11 @@ def lower_field_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_reference_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower &expr or &mut expr -> UNOP '&'."""
-    children = [c for c in node.children if c.type not in ("&", "mut")]
+    children = [
+        c
+        for c in node.children
+        if c.type not in (RustNodeType.AMPERSAND, RustNodeType.MUT_KEYWORD)
+    ]
     inner = children[0] if children else node
     inner_reg = ctx.lower_expr(inner)
     reg = ctx.fresh_reg()
@@ -47,7 +52,7 @@ def lower_reference_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_deref_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower *expr -> UNOP '*'."""
-    children = [c for c in node.children if c.type != "*"]
+    children = [c for c in node.children if c.type != RustNodeType.ASTERISK]
     inner = children[0] if children else node
     inner_reg = ctx.lower_expr(inner)
     reg = ctx.fresh_reg()
@@ -134,7 +139,7 @@ def lower_else_clause(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_return_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower Rust return expression (value-producing)."""
-    children = [c for c in node.children if c.type != "return"]
+    children = [c for c in node.children if c.type != RustNodeType.RETURN_KEYWORD]
     if children:
         val_reg = ctx.lower_expr(children[0])
     else:
@@ -161,14 +166,27 @@ def lower_match_expr(ctx: TreeSitterEmitContext, node) -> str:
     result_var = f"__match_result_{ctx.label_counter}"
     end_label = ctx.fresh_label("match_end")
 
-    arms = [c for c in body_node.children if c.type == "match_arm"] if body_node else []
+    arms = (
+        [c for c in body_node.children if c.type == RustNodeType.MATCH_ARM]
+        if body_node
+        else []
+    )
 
     for arm in arms:
-        arm_pattern = next((c for c in arm.children if c.type == "match_pattern"), None)
+        arm_pattern = next(
+            (c for c in arm.children if c.type == RustNodeType.MATCH_PATTERN), None
+        )
         arm_body_children = [
             c
             for c in arm.children
-            if c.type not in ("match_pattern", "=>", ",", "fat_arrow") and c.is_named
+            if c.type
+            not in (
+                RustNodeType.MATCH_PATTERN,
+                RustNodeType.FAT_ARROW,
+                RustNodeType.COMMA,
+                RustNodeType.FAT_ARROW_ALIAS,
+            )
+            and c.is_named
         ]
         arm_label = ctx.fresh_label("match_arm")
         next_label = ctx.fresh_label("match_next")
@@ -215,7 +233,12 @@ def lower_block_expr(ctx: TreeSitterEmitContext, node) -> str:
     children = [
         c
         for c in node.children
-        if c.type not in ("{", "}", ";")
+        if c.type
+        not in (
+            RustNodeType.OPEN_BRACE,
+            RustNodeType.CLOSE_BRACE,
+            RustNodeType.SEMICOLON,
+        )
         and c.type not in ctx.constants.comment_types
         and c.type not in ctx.constants.noise_types
         and c.is_named
@@ -275,9 +298,13 @@ def _lower_closure_params(ctx: TreeSitterEmitContext, params_node) -> None:
     from interpreter.frontends.rust.declarations import lower_rust_param
 
     for child in params_node.children:
-        if child.type in ("|", ",", ":"):
+        if child.type in (
+            RustNodeType.PIPE,
+            RustNodeType.COMMA,
+            RustNodeType.COLON,
+        ):
             continue
-        if child.type == "identifier":
+        if child.type == RustNodeType.IDENTIFIER:
             pname = ctx.node_text(child)
             ctx.emit(
                 Opcode.SYMBOLIC,
@@ -289,7 +316,7 @@ def _lower_closure_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 Opcode.STORE_VAR,
                 operands=[pname, f"%{ctx.reg_counter - 1}"],
             )
-        elif child.type == "parameter":
+        elif child.type == RustNodeType.PARAMETER:
             lower_rust_param(ctx, child)
 
 
@@ -309,7 +336,7 @@ def lower_struct_instantiation(ctx: TreeSitterEmitContext, node) -> str:
 
     if body_node:
         for child in body_node.children:
-            if child.type == "field_initializer":
+            if child.type == RustNodeType.FIELD_INITIALIZER:
                 field_name_node = child.child_by_field_name("field")
                 field_val_node = child.child_by_field_name("value")
                 if field_name_node and field_val_node:
@@ -372,7 +399,12 @@ def lower_index_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower tuple_expression: (a, b, c) -> NEW_ARRAY."""
-    elems = [c for c in node.children if c.type not in ("(", ")", ",")]
+    elems = [
+        c
+        for c in node.children
+        if c.type
+        not in (RustNodeType.OPEN_PAREN, RustNodeType.CLOSE_PAREN, RustNodeType.COMMA)
+    ]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
@@ -393,7 +425,11 @@ def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> str:
 def lower_try_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower `expr?` as CALL_FUNCTION("try_unwrap", inner)."""
     inner = next(
-        (c for c in node.children if c.type != "?" and c.is_named),
+        (
+            c
+            for c in node.children
+            if c.type != RustNodeType.QUESTION_MARK and c.is_named
+        ),
         None,
     )
     inner_reg = ctx.lower_expr(inner) if inner else ctx.fresh_reg()
@@ -410,7 +446,12 @@ def lower_try_expr(ctx: TreeSitterEmitContext, node) -> str:
 def lower_await_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower `expr.await` as CALL_FUNCTION("await", inner)."""
     inner = next(
-        (c for c in node.children if c.type not in (".", "await") and c.is_named),
+        (
+            c
+            for c in node.children
+            if c.type not in (RustNodeType.DOT, RustNodeType.AWAIT_KEYWORD)
+            and c.is_named
+        ),
         None,
     )
     inner_reg = ctx.lower_expr(inner) if inner else ctx.fresh_reg()
@@ -444,7 +485,7 @@ def lower_type_cast_expr(ctx: TreeSitterEmitContext, node) -> str:
 def lower_scoped_identifier(ctx: TreeSitterEmitContext, node) -> str:
     """Lower `HashMap::new`, `Shape::Circle` as LOAD_VAR with qualified name."""
     full_name = "::".join(
-        ctx.node_text(c) for c in node.children if c.type == "identifier"
+        ctx.node_text(c) for c in node.children if c.type == RustNodeType.IDENTIFIER
     )
     reg = ctx.fresh_reg()
     ctx.emit(
@@ -545,7 +586,12 @@ def lower_tuple_struct_pattern(ctx: TreeSitterEmitContext, node) -> str:
         (
             c
             for c in node.children
-            if c.type in ("identifier", "scoped_identifier", "type_identifier")
+            if c.type
+            in (
+                RustNodeType.IDENTIFIER,
+                RustNodeType.SCOPED_IDENTIFIER,
+                RustNodeType.TYPE_IDENTIFIER,
+            )
         ),
         None,
     )
@@ -562,7 +608,12 @@ def lower_tuple_struct_pattern(ctx: TreeSitterEmitContext, node) -> str:
         c
         for c in node.children
         if c.is_named
-        and c.type not in ("identifier", "scoped_identifier", "type_identifier")
+        and c.type
+        not in (
+            RustNodeType.IDENTIFIER,
+            RustNodeType.SCOPED_IDENTIFIER,
+            RustNodeType.TYPE_IDENTIFIER,
+        )
     ]
     for i, child in enumerate(inner_ids):
         child_reg = ctx.lower_expr(child)
@@ -608,7 +659,8 @@ def lower_struct_pattern_expr(ctx: TreeSitterEmitContext, node) -> str:
         (
             c
             for c in node.children
-            if c.type in ("type_identifier", "scoped_type_identifier")
+            if c.type
+            in (RustNodeType.TYPE_IDENTIFIER, RustNodeType.SCOPED_TYPE_IDENTIFIER)
         ),
         None,
     )
@@ -621,13 +673,17 @@ def lower_struct_pattern_expr(ctx: TreeSitterEmitContext, node) -> str:
         node=node,
     )
     # Extract field bindings
-    field_patterns = [c for c in node.children if c.type == "field_pattern"]
+    field_patterns = [c for c in node.children if c.type == RustNodeType.FIELD_PATTERN]
     for fp in field_patterns:
         name_node = next(
             (
                 ch
                 for ch in fp.children
-                if ch.type in ("field_identifier", "shorthand_field_identifier")
+                if ch.type
+                in (
+                    RustNodeType.FIELD_IDENTIFIER,
+                    RustNodeType.SHORTHAND_FIELD_IDENTIFIER,
+                )
             ),
             None,
         )
@@ -648,13 +704,13 @@ def lower_rust_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
     """Rust-specific store target handling field_expression and index_expression."""
-    if target.type == "identifier":
+    if target.type == RustNodeType.IDENTIFIER:
         ctx.emit(
             Opcode.STORE_VAR,
             operands=[ctx.node_text(target), val_reg],
             node=parent_node,
         )
-    elif target.type == "field_expression":
+    elif target.type == RustNodeType.FIELD_EXPRESSION:
         value_node = target.child_by_field_name("value")
         field_node = target.child_by_field_name("field")
         if value_node and field_node:
@@ -664,7 +720,7 @@ def lower_rust_store_target(
                 operands=[obj_reg, ctx.node_text(field_node), val_reg],
                 node=parent_node,
             )
-    elif target.type == "index_expression":
+    elif target.type == RustNodeType.INDEX_EXPRESSION:
         children = [c for c in target.children if c.is_named]
         if len(children) >= 2:
             obj_reg = ctx.lower_expr(children[0])
@@ -674,8 +730,8 @@ def lower_rust_store_target(
                 operands=[obj_reg, idx_reg, val_reg],
                 node=parent_node,
             )
-    elif target.type == "dereference_expression":
-        inner_children = [c for c in target.children if c.type != "*"]
+    elif target.type == RustNodeType.DEREFERENCE_EXPRESSION:
+        inner_children = [c for c in target.children if c.type != RustNodeType.ASTERISK]
         if inner_children:
             ctx.lower_expr(inner_children[0])
             ctx.emit(

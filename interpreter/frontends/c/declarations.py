@@ -11,20 +11,23 @@ from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
 )
+from interpreter.frontends.c.node_types import CNodeType
 
 logger = logging.getLogger(__name__)
 
 
 def extract_declarator_name(ctx: TreeSitterEmitContext, decl_node) -> str:
     """Extract the variable name from a declarator, handling pointer declarators."""
-    if decl_node.type == "identifier":
+    if decl_node.type == CNodeType.IDENTIFIER:
         return ctx.node_text(decl_node)
     # pointer_declarator, array_declarator, etc.
     inner = decl_node.child_by_field_name("declarator")
     if inner:
         return extract_declarator_name(ctx, inner)
     # Fallback: first identifier child
-    id_node = next((c for c in decl_node.children if c.type == "identifier"), None)
+    id_node = next(
+        (c for c in decl_node.children if c.type == CNodeType.IDENTIFIER), None
+    )
     if id_node:
         return ctx.node_text(id_node)
     return ctx.node_text(decl_node)
@@ -33,11 +36,11 @@ def extract_declarator_name(ctx: TreeSitterEmitContext, decl_node) -> str:
 def _extract_struct_type(ctx: TreeSitterEmitContext, node) -> str:
     """Return the struct type name if *node* has a struct_specifier, else ''."""
     for child in node.children:
-        if child.type == "struct_specifier":
+        if child.type == CNodeType.STRUCT_SPECIFIER:
             type_node = child.child_by_field_name("name")
             if type_node is None:
                 type_node = next(
-                    (c for c in child.children if c.type == "type_identifier"),
+                    (c for c in child.children if c.type == CNodeType.TYPE_IDENTIFIER),
                     None,
                 )
             if type_node:
@@ -51,11 +54,11 @@ def lower_declaration(ctx: TreeSitterEmitContext, node) -> None:
     raw_type = extract_type_from_field(ctx, node, "type")
     type_hint = normalize_type_hint(raw_type, ctx.type_map)
     for child in node.children:
-        if child.type == "init_declarator":
+        if child.type == CNodeType.INIT_DECLARATOR:
             _lower_init_declarator(
                 ctx, child, struct_type=struct_type, type_hint=type_hint
             )
-        elif child.type == "identifier":
+        elif child.type == CNodeType.IDENTIFIER:
             var_name = ctx.node_text(child)
             if struct_type:
                 val_reg = ctx.fresh_reg()
@@ -116,7 +119,7 @@ def _lower_init_declarator(
 
 def _find_function_declarator(node) -> object | None:
     """Recursively find function_declarator inside pointer/other declarators."""
-    if node.type == "function_declarator":
+    if node.type == CNodeType.FUNCTION_DECLARATOR:
         return node
     for child in node.children:
         result = _find_function_declarator(child)
@@ -128,7 +131,7 @@ def _find_function_declarator(node) -> object | None:
 def lower_c_params(ctx: TreeSitterEmitContext, params_node) -> None:
     """Lower C function parameters (parameter_declaration nodes)."""
     for child in params_node.children:
-        if child.type == "parameter_declaration":
+        if child.type == CNodeType.PARAMETER_DECLARATION:
             decl_node = child.child_by_field_name("declarator")
             if decl_node:
                 pname = extract_declarator_name(ctx, decl_node)
@@ -159,7 +162,7 @@ def lower_function_def_c(ctx: TreeSitterEmitContext, node) -> None:
     params_node = None
 
     if declarator_node:
-        if declarator_node.type == "function_declarator":
+        if declarator_node.type == CNodeType.FUNCTION_DECLARATOR:
             name_node = declarator_node.child_by_field_name("declarator")
             params_node = declarator_node.child_by_field_name(
                 ctx.constants.func_params_field
@@ -247,7 +250,7 @@ def lower_struct_def(ctx: TreeSitterEmitContext, node) -> None:
 def lower_struct_body(ctx: TreeSitterEmitContext, node) -> None:
     """Lower struct field_declaration_list."""
     for child in node.children:
-        if child.type == "field_declaration":
+        if child.type == CNodeType.FIELD_DECLARATION:
             lower_struct_field(ctx, child)
         elif child.is_named and child.type not in ("{", "}"):
             ctx.lower_stmt(child)
@@ -256,7 +259,9 @@ def lower_struct_body(ctx: TreeSitterEmitContext, node) -> None:
 def lower_struct_field(ctx: TreeSitterEmitContext, node) -> None:
     """Lower a struct field declaration as STORE_FIELD on this."""
     declarators = [
-        c for c in node.children if c.type in ("field_identifier", "identifier")
+        c
+        for c in node.children
+        if c.type in (CNodeType.FIELD_IDENTIFIER, CNodeType.IDENTIFIER)
     ]
     for decl in declarators:
         fname = ctx.node_text(decl)
@@ -295,7 +300,7 @@ def lower_enum_def(ctx: TreeSitterEmitContext, node) -> None:
     )
 
     if body_node:
-        enumerators = [c for c in body_node.children if c.type == "enumerator"]
+        enumerators = [c for c in body_node.children if c.type == CNodeType.ENUMERATOR]
         for i, enumerator in enumerate(enumerators):
             name_child = enumerator.child_by_field_name("name")
             value_child = enumerator.child_by_field_name("value")
@@ -356,11 +361,13 @@ def lower_typedef(ctx: TreeSitterEmitContext, node) -> None:
     """Lower type_definition as CONST type_name -> STORE_VAR alias."""
     named_children = [c for c in node.children if c.is_named]
     alias_node = next(
-        (c for c in reversed(named_children) if c.type == "type_identifier"),
+        (c for c in reversed(named_children) if c.type == CNodeType.TYPE_IDENTIFIER),
         None,
     )
     type_nodes = [
-        c for c in named_children if c != alias_node and c.type != "type_identifier"
+        c
+        for c in named_children
+        if c != alias_node and c.type != CNodeType.TYPE_IDENTIFIER
     ]
     type_name = ctx.node_text(type_nodes[0]) if type_nodes else "unknown_type"
     alias_name = ctx.node_text(alias_node) if alias_node else "unknown_alias"
