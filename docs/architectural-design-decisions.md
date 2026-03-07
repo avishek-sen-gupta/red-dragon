@@ -1413,4 +1413,4 @@ Updated tier classification: Tier 1 (11): Python, Java, C#, Kotlin, Scala, JS, T
 
 2. **UNOP `~` → Int**: Added `"~": TypeName.INT` to `_UNOP_FIXED_TYPES`.
 
-**Consequences:** Test count: 9266 passed, 4 skipped, 22 xfailed (8 new tests). Builtin method types now propagate through STORE_VAR, BINOP, and downstream instructions without requiring frontend type annotations.
+**Consequences:** Test count: 9289 passed, 4 skipped, 22 xfailed (31 new tests: 8 unit, 23 integration across Python/JavaScript/Java/Ruby/Kotlin). Builtin method types now propagate through STORE_VAR, BINOP, and downstream instructions without requiring frontend type annotations.
