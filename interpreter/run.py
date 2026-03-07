@@ -59,7 +59,7 @@ _IDENTITY_RULES = IdentityConversionRules()
 def _create_resolver(config: VMConfig) -> UnresolvedCallResolver:
     """Create the appropriate call resolver based on config."""
     if config.unresolved_call_strategy == UnresolvedCallStrategy.LLM:
-        from .llm_client import get_llm_client
+        from interpreter.llm_client import get_llm_client
 
         llm_client = get_llm_client(provider=config.backend)
         return LLMPlausibleResolver(

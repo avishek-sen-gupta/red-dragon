@@ -23,7 +23,7 @@ def _extract_property_name(ctx: TreeSitterEmitContext, var_decl_node) -> str:
     return ctx.node_text(id_node) if id_node else "__unknown"
 
 
-def _find_property_value(ctx: TreeSitterEmitContext, node):
+def _find_property_value(ctx: TreeSitterEmitContext, node) -> object | None:
     """Find the value expression after '=' in a property_declaration."""
     found_eq = False
     for child in node.children:

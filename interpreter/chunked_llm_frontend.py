@@ -169,31 +169,28 @@ class IRRenumberer:
         Returns:
             Tuple of (renumbered instructions, next available reg_offset).
         """
-        max_reg = -1
-        result: list[IRInstruction] = []
 
-        for inst in instructions:
-            new_result_reg = self._renumber_reg(inst.result_reg, reg_offset)
+        def _renumber_inst(inst: IRInstruction) -> IRInstruction:
             new_operands = [
                 self._renumber_operand(op, reg_offset, label_suffix)
                 for op in inst.operands
             ]
-            new_label = self._renumber_label(inst.label, label_suffix, inst.opcode)
-
-            result.append(
-                IRInstruction(
-                    opcode=inst.opcode,
-                    result_reg=new_result_reg,
-                    operands=new_operands,
-                    label=new_label,
-                    source_location=inst.source_location,
-                )
+            return IRInstruction(
+                opcode=inst.opcode,
+                result_reg=self._renumber_reg(inst.result_reg, reg_offset),
+                operands=new_operands,
+                label=self._renumber_label(inst.label, label_suffix, inst.opcode),
+                source_location=inst.source_location,
             )
 
-            max_reg = max(max_reg, self._extract_reg_number(new_result_reg))
-            for op in new_operands:
-                max_reg = max(max_reg, self._extract_reg_number(op))
+        result = [_renumber_inst(inst) for inst in instructions]
 
+        all_reg_numbers = [
+            self._extract_reg_number(token)
+            for inst in result
+            for token in [inst.result_reg, *inst.operands]
+        ]
+        max_reg = max(all_reg_numbers, default=-1)
         next_offset = max_reg + 1 if max_reg >= 0 else reg_offset
         return result, next_offset
 

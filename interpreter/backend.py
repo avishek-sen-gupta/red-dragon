@@ -148,7 +148,10 @@ class LLMInterpreterBackend(LLMBackend):
         return self._parse_response(raw)
 
 
-def get_backend(name: str, client: Any = None) -> LLMBackend:
+_NO_CLIENT: Any = object()  # sentinel — distinct from None
+
+
+def get_backend(name: str, client: Any = _NO_CLIENT) -> LLMBackend:
     """Factory for LLM interpreter backends.
 
     Args:
@@ -157,7 +160,7 @@ def get_backend(name: str, client: Any = None) -> LLMBackend:
     """
     llm_client = (
         get_llm_client(provider=name, completion_fn=client)
-        if client
+        if client is not _NO_CLIENT
         else get_llm_client(provider=name)
     )
     return LLMInterpreterBackend(llm_client=llm_client)

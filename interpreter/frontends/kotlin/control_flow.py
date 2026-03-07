@@ -88,7 +88,7 @@ def lower_while_stmt(ctx: TreeSitterEmitContext, node) -> None:
 # -- for statement -----------------------------------------------------
 
 
-def _find_for_iterable(ctx: TreeSitterEmitContext, node):
+def _find_for_iterable(ctx: TreeSitterEmitContext, node) -> object | None:
     """Find the iterable expression in a for statement (after 'in' keyword)."""
     found_in = False
     for child in node.children:
