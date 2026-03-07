@@ -1400,3 +1400,17 @@ Updated tier classification: Tier 1 (11): Python, Java, C#, Kotlin, Scala, JS, T
 3. **Ruby implicit return** (`interpreter/frontends/ruby/declarations.py`): New `_lower_body_with_implicit_return` helper detects when the last named child of a method body is an expression (not a statement). Both `lower_ruby_method` and `lower_ruby_singleton_method` use this helper.
 
 **Consequences:** All 3 xfail markers removed from `tests/integration/test_type_inference.py`. Scala added to `TestReturnBackfillAllLanguages`. Test count: 9258 passed, 4 skipped, 22 xfailed (down from 25 xfailed).
+
+---
+
+### ADR-081: Builtin method return types and UNOP `~` → Int (2026-03-07)
+
+**Context:** The type inference pass handled CALL_METHOD return types only via user-defined class method tables and a func_return_types fallback. Common builtin methods like `.upper()`, `.split()`, `.find()`, `.startswith()` — whose return types are universally known — were left untyped when no user-defined class method matched. Separately, the UNOP `~` (bitwise NOT) relied on operand-type propagation, which produced no type when the operand was untyped, even though `~` always produces an integer.
+
+**Decision:** Two additions to `interpreter/type_inference.py`:
+
+1. **Builtin method return types table** (`_BUILTIN_METHOD_RETURN_TYPES`): 60+ method names mapped to their canonical return types — String methods (`.upper()`, `.lower()`, `.strip()`, `.replace()`, etc.), Int methods (`.find()`, `.index()`, `.count()`, `.size()`), Bool methods (`.startswith()`, `.endswith()`, `.contains()`, `.includes()`), and Array methods (`.split()`, `.keys()`, `.values()`, `.items()`). Cross-language coverage includes Python, JavaScript, Java, Ruby, Kotlin, Go, and Lua naming conventions. Wired as the final fallback in `_infer_call_method` — user-defined class methods and func_return_types take priority.
+
+2. **UNOP `~` → Int**: Added `"~": TypeName.INT` to `_UNOP_FIXED_TYPES`.
+
+**Consequences:** Test count: 9266 passed, 4 skipped, 22 xfailed (8 new tests). Builtin method types now propagate through STORE_VAR, BINOP, and downstream instructions without requiring frontend type annotations.
