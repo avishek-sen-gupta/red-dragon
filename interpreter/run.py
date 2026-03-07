@@ -10,7 +10,7 @@ from typing import Any
 
 from .constants import Language
 from .conversion_rules import TypeConversionRules
-from .default_conversion_rules import DefaultConversionRules
+from .default_conversion_rules import DefaultTypeConversionRules
 from .identity_conversion_rules import IdentityConversionRules
 from .ir import IRInstruction, Opcode
 from .frontend import get_frontend
@@ -564,7 +564,7 @@ def run(
     stats.registry_classes = len(registry.classes)
 
     # 4c. Type inference
-    conversion_rules = DefaultConversionRules()
+    conversion_rules = DefaultTypeConversionRules()
     type_resolver = TypeResolver(conversion_rules)
     type_env = infer_types(
         instructions, type_resolver, type_env_builder=frontend.type_env_builder

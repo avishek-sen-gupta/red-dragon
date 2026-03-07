@@ -7,7 +7,7 @@ write time — so str(2) == "2" matches on both store and load.
 
 from types import MappingProxyType
 
-from interpreter.default_conversion_rules import DefaultConversionRules
+from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.type_environment import TypeEnvironment
@@ -85,7 +85,7 @@ class TestFloatIndexHeapKeyMismatch:
         """STORE_INDEX with float 2.0, then LOAD_INDEX with int 2 — value should round-trip."""
         vm = _setup_array(_make_vm())
         type_env = _type_env_with({"%idx_f": "Int"})
-        rules = DefaultConversionRules()
+        rules = DefaultTypeConversionRules()
 
         # Store value 42 at float index 2.0 (coerced to int 2 at write time)
         _set_reg(vm, "%idx_f", 2.0, type_env=type_env, conversion_rules=rules)
@@ -119,7 +119,7 @@ class TestFloatIndexHeapKeyMismatch:
         """STORE_INDEX with int 2, then LOAD_INDEX with float 2.0 — value should round-trip."""
         vm = _setup_array(_make_vm())
         type_env = _type_env_with({"%idx_i": "Int", "%idx_f": "Int"})
-        rules = DefaultConversionRules()
+        rules = DefaultTypeConversionRules()
 
         # Store value 99 at int index 2
         _set_reg(vm, "%idx_i", 2)
@@ -153,7 +153,7 @@ class TestFloatIndexHeapKeyMismatch:
         """After STORE_INDEX with float 2.0 and type env saying Int, heap key is '2' not '2.0'."""
         vm = _setup_array(_make_vm())
         type_env = _type_env_with({"%idx_f": "Int"})
-        rules = DefaultConversionRules()
+        rules = DefaultTypeConversionRules()
 
         _set_reg(vm, "%idx_f", 2.0, type_env=type_env, conversion_rules=rules)
         _set_reg(vm, "%val", 77)

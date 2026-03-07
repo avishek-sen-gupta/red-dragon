@@ -1,4 +1,4 @@
-"""DefaultConversionRules — sensible type coercion for the default type ontology."""
+"""DefaultTypeConversionRules — sensible type coercion for the default type ontology."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def _truncate_to_int(x: Any) -> int:
     return math.trunc(x)
 
 
-class DefaultConversionRules(TypeConversionRules):
+class DefaultTypeConversionRules(TypeConversionRules):
     """Default coercion table for the standard type ontology.
 
     Handles Int/Float promotion, Int division → floor division,

@@ -2,13 +2,13 @@
 
 from interpreter.constants import TypeName
 from interpreter.conversion_result import IDENTITY_CONVERSION
-from interpreter.default_conversion_rules import DefaultConversionRules
+from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.null_type_resolver import NullTypeResolver
 from interpreter.type_resolver import TypeResolver
 
 
 def _resolver() -> TypeResolver:
-    return TypeResolver(DefaultConversionRules())
+    return TypeResolver(DefaultTypeConversionRules())
 
 
 class TestTypeResolverWithHints:
