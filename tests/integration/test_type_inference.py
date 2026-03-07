@@ -1796,3 +1796,128 @@ class TestNewObjectTypingOOP:
         assert (
             len(dog_typed) >= 1
         ), f"[{lang}] expected at least one register typed as 'Dog'"
+
+
+# ---------------------------------------------------------------------------
+# Builtin method return types (ADR-081)
+# ---------------------------------------------------------------------------
+
+
+class TestBuiltinMethodReturnTypesPython:
+    def test_upper_returns_string(self):
+        _instructions, env = _lower_and_infer("x = 'hello'.upper()", "python")
+        assert env.var_types["x"] == TypeName.STRING
+
+    def test_split_returns_array(self):
+        _instructions, env = _lower_and_infer("x = 'a,b'.split(',')", "python")
+        assert env.var_types["x"] == TypeName.ARRAY
+
+    def test_find_returns_int(self):
+        _instructions, env = _lower_and_infer("x = 'hello'.find('l')", "python")
+        assert env.var_types["x"] == TypeName.INT
+
+    def test_startswith_returns_bool(self):
+        _instructions, env = _lower_and_infer("x = 'hello'.startswith('h')", "python")
+        assert env.var_types["x"] == TypeName.BOOL
+
+    def test_keys_returns_array(self):
+        _instructions, env = _lower_and_infer("d = {}; x = d.keys()", "python")
+        assert env.var_types["x"] == TypeName.ARRAY
+
+    def test_values_returns_array(self):
+        _instructions, env = _lower_and_infer("d = {}; x = d.values()", "python")
+        assert env.var_types["x"] == TypeName.ARRAY
+
+    def test_replace_returns_string(self):
+        _instructions, env = _lower_and_infer("x = 'hello'.replace('l','r')", "python")
+        assert env.var_types["x"] == TypeName.STRING
+
+    def test_count_returns_int(self):
+        _instructions, env = _lower_and_infer("x = [1,2,1].count(1)", "python")
+        assert env.var_types["x"] == TypeName.INT
+
+
+class TestBuiltinMethodReturnTypesJavaScript:
+    def test_toUpperCase_returns_string(self):
+        _instructions, env = _lower_and_infer(
+            "let x = 'hello'.toUpperCase();", "javascript"
+        )
+        assert env.var_types["x"] == TypeName.STRING
+
+    def test_split_returns_array(self):
+        _instructions, env = _lower_and_infer("let x = 'a,b'.split(',');", "javascript")
+        assert env.var_types["x"] == TypeName.ARRAY
+
+    def test_indexOf_returns_int(self):
+        _instructions, env = _lower_and_infer(
+            "let x = 'hello'.indexOf('l');", "javascript"
+        )
+        assert env.var_types["x"] == TypeName.INT
+
+    def test_includes_returns_bool(self):
+        _instructions, env = _lower_and_infer(
+            "let x = 'hello'.includes('l');", "javascript"
+        )
+        assert env.var_types["x"] == TypeName.BOOL
+
+    def test_trim_returns_string(self):
+        _instructions, env = _lower_and_infer("let x = ' hello '.trim();", "javascript")
+        assert env.var_types["x"] == TypeName.STRING
+
+
+class TestBuiltinMethodReturnTypesJava:
+    def test_toUpperCase_returns_string(self):
+        _instructions, env = _lower_and_infer(
+            'class M { static String x = "hello".toUpperCase(); }', "java"
+        )
+        assert env.var_types["x"] == TypeName.STRING
+
+    def test_indexOf_returns_int(self):
+        _instructions, env = _lower_and_infer(
+            'class M { static int x = "hello".indexOf("l"); }', "java"
+        )
+        assert env.var_types["x"] == TypeName.INT
+
+    def test_contains_returns_bool(self):
+        _instructions, env = _lower_and_infer(
+            'class M { static boolean x = "hello".contains("l"); }', "java"
+        )
+        assert env.var_types["x"] == TypeName.BOOL
+
+
+class TestBuiltinMethodReturnTypesRuby:
+    def test_upcase_returns_string(self):
+        _instructions, env = _lower_and_infer("x = 'hello'.upcase", "ruby")
+        assert env.var_types["x"] == TypeName.STRING
+
+    def test_downcase_returns_string(self):
+        _instructions, env = _lower_and_infer("x = 'hello'.downcase", "ruby")
+        assert env.var_types["x"] == TypeName.STRING
+
+    def test_split_returns_array(self):
+        _instructions, env = _lower_and_infer("x = 'a,b'.split(',')", "ruby")
+        assert env.var_types["x"] == TypeName.ARRAY
+
+    def test_gsub_returns_string(self):
+        _instructions, env = _lower_and_infer("x = 'hello'.gsub('l','r')", "ruby")
+        assert env.var_types["x"] == TypeName.STRING
+
+
+class TestBuiltinMethodReturnTypesKotlin:
+    def test_toUpperCase_returns_string(self):
+        _instructions, env = _lower_and_infer(
+            'fun main() { val x = "hello".toUpperCase() }', "kotlin"
+        )
+        assert env.var_types["x"] == TypeName.STRING
+
+    def test_indexOf_returns_int(self):
+        _instructions, env = _lower_and_infer(
+            'fun main() { val x = "hello".indexOf("l") }', "kotlin"
+        )
+        assert env.var_types["x"] == TypeName.INT
+
+    def test_contains_returns_bool(self):
+        _instructions, env = _lower_and_infer(
+            'fun main() { val x = "hello".contains("l") }', "kotlin"
+        )
+        assert env.var_types["x"] == TypeName.BOOL
