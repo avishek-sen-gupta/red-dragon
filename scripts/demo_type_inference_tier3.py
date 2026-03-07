@@ -10,7 +10,7 @@ Exercises all 3 new features:
 import logging
 
 from interpreter.api import lower_and_infer
-from interpreter.default_conversion_rules import DefaultConversionRules
+from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.type_inference import infer_types
@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.WARNING)
 
 
 def _resolver():
-    return TypeResolver(DefaultConversionRules())
+    return TypeResolver(DefaultTypeConversionRules())
 
 
 def _lower_and_infer(source: str, language: str):

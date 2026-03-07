@@ -11,14 +11,14 @@ Exercises 6 features:
 """
 
 from interpreter.api import lower_and_infer
-from interpreter.default_conversion_rules import DefaultConversionRules
+from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.type_inference import infer_types
 from interpreter.type_resolver import TypeResolver
 
 
 def _resolver():
-    return TypeResolver(DefaultConversionRules())
+    return TypeResolver(DefaultTypeConversionRules())
 
 
 def _lower_and_infer(source: str, language: str):

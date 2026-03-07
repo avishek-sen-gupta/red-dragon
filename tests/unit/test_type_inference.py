@@ -4,7 +4,7 @@ import pytest
 
 from interpreter.constants import TypeName
 from interpreter.conversion_result import IDENTITY_CONVERSION
-from interpreter.default_conversion_rules import DefaultConversionRules
+from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.null_type_resolver import NullTypeResolver
 from interpreter.function_signature import FunctionSignature
@@ -23,7 +23,7 @@ def _make_inst(opcode, result_reg="", operands=None, label=""):
 
 
 def _default_resolver():
-    return TypeResolver(DefaultConversionRules())
+    return TypeResolver(DefaultTypeConversionRules())
 
 
 def _null_resolver():
