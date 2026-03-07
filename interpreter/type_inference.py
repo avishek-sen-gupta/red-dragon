@@ -32,6 +32,71 @@ _BUILTIN_RETURN_TYPES: dict[str, str] = {
     "Array": TypeName.ARRAY,
 }
 
+_BUILTIN_METHOD_RETURN_TYPES: dict[str, str] = {
+    # String → String
+    "upper": TypeName.STRING,
+    "lower": TypeName.STRING,
+    "strip": TypeName.STRING,
+    "lstrip": TypeName.STRING,
+    "rstrip": TypeName.STRING,
+    "replace": TypeName.STRING,
+    "format": TypeName.STRING,
+    "join": TypeName.STRING,
+    "capitalize": TypeName.STRING,
+    "title": TypeName.STRING,
+    "swapcase": TypeName.STRING,
+    "trim": TypeName.STRING,
+    "toLowerCase": TypeName.STRING,
+    "toUpperCase": TypeName.STRING,
+    "substring": TypeName.STRING,
+    "charAt": TypeName.STRING,
+    "toString": TypeName.STRING,
+    "concat": TypeName.STRING,
+    "downcase": TypeName.STRING,
+    "upcase": TypeName.STRING,
+    "chomp": TypeName.STRING,
+    "chop": TypeName.STRING,
+    "gsub": TypeName.STRING,
+    "sub": TypeName.STRING,
+    "encode": TypeName.STRING,
+    "decode": TypeName.STRING,
+    # → Int
+    "find": TypeName.INT,
+    "index": TypeName.INT,
+    "rfind": TypeName.INT,
+    "rindex": TypeName.INT,
+    "count": TypeName.INT,
+    "indexOf": TypeName.INT,
+    "lastIndexOf": TypeName.INT,
+    "size": TypeName.INT,
+    "length": TypeName.INT,
+    # → Bool
+    "startswith": TypeName.BOOL,
+    "endswith": TypeName.BOOL,
+    "isdigit": TypeName.BOOL,
+    "isalpha": TypeName.BOOL,
+    "isalnum": TypeName.BOOL,
+    "isupper": TypeName.BOOL,
+    "islower": TypeName.BOOL,
+    "isspace": TypeName.BOOL,
+    "startsWith": TypeName.BOOL,
+    "endsWith": TypeName.BOOL,
+    "includes": TypeName.BOOL,
+    "contains": TypeName.BOOL,
+    "isEmpty": TypeName.BOOL,
+    "has": TypeName.BOOL,
+    # → Array
+    "split": TypeName.ARRAY,
+    "splitlines": TypeName.ARRAY,
+    "rsplit": TypeName.ARRAY,
+    "keys": TypeName.ARRAY,
+    "values": TypeName.ARRAY,
+    "items": TypeName.ARRAY,
+    "entries": TypeName.ARRAY,
+    "toArray": TypeName.ARRAY,
+    "toList": TypeName.ARRAY,
+}
+
 _SELF_PARAM_NAMES = frozenset({"self", "this", "$this"})
 
 _FUNC_REF_PATTERN = re.compile(r"<function:")
@@ -242,6 +307,7 @@ _UNOP_FIXED_TYPES: dict[str, str] = {
     "not": TypeName.BOOL,
     "!": TypeName.BOOL,
     "#": TypeName.INT,
+    "~": TypeName.INT,
 }
 
 
@@ -368,6 +434,11 @@ def _infer_call_method(
     # Fallback: try func_return_types for unique method names
     if method_name in ctx.func_return_types:
         ctx.register_types[inst.result_reg] = ctx.func_return_types[method_name]
+        return
+    # Final fallback: builtin method return types (e.g. .upper()→String, .split()→Array)
+    builtin_type = _BUILTIN_METHOD_RETURN_TYPES.get(method_name, "")
+    if builtin_type:
+        ctx.register_types[inst.result_reg] = builtin_type
 
 
 def _infer_call_unknown(

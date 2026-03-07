@@ -335,6 +335,25 @@ class TestUnopInference:
         env = infer_types(instructions, _default_resolver())
         assert env.register_types["%1"] == TypeName.BOOL
 
+    def test_bitwise_not_produces_int(self):
+        """UNOP `~` → Int regardless of operand type."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+            _make_inst(Opcode.UNOP, result_reg="%1", operands=["~", "%0"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%1"] == TypeName.INT
+
+    def test_bitwise_not_on_untyped_operand_still_produces_int(self):
+        """UNOP `~` with untyped operand → Int."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.UNOP, result_reg="%1", operands=["~", "%0"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%1"] == TypeName.INT
+
 
 # ---------------------------------------------------------------------------
 # NEW_OBJECT / NEW_ARRAY
@@ -839,6 +858,102 @@ class TestCallMethodReturnTypes:
         ]
         builder = TypeEnvironmentBuilder(func_return_types={"func_getAge_0": "Int"})
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        assert env.register_types["%3"] == "Int"
+
+    def test_builtin_string_method_upper_returns_string(self):
+        """CALL_METHOD .upper() on any object → String."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=['"hello"']),
+            _make_inst(
+                Opcode.CALL_METHOD,
+                result_reg="%1",
+                operands=["%0", "upper"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%1"] == TypeName.STRING
+
+    def test_builtin_string_method_split_returns_array(self):
+        """CALL_METHOD .split() → Array."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=['"a,b,c"']),
+            _make_inst(
+                Opcode.CALL_METHOD,
+                result_reg="%1",
+                operands=["%0", "split"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%1"] == TypeName.ARRAY
+
+    def test_builtin_method_keys_returns_array(self):
+        """CALL_METHOD .keys() → Array."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(
+                Opcode.CALL_METHOD,
+                result_reg="%1",
+                operands=["%0", "keys"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%1"] == TypeName.ARRAY
+
+    def test_builtin_method_find_returns_int(self):
+        """CALL_METHOD .find() → Int."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=['"hello"']),
+            _make_inst(
+                Opcode.CALL_METHOD,
+                result_reg="%1",
+                operands=["%0", "find"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%1"] == TypeName.INT
+
+    def test_builtin_method_startswith_returns_bool(self):
+        """CALL_METHOD .startswith() → Bool."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=['"hello"']),
+            _make_inst(
+                Opcode.CALL_METHOD,
+                result_reg="%1",
+                operands=["%0", "startswith"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%1"] == TypeName.BOOL
+
+    def test_user_defined_method_takes_priority_over_builtin(self):
+        """User-defined class method return type overrides builtin method table."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label="class_Widget_0"),
+            _make_inst(Opcode.BRANCH, label="end_split_0"),
+            _make_inst(Opcode.LABEL, label="func_split_0"),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_split_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:split@func_split_0>"],
+            ),
+            _make_inst(Opcode.LABEL, label="end_class_Widget_0"),
+            _make_inst(Opcode.NEW_OBJECT, result_reg="%2", operands=["Widget"]),
+            _make_inst(
+                Opcode.CALL_METHOD,
+                result_reg="%3",
+                operands=["%2", "split"],
+            ),
+        ]
+        builder = TypeEnvironmentBuilder(func_return_types={"func_split_0": "Int"})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        # User-defined Widget.split() returns Int, not the builtin Array
         assert env.register_types["%3"] == "Int"
 
     def test_class_scope_reset_on_new_class(self):
