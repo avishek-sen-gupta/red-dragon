@@ -9,7 +9,7 @@ from types import MappingProxyType
 from typing import Any
 
 from .constants import Language
-from .conversion_rules import ConversionRules
+from .conversion_rules import TypeConversionRules
 from .default_conversion_rules import DefaultConversionRules
 from .identity_conversion_rules import IdentityConversionRules
 from .ir import IRInstruction, Opcode
@@ -123,7 +123,7 @@ def _handle_call_dispatch_setup(
     current_label: str,
     ip: int,
     type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
-    conversion_rules: ConversionRules = _IDENTITY_RULES,
+    conversion_rules: TypeConversionRules = _IDENTITY_RULES,
 ):
     """Set up the new call frame's return info after call_push + dispatch."""
     call_result_reg = instruction.result_reg
@@ -186,7 +186,7 @@ def execute_cfg(
     registry: FunctionRegistry,
     config: VMConfig = VMConfig(),
     type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
-    conversion_rules: ConversionRules = _IDENTITY_RULES,
+    conversion_rules: TypeConversionRules = _IDENTITY_RULES,
 ) -> tuple[VMState, ExecutionStats]:
     """Execute a pre-built CFG from the given entry point.
 
@@ -324,7 +324,7 @@ def execute_cfg_traced(
     registry: FunctionRegistry,
     config: VMConfig = VMConfig(),
     type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
-    conversion_rules: ConversionRules = _IDENTITY_RULES,
+    conversion_rules: TypeConversionRules = _IDENTITY_RULES,
 ) -> tuple[VMState, ExecutionTrace]:
     """Execute a pre-built CFG and record a trace of every step.
 

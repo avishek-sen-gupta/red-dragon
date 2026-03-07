@@ -1,10 +1,10 @@
-"""IdentityConversionRules — null-object ConversionRules that never coerces."""
+"""IdentityConversionRules — null-object TypeConversionRules that never coerces."""
 
 from __future__ import annotations
 
 from typing import Any, Callable
 
-from interpreter.conversion_rules import ConversionRules
+from interpreter.conversion_rules import TypeConversionRules
 from interpreter.conversion_result import (
     ConversionResult,
     IDENTITY_CONVERSION,
@@ -12,7 +12,7 @@ from interpreter.conversion_result import (
 )
 
 
-class IdentityConversionRules(ConversionRules):
+class IdentityConversionRules(TypeConversionRules):
     """Always returns identity coercers with no operator override.
 
     This is the null-object implementation: when the VM has no type

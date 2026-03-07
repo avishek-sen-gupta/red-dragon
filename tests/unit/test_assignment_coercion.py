@@ -1,4 +1,4 @@
-"""Tests for assignment coercion — coerce_assignment on ConversionRules."""
+"""Tests for assignment coercion — coerce_assignment on TypeConversionRules."""
 
 import math
 
