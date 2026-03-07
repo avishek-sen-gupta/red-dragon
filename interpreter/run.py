@@ -8,25 +8,25 @@ import time
 from types import MappingProxyType
 from typing import Any
 
-from .constants import Language
-from .conversion_rules import TypeConversionRules
-from .default_conversion_rules import DefaultTypeConversionRules
-from .identity_conversion_rules import IdentityConversionRules
-from .ir import IRInstruction, Opcode
-from .frontend import get_frontend
-from .frontend_observer import FrontendObserver
-from .cfg import CFG, build_cfg
-from .registry import build_registry, _parse_class_ref, FunctionRegistry
-from .executor import _try_execute_locally
-from .type_environment import TypeEnvironment
-from .type_inference import infer_types
-from .type_resolver import TypeResolver
-from .unresolved_call import (
+from interpreter.constants import Language
+from interpreter.conversion_rules import TypeConversionRules
+from interpreter.default_conversion_rules import DefaultTypeConversionRules
+from interpreter.identity_conversion_rules import IdentityConversionRules
+from interpreter.ir import IRInstruction, Opcode
+from interpreter.frontend import get_frontend
+from interpreter.frontend_observer import FrontendObserver
+from interpreter.cfg import CFG, build_cfg
+from interpreter.registry import build_registry, _parse_class_ref, FunctionRegistry
+from interpreter.executor import _try_execute_locally
+from interpreter.type_environment import TypeEnvironment
+from interpreter.type_inference import infer_types
+from interpreter.type_resolver import TypeResolver
+from interpreter.unresolved_call import (
     SymbolicResolver,
     LLMPlausibleResolver,
     UnresolvedCallResolver,
 )
-from .vm import (
+from interpreter.vm import (
     VMState,
     SymbolicValue,
     StackFrame,
@@ -36,15 +36,15 @@ from .vm import (
     _deserialize_value,
     _serialize_value,
 )
-from .run_types import (
+from interpreter.run_types import (
     VMConfig,
     ExecutionStats,
     PipelineStats,
     UnresolvedCallStrategy,
 )  # noqa: F401 — re-exported for backwards compatibility
-from .trace_types import TraceStep, ExecutionTrace
-from .backend import get_backend
-from . import constants
+from interpreter.trace_types import TraceStep, ExecutionTrace
+from interpreter.backend import get_backend
+from interpreter import constants
 
 logger = logging.getLogger(__name__)
 
@@ -98,22 +98,24 @@ def _log_update(
     update: StateUpdate,
     used_llm: bool,
 ):
-    """Print verbose step-by-step execution info."""
+    """Log verbose step-by-step execution info."""
     tag = "LLM" if used_llm else "local"
-    print(f"  [{tag}] {update.reasoning}")
+    logger.info("  [%s] %s", tag, update.reasoning)
     for reg, val in update.register_writes.items():
-        print(f"    {reg} = {_format_val(val)}")
+        logger.info("    %s = %s", reg, _format_val(val))
     for var, val in update.var_writes.items():
-        print(f"    ${var} = {_format_val(val)}")
+        logger.info("    $%s = %s", var, _format_val(val))
     for hw in update.heap_writes:
-        print(f"    heap[{hw.obj_addr}].{hw.field} = {_format_val(hw.value)}")
+        logger.info(
+            "    heap[%s].%s = %s", hw.obj_addr, hw.field, _format_val(hw.value)
+        )
     for obj in update.new_objects:
-        print(f"    new {obj.type_hint} @ {obj.addr}")
+        logger.info("    new %s @ %s", obj.type_hint, obj.addr)
     if update.next_label:
-        print(f"    → {update.next_label}")
+        logger.info("    → %s", update.next_label)
     if update.path_condition:
-        print(f"    path: {update.path_condition}")
-    print()
+        logger.info("    path: %s", update.path_condition)
+    logger.info("")
 
 
 def _handle_call_dispatch_setup(
@@ -156,12 +158,12 @@ def _handle_return_flow(
     """Handle RETURN/THROW control flow. Returns new (label, ip) or stop sentinel."""
     if len(vm.call_stack) < 1:
         if verbose:
-            print(f"[step {step}] Top-level return/throw. Stopping.")
+            logger.info("[step %d] Top-level return/throw. Stopping.", step)
         return _StopExecution()
 
     if return_frame.function_name == constants.MAIN_FRAME_NAME:
         if verbose:
-            print(f"[step {step}] Top-level return/throw. Stopping.")
+            logger.info("[step %d] Top-level return/throw. Stopping.", step)
         return _StopExecution()
 
     # Return to caller — write return value to caller's result register
@@ -176,7 +178,7 @@ def _handle_return_flow(
         return (return_frame.return_label, new_ip)
 
     if verbose:
-        print(f"[step {step}] No return label. Stopping.")
+        logger.info("[step %d] No return label. Stopping.", step)
     return _StopExecution()
 
 
@@ -226,16 +228,17 @@ def execute_cfg(
                 ip = 0
                 continue
             if config.verbose:
-                print(
-                    f"[step {step}] End of '{current_label}', "
-                    "no successors. Stopping."
+                logger.info(
+                    "[step %d] End of '%s', no successors. Stopping.",
+                    step,
+                    current_label,
                 )
             break
 
         instruction = block.instructions[ip]
 
         if config.verbose:
-            print(f"[step {step}] {current_label}:{ip}  {instruction}")
+            logger.info("[step %d] %s:%d  %s", step, current_label, ip, instruction)
 
         if instruction.opcode == Opcode.LABEL:
             ip += 1
@@ -313,7 +316,7 @@ def execute_cfg(
     )
 
     if config.verbose:
-        print(f"\n({stats.steps} steps, {stats.llm_calls} LLM calls)")
+        logger.info("(%d steps, %d LLM calls)", stats.steps, stats.llm_calls)
 
     return (vm, stats)
 
@@ -364,16 +367,17 @@ def execute_cfg_traced(
                 ip = 0
                 continue
             if config.verbose:
-                print(
-                    f"[step {step}] End of '{current_label}', "
-                    "no successors. Stopping."
+                logger.info(
+                    "[step %d] End of '%s', no successors. Stopping.",
+                    step,
+                    current_label,
                 )
             break
 
         instruction = block.instructions[ip]
 
         if config.verbose:
-            print(f"[step {step}] {current_label}:{ip}  {instruction}")
+            logger.info("[step %d] %s:%d  %s", step, current_label, ip, instruction)
 
         if instruction.opcode == Opcode.LABEL:
             ip += 1
@@ -459,7 +463,7 @@ def execute_cfg_traced(
     )
 
     if config.verbose:
-        print(f"\n({stats.steps} steps, {stats.llm_calls} LLM calls)")
+        logger.info("(%d steps, %d LLM calls)", stats.steps, stats.llm_calls)
 
     trace = ExecutionTrace(
         steps=trace_steps,
@@ -538,10 +542,10 @@ def run(
     )
 
     if verbose:
-        print("═══ IR ═══")
+        logger.info("═══ IR ═══")
         for inst in instructions:
-            print(f"  {inst}")
-        print()
+            logger.info("  %s", inst)
+        logger.info("")
 
     # 3. Build CFG
     t0 = time.perf_counter()
@@ -550,8 +554,8 @@ def run(
     stats.cfg_block_count = len(cfg.blocks)
 
     if verbose:
-        print("═══ CFG ═══")
-        print(cfg)
+        logger.info("═══ CFG ═══")
+        logger.info("%s", cfg)
 
     # 4. Pick entry
     entry = _find_entry_point(cfg, entry_point)
@@ -598,8 +602,8 @@ def run(
     stats.total_time = time.perf_counter() - pipeline_start
 
     if verbose:
-        print()
-        print(stats.report())
+        logger.info("")
+        logger.info("%s", stats.report())
 
     return vm
 

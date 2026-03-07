@@ -7,9 +7,9 @@ from collections import deque
 from dataclasses import dataclass, field
 from functools import reduce
 
-from . import constants
-from .cfg import BasicBlock, CFG
-from .ir import IRInstruction, Opcode
+from interpreter import constants
+from interpreter.cfg import BasicBlock, CFG
+from interpreter.ir import IRInstruction, Opcode
 
 logger = logging.getLogger(__name__)
 

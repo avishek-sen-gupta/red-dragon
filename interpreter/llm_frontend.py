@@ -7,12 +7,12 @@ import logging
 import time
 from typing import Any
 
-from .constants import Language
-from .frontend import Frontend
-from .frontend_observer import FrontendObserver, NullFrontendObserver
-from .ir import NO_SOURCE_LOCATION, IRInstruction, Opcode
-from .llm_client import LLMClient
-from . import constants
+from interpreter.constants import Language
+from interpreter.frontend import Frontend
+from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
+from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode
+from interpreter.llm_client import LLMClient
+from interpreter import constants
 
 logger = logging.getLogger(__name__)
 
