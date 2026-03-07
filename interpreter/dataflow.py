@@ -179,10 +179,11 @@ def _build_defs_by_variable(
     all_defs: list[Definition],
 ) -> dict[str, set[Definition]]:
     """Index definitions by variable name."""
-    result: dict[str, set[Definition]] = {}
-    for d in all_defs:
-        result.setdefault(d.variable, set()).add(d)
-    return result
+
+    def _acc_def(acc: dict[str, set[Definition]], d: Definition):
+        return {**acc, d.variable: acc.get(d.variable, set()) | {d}}
+
+    return reduce(_acc_def, all_defs, {})
 
 
 def compute_gen_kill(
@@ -329,30 +330,36 @@ def _build_raw_dependency_graph(
     Does NOT compute transitive closure.
     """
     # Map: variable -> set of variables/registers used by its defining instruction
-    produced_from: dict[str, set[str]] = {}
-    for link in def_use_chains:
-        defn = link.definition
-        uses = _uses_of(defn.instruction)
-        produced_from.setdefault(defn.variable, set()).update(uses)
-
-    # For each STORE_VAR, trace the RHS register backward to named variables
-    dep_graph: dict[str, set[str]] = {}
+    produced_from: dict[str, set[str]] = reduce(
+        lambda acc, link: {
+            **acc,
+            link.definition.variable: acc.get(link.definition.variable, set())
+            | set(_uses_of(link.definition.instruction)),
+        },
+        def_use_chains,
+        {},
+    )
 
     # Collect all STORE_VAR definitions
-    store_var_defs: set[tuple[str, str]] = set()
-    for link in def_use_chains:
-        use_inst = link.use.instruction
-        if use_inst.opcode == Opcode.STORE_VAR and len(use_inst.operands) >= 2:
-            var_name = use_inst.operands[0]
-            rhs_reg = use_inst.operands[1]
-            store_var_defs.add((var_name, rhs_reg))
+    store_var_defs: set[tuple[str, str]] = {
+        (use_inst.operands[0], use_inst.operands[1])
+        for link in def_use_chains
+        if (use_inst := link.use.instruction).opcode == Opcode.STORE_VAR
+        and len(use_inst.operands) >= 2
+    }
 
-    for var_name, rhs_reg in store_var_defs:
+    # For each STORE_VAR, trace the RHS register backward to named variables
+    def _trace_deps(var_name: str, rhs_reg: str) -> tuple[str, set[str]]:
         named_deps: set[str] = set()
         _trace_to_named_vars(rhs_reg, produced_from, named_deps, set())
-        dep_graph.setdefault(var_name, set()).update(named_deps)
+        return (var_name, named_deps)
 
-    return dep_graph
+    traced = [_trace_deps(var_name, rhs_reg) for var_name, rhs_reg in store_var_defs]
+    return reduce(
+        lambda acc, pair: {**acc, pair[0]: acc.get(pair[0], set()) | pair[1]},
+        traced,
+        {},
+    )
 
 
 def _transitive_closure(

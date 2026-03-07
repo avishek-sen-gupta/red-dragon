@@ -283,7 +283,7 @@ def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
                 ctx.lower_block(body_block)
 
 
-def _find_property_initializer(ctx: TreeSitterEmitContext, node):
+def _find_property_initializer(ctx: TreeSitterEmitContext, node) -> object | None:
     """Find the initializer expression after ``=`` in a property_declaration."""
     found_eq = False
     for child in node.children:

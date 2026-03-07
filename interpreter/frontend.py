@@ -73,24 +73,24 @@ def get_frontend(
     if frontend_type == constants.FRONTEND_COBOL:
         import os
 
-        from .cobol.cobol_frontend import CobolFrontend
-        from .cobol.cobol_parser import ProLeapCobolParser
-        from .cobol.subprocess_runner import RealSubprocessRunner
+        from interpreter.cobol.cobol_frontend import CobolFrontend
+        from interpreter.cobol.cobol_parser import ProLeapCobolParser
+        from interpreter.cobol.subprocess_runner import RealSubprocessRunner
 
         bridge_jar = os.environ.get("PROLEAP_BRIDGE_JAR", "proleap-bridge.jar")
         parser = ProLeapCobolParser(RealSubprocessRunner(), bridge_jar)
         return CobolFrontend(parser, observer=observer)
 
     if frontend_type == constants.FRONTEND_DETERMINISTIC:
-        from .frontends import get_deterministic_frontend
+        from interpreter.frontends import get_deterministic_frontend
 
         frontend = get_deterministic_frontend(language, observer=observer)
         if repair_client is not _NO_REPAIR_CLIENT:
-            from .ast_repair.repairing_frontend_decorator import (
+            from interpreter.ast_repair.repairing_frontend_decorator import (
                 RepairingFrontendDecorator,
             )
-            from .llm_client import LLMClient
-            from .parser import TreeSitterParserFactory
+            from interpreter.llm_client import LLMClient
+            from interpreter.parser import TreeSitterParserFactory
 
             if isinstance(repair_client, LLMClient):
                 frontend = RepairingFrontendDecorator(
@@ -102,8 +102,8 @@ def get_frontend(
         return frontend
 
     if frontend_type in (constants.FRONTEND_LLM, constants.FRONTEND_CHUNKED_LLM):
-        from .llm_client import LLMClient, get_llm_client
-        from .llm_frontend import LLMFrontend
+        from interpreter.llm_client import LLMClient, get_llm_client
+        from interpreter.llm_frontend import LLMFrontend
 
         if llm_client is None:
             resolved_client = get_llm_client(provider=llm_provider)
@@ -126,8 +126,8 @@ def get_frontend(
         )
 
         if frontend_type == constants.FRONTEND_CHUNKED_LLM:
-            from .chunked_llm_frontend import ChunkedLLMFrontend
-            from .parser import TreeSitterParserFactory
+            from interpreter.chunked_llm_frontend import ChunkedLLMFrontend
+            from interpreter.parser import TreeSitterParserFactory
 
             return ChunkedLLMFrontend(
                 inner_frontend, TreeSitterParserFactory(), language
