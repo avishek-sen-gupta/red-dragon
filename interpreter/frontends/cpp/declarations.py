@@ -17,6 +17,7 @@ from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
 )
+from interpreter.frontends.cpp.node_types import CppNodeType
 
 
 def lower_cpp_declaration(ctx: TreeSitterEmitContext, node) -> None:
@@ -25,13 +26,13 @@ def lower_cpp_declaration(ctx: TreeSitterEmitContext, node) -> None:
     raw_type = extract_type_from_field(ctx, node, "type")
     type_hint = normalize_type_hint(raw_type, ctx.type_map)
     for child in node.children:
-        if child.type == "init_declarator":
+        if child.type == CppNodeType.INIT_DECLARATOR:
             from interpreter.frontends.c.declarations import _lower_init_declarator
 
             _lower_init_declarator(
                 ctx, child, struct_type=struct_type, type_hint=type_hint
             )
-        elif child.type == "identifier":
+        elif child.type == CppNodeType.IDENTIFIER:
             var_name = ctx.node_text(child)
             if struct_type:
                 val_reg = ctx.fresh_reg()
@@ -68,7 +69,7 @@ def _extract_cpp_struct_type(ctx: TreeSitterEmitContext, node) -> str:
     if result:
         return result
     for child in node.children:
-        if child.type == "type_identifier":
+        if child.type == CppNodeType.TYPE_IDENTIFIER:
             return ctx.node_text(child)
     return ""
 
@@ -122,19 +123,19 @@ def lower_cpp_class_body(ctx: TreeSitterEmitContext, node) -> None:
     from interpreter.frontends.cpp.control_flow import lower_template_decl
 
     for child in node.children:
-        if child.type == "function_definition":
+        if child.type == CppNodeType.FUNCTION_DEFINITION:
             lower_cpp_method(ctx, child)
-        elif child.type == "declaration":
+        elif child.type == CppNodeType.DECLARATION:
             lower_declaration(ctx, child)
-        elif child.type == "field_declaration":
+        elif child.type == CppNodeType.FIELD_DECLARATION:
             lower_struct_field(ctx, child)
-        elif child.type == "template_declaration":
+        elif child.type == CppNodeType.TEMPLATE_DECLARATION:
             lower_template_decl(ctx, child)
-        elif child.type == "friend_declaration":
+        elif child.type == CppNodeType.FRIEND_DECLARATION:
             continue
-        elif child.type == "access_specifier":
+        elif child.type == CppNodeType.ACCESS_SPECIFIER:
             continue
-        elif child.type == "field_initializer_list":
+        elif child.type == CppNodeType.FIELD_INITIALIZER_LIST:
             lower_field_initializer_list(ctx, child)
         elif child.is_named and child.type not in ("{", "}"):
             ctx.lower_stmt(child)
@@ -145,7 +146,7 @@ def lower_cpp_method(ctx: TreeSitterEmitContext, node) -> None:
     declarator_node = node.child_by_field_name("declarator")
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
     init_list_node = next(
-        (c for c in node.children if c.type == "field_initializer_list"),
+        (c for c in node.children if c.type == CppNodeType.FIELD_INITIALIZER_LIST),
         None,
     )
 
@@ -153,7 +154,7 @@ def lower_cpp_method(ctx: TreeSitterEmitContext, node) -> None:
     params_node = None
 
     if declarator_node:
-        if declarator_node.type == "function_declarator":
+        if declarator_node.type == CppNodeType.FUNCTION_DECLARATOR:
             name_node = declarator_node.child_by_field_name("declarator")
             params_node = declarator_node.child_by_field_name(
                 ctx.constants.func_params_field
@@ -226,13 +227,13 @@ def lower_field_initializer_list(ctx: TreeSitterEmitContext, node) -> None:
         node=node,
     )
     for child in node.children:
-        if child.type == "field_initializer":
+        if child.type == CppNodeType.FIELD_INITIALIZER:
             field_node = next(
-                (c for c in child.children if c.type == "field_identifier"),
+                (c for c in child.children if c.type == CppNodeType.FIELD_IDENTIFIER),
                 None,
             )
             args_node = next(
-                (c for c in child.children if c.type == "argument_list"),
+                (c for c in child.children if c.type == CppNodeType.ARGUMENT_LIST),
                 None,
             )
             if field_node is None:
@@ -262,7 +263,7 @@ def lower_cpp_function_def(ctx: TreeSitterEmitContext, node) -> None:
     declarator_node = node.child_by_field_name("declarator")
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
     init_list_node = next(
-        (c for c in node.children if c.type == "field_initializer_list"),
+        (c for c in node.children if c.type == CppNodeType.FIELD_INITIALIZER_LIST),
         None,
     )
 
@@ -270,7 +271,7 @@ def lower_cpp_function_def(ctx: TreeSitterEmitContext, node) -> None:
     params_node = None
 
     if declarator_node:
-        if declarator_node.type == "function_declarator":
+        if declarator_node.type == CppNodeType.FUNCTION_DECLARATOR:
             name_node = declarator_node.child_by_field_name("declarator")
             params_node = declarator_node.child_by_field_name(
                 ctx.constants.func_params_field

@@ -18,12 +18,13 @@ from typing import Any, Callable
 
 from interpreter.frontend import Frontend
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
+from interpreter.frontends.base_node_types import BaseNodeType
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
 from interpreter.parser import ParserFactory
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter import constants
-from interpreter.constants import Language
+from interpreter.constants import CanonicalLiteral, DEFAULT_EXCEPTION_TYPE, Language
 
 logger = logging.getLogger(__name__)
 
@@ -70,17 +71,19 @@ class BaseFrontend(Frontend):
 
     BLOCK_NODE_TYPES: frozenset[str] = frozenset()
 
-    NONE_LITERAL: str = "None"
-    TRUE_LITERAL: str = "True"
-    FALSE_LITERAL: str = "False"
-    DEFAULT_RETURN_VALUE: str = "None"
+    NONE_LITERAL: str = CanonicalLiteral.NONE
+    TRUE_LITERAL: str = CanonicalLiteral.TRUE
+    FALSE_LITERAL: str = CanonicalLiteral.FALSE
+    DEFAULT_RETURN_VALUE: str = CanonicalLiteral.NONE
 
-    COMMENT_TYPES: frozenset[str] = frozenset({"comment"})
-    NOISE_TYPES: frozenset[str] = frozenset({"newline", "\n"})
+    COMMENT_TYPES: frozenset[str] = frozenset({BaseNodeType.COMMENT})
+    NOISE_TYPES: frozenset[str] = frozenset(
+        {BaseNodeType.NEWLINE, BaseNodeType.NEWLINE_CHAR}
+    )
 
-    PAREN_EXPR_TYPE: str = "parenthesized_expression"
+    PAREN_EXPR_TYPE: str = BaseNodeType.PARENTHESIZED_EXPRESSION
 
-    ATTRIBUTE_NODE_TYPE: str = "attribute"
+    ATTRIBUTE_NODE_TYPE: str = BaseNodeType.ATTRIBUTE
 
     # ── init ─────────────────────────────────────────────────────
 
@@ -339,7 +342,11 @@ class BaseFrontend(Frontend):
 
     def _lower_paren(self, node) -> str:
         inner = next(
-            (c for c in node.children if c.type not in ("(", ")")),
+            (
+                c
+                for c in node.children
+                if c.type not in (BaseNodeType.OPEN_PAREN, BaseNodeType.CLOSE_PAREN)
+            ),
             None,
         )
         if inner is None:
@@ -347,7 +354,11 @@ class BaseFrontend(Frontend):
         return self._lower_expr(inner)
 
     def _lower_binop(self, node) -> str:
-        children = [c for c in node.children if c.type not in ("(", ")")]
+        children = [
+            c
+            for c in node.children
+            if c.type not in (BaseNodeType.OPEN_PAREN, BaseNodeType.CLOSE_PAREN)
+        ]
         lhs_reg = self._lower_expr(children[0])
         op = self._node_text(children[1])
         rhs_reg = self._lower_expr(children[2])
@@ -361,7 +372,11 @@ class BaseFrontend(Frontend):
         return reg
 
     def _lower_comparison(self, node) -> str:
-        children = [c for c in node.children if c.type not in ("(", ")")]
+        children = [
+            c
+            for c in node.children
+            if c.type not in (BaseNodeType.OPEN_PAREN, BaseNodeType.CLOSE_PAREN)
+        ]
         lhs_reg = self._lower_expr(children[0])
         op = self._node_text(children[1])
         rhs_reg = self._lower_expr(children[2])
@@ -375,7 +390,11 @@ class BaseFrontend(Frontend):
         return reg
 
     def _lower_unop(self, node) -> str:
-        children = [c for c in node.children if c.type not in ("(", ")")]
+        children = [
+            c
+            for c in node.children
+            if c.type not in (BaseNodeType.OPEN_PAREN, BaseNodeType.CLOSE_PAREN)
+        ]
         op = self._node_text(children[0])
         operand_reg = self._lower_expr(children[1])
         reg = self._fresh_reg()
@@ -398,11 +417,11 @@ class BaseFrontend(Frontend):
         # Method call: obj.method(...)
         if func_node and func_node.type in (
             self.ATTRIBUTE_NODE_TYPE,
-            "member_expression",
-            "selector_expression",
-            "member_access_expression",
-            "field_access",
-            "method_index_expression",
+            BaseNodeType.MEMBER_EXPRESSION,
+            BaseNodeType.SELECTOR_EXPRESSION,
+            BaseNodeType.MEMBER_ACCESS_EXPRESSION,
+            BaseNodeType.FIELD_ACCESS,
+            BaseNodeType.METHOD_INDEX_EXPRESSION,
         ):
             obj_node = func_node.child_by_field_name(self.ATTR_OBJECT_FIELD)
             attr_node = func_node.child_by_field_name(self.ATTR_ATTRIBUTE_FIELD)
@@ -425,7 +444,7 @@ class BaseFrontend(Frontend):
                 return reg
 
         # Plain function call
-        if func_node and func_node.type == "identifier":
+        if func_node and func_node.type == BaseNodeType.IDENTIFIER:
             func_name = self._node_text(func_node)
             reg = self._fresh_reg()
             self._emit(
@@ -462,7 +481,14 @@ class BaseFrontend(Frontend):
         return [
             self._lower_expr(c)
             for c in args_node.children
-            if c.type not in ("(", ")", ",", "argument", "value_argument")
+            if c.type
+            not in (
+                BaseNodeType.OPEN_PAREN,
+                BaseNodeType.CLOSE_PAREN,
+                BaseNodeType.COMMA,
+                BaseNodeType.ARGUMENT,
+                BaseNodeType.VALUE_ARGUMENT,
+            )
             and c.is_named
         ]
 
@@ -472,9 +498,13 @@ class BaseFrontend(Frontend):
             return []
         regs = []
         for c in args_node.children:
-            if c.type in ("(", ")", ","):
+            if c.type in (
+                BaseNodeType.OPEN_PAREN,
+                BaseNodeType.CLOSE_PAREN,
+                BaseNodeType.COMMA,
+            ):
                 continue
-            if c.type in ("argument", "value_argument"):
+            if c.type in (BaseNodeType.ARGUMENT, BaseNodeType.VALUE_ARGUMENT):
                 inner = next(
                     (gc for gc in c.children if gc.is_named),
                     None,
@@ -524,7 +554,7 @@ class BaseFrontend(Frontend):
     # ── common store target ──────────────────────────────────────
 
     def _lower_store_target(self, target, val_reg: str, parent_node):
-        if target.type == "identifier":
+        if target.type == BaseNodeType.IDENTIFIER:
             self._emit(
                 Opcode.STORE_VAR,
                 operands=[self._node_text(target), val_reg],
@@ -532,10 +562,10 @@ class BaseFrontend(Frontend):
             )
         elif target.type in (
             self.ATTRIBUTE_NODE_TYPE,
-            "member_expression",
-            "selector_expression",
-            "member_access_expression",
-            "field_access",
+            BaseNodeType.MEMBER_EXPRESSION,
+            BaseNodeType.SELECTOR_EXPRESSION,
+            BaseNodeType.MEMBER_ACCESS_EXPRESSION,
+            BaseNodeType.FIELD_ACCESS,
         ):
             obj_node = target.child_by_field_name(self.ATTR_OBJECT_FIELD)
             attr_node = target.child_by_field_name(self.ATTR_ATTRIBUTE_FIELD)
@@ -550,7 +580,7 @@ class BaseFrontend(Frontend):
                     operands=[obj_reg, self._node_text(attr_node), val_reg],
                     node=parent_node,
                 )
-        elif target.type == "subscript":
+        elif target.type == BaseNodeType.SUBSCRIPT:
             obj_node = target.child_by_field_name(self.SUBSCRIPT_VALUE_FIELD)
             idx_node = target.child_by_field_name(self.SUBSCRIPT_INDEX_FIELD)
             if obj_node and idx_node:
@@ -595,7 +625,7 @@ class BaseFrontend(Frontend):
 
     def _lower_return(self, node):
         """Lower a return statement. Override for language-specific keyword."""
-        children = [c for c in node.children if c.type != "return"]
+        children = [c for c in node.children if c.type != BaseNodeType.RETURN]
         if children:
             val_reg = self._lower_expr(children[0])
         else:
@@ -650,15 +680,20 @@ class BaseFrontend(Frontend):
     def _lower_alternative(self, alt_node, end_label: str):
         """Lower an else/elif/else-if alternative block."""
         alt_type = alt_node.type
-        if alt_type in ("elif_clause",):
+        if alt_type in (BaseNodeType.ELIF_CLAUSE,):
             self._lower_elif(alt_node, end_label)
-        elif alt_type in ("else_clause", "else"):
+        elif alt_type in (BaseNodeType.ELSE_CLAUSE, BaseNodeType.ELSE):
             body = alt_node.child_by_field_name("body")
             if body:
                 self._lower_block(body)
             else:
                 for child in alt_node.children:
-                    if child.type not in ("else", ":", "{", "}"):
+                    if child.type not in (
+                        BaseNodeType.ELSE,
+                        BaseNodeType.COLON,
+                        BaseNodeType.OPEN_BRACE,
+                        BaseNodeType.CLOSE_BRACE,
+                    ):
                         self._lower_stmt(child)
         else:
             self._lower_block(alt_node)
@@ -842,7 +877,13 @@ class BaseFrontend(Frontend):
 
     def _lower_param(self, child):
         """Lower a single function parameter to SYMBOLIC + STORE_VAR."""
-        if child.type in ("(", ")", ",", ":", "->"):
+        if child.type in (
+            BaseNodeType.OPEN_PAREN,
+            BaseNodeType.CLOSE_PAREN,
+            BaseNodeType.COMMA,
+            BaseNodeType.COLON,
+            BaseNodeType.ARROW,
+        ):
             return
         pname = self._extract_param_name(child)
         if pname is None:
@@ -860,7 +901,7 @@ class BaseFrontend(Frontend):
 
     def _extract_param_name(self, child) -> str | None:
         """Extract parameter name from a parameter node. Override per language."""
-        if child.type == "identifier":
+        if child.type == BaseNodeType.IDENTIFIER:
             return self._node_text(child)
         # Try common field names
         for field in ("name", "pattern"):
@@ -869,7 +910,7 @@ class BaseFrontend(Frontend):
                 return self._node_text(name_node)
         # Try first identifier child
         id_node = next(
-            (sub for sub in child.children if sub.type == "identifier"),
+            (sub for sub in child.children if sub.type == BaseNodeType.IDENTIFIER),
             None,
         )
         if id_node:
@@ -918,7 +959,16 @@ class BaseFrontend(Frontend):
         )
 
     def _lower_list_literal(self, node) -> str:
-        elems = [c for c in node.children if c.type not in ("[", "]", ",")]
+        elems = [
+            c
+            for c in node.children
+            if c.type
+            not in (
+                BaseNodeType.OPEN_BRACKET,
+                BaseNodeType.CLOSE_BRACKET,
+                BaseNodeType.COMMA,
+            )
+        ]
         arr_reg = self._fresh_reg()
         size_reg = self._fresh_reg()
         self._emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
@@ -944,7 +994,7 @@ class BaseFrontend(Frontend):
             node=node,
         )
         for child in node.children:
-            if child.type == "pair":
+            if child.type == BaseNodeType.PAIR:
                 key_node = child.child_by_field_name("key")
                 val_node = child.child_by_field_name("value")
                 key_reg = self._lower_expr(key_node)
@@ -1020,7 +1070,9 @@ class BaseFrontend(Frontend):
         # ── catch clauses ──
         for i, clause in enumerate(catch_clauses):
             self._emit(Opcode.LABEL, label=catch_labels[i])
-            exc_type = clause.get("type", "Exception") or "Exception"
+            exc_type = (
+                clause.get("type", DEFAULT_EXCEPTION_TYPE) or DEFAULT_EXCEPTION_TYPE
+            )
             exc_reg = self._fresh_reg()
             self._emit(
                 Opcode.SYMBOLIC,
@@ -1061,7 +1113,7 @@ class BaseFrontend(Frontend):
         reachable.
         """
         for child in node.children:
-            if child.type not in (";",) and child.is_named:
+            if child.type not in (BaseNodeType.SEMICOLON,) and child.is_named:
                 self._lower_stmt(child)
                 return
         for child in node.children:
@@ -1071,7 +1123,7 @@ class BaseFrontend(Frontend):
     def _lower_var_declaration(self, node):
         """Lower a variable declaration with name/value fields or declarators."""
         for child in node.children:
-            if child.type == "variable_declarator":
+            if child.type == BaseNodeType.VARIABLE_DECLARATOR:
                 name_node = child.child_by_field_name("name")
                 value_node = child.child_by_field_name("value")
                 if name_node and value_node:

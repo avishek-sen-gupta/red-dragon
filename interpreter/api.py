@@ -31,6 +31,7 @@ from interpreter.type_environment import TypeEnvironment
 from interpreter.type_inference import infer_types
 from interpreter.type_resolver import TypeResolver
 from interpreter import constants
+from interpreter.constants import LLMProvider
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ def lower_source(
     source: str,
     language: str | Language = Language.PYTHON,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
-    backend: str = "claude",
+    backend: str = LLMProvider.CLAUDE,
 ) -> list[IRInstruction]:
     """Parse and lower source code to IR instructions.
 
@@ -75,7 +76,7 @@ def lower_and_infer(
     source: str,
     language: str | Language = Language.PYTHON,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
-    backend: str = "claude",
+    backend: str = LLMProvider.CLAUDE,
 ) -> tuple[list[IRInstruction], TypeEnvironment]:
     """Parse, lower, and run type inference with frontend-seeded type annotations.
 
@@ -107,7 +108,7 @@ def dump_ir(
     source: str,
     language: str | Language = Language.PYTHON,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
-    backend: str = "claude",
+    backend: str = LLMProvider.CLAUDE,
 ) -> str:
     """Lower source to IR and return a human-readable text dump.
 
@@ -128,7 +129,7 @@ def build_cfg_from_source(
     source: str,
     language: str | Language = Language.PYTHON,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
-    backend: str = "claude",
+    backend: str = LLMProvider.CLAUDE,
     function_name: str = "",
 ) -> CFG:
     """Parse, lower, optionally slice to a function, and build a CFG.
@@ -155,7 +156,7 @@ def dump_cfg(
     source: str,
     language: str | Language = Language.PYTHON,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
-    backend: str = "claude",
+    backend: str = LLMProvider.CLAUDE,
     function_name: str = "",
 ) -> str:
     """Build a CFG from source and return its text representation.
@@ -178,7 +179,7 @@ def dump_mermaid(
     source: str,
     language: str | Language = Language.PYTHON,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
-    backend: str = "claude",
+    backend: str = LLMProvider.CLAUDE,
     function_name: str = "",
 ) -> str:
     """Build a CFG from source and return a Mermaid flowchart diagram.
@@ -201,7 +202,7 @@ def ir_stats(
     source: str,
     language: str | Language = Language.PYTHON,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
-    backend: str = "claude",
+    backend: str = LLMProvider.CLAUDE,
 ) -> dict[str, int]:
     """Lower source to IR and return opcode frequency counts.
 
@@ -224,7 +225,7 @@ def execute_traced(
     function_name: str = "",
     entry_point: str = "",
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
-    backend: str = "claude",
+    backend: str = LLMProvider.CLAUDE,
     max_steps: int = 100,
 ) -> ExecutionTrace:
     """Parse, lower, build CFG, and execute with full trace recording.

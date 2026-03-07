@@ -11,6 +11,7 @@ from interpreter.frontends.common.expressions import (
     lower_const_literal,
     extract_call_args,
 )
+from interpreter.frontends.go.node_types import GoNodeType
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ def lower_go_call(ctx: TreeSitterEmitContext, node) -> str:
     arg_regs = extract_call_args(ctx, args_node) if args_node else []
 
     # Method call via selector: obj.Method(...)
-    if func_node and func_node.type == "selector_expression":
+    if func_node and func_node.type == GoNodeType.SELECTOR_EXPRESSION:
         operand_node = func_node.child_by_field_name("operand")
         field_node = func_node.child_by_field_name("field")
         if operand_node and field_node:
@@ -40,7 +41,7 @@ def lower_go_call(ctx: TreeSitterEmitContext, node) -> str:
             return reg
 
     # Plain function call
-    if func_node and func_node.type == "identifier":
+    if func_node and func_node.type == GoNodeType.IDENTIFIER:
         func_name = ctx.node_text(func_node)
         reg = ctx.fresh_reg()
         ctx.emit(
@@ -110,7 +111,7 @@ def lower_composite_literal(ctx: TreeSitterEmitContext, node) -> str:
     """Lower Go composite literal: Point{X: 1} or []int{1, 2, 3}."""
     type_node = node.child_by_field_name("type")
     body_node = node.child_by_field_name("body") or next(
-        (c for c in node.children if c.type == "literal_value"), None
+        (c for c in node.children if c.type == GoNodeType.LITERAL_VALUE), None
     )
 
     type_name = ctx.node_text(type_node) if type_node else "Object"
@@ -127,7 +128,7 @@ def lower_composite_literal(ctx: TreeSitterEmitContext, node) -> str:
 
     elements = [c for c in body_node.children if c.is_named]
     for i, elem in enumerate(elements):
-        if elem.type == "keyed_element":
+        if elem.type == GoNodeType.KEYED_ELEMENT:
             # Key-value pair: {Key: Value}
             children = [c for c in elem.children if c.is_named]
             key_elem = children[0] if children else None
@@ -151,7 +152,7 @@ def lower_composite_literal(ctx: TreeSitterEmitContext, node) -> str:
                 operands=[obj_reg, key_name, val_reg],
                 node=elem,
             )
-        elif elem.type == "literal_element":
+        elif elem.type == GoNodeType.LITERAL_ELEMENT:
             # Positional element
             inner = next((c for c in elem.children if c.is_named), elem)
             val_reg = ctx.lower_expr(inner)
@@ -279,11 +280,11 @@ def extract_expression_list(ctx: TreeSitterEmitContext, node) -> list[str]:
     """Extract identifiers from an expression_list node."""
     if node is None:
         return []
-    if node.type == "expression_list":
+    if node.type == GoNodeType.EXPRESSION_LIST:
         return [
             ctx.node_text(c)
             for c in node.children
-            if c.type not in (",",) and c.is_named
+            if c.type not in (GoNodeType.COMMA,) and c.is_named
         ]
     return [ctx.node_text(node)]
 
@@ -292,8 +293,10 @@ def get_expression_list_children(node) -> list:
     """Get child nodes from an expression_list."""
     if node is None:
         return []
-    if node.type == "expression_list":
-        return [c for c in node.children if c.type not in (",",) and c.is_named]
+    if node.type == GoNodeType.EXPRESSION_LIST:
+        return [
+            c for c in node.children if c.type not in (GoNodeType.COMMA,) and c.is_named
+        ]
     return [node]
 
 
@@ -301,11 +304,11 @@ def lower_expression_list(ctx: TreeSitterEmitContext, node) -> list[str]:
     """Lower each expression in an expression_list, return registers."""
     if node is None:
         return []
-    if node.type == "expression_list":
+    if node.type == GoNodeType.EXPRESSION_LIST:
         return [
             ctx.lower_expr(c)
             for c in node.children
-            if c.type not in (",",) and c.is_named
+            if c.type not in (GoNodeType.COMMA,) and c.is_named
         ]
     return [ctx.lower_expr(node)]
 
@@ -316,13 +319,13 @@ def lower_expression_list(ctx: TreeSitterEmitContext, node) -> list[str]:
 def lower_go_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
-    if target.type == "identifier":
+    if target.type == GoNodeType.IDENTIFIER:
         ctx.emit(
             Opcode.STORE_VAR,
             operands=[ctx.node_text(target), val_reg],
             node=parent_node,
         )
-    elif target.type == "selector_expression":
+    elif target.type == GoNodeType.SELECTOR_EXPRESSION:
         operand_node = target.child_by_field_name("operand")
         field_node = target.child_by_field_name("field")
         if operand_node and field_node:
@@ -332,7 +335,7 @@ def lower_go_store_target(
                 operands=[obj_reg, ctx.node_text(field_node), val_reg],
                 node=parent_node,
             )
-    elif target.type == "index_expression":
+    elif target.type == GoNodeType.INDEX_EXPRESSION:
         operand_node = target.child_by_field_name("operand")
         index_node = target.child_by_field_name("index")
         if operand_node and index_node:

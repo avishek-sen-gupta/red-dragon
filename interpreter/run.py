@@ -45,6 +45,7 @@ from interpreter.run_types import (
 from interpreter.trace_types import TraceStep, ExecutionTrace
 from interpreter.backend import get_backend
 from interpreter import constants
+from interpreter.constants import LLMProvider
 
 logger = logging.getLogger(__name__)
 
@@ -478,7 +479,7 @@ def run(
     source: str,
     language: str | Language = Language.PYTHON,
     entry_point: str = "",
-    backend: str = "claude",
+    backend: str = LLMProvider.CLAUDE,
     max_steps: int = 100,
     verbose: bool = False,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,

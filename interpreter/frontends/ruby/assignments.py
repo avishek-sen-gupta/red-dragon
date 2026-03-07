@@ -6,12 +6,15 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter.frontends.ruby.expressions import lower_ruby_store_target
+from interpreter.frontends.ruby.node_types import RubyNodeType
 
 
 def lower_ruby_return(ctx: TreeSitterEmitContext, node) -> None:
     """Lower Ruby return statement."""
     children = [
-        c for c in node.children if c.type not in ("return", "return_statement")
+        c
+        for c in node.children
+        if c.type not in (RubyNodeType.RETURN, RubyNodeType.RETURN_STATEMENT)
     ]
     if children:
         val_reg = ctx.lower_expr(children[0])

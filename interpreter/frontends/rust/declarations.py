@@ -11,6 +11,7 @@ from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
 )
+from interpreter.frontends.rust.node_types import RustNodeType
 
 logger = logging.getLogger(__name__)
 
@@ -22,17 +23,17 @@ def _extract_let_pattern_name(ctx: TreeSitterEmitContext, pattern_node) -> str:
     """Extract identifier from let pattern, handling `mut` wrapper."""
     if pattern_node is None:
         return "__unknown"
-    if pattern_node.type == "identifier":
+    if pattern_node.type == RustNodeType.IDENTIFIER:
         return ctx.node_text(pattern_node)
-    if pattern_node.type == "mutable_specifier":
+    if pattern_node.type == RustNodeType.MUTABLE_SPECIFIER:
         id_child = next(
-            (c for c in pattern_node.children if c.type == "identifier"),
+            (c for c in pattern_node.children if c.type == RustNodeType.IDENTIFIER),
             None,
         )
         return ctx.node_text(id_child) if id_child else "__unknown"
     # mut pattern wrapping: children may contain mutable_specifier + identifier
     id_child = next(
-        (c for c in pattern_node.children if c.type == "identifier"),
+        (c for c in pattern_node.children if c.type == RustNodeType.IDENTIFIER),
         None,
     )
     if id_child:
@@ -42,11 +43,11 @@ def _extract_let_pattern_name(ctx: TreeSitterEmitContext, pattern_node) -> str:
 
 def _extract_rust_param_name(ctx: TreeSitterEmitContext, child) -> str | None:
     """Rust-specific param name extraction handling self_parameter and mut patterns."""
-    if child.type == "identifier":
+    if child.type == RustNodeType.IDENTIFIER:
         return ctx.node_text(child)
-    if child.type == "self_parameter":
+    if child.type == RustNodeType.SELF_PARAMETER:
         return "self"
-    if child.type == "parameter":
+    if child.type == RustNodeType.PARAMETER:
         pattern_node = child.child_by_field_name("pattern")
         if pattern_node:
             return _extract_let_pattern_name(ctx, pattern_node)
@@ -61,7 +62,13 @@ def lower_rust_params(ctx: TreeSitterEmitContext, params_node) -> None:
 
 def lower_rust_param(ctx: TreeSitterEmitContext, child) -> None:
     """Lower a single Rust function parameter to SYMBOLIC + STORE_VAR."""
-    if child.type in ("(", ")", ",", ":", "->"):
+    if child.type in (
+        RustNodeType.OPEN_PAREN,
+        RustNodeType.CLOSE_PAREN,
+        RustNodeType.COMMA,
+        RustNodeType.COLON,
+        RustNodeType.ARROW,
+    ):
         return
     pname = _extract_rust_param_name(ctx, child)
     if pname is None:
@@ -148,9 +155,9 @@ def lower_let_decl(ctx: TreeSitterEmitContext, node) -> None:
             operands=[ctx.constants.none_literal],
         )
 
-    if pattern_node is not None and pattern_node.type == "tuple_pattern":
+    if pattern_node is not None and pattern_node.type == RustNodeType.TUPLE_PATTERN:
         _lower_tuple_destructure(ctx, pattern_node, val_reg, node)
-    elif pattern_node is not None and pattern_node.type == "struct_pattern":
+    elif pattern_node is not None and pattern_node.type == RustNodeType.STRUCT_PATTERN:
         _lower_struct_destructure(ctx, pattern_node, val_reg, node)
     else:
         var_name = _extract_let_pattern_name(ctx, pattern_node)
@@ -167,7 +174,11 @@ def _lower_tuple_destructure(
 ) -> None:
     """Lower `let (a, b) = expr;` -- emit LOAD_INDEX + STORE_VAR per element."""
     named_children = [
-        c for c in pattern_node.children if c.type not in ("(", ")", ",") and c.is_named
+        c
+        for c in pattern_node.children
+        if c.type
+        not in (RustNodeType.OPEN_PAREN, RustNodeType.CLOSE_PAREN, RustNodeType.COMMA)
+        and c.is_named
     ]
     for i, child in enumerate(named_children):
         idx_reg = ctx.fresh_reg()
@@ -192,14 +203,18 @@ def _lower_struct_destructure(
 ) -> None:
     """Lower `let Point { x, y } = expr;` -- emit LOAD_FIELD + STORE_VAR per field."""
     for child in pattern_node.children:
-        if child.type == "field_pattern":
+        if child.type == RustNodeType.FIELD_PATTERN:
             id_node = next(
-                (c for c in child.children if c.type == "shorthand_field_identifier"),
+                (
+                    c
+                    for c in child.children
+                    if c.type == RustNodeType.SHORTHAND_FIELD_IDENTIFIER
+                ),
                 None,
             )
             if id_node is None:
                 id_node = next(
-                    (c for c in child.children if c.type == "identifier"),
+                    (c for c in child.children if c.type == RustNodeType.IDENTIFIER),
                     None,
                 )
             if id_node is None:
@@ -321,7 +336,11 @@ def lower_enum_item(ctx: TreeSitterEmitContext, node) -> None:
 
     if body_node:
         for child in body_node.children:
-            if child.type in ("{", "}", ","):
+            if child.type in (
+                RustNodeType.OPEN_BRACE,
+                RustNodeType.CLOSE_BRACE,
+                RustNodeType.COMMA,
+            ):
                 continue
             if not child.is_named:
                 continue

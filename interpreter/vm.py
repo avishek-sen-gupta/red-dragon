@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import MappingProxyType
 from typing import Any
 
-from interpreter.constants import TypeName
+from interpreter.constants import CanonicalLiteral, TypeName
 from interpreter.conversion_rules import TypeConversionRules
 from interpreter.identity_conversion_rules import IdentityConversionRules
 from interpreter.type_environment import TypeEnvironment
@@ -183,11 +183,11 @@ def _resolve_reg(vm: VMState, operand: str) -> Any:
 
 def _parse_const(raw: str) -> Any:
     """Parse a constant literal string into a Python value."""
-    if raw == "None":
+    if raw == CanonicalLiteral.NONE:
         return None
-    if raw == "True":
+    if raw == CanonicalLiteral.TRUE:
         return True
-    if raw == "False":
+    if raw == CanonicalLiteral.FALSE:
         return False
     try:
         return int(raw)

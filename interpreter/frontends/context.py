@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from interpreter import constants
-from interpreter.constants import Language
+from interpreter.constants import CanonicalLiteral, Language
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
@@ -67,10 +67,10 @@ class GrammarConstants:
     block_node_types: frozenset[str] = frozenset()
 
     # Canonical literals
-    none_literal: str = "None"
-    true_literal: str = "True"
-    false_literal: str = "False"
-    default_return_value: str = "None"
+    none_literal: str = CanonicalLiteral.NONE
+    true_literal: str = CanonicalLiteral.TRUE
+    false_literal: str = CanonicalLiteral.FALSE
+    default_return_value: str = CanonicalLiteral.NONE
 
     # Filtering
     comment_types: frozenset[str] = frozenset({"comment"})

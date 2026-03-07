@@ -13,6 +13,7 @@ from interpreter.frontends.common.expressions import (
     lower_interpolated_string_parts,
     lower_update_expr,
 )
+from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 def lower_kotlin_string_literal(ctx: TreeSitterEmitContext, node) -> str:
     """Lower Kotlin string literal, decomposing $var / ${expr} interpolation."""
     has_interpolation = any(
-        c.type in ("interpolated_identifier", "interpolated_expression")
+        c.type in (KNT.INTERPOLATED_IDENTIFIER, KNT.INTERPOLATED_EXPRESSION)
         for c in node.children
     )
     if not has_interpolation:
@@ -31,7 +32,7 @@ def lower_kotlin_string_literal(ctx: TreeSitterEmitContext, node) -> str:
 
     parts: list[str] = []
     for child in node.children:
-        if child.type == "string_content":
+        if child.type == KNT.STRING_CONTENT:
             frag_reg = ctx.fresh_reg()
             ctx.emit(
                 Opcode.CONST,
@@ -40,9 +41,9 @@ def lower_kotlin_string_literal(ctx: TreeSitterEmitContext, node) -> str:
                 node=child,
             )
             parts.append(frag_reg)
-        elif child.type == "interpolated_identifier":
+        elif child.type == KNT.INTERPOLATED_IDENTIFIER:
             parts.append(lower_identifier(ctx, child))
-        elif child.type == "interpolated_expression":
+        elif child.type == KNT.INTERPOLATED_EXPRESSION:
             named = [c for c in child.children if c.is_named]
             if named:
                 parts.append(ctx.lower_expr(named[0]))
@@ -59,7 +60,7 @@ def _extract_kotlin_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
         return []
     regs = []
     for child in args_node.children:
-        if child.type == "value_argument":
+        if child.type == KNT.VALUE_ARGUMENT:
             inner = next((gc for gc in child.children if gc.is_named), None)
             if inner:
                 regs.append(ctx.lower_expr(inner))
@@ -74,9 +75,9 @@ def _extract_nav_field_name(ctx: TreeSitterEmitContext, node) -> str:
     ``navigation_suffix`` nodes include the leading dot in their text,
     so we unwrap to the inner ``simple_identifier`` instead.
     """
-    if node.type == "navigation_suffix":
+    if node.type == KNT.NAVIGATION_SUFFIX:
         id_node = next(
-            (c for c in node.children if c.type == "simple_identifier"), None
+            (c for c in node.children if c.type == KNT.SIMPLE_IDENTIFIER), None
         )
         if id_node:
             return ctx.node_text(id_node)
@@ -91,21 +92,21 @@ def lower_kotlin_call(ctx: TreeSitterEmitContext, node) -> str:
 
     callee_node = named_children[0]
     call_suffix = next(
-        (c for c in node.children if c.type == "call_suffix"),
+        (c for c in node.children if c.type == KNT.CALL_SUFFIX),
         None,
     )
 
     args_node = None
     if call_suffix:
         args_node = next(
-            (c for c in call_suffix.children if c.type == "value_arguments"),
+            (c for c in call_suffix.children if c.type == KNT.VALUE_ARGUMENTS),
             None,
         )
 
     arg_regs = _extract_kotlin_args(ctx, args_node)
 
     # Method call via navigation_expression
-    if callee_node.type == "navigation_expression":
+    if callee_node.type == KNT.NAVIGATION_EXPRESSION:
         nav_children = [c for c in callee_node.children if c.is_named]
         if len(nav_children) >= 2:
             obj_reg = ctx.lower_expr(nav_children[0])
@@ -120,7 +121,7 @@ def lower_kotlin_call(ctx: TreeSitterEmitContext, node) -> str:
             return reg
 
     # Plain function call
-    if callee_node.type == "simple_identifier":
+    if callee_node.type == KNT.SIMPLE_IDENTIFIER:
         func_name = ctx.node_text(callee_node)
         reg = ctx.fresh_reg()
         ctx.emit(
@@ -239,7 +240,7 @@ def lower_if_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_when_expr(ctx: TreeSitterEmitContext, node) -> str:
     subject_node = next(
-        (c for c in node.children if c.type == "when_subject"),
+        (c for c in node.children if c.type == KNT.WHEN_SUBJECT),
         None,
     )
     val_reg = ctx.fresh_reg()
@@ -251,21 +252,21 @@ def lower_when_expr(ctx: TreeSitterEmitContext, node) -> str:
     result_var = f"__when_result_{ctx.label_counter}"
     end_label = ctx.fresh_label("when_end")
 
-    entries = [c for c in node.children if c.type == "when_entry"]
+    entries = [c for c in node.children if c.type == KNT.WHEN_ENTRY]
     for entry in entries:
         cond_node = next(
-            (c for c in entry.children if c.type == "when_condition"),
+            (c for c in entry.children if c.type == KNT.WHEN_CONDITION),
             None,
         )
         body_children = [
             c
             for c in entry.children
-            if c.type not in ("when_condition", "->", ",")
+            if c.type not in (KNT.WHEN_CONDITION, "->", ",")
             and c.is_named
-            and c.type != "control_structure_body"
+            and c.type != KNT.CONTROL_STRUCTURE_BODY
         ]
         body_node = next(
-            (c for c in entry.children if c.type == "control_structure_body"),
+            (c for c in entry.children if c.type == KNT.CONTROL_STRUCTURE_BODY),
             None,
         )
 
@@ -407,14 +408,14 @@ def lower_lambda_literal(ctx: TreeSitterEmitContext, node) -> str:
 
     # Extract lambda parameters: lambda_parameters -> variable_declaration -> simple_identifier
     lambda_params_node = next(
-        (c for c in node.children if c.type == "lambda_parameters"),
+        (c for c in node.children if c.type == KNT.LAMBDA_PARAMETERS),
         None,
     )
     if lambda_params_node:
         for child in lambda_params_node.children:
-            if child.type == "variable_declaration":
+            if child.type == KNT.VARIABLE_DECLARATION:
                 id_node = next(
-                    (c for c in child.children if c.type == "simple_identifier"),
+                    (c for c in child.children if c.type == KNT.SIMPLE_IDENTIFIER),
                     None,
                 )
                 if id_node:
@@ -436,14 +437,14 @@ def lower_lambda_literal(ctx: TreeSitterEmitContext, node) -> str:
         for c in node.children
         if c.type not in ("{", "}", "->")
         and c.is_named
-        and c.type != "lambda_parameters"
+        and c.type != KNT.LAMBDA_PARAMETERS
         and c.type not in ctx.constants.comment_types
     ]
     # Kotlin lambdas implicitly return the last expression.
     # If the body is a `statements` node, lower all but the last child
     # as statements, then return the last expression's value.
     last_returned = False
-    if len(body_children) == 1 and body_children[0].type == "statements":
+    if len(body_children) == 1 and body_children[0].type == KNT.STATEMENTS:
         stmts = [
             c
             for c in body_children[0].children
@@ -484,11 +485,11 @@ def lower_lambda_literal(ctx: TreeSitterEmitContext, node) -> str:
 def lower_object_literal(ctx: TreeSitterEmitContext, node) -> str:
     """Lower `object : Type { ... }` as NEW_OBJECT + body lowering."""
     delegation = next(
-        (c for c in node.children if c.type == "delegation_specifier"),
+        (c for c in node.children if c.type == KNT.DELEGATION_SPECIFIER),
         None,
     )
     body_node = next(
-        (c for c in node.children if c.type == "class_body"),
+        (c for c in node.children if c.type == KNT.CLASS_BODY),
         None,
     )
     type_name = ctx.node_text(delegation) if delegation else "__anon_object"
@@ -615,7 +616,7 @@ def lower_indexing_expr(ctx: TreeSitterEmitContext, node) -> str:
     obj_reg = ctx.lower_expr(named_children[0])
     # The index is inside indexing_suffix
     suffix_node = next(
-        (c for c in node.children if c.type == "indexing_suffix"),
+        (c for c in node.children if c.type == KNT.INDEXING_SUFFIX),
         None,
     )
     if suffix_node is None:
@@ -678,13 +679,13 @@ def lower_type_test(ctx: TreeSitterEmitContext, node) -> str:
 def lower_kotlin_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
-    if target.type == "simple_identifier":
+    if target.type == KNT.SIMPLE_IDENTIFIER:
         ctx.emit(
             Opcode.STORE_VAR,
             operands=[ctx.node_text(target), val_reg],
             node=parent_node,
         )
-    elif target.type == "navigation_expression":
+    elif target.type == KNT.NAVIGATION_EXPRESSION:
         named_children = [c for c in target.children if c.is_named]
         if len(named_children) >= 2:
             obj_reg = ctx.lower_expr(named_children[0])
@@ -703,12 +704,12 @@ def lower_kotlin_store_target(
                 operands=[ctx.node_text(target), val_reg],
                 node=parent_node,
             )
-    elif target.type == "indexing_expression":
+    elif target.type == KNT.INDEXING_EXPRESSION:
         named_children = [c for c in target.children if c.is_named]
         if named_children:
             obj_reg = ctx.lower_expr(named_children[0])
             suffix_node = next(
-                (c for c in target.children if c.type == "indexing_suffix"),
+                (c for c in target.children if c.type == KNT.INDEXING_SUFFIX),
                 None,
             )
             if suffix_node:
@@ -729,19 +730,19 @@ def lower_kotlin_store_target(
                 operands=[ctx.node_text(target), val_reg],
                 node=parent_node,
             )
-    elif target.type == "directly_assignable_expression":
+    elif target.type == KNT.DIRECTLY_ASSIGNABLE_EXPRESSION:
         # Check for indexing: simple_identifier + indexing_suffix
         suffix_node = next(
-            (c for c in target.children if c.type == "indexing_suffix"),
+            (c for c in target.children if c.type == KNT.INDEXING_SUFFIX),
             None,
         )
         nav_suffix = next(
-            (c for c in target.children if c.type == "navigation_suffix"),
+            (c for c in target.children if c.type == KNT.NAVIGATION_SUFFIX),
             None,
         )
         if suffix_node:
             id_node = next(
-                (c for c in target.children if c.type == "simple_identifier"),
+                (c for c in target.children if c.type == KNT.SIMPLE_IDENTIFIER),
                 None,
             )
             obj_reg = ctx.lower_expr(id_node) if id_node else ctx.fresh_reg()
@@ -758,7 +759,7 @@ def lower_kotlin_store_target(
             # Navigation assignment: this.field = val or obj.field = val
             named_children = [c for c in target.children if c.is_named]
             obj_node = next(
-                (c for c in named_children if c.type != "navigation_suffix"),
+                (c for c in named_children if c.type != KNT.NAVIGATION_SUFFIX),
                 None,
             )
             obj_reg = ctx.lower_expr(obj_node) if obj_node else ctx.fresh_reg()

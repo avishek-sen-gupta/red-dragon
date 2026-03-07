@@ -7,6 +7,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.javascript.expressions import lower_js_params
+from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
@@ -16,17 +17,17 @@ from interpreter.frontends.type_extraction import (
 def lower_js_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
     """Lower lexical_declaration / variable_declaration, handling destructuring."""
     for child in node.children:
-        if child.type != "variable_declarator":
+        if child.type != JSN.VARIABLE_DECLARATOR:
             continue
         name_node = child.child_by_field_name(ctx.constants.func_name_field)
         value_node = child.child_by_field_name("value")
         if name_node is None:
             continue
 
-        if name_node.type == "object_pattern" and value_node:
+        if name_node.type == JSN.OBJECT_PATTERN and value_node:
             val_reg = ctx.lower_expr(value_node)
             _lower_object_destructure(ctx, name_node, val_reg, node)
-        elif name_node.type == "array_pattern" and value_node:
+        elif name_node.type == JSN.ARRAY_PATTERN and value_node:
             val_reg = ctx.lower_expr(value_node)
             _lower_array_destructure(ctx, name_node, val_reg, node)
         elif value_node:
@@ -55,7 +56,7 @@ def _lower_object_destructure(
 ) -> None:
     """Lower { a, b } = obj or { x: localX } = obj."""
     for child in pattern_node.children:
-        if child.type == "shorthand_property_identifier_pattern":
+        if child.type == JSN.SHORTHAND_PROPERTY_IDENTIFIER_PATTERN:
             prop_name = ctx.node_text(child)
             field_reg = ctx.fresh_reg()
             ctx.emit(
@@ -69,7 +70,7 @@ def _lower_object_destructure(
                 operands=[prop_name, field_reg],
                 node=parent_node,
             )
-        elif child.type == "pair_pattern":
+        elif child.type == JSN.PAIR_PATTERN:
             key_node = child.child_by_field_name("key")
             value_child = child.child_by_field_name("value")
             if key_node and value_child:
@@ -123,11 +124,11 @@ def lower_js_class_def(ctx: TreeSitterEmitContext, node) -> None:
 
     if body_node:
         for child in body_node.children:
-            if child.type == "method_definition":
+            if child.type == JSN.METHOD_DEFINITION:
                 _lower_method_def(ctx, child)
-            elif child.type == "class_static_block":
+            elif child.type == JSN.CLASS_STATIC_BLOCK:
                 lower_class_static_block(ctx, child)
-            elif child.type == "field_definition":
+            elif child.type == JSN.FIELD_DEFINITION:
                 from interpreter.frontends.javascript.expressions import (
                     lower_js_field_definition,
                 )
@@ -159,17 +160,17 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
         operands=[f"{constants.PARAM_PREFIX}this"],
     )
     ctx.seed_register_type(param_reg, class_name)
-    ctx.seed_param_type("this", class_name)
+    ctx.seed_param_type(constants.PARAM_THIS, class_name)
     ctx.emit(
         Opcode.STORE_VAR,
-        operands=["this", param_reg],
+        operands=[constants.PARAM_THIS, param_reg],
     )
-    ctx.seed_var_type("this", class_name)
+    ctx.seed_var_type(constants.PARAM_THIS, class_name)
 
 
 def _has_static_modifier(node) -> bool:
     """Return True if *node* has a ``static`` child token."""
-    return any(c.type == "static" for c in node.children)
+    return any(c.type == JSN.STATIC for c in node.children)
 
 
 def _lower_method_def(ctx: TreeSitterEmitContext, node) -> None:
@@ -260,7 +261,7 @@ def lower_js_function_def(ctx: TreeSitterEmitContext, node) -> None:
 def lower_export_statement(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `export ...` by unwrapping and lowering the inner declaration."""
     for child in node.children:
-        if child.is_named and child.type not in ("export", "default"):
+        if child.is_named and child.type not in (JSN.EXPORT, JSN.DEFAULT):
             ctx.lower_stmt(child)
 
 
@@ -272,5 +273,5 @@ def lower_class_static_block(ctx: TreeSitterEmitContext, node) -> None:
         return
     # Fallback: lower all named children as statements
     for child in node.children:
-        if child.is_named and child.type not in ("static",):
+        if child.is_named and child.type not in (JSN.STATIC,):
             ctx.lower_stmt(child)

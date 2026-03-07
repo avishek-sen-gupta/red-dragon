@@ -67,6 +67,32 @@ SUPPORTED_DETERMINISTIC_LANGUAGES: tuple[str, ...] = tuple(
 )
 
 
+class LLMProvider(StrEnum):
+    """Supported LLM provider identifiers."""
+
+    CLAUDE = "claude"
+    OPENAI = "openai"
+    OLLAMA = "ollama"
+    HUGGINGFACE = "huggingface"
+
+
+class CanonicalLiteral:
+    """Canonical string representations of Python literal values in IR."""
+
+    NONE = "None"
+    TRUE = "True"
+    FALSE = "False"
+
+
+DEFAULT_EXCEPTION_TYPE = "Exception"
+
+
+PARAM_SELF = "self"
+PARAM_THIS = "this"
+PARAM_PHP_THIS = "$this"
+SELF_PARAM_NAMES: frozenset[str] = frozenset({PARAM_SELF, PARAM_THIS, PARAM_PHP_THIS})
+
+
 class TypeName(StrEnum):
     """Canonical type names for the type ontology DAG."""
 

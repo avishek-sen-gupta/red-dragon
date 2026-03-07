@@ -13,6 +13,7 @@ from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
 from interpreter.frontends.pascal.type_helpers import extract_pascal_return_type
+from interpreter.frontends.pascal.node_types import PascalNodeType
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +32,15 @@ def lower_pascal_assignment(ctx: TreeSitterEmitContext, node) -> None:
     target = named_children[0]
     value = named_children[-1]
     val_reg = ctx.lower_expr(value)
-    if target.type == "exprSubscript":
+    if target.type == PascalNodeType.EXPR_SUBSCRIPT:
         target_named = [
             c for c in target.children if c.is_named and c.type not in KEYWORD_NOISE
         ]
         if target_named:
             obj_reg = ctx.lower_expr(target_named[0])
-            args_node = next((c for c in target.children if c.type == "exprArgs"), None)
+            args_node = next(
+                (c for c in target.children if c.type == PascalNodeType.EXPR_ARGS), None
+            )
             if args_node:
                 idx_children = [
                     c
@@ -60,7 +63,7 @@ def lower_pascal_assignment(ctx: TreeSitterEmitContext, node) -> None:
                 operands=[ctx.node_text(target), val_reg],
                 node=node,
             )
-    elif target.type == "exprDot":
+    elif target.type == PascalNodeType.EXPR_DOT:
         dot_named = [
             c for c in target.children if c.is_named and c.type not in KEYWORD_NOISE
         ]
@@ -87,7 +90,7 @@ def lower_pascal_assignment(ctx: TreeSitterEmitContext, node) -> None:
 def lower_pascal_decl_vars(ctx: TreeSitterEmitContext, node) -> None:
     """Lower declVars -- contains multiple declVar children."""
     for child in node.children:
-        if child.type == "declVar":
+        if child.type == PascalNodeType.DECL_VAR:
             lower_pascal_decl_var(ctx, child)
 
 
@@ -96,11 +99,13 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
 
     Array types emit NEW_ARRAY; scalar types default to NONE_LITERAL.
     """
-    id_node = next((c for c in node.children if c.type == "identifier"), None)
+    id_node = next(
+        (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
+    )
     if id_node is None:
         return
     var_name = ctx.node_text(id_node)
-    type_node = next((c for c in node.children if c.type == "type"), None)
+    type_node = next((c for c in node.children if c.type == PascalNodeType.TYPE), None)
     array_size = _pascal_array_size(ctx, type_node) if type_node else 0
     if array_size > 0:
         size_reg = ctx.fresh_reg()
@@ -143,13 +148,17 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
 
 def _pascal_array_size(ctx: TreeSitterEmitContext, type_node) -> int:
     """Extract array size from a Pascal type node containing declArray."""
-    decl_array = next((c for c in type_node.children if c.type == "declArray"), None)
+    decl_array = next(
+        (c for c in type_node.children if c.type == PascalNodeType.DECL_ARRAY), None
+    )
     if decl_array is None:
         return 0
-    range_node = next((c for c in decl_array.children if c.type == "range"), None)
+    range_node = next(
+        (c for c in decl_array.children if c.type == PascalNodeType.RANGE), None
+    )
     if range_node is None:
         return 0
-    nums = [c for c in range_node.children if c.type == "literalNumber"]
+    nums = [c for c in range_node.children if c.type == PascalNodeType.LITERAL_NUMBER]
     if len(nums) < 2:
         return 0
     try:
@@ -162,10 +171,14 @@ def _pascal_array_size(ctx: TreeSitterEmitContext, type_node) -> int:
 
 def _pascal_var_type_name(ctx: TreeSitterEmitContext, type_node) -> str:
     """Extract the type name from a Pascal type node (type > typeref > identifier)."""
-    typeref = next((c for c in type_node.children if c.type == "typeref"), None)
+    typeref = next(
+        (c for c in type_node.children if c.type == PascalNodeType.TYPEREF), None
+    )
     if typeref is None:
         return ""
-    id_node = next((c for c in typeref.children if c.type == "identifier"), None)
+    id_node = next(
+        (c for c in typeref.children if c.type == PascalNodeType.IDENTIFIER), None
+    )
     return ctx.node_text(id_node) if id_node else ""
 
 
@@ -176,11 +189,17 @@ def lower_pascal_proc(ctx: TreeSitterEmitContext, node) -> None:
     nested ``declProc`` child; for standalone ``declProc`` nodes they
     are direct children.
     """
-    decl_node = next((c for c in node.children if c.type == "declProc"), None)
+    decl_node = next(
+        (c for c in node.children if c.type == PascalNodeType.DECL_PROC), None
+    )
     search_node = decl_node if decl_node else node
-    id_node = next((c for c in search_node.children if c.type == "identifier"), None)
-    args_node = next((c for c in search_node.children if c.type == "declArgs"), None)
-    body_node = next((c for c in node.children if c.type == "block"), None)
+    id_node = next(
+        (c for c in search_node.children if c.type == PascalNodeType.IDENTIFIER), None
+    )
+    args_node = next(
+        (c for c in search_node.children if c.type == PascalNodeType.DECL_ARGS), None
+    )
+    body_node = next((c for c in node.children if c.type == PascalNodeType.BLOCK), None)
 
     func_name = ctx.node_text(id_node) if id_node else "__anon"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -198,7 +217,7 @@ def lower_pascal_proc(ctx: TreeSitterEmitContext, node) -> None:
     prev_func_name = getattr(ctx, "_pascal_current_function_name", "")
     ctx._pascal_current_function_name = func_name
     for child in node.children:
-        if child.type == "defProc":
+        if child.type == PascalNodeType.DEF_PROC:
             lower_pascal_proc(ctx, child)
     if body_node:
         lower_pascal_block(ctx, body_node)
@@ -225,9 +244,9 @@ def _lower_pascal_params(ctx: TreeSitterEmitContext, args_node) -> None:
     for child in args_node.children:
         if child.type in KEYWORD_NOISE:
             continue
-        if child.type == "declArg":
+        if child.type == PascalNodeType.DECL_ARG:
             _lower_pascal_single_param(ctx, child)
-        elif child.type == "identifier":
+        elif child.type == PascalNodeType.IDENTIFIER:
             pname = ctx.node_text(child)
             ctx.emit(
                 Opcode.SYMBOLIC,
@@ -249,13 +268,13 @@ def _lower_pascal_single_param(ctx: TreeSitterEmitContext, child) -> None:
     parameter names; the type identifier is nested inside ``type > typeref``.
     """
     type_name = _pascal_var_type_name(
-        ctx, next((c for c in child.children if c.type == "type"), None)
+        ctx, next((c for c in child.children if c.type == PascalNodeType.TYPE), None)
     )
     type_hint = (
         normalize_type_hint(type_name.lower(), ctx.type_map) if type_name else ""
     )
     for id_node in child.children:
-        if id_node.type != "identifier":
+        if id_node.type != PascalNodeType.IDENTIFIER:
             continue
         pname = ctx.node_text(id_node)
         _sym_reg = ctx.fresh_reg()
@@ -277,17 +296,21 @@ def _lower_pascal_single_param(ctx: TreeSitterEmitContext, child) -> None:
 def lower_pascal_decl_consts(ctx: TreeSitterEmitContext, node) -> None:
     """Lower declConsts -- iterate declConst children."""
     for child in node.children:
-        if child.type == "declConst":
+        if child.type == PascalNodeType.DECL_CONST:
             lower_pascal_decl_const(ctx, child)
 
 
 def lower_pascal_decl_const(ctx: TreeSitterEmitContext, node) -> None:
     """Lower declConst -- extract name + defaultValue child, lower value, STORE_VAR."""
-    id_node = next((c for c in node.children if c.type == "identifier"), None)
+    id_node = next(
+        (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
+    )
     if id_node is None:
         return
     var_name = ctx.node_text(id_node)
-    value_node = next((c for c in node.children if c.type == "defaultValue"), None)
+    value_node = next(
+        (c for c in node.children if c.type == PascalNodeType.DEFAULT_VALUE), None
+    )
     if value_node:
         # defaultValue wraps the actual expression
         inner = next(
@@ -322,20 +345,24 @@ def lower_pascal_decl_const(ctx: TreeSitterEmitContext, node) -> None:
 def lower_pascal_decl_types(ctx: TreeSitterEmitContext, node) -> None:
     """Lower declTypes -- iterate individual declType children."""
     for child in node.children:
-        if child.type == "declType":
+        if child.type == PascalNodeType.DECL_TYPE:
             lower_pascal_decl_type(ctx, child)
 
 
 def lower_pascal_decl_type(ctx: TreeSitterEmitContext, node) -> None:
     """Lower declType -- emit CLASS_REF for record types, skip others."""
-    id_node = next((c for c in node.children if c.type == "identifier"), None)
-    class_node = next((c for c in node.children if c.type == "declClass"), None)
+    id_node = next(
+        (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
+    )
+    class_node = next(
+        (c for c in node.children if c.type == PascalNodeType.DECL_CLASS), None
+    )
 
     if id_node is None or class_node is None:
         return
 
     # Only handle record types
-    has_record = any(c.type == "kRecord" for c in class_node.children)
+    has_record = any(c.type == PascalNodeType.K_RECORD for c in class_node.children)
     if not has_record:
         return
 

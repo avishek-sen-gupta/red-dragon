@@ -11,6 +11,7 @@ from interpreter.frontends.common.expressions import (
     lower_const_literal,
     lower_interpolated_string_parts,
 )
+from interpreter.frontends.ruby.node_types import RubyNodeType
 
 
 def lower_instance_variable(ctx: TreeSitterEmitContext, node) -> str:
@@ -18,7 +19,9 @@ def lower_instance_variable(ctx: TreeSitterEmitContext, node) -> str:
     raw = ctx.node_text(node)
     field_name = raw.lstrip("@")
     self_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=self_reg, operands=["self"], node=node)
+    ctx.emit(
+        Opcode.LOAD_VAR, result_reg=self_reg, operands=[constants.PARAM_SELF], node=node
+    )
     reg = ctx.fresh_reg()
     ctx.emit(
         Opcode.LOAD_FIELD,
@@ -31,13 +34,13 @@ def lower_instance_variable(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_ruby_string(ctx: TreeSitterEmitContext, node) -> str:
     """Lower Ruby string, decomposing interpolation into CONST + LOAD_VAR + BINOP '+'."""
-    has_interpolation = any(c.type == "interpolation" for c in node.children)
+    has_interpolation = any(c.type == RubyNodeType.INTERPOLATION for c in node.children)
     if not has_interpolation:
         return lower_const_literal(ctx, node)
 
     parts: list[str] = []
     for child in node.children:
-        if child.type == "string_content":
+        if child.type == RubyNodeType.STRING_CONTENT:
             frag_reg = ctx.fresh_reg()
             ctx.emit(
                 Opcode.CONST,
@@ -46,7 +49,7 @@ def lower_ruby_string(ctx: TreeSitterEmitContext, node) -> str:
                 node=child,
             )
             parts.append(frag_reg)
-        elif child.type == "interpolation":
+        elif child.type == RubyNodeType.INTERPOLATION:
             named = [c for c in child.children if c.is_named]
             if named:
                 parts.append(ctx.lower_expr(named[0]))
@@ -56,13 +59,13 @@ def lower_ruby_string(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_ruby_heredoc_body(ctx: TreeSitterEmitContext, node) -> str:
     """Lower Ruby heredoc body, decomposing interpolation like lower_ruby_string."""
-    has_interpolation = any(c.type == "interpolation" for c in node.children)
+    has_interpolation = any(c.type == RubyNodeType.INTERPOLATION for c in node.children)
     if not has_interpolation:
         return lower_const_literal(ctx, node)
 
     parts: list[str] = []
     for child in node.children:
-        if child.type == "heredoc_content":
+        if child.type == RubyNodeType.HEREDOC_CONTENT:
             frag_reg = ctx.fresh_reg()
             ctx.emit(
                 Opcode.CONST,
@@ -71,7 +74,7 @@ def lower_ruby_heredoc_body(ctx: TreeSitterEmitContext, node) -> str:
                 node=child,
             )
             parts.append(frag_reg)
-        elif child.type == "interpolation":
+        elif child.type == RubyNodeType.INTERPOLATION:
             named = [c for c in child.children if c.is_named]
             if named:
                 parts.append(ctx.lower_expr(named[0]))
@@ -88,7 +91,11 @@ def lower_ruby_call(ctx: TreeSitterEmitContext, node) -> str:
 
     # Detect block/do_block child and lower it as a closure argument
     block_node = next(
-        (c for c in node.children if c.type in ("block", "do_block")),
+        (
+            c
+            for c in node.children
+            if c.type in (RubyNodeType.BLOCK, RubyNodeType.DO_BLOCK)
+        ),
         None,
     )
     if block_node:
@@ -183,7 +190,7 @@ def lower_ruby_hash(ctx: TreeSitterEmitContext, node) -> str:
         node=node,
     )
     for child in node.children:
-        if child.type == "pair":
+        if child.type == RubyNodeType.PAIR:
             key_node = child.child_by_field_name("key")
             val_node = child.child_by_field_name("value")
             if key_node and val_node:
@@ -230,7 +237,7 @@ def lower_ruby_lambda(ctx: TreeSitterEmitContext, node) -> str:
             (
                 c
                 for c in body_node.children
-                if c.type in ("block_body", "body_statement")
+                if c.type in (RubyNodeType.BLOCK_BODY, RubyNodeType.BODY_STATEMENT)
             ),
             None,
         )
@@ -247,7 +254,12 @@ def lower_ruby_lambda(ctx: TreeSitterEmitContext, node) -> str:
         for child in node.children:
             if (
                 child.is_named
-                and child.type not in ("lambda_parameters", "block_parameters", "->")
+                and child.type
+                not in (
+                    RubyNodeType.LAMBDA_PARAMETERS,
+                    RubyNodeType.BLOCK_PARAMETERS,
+                    RubyNodeType.ARROW,
+                )
                 and child.type not in ctx.constants.noise_types
                 and child.type not in ctx.constants.comment_types
             ):
@@ -274,7 +286,16 @@ def lower_ruby_lambda(ctx: TreeSitterEmitContext, node) -> str:
 def lower_ruby_word_array(ctx: TreeSitterEmitContext, node) -> str:
     """Lower `%w[a b c]` or `%i[a b c]` as NEW_ARRAY + STORE_INDEX per element."""
     elems = [
-        c for c in node.children if c.is_named and c.type not in ("{", "}", "[", "]")
+        c
+        for c in node.children
+        if c.is_named
+        and c.type
+        not in (
+            RubyNodeType.OPEN_BRACE,
+            RubyNodeType.CLOSE_BRACE,
+            RubyNodeType.OPEN_BRACKET,
+            RubyNodeType.CLOSE_BRACKET,
+        )
     ]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
@@ -359,7 +380,7 @@ def lower_ruby_self(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(
         Opcode.LOAD_VAR,
         result_reg=reg,
-        operands=["self"],
+        operands=[constants.PARAM_SELF],
         node=node,
     )
     return reg
@@ -368,7 +389,7 @@ def lower_ruby_self(ctx: TreeSitterEmitContext, node) -> str:
 def lower_ruby_super(ctx: TreeSitterEmitContext, node) -> str:
     """Lower `super` or `super(args)` as CALL_FUNCTION("super", ...args)."""
     args_node = next(
-        (c for c in node.children if c.type == "argument_list"),
+        (c for c in node.children if c.type == RubyNodeType.ARGUMENT_LIST),
         None,
     )
     arg_regs = extract_call_args(ctx, args_node) if args_node else []
@@ -385,7 +406,7 @@ def lower_ruby_super(ctx: TreeSitterEmitContext, node) -> str:
 def lower_ruby_yield(ctx: TreeSitterEmitContext, node) -> str:
     """Lower `yield` or `yield expr` as CALL_FUNCTION("yield", ...args)."""
     args_node = next(
-        (c for c in node.children if c.type == "argument_list"),
+        (c for c in node.children if c.type == RubyNodeType.ARGUMENT_LIST),
         None,
     )
     arg_regs = extract_call_args(ctx, args_node) if args_node else []
@@ -423,7 +444,7 @@ def lower_ruby_block(ctx: TreeSitterEmitContext, node) -> str:
 
     # Lower block parameters from block_parameters or |x, y| syntax
     params_node = next(
-        (c for c in node.children if c.type == "block_parameters"),
+        (c for c in node.children if c.type == RubyNodeType.BLOCK_PARAMETERS),
         None,
     )
     if params_node:
@@ -431,7 +452,11 @@ def lower_ruby_block(ctx: TreeSitterEmitContext, node) -> str:
 
     # Lower block body
     body_node = next(
-        (c for c in node.children if c.type in ("block_body", "body_statement")),
+        (
+            c
+            for c in node.children
+            if c.type in (RubyNodeType.BLOCK_BODY, RubyNodeType.BODY_STATEMENT)
+        ),
         None,
     )
     if body_node:
@@ -441,7 +466,14 @@ def lower_ruby_block(ctx: TreeSitterEmitContext, node) -> str:
         for child in node.children:
             if (
                 child.is_named
-                and child.type not in ("block_parameters", "{", "}", "do", "end")
+                and child.type
+                not in (
+                    RubyNodeType.BLOCK_PARAMETERS,
+                    RubyNodeType.OPEN_BRACE,
+                    RubyNodeType.CLOSE_BRACE,
+                    RubyNodeType.DO,
+                    RubyNodeType.END,
+                )
                 and child.type not in ctx.constants.noise_types
                 and child.type not in ctx.constants.comment_types
             ):
@@ -473,9 +505,14 @@ def lower_ruby_block(ctx: TreeSitterEmitContext, node) -> str:
 def lower_ruby_params(ctx: TreeSitterEmitContext, params_node) -> None:
     """Lower Ruby function/block parameters."""
     for child in params_node.children:
-        if child.type in ("(", ")", ",", "|"):
+        if child.type in (
+            RubyNodeType.OPEN_PAREN,
+            RubyNodeType.CLOSE_PAREN,
+            RubyNodeType.COMMA,
+            RubyNodeType.PIPE,
+        ):
             continue
-        pname = ctx.node_text(child) if child.type == "identifier" else None
+        pname = ctx.node_text(child) if child.type == RubyNodeType.IDENTIFIER else None
         if pname is None:
             pname = _extract_param_name(ctx, child)
         if pname is None:
@@ -494,7 +531,7 @@ def lower_ruby_params(ctx: TreeSitterEmitContext, params_node) -> None:
 
 def _extract_param_name(ctx: TreeSitterEmitContext, child) -> str | None:
     """Extract parameter name from a parameter node."""
-    if child.type == "identifier":
+    if child.type == RubyNodeType.IDENTIFIER:
         return ctx.node_text(child)
     # Try common field names
     for field in ("name", "pattern"):
@@ -503,7 +540,7 @@ def _extract_param_name(ctx: TreeSitterEmitContext, child) -> str | None:
             return ctx.node_text(name_node)
     # Try first identifier child
     id_node = next(
-        (sub for sub in child.children if sub.type == "identifier"),
+        (sub for sub in child.children if sub.type == RubyNodeType.IDENTIFIER),
         None,
     )
     if id_node:
@@ -518,14 +555,14 @@ def lower_ruby_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
     """Ruby-specific store target handling for instance variables and element references."""
-    if target.type == "instance_variable":
+    if target.type == RubyNodeType.INSTANCE_VARIABLE:
         raw = ctx.node_text(target)
         field_name = raw.lstrip("@")
         self_reg = ctx.fresh_reg()
         ctx.emit(
             Opcode.LOAD_VAR,
             result_reg=self_reg,
-            operands=["self"],
+            operands=[constants.PARAM_SELF],
             node=parent_node,
         )
         ctx.emit(
@@ -534,17 +571,17 @@ def lower_ruby_store_target(
             node=parent_node,
         )
     elif target.type in (
-        "identifier",
-        "constant",
-        "global_variable",
-        "class_variable",
+        RubyNodeType.IDENTIFIER,
+        RubyNodeType.CONSTANT,
+        RubyNodeType.GLOBAL_VARIABLE,
+        RubyNodeType.CLASS_VARIABLE,
     ):
         ctx.emit(
             Opcode.STORE_VAR,
             operands=[ctx.node_text(target), val_reg],
             node=parent_node,
         )
-    elif target.type == "element_reference":
+    elif target.type == RubyNodeType.ELEMENT_REFERENCE:
         named_children = [c for c in target.children if c.is_named]
         if len(named_children) >= 2:
             obj_reg = ctx.lower_expr(named_children[0])

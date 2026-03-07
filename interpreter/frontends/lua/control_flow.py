@@ -6,6 +6,7 @@ import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
+from interpreter.frontends.lua.node_types import LuaNodeType
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +20,10 @@ def lower_lua_if(ctx: TreeSitterEmitContext, node) -> None:
     true_label = ctx.fresh_label("if_true")
     end_label = ctx.fresh_label("if_end")
 
-    elseif_nodes = [c for c in node.children if c.type == "elseif_statement"]
-    else_node = next((c for c in node.children if c.type == "else_statement"), None)
+    elseif_nodes = [c for c in node.children if c.type == LuaNodeType.ELSEIF_STATEMENT]
+    else_node = next(
+        (c for c in node.children if c.type == LuaNodeType.ELSE_STATEMENT), None
+    )
     has_alternative = len(elseif_nodes) > 0 or else_node is not None
     false_label = ctx.fresh_label("if_false") if has_alternative else end_label
 
@@ -50,7 +53,7 @@ def _lower_lua_elseif_chain(
     if not elseif_nodes:
         if else_node:
             for child in else_node.children:
-                if child.is_named and child.type not in ("else",):
+                if child.is_named and child.type not in (LuaNodeType.ELSE,):
                     ctx.lower_block(child)
         return
 
@@ -113,10 +116,10 @@ def lower_lua_while(ctx: TreeSitterEmitContext, node) -> None:
 def lower_lua_for(ctx: TreeSitterEmitContext, node) -> None:
     """Lower for_statement -- dispatches on for_numeric_clause vs for_generic_clause."""
     numeric_clause = next(
-        (c for c in node.children if c.type == "for_numeric_clause"), None
+        (c for c in node.children if c.type == LuaNodeType.FOR_NUMERIC_CLAUSE), None
     )
     generic_clause = next(
-        (c for c in node.children if c.type == "for_generic_clause"), None
+        (c for c in node.children if c.type == LuaNodeType.FOR_GENERIC_CLAUSE), None
     )
     body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
@@ -199,8 +202,12 @@ def _lower_lua_for_generic(
 ) -> None:
     """Lower for k, v in ipairs/pairs(t) do ... end as index-based iteration."""
     # Extract variable names from variable_list
-    var_list = next((c for c in clause.children if c.type == "variable_list"), None)
-    expr_list = next((c for c in clause.children if c.type == "expression_list"), None)
+    var_list = next(
+        (c for c in clause.children if c.type == LuaNodeType.VARIABLE_LIST), None
+    )
+    expr_list = next(
+        (c for c in clause.children if c.type == LuaNodeType.EXPRESSION_LIST), None
+    )
 
     var_names = (
         [ctx.node_text(c) for c in var_list.children if c.is_named] if var_list else []
@@ -297,7 +304,7 @@ def lower_lua_do(ctx: TreeSitterEmitContext, node) -> None:
         ctx.lower_block(body_node)
     else:
         for child in node.children:
-            if child.is_named and child.type not in ("do", "end"):
+            if child.is_named and child.type not in (LuaNodeType.DO, LuaNodeType.END):
                 ctx.lower_stmt(child)
 
 

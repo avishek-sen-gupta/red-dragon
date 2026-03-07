@@ -7,6 +7,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.common.expressions import lower_const_literal
+from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
 
 
 def lower_js_subscript(ctx: TreeSitterEmitContext, node) -> str:
@@ -48,7 +49,7 @@ def lower_js_call(ctx: TreeSitterEmitContext, node) -> str:
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = _extract_js_call_args(ctx, args_node) if args_node else []
 
-    if func_node and func_node.type == "member_expression":
+    if func_node and func_node.type == JSN.MEMBER_EXPRESSION:
         obj_node = func_node.child_by_field_name(ctx.constants.attr_object_field)
         prop_node = func_node.child_by_field_name("property")
         if obj_node and prop_node:
@@ -63,7 +64,7 @@ def lower_js_call(ctx: TreeSitterEmitContext, node) -> str:
             )
             return reg
 
-    if func_node and func_node.type == "identifier":
+    if func_node and func_node.type == JSN.IDENTIFIER:
         func_name = ctx.node_text(func_node)
         reg = ctx.fresh_reg()
         ctx.emit(
@@ -91,20 +92,20 @@ def _extract_js_call_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
     return [
         ctx.lower_expr(c)
         for c in args_node.children
-        if c.type not in ("(", ")", ",") and c.is_named
+        if c.type not in (JSN.OPEN_PAREN, JSN.CLOSE_PAREN, JSN.COMMA) and c.is_named
     ]
 
 
 def lower_js_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
-    if target.type == "identifier":
+    if target.type == JSN.IDENTIFIER:
         ctx.emit(
             Opcode.STORE_VAR,
             operands=[ctx.node_text(target), val_reg],
             node=parent_node,
         )
-    elif target.type == "member_expression":
+    elif target.type == JSN.MEMBER_EXPRESSION:
         obj_node = target.child_by_field_name(ctx.constants.attr_object_field)
         prop_node = target.child_by_field_name("property")
         if obj_node and prop_node:
@@ -114,7 +115,7 @@ def lower_js_store_target(
                 operands=[obj_reg, ctx.node_text(prop_node), val_reg],
                 node=parent_node,
             )
-    elif target.type == "subscript_expression":
+    elif target.type == JSN.SUBSCRIPT_EXPRESSION:
         obj_node = target.child_by_field_name(ctx.constants.attr_object_field)
         idx_node = target.child_by_field_name("index")
         if obj_node and idx_node:
@@ -150,7 +151,7 @@ def lower_js_object_literal(ctx: TreeSitterEmitContext, node) -> str:
         node=node,
     )
     for child in node.children:
-        if child.type == "pair":
+        if child.type == JSN.PAIR:
             key_node = child.child_by_field_name("key")
             val_node = child.child_by_field_name("value")
             if key_node and val_node:
@@ -160,7 +161,7 @@ def lower_js_object_literal(ctx: TreeSitterEmitContext, node) -> str:
                     Opcode.STORE_INDEX,
                     operands=[obj_reg, key_reg, val_reg],
                 )
-        elif child.type == "shorthand_property_identifier":
+        elif child.type == JSN.SHORTHAND_PROPERTY_IDENTIFIER:
             from interpreter.frontends.common.expressions import lower_identifier
 
             key_reg = lower_const_literal(ctx, child)
@@ -184,13 +185,13 @@ def lower_arrow_function(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.LABEL, label=func_label)
 
     if params_node:
-        if params_node.type == "identifier":
+        if params_node.type == JSN.IDENTIFIER:
             lower_js_param(ctx, params_node)
         else:
             lower_js_params(ctx, params_node)
 
     if body_node:
-        if body_node.type == "statement_block":
+        if body_node.type == JSN.STATEMENT_BLOCK:
             ctx.lower_block(body_node)
         else:
             # Expression body: implicit return
@@ -380,18 +381,18 @@ def lower_function_expression(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_template_string(ctx: TreeSitterEmitContext, node) -> str:
     """Lower template string, descending into template_substitution children."""
-    has_substitution = any(c.type == "template_substitution" for c in node.children)
+    has_substitution = any(c.type == JSN.TEMPLATE_SUBSTITUTION for c in node.children)
     if not has_substitution:
         return lower_const_literal(ctx, node)
 
     # Build by concatenating literal fragments and substitution expressions
     parts: list[str] = []
     for child in node.children:
-        if child.type == "template_substitution":
+        if child.type == JSN.TEMPLATE_SUBSTITUTION:
             parts.append(lower_template_substitution(ctx, child))
         elif child.is_named:
             parts.append(ctx.lower_expr(child))
-        elif child.type not in ("`",):
+        elif child.type not in (JSN.BACKTICK,):
             # String fragment
             frag_reg = ctx.fresh_reg()
             ctx.emit(
@@ -461,14 +462,14 @@ def lower_js_field_definition(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_js_param(ctx: TreeSitterEmitContext, child) -> None:
-    if child.type in ("(", ")", ","):
+    if child.type in (JSN.OPEN_PAREN, JSN.CLOSE_PAREN, JSN.COMMA):
         return
-    if child.type == "identifier":
+    if child.type == JSN.IDENTIFIER:
         pname = ctx.node_text(child)
     elif child.type in (
-        "assignment_pattern",
-        "object_pattern",
-        "array_pattern",
+        JSN.ASSIGNMENT_PATTERN,
+        JSN.OBJECT_PATTERN,
+        JSN.ARRAY_PATTERN,
     ):
         pname = ctx.node_text(child)
     else:

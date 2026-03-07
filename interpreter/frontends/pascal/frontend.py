@@ -11,6 +11,7 @@ from interpreter.frontends.pascal import expressions as pascal_expr
 from interpreter.frontends.pascal import control_flow as pascal_cf
 from interpreter.frontends.pascal import declarations as pascal_decl
 from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
+from interpreter.frontends.pascal.node_types import PascalNodeType
 
 
 class PascalFrontend(BaseFrontend):
@@ -18,15 +19,15 @@ class PascalFrontend(BaseFrontend):
 
     def _build_constants(self) -> GrammarConstants:
         return GrammarConstants(
-            comment_types=frozenset({"comment"}),
+            comment_types=frozenset({PascalNodeType.COMMENT}),
             noise_types=KEYWORD_NOISE,
             block_node_types=frozenset(
                 {
-                    "block",
-                    "root",
-                    "program",
-                    "statements",
-                    "statement",
+                    PascalNodeType.BLOCK,
+                    PascalNodeType.ROOT,
+                    PascalNodeType.PROGRAM,
+                    PascalNodeType.STATEMENTS,
+                    PascalNodeType.STATEMENT,
                 }
             ),
         )
@@ -57,50 +58,50 @@ class PascalFrontend(BaseFrontend):
 
     def _build_expr_dispatch(self) -> dict[str, Callable]:
         return {
-            "identifier": common_expr.lower_identifier,
-            "literalNumber": common_expr.lower_const_literal,
-            "literalString": common_expr.lower_const_literal,
-            "exprBinary": pascal_expr.lower_pascal_binop,
-            "exprCall": pascal_expr.lower_pascal_call,
-            "exprParens": pascal_expr.lower_pascal_paren,
-            "exprDot": pascal_expr.lower_pascal_dot,
-            "exprSubscript": pascal_expr.lower_pascal_subscript,
-            "exprUnary": pascal_expr.lower_pascal_unary,
-            "exprBrackets": pascal_expr.lower_pascal_brackets,
-            "kTrue": common_expr.lower_canonical_true,
-            "kFalse": common_expr.lower_canonical_false,
-            "kNil": common_expr.lower_canonical_none,
-            "range": pascal_expr.lower_pascal_range,
-            "inherited": pascal_expr.lower_pascal_inherited_expr,
-            "typeref": common_expr.lower_const_literal,
+            PascalNodeType.IDENTIFIER: common_expr.lower_identifier,
+            PascalNodeType.LITERAL_NUMBER: common_expr.lower_const_literal,
+            PascalNodeType.LITERAL_STRING: common_expr.lower_const_literal,
+            PascalNodeType.EXPR_BINARY: pascal_expr.lower_pascal_binop,
+            PascalNodeType.EXPR_CALL: pascal_expr.lower_pascal_call,
+            PascalNodeType.EXPR_PARENS: pascal_expr.lower_pascal_paren,
+            PascalNodeType.EXPR_DOT: pascal_expr.lower_pascal_dot,
+            PascalNodeType.EXPR_SUBSCRIPT: pascal_expr.lower_pascal_subscript,
+            PascalNodeType.EXPR_UNARY: pascal_expr.lower_pascal_unary,
+            PascalNodeType.EXPR_BRACKETS: pascal_expr.lower_pascal_brackets,
+            PascalNodeType.K_TRUE: common_expr.lower_canonical_true,
+            PascalNodeType.K_FALSE: common_expr.lower_canonical_false,
+            PascalNodeType.K_NIL: common_expr.lower_canonical_none,
+            PascalNodeType.RANGE: pascal_expr.lower_pascal_range,
+            PascalNodeType.INHERITED: pascal_expr.lower_pascal_inherited_expr,
+            PascalNodeType.TYPEREF: common_expr.lower_const_literal,
         }
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:
         return {
-            "root": pascal_cf.lower_pascal_root,
-            "program": pascal_cf.lower_pascal_program,
-            "block": pascal_cf.lower_pascal_block,
-            "statement": pascal_cf.lower_pascal_statement,
-            "assignment": pascal_decl.lower_pascal_assignment,
-            "declVars": pascal_decl.lower_pascal_decl_vars,
-            "declVar": pascal_decl.lower_pascal_decl_var,
-            "ifElse": pascal_cf.lower_pascal_if,
-            "if": pascal_cf.lower_pascal_if,
-            "while": pascal_cf.lower_pascal_while,
-            "for": pascal_cf.lower_pascal_for,
-            "defProc": pascal_decl.lower_pascal_proc,
-            "declProc": pascal_decl.lower_pascal_proc,
-            "statements": pascal_cf.lower_pascal_block,
-            "case": pascal_cf.lower_pascal_case,
-            "repeat": pascal_cf.lower_pascal_repeat,
-            "declConsts": pascal_decl.lower_pascal_decl_consts,
-            "declConst": pascal_decl.lower_pascal_decl_const,
-            "declType": pascal_decl.lower_pascal_decl_type,
-            "declTypes": pascal_decl.lower_pascal_decl_types,
-            "declUses": pascal_cf.lower_pascal_noop,
-            "try": pascal_cf.lower_pascal_try,
-            "exceptionHandler": pascal_cf.lower_pascal_exception_handler,
-            "raise": pascal_cf.lower_pascal_raise,
-            "with": pascal_cf.lower_pascal_with,
-            "inherited": pascal_cf.lower_pascal_inherited_stmt,
+            PascalNodeType.ROOT: pascal_cf.lower_pascal_root,
+            PascalNodeType.PROGRAM: pascal_cf.lower_pascal_program,
+            PascalNodeType.BLOCK: pascal_cf.lower_pascal_block,
+            PascalNodeType.STATEMENT: pascal_cf.lower_pascal_statement,
+            PascalNodeType.ASSIGNMENT: pascal_decl.lower_pascal_assignment,
+            PascalNodeType.DECL_VARS: pascal_decl.lower_pascal_decl_vars,
+            PascalNodeType.DECL_VAR: pascal_decl.lower_pascal_decl_var,
+            PascalNodeType.IF_ELSE: pascal_cf.lower_pascal_if,
+            PascalNodeType.IF: pascal_cf.lower_pascal_if,
+            PascalNodeType.WHILE: pascal_cf.lower_pascal_while,
+            PascalNodeType.FOR: pascal_cf.lower_pascal_for,
+            PascalNodeType.DEF_PROC: pascal_decl.lower_pascal_proc,
+            PascalNodeType.DECL_PROC: pascal_decl.lower_pascal_proc,
+            PascalNodeType.STATEMENTS: pascal_cf.lower_pascal_block,
+            PascalNodeType.CASE: pascal_cf.lower_pascal_case,
+            PascalNodeType.REPEAT: pascal_cf.lower_pascal_repeat,
+            PascalNodeType.DECL_CONSTS: pascal_decl.lower_pascal_decl_consts,
+            PascalNodeType.DECL_CONST: pascal_decl.lower_pascal_decl_const,
+            PascalNodeType.DECL_TYPE: pascal_decl.lower_pascal_decl_type,
+            PascalNodeType.DECL_TYPES: pascal_decl.lower_pascal_decl_types,
+            PascalNodeType.DECL_USES: pascal_cf.lower_pascal_noop,
+            PascalNodeType.TRY: pascal_cf.lower_pascal_try,
+            PascalNodeType.EXCEPTION_HANDLER: pascal_cf.lower_pascal_exception_handler,
+            PascalNodeType.RAISE: pascal_cf.lower_pascal_raise,
+            PascalNodeType.WITH: pascal_cf.lower_pascal_with,
+            PascalNodeType.INHERITED: pascal_cf.lower_pascal_inherited_stmt,
         }

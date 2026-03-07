@@ -10,6 +10,7 @@ from interpreter.frontends.common.exceptions import (
     lower_raise_or_throw,
     lower_try_catch,
 )
+from interpreter.frontends.cpp.node_types import CppNodeType
 
 
 def lower_cpp_if(ctx: TreeSitterEmitContext, node) -> None:
@@ -46,7 +47,7 @@ def lower_cpp_if(ctx: TreeSitterEmitContext, node) -> None:
     if alt_node:
         ctx.emit(Opcode.LABEL, label=false_label)
         for child in alt_node.children:
-            if child.type not in ("else",) and child.is_named:
+            if child.type not in (CppNodeType.ELSE_KEYWORD,) and child.is_named:
                 ctx.lower_stmt(child)
         ctx.emit(Opcode.BRANCH, label=end_label)
 
@@ -94,7 +95,11 @@ def lower_template_decl(ctx: TreeSitterEmitContext, node) -> None:
         c
         for c in node.children
         if c.is_named
-        and c.type not in ("template_parameter_list", "template_parameter_declaration")
+        and c.type
+        not in (
+            CppNodeType.TEMPLATE_PARAMETER_LIST,
+            CppNodeType.TEMPLATE_PARAMETER_DECLARATION,
+        )
     ]
     if inner_decls:
         ctx.lower_stmt(inner_decls[-1])
@@ -172,16 +177,20 @@ def lower_try(ctx: TreeSitterEmitContext, node) -> None:
     body_node = node.child_by_field_name("body")
     catch_clauses = []
     for child in node.children:
-        if child.type == "catch_clause":
+        if child.type == CppNodeType.CATCH_CLAUSE:
             param_node = next(
-                (c for c in child.children if c.type == "catch_declarator"),
+                (c for c in child.children if c.type == CppNodeType.CATCH_DECLARATOR),
                 None,
             )
             exc_var = None
             exc_type = None
             if param_node:
                 id_node = next(
-                    (c for c in param_node.children if c.type == "identifier"),
+                    (
+                        c
+                        for c in param_node.children
+                        if c.type == CppNodeType.IDENTIFIER
+                    ),
                     None,
                 )
                 exc_var = ctx.node_text(id_node) if id_node else None

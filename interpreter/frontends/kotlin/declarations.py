@@ -6,6 +6,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
 from interpreter.frontends.type_extraction import (
     extract_type_from_child,
     normalize_type_hint,
@@ -17,7 +18,7 @@ from interpreter.frontends.type_extraction import (
 def _extract_property_name(ctx: TreeSitterEmitContext, var_decl_node) -> str:
     """Extract name from variable_declaration -> simple_identifier."""
     id_node = next(
-        (c for c in var_decl_node.children if c.type == "simple_identifier"),
+        (c for c in var_decl_node.children if c.type == KNT.SIMPLE_IDENTIFIER),
         None,
     )
     return ctx.node_text(id_node) if id_node else "__unknown"
@@ -49,7 +50,9 @@ def _lower_multi_variable_destructure(
             operands=[ctx.constants.none_literal],
         )
 
-    var_decls = [c for c in multi_var_node.children if c.type == "variable_declaration"]
+    var_decls = [
+        c for c in multi_var_node.children if c.type == KNT.VARIABLE_DECLARATION
+    ]
     for i, var_decl in enumerate(var_decls):
         var_name = _extract_property_name(ctx, var_decl)
         idx_reg = ctx.fresh_reg()
@@ -70,7 +73,7 @@ def _lower_multi_variable_destructure(
 
 def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
     multi_var_decl = next(
-        (c for c in node.children if c.type == "multi_variable_declaration"),
+        (c for c in node.children if c.type == KNT.MULTI_VARIABLE_DECLARATION),
         None,
     )
 
@@ -79,14 +82,14 @@ def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
         return
 
     var_decl = next(
-        (c for c in node.children if c.type == "variable_declaration"),
+        (c for c in node.children if c.type == KNT.VARIABLE_DECLARATION),
         None,
     )
     var_name = _extract_property_name(ctx, var_decl) if var_decl else "__unknown"
 
     # Extract type from the variable_declaration child
     raw_type = (
-        extract_type_from_child(ctx, var_decl, ("user_type", "nullable_type"))
+        extract_type_from_child(ctx, var_decl, (KNT.USER_TYPE, KNT.NULLABLE_TYPE))
         if var_decl
         else ""
     )
@@ -135,15 +138,15 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
 
 def _lower_kotlin_params(ctx: TreeSitterEmitContext, params_node) -> None:
     for child in params_node.children:
-        if child.type == "parameter":
+        if child.type == KNT.PARAMETER:
             id_node = next(
-                (c for c in child.children if c.type == "simple_identifier"),
+                (c for c in child.children if c.type == KNT.SIMPLE_IDENTIFIER),
                 None,
             )
             if id_node:
                 pname = ctx.node_text(id_node)
                 raw_type = extract_type_from_child(
-                    ctx, child, ("user_type", "nullable_type")
+                    ctx, child, (KNT.USER_TYPE, KNT.NULLABLE_TYPE)
                 )
                 type_hint = normalize_type_hint(raw_type, ctx.type_map)
                 ctx.emit(
@@ -188,15 +191,15 @@ def lower_function_decl(
     ctx: TreeSitterEmitContext, node, inject_this: bool = False
 ) -> None:
     name_node = next(
-        (c for c in node.children if c.type == "simple_identifier"),
+        (c for c in node.children if c.type == KNT.SIMPLE_IDENTIFIER),
         None,
     )
     params_node = next(
-        (c for c in node.children if c.type == "function_value_parameters"),
+        (c for c in node.children if c.type == KNT.FUNCTION_VALUE_PARAMETERS),
         None,
     )
     body_node = next(
-        (c for c in node.children if c.type == "function_body"),
+        (c for c in node.children if c.type == KNT.FUNCTION_BODY),
         None,
     )
 
@@ -204,7 +207,7 @@ def lower_function_decl(
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    raw_return = extract_type_from_child(ctx, node, ("user_type", "nullable_type"))
+    raw_return = extract_type_from_child(ctx, node, (KNT.USER_TYPE, KNT.NULLABLE_TYPE))
     return_hint = normalize_type_hint(raw_return, ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
@@ -250,9 +253,9 @@ def _lower_class_body_with_companions(ctx: TreeSitterEmitContext, node) -> None:
     for child in node.children:
         if not child.is_named:
             continue
-        if child.type == "companion_object":
+        if child.type == KNT.COMPANION_OBJECT:
             _lower_companion_object(ctx, child)
-        elif child.type == "function_declaration":
+        elif child.type == KNT.FUNCTION_DECLARATION:
             lower_function_decl(ctx, child, inject_this=True)
         else:
             ctx.lower_stmt(child)
@@ -261,7 +264,7 @@ def _lower_class_body_with_companions(ctx: TreeSitterEmitContext, node) -> None:
 def _lower_companion_object(ctx: TreeSitterEmitContext, node) -> None:
     """Lower companion object by lowering its class_body child as a block."""
     body_node = next(
-        (c for c in node.children if c.type == "class_body"),
+        (c for c in node.children if c.type == KNT.CLASS_BODY),
         None,
     )
     if body_node:
@@ -271,7 +274,7 @@ def _lower_companion_object(ctx: TreeSitterEmitContext, node) -> None:
 def _lower_enum_class_body(ctx: TreeSitterEmitContext, node) -> None:
     """Lower enum_class_body: create NEW_OBJECT + STORE_VAR for each entry."""
     for child in node.children:
-        if child.type == "enum_entry":
+        if child.type == KNT.ENUM_ENTRY:
             _lower_enum_entry(ctx, child)
         elif child.is_named and child.type not in ("{", "}", ",", ";"):
             ctx.lower_stmt(child)
@@ -280,7 +283,7 @@ def _lower_enum_class_body(ctx: TreeSitterEmitContext, node) -> None:
 def _lower_enum_entry(ctx: TreeSitterEmitContext, node) -> None:
     """Lower a single enum_entry as NEW_OBJECT('enum:Name') + STORE_VAR."""
     name_node = next(
-        (c for c in node.children if c.type == "simple_identifier"),
+        (c for c in node.children if c.type == KNT.SIMPLE_IDENTIFIER),
         None,
     )
     entry_name = ctx.node_text(name_node) if name_node else "__unknown_enum"
@@ -296,11 +299,11 @@ def _lower_enum_entry(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_class_decl(ctx: TreeSitterEmitContext, node) -> None:
     name_node = next(
-        (c for c in node.children if c.type == "type_identifier"),
+        (c for c in node.children if c.type == KNT.TYPE_IDENTIFIER),
         None,
     )
     body_node = next(
-        (c for c in node.children if c.type in ("class_body", "enum_class_body")),
+        (c for c in node.children if c.type in (KNT.CLASS_BODY, KNT.ENUM_CLASS_BODY)),
         None,
     )
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
@@ -311,7 +314,7 @@ def lower_class_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=class_label)
     if body_node:
-        if body_node.type == "enum_class_body":
+        if body_node.type == KNT.ENUM_CLASS_BODY:
             _lower_enum_class_body(ctx, body_node)
         else:
             _lower_class_body_with_companions(ctx, body_node)
@@ -334,11 +337,11 @@ def lower_class_decl(ctx: TreeSitterEmitContext, node) -> None:
 def lower_object_decl(ctx: TreeSitterEmitContext, node) -> None:
     """Lower object declaration (Kotlin singleton) like a class."""
     name_node = next(
-        (c for c in node.children if c.type == "type_identifier"),
+        (c for c in node.children if c.type == KNT.TYPE_IDENTIFIER),
         None,
     )
     body_node = next(
-        (c for c in node.children if c.type == "class_body"),
+        (c for c in node.children if c.type == KNT.CLASS_BODY),
         None,
     )
     obj_name = ctx.node_text(name_node) if name_node else "__anon_object"
