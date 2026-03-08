@@ -417,3 +417,5 @@ STORE_VAR greet %9
 10. **Class static blocks**: `static { ... }` blocks inside classes are supported via `js_decl.lower_class_static_block`.
 
 11. **Pure function architecture**: All lowering methods are pure functions taking `(ctx: TreeSitterEmitContext, node)` as arguments. The `JavaScriptFrontend` class in `frontend.py` is a thin orchestrator that builds dispatch tables from these functions via `_build_expr_dispatch()` and `_build_stmt_dispatch()`.
+
+12. **Scoping model** -- Uses default `BLOCK_SCOPED = False` (function-scoped). JavaScript `var` declarations are function-scoped, so no `$` mangling occurs. Note that `TypeScriptFrontend` (which extends this frontend) overrides to `BLOCK_SCOPED = True` for `let`/`const` semantics.

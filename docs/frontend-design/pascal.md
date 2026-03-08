@@ -348,3 +348,5 @@ Note: Assignment to the function name (`Fact := 1`) is lowered as `RETURN` becau
 12. **Type extraction in `type_helpers.py`**: Return type extraction for functions is isolated in `type_helpers.extract_pascal_return_type`, which distinguishes `kFunction` (has return type) from `kProcedure` (no return type).
 
 13. **Exception handling**: `try`/`except`/`finally` is lowered via the common `lower_try_catch` infrastructure. Pascal's `on E: Exception do` handlers and bare `except` blocks are both supported. The `raise` statement emits `THROW`.
+
+14. **Scoping model** -- Uses default `BLOCK_SCOPED = False` (function-scoped). Pascal variables are declared at procedure/function scope, so no `$` mangling occurs. Nested `begin..end` blocks share the enclosing scope.

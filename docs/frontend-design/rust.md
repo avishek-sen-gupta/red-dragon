@@ -400,3 +400,5 @@ STORE_VAR main  %23
 15. **Loops in expression position**: `while`, `loop`, and `for` can appear as expressions in Rust. `rust_expr.lower_loop_as_expr` lowers them as statements and returns `CONST "None"` (unit). Similarly, `break` and `continue` in expression position delegate to the common handlers and return unit.
 
 16. **`RustNodeType` constants**: All tree-sitter node type strings are centralised in `node_types.py` as `RustNodeType` class attributes, so typos are caught at import time and grep/refactor is trivial.
+
+17. **Scoping model** -- Uses `BLOCK_SCOPED = True` (LLVM-style name mangling). Shadowed variables in nested blocks, for-in loop variables, and match arm variables are renamed (`x` → `x$1`) to disambiguate. See [base-frontend.md](base-frontend.md#block-scopes) for the general mechanism.

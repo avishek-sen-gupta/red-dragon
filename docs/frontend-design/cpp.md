@@ -496,3 +496,5 @@ STORE_VAR "main", %37
 11. **Method `this` injection**: `lower_cpp_method` injects `SYMBOLIC param:this` + `STORE_VAR this` before other parameters when lowering function definitions inside class/struct bodies. The `this` parameter is typed with the current class name.
 
 12. **Pure function architecture**: Like the C frontend, all C++-specific lowering logic is implemented as pure functions taking `(ctx: TreeSitterEmitContext, node)`. The `CppFrontend` class only builds dispatch tables by extending the C tables with C++ entries. Node type strings are centralised in `CppNodeType` constants.
+
+13. **Scoping model** -- Inherits `BLOCK_SCOPED = True` from the C frontend. Mangling applies to nested compound statements, C-style for-loop init declarations, and catch clause variables in try/catch blocks. Lambda captures are not modelled for scoping purposes (see design note 5).

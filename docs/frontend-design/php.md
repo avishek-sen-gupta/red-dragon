@@ -344,3 +344,5 @@ CALL_FUNCTION %11  "echo"  %10
 10. **Object creation uses NEW_OBJECT + CALL_METHOD**: `new Foo(args)` emits `NEW_OBJECT("Foo")` followed by `CALL_METHOD(obj, "__construct", ...args)`, modeling PHP's two-phase construction.
 
 11. **String interpolation decomposition**: Double-quoted strings and heredocs with embedded variables are decomposed into `CONST` + `LOAD_VAR` + `BINOP +` chains, making interpolation explicit in the IR.
+
+12. **Scoping model** -- Uses default `BLOCK_SCOPED = False` (function-scoped). PHP variables are function-scoped, so no `$` mangling occurs. Note that PHP's tree-sitter grammar does not assign a field name to the for-loop initializer, so C-style for init scoping is not applicable.

@@ -383,3 +383,5 @@ Note: Methods are lowered *after* the class label/ref is emitted due to the defe
 10. **Pure function architecture**: All lowering logic is implemented as pure functions taking `(ctx: TreeSitterEmitContext, node)` rather than instance methods. The `CSharpFrontend` class is a thin orchestrator that builds dispatch tables from these functions via `_build_expr_dispatch()` and `_build_stmt_dispatch()`. Node type strings are centralised in `CSharpNodeType` constants.
 
 11. **Instance method `this` injection**: `_lower_deferred_class_child` injects `this` parameter for non-static methods by checking for the `static` modifier and passing `inject_this=True` to `lower_method_decl`.
+
+12. **Scoping model** -- Uses `BLOCK_SCOPED = True` (LLVM-style name mangling). Shadowed variables in nested blocks, foreach loop variables (with explicit `enter_block_scope`/`exit_block_scope`), C-style for-loop init declarations, and catch clause variables are renamed (`x` → `x$1`) to disambiguate. See [base-frontend.md](base-frontend.md#block-scopes) for the general mechanism.
