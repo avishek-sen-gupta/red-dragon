@@ -1,4 +1,12 @@
-"""Static type inference pass — walks IR instructions and builds a TypeEnvironment."""
+"""Static type inference pass — walks IR instructions and builds a TypeEnvironment.
+
+**Type representation:** This module operates entirely on strings, not
+``TypeExpr`` objects.  The conversion to ``TypeExpr`` happens at a single
+boundary: ``TypeEnvironmentBuilder.build()`` calls ``parse_type()`` on
+every string.  This is a deliberate architectural decision (see ADR-085)
+— migrating the 69+ type-string operations here to ``TypeExpr`` was
+evaluated and rejected as added complexity with no functional gain.
+"""
 
 from __future__ import annotations
 
