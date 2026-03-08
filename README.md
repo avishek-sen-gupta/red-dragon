@@ -492,7 +492,7 @@ Demo scripts exercising the LLM integration:
 
 ```bash
 poetry run python scripts/demo_llm_e2e.py             # LLM frontend + LLM resolver (Python)
-poetry run python scripts/demo_unsupported_language.py  # LLM frontend for Haskell (no tree-sitter)
+poetry run python scripts/demo_unsupported_language_haskell.py  # LLM frontend for Haskell (no tree-sitter)
 poetry run python scripts/run_chunked_demo.py           # chunked LLM frontend
 poetry run python scripts/demo_ast_repair.py            # LLM-assisted AST repair for malformed source
 ```
