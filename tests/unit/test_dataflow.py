@@ -173,7 +173,7 @@ class TestDefUseChains:
         x_chains = [
             c for c in chains if c.definition.variable == "x" and c.use.variable == "x"
         ]
-        assert len(x_chains) >= 1
+        assert len(x_chains) == 1
         assert any(c.use.instruction.opcode == Opcode.LOAD_VAR for c in x_chains)
 
     def test_use_after_redefinition(self):
@@ -245,7 +245,7 @@ class TestDefUseChains:
 
         # x should be defined and usable
         x_chains = [c for c in chains if c.use.variable == "x"]
-        assert len(x_chains) >= 1
+        assert len(x_chains) == 1
 
 
 class TestDependencyGraph:
@@ -547,7 +547,7 @@ class TestRegionOpcodeDataflow:
             if c.use.instruction.opcode == Opcode.WRITE_REGION
             and c.use.variable == "%r0"
         ]
-        assert len(write_region_uses) >= 1
+        assert len(write_region_uses) == 1
 
         # LOAD_REGION should have def-use chain from %r0
         load_region_uses = [
@@ -556,7 +556,7 @@ class TestRegionOpcodeDataflow:
             if c.use.instruction.opcode == Opcode.LOAD_REGION
             and c.use.variable == "%r0"
         ]
-        assert len(load_region_uses) >= 1
+        assert len(load_region_uses) == 1
 
         # STORE_VAR of 'result' should use %loaded from LOAD_REGION
         store_result_uses = [
@@ -565,7 +565,7 @@ class TestRegionOpcodeDataflow:
             if c.use.instruction.opcode == Opcode.STORE_VAR
             and c.use.variable == "%loaded"
         ]
-        assert len(store_result_uses) >= 1
+        assert len(store_result_uses) == 1
 
 
 class TestEdgeCases:
@@ -583,4 +583,4 @@ class TestEdgeCases:
 
         assert isinstance(result, DataflowResult)
         x_defs = [d for d in result.definitions if d.variable == "x"]
-        assert len(x_defs) >= 1
+        assert len(x_defs) == 1

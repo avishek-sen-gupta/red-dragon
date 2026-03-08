@@ -21,7 +21,7 @@ class TestExtractDetectsErrors:
         source = b"def foo(:\n  return 1\n"
         tree = parser.parse(source)
         spans = extract(tree.root_node, source)
-        assert len(spans) >= 1
+        assert len(spans) == 1
         assert spans[0].start_line == 0
 
     def test_missing_closing_paren(self):
@@ -29,7 +29,7 @@ class TestExtractDetectsErrors:
         source = b"print(1\nx = 2\n"
         tree = parser.parse(source)
         spans = extract(tree.root_node, source)
-        assert len(spans) >= 1
+        assert len(spans) == 1
 
 
 class TestLineExpansion:
