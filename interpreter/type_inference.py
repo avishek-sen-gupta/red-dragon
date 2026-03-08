@@ -104,12 +104,15 @@ _FUNC_REF_EXTRACT = re.compile(constants.FUNC_REF_PATTERN)
 _CLASS_REF_PATTERN = re.compile(r"<class:")
 
 
+_GLOBAL_SCOPE = ""
+
+
 @dataclass
 class _InferenceContext:
     """Mutable bundle of all state accumulated during the inference walk."""
 
     register_types: dict[str, str] = field(default_factory=dict)
-    var_types: dict[str, str] = field(default_factory=dict)
+    scoped_var_types: dict[str, dict[str, str]] = field(default_factory=dict)
     func_return_types: dict[str, str] = field(default_factory=dict)
     func_param_types: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
     current_func_label: str = ""
@@ -118,6 +121,29 @@ class _InferenceContext:
     field_types: dict[str, dict[str, str]] = field(default_factory=dict)
     array_element_types: dict[str, str] = field(default_factory=dict)
     register_source_var: dict[str, str] = field(default_factory=dict)
+
+    def store_var_type(self, name: str, type_name: str) -> None:
+        """Store a variable type in the current function scope."""
+        scope = self.current_func_label
+        scope_dict = self.scoped_var_types.setdefault(scope, {})
+        if name not in scope_dict:
+            scope_dict[name] = type_name
+
+    def lookup_var_type(self, name: str) -> str:
+        """Look up a variable type: current scope first, then global."""
+        scope = self.current_func_label
+        scope_dict = self.scoped_var_types.get(scope, {})
+        if name in scope_dict:
+            return scope_dict[name]
+        global_dict = self.scoped_var_types.get(_GLOBAL_SCOPE, {})
+        return global_dict.get(name, "")
+
+    def flat_var_types(self) -> dict[str, str]:
+        """Flatten all scoped var types into a single dict for TypeEnvironment."""
+        result: dict[str, str] = {}
+        for scope_dict in self.scoped_var_types.values():
+            result.update(scope_dict)
+        return result
 
 
 def infer_types(
@@ -137,7 +163,7 @@ def infer_types(
     """
     ctx = _InferenceContext(
         register_types=dict(type_env_builder.register_types),
-        var_types=dict(type_env_builder.var_types),
+        scoped_var_types={_GLOBAL_SCOPE: dict(type_env_builder.var_types)},
         func_return_types=dict(type_env_builder.func_return_types),
         func_param_types={
             k: list(v) for k, v in type_env_builder.func_param_types.items()
@@ -157,9 +183,10 @@ def infer_types(
     logger.debug("Type inference converged after %d pass(es)", passes)
 
     # Use builder for final assembly
+    flat_vars = ctx.flat_var_types()
     final_builder = TypeEnvironmentBuilder(
         register_types=ctx.register_types,
-        var_types=ctx.var_types,
+        var_types=flat_vars,
         func_return_types=ctx.func_return_types,
         func_param_types=ctx.func_param_types,
     )
@@ -167,7 +194,7 @@ def infer_types(
     logger.debug(
         "Type inference complete: %d register types, %d variable types",
         len(ctx.register_types),
-        len(ctx.var_types),
+        len(flat_vars),
     )
     return final_builder.build()
 
@@ -278,8 +305,9 @@ def _infer_load_var(
     name = inst.operands[0] if inst.operands else ""
     if inst.result_reg and name:
         ctx.register_source_var[inst.result_reg] = str(name)
-    if inst.result_reg and name in ctx.var_types:
-        ctx.register_types[inst.result_reg] = ctx.var_types[name]
+    var_type = ctx.lookup_var_type(str(name)) if name else ""
+    if inst.result_reg and var_type:
+        ctx.register_types[inst.result_reg] = var_type
 
 
 def _infer_store_var(
@@ -290,13 +318,10 @@ def _infer_store_var(
     name = inst.operands[0] if inst.operands else ""
     if not name:
         return
-    # var_types may be pre-seeded by the builder; skip if already known
-    if name in ctx.var_types:
-        return
     if len(inst.operands) >= 2:
         value_reg = str(inst.operands[1])
         if value_reg in ctx.register_types:
-            ctx.var_types[name] = ctx.register_types[value_reg]
+            ctx.store_var_type(str(name), ctx.register_types[value_reg])
 
 
 def _infer_binop(

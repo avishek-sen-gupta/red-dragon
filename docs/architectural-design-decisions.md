@@ -1483,3 +1483,17 @@ Phase 3 — Multiple inheritance:
 **IR changes:** None. The 27-opcode IR is unchanged. Inheritance metadata is conveyed either through an extension to the `<class:Name@label>` reference format (e.g., `<class:Dog@label:Animal>`) or through a new metadata instruction that the registry scanner picks up. The preferred approach is extending the class reference format, as it keeps inheritance co-located with the class definition and requires no new opcodes.
 
 **Consequences:** Method dispatch for inherited methods will resolve concretely instead of going symbolic. `super` calls will dispatch to the correct parent method. The flat `class_methods` table remains the primary lookup; the parent chain is only consulted on cache miss. No performance impact for classes without inheritance. The executor remains language-agnostic — all MRO complexity is pushed to frontends, consistent with the ports-and-adapters architecture (ADR-002).
+
+---
+
+### ADR-084: Function-scoped variable types in type inference (2026-03-08)
+
+**Context:** The type inference pass tracked variable types in a flat `dict[str, str]` (`var_types`), keyed only by variable name. When two functions use the same variable name with different types (e.g., `x = 42` in `make_int()` and `x = "hello"` in `make_str()`), the first STORE_VAR wins and pollutes the second function's type — `make_str` would incorrectly report `Int` for `x` instead of `String`. Register types (`%0`, `%1`, ...) are globally unique and unaffected.
+
+**Decision:** Replace the flat `var_types: dict[str, str]` with a nested `scoped_var_types: dict[str, dict[str, str]]`, keyed by function label (from LABEL instructions). A `_GLOBAL_SCOPE = ""` key holds file-level variables. Lookup follows function-scope-first, global-scope-fallback semantics. The final `TypeEnvironment.var_types` is assembled by flattening all scopes (later scopes overwrite earlier ones for same-named variables, which is acceptable since the flat dict is a summary view).
+
+**Alternatives considered:**
+- **Prefixed variable names** (e.g., `func_f::x`): Would leak implementation details into the public `var_types` API and break downstream consumers expecting plain variable names.
+- **No change** (document as known limitation): Rejected because the bug silently produces wrong types, which propagates to return type inference and function signatures.
+
+**Consequences:** Variable types are correctly isolated per function. Global variables remain visible inside functions via fallback lookup. The public `TypeEnvironment.var_types` API is unchanged (flat dict). Cross-language integration tests verify scoping across all 15 languages.
