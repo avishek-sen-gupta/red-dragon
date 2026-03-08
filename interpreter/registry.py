@@ -21,6 +21,7 @@ class RefParseResult:
     name: str = ""
     label: str = ""
     closure_id: str = ""
+    parents: list[str] = field(default_factory=list)
 
 
 class RefPatterns:
@@ -46,13 +47,17 @@ def _parse_func_ref(val: Any) -> RefParseResult:
 
 
 def _parse_class_ref(val: Any) -> RefParseResult:
-    """Parse '<class:name@label>' → RefParseResult."""
+    """Parse '<class:name@label>' or '<class:name@label:Parent1,Parent2>'."""
     if not isinstance(val, str):
         return RefParseResult(matched=False)
     m = RefPatterns.CLASS_RE.search(val)
     if not m:
         return RefParseResult(matched=False)
-    return RefParseResult(matched=True, name=m.group(1), label=m.group(2))
+    parents_str = m.group(3) or ""
+    parents = [p for p in parents_str.split(",") if p]
+    return RefParseResult(
+        matched=True, name=m.group(1), label=m.group(2), parents=parents
+    )
 
 
 # ── Registry ─────────────────────────────────────────────────────
@@ -66,6 +71,8 @@ class FunctionRegistry:
     class_methods: dict[str, dict[str, str]] = field(default_factory=dict)
     # class_name → class_body_label
     classes: dict[str, str] = field(default_factory=dict)
+    # class_name → linearized parent chain (MRO, excluding self)
+    class_parents: dict[str, list[str]] = field(default_factory=dict)
 
 
 def _scan_func_params(cfg: CFG) -> dict[str, list[str]]:
@@ -87,15 +94,17 @@ def _scan_func_params(cfg: CFG) -> dict[str, list[str]]:
 
 def _scan_classes(
     instructions: list[IRInstruction],
-) -> tuple[dict[str, str], dict[str, dict[str, str]]]:
-    """Scan IR to find classes and their methods.
+) -> tuple[dict[str, str], dict[str, dict[str, str]], dict[str, list[str]]]:
+    """Scan IR to find classes, their methods, and parent chains.
 
-    Returns (classes, class_methods) where:
+    Returns (classes, class_methods, class_parents) where:
     - classes: class_name → class_body_label
     - class_methods: class_name → {method_name → func_label}
+    - class_parents: class_name → linearized parent chain (MRO, excluding self)
     """
     classes: dict[str, str] = {}
     class_methods: dict[str, dict[str, str]] = {}
+    class_parents: dict[str, list[str]] = {}
 
     # First pass: find class constants
     for inst in instructions:
@@ -104,6 +113,8 @@ def _scan_classes(
         cr = _parse_class_ref(str(inst.operands[0]))
         if cr.matched:
             classes[cr.name] = cr.label
+            if cr.parents:
+                class_parents[cr.name] = cr.parents
 
     # Second pass: identify class scopes and their methods.
     # Python emits methods inside the class scope (class_X ... end_class_X).
@@ -132,12 +143,37 @@ def _scan_classes(
             if fr.matched:
                 class_methods[in_class][fr.name] = fr.label
 
-    return classes, class_methods
+    return classes, class_methods, class_parents
+
+
+def _expand_parent_chains(
+    class_parents: dict[str, list[str]],
+) -> dict[str, list[str]]:
+    """Expand direct parent lists into full linearized MRO chains.
+
+    For single inheritance, if Dog -> Animal -> Object, then
+    class_parents["Dog"] should be ["Animal", "Object"], not just ["Animal"].
+    """
+    expanded: dict[str, list[str]] = {}
+    for cls in class_parents:
+        chain: list[str] = []
+        seen: set[str] = set()
+        queue = list(class_parents.get(cls, []))
+        while queue:
+            parent = queue.pop(0)
+            if parent in seen:
+                continue
+            seen.add(parent)
+            chain.append(parent)
+            queue.extend(class_parents.get(parent, []))
+        expanded[cls] = chain
+    return expanded
 
 
 def build_registry(instructions: list[IRInstruction], cfg: CFG) -> FunctionRegistry:
     """Scan IR and CFG to build a function/class registry."""
     reg = FunctionRegistry()
     reg.func_params = _scan_func_params(cfg)
-    reg.classes, reg.class_methods = _scan_classes(instructions)
+    reg.classes, reg.class_methods, direct_parents = _scan_classes(instructions)
+    reg.class_parents = _expand_parent_chains(direct_parents)
     return reg

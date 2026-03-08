@@ -980,6 +980,14 @@ def _handle_call_method(
 
     methods = registry.class_methods[type_hint]
     func_label = methods.get(method_name, "")
+    # Walk parent chain for inherited methods
+    if not func_label or func_label not in cfg.blocks:
+        for parent in registry.class_parents.get(type_hint, []):
+            parent_methods = registry.class_methods.get(parent, {})
+            candidate = parent_methods.get(method_name, "")
+            if candidate and candidate in cfg.blocks:
+                func_label = candidate
+                break
     if not func_label or func_label not in cfg.blocks:
         # Known type but unknown method — resolve via configured strategy
         return call_resolver.resolve_method(type_hint, method_name, args, inst, vm)

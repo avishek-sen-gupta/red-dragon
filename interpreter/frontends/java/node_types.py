@@ -75,6 +75,7 @@ class JavaNodeType:
     ENUM_DECLARATION = "enum_declaration"
     ANNOTATION_TYPE_DECLARATION = "annotation_type_declaration"
     RECORD_DECLARATION = "record_declaration"
+    SUPERCLASS = "superclass"
     CONSTRUCTOR_DECLARATION = "constructor_declaration"
     FIELD_DECLARATION = "field_declaration"
     STATIC_INITIALIZER = "static_initializer"
