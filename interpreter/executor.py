@@ -245,6 +245,18 @@ def _handle_load_field(
 ) -> ExecutionResult:
     obj_val = _resolve_reg(vm, inst.operands[0])
     field_name = inst.operands[1]
+    # In C, *fp where fp is a function pointer is equivalent to fp.
+    if (
+        field_name == "*"
+        and isinstance(obj_val, str)
+        and _parse_func_ref(obj_val).matched
+    ):
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: obj_val},
+                reasoning=f"deref {obj_val} → {obj_val} (dereference of function pointer is identity)",
+            )
+        )
     addr = _heap_addr(obj_val)
     if addr and addr not in vm.heap:
         # Materialise a synthetic heap entry for symbolic objects so that
@@ -494,6 +506,14 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
 def _handle_unop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
     oper = inst.operands[0]
     operand = _resolve_reg(vm, inst.operands[1])
+    # In C, &func is equivalent to func for function references.
+    if oper == "&" and isinstance(operand, str) and _parse_func_ref(operand).matched:
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: operand},
+                reasoning=f"unop &{operand} → {operand} (address-of function is identity)",
+            )
+        )
     if _is_symbolic(operand):
         op_desc = _symbolic_name(operand)
         sym = vm.fresh_symbolic(hint=f"{oper}{op_desc}")

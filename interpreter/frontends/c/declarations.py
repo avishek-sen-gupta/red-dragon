@@ -24,6 +24,12 @@ def extract_declarator_name(ctx: TreeSitterEmitContext, decl_node) -> str:
     inner = decl_node.child_by_field_name("declarator")
     if inner:
         return extract_declarator_name(ctx, inner)
+    # parenthesized_declarator: no "declarator" field, recurse into first named child
+    if (
+        decl_node.type == CNodeType.PARENTHESIZED_DECLARATOR
+        and decl_node.named_child_count > 0
+    ):
+        return extract_declarator_name(ctx, decl_node.named_children[0])
     # Fallback: first identifier child
     id_node = next(
         (c for c in decl_node.children if c.type == CNodeType.IDENTIFIER), None

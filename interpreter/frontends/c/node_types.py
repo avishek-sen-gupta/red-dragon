@@ -61,6 +61,8 @@ class CNodeType:
     FIELD_IDENTIFIER = "field_identifier"
     ENUMERATOR = "enumerator"
     TYPE_DESCRIPTOR = "type_descriptor"
+    PARENTHESIZED_DECLARATOR = "parenthesized_declarator"
+    POINTER_DECLARATOR = "pointer_declarator"
     FIELD_DESIGNATOR = "field_designator"
     INITIALIZER_LIST = "initializer_list"
     INITIALIZER_PAIR = "initializer_pair"
