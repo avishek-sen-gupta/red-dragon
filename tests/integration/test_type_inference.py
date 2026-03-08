@@ -243,7 +243,7 @@ function add(a: number, b: number): number {
             for i in instructions
             if i.opcode == Opcode.SYMBOLIC
             and i.result_reg
-            and env.register_types.get(i.result_reg)
+            and env.register_types.get(i.result_reg) == "Float"
         ]
         assert len(symbolics) >= 2
 
