@@ -1003,3 +1003,46 @@ class TestGoIfInitScoping:
         assert "y" in stores
         mangled = [n for n in stores if n.startswith("y$")]
         assert len(mangled) == 0
+
+
+# ---------------------------------------------------------------------------
+# Go switch-init scoping (P0 #2)
+# ---------------------------------------------------------------------------
+
+
+class TestGoSwitchInitScoping:
+    """Go switch x := expr; x { } — init var should be scoped to the switch."""
+
+    def test_switch_init_shadows_outer(self):
+        source = """
+        package main
+        func main() {
+            x := 99
+            switch x := 42; x {
+            case 42:
+                _ = x
+            }
+            z := x
+        }
+        """
+        ir = _lower(GoFrontend, "go", source)
+        stores = _store_var_names(ir)
+        mangled = [n for n in stores if n.startswith("x$")]
+        assert len(mangled) >= 1
+        assert "x" in stores
+
+    def test_switch_init_no_shadow_no_mangle(self):
+        source = """
+        package main
+        func main() {
+            switch y := 42; y {
+            case 42:
+                _ = y
+            }
+        }
+        """
+        ir = _lower(GoFrontend, "go", source)
+        stores = _store_var_names(ir)
+        assert "y" in stores
+        mangled = [n for n in stores if n.startswith("y$")]
+        assert len(mangled) == 0
