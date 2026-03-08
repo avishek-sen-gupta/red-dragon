@@ -193,6 +193,13 @@ class TreeSitterEmitContext:
         if var_name and type_name:
             self.type_env_builder.var_types[var_name] = parse_type(type_name)
 
+    def seed_interface_impl(self, class_name: str, interface_name: str) -> None:
+        """Seed that a class implements an interface."""
+        if class_name and interface_name:
+            self.type_env_builder.interface_implementations.setdefault(
+                class_name, []
+            ).append(interface_name)
+
     def seed_type_alias(self, alias_name: str, target_type: str) -> None:
         """Seed a type alias (e.g., typedef int UserId → alias UserId = Int)."""
         if alias_name and target_type:

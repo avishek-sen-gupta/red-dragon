@@ -357,6 +357,9 @@ def infer_types(
         var_types=MappingProxyType(flat_vars),
         func_signatures=MappingProxyType(func_signatures),
         type_aliases=MappingProxyType(dict(aliases)),
+        interface_implementations=MappingProxyType(
+            {k: tuple(v) for k, v in type_env_builder.interface_implementations.items()}
+        ),
     )
 
 
