@@ -27,6 +27,7 @@ from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.type_expr import (
     TypeExpr,
     ScalarType,
+    ParameterizedType,
     FunctionType,
     UNKNOWN,
     array_of,
@@ -263,6 +264,34 @@ def _build_func_signatures(
     }
 
 
+def _resolve_alias(
+    t: TypeExpr, aliases: dict[str, TypeExpr], depth: int = 0
+) -> TypeExpr:
+    """Resolve a TypeExpr through the alias registry, expanding transitively.
+
+    ScalarType names that appear as alias keys are expanded. Parameterized
+    types have their arguments resolved recursively. A depth limit prevents
+    infinite loops from circular aliases.
+    """
+    if depth > 20:
+        return t
+    if isinstance(t, ScalarType) and t.name in aliases:
+        return _resolve_alias(aliases[t.name], aliases, depth + 1)
+    if isinstance(t, ParameterizedType):
+        resolved_args = tuple(
+            _resolve_alias(a, aliases, depth + 1) for a in t.arguments
+        )
+        return ParameterizedType(t.constructor, resolved_args)
+    return t
+
+
+def _resolve_aliases_in_dict(
+    d: dict[str, TypeExpr], aliases: dict[str, TypeExpr]
+) -> dict[str, TypeExpr]:
+    """Resolve all values in a dict through the alias registry."""
+    return {k: _resolve_alias(v, aliases) for k, v in d.items()}
+
+
 def infer_types(
     instructions: list[IRInstruction],
     type_resolver: TypeResolver,
@@ -278,12 +307,20 @@ def infer_types(
 
     Pure function — no mutation of the input instructions.
     """
+    aliases = type_env_builder.type_aliases
     ctx = _InferenceContext(
-        register_types=dict(type_env_builder.register_types),
-        scoped_var_types={_GLOBAL_SCOPE: dict(type_env_builder.var_types)},
-        func_return_types=dict(type_env_builder.func_return_types),
+        register_types=_resolve_aliases_in_dict(
+            type_env_builder.register_types, aliases
+        ),
+        scoped_var_types={
+            _GLOBAL_SCOPE: _resolve_aliases_in_dict(type_env_builder.var_types, aliases)
+        },
+        func_return_types=_resolve_aliases_in_dict(
+            type_env_builder.func_return_types, aliases
+        ),
         func_param_types={
-            k: list(v) for k, v in type_env_builder.func_param_types.items()
+            k: [(pn, _resolve_alias(pt, aliases)) for pn, pt in v]
+            for k, v in type_env_builder.func_param_types.items()
         },
         _seeded_var_names=frozenset(type_env_builder.var_types.keys()),
     )
@@ -319,6 +356,7 @@ def infer_types(
         register_types=MappingProxyType(ctx.register_types),
         var_types=MappingProxyType(flat_vars),
         func_signatures=MappingProxyType(func_signatures),
+        type_aliases=MappingProxyType(dict(aliases)),
     )
 
 

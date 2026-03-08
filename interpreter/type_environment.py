@@ -28,3 +28,4 @@ class TypeEnvironment:
     register_types: MappingProxyType[str, TypeExpr]
     var_types: MappingProxyType[str, TypeExpr]
     func_signatures: MappingProxyType[str, FunctionSignature]
+    type_aliases: MappingProxyType[str, TypeExpr] = MappingProxyType({})
