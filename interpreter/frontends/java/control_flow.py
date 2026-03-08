@@ -328,6 +328,16 @@ def lower_throw(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_try(ctx: TreeSitterEmitContext, node) -> None:
+    # Lower try-with-resources declarations before the try body
+    resources_node = node.child_by_field_name("resources")
+    scope_entered = resources_node is not None and ctx.block_scoped
+    if scope_entered:
+        ctx.enter_block_scope()
+    if resources_node:
+        for resource in resources_node.children:
+            if resource.type == JavaNodeType.RESOURCE:
+                _lower_resource_decl(ctx, resource)
+
     body_node = node.child_by_field_name("body")
     catch_clauses: list[dict] = []
     finally_node = None
@@ -361,6 +371,19 @@ def lower_try(ctx: TreeSitterEmitContext, node) -> None:
                 None,
             )
     lower_try_catch(ctx, node, body_node, catch_clauses, finally_node)
+
+    if scope_entered:
+        ctx.exit_block_scope()
+
+
+def _lower_resource_decl(ctx: TreeSitterEmitContext, resource) -> None:
+    """Lower a try-with-resources resource: ``Type name = expr``."""
+    name_node = resource.child_by_field_name("name")
+    value_node = resource.child_by_field_name("value")
+    raw_name = ctx.node_text(name_node) if name_node else "__resource"
+    var_name = ctx.declare_block_var(raw_name)
+    val_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
+    ctx.emit(Opcode.STORE_VAR, operands=[var_name, val_reg], node=resource)
 
 
 def lower_explicit_constructor_invocation(ctx: TreeSitterEmitContext, node) -> None:
