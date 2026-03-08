@@ -98,3 +98,175 @@ int r2 = (*fp2)(2, 3);
         vars_ = _run_c(source)
         assert vars_["r1"] == 5, "get_op(1) should return &add: 2+3=5"
         assert vars_["r2"] == 6, "get_op(0) should return &mul: 2*3=6"
+
+    def test_array_of_function_pointers(self):
+        """Function pointers stored in an array and called by index."""
+        source = """\
+int add(int a, int b) { return a + b; }
+int sub(int a, int b) { return a - b; }
+int mul(int a, int b) { return a * b; }
+
+int (*ops[3])(int, int) = {&add, &sub, &mul};
+int r0 = (*ops[0])(10, 3);
+int r1 = (*ops[1])(10, 3);
+int r2 = (*ops[2])(10, 3);
+"""
+        vars_ = _run_c(source)
+        assert vars_["r0"] == 13
+        assert vars_["r1"] == 7
+        assert vars_["r2"] == 30
+
+    def test_function_pointer_in_struct(self):
+        """Function pointer stored as a struct field and called via member access."""
+        source = """\
+int add(int a, int b) { return a + b; }
+
+struct Calculator {
+    int (*op)(int, int);
+};
+
+struct Calculator calc;
+calc.op = &add;
+int result = (*calc.op)(4, 5);
+"""
+        vars_ = _run_c(source)
+        assert vars_["result"] == 9
+
+    def test_conditional_function_pointer_selection(self):
+        """Function pointer assigned conditionally via if/else inside a function."""
+        source = """\
+int add(int a, int b) { return a + b; }
+int sub(int a, int b) { return a - b; }
+
+int compute(int choice, int x, int y) {
+    int (*op)(int, int);
+    if (choice == 1) { op = &add; }
+    else { op = &sub; }
+    return (*op)(x, y);
+}
+
+int r1 = compute(1, 10, 3);
+int r2 = compute(0, 10, 3);
+"""
+        vars_ = _run_c(source)
+        assert vars_["r1"] == 13
+        assert vars_["r2"] == 7
+
+    def test_nested_function_pointer_calls(self):
+        """Result of one FP call used as argument to another: fp1(fp2(1,2), 3)."""
+        source = """\
+int add(int a, int b) { return a + b; }
+int mul(int a, int b) { return a * b; }
+
+int (*fp1)(int, int) = &mul;
+int (*fp2)(int, int) = &add;
+int result = (*fp1)((*fp2)(1, 2), 3);
+"""
+        vars_ = _run_c(source)
+        assert vars_["result"] == 9
+
+    def test_callback_chain(self):
+        """Function pointer forwarded through two call layers."""
+        source = """\
+int add(int a, int b) { return a + b; }
+
+int apply(int (*f)(int, int), int x, int y) {
+    return (*f)(x, y);
+}
+
+int apply_twice(int (*f)(int, int), int x, int y) {
+    int first = apply(f, x, y);
+    int second = apply(f, first, y);
+    return second;
+}
+
+int result = apply_twice(&add, 1, 5);
+"""
+        vars_ = _run_c(source)
+        assert vars_["result"] == 11
+
+    def test_function_pointer_reassignment_in_loop(self):
+        """FP reassigned mid-loop: first iteration uses add, rest use mul."""
+        source = """\
+int add(int a, int b) { return a + b; }
+int mul(int a, int b) { return a * b; }
+
+int result = 1;
+int (*op)(int, int) = &add;
+int i = 0;
+while (i < 3) {
+    result = (*op)(result, 2);
+    op = &mul;
+    i = i + 1;
+}
+"""
+        vars_ = _run_c(source)
+        # iter 0: add(1,2)=3, op→mul
+        # iter 1: mul(3,2)=6
+        # iter 2: mul(6,2)=12
+        assert vars_["result"] == 12
+
+    def test_higher_order_function_pointer(self):
+        """Function pointer parameter that itself takes a function pointer."""
+        source = """\
+int apply(int (*f)(int, int), int x, int y) {
+    return (*f)(x, y);
+}
+
+int add(int a, int b) { return a + b; }
+
+int meta_apply(int (*applier)(int (*)(int, int), int, int), int (*f)(int, int), int x, int y) {
+    return (*applier)(f, x, y);
+}
+
+int result = meta_apply(&apply, &add, 3, 4);
+"""
+        vars_ = _run_c(source)
+        assert vars_["result"] == 7
+
+    def test_typedef_function_pointer(self):
+        """Function pointer via typedef alias."""
+        source = """\
+typedef int (*binop)(int, int);
+
+int add(int a, int b) { return a + b; }
+
+binop get_add() { return &add; }
+
+binop fp = get_add();
+int result = (*fp)(6, 7);
+"""
+        vars_ = _run_c(source)
+        assert vars_["result"] == 13
+
+    def test_ternary_function_pointer_selection(self):
+        """Ternary operator selecting between two function pointers."""
+        source = """\
+int add(int a, int b) { return a + b; }
+int sub(int a, int b) { return a - b; }
+
+int x = 1;
+int (*op)(int, int) = (x > 0) ? &add : &sub;
+int r1 = (*op)(10, 3);
+
+x = 0;
+int (*op2)(int, int) = (x > 0) ? &add : &sub;
+int r2 = (*op2)(10, 3);
+"""
+        vars_ = _run_c(source)
+        assert vars_["r1"] == 13
+        assert vars_["r2"] == 7
+
+    def test_self_referencing_function_pointer(self):
+        """Function obtains its own address via &name and calls itself through the FP."""
+        source = """\
+int factorial(int n) {
+    if (n <= 1) { return 1; }
+    int (*self)(int) = &factorial;
+    return n * (*self)(n - 1);
+}
+
+int result = factorial(5);
+"""
+        vars_ = _run_c(source, max_steps=1000)
+        assert vars_["result"] == 120
