@@ -41,6 +41,7 @@ class GrammarConstants:
     while_body_field: str = "body"
 
     # For loop
+    for_initializer_field: str = "initializer"
     for_condition_field: str = "condition"
     for_body_field: str = "body"
     for_update_field: str = "update"

@@ -159,8 +159,17 @@ def lower_while(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_c_style_for(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower a C-style for(init; cond; update) loop."""
-    init_node = node.child_by_field_name("initializer")
+    """Lower a C-style for(init; cond; update) loop.
+
+    When ``ctx.block_scoped`` is True, the entire loop (init + condition +
+    body + update) is wrapped in a block scope so that variables declared
+    in the init (e.g. ``for (int i = 0; ...)``) are scoped to the loop.
+    """
+    scope_entered = ctx.block_scoped
+    if scope_entered:
+        ctx.enter_block_scope()
+
+    init_node = node.child_by_field_name(ctx.constants.for_initializer_field)
     cond_node = node.child_by_field_name(ctx.constants.for_condition_field)
     update_node = node.child_by_field_name(ctx.constants.for_update_field)
     body_node = node.child_by_field_name(ctx.constants.for_body_field)
@@ -196,3 +205,6 @@ def lower_c_style_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.BRANCH, label=loop_label)
 
     ctx.emit(Opcode.LABEL, label=end_label)
+
+    if scope_entered:
+        ctx.exit_block_scope()
