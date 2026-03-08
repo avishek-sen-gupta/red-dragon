@@ -475,7 +475,7 @@ flowchart BT
 
 ## LLM frontend
 
-The LLM frontend (`--frontend llm`) sends source to an LLM constrained by a formal [IR schema](docs/ir-reference.md) — the LLM acts as a **compiler frontend**, not a reasoning engine. The prompt provides all 27 opcode schemas, concrete patterns for functions/classes/control flow, and a full worked example. On malformed JSON, the call is retried up to 3 times.
+The LLM frontend (`--frontend llm`) sends source to an LLM constrained by a formal [IR schema](docs/ir-reference.md) — the LLM acts as a **compiler frontend**, not a reasoning engine. The prompt provides all 27 opcode schemas, concrete patterns for functions/classes/control flow, a worked example for function definitions, and a worked example for array initialization (showing that each value and index needs a dedicated CONST register). An explicit rule warns against confusing register names with stored values. On malformed JSON, the call is retried up to 3 times.
 
 The **chunked LLM frontend** (`--frontend chunked_llm`) handles large files by decomposing them into per-function/class chunks via tree-sitter, lowering each independently, then renumbering registers/labels and reassembling. Failed chunks produce `SYMBOLIC` placeholders.
 

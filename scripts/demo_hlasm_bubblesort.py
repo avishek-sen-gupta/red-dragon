@@ -17,11 +17,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from interpreter.cfg import build_cfg
+from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.llm_client import get_llm_client
 from interpreter.llm_frontend import LLMFrontend
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg
 from interpreter.run_types import VMConfig
+from interpreter.type_inference import infer_types
+from interpreter.type_resolver import TypeResolver
 from interpreter.vm_types import SymbolicValue
 
 logger = logging.getLogger(__name__)
@@ -155,6 +158,25 @@ def main():
     print("  IR:")
     for inst in instructions:
         print(f"    {inst}")
+
+    # ── Type Inference ──
+    _print_header("Type Inference")
+    resolver = TypeResolver(DefaultTypeConversionRules())
+    env = infer_types(instructions, resolver)
+
+    print("  Register types:")
+    for reg, typ in sorted(env.register_types.items()):
+        print(f"    {reg:8s} : {typ}")
+
+    print("\n  Variable types:")
+    for var, typ in sorted(env.var_types.items()):
+        print(f"    {var:8s} : {typ}")
+
+    if env.func_signatures:
+        print("\n  Function signatures:")
+        for name, sig in sorted(env.func_signatures.items()):
+            params = ", ".join(f"{p}: {t}" for p, t in sig.param_types)
+            print(f"    {name}({params}) -> {sig.return_type}")
 
     # ── Phase 2: Build CFG ──
     _print_header("Phase 2: Build CFG (deterministic)")
