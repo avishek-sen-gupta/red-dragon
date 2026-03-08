@@ -1616,3 +1616,29 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 - **Separate NullType class**: Rejected — `ScalarType("Null")` is sufficient and avoids adding another class.
 
 **Consequences:** 51 new tests (30 unit for UnionType/Optional, 13 unit for TypeGraph union subtype/LUB, 4 unit for inference widening, 4 integration for Python/JS source programs). All 9664 tests pass. No existing test changed.
+
+### ADR-089: Function types with contravariant subtyping (2026-03-08)
+
+**Context:** The type system had no representation for callable types. Functions stored as CONST references lost their type information — a variable holding a function reference was typed as a plain string or remained unknown. This prevented reasoning about higher-order functions, callback types, and indirect calls through typed function references.
+
+**Decision:** Add `FunctionType(params: tuple[TypeExpr, ...], return_type: TypeExpr)` as a fifth TypeExpr variant.
+
+**Design details:**
+- Canonical string form: `Fn(Int, String) -> Bool` — parens for params, arrow for return
+- `fn_type(params, ret)` convenience constructor
+- Parser extended: `_parse_name` stops at `(` and `)`, `_parse_function_type` handles `Fn(...)  -> T` syntax
+- `parse_type("Fn(Int, String) -> Bool")` round-trips correctly through `str()`
+
+**TypeGraph extensions:**
+- Subtype: `Fn(A1, A2) -> R1 ⊆ Fn(B1, B2) -> R2` iff params are contravariant (`B1 ⊆ A1`, `B2 ⊆ A2`) and return is covariant (`R1 ⊆ R2`). Arity mismatch → not a subtype.
+- LUB: same-arity functions get pairwise LUB on params (intersection semantics) and return (union semantics). Different arities → `Any`.
+
+**Inference engine:**
+- CONST function references: when the referenced function has known parameter and return types, the register is typed as `FunctionType` instead of leaving it unknown
+- CALL_UNKNOWN: if the target register holds a `FunctionType`, the call result register gets the function's return type
+
+**Alternatives considered:**
+- **Arrow syntax `(Int, String) => Bool`**: Rejected — conflicts with potential lambda syntax. `Fn(...)` prefix is unambiguous.
+- **Separate CallableType class**: Rejected — `FunctionType` with params tuple is sufficient. Overloaded callables can use `UnionType` of multiple `FunctionType`s.
+
+**Consequences:** 54 new tests (31 unit for FunctionType/parsing, 15 unit for TypeGraph function subtype/LUB, 5 unit for inference, 3 integration for Python/Java source programs). All 9718 tests pass. No existing test changed.
