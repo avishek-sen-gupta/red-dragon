@@ -157,10 +157,34 @@ def _lower_deferred_class_child(ctx: TreeSitterEmitContext, child) -> None:
         ctx.lower_stmt(child)
 
 
+def _extract_java_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
+    """Extract parent class names from a Java class_declaration node."""
+    superclass_node = next(
+        (c for c in node.children if c.type == JavaNodeType.SUPERCLASS), None
+    )
+    if superclass_node is None:
+        return []
+    parent_id = next(
+        (c for c in superclass_node.children if c.type == JavaNodeType.TYPE_IDENTIFIER),
+        None,
+    )
+    return [ctx.node_text(parent_id)] if parent_id else []
+
+
+def _make_class_ref(class_name: str, class_label: str, parents: list[str]) -> str:
+    """Build the class reference string, with parents if present."""
+    if parents:
+        return constants.CLASS_REF_WITH_PARENTS_TEMPLATE.format(
+            name=class_name, label=class_label, parents=",".join(parents)
+        )
+    return constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
+
+
 def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
+    parents = _extract_java_parents(ctx, node)
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
@@ -174,9 +198,7 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.CONST,
         result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
-        ],
+        operands=[_make_class_ref(class_name, class_label, parents)],
     )
     ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
 
