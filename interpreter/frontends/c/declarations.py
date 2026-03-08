@@ -134,6 +134,27 @@ def _find_function_declarator(node) -> object | None:
     return None
 
 
+def _find_innermost_function_declarator(node) -> object | None:
+    """Find the innermost function_declarator by following the declarator chain.
+
+    For complex C declarations like ``int (*get_op(int choice))(int, int)``,
+    the outermost function_declarator holds the pointer's parameter types,
+    while the innermost holds the real function name and parameters.
+    """
+    if node.type == CNodeType.FUNCTION_DECLARATOR:
+        inner = _find_function_declarator_in_declarator_child(node)
+        return inner if inner else node
+    return _find_function_declarator(node)
+
+
+def _find_function_declarator_in_declarator_child(func_decl) -> object | None:
+    """Search the declarator subtree of a function_declarator for a nested one."""
+    decl_child = func_decl.child_by_field_name("declarator")
+    if decl_child:
+        return _find_function_declarator(decl_child)
+    return None
+
+
 def lower_c_params(ctx: TreeSitterEmitContext, params_node) -> None:
     """Lower C function parameters (parameter_declaration nodes)."""
     for child in params_node.children:
@@ -169,15 +190,18 @@ def lower_function_def_c(ctx: TreeSitterEmitContext, node) -> None:
 
     if declarator_node:
         if declarator_node.type == CNodeType.FUNCTION_DECLARATOR:
-            name_node = declarator_node.child_by_field_name("declarator")
-            params_node = declarator_node.child_by_field_name(
+            # Check for nested function_declarator (e.g. function-pointer return types)
+            inner_decl = _find_innermost_function_declarator(declarator_node)
+            target_decl = inner_decl if inner_decl else declarator_node
+            name_node = target_decl.child_by_field_name("declarator")
+            params_node = target_decl.child_by_field_name(
                 ctx.constants.func_params_field
             )
             func_name = (
                 extract_declarator_name(ctx, name_node) if name_node else "__anon"
             )
         else:
-            func_decl = _find_function_declarator(declarator_node)
+            func_decl = _find_innermost_function_declarator(declarator_node)
             if func_decl:
                 name_node = func_decl.child_by_field_name("declarator")
                 params_node = func_decl.child_by_field_name(

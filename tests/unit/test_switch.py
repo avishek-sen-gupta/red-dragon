@@ -148,6 +148,10 @@ class TestCSwitchLowering:
         )
         labels = _labels(ir)
         assert any("switch_end" in l for l in labels)
+        # Empty switch should produce no case comparisons
+        binops = _find_all(ir, Opcode.BINOP)
+        eq_ops = [b for b in binops if "==" in b.operands]
+        assert len(eq_ops) == 0, "empty switch should produce no case comparisons"
 
 
 class TestCppSwitchInheritsC:

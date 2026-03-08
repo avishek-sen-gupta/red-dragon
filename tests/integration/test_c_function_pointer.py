@@ -58,24 +58,43 @@ int result = apply(&add, 7, 3);
         assert vars_["result"] == 10
 
     def test_function_pointer_returned_from_function(self):
-        """A function that returns a function pointer."""
+        """A function pointer returned from a function and called by the caller."""
+        source = """\
+int add(int a, int b) { return a + b; }
+
+int apply_returned(int x, int y) {
+    int (*fp)(int, int) = &add;
+    return (*fp)(x, y);
+}
+
+int r1 = apply_returned(2, 3);
+int r2 = apply_returned(10, 20);
+"""
+        vars_ = _run_c(source)
+        assert vars_["r1"] == 5
+        assert vars_["r2"] == 30
+
+    def test_function_pointer_return_type_declaration(self):
+        """Function with function-pointer return type: int (*get_op(int))(int, int).
+
+        The complex C declaration nests the real function name and parameters
+        inside a parenthesized_declarator. The frontend must find the innermost
+        function_declarator to extract the correct parameter list.
+        """
         source = """\
 int add(int a, int b) { return a + b; }
 int mul(int a, int b) { return a * b; }
 
-int use_add() {
-    int (*fp)(int, int) = &add;
-    return (*fp)(2, 3);
+int (*get_op(int choice))(int, int) {
+    if (choice == 1) { return &add; }
+    return &mul;
 }
 
-int use_mul() {
-    int (*fp)(int, int) = &mul;
-    return (*fp)(2, 3);
-}
-
-int r1 = use_add();
-int r2 = use_mul();
+int (*fp1)(int, int) = get_op(1);
+int r1 = (*fp1)(2, 3);
+int (*fp2)(int, int) = get_op(0);
+int r2 = (*fp2)(2, 3);
 """
         vars_ = _run_c(source)
-        assert vars_["r1"] == 5
-        assert vars_["r2"] == 6
+        assert vars_["r1"] == 5, "get_op(1) should return &add: 2+3=5"
+        assert vars_["r2"] == 6, "get_op(0) should return &mul: 2*3=6"

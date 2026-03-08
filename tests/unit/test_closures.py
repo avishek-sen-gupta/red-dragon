@@ -38,6 +38,8 @@ result = f(7)
 """
         vars_ = _run_program(source)
         assert vars_["result"] == 17
+        # The captured variable 'x' should not leak into the caller's scope
+        assert "x" not in vars_, "captured var 'x' should not be in the caller's scope"
 
 
 class TestMultipleClosures:
