@@ -1157,7 +1157,7 @@ class TypeResolver:
 ```mermaid
 flowchart TD
     BINOP["resolve_binop(op, left_hint, right_hint)"]
-    BOTH{Both hints falsy<br/>(UNKNOWN)?}
+    BOTH{Both hints falsy<br/>UNKNOWN?}
     FILL["Symmetric fill:<br/>effective_left = left or right<br/>effective_right = right or left"]
     DELEGATE["rules.resolve(op,<br/>effective_left, effective_right)"]
     IDENTITY["Return IDENTITY_CONVERSION"]
