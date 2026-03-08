@@ -94,6 +94,14 @@ PARAM_PHP_THIS = "$this"
 SELF_PARAM_NAMES: frozenset[str] = frozenset({PARAM_SELF, PARAM_THIS, PARAM_PHP_THIS})
 
 
+class Variance(StrEnum):
+    """Variance annotation for parameterized type arguments."""
+
+    COVARIANT = "covariant"
+    CONTRAVARIANT = "contravariant"
+    INVARIANT = "invariant"
+
+
 class TypeName(StrEnum):
     """Canonical type names for the type ontology DAG."""
 
