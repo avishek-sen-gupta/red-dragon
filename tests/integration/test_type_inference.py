@@ -2645,90 +2645,130 @@ class Dog implements Comparable, Serializable {
 
 
 class TestVarianceIntegration:
-    """Integration: variance annotations affect subtype and LUB in TypeGraph."""
+    """Integration: source → inference → variance-annotated TypeGraph subtype checks."""
 
-    def test_invariant_blocks_mutable_container_subtype(self):
-        """MutableList[Int] should NOT be subtype of MutableList[Number] with INVARIANT."""
+    def test_java_list_inferred_type_with_invariant_variance(self):
+        """Java List<String> inferred type checked against invariant variance rules."""
         from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
-        from interpreter.type_expr import scalar, ParameterizedType
-        from interpreter.constants import TypeName, Variance
+        from interpreter.constants import Variance
 
+        _, env = _lower_and_infer(
+            "class M { void m() { List<String> items = new ArrayList<>(); } }",
+            "java",
+        )
+        inferred_type = env.var_types["items"]
+        assert inferred_type == "List[String]"
+
+        # With invariant variance, List[String] should NOT be subtype of List[Any]
         graph = TypeGraph(
             DEFAULT_TYPE_NODES,
-            variance_registry={"MutableList": (Variance.INVARIANT,)},
+            variance_registry={"List": (Variance.INVARIANT,)},
         )
-        ml_int = ParameterizedType("MutableList", (scalar(TypeName.INT),))
-        ml_num = ParameterizedType("MutableList", (scalar(TypeName.NUMBER),))
-        # Invariant: MutableList[Int] is NOT a subtype of MutableList[Number]
-        assert not graph.is_subtype_expr(ml_int, ml_num)
-        # But MutableList[Int] IS a subtype of itself
-        assert graph.is_subtype_expr(ml_int, ml_int)
+        assert not graph.is_subtype_expr(
+            inferred_type, ParameterizedType("List", (scalar("Any"),))
+        )
+        # But IS subtype of itself
+        assert graph.is_subtype_expr(inferred_type, inferred_type)
 
-    def test_covariant_allows_readonly_container_subtype(self):
-        """ReadOnlyList[Int] should be subtype of ReadOnlyList[Number] with default covariant."""
+    def test_java_map_inferred_type_with_mixed_variance(self):
+        """Java Map<String, Integer> checked with invariant key, covariant value."""
         from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
-        from interpreter.type_expr import scalar, ParameterizedType
-        from interpreter.constants import TypeName
+        from interpreter.constants import Variance
 
-        graph = TypeGraph(DEFAULT_TYPE_NODES)
-        ro_int = ParameterizedType("ReadOnlyList", (scalar(TypeName.INT),))
-        ro_num = ParameterizedType("ReadOnlyList", (scalar(TypeName.NUMBER),))
-        # Default covariant: ReadOnlyList[Int] IS a subtype of ReadOnlyList[Number]
-        assert graph.is_subtype_expr(ro_int, ro_num)
-
-    def test_mixed_variance_map(self):
-        """Map with invariant key and covariant value."""
-        from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
-        from interpreter.type_expr import scalar, map_of
-        from interpreter.constants import TypeName, Variance
+        _, env = _lower_and_infer(
+            "class M { void m() { Map<String, Integer> m = new HashMap<>(); } }",
+            "java",
+        )
+        inferred_type = env.var_types["m"]
+        assert inferred_type == "Map[String, Int]"
 
         graph = TypeGraph(
             DEFAULT_TYPE_NODES,
             variance_registry={"Map": (Variance.INVARIANT, Variance.COVARIANT)},
         )
-        # Same key, covariant value: Map[String, Int] <: Map[String, Number]
+        # Same key, wider value: Map[String, Int] <: Map[String, Number] (covariant value)
         assert graph.is_subtype_expr(
-            map_of(scalar(TypeName.STRING), scalar(TypeName.INT)),
-            map_of(scalar(TypeName.STRING), scalar(TypeName.NUMBER)),
+            inferred_type,
+            ParameterizedType("Map", (scalar("String"), scalar("Number"))),
         )
-        # Different key: Map[Int, Int] NOT <: Map[String, Int] (invariant key)
+        # Different key: NOT subtype (invariant key)
         assert not graph.is_subtype_expr(
-            map_of(scalar(TypeName.INT), scalar(TypeName.INT)),
-            map_of(scalar(TypeName.STRING), scalar(TypeName.INT)),
+            inferred_type,
+            ParameterizedType("Map", (scalar("Any"), scalar("Int"))),
+        )
+
+    def test_kotlin_list_inferred_type_covariant_default(self):
+        """Kotlin List<String> with default covariant variance allows widening."""
+        from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+
+        _, env = _lower_and_infer(
+            'fun main() { val items: List<String> = listOf("a") }',
+            "kotlin",
+        )
+        inferred_type = env.var_types["items"]
+        assert inferred_type == "List[String]"
+
+        # Default covariant: List[String] IS subtype of List[Any]
+        graph = TypeGraph(DEFAULT_TYPE_NODES)
+        assert graph.is_subtype_expr(
+            inferred_type, ParameterizedType("List", (scalar("Any"),))
         )
 
 
 class TestBoundedTypeVarIntegration:
-    """Integration: bounded type variables interact correctly with TypeGraph."""
+    """Integration: source → inference → TypeVar bound checks against inferred types."""
 
-    def test_typevar_bounded_by_number_accepts_int(self):
-        """TypeVar T bounded by Number should accept Int as a subtype."""
+    def test_java_inferred_int_satisfies_number_bound(self):
+        """Java int var inferred as Int satisfies TypeVar bounded by Number."""
         from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
         from interpreter.type_expr import typevar, scalar
         from interpreter.constants import TypeName
 
+        _, env = _lower_and_infer(
+            "class M { static int x_tv1 = 42; }",
+            "java",
+        )
+        inferred = env.var_types["x_tv1"]
+        assert inferred == "Int"
+
         graph = TypeGraph(DEFAULT_TYPE_NODES)
         t_num = typevar("T", bound=scalar(TypeName.NUMBER))
-        # Int satisfies T: Number because Int <: Number
-        assert graph.is_subtype_expr(scalar(TypeName.INT), t_num)
-        # String does NOT satisfy T: Number
-        assert not graph.is_subtype_expr(scalar(TypeName.STRING), t_num)
+        # Inferred Int satisfies T: Number
+        assert graph.is_subtype_expr(inferred, t_num)
 
-    def test_typevar_in_parameterized_container(self):
-        """Array[Int] should be subtype of Array[T: Number] covariantly."""
+    def test_java_inferred_string_fails_number_bound(self):
+        """Java String var does NOT satisfy TypeVar bounded by Number."""
+        from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+        from interpreter.type_expr import typevar, scalar
+        from interpreter.constants import TypeName
+
+        _, env = _lower_and_infer(
+            'class M { void m() { String s_tv1 = "hello"; } }',
+            "java",
+        )
+        inferred = env.var_types["s_tv1"]
+        assert inferred == "String"
+
+        graph = TypeGraph(DEFAULT_TYPE_NODES)
+        t_num = typevar("T", bound=scalar(TypeName.NUMBER))
+        # String does NOT satisfy T: Number
+        assert not graph.is_subtype_expr(inferred, t_num)
+
+    def test_java_generic_list_satisfies_typevar_container_bound(self):
+        """Java List[Int] checked against List[T: Number] with TypeVar argument."""
         from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
         from interpreter.type_expr import typevar, scalar, array_of
         from interpreter.constants import TypeName
 
+        _, env = _lower_and_infer(
+            "class M { void m() { List<Integer> nums_tv1 = new ArrayList<>(); } }",
+            "java",
+        )
+        inferred = env.var_types["nums_tv1"]
+        assert inferred == "List[Int]"
+
         graph = TypeGraph(DEFAULT_TYPE_NODES)
         t_num = typevar("T", bound=scalar(TypeName.NUMBER))
-        # Array[Int] <: Array[T: Number] because Int <: T: Number (bound=Number)
-        assert graph.is_subtype_expr(
-            array_of(scalar(TypeName.INT)),
-            array_of(t_num),
-        )
-        # Array[String] NOT <: Array[T: Number]
-        assert not graph.is_subtype_expr(
-            array_of(scalar(TypeName.STRING)),
-            array_of(t_num),
-        )
+        list_t = ParameterizedType("List", (t_num,))
+        # List[Int] <: List[T: Number] because Int <: T: Number (bound=Number)
+        assert graph.is_subtype_expr(inferred, list_t)
