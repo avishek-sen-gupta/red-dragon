@@ -62,27 +62,33 @@ def greet():
 
     def test_return_backfill_javascript(self):
         source = """\
-function factorial(n) {
-    if (n <= 1) { return 1; }
-    return n * factorial(n - 1);
+function double(n) {
+    return n * 2;
+}
+
+function greet() {
+    return "hi";
 }
 """
         _instructions, env = _lower_and_infer(source, "javascript")
 
-        # factorial's return type is unresolved because the recursive call
-        # prevents simple backfill — the RETURN operand depends on BINOP
-        # whose operands include the recursive CALL result.
-        assert "factorial" in env.func_signatures
+        assert env.func_signatures["double"].return_type == "Int"
+        assert env.func_signatures["greet"].return_type == "String"
 
     def test_return_backfill_ruby(self):
         source = """\
-def square(x)
-  return x * x
+def double(x)
+  return 42
+end
+
+def greet()
+  return "hello"
 end
 """
         _instructions, env = _lower_and_infer(source, "ruby")
 
-        assert "square" in env.func_signatures
+        assert env.func_signatures["double"].return_type == "Int"
+        assert env.func_signatures["greet"].return_type == "String"
 
 
 class TestUnopRefinement:
@@ -139,6 +145,15 @@ class Dog {
 
         call_methods = [i for i in instructions if i.opcode == Opcode.CALL_METHOD]
         assert len(call_methods) >= 2
+        # Verify return types were actually inferred for the method calls
+        inferred_regs = [
+            cm.result_reg
+            for cm in call_methods
+            if cm.result_reg and cm.result_reg in env.register_types
+        ]
+        assert (
+            len(inferred_regs) >= 2
+        ), "CALL_METHOD result registers should have inferred types"
 
 
 class TestFieldTypeTable:
