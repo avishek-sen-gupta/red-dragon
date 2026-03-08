@@ -129,7 +129,7 @@ class IRInstruction(BaseModel):
     source_location: SourceLocation = NO_SOURCE_LOCATION
 ```
 
-**Key design choice**: registers use SSA-like naming (`%0`, `%1`, ...) for temporaries, while named variables use string names (`x`, `total`). The `STORE_VAR` / `LOAD_VAR` opcodes bridge between registers and variables.
+**Key design choice**: registers use SSA-like naming (`%0`, `%1`, ...) for temporaries, while named variables use string names (`x`, `total`). The `STORE_VAR` / `LOAD_VAR` opcodes bridge between registers and variables. For block-scoped languages, variable names may be mangled by the frontend (e.g. `x$1`) to disambiguate shadowed declarations — see the [Type System doc](type-system.md#block-scope-tracking-llvm-style) for details.
 
 ### Source location traceability
 

@@ -52,6 +52,8 @@ Read a named variable.
 
 Searches the call stack from the current frame backwards. If the variable is not found, the VM creates a fresh symbolic value.
 
+For block-scoped languages, `var_name` may be a mangled name (e.g. `x$1`) produced by the frontend's scope tracker. See [Block-Scope Tracking](type-system.md#block-scope-tracking-llvm-style).
+
 ```
 %4 = load_var x
 ```
@@ -212,6 +214,8 @@ Write a value into a named variable.
 | `operands` | `[var_name, value_reg]` |
 
 Stores in the current call frame's local variables. If inside a closure, also updates the captured environment.
+
+For block-scoped languages, `var_name` may be a mangled name (e.g. `x$1`) produced by the frontend's scope tracker. See [Block-Scope Tracking](type-system.md#block-scope-tracking-llvm-style).
 
 ```
 store_var x %5
