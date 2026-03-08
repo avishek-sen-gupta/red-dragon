@@ -2,6 +2,53 @@
 
 RedDragon's type system provides **static type inference** over the universal IR, enabling type-aware operator semantics (e.g. integer division, float promotion) and write-time coercion during VM execution. It is designed for incomplete programs: when type information is missing, the system degrades gracefully to identity (no coercion) rather than failing.
 
+## Table of Contents
+
+- [Architecture Overview](#architecture-overview)
+- [TypeExpr — Algebraic Data Type for Types](#typeexpr--algebraic-data-type-for-types)
+  - [Variants](#variants)
+  - [String Compatibility](#string-compatibility)
+  - [Convenience Constructors](#convenience-constructors)
+  - [parse_type() — String ↔ TypeExpr Round-Tripping](#parsetype--string--typeexpr-round-tripping)
+  - [Union Types](#union-types)
+  - [Function Types](#function-types)
+  - [Tuple Types](#tuple-types)
+  - [Type Aliases](#type-aliases)
+  - [Interface/Trait Typing](#interfacetrait-typing)
+  - [Bounded Type Variables](#bounded-type-variables)
+- [Type Hierarchy](#type-hierarchy)
+  - [TypeName Enum](#typename-enum)
+  - [TypeNode](#typenode)
+  - [TypeGraph](#typegraph)
+- [Phase 1: Frontend Type Extraction](#phase-1-frontend-type-extraction)
+  - [Type Extraction Pipeline](#type-extraction-pipeline)
+  - [Seeding Methods](#seeding-methods)
+  - [Universal Seeding Patterns](#universal-seeding-patterns)
+  - [Per-Language Type Extraction](#per-language-type-extraction)
+  - [TypeEnvironmentBuilder](#typeenvironmentbuilder)
+- [Phase 2: Static Type Inference](#phase-2-static-type-inference)
+  - [_InferenceContext](#_inferencecontext)
+  - [infer_types() — Full Flow](#infertypes--full-flow)
+  - [Fixpoint Algorithm](#fixpoint-algorithm)
+  - [Per-Opcode Inference Rules](#per-opcode-inference-rules)
+  - [Post-Fixpoint Promotion](#post-fixpoint-promotion)
+  - [Function Signature Assembly](#function-signature-assembly)
+  - [Type Alias Resolution](#type-alias-resolution)
+  - [Builtin Type Knowledge](#builtin-type-knowledge)
+  - [TypeEnvironment (Output)](#typeenvironment-output)
+  - [Block-Scope Tracking (LLVM-style)](#block-scope-tracking-llvm-style)
+- [Phase 3: Runtime Type Coercion](#phase-3-runtime-type-coercion)
+  - [Coercion Flow](#coercion-flow)
+  - [TypeConversionRules (ABC)](#typeconversionrules-abc)
+  - [ConversionResult](#conversionresult)
+  - [DefaultTypeConversionRules](#defaulttypeconversionrules)
+  - [TypeResolver](#typeresolver)
+  - [How Coercion Composes End-to-End](#how-coercion-composes-end-to-end)
+- [End-to-End Example](#end-to-end-example)
+- [Extensibility](#extensibility)
+
+---
+
 ## Architecture Overview
 
 ```mermaid
@@ -68,6 +115,8 @@ hash(ScalarType("Int")) == hash("Int")                                  # True
 ```
 
 This is implemented via `__eq__` (compares `str(self)` against `str(other)` or raw strings) and `__hash__` (hashes `str(self)`). The `__bool__` method returns the truthiness of the string representation, making `UNKNOWN` (empty string) falsy — so `if type_expr:` checks whether a type is known.
+
+**No string roundtrips in the pipeline:** The entire type pipeline operates on `TypeExpr` objects end-to-end. Frontends call `parse_type()` at the seeding boundary, `TypeEnvironmentBuilder` stores `TypeExpr`, the inference engine and type resolver work with `TypeExpr` throughout, and `UNKNOWN` (falsy `UnknownType` singleton) replaces empty strings. There are no string serialization/deserialization roundtrips anywhere in the pipeline.
 
 ### Convenience Constructors
 
@@ -446,6 +495,9 @@ flowchart LR
 - `extract_type_from_child(ctx, node, child_types)` — Extracts from the first child matching one of the given node types
 
 **Layer 2 — Generic type structuring:**
+
+Generic types are extracted **structurally from tree-sitter ASTs**, not via string replacement. Each component is normalised independently through the frontend's `type_map`, and nested generics are handled recursively through the same pipeline.
+
 - `extract_normalized_type(ctx, node, field_name, type_map)` — Extracts from field, detects generics, decomposes into bracket notation
 - `extract_normalized_type_from_child(ctx, node, child_types, type_map)` — Same but from child nodes
 - `_decompose_generic(ctx, node, args_child_type, type_map)` — Recursively converts generic AST patterns into bracket notation:
@@ -977,6 +1029,30 @@ int x = 10;           // declare_block_var("x") → "x" (base level)
 //   "x$2" → VarScopeInfo(original_name="x", scope_depth=2)
 ```
 
+**Loop variable scoping:** For-each style loops (Java enhanced-for, C++ range-for, C# foreach, Rust for-in, Go range, Kotlin for, Scala for-comprehension, JS/TS for-in and for-of) declare their iteration variables inside a new block scope. Each loop's control flow lowerer calls `enter_block_scope()` before the loop body label, then `declare_block_var(raw_name)` to register the iteration variable. The scope is exited after `pop_loop()`. This ensures that `for (int x : list)` correctly shadows an outer `x`:
+
+```java
+int x = 0;                    // declare_block_var("x") → "x"
+for (int x : list) {          // enter_block_scope(); declare_block_var("x") → "x$1"
+    int y = x;                // resolve_var("x") → "x$1"
+}                             // exit_block_scope()
+int z = x;                    // resolve_var("x") → "x"
+
+// var_scope_metadata: "x$1" → VarScopeInfo(original_name="x", scope_depth=1)
+```
+
+**Catch clause variable scoping:** Each catch clause enters its own block scope before declaring the exception variable. This prevents the catch parameter from colliding with an outer variable of the same name:
+
+```java
+int e = 0;                    // declare_block_var("e") → "e"
+try { ... } catch (Exception e) {   // enter_block_scope(); declare_block_var("e") → "e$1"
+    log(e);                   // resolve_var("e") → "e$1"
+}                             // exit_block_scope()
+int z = e;                    // resolve_var("e") → "e"
+```
+
+The scope enter/exit is applied in `lower_try_catch()` (`interpreter/frontends/common/exceptions.py`), which is shared across all languages with try/catch semantics (Java, C++, C#, Kotlin, Scala, TypeScript, JavaScript, Python, Ruby).
+
 **Function-scoped languages** (Python, JavaScript `var`, Ruby, Lua, PHP, Pascal) **bypass this entirely** — they do not call `enter_block_scope()`/`declare_block_var()`, so variable names pass through unchanged.
 
 **Mixed-scoping languages** (JavaScript/TypeScript with both `var` and `let`/`const`): The frontend uses `declare_block_var()` for `let`/`const` declarations and raw names for `var`. The scope tracker is opt-in per declaration, not per language.
@@ -1271,7 +1347,7 @@ The type system is designed for extension via dependency injection:
 | **Custom type hierarchies** | `TypeGraph.extend(additional_nodes)` | `graph.extend((TypeNode("Dog", ("Animal",)),))` |
 | **Interface hierarchies** | `TypeGraph.extend_with_interfaces(impls)` | Add `Dog ⊆ Comparable` edges |
 | **Variance annotations** | `TypeGraph.with_variance(registry)` | `{"MutableList": (Variance.INVARIANT,)}` |
-| **Custom coercion rules** | Implement `TypeConversionRules` ABC | COBOL decimal arithmetic, language-specific division semantics |
+| **Custom coercion rules** | Implement `TypeConversionRules` ABC | COBOL fixed-point arithmetic, a language where `/` always produces Float |
 | **Frontend type seeding** | `TreeSitterEmitContext.seed_*()` methods | Any frontend can seed register, var, alias, interface, and param types |
 | **Type aliases** | `seed_type_alias()` → transitive resolution | `typedef int UserId;` → `UserId = Int` |
 | **Block-scope tracking** | `enter_block_scope()` / `declare_block_var()` | Frontend-level name mangling for block-scoped languages |
