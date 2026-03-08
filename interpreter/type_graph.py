@@ -13,6 +13,7 @@ from interpreter.type_expr import (
     ScalarType,
     ParameterizedType,
     UnionType,
+    FunctionType,
     scalar,
     union_of,
 )
@@ -137,6 +138,18 @@ class TypeGraph:
                 )
             case (ParameterizedType(constructor=cc), ScalarType(name=pn)):
                 return self.is_subtype(cc, pn)
+            case (
+                FunctionType(params=cp, return_type=cr),
+                FunctionType(params=pp, return_type=pr),
+            ):
+                if len(cp) != len(pp):
+                    return False
+                # Contravariant params: parent param must be subtype of child param
+                params_ok = all(
+                    self.is_subtype_expr(pp_i, cp_i) for cp_i, pp_i in zip(cp, pp)
+                )
+                # Covariant return: child return must be subtype of parent return
+                return params_ok and self.is_subtype_expr(cr, pr)
             case _:
                 return False
 
@@ -174,6 +187,17 @@ class TypeGraph:
                     self.common_supertype_expr(aa_i, ab_i) for aa_i, ab_i in zip(aa, ab)
                 )
                 return ParameterizedType(ca, merged_args)
+            case (
+                FunctionType(params=pa, return_type=ra),
+                FunctionType(params=pb, return_type=rb),
+            ):
+                if len(pa) != len(pb):
+                    return scalar(TypeName.ANY)
+                merged_params = tuple(
+                    self.common_supertype_expr(pa_i, pb_i) for pa_i, pb_i in zip(pa, pb)
+                )
+                merged_return = self.common_supertype_expr(ra, rb)
+                return FunctionType(params=merged_params, return_type=merged_return)
             case _:
                 return scalar(TypeName.ANY)
 

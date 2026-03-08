@@ -10,6 +10,7 @@ from interpreter.type_expr import (
     ParameterizedType,
     UnionType,
     UnknownType,
+    FunctionType,
     UNKNOWN,
     parse_type,
     scalar,
@@ -21,6 +22,7 @@ from interpreter.type_expr import (
     is_optional,
     unwrap_optional,
     unknown,
+    fn_type,
 )
 
 
@@ -501,3 +503,174 @@ class TestOptionalConvenience:
     def test_unwrap_non_optional_returns_as_is(self):
         result = unwrap_optional(scalar("Int"))
         assert result == scalar("Int")
+
+
+# ---------------------------------------------------------------------------
+# FunctionType
+# ---------------------------------------------------------------------------
+
+
+class TestFunctionType:
+    def test_str_with_params(self):
+        t = FunctionType(
+            params=(scalar("Int"), scalar("String")), return_type=scalar("Bool")
+        )
+        assert str(t) == "Fn(Int, String) -> Bool"
+
+    def test_str_no_params(self):
+        t = FunctionType(params=(), return_type=scalar("Int"))
+        assert str(t) == "Fn() -> Int"
+
+    def test_str_single_param(self):
+        t = FunctionType(params=(scalar("Int"),), return_type=scalar("String"))
+        assert str(t) == "Fn(Int) -> String"
+
+    def test_equality(self):
+        a = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        b = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        assert a == b
+
+    def test_inequality_different_params(self):
+        a = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        b = FunctionType(params=(scalar("String"),), return_type=scalar("Bool"))
+        assert a != b
+
+    def test_inequality_different_return(self):
+        a = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        b = FunctionType(params=(scalar("Int"),), return_type=scalar("String"))
+        assert a != b
+
+    def test_inequality_different_arity(self):
+        a = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        b = FunctionType(
+            params=(scalar("Int"), scalar("Int")), return_type=scalar("Bool")
+        )
+        assert a != b
+
+    def test_hashable(self):
+        a = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        b = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        assert hash(a) == hash(b)
+        s = {a, b}
+        assert len(s) == 1
+
+    def test_frozen(self):
+        t = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        with pytest.raises(AttributeError):
+            t.params = ()  # type: ignore[misc]
+
+    def test_is_type_expr(self):
+        t = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        assert isinstance(t, TypeExpr)
+
+    def test_string_compatibility(self):
+        t = FunctionType(
+            params=(scalar("Int"), scalar("String")), return_type=scalar("Bool")
+        )
+        assert t == "Fn(Int, String) -> Bool"
+
+    def test_string_compatibility_reverse(self):
+        t = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        assert "Fn(Int) -> Bool" == t
+
+    def test_hash_matches_string(self):
+        t = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        assert hash(t) == hash("Fn(Int) -> Bool")
+
+    def test_in_set_with_string(self):
+        s = {FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))}
+        assert "Fn(Int) -> Bool" in s
+
+    def test_nested_function_type(self):
+        """FunctionType with a FunctionType parameter."""
+        inner = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        outer = FunctionType(params=(inner,), return_type=scalar("String"))
+        assert str(outer) == "Fn(Fn(Int) -> Bool) -> String"
+
+    def test_not_equals_scalar(self):
+        t = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        assert t != scalar("Int")
+
+    def test_not_equals_parameterized(self):
+        t = FunctionType(params=(scalar("Int"),), return_type=scalar("Bool"))
+        assert t != pointer(scalar("Int"))
+
+    def test_truthy(self):
+        t = FunctionType(params=(), return_type=scalar("Int"))
+        assert t
+
+
+class TestFnTypeConstructor:
+    def test_fn_type_with_params(self):
+        result = fn_type([scalar("Int"), scalar("String")], scalar("Bool"))
+        assert isinstance(result, FunctionType)
+        assert result.params == (scalar("Int"), scalar("String"))
+        assert result.return_type == scalar("Bool")
+
+    def test_fn_type_no_params(self):
+        result = fn_type([], scalar("Int"))
+        assert isinstance(result, FunctionType)
+        assert result.params == ()
+        assert result.return_type == scalar("Int")
+
+
+class TestFunctionTypeParsing:
+    def test_parse_no_params(self):
+        result = parse_type("Fn() -> Int")
+        assert isinstance(result, FunctionType)
+        assert result.params == ()
+        assert result.return_type == scalar("Int")
+
+    def test_parse_single_param(self):
+        result = parse_type("Fn(Int) -> Bool")
+        assert isinstance(result, FunctionType)
+        assert result.params == (scalar("Int"),)
+        assert result.return_type == scalar("Bool")
+
+    def test_parse_two_params(self):
+        result = parse_type("Fn(Int, String) -> Bool")
+        assert isinstance(result, FunctionType)
+        assert result.params == (scalar("Int"), scalar("String"))
+        assert result.return_type == scalar("Bool")
+
+    def test_parse_parameterized_return(self):
+        result = parse_type("Fn(Int) -> Array[String]")
+        assert isinstance(result, FunctionType)
+        assert result.return_type == array_of(scalar("String"))
+
+    def test_parse_parameterized_param(self):
+        result = parse_type("Fn(Array[Int]) -> Bool")
+        assert isinstance(result, FunctionType)
+        assert result.params == (array_of(scalar("Int")),)
+
+    def test_parse_nested_function_type(self):
+        """Fn(Fn(Int) -> Bool) -> String"""
+        result = parse_type("Fn(Fn(Int) -> Bool) -> String")
+        assert isinstance(result, FunctionType)
+        inner = result.params[0]
+        assert isinstance(inner, FunctionType)
+        assert inner.params == (scalar("Int"),)
+        assert inner.return_type == scalar("Bool")
+        assert result.return_type == scalar("String")
+
+    def test_roundtrip_no_params(self):
+        original = "Fn() -> Int"
+        assert str(parse_type(original)) == original
+
+    def test_roundtrip_two_params(self):
+        original = "Fn(Int, String) -> Bool"
+        assert str(parse_type(original)) == original
+
+    def test_roundtrip_nested(self):
+        original = "Fn(Fn(Int) -> Bool) -> String"
+        assert str(parse_type(original)) == original
+
+    def test_roundtrip_parameterized_return(self):
+        original = "Fn(Int) -> Array[String]"
+        assert str(parse_type(original)) == original
+
+    def test_fn_as_scalar_name_without_parens(self):
+        """Bare 'Fn' without parens should parse as a scalar type."""
+        result = parse_type("Fn")
+        assert isinstance(result, ScalarType)
+        assert result.name == "Fn"

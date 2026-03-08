@@ -123,6 +123,22 @@ class ParameterizedType(TypeExpr):
 
 
 @dataclass(frozen=True, eq=False)
+class FunctionType(TypeExpr):
+    """A function type: ``Fn(Int, String) -> Bool``.
+
+    Params are stored as a tuple of TypeExpr for the parameter types.
+    Return type is a single TypeExpr.
+    """
+
+    params: tuple[TypeExpr, ...]
+    return_type: TypeExpr
+
+    def __str__(self) -> str:
+        params_str = ", ".join(str(p) for p in self.params)
+        return f"Fn({params_str}) -> {self.return_type}"
+
+
+@dataclass(frozen=True, eq=False)
 class UnionType(TypeExpr):
     """A union of two or more types: ``Union[Int, String]``.
 
@@ -179,6 +195,11 @@ def array_of(element: TypeExpr) -> ParameterizedType:
 def map_of(key: TypeExpr, value: TypeExpr) -> ParameterizedType:
     """Create a ``Map[key, value]`` type."""
     return ParameterizedType("Map", (key, value))
+
+
+def fn_type(params: list[TypeExpr], ret: TypeExpr) -> FunctionType:
+    """Create a ``Fn(params...) -> ret`` function type."""
+    return FunctionType(params=tuple(params), return_type=ret)
 
 
 def union_of(*types: TypeExpr) -> TypeExpr:
@@ -249,6 +270,8 @@ def parse_type(s: str) -> TypeExpr:
 def _parse_expr(s: str, pos: int) -> tuple[TypeExpr, int]:
     """Parse a single TypeExpr starting at *pos*, returning (expr, next_pos)."""
     name, pos = _parse_name(s, pos)
+    if name == "Fn" and pos < len(s) and s[pos] == "(":
+        return _parse_function_type(s, pos)
     if pos < len(s) and s[pos] == "[":
         args, pos = _parse_args(s, pos + 1)
         if name == "Union":
@@ -260,9 +283,9 @@ def _parse_expr(s: str, pos: int) -> tuple[TypeExpr, int]:
 
 
 def _parse_name(s: str, pos: int) -> tuple[str, int]:
-    """Consume an identifier (everything up to ``[``, ``]``, ``,``, or end)."""
+    """Consume an identifier (everything up to ``[``, ``]``, ``,``, ``(``, ``)``, or end)."""
     start = pos
-    while pos < len(s) and s[pos] not in ("[", "]", ","):
+    while pos < len(s) and s[pos] not in ("[", "]", ",", "(", ")"):
         pos += 1
     return s[start:pos].strip(), pos
 
@@ -282,3 +305,33 @@ def _parse_args(s: str, pos: int) -> tuple[list[TypeExpr], int]:
         expr, pos = _parse_expr(s, pos)
         args.append(expr)
     return args, pos
+
+
+def _parse_function_type(s: str, pos: int) -> tuple[FunctionType, int]:
+    """Parse ``Fn(param_types...) -> return_type`` starting after 'Fn' at the '('."""
+    # pos points to '('
+    pos += 1  # skip '('
+    params: list[TypeExpr] = []
+    while pos < len(s):
+        # skip whitespace
+        while pos < len(s) and s[pos] == " ":
+            pos += 1
+        if s[pos] == ")":
+            pos += 1  # skip ')'
+            break
+        if s[pos] == ",":
+            pos += 1
+            while pos < len(s) and s[pos] == " ":
+                pos += 1
+            continue
+        expr, pos = _parse_expr(s, pos)
+        params.append(expr)
+    # skip " -> "
+    while pos < len(s) and s[pos] == " ":
+        pos += 1
+    if pos + 1 < len(s) and s[pos : pos + 2] == "->":
+        pos += 2
+    while pos < len(s) and s[pos] == " ":
+        pos += 1
+    ret_type, pos = _parse_expr(s, pos)
+    return FunctionType(params=tuple(params), return_type=ret_type), pos
