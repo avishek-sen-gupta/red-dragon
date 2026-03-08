@@ -40,6 +40,36 @@ class TypeExpr:
         return bool(str(self))
 
 
+class UnknownType(TypeExpr):
+    """Sentinel for 'type not yet known'.
+
+    Falsy, compares equal to ``""``, and is a singleton via ``UNKNOWN``.
+    Use ``unknown()`` as the constructor — it always returns the singleton.
+    """
+
+    def __str__(self) -> str:
+        return ""
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, UnknownType):
+            return True
+        if isinstance(other, str):
+            return other == ""
+        if isinstance(other, TypeExpr):
+            return False
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash("")
+
+    def __bool__(self) -> bool:
+        return False
+
+
+UNKNOWN = UnknownType()
+"""Singleton sentinel for 'type not yet known'."""
+
+
 @dataclass(frozen=True, eq=False)
 class ScalarType(TypeExpr):
     """A simple, non-parameterized type like ``Int`` or ``String``."""
@@ -97,6 +127,11 @@ class ParameterizedType(TypeExpr):
 # ---------------------------------------------------------------------------
 
 
+def unknown() -> UnknownType:
+    """Return the UNKNOWN singleton."""
+    return UNKNOWN
+
+
 def scalar(name: str) -> ScalarType:
     """Create a scalar type."""
     return ScalarType(name)
@@ -125,10 +160,12 @@ def map_of(key: TypeExpr, value: TypeExpr) -> ParameterizedType:
 def parse_type(s: str) -> TypeExpr:
     """Parse a canonical type string into a TypeExpr.
 
-    Handles scalar names (``"Int"``), single-parameter types
-    (``"Pointer[Int]"``), multi-parameter types (``"Map[String, Int]"``),
-    and arbitrary nesting (``"Pointer[Array[Int]]"``).
+    Returns ``UNKNOWN`` for empty strings.  Handles scalar names (``"Int"``),
+    single-parameter types (``"Pointer[Int]"``), multi-parameter types
+    (``"Map[String, Int]"``), and arbitrary nesting (``"Pointer[Array[Int]]"``).
     """
+    if not s:
+        return UNKNOWN
     expr, _rest = _parse_expr(s, 0)
     return expr
 
