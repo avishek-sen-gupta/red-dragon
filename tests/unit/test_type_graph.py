@@ -193,6 +193,33 @@ class TestTypeGraphParameterizedSubtype:
         parent = map_of(scalar("Number"), scalar("Number"))
         assert not g.is_subtype_expr(child, parent)
 
+    def test_nested_multi_arg_subtype(self):
+        """Map[String, Map[Int, Int]] ⊆ Map[String, Map[Number, Number]]."""
+        g = self._graph()
+        child = map_of(scalar("String"), map_of(scalar("Int"), scalar("Int")))
+        parent = map_of(scalar("String"), map_of(scalar("Number"), scalar("Number")))
+        assert g.is_subtype_expr(child, parent)
+
+    def test_nested_multi_arg_subtype_mismatch(self):
+        """Map[String, Map[Int, String]] ⊄ Map[String, Map[Number, Number]]."""
+        g = self._graph()
+        child = map_of(scalar("String"), map_of(scalar("Int"), scalar("String")))
+        parent = map_of(scalar("String"), map_of(scalar("Number"), scalar("Number")))
+        assert not g.is_subtype_expr(child, parent)
+
+    def test_multi_arg_nested_in_both_positions(self):
+        """Map[Map[Int, Int], Map[Int, Int]] ⊆ Map[Map[Number, Number], Map[Number, Number]]."""
+        g = self._graph()
+        child = map_of(
+            map_of(scalar("Int"), scalar("Int")),
+            map_of(scalar("Int"), scalar("Int")),
+        )
+        parent = map_of(
+            map_of(scalar("Number"), scalar("Number")),
+            map_of(scalar("Number"), scalar("Number")),
+        )
+        assert g.is_subtype_expr(child, parent)
+
 
 class TestTypeGraphParameterizedLUB:
     """Least upper bound for parameterized TypeExpr objects."""
@@ -240,3 +267,13 @@ class TestTypeGraphParameterizedLUB:
         b = array_of(pointer(scalar("Float")))
         result = g.common_supertype_expr(a, b)
         assert result == array_of(pointer(scalar("Number")))
+
+    def test_lub_nested_multi_arg(self):
+        """LUB of Map[Int, Map[Int, Int]] and Map[Float, Map[Float, Float]] is Map[Number, Map[Number, Number]]."""
+        g = self._graph()
+        a = map_of(scalar("Int"), map_of(scalar("Int"), scalar("Int")))
+        b = map_of(scalar("Float"), map_of(scalar("Float"), scalar("Float")))
+        result = g.common_supertype_expr(a, b)
+        assert result == map_of(
+            scalar("Number"), map_of(scalar("Number"), scalar("Number"))
+        )

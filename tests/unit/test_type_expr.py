@@ -123,6 +123,44 @@ class TestParseType:
         )
         assert result == expected
 
+    def test_parse_multi_arg_nested_in_multi_arg(self):
+        result = parse_type("Map[String, Map[Int, String]]")
+        expected = ParameterizedType(
+            "Map",
+            (
+                ScalarType("String"),
+                ParameterizedType("Map", (ScalarType("Int"), ScalarType("String"))),
+            ),
+        )
+        assert result == expected
+
+    def test_parse_multi_arg_nested_both_positions(self):
+        result = parse_type("Map[Map[Int, String], Map[Bool, Float]]")
+        expected = ParameterizedType(
+            "Map",
+            (
+                ParameterizedType("Map", (ScalarType("Int"), ScalarType("String"))),
+                ParameterizedType("Map", (ScalarType("Bool"), ScalarType("Float"))),
+            ),
+        )
+        assert result == expected
+
+    def test_parse_three_type_args(self):
+        result = parse_type("Triple[Int, String, Bool]")
+        expected = ParameterizedType(
+            "Triple",
+            (ScalarType("Int"), ScalarType("String"), ScalarType("Bool")),
+        )
+        assert result == expected
+
+    def test_roundtrip_multi_arg_nested(self):
+        original = "Map[String, Map[Int, String]]"
+        assert str(parse_type(original)) == original
+
+    def test_roundtrip_multi_arg_nested_both_positions(self):
+        original = "Map[Map[Int, String], Map[Bool, Float]]"
+        assert str(parse_type(original)) == original
+
     def test_roundtrip_scalar(self):
         assert str(parse_type("Int")) == "Int"
 
