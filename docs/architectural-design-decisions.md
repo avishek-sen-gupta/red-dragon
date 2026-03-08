@@ -1726,3 +1726,25 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 - **Default to invariant**: Rejected — breaks backwards compatibility. Covariant default matches existing behavior.
 
 **Consequences:** 9 new tests (all unit for TypeGraph variance subtype/LUB). All 9770 tests pass. No existing test changed.
+
+### ADR-094: Bounded type variables (TypeVar) for generic type parameters (2026-03-08)
+
+**Context:** The type system lacked support for generic type parameters like Java's `<T extends Number>` or Kotlin's `<T : Comparable>`. Without type variables, generic container and function types couldn't express bounds on their type parameters.
+
+**Decision:** Add `TypeVar` as a new `TypeExpr` variant representing bounded type variables.
+
+**Design details:**
+- `TypeVar(name: str, bound: TypeExpr = UNKNOWN)` dataclass in `type_expr.py`
+- `typevar(name, bound)` convenience constructor
+- `TypeVar.__str__` returns `"T: Number"` (bounded) or `"T"` (unbounded)
+- Subtype rules in `TypeGraph.is_subtype_expr`:
+  - TypeVar child: subtype if its bound is subtype of parent (unbounded → bound=Any)
+  - TypeVar parent: child satisfies it if child is subtype of the bound
+- TypeVars compose with parameterized types: `Array[Int] ⊆ Array[T: Number]` via covariant argument checking
+
+**Alternatives considered:**
+- **TypeVar as ScalarType with naming convention**: Rejected — loses bound information and requires out-of-band tracking
+- **Separate generic parameter registry**: Rejected — embedding bound in TypeExpr is simpler and self-contained
+- **TypeVar in LUB computation**: Deferred — LUB of two TypeVars is not yet needed; can be added when generic inference requires it
+
+**Consequences:** 20 new tests (10 unit for TypeVar ADT, 8 unit for TypeGraph subtype rules, 2 integration for bounded TypeVar with containers). All 9790 tests pass. No existing test changed.

@@ -2642,3 +2642,39 @@ class Dog implements Comparable, Serializable {
         impls = env.interface_implementations["Dog"]
         assert "Comparable" in impls
         assert "Serializable" in impls
+
+
+class TestBoundedTypeVarIntegration:
+    """Integration: bounded type variables interact correctly with TypeGraph."""
+
+    def test_typevar_bounded_by_number_accepts_int(self):
+        """TypeVar T bounded by Number should accept Int as a subtype."""
+        from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+        from interpreter.type_expr import typevar, scalar
+        from interpreter.constants import TypeName
+
+        graph = TypeGraph(DEFAULT_TYPE_NODES)
+        t_num = typevar("T", bound=scalar(TypeName.NUMBER))
+        # Int satisfies T: Number because Int <: Number
+        assert graph.is_subtype_expr(scalar(TypeName.INT), t_num)
+        # String does NOT satisfy T: Number
+        assert not graph.is_subtype_expr(scalar(TypeName.STRING), t_num)
+
+    def test_typevar_in_parameterized_container(self):
+        """Array[Int] should be subtype of Array[T: Number] covariantly."""
+        from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+        from interpreter.type_expr import typevar, scalar, array_of
+        from interpreter.constants import TypeName
+
+        graph = TypeGraph(DEFAULT_TYPE_NODES)
+        t_num = typevar("T", bound=scalar(TypeName.NUMBER))
+        # Array[Int] <: Array[T: Number] because Int <: T: Number (bound=Number)
+        assert graph.is_subtype_expr(
+            array_of(scalar(TypeName.INT)),
+            array_of(t_num),
+        )
+        # Array[String] NOT <: Array[T: Number]
+        assert not graph.is_subtype_expr(
+            array_of(scalar(TypeName.STRING)),
+            array_of(t_num),
+        )

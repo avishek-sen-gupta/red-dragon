@@ -14,6 +14,7 @@ from interpreter.type_expr import (
     ParameterizedType,
     UnionType,
     FunctionType,
+    TypeVar,
     scalar,
     union_of,
     tuple_of,
@@ -135,6 +136,14 @@ class TypeGraph:
         # Union parent: child must be subtype of at least one member
         if isinstance(parent, UnionType):
             return any(self.is_subtype_expr(child, m) for m in parent.members)
+        # TypeVar child: subtype if bound is subtype of parent
+        if isinstance(child, TypeVar):
+            bound = child.bound if child.bound else scalar(TypeName.ANY)
+            return self.is_subtype_expr(bound, parent)
+        # TypeVar parent: child satisfies it if child is subtype of the bound
+        if isinstance(parent, TypeVar):
+            bound = parent.bound if parent.bound else scalar(TypeName.ANY)
+            return self.is_subtype_expr(child, bound)
         match (child, parent):
             case (ScalarType(name=cn), ScalarType(name=pn)):
                 return self.is_subtype(cn, pn)

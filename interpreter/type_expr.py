@@ -167,6 +167,35 @@ class UnionType(TypeExpr):
         return hash(str(self))
 
 
+@dataclass(frozen=True, eq=False)
+class TypeVar(TypeExpr):
+    """A type variable with an optional upper bound: ``T``, ``T: Number``.
+
+    Represents generic type parameters like Java's ``<T extends Number>``.
+    The bound defaults to ``UNKNOWN`` (unbounded, effectively ``Any``).
+    """
+
+    name: str
+    bound: TypeExpr = UNKNOWN
+
+    def __str__(self) -> str:
+        if self.bound:
+            return f"{self.name}: {self.bound}"
+        return self.name
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, TypeVar):
+            return self.name == other.name and self.bound == other.bound
+        if isinstance(other, str):
+            return str(self) == other
+        if isinstance(other, TypeExpr):
+            return False
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(str(self))
+
+
 # ---------------------------------------------------------------------------
 # Convenience constructors
 # ---------------------------------------------------------------------------
@@ -195,6 +224,11 @@ def array_of(element: TypeExpr) -> ParameterizedType:
 def map_of(key: TypeExpr, value: TypeExpr) -> ParameterizedType:
     """Create a ``Map[key, value]`` type."""
     return ParameterizedType("Map", (key, value))
+
+
+def typevar(name: str, bound: TypeExpr = UNKNOWN) -> TypeVar:
+    """Create a type variable, optionally with an upper bound."""
+    return TypeVar(name=name, bound=bound)
 
 
 def fn_type(params: list[TypeExpr], ret: TypeExpr) -> FunctionType:

@@ -11,6 +11,7 @@ from interpreter.type_expr import (
     UnionType,
     UnknownType,
     FunctionType,
+    TypeVar,
     UNKNOWN,
     parse_type,
     scalar,
@@ -24,6 +25,7 @@ from interpreter.type_expr import (
     unknown,
     fn_type,
     tuple_of,
+    typevar,
 )
 
 
@@ -722,3 +724,52 @@ class TestTupleOfConstructor:
         t2 = parse_type("Tuple[Int, String]")
         assert hash(t1) == hash(t2)
         assert t1 == t2
+
+
+class TestTypeVar:
+    """Tests for TypeVar type expressions."""
+
+    def test_unbounded_typevar_str(self):
+        t = typevar("T")
+        assert str(t) == "T"
+
+    def test_bounded_typevar_str(self):
+        t = typevar("T", scalar("Number"))
+        assert str(t) == "T: Number"
+
+    def test_typevar_equality(self):
+        a = typevar("T", scalar("Number"))
+        b = typevar("T", scalar("Number"))
+        assert a == b
+
+    def test_typevar_inequality_name(self):
+        a = typevar("T", scalar("Number"))
+        b = typevar("U", scalar("Number"))
+        assert a != b
+
+    def test_typevar_inequality_bound(self):
+        a = typevar("T", scalar("Number"))
+        b = typevar("T", scalar("String"))
+        assert a != b
+
+    def test_typevar_not_equal_to_scalar(self):
+        t = typevar("T")
+        assert t != scalar("T")
+
+    def test_typevar_hash_consistency(self):
+        a = typevar("T", scalar("Number"))
+        b = typevar("T", scalar("Number"))
+        assert hash(a) == hash(b)
+
+    def test_typevar_string_comparison(self):
+        t = typevar("T", scalar("Number"))
+        assert t == "T: Number"
+
+    def test_typevar_is_truthy(self):
+        assert bool(typevar("T"))
+
+    def test_typevar_constructor(self):
+        t = typevar("T", scalar("Int"))
+        assert isinstance(t, TypeVar)
+        assert t.name == "T"
+        assert t.bound == scalar("Int")
