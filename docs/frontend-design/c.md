@@ -389,3 +389,5 @@ STORE_VAR "distance", %25
 9. **Default return value**: Unlike most language frontends (which use `"None"`), the C frontend uses `"0"` as its `default_return_value`, reflecting C's convention that `main` returns 0 on success.
 
 10. **Pure function architecture**: All lowering logic is implemented as pure functions taking `(ctx: TreeSitterEmitContext, node)` rather than instance methods. The `CFrontend` class is a thin orchestrator that builds dispatch tables from these functions via `_build_expr_dispatch()` and `_build_stmt_dispatch()`. Node type strings are centralised in `CNodeType` constants.
+
+11. **Scoping model** -- Uses `BLOCK_SCOPED = True` (LLVM-style name mangling). Shadowed variables in nested compound statements (`{ }`), C-style for-loop init declarations, and variables in switch/case blocks are renamed (`x` → `x$1`) to disambiguate. See [base-frontend.md](base-frontend.md#block-scopes) for the general mechanism.

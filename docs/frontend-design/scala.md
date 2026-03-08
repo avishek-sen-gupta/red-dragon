@@ -331,3 +331,4 @@ STORE_VAR factorial, %14
 - **Tuple destructuring**: `val (a, b) = expr` is supported via `tuple_pattern` detection in `_lower_val_or_var_def`, emitting `LOAD_INDEX` per element.
 - **Pure function architecture**: All lowering logic lives in pure functions taking `(ctx: TreeSitterEmitContext, node)` instead of instance methods. The `ScalaFrontend` class is a thin orchestrator that builds dispatch tables and constants.
 - **Instance method `this` injection**: `lower_function_def` accepts an `inject_this` parameter; class body methods get `this` injected via `_lower_class_body_hoisted`.
+- **Scoping model** -- Uses `BLOCK_SCOPED = True` (LLVM-style name mangling). Shadowed variables in nested blocks, for-comprehension variables, and catch clause variables are renamed (`x` → `x$1`) to disambiguate. See [base-frontend.md](base-frontend.md#block-scopes) for the general mechanism.

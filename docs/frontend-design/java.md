@@ -301,3 +301,4 @@ STORE_VAR factorial, %12
 - **`_CLASS_BODY_METHOD_TYPES`**: `frozenset({"method_declaration", "constructor_declaration"})` -- used to partition class body for ordered hoisting.
 - **Pure function architecture**: All lowering logic lives in pure functions taking `(ctx: TreeSitterEmitContext, node)` instead of instance methods. The `JavaFrontend` class is a thin orchestrator that builds dispatch tables and constants.
 - **Instance method `this` injection**: `lower_method_decl` accepts an `inject_this` parameter; class body methods get `this` injected unless they have a `static` modifier.
+- **Scoping model** -- Uses `BLOCK_SCOPED = True` (LLVM-style name mangling). Shadowed variables in nested blocks, enhanced-for loop variables, catch clause variables, and C-style for-loop init declarations (via `for_initializer_field="init"`) are renamed (`x` → `x$1`) to disambiguate. See [base-frontend.md](base-frontend.md#block-scopes) for the general mechanism.

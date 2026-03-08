@@ -284,3 +284,5 @@ STORE_VAR hello %21
 9. **Pure function architecture**: All TS-specific lowering methods are pure functions taking `(ctx: TreeSitterEmitContext, node)` as arguments, defined as module-level functions in `typescript.py`. The `TypeScriptFrontend` class overrides `_build_expr_dispatch()` and `_build_stmt_dispatch()` to wire them in.
 
 10. **Minimal footprint**: The TypeScript frontend is deliberately thin. By extending `JavaScriptFrontend`, it inherits all JS runtime semantics and only needs to handle the TypeScript-specific type system constructs that tree-sitter parses into distinct node types.
+
+11. **Scoping model** -- Uses `BLOCK_SCOPED = True` (LLVM-style name mangling), inherited from `JavaScriptFrontend` which itself sets it. Shadowed variables in nested blocks, for-of/for-in loop variables, C-style for-loop init declarations, and catch clause variables are renamed (`x` → `x$1`) to disambiguate. Note that TypeScript inherits `BLOCK_SCOPED = True` from its JavaScript base, but JavaScript itself is function-scoped -- TypeScript overrides this. See [base-frontend.md](base-frontend.md#block-scopes) for the general mechanism.

@@ -289,3 +289,5 @@ Note the table constructor: positional entries start at index 1 (Lua convention)
 8. **No class/module support** -- Lua has no built-in class or module syntax. Object-oriented patterns in Lua are implemented via metatables, which are not modeled by this frontend.
 
 9. **Anonymous functions vs. declarations** -- `function_definition` (expression) returns a register via `lua_expr.lower_lua_function_definition`, while `function_declaration` (statement) emits `STORE_VAR` via `lua_decl.lower_lua_function_declaration`. This distinction matches Lua's semantics where `local f = function() end` is an expression assignment and `function f() end` is a declaration.
+
+10. **Scoping model** -- Uses default `BLOCK_SCOPED = False` (function-scoped). Lua's `local` variables are technically block-scoped in the real language, but the frontend treats them as function-scoped. No `$` mangling occurs.
