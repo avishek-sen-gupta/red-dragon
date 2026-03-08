@@ -18,6 +18,8 @@ from interpreter.frontends.java.node_types import JavaNodeType
 class JavaFrontend(BaseFrontend):
     """Lowers a Java tree-sitter AST into flattened TAC IR."""
 
+    BLOCK_SCOPED = True
+
     def _build_constants(self) -> GrammarConstants:
         return GrammarConstants(
             attr_object_field="object",

@@ -1276,25 +1276,3 @@ The type system is designed for extension via dependency injection:
 | **Type aliases** | `seed_type_alias()` → transitive resolution | `typedef int UserId;` → `UserId = Int` |
 | **Block-scope tracking** | `enter_block_scope()` / `declare_block_var()` | Frontend-level name mangling for block-scoped languages |
 
----
-
-## File Reference
-
-| File | Role |
-|---|---|
-| `interpreter/type_expr.py` | `TypeExpr` ADT — `ScalarType`, `ParameterizedType`, `UnionType`, `FunctionType`, `TypeVar`, `UnknownType`; `parse_type()` parser; convenience constructors |
-| `interpreter/type_node.py` | `TypeNode` — frozen dataclass for DAG nodes with `name`, `parents`, and `kind` (`"class"` or `"interface"`) |
-| `interpreter/type_graph.py` | `TypeGraph` — immutable DAG with string and TypeExpr subtype/LUB queries, variance registry, interface extension, functional update operations |
-| `interpreter/constants.py` | `TypeName` enum (12 canonical types), `Variance` enum, `CanonicalLiteral`, `SELF_PARAM_NAMES`, label prefixes, reference patterns |
-| `interpreter/type_environment_builder.py` | `TypeEnvironmentBuilder` — mutable accumulator for frontend seeds (register types, var types, func return/param types, aliases, interfaces, scope metadata) |
-| `interpreter/type_environment.py` | `TypeEnvironment` — frozen inference result with `MappingProxyType` fields for deep immutability |
-| `interpreter/function_signature.py` | `FunctionSignature` — frozen `(params, return_type)` record |
-| `interpreter/type_inference.py` | `infer_types()` — fixpoint inference engine; `_InferenceContext` with scoped var types, union widening, 18 opcode handlers, array/tuple promotion, alias resolution |
-| `interpreter/type_resolver.py` | `TypeResolver` — composes `TypeConversionRules` with graceful degradation for missing type hints (symmetric fill for binops, identity for unknowns) |
-| `interpreter/conversion_rules.py` | `TypeConversionRules` — ABC with `resolve()` and `coerce_assignment()` methods |
-| `interpreter/conversion_result.py` | `ConversionResult` — frozen coercion descriptor with `result_type`, `left_coercer`, `right_coercer`, `operator_override` |
-| `interpreter/default_conversion_rules.py` | `DefaultTypeConversionRules` — standard coercion table: arithmetic promotion, `/` → `//` for Int/Int, `Float → Int` truncation |
-| `interpreter/var_scope_info.py` | `VarScopeInfo` — frozen metadata for mangled block-scoped variable names (`original_name`, `scope_depth`) |
-| `interpreter/frontends/type_extraction.py` | Type extraction pipeline: `extract_type_from_field()`, `extract_normalized_type()`, `normalize_type_hint()`, `_decompose_generic()` |
-| `interpreter/frontends/context.py` | `TreeSitterEmitContext` — `seed_*_type()` frontend seeding API; block-scope tracking (`enter_block_scope`, `declare_block_var`, `resolve_var`) |
-| `interpreter/vm.py` | `_coerce_value()`, `_runtime_type_name()`, `apply_update()` — write-time register coercion |

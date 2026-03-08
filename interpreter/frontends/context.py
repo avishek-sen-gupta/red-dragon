@@ -116,6 +116,9 @@ class TreeSitterEmitContext:
     _current_func_label: str = ""
     _current_class_name: str = ""
 
+    # When True, lower_block() auto-enters/exits block scopes
+    block_scoped: bool = False
+
     # Block-scope tracking (LLVM-style: frontends disambiguate at emission time)
     _block_scope_stack: list[dict[str, str]] = field(default_factory=list)
     _scope_counter: int = 0
@@ -238,16 +241,24 @@ class TreeSitterEmitContext:
 
         If *node* is itself a known statement whose handler is NOT a
         block-iterate handler, it is lowered directly.
+
+        When ``block_scoped`` is True and *node* is a block node type,
+        a new block scope is entered before lowering and exited after.
         """
         ntype = node.type
         handler = self.stmt_dispatch.get(ntype)
         if handler is not None and ntype not in self.constants.block_node_types:
             handler(self, node)
             return
+        scope_entered = self.block_scoped and ntype in self.constants.block_node_types
+        if scope_entered:
+            self.enter_block_scope()
         for child in node.children:
             if not child.is_named:
                 continue
             self.lower_stmt(child)
+        if scope_entered:
+            self.exit_block_scope()
 
     def lower_stmt(self, node) -> None:
         ntype = node.type
@@ -256,6 +267,9 @@ class TreeSitterEmitContext:
         handler = self.stmt_dispatch.get(ntype)
         if handler:
             handler(self, node)
+            return
+        if ntype in self.constants.block_node_types:
+            self.lower_block(node)
             return
         # Fallback: try as expression
         self.lower_expr(node)

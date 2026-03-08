@@ -87,7 +87,8 @@ def lower_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 ctx, child, struct_type=struct_type, type_hint=type_hint
             )
         elif child.type in (CNodeType.IDENTIFIER, CNodeType.POINTER_DECLARATOR):
-            var_name = extract_declarator_name(ctx, child)
+            raw_name = extract_declarator_name(ctx, child)
+            var_name = ctx.declare_block_var(raw_name)
             ptr_depth = _count_pointer_depth(child)
             effective_type = (
                 _wrap_pointer_type(type_hint, ptr_depth) if ptr_depth else type_hint
@@ -122,7 +123,8 @@ def _lower_init_declarator(
     decl_node = node.child_by_field_name("declarator")
     value_node = node.child_by_field_name("value")
 
-    var_name = extract_declarator_name(ctx, decl_node) if decl_node else "__anon"
+    raw_name = extract_declarator_name(ctx, decl_node) if decl_node else "__anon"
+    var_name = ctx.declare_block_var(raw_name)
     ptr_depth = _count_pointer_depth(decl_node) if decl_node else 0
     effective_type = (
         _wrap_pointer_type(type_hint, ptr_depth) if ptr_depth else type_hint

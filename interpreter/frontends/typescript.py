@@ -25,6 +25,8 @@ from interpreter.frontends.common.declarations import make_class_ref
 class TypeScriptFrontend(JavaScriptFrontend):
     """Lowers TypeScript AST to IR. Extends JavaScriptFrontend, skipping type annotations."""
 
+    BLOCK_SCOPED = True
+
     def _build_constants(self) -> GrammarConstants:
         js_constants = super()._build_constants()
         return GrammarConstants(

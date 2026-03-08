@@ -70,7 +70,7 @@ def lower_identifier(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(
         Opcode.LOAD_VAR,
         result_reg=reg,
-        operands=[ctx.node_text(node)],
+        operands=[ctx.resolve_var(ctx.node_text(node))],
         node=node,
     )
     return reg
@@ -391,7 +391,7 @@ def lower_store_target(
     if target.type == CommonNodeType.IDENTIFIER:
         ctx.emit(
             Opcode.STORE_VAR,
-            operands=[ctx.node_text(target), val_reg],
+            operands=[ctx.resolve_var(ctx.node_text(target)), val_reg],
             node=parent_node,
         )
     elif target.type in (

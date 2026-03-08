@@ -51,7 +51,7 @@ def _lower_csharp_declarator(
     if name_node is None:
         return
 
-    var_name = ctx.node_text(name_node)
+    var_name = ctx.declare_block_var(ctx.node_text(name_node))
     if value_node:
         val_reg = ctx.lower_expr(value_node)
     else:

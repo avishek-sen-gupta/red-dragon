@@ -85,7 +85,8 @@ def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
         (c for c in node.children if c.type == KNT.VARIABLE_DECLARATION),
         None,
     )
-    var_name = _extract_property_name(ctx, var_decl) if var_decl else "__unknown"
+    raw_name = _extract_property_name(ctx, var_decl) if var_decl else "__unknown"
+    var_name = ctx.declare_block_var(raw_name)
 
     # Extract type from the variable_declaration child
     type_hint = (

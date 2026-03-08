@@ -18,6 +18,8 @@ from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 class ScalaFrontend(BaseFrontend):
     """Lowers a Scala tree-sitter AST into flattened TAC IR."""
 
+    BLOCK_SCOPED = True
+
     def _build_constants(self) -> GrammarConstants:
         return GrammarConstants(
             call_function_field="function",

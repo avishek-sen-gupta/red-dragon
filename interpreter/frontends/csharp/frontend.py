@@ -18,6 +18,8 @@ from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
 class CSharpFrontend(BaseFrontend):
     """Lowers a C# tree-sitter AST into flattened TAC IR."""
 
+    BLOCK_SCOPED = True
+
     def _build_constants(self) -> GrammarConstants:
         return GrammarConstants(
             attr_object_field="expression",

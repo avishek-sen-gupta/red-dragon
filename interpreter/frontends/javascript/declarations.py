@@ -32,13 +32,15 @@ def lower_js_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
             val_reg = ctx.lower_expr(value_node)
             _lower_array_destructure(ctx, name_node, val_reg, node)
         elif value_node:
+            var_name = ctx.declare_block_var(ctx.node_text(name_node))
             val_reg = ctx.lower_expr(value_node)
             ctx.emit(
                 Opcode.STORE_VAR,
-                operands=[ctx.node_text(name_node), val_reg],
+                operands=[var_name, val_reg],
                 node=node,
             )
         else:
+            var_name = ctx.declare_block_var(ctx.node_text(name_node))
             val_reg = ctx.fresh_reg()
             ctx.emit(
                 Opcode.CONST,
@@ -47,7 +49,7 @@ def lower_js_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
             )
             ctx.emit(
                 Opcode.STORE_VAR,
-                operands=[ctx.node_text(name_node), val_reg],
+                operands=[var_name, val_reg],
                 node=node,
             )
 

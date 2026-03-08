@@ -18,6 +18,8 @@ from interpreter.frontends.rust.node_types import RustNodeType
 class RustFrontend(BaseFrontend):
     """Lowers a Rust tree-sitter AST into flattened TAC IR."""
 
+    BLOCK_SCOPED = True
+
     def _build_constants(self) -> GrammarConstants:
         return GrammarConstants(
             attr_object_field="value",

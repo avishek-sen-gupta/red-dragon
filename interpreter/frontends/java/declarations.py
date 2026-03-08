@@ -21,14 +21,16 @@ def lower_local_var_decl(ctx: TreeSitterEmitContext, node) -> None:
             name_node = child.child_by_field_name("name")
             value_node = child.child_by_field_name("value")
             if name_node and value_node:
+                var_name = ctx.declare_block_var(ctx.node_text(name_node))
                 val_reg = ctx.lower_expr(value_node)
                 ctx.emit(
                     Opcode.STORE_VAR,
-                    operands=[ctx.node_text(name_node), val_reg],
+                    operands=[var_name, val_reg],
                     node=node,
                 )
-                ctx.seed_var_type(ctx.node_text(name_node), type_hint)
+                ctx.seed_var_type(var_name, type_hint)
             elif name_node:
+                var_name = ctx.declare_block_var(ctx.node_text(name_node))
                 val_reg = ctx.fresh_reg()
                 ctx.emit(
                     Opcode.CONST,
@@ -37,10 +39,10 @@ def lower_local_var_decl(ctx: TreeSitterEmitContext, node) -> None:
                 )
                 ctx.emit(
                     Opcode.STORE_VAR,
-                    operands=[ctx.node_text(name_node), val_reg],
+                    operands=[var_name, val_reg],
                     node=node,
                 )
-                ctx.seed_var_type(ctx.node_text(name_node), type_hint)
+                ctx.seed_var_type(var_name, type_hint)
 
 
 def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
