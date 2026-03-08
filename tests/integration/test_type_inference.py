@@ -1988,3 +1988,214 @@ end
         _instructions, env = _lower_and_infer(source, "ruby")
         assert env.func_signatures["helper"].return_type == TypeName.INT
         assert env.func_signatures["main"].return_type == TypeName.INT
+
+
+# ---------------------------------------------------------------------------
+# Variable type scoping — same var name, different types in different functions
+# ---------------------------------------------------------------------------
+
+_SCOPING_SOURCES: dict[str, str] = {
+    "python": """\
+def make_int():
+    x = 42
+    return x
+
+def make_str():
+    x = "hello"
+    return x
+""",
+    "javascript": """\
+function make_int() {
+    let x = 42;
+    return x;
+}
+
+function make_str() {
+    let x = "hello";
+    return x;
+}
+""",
+    "java": """\
+class Main {
+    static int make_int() {
+        int x = 42;
+        return x;
+    }
+
+    static String make_str() {
+        String x = "hello";
+        return x;
+    }
+}
+""",
+    "typescript": """\
+function make_int(): number {
+    let x: number = 42;
+    return x;
+}
+
+function make_str(): string {
+    let x: string = "hello";
+    return x;
+}
+""",
+    "kotlin": """\
+fun make_int(): Int {
+    val x = 42
+    return x
+}
+
+fun make_str(): String {
+    val x = "hello"
+    return x
+}
+""",
+    "csharp": """\
+class Main {
+    static int make_int() {
+        int x = 42;
+        return x;
+    }
+
+    static string make_str() {
+        string x = "hello";
+        return x;
+    }
+}
+""",
+    "go": """\
+func make_int() int {
+    x := 42
+    return x
+}
+
+func make_str() string {
+    x := "hello"
+    return x
+}
+""",
+    "rust": """\
+fn make_int() -> i32 {
+    let x = 42;
+    return x;
+}
+
+fn make_str() -> String {
+    let x = "hello";
+    return x;
+}
+""",
+    "scala": """\
+def make_int(): Int = {
+    val x = 42
+    return x
+}
+
+def make_str(): String = {
+    val x = "hello"
+    return x
+}
+""",
+    "lua": """\
+function make_int()
+    local x = 42
+    return x
+end
+
+function make_str()
+    local x = "hello"
+    return x
+end
+""",
+    "ruby": """\
+def make_int()
+  x = 42
+  return x
+end
+
+def make_str()
+  x = "hello"
+  return x
+end
+""",
+    "php": """\
+<?php
+function make_int() {
+    $x = 42;
+    return $x;
+}
+
+function make_str() {
+    $x = "hello";
+    return $x;
+}
+""",
+    "c": """\
+int make_int() {
+    int x = 42;
+    return x;
+}
+
+float make_str() {
+    float x = 3.14;
+    return x;
+}
+""",
+    "cpp": """\
+int make_int() {
+    int x = 42;
+    return x;
+}
+
+string make_str() {
+    string x = "hello";
+    return x;
+}
+""",
+    "pascal": """\
+function make_int: integer;
+var x: integer;
+begin
+    x := 42;
+    make_int := x;
+end;
+
+function make_str: string;
+var x: string;
+begin
+    x := 'hello';
+    make_str := x;
+end;
+""",
+}
+
+
+@pytest.fixture(params=sorted(_SCOPING_SOURCES.keys()))
+def scoping_lang(request):
+    return request.param
+
+
+# Per-language canonical type for "integer 42" and "string hello"
+_EXPECTED_INT_TYPE: dict[str, str] = {
+    "typescript": TypeName.FLOAT,  # TS `number` → Float
+}
+_EXPECTED_STR_TYPE: dict[str, str] = {
+    "c": TypeName.FLOAT,  # C has no string type; use float to test scoping
+}
+
+
+class TestVarTypeScopingCrossLanguage:
+    def test_same_var_name_different_types_scoped(self, scoping_lang):
+        """Variable 'x' in make_int is Int, 'x' in make_str is String — no collision."""
+        source = _SCOPING_SOURCES[scoping_lang]
+        instructions, env = _lower_and_infer(source, scoping_lang)
+        expected_int = _EXPECTED_INT_TYPE.get(scoping_lang, TypeName.INT)
+        expected_str = _EXPECTED_STR_TYPE.get(scoping_lang, TypeName.STRING)
+        # Both functions should have their return types correctly inferred
+        assert env.func_signatures["make_int"].return_type == expected_int
+        assert env.func_signatures["make_str"].return_type == expected_str
+        # Key: the two return types must be DIFFERENT (scoping works)
+        assert (
+            env.func_signatures["make_int"].return_type
+            != env.func_signatures["make_str"].return_type
+        )
