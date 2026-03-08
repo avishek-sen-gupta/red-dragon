@@ -6,6 +6,10 @@ arbitrary nesting (``Pointer[Array[Int]]``).
 
 Every TypeExpr has a canonical string representation via ``__str__``
 that round-trips through ``parse_type``.
+
+**String compatibility:** TypeExpr values compare equal to their
+string representations (``ScalarType("Int") == "Int"`` is True),
+enabling gradual migration from string-based type storage.
 """
 
 from __future__ import annotations
@@ -13,12 +17,27 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class TypeExpr:
-    """Base class for all type expressions."""
+    """Base class for all type expressions.
+
+    Subclasses must implement ``__str__``, ``__eq__``, and ``__hash__``.
+    All TypeExpr values compare equal to their ``str()`` representation,
+    so ``ScalarType("Int") == "Int"`` holds.
+    """
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, TypeExpr):
+            return str(self) == str(other)
+        if isinstance(other, str):
+            return str(self) == other
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(str(self))
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class ScalarType(TypeExpr):
     """A simple, non-parameterized type like ``Int`` or ``String``."""
 
@@ -27,8 +46,20 @@ class ScalarType(TypeExpr):
     def __str__(self) -> str:
         return self.name
 
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, ScalarType):
+            return self.name == other.name
+        if isinstance(other, str):
+            return self.name == other
+        if isinstance(other, ParameterizedType):
+            return False
+        return NotImplemented
 
-@dataclass(frozen=True)
+    def __hash__(self) -> int:
+        return hash(self.name)
+
+
+@dataclass(frozen=True, eq=False)
 class ParameterizedType(TypeExpr):
     """A type constructor applied to one or more type arguments.
 
@@ -41,6 +72,21 @@ class ParameterizedType(TypeExpr):
     def __str__(self) -> str:
         args_str = ", ".join(str(a) for a in self.arguments)
         return f"{self.constructor}[{args_str}]"
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, ParameterizedType):
+            return (
+                self.constructor == other.constructor
+                and self.arguments == other.arguments
+            )
+        if isinstance(other, str):
+            return str(self) == other
+        if isinstance(other, ScalarType):
+            return False
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(str(self))
 
 
 # ---------------------------------------------------------------------------

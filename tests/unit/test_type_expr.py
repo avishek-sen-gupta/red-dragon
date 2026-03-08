@@ -164,6 +164,63 @@ class TestConvenienceConstructors:
         assert str(result) == "Pointer[Array[Int]]"
 
 
+class TestTypeExprStringCompatibility:
+    """TypeExpr values compare equal to their string representations.
+
+    This enables gradual migration: code that stores TypeExpr in dicts
+    can still be queried with plain strings.
+    """
+
+    def test_scalar_equals_string(self):
+        assert ScalarType("Int") == "Int"
+
+    def test_scalar_equals_string_reverse(self):
+        assert "Int" == ScalarType("Int")
+
+    def test_scalar_not_equals_different_string(self):
+        assert ScalarType("Int") != "Float"
+
+    def test_parameterized_equals_string(self):
+        t = ParameterizedType("Pointer", (ScalarType("Int"),))
+        assert t == "Pointer[Int]"
+
+    def test_parameterized_equals_string_reverse(self):
+        t = ParameterizedType("Pointer", (ScalarType("Int"),))
+        assert "Pointer[Int]" == t
+
+    def test_nested_parameterized_equals_string(self):
+        t = ParameterizedType(
+            "Pointer", (ParameterizedType("Array", (ScalarType("Int"),)),)
+        )
+        assert t == "Pointer[Array[Int]]"
+
+    def test_scalar_hash_matches_string_hash(self):
+        """Required for correct dict/set behavior when mixing str and TypeExpr."""
+        assert hash(ScalarType("Int")) == hash("Int")
+
+    def test_parameterized_hash_matches_string_hash(self):
+        t = ParameterizedType("Pointer", (ScalarType("Int"),))
+        assert hash(t) == hash("Pointer[Int]")
+
+    def test_scalar_in_set_with_string(self):
+        """A set containing ScalarType('Int') should recognize 'Int' as duplicate."""
+        s = {ScalarType("Int")}
+        assert "Int" in s
+
+    def test_string_in_set_with_scalar(self):
+        s = {"Int"}
+        assert ScalarType("Int") in s
+
+    def test_empty_scalar_equals_empty_string(self):
+        assert ScalarType("") == ""
+
+    def test_scalar_not_equals_none(self):
+        assert ScalarType("Int") != None  # noqa: E711
+
+    def test_scalar_not_equals_int(self):
+        assert ScalarType("Int") != 42
+
+
 class TestTypeExprProperties:
     def test_scalar_constructor_name(self):
         """ScalarType has no constructor — it IS the base type."""
