@@ -1542,7 +1542,8 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 - **`_InferenceContext`** operates on `TypeExpr` — all registers, vars, return types, field types store `TypeExpr`
 - **`UNKNOWN` sentinel** (`UnknownType` singleton) replaces empty strings as the "type not yet known" marker; falsy for `if expr:` checks
 - **Builtin lookup tables** (`_BUILTIN_RETURN_TYPES`, `_BUILTIN_METHOD_RETURN_TYPES`) store `TypeExpr` values
-- **`TypeResolver`** and **`TypeConversionRules`** still accept/return strings (Phase 2)
+- **`TypeResolver`** and **`TypeConversionRules`** accept/return `TypeExpr`
+- **`ConversionResult.result_type`** is `TypeExpr` (default `UNKNOWN`)
 - **`TypeEnvironment`** stores frozen `TypeExpr` objects with string-compatible equality
 
 **Alternatives considered:**
