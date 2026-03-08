@@ -105,3 +105,6 @@ class TypeName(StrEnum):
     BOOL = "Bool"
     OBJECT = "Object"
     ARRAY = "Array"
+    POINTER = "Pointer"
+    MAP = "Map"
+    REGION = "Region"
