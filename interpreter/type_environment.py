@@ -7,6 +7,7 @@ from types import MappingProxyType
 
 from interpreter.function_signature import FunctionSignature
 from interpreter.type_expr import TypeExpr
+from interpreter.var_scope_info import VarScopeInfo
 
 
 @dataclass(frozen=True)
@@ -32,3 +33,7 @@ class TypeEnvironment:
     interface_implementations: MappingProxyType[str, tuple[str, ...]] = (
         MappingProxyType({})
     )
+    scoped_var_types: MappingProxyType[str, MappingProxyType[str, TypeExpr]] = (
+        MappingProxyType({})
+    )
+    var_scope_metadata: MappingProxyType[str, VarScopeInfo] = MappingProxyType({})

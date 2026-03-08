@@ -16,6 +16,7 @@ from interpreter.constants import CanonicalLiteral, Language
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.var_scope_info import VarScopeInfo
 from interpreter.type_expr import parse_type
 
 logger = logging.getLogger(__name__)
@@ -114,6 +115,12 @@ class TreeSitterEmitContext:
     )
     _current_func_label: str = ""
     _current_class_name: str = ""
+
+    # Block-scope tracking (LLVM-style: frontends disambiguate at emission time)
+    _block_scope_stack: list[dict[str, str]] = field(default_factory=list)
+    _scope_counter: int = 0
+    _var_scope_metadata: dict[str, VarScopeInfo] = field(default_factory=dict)
+    _base_declared_vars: set[str] = field(default_factory=set)
 
     # ── utility methods ──────────────────────────────────────────
 
@@ -279,3 +286,80 @@ class TreeSitterEmitContext:
     def pop_loop(self) -> None:
         self.loop_stack.pop()
         self.break_target_stack.pop()
+
+    # ── block-scope tracking (LLVM-style) ─────────────────────────
+
+    @property
+    def var_scope_metadata(self) -> dict[str, VarScopeInfo]:
+        """Metadata for mangled variable names: mangled_name → VarScopeInfo."""
+        return self._var_scope_metadata
+
+    def enter_block_scope(self) -> None:
+        """Push a new block scope onto the scope stack."""
+        self._block_scope_stack.append({})
+
+    def exit_block_scope(self) -> None:
+        """Pop the innermost block scope."""
+        self._block_scope_stack.pop()
+
+    def declare_block_var(self, name: str) -> str:
+        """Declare a variable in the current block scope.
+
+        If *name* shadows a variable from an outer scope, returns a mangled
+        name (e.g. ``x$1``) and records VarScopeInfo metadata. Otherwise
+        returns *name* unchanged.
+        """
+        # Check if name exists in any outer scope (stack entries or base)
+        shadows_outer = (
+            any(name in scope for scope in self._block_scope_stack[:-1])
+            if self._block_scope_stack
+            else False
+        )
+
+        # Also check if name was declared at base level (before any scope)
+        if not shadows_outer and self._block_scope_stack:
+            # Base-level vars are tracked as entries in an implicit scope 0
+            # We detect them by checking if name appears in an earlier scope
+            # or was declared at scope depth 0 (tracked via metadata lookup)
+            shadows_outer = (
+                any(name in scope for scope in self._block_scope_stack[:-1])
+                or any(
+                    info.original_name == name
+                    for info in self._var_scope_metadata.values()
+                )
+                or name in self._base_declared_vars
+            )
+
+        if shadows_outer:
+            self._scope_counter += 1
+            mangled = f"{name}${self._scope_counter}"
+            depth = len(self._block_scope_stack)
+            self._var_scope_metadata[mangled] = VarScopeInfo(
+                original_name=name, scope_depth=depth
+            )
+            if self._block_scope_stack:
+                self._block_scope_stack[-1][name] = mangled
+            return mangled
+
+        # No shadowing — record in current scope (if any) or base
+        if self._block_scope_stack:
+            self._block_scope_stack[-1][name] = name
+        else:
+            self._base_declared_vars.add(name)
+        return name
+
+    def resolve_var(self, name: str) -> str:
+        """Resolve a variable name through the block scope stack.
+
+        Walks from innermost to outermost scope, returning the mangled
+        name if found. Falls back to the original name.
+        """
+        for scope in reversed(self._block_scope_stack):
+            if name in scope:
+                return scope[name]
+        return name
+
+    def reset_block_scopes(self) -> None:
+        """Clear all block scopes (used at function boundaries)."""
+        self._block_scope_stack.clear()
+        self._base_declared_vars.clear()

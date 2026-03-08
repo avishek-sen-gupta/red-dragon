@@ -1748,3 +1748,25 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 - **TypeVar in LUB computation**: Deferred — LUB of two TypeVars is not yet needed; can be added when generic inference requires it
 
 **Consequences:** 20 new tests (10 unit for TypeVar ADT, 8 unit for TypeGraph subtype rules, 2 integration for bounded TypeVar with containers). All 9790 tests pass. No existing test changed.
+
+### ADR-095: LLVM-style frontend variable scoping with metadata (2026-03-09)
+
+**Context:** The type inference engine has per-function scoping (`scoped_var_types`), but two problems remain: (1) `flat_var_types()` collapses all scopes via `dict.update()`, so later functions overwrite earlier ones — `x: Int` in `foo()` and `x: String` in `bar()` produces `x: String` in the flat output; (2) block-scoped languages (Java, C, C++, C#, Go, Kotlin, Scala, Rust, TypeScript `let`/`const`) should not let inner-block variable declarations overwrite outer-scope types.
+
+**Decision:** Follow the LLVM compiler frontend approach: resolve variable scoping at IR emission time in the frontend, not in the inference engine. Frontends for block-scoped languages disambiguate variable names before emitting `STORE_VAR`/`LOAD_VAR`, so the IR never contains name collisions. Original names and scope metadata are preserved separately.
+
+**Design details:**
+- `TreeSitterEmitContext` gains a scope stack (`_block_scope_stack`) and methods: `enter_block_scope()`, `exit_block_scope()`, `declare_block_var(name)` → mangled name, `resolve_var(name)` → current binding
+- When a block-scoped frontend encounters a declaration that shadows an outer variable, `declare_block_var` returns a mangled name (e.g., `x$1`) and records metadata `VarScopeInfo(original_name, scope_depth)`
+- `STORE_VAR` and `LOAD_VAR` use the mangled name — the inference engine sees unique names, no collisions
+- Function-scoped frontends (Python, Ruby, PHP, COBOL, etc.) never call `enter_block_scope`, so behavior is unchanged
+- Mixed-scoping languages (JS/TS with `var` vs `let`) use `declare_block_var` for `let`/`const` and raw names for `var`
+- `TypeEnvironment` exposes `scoped_var_types` (per-function) and `var_scope_metadata` (mangled→original mapping)
+- `flat_var_types()` changed from `dict.update()` overwrite to `union_of()` merge
+
+**Alternatives considered:**
+- **SCOPE_ENTER/SCOPE_EXIT opcodes + STORE_LOCAL**: Rejected — adds complexity to the IR and inference engine. LLVM, GCC, and JVM all resolve scoping before or during IR emission, not in the IR itself.
+- **Per-frontend ScopingPolicy enum with label-based inference**: Rejected — fragile, depends on label naming conventions, can't handle mixed scoping (JS `var` vs `let`)
+- **Scope-qualified variable names (`func_foo_0::x`)**: Rejected — pollutes the public API and breaks all existing consumers of `var_types`
+
+**Consequences:** Core infrastructure commit adds scope tracker to context, metadata storage, flat_var_types fix, and scoped_var_types exposure. Per-frontend commits follow for each block-scoped language.
