@@ -1497,3 +1497,46 @@ Phase 3 — Multiple inheritance:
 - **No change** (document as known limitation): Rejected because the bug silently produces wrong types, which propagates to return type inference and function signatures.
 
 **Consequences:** Variable types are correctly isolated per function. Global variables remain visible inside functions via fallback lookup. The public `TypeEnvironment.var_types` API is unchanged (flat dict). Cross-language integration tests verify scoping across all 15 languages.
+
+---
+
+### ADR-085: Parameterized types via TypeExpr algebraic data type (2026-03-08)
+
+**Context:** The type system represented all types as flat strings (`"Int"`, `"String"`, `"Array"`). This meant C pointer types (`int*`, `int**`) collapsed to their base type (`"Int"`), losing pointer information. More broadly, parameterized types like `Array<String>`, `Map<String, Int>`, and `Pointer<Int>` couldn't be represented, queried for subtype relationships, or distinguished from their raw constructors.
+
+**Decision:** Introduce a `TypeExpr` algebraic data type with three forms:
+
+```python
+@dataclass(frozen=True)
+class TypeExpr: ...                          # base
+
+@dataclass(frozen=True)
+class ScalarType(TypeExpr):                  # e.g. Int, String
+    name: str
+
+@dataclass(frozen=True)
+class ParameterizedType(TypeExpr):           # e.g. Pointer[Int], Map[String, Int]
+    constructor: str
+    arguments: tuple[TypeExpr, ...]
+```
+
+Each `TypeExpr` has a canonical string representation via `__str__` that round-trips through `parse_type()`. This means parameterized type *strings* (like `"Pointer[Int]"`) flow through the existing string-based `TypeEnvironment` and type inference without requiring immediate migration of all consumers. The `TypeExpr` ADT is used for construction/formatting and for structured queries (subtype checks, LUB) via new `TypeGraph` methods.
+
+**TypeGraph extensions:**
+- `is_subtype_expr(child, parent)` — covariant: `Pointer[Int] ⊆ Pointer[Number]` iff `Int ⊆ Number`; `Pointer[Int] ⊆ Pointer` (raw constructor is supertype)
+- `common_supertype_expr(a, b)` — pairwise LUB: `LUB(Pointer[Int], Pointer[Float]) = Pointer[Number]`
+
+**New TypeName constants:** `Pointer`, `Map`, `Region` added to the type ontology DAG as children of `Any`.
+
+**C/C++ frontend integration:** The C frontend detects `pointer_declarator` nesting in declarations and parameters, counts the depth, and wraps the base type using `pointer(scalar(base))`. `int **pp` becomes `"Pointer[Pointer[Int]]"`. The C++ frontend reuses C's `lower_declaration` and gets this for free. Previously, bare pointer declarations (e.g., `float *fp;`) were silently dropped — now they emit proper `STORE_VAR` with pointer types.
+
+**Migration strategy:** Existing string-based APIs (`TypeEnvironment.register_types`, `var_types`) continue to work unchanged — parameterized types are represented as strings like `"Pointer[Int]"`. Future phases will:
+1. Migrate `TypeEnvironment` internals to store `TypeExpr` objects
+2. Extract parameterized types from Java generics, Python type hints, etc.
+3. Add type variable support for true generics
+
+**Alternatives considered:**
+- **String conventions without ADT** (e.g., `"Pointer[Int]"` with ad-hoc parsing): Rejected — fragile for nesting, no structured equality/hashing, no subtype logic.
+- **Immediate full migration** (replace all `str` with `TypeExpr`): Deferred — 9400+ tests depend on string-based APIs; incremental migration is safer.
+
+**Consequences:** C pointer types now carry full type information through the pipeline. The TypeExpr ADT provides a foundation for future parameterized type extraction across all frontends. TypeGraph can answer subtype and LUB questions for arbitrary nesting depth. No existing tests broken — all changes are additive.
