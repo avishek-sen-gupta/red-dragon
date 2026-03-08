@@ -22,6 +22,7 @@ class JavaFrontend(BaseFrontend):
 
     def _build_constants(self) -> GrammarConstants:
         return GrammarConstants(
+            for_initializer_field="init",
             attr_object_field="object",
             attr_attribute_field="field",
             attribute_node_type=JavaNodeType.FIELD_ACCESS,
