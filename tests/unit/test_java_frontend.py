@@ -61,7 +61,7 @@ class TestJavaVariables:
         instructions = _parse_java("class M { void m() { int x; x = 5; } }")
         stores = _find_all(instructions, Opcode.STORE_VAR)
         x_stores = [inst for inst in stores if "x" in inst.operands]
-        assert len(x_stores) >= 2
+        assert len(x_stores) == 2
 
 
 class TestJavaExpressions:
@@ -97,13 +97,13 @@ class TestJavaMethodCalls:
             'class M { void m() { System.out.println("hello"); } }'
         )
         calls = _find_all(instructions, Opcode.CALL_METHOD)
-        assert len(calls) >= 1
+        assert len(calls) == 1
         assert any("println" in inst.operands for inst in calls)
 
     def test_standalone_method_call(self):
         instructions = _parse_java("class M { void m() { foo(1, 2); } }")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
-        assert len(calls) >= 1
+        assert len(calls) == 1
         assert "foo" in calls[0].operands
 
     def test_object_creation(self):

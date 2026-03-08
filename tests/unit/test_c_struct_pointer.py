@@ -44,7 +44,7 @@ class TestArrowOperatorLowering:
         ir = _parse_and_lower(source)
         loads = _find_all(ir, Opcode.LOAD_FIELD)
         field_loads = [l for l in loads if "x" in l.operands]
-        assert len(field_loads) >= 1
+        assert len(field_loads) == 1
 
     def test_arrow_write_lowers_to_store_field(self):
         """p->x = 5 should lower to STORE_FIELD."""
@@ -55,7 +55,7 @@ class TestArrowOperatorLowering:
         ir = _parse_and_lower(source)
         stores = _find_all(ir, Opcode.STORE_FIELD)
         field_stores = [s for s in stores if "x" in s.operands]
-        assert len(field_stores) >= 1
+        assert len(field_stores) == 2
 
 
 # ── Executor: address-of on heap objects ─────────────────────────

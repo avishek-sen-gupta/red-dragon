@@ -47,7 +47,7 @@ class TestJavaTypeExtraction:
             for pt in pts
             if pt[0] == "x"
         ]
-        assert len(param_types) >= 1
+        assert len(param_types) == 1
         assert param_types[0][1] == "Int"
 
     def test_param_string_carries_type_hint(self):
@@ -58,7 +58,7 @@ class TestJavaTypeExtraction:
             for pt in pts
             if pt[0] == "s"
         ]
-        assert len(param_types) >= 1
+        assert len(param_types) == 1
         assert param_types[0][1] == "String"
 
     def test_field_decl_carries_type_hint(self):
@@ -73,7 +73,7 @@ class TestJavaTypeExtraction:
             for pt in pts
             if pt[0] == "this"
         ]
-        assert len(this_params) >= 1
+        assert len(this_params) == 1
         assert this_params[0][1] == "Dog"
 
 
@@ -102,7 +102,7 @@ class TestGoTypeExtraction:
             for pt in pts
             if pt[0] == "name"
         ]
-        assert len(param_types) >= 1
+        assert len(param_types) == 1
         assert param_types[0][1] == "String"
 
     def test_var_without_type_has_empty_hint(self):
@@ -134,7 +134,7 @@ class TestRustTypeExtraction:
             for pt in pts
             if pt[0] == "r"
         ]
-        assert len(param_types) >= 1
+        assert len(param_types) == 1
         assert param_types[0][1] == "Float"
 
     def test_const_bool_carries_type_hint(self):
@@ -165,7 +165,7 @@ class TestCTypeExtraction:
             for pt in pts
             if pt[0] == "x"
         ]
-        assert len(param_types) >= 1
+        assert len(param_types) == 1
         assert param_types[0][1] == "Float"
 
 
@@ -192,7 +192,7 @@ class TestCppTypeExtraction:
             for pt in pts
             if pt[0] == "x"
         ]
-        assert len(param_types) >= 1
+        assert len(param_types) == 1
         assert param_types[0][1] == "Float"
 
     def test_this_param_seeded_in_instance_method(self):
@@ -205,7 +205,7 @@ class TestCppTypeExtraction:
             for pt in pts
             if pt[0] == "this"
         ]
-        assert len(this_params) >= 1
+        assert len(this_params) == 1
         assert this_params[0][1] == "Dog"
 
 
@@ -232,7 +232,7 @@ class TestCSharpTypeExtraction:
             for pt in pts
             if pt[0] == "s"
         ]
-        assert len(param_types) >= 1
+        assert len(param_types) == 1
         assert param_types[0][1] == "String"
 
     def test_this_param_seeded_in_instance_method(self):
@@ -243,7 +243,7 @@ class TestCSharpTypeExtraction:
             for pt in pts
             if pt[0] == "this"
         ]
-        assert len(this_params) >= 1
+        assert len(this_params) == 1
         assert this_params[0][1] == "Dog"
 
 
@@ -268,7 +268,7 @@ class TestKotlinTypeExtraction:
             for pt in pts
             if pt[0] == "x"
         ]
-        assert len(param_types) >= 1
+        assert len(param_types) == 1
         assert param_types[0][1] == "Int"
 
     def test_property_string_carries_type_hint(self):
@@ -285,7 +285,7 @@ class TestKotlinTypeExtraction:
             for pt in pts
             if pt[0] == "this"
         ]
-        assert len(this_params) >= 1
+        assert len(this_params) == 1
         assert this_params[0][1] == "Dog"
 
 
@@ -308,7 +308,7 @@ class TestScalaTypeExtraction:
             for pt in pts
             if pt[0] == "x"
         ]
-        assert len(param_types) >= 1
+        assert len(param_types) == 1
         assert param_types[0][1] == "Int"
 
     def test_val_string_carries_type_hint(self):
@@ -323,7 +323,7 @@ class TestScalaTypeExtraction:
             for pt in pts
             if pt[0] == "this"
         ]
-        assert len(this_params) >= 1
+        assert len(this_params) == 1
         assert this_params[0][1] == "Dog"
 
 
@@ -346,7 +346,7 @@ class TestJavaScriptTypeExtraction:
             for pt in pts
             if pt[0] == "this"
         ]
-        assert len(this_params) >= 1
+        assert len(this_params) == 1
         assert this_params[0][1] == "Dog"
 
 
@@ -377,7 +377,7 @@ class TestPascalTypeExtraction:
             for pt in pts
             if pt[0] == "x"
         ]
-        assert len(param_types) >= 1
+        assert len(param_types) == 1
         assert param_types[0][1] == "Int"
 
 
@@ -402,7 +402,7 @@ class TestTypeScriptTypeExtraction:
             for pt in pts
             if pt[0] == "x"
         ]
-        assert len(param_types) >= 1
+        assert len(param_types) == 1
         assert param_types[0][1] == "Float"
 
     def test_param_string_carries_type_hint(self):
@@ -415,7 +415,7 @@ class TestTypeScriptTypeExtraction:
             for pt in pts
             if pt[0] == "name"
         ]
-        assert len(param_types) >= 1
+        assert len(param_types) == 1
         assert param_types[0][1] == "String"
 
     def test_this_param_seeded_in_instance_method(self):
@@ -426,7 +426,7 @@ class TestTypeScriptTypeExtraction:
             for pt in pts
             if pt[0] == "this"
         ]
-        assert len(this_params) >= 1
+        assert len(this_params) == 1
         assert this_params[0][1] == "Dog"
 
 
@@ -451,7 +451,7 @@ class TestPythonTypeExtraction:
             for pt in pts
             if pt[0] == "x"
         ]
-        assert len(param_types) >= 1
+        assert len(param_types) == 1
         assert param_types[0][1] == "Int"
 
     def test_untyped_param_has_empty_hint(self):
@@ -462,7 +462,7 @@ class TestPythonTypeExtraction:
             for pt in pts
             if pt[0] == "x"
         ]
-        assert len(param_types) >= 1
+        assert len(param_types) == 1
         assert param_types[0][1] == ""
 
 
@@ -487,7 +487,7 @@ class TestPHPTypeExtraction:
             for pt in pts
             if pt[0] == "$x"
         ]
-        assert len(param_types) >= 1
+        assert len(param_types) == 1
         assert param_types[0][1] == "Int"
 
     def test_param_string_carries_type_hint(self):
@@ -500,7 +500,7 @@ class TestPHPTypeExtraction:
             for pt in pts
             if pt[0] == "$name"
         ]
-        assert len(param_types) >= 1
+        assert len(param_types) == 1
         assert param_types[0][1] == "String"
 
     def test_this_param_seeded_in_instance_method(self):
@@ -513,5 +513,5 @@ class TestPHPTypeExtraction:
             for pt in pts
             if pt[0] == "$this"
         ]
-        assert len(this_params) >= 1
+        assert len(this_params) == 1
         assert this_params[0][1] == "Dog"

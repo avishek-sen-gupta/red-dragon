@@ -79,18 +79,13 @@ class TestCountOpcodes:
 class TestIrStats:
     def test_simple_assignment_has_const_and_store(self):
         result = ir_stats(SIMPLE_SOURCE)
-        assert result["CONST"] >= 1
-        assert result["STORE_VAR"] >= 1
+        assert result["CONST"] == 1
+        assert result["STORE_VAR"] == 1
 
     def test_function_source_has_call_and_return(self):
         result = ir_stats(FUNCTION_SOURCE)
-        assert (
-            result.get("CALL_FUNCTION", 0)
-            + result.get("CALL_METHOD", 0)
-            + result.get("CALL_UNKNOWN", 0)
-            >= 1
-        )
-        assert result["RETURN"] >= 1
+        assert result["CALL_FUNCTION"] == 1
+        assert result["RETURN"] == 2
 
     def test_returns_dict(self):
         result = ir_stats(SIMPLE_SOURCE)
@@ -99,8 +94,8 @@ class TestIrStats:
     def test_language_parameter(self):
         js_source = "let x = 42;\n"
         result = ir_stats(js_source, language="javascript")
-        assert result["CONST"] >= 1
-        assert result["STORE_VAR"] >= 1
+        assert result["CONST"] == 1
+        assert result["STORE_VAR"] == 1
 
     def test_all_counts_are_positive(self):
         result = ir_stats(SIMPLE_SOURCE)

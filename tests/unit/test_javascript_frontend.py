@@ -143,7 +143,7 @@ class TestJavaScriptFunctions:
     def test_function_call(self):
         instructions = _parse_js("add(1, 2);")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
-        assert len(calls) >= 1
+        assert len(calls) == 1
         assert "add" in calls[0].operands
 
     def test_arrow_function(self):

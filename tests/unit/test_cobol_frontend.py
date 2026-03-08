@@ -101,7 +101,7 @@ class TestDataDivisionLowering:
         instructions = frontend.lower(b"")
 
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
-        assert len(writes) >= 1  # At least one WRITE_REGION for initial value
+        assert len(writes) == 1  # Exactly one WRITE_REGION for initial value
         # Verify the write contains encoded bytes for "123"
         write_bytes = [w.operands for w in writes]
         assert any(
@@ -174,7 +174,7 @@ class TestDataDivisionLowering:
         instructions = frontend.lower(b"")
 
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
-        assert len(writes) >= 2  # One for each field with a VALUE
+        assert len(writes) == 2  # One for each field with a VALUE
 
 
 class TestProcedureDivisionLowering:

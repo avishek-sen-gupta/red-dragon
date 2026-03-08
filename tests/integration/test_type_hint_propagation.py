@@ -51,11 +51,11 @@ class TestJavaTypeHintPropagation:
         ]
 
         # 'a' and 'b' should have Int type hints
-        assert len(int_params) >= 2, f"Expected >= 2 Int params, got {len(int_params)}"
+        assert len(int_params) == 2, f"Expected 2 Int params, got {len(int_params)}"
         # 'x' and 'y' should have Float type hints
         assert (
-            len(float_params) >= 2
-        ), f"Expected >= 2 Float params, got {len(float_params)}"
+            len(float_params) == 2
+        ), f"Expected 2 Float params, got {len(float_params)}"
 
         # Local variable 'sum' should have Int type hint via builder var_types
         assert builder.var_types.get("sum") == "Int"
@@ -83,7 +83,7 @@ class TestGoTypeHintPropagation:
         ]
 
         # 'a' and 'b' should have Int type hints
-        assert len(int_params) >= 2, f"Expected >= 2 Int params, got {len(int_params)}"
+        assert len(int_params) == 2, f"Expected 2 Int params, got {len(int_params)}"
 
         # 'counter' should have Int type hint via builder var_types
         assert builder.var_types.get("counter") == "Int"

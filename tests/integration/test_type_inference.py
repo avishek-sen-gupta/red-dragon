@@ -44,7 +44,7 @@ class TestJavaTypeInference:
         )
         # Find the BINOP instruction
         binops = [i for i in instructions if i.opcode == Opcode.BINOP]
-        assert len(binops) >= 1
+        assert len(binops) == 1
         binop_reg = binops[0].result_reg
         assert env.register_types[binop_reg] == TypeName.INT
         assert env.var_types["x"] == "Int"
@@ -68,7 +68,7 @@ class M {
             and i.result_reg
             and env.register_types.get(i.result_reg) == "Int"
         ]
-        assert len(symbolics) >= 2
+        assert len(symbolics) == 2
 
     def test_mixed_int_float(self):
         """Java `double y = a + 1` where a is int — BINOP produces Float."""
@@ -105,7 +105,7 @@ class M {
             and i.result_reg
             and env.register_types.get(i.result_reg) == "Dog"
         ]
-        assert len(call_fns) >= 1
+        assert len(call_fns) == 1
 
     def test_string_variable(self):
         """Java String variable gets String type."""

@@ -278,8 +278,8 @@ class TestClosuresLowering:
         ]
         if lang in CLOSURE_LANGUAGES:
             assert (
-                len(labels) >= 2
-            ), f"[{lang}] closure should produce >= 2 nested func_ labels, got {labels}"
+                len(labels) == 2
+            ), f"[{lang}] closure should produce exactly 2 nested func_ labels, got {labels}"
 
 
 # ---------------------------------------------------------------------------

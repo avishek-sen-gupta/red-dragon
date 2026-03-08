@@ -1684,7 +1684,9 @@ class TestCallUnknown:
             _make_inst(Opcode.CALL_UNKNOWN, operands=["%0"]),
         ]
         env = infer_types(instructions, _default_resolver())
-        # Just verify no crash
+        # CALL_UNKNOWN with no result_reg should not pollute register_types
+        assert "%0" not in env.register_types
+        assert len(env.var_types) == 0
 
 
 # ---------------------------------------------------------------------------
