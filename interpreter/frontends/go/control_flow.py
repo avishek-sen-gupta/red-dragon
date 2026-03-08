@@ -20,6 +20,18 @@ logger = logging.getLogger(__name__)
 
 
 def lower_go_if(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower Go if statement, including optional init statement.
+
+    Go allows ``if x := expr; cond { }``.  The init variable is scoped
+    to the entire if/else chain.
+    """
+    init_node = node.child_by_field_name("initializer")
+    scope_entered = init_node is not None and ctx.block_scoped
+    if scope_entered:
+        ctx.enter_block_scope()
+    if init_node:
+        ctx.lower_stmt(init_node)
+
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
     alt_node = node.child_by_field_name(ctx.constants.if_alternative_field)
@@ -59,6 +71,9 @@ def lower_go_if(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(Opcode.BRANCH, label=end_label)
 
     ctx.emit(Opcode.LABEL, label=end_label)
+
+    if scope_entered:
+        ctx.exit_block_scope()
 
 
 # -- Go: for statement -----------------------------------------------------

@@ -962,3 +962,44 @@ z = x
         # x should appear multiple times (outer init + loop assignment) with no mangling
         x_stores = [n for n in stores if n == "x"]
         assert len(x_stores) >= 2
+
+
+# ---------------------------------------------------------------------------
+# Go if-init scoping (P0 #1)
+# ---------------------------------------------------------------------------
+
+
+class TestGoIfInitScoping:
+    """Go if x := expr; cond { } — init var should be scoped to the if chain."""
+
+    def test_if_init_shadows_outer(self):
+        source = """
+        package main
+        func main() {
+            x := 99
+            if x := 42; x > 0 {
+                _ = x
+            }
+            z := x
+        }
+        """
+        ir = _lower(GoFrontend, "go", source)
+        stores = _store_var_names(ir)
+        mangled = [n for n in stores if n.startswith("x$")]
+        assert len(mangled) >= 1
+        assert "x" in stores
+
+    def test_if_init_no_shadow_no_mangle(self):
+        source = """
+        package main
+        func main() {
+            if y := 42; y > 0 {
+                _ = y
+            }
+        }
+        """
+        ir = _lower(GoFrontend, "go", source)
+        stores = _store_var_names(ir)
+        assert "y" in stores
+        mangled = [n for n in stores if n.startswith("y$")]
+        assert len(mangled) == 0
