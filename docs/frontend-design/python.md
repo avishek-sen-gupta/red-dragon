@@ -403,3 +403,5 @@ STORE_VAR greet %9
 10. **F-string interpolation**: The `lower_python_string` handler decomposes f-strings into `CONST` fragments and interpolation results concatenated via `BINOP("+")`. The `lower_interpolation` handler extracts the inner expression, while `string_content`, `string_start`, `string_end`, `format_specifier`, and `type_conversion` are all lowered as `CONST` literals.
 
 11. **Pure function architecture**: All lowering methods are pure functions taking `(ctx: TreeSitterEmitContext, node)` as arguments. The `PythonFrontend` class in `frontend.py` is a thin orchestrator that builds dispatch tables from these functions via `_build_expr_dispatch()` and `_build_stmt_dispatch()`.
+
+12. **Scoping model** -- Uses default `BLOCK_SCOPED = False` (function-scoped). All variables within a function share a single flat namespace -- no `$` mangling occurs. Nested blocks (`if`, `for`, `with`) do not create new scopes.

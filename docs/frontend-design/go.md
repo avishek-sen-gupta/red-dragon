@@ -292,3 +292,5 @@ Note how `func main()` body is inlined at the top level (not wrapped in a functi
 7. **Range-based for uses synthetic variables** -- The range loop increments `__for_idx` (a synthetic name) rather than the user's index variable. This is a known simplification.
 
 8. **`GoNodeType` constants** -- All tree-sitter node type strings are centralised in `node_types.py` as `GoNodeType` class attributes, so typos are caught at import time and grep/refactor is trivial.
+
+9. **Scoping model** -- Uses `BLOCK_SCOPED = True` (LLVM-style name mangling). Shadowed variables in nested blocks, range-for loop variables, and C-style for-loop init declarations are renamed (`x` → `x$1`) to disambiguate. See [base-frontend.md](base-frontend.md#block-scopes) for the general mechanism.
