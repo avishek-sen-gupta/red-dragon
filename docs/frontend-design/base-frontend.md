@@ -91,6 +91,7 @@ These return pure data -- a `GrammarConstants` dataclass, two dispatch dicts map
 |---|---|---|
 | `while_condition_field` | `"condition"` | While condition |
 | `while_body_field` | `"body"` | While body |
+| `for_initializer_field` | `"initializer"` | For-loop init (Java overrides to `"init"`) |
 | `for_condition_field` | `"condition"` | For condition |
 | `for_body_field` | `"body"` | For body |
 | `for_update_field` | `"update"` | For update expression |
@@ -255,7 +256,7 @@ Shared pure-function lowerers used by multiple language frontends. Each function
 |---|---|---|
 | `lower_if` | `BRANCH_IF` + labels | If/elif/else chains |
 | `lower_while` | Labels + `BRANCH_IF` loop | While loops |
-| `lower_c_style_for` | Init + condition + body + update | C-style for loops |
+| `lower_c_style_for` | Init + condition + body + update | C-style for loops; wraps in block scope when `block_scoped=True` so init vars (e.g. `for(int i=0;...)`) are scoped to the loop |
 | `lower_break` | `BRANCH` | Break via `break_target_stack` |
 | `lower_continue` | `BRANCH` | Continue via `loop_stack` |
 

@@ -98,7 +98,7 @@ The JavaScript frontend inherits base defaults for `none_literal` (`"None"`), `t
 | `return_statement` | `common_assign.lower_return` | `RETURN` |
 | `if_statement` | `js_cf.lower_js_if` | `BRANCH_IF` + labels |
 | `while_statement` | `common_cf.lower_while` | `LABEL` + `BRANCH_IF` loop |
-| `for_statement` | `common_cf.lower_c_style_for` | C-style for(init; cond; update) loop |
+| `for_statement` | `common_cf.lower_c_style_for` | C-style for(init; cond; update) loop; init vars block-scoped (TypeScript inherits this) |
 | `for_in_statement` | `js_cf.lower_for_in` | for...in / for...of dispatch |
 | `function_declaration` | `js_decl.lower_js_function_def` | Named function definition |
 | `class_declaration` | `js_decl.lower_js_class_def` | Class with `method_definition` and `class_static_block` handling |
