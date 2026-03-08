@@ -5,11 +5,20 @@ from __future__ import annotations
 from interpreter.frontends.c import CFrontend
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.type_environment_builder import TypeEnvironmentBuilder
 
 
 def _parse_and_lower(source: str) -> list[IRInstruction]:
     frontend = CFrontend(TreeSitterParserFactory(), "c")
     return frontend.lower(source.encode("utf-8"))
+
+
+def _parse_and_lower_with_types(
+    source: str,
+) -> tuple[list[IRInstruction], TypeEnvironmentBuilder]:
+    frontend = CFrontend(TreeSitterParserFactory(), "c")
+    instructions = frontend.lower(source.encode("utf-8"))
+    return instructions, frontend.type_env_builder
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:
@@ -756,3 +765,45 @@ void f() {
         # No unsupported SYMBOLIC
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+
+class TestCFrontendPointerTypeSeed:
+    """Pointer declarations should seed Pointer[BaseType] in type_env_builder."""
+
+    def test_int_pointer_variable_gets_pointer_int(self):
+        """int *p = &x; should seed var_types['p'] = 'Pointer[Int]'."""
+        _, builder = _parse_and_lower_with_types("void f() { int *p = &x; }")
+        assert builder.var_types["p"] == "Pointer[Int]"
+
+    def test_float_pointer_variable(self):
+        """float *fp; should seed var_types['fp'] = 'Pointer[Float]'."""
+        _, builder = _parse_and_lower_with_types("void f() { float *fp; }")
+        assert builder.var_types["fp"] == "Pointer[Float]"
+
+    def test_double_pointer_variable(self):
+        """int **pp; should seed var_types['pp'] = 'Pointer[Pointer[Int]]'."""
+        _, builder = _parse_and_lower_with_types("void f() { int **pp; }")
+        assert builder.var_types["pp"] == "Pointer[Pointer[Int]]"
+
+    def test_non_pointer_unchanged(self):
+        """int x = 42; should still seed var_types['x'] = 'Int'."""
+        _, builder = _parse_and_lower_with_types("void f() { int x = 42; }")
+        assert builder.var_types["x"] == "Int"
+
+    def test_pointer_parameter_gets_pointer_type(self):
+        """int f(int *arr) should seed param type as Pointer[Int]."""
+        _, builder = _parse_and_lower_with_types("int f(int *arr) { return *arr; }")
+        # Find the param type for 'arr'
+        func_label = next(k for k in builder.func_param_types if "f" in k)
+        param_types = dict(builder.func_param_types[func_label])
+        assert param_types["arr"] == "Pointer[Int]"
+
+    def test_char_pointer_gets_pointer_int(self):
+        """char *s; — char maps to Int, so char* is Pointer[Int]."""
+        _, builder = _parse_and_lower_with_types("void f() { char *s; }")
+        assert builder.var_types["s"] == "Pointer[Int]"
+
+    def test_void_pointer(self):
+        """void *vp; — void maps to Any, so void* is Pointer[Any]."""
+        _, builder = _parse_and_lower_with_types("void f() { void *vp; }")
+        assert builder.var_types["vp"] == "Pointer[Any]"
