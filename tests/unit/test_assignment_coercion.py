@@ -7,6 +7,7 @@ from interpreter.conversion_result import _identity
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.identity_conversion_rules import IdentityConversionRules
 from interpreter.null_type_resolver import NullTypeResolver
+from interpreter.type_expr import UNKNOWN, scalar
 from interpreter.type_resolver import TypeResolver
 
 
@@ -109,3 +110,29 @@ class TestNullTypeResolverAssignment:
         resolver = NullTypeResolver()
         coercer = resolver.resolve_assignment(TypeName.INT, TypeName.FLOAT)
         assert coercer(42) == 42
+
+
+class TestAssignmentCoercionTypeExpr:
+    """coerce_assignment accepts TypeExpr arguments."""
+
+    def test_float_to_int_with_type_expr(self):
+        coercer = _rules().coerce_assignment(
+            scalar(TypeName.FLOAT), scalar(TypeName.INT)
+        )
+        assert coercer(3.7) == 3
+
+    def test_int_to_float_with_type_expr(self):
+        coercer = _rules().coerce_assignment(
+            scalar(TypeName.INT), scalar(TypeName.FLOAT)
+        )
+        result = coercer(5)
+        assert isinstance(result, float)
+
+    def test_same_type_returns_identity(self):
+        coercer = _rules().coerce_assignment(scalar(TypeName.INT), scalar(TypeName.INT))
+        assert coercer(42) == 42
+
+    def test_resolver_with_unknown_returns_identity(self):
+        resolver = TypeResolver(DefaultTypeConversionRules())
+        coercer = resolver.resolve_assignment(UNKNOWN, scalar(TypeName.INT))
+        assert coercer is _identity

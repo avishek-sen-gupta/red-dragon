@@ -4,6 +4,7 @@ from interpreter.constants import TypeName
 from interpreter.conversion_result import IDENTITY_CONVERSION
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.identity_conversion_rules import IdentityConversionRules
+from interpreter.type_expr import ScalarType, TypeExpr, UNKNOWN, scalar
 
 
 def _rules() -> DefaultTypeConversionRules:
@@ -116,3 +117,42 @@ class TestIdentityConversionRules:
         rules = IdentityConversionRules()
         result = rules.resolve("+", TypeName.INT, TypeName.INT)
         assert result is IDENTITY_CONVERSION
+
+
+class TestConversionResultTypeExpr:
+    """ConversionResult.result_type should be TypeExpr, not str."""
+
+    def test_arithmetic_result_type_is_type_expr(self):
+        result = _rules().resolve("+", scalar(TypeName.INT), scalar(TypeName.INT))
+        assert isinstance(result.result_type, TypeExpr)
+        assert isinstance(result.result_type, ScalarType)
+
+    def test_comparison_result_type_is_type_expr(self):
+        result = _rules().resolve("==", scalar(TypeName.INT), scalar(TypeName.FLOAT))
+        assert isinstance(result.result_type, ScalarType)
+        assert result.result_type == TypeName.BOOL
+
+    def test_identity_conversion_result_type_is_unknown(self):
+        assert IDENTITY_CONVERSION.result_type is UNKNOWN
+        assert not IDENTITY_CONVERSION.result_type
+
+    def test_accepts_type_expr_arguments(self):
+        """resolve() should accept TypeExpr objects, not just strings."""
+        result = _rules().resolve("+", scalar(TypeName.INT), scalar(TypeName.FLOAT))
+        assert result.result_type == TypeName.FLOAT
+        assert isinstance(result.left_coercer(3), float)
+
+    def test_division_with_type_expr_returns_type_expr(self):
+        result = _rules().resolve("/", scalar(TypeName.INT), scalar(TypeName.INT))
+        assert isinstance(result.result_type, ScalarType)
+        assert result.result_type == TypeName.INT
+        assert result.operator_override == "//"
+
+    def test_modulo_with_type_expr_returns_type_expr(self):
+        result = _rules().resolve("%", scalar(TypeName.INT), scalar(TypeName.INT))
+        assert isinstance(result.result_type, ScalarType)
+
+    def test_bool_promotion_with_type_expr(self):
+        result = _rules().resolve("+", scalar(TypeName.BOOL), scalar(TypeName.INT))
+        assert isinstance(result.result_type, ScalarType)
+        assert result.result_type == TypeName.INT

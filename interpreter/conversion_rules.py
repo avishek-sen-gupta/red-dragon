@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable
 
 from interpreter.conversion_result import ConversionResult
+from interpreter.type_expr import TypeExpr
 
 
 class TypeConversionRules(ABC):
@@ -16,12 +17,12 @@ class TypeConversionRules(ABC):
 
     @abstractmethod
     def resolve(
-        self, operator: str, left_type: str, right_type: str
+        self, operator: str, left_type: TypeExpr, right_type: TypeExpr
     ) -> ConversionResult: ...
 
     @abstractmethod
     def coerce_assignment(
-        self, value_type: str, target_type: str
+        self, value_type: TypeExpr, target_type: TypeExpr
     ) -> Callable[[Any], Any]:
         """Return a function that coerces a value of value_type into target_type.
 

@@ -436,10 +436,9 @@ def _infer_binop(
     operator = str(inst.operands[0])
     left_hint = ctx.register_types.get(str(inst.operands[1]), UNKNOWN)
     right_hint = ctx.register_types.get(str(inst.operands[2]), UNKNOWN)
-    # TypeResolver still accepts strings (Phase 2 migration)
-    result = type_resolver.resolve_binop(operator, str(left_hint), str(right_hint))
+    result = type_resolver.resolve_binop(operator, left_hint, right_hint)
     if result.result_type:
-        ctx.register_types[inst.result_reg] = parse_type(result.result_type)
+        ctx.register_types[inst.result_reg] = result.result_type
 
 
 _UNOP_FIXED_TYPES: dict[str, TypeExpr] = {
