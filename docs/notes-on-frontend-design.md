@@ -17,8 +17,8 @@ This document describes the design of the frontend subsystem — the pipeline st
 9. [LLM Client Abstraction](#9-llm-client-abstraction)
 10. [Frontend Factory](#10-frontend-factory)
 11. [Lowering Patterns Reference](#11-lowering-patterns-reference)
-12. [Module Map](#14-module-map)
-13. [End-to-End Worked Example](#15-end-to-end-worked-example)
+12. [Module Map](#12-module-map)
+13. [End-to-End Worked Example](#13-end-to-end-worked-example)
 
 ---
 
@@ -188,184 +188,244 @@ The parser produces a tree-sitter `Tree` object whose `root_node` the frontend t
 
 ---
 
-## 5. BaseFrontend — The Lowering Engine
+## 5. BaseFrontend and TreeSitterEmitContext — The Lowering Engine
 
-`interpreter/frontends/_base.py` (~950 lines) contains the language-agnostic lowering engine that all 15 deterministic frontends inherit from.
+The lowering engine is split across two classes:
 
-### Architecture: dispatch tables
+- **`BaseFrontend`** (`interpreter/frontends/_base.py`) — the abstract base class that all 15 deterministic frontends inherit from. Handles parsing, context creation, and provides the subclass hook methods.
+- **`TreeSitterEmitContext`** (`interpreter/frontends/context.py`) — a mutable dataclass that holds all lowering state (registers, labels, instructions, scopes, type info) and performs the recursive descent. All lowering functions receive `ctx` as their first argument.
 
-The central design pattern is **two dispatch tables** mapping tree-sitter node type names to handler methods:
+### Architecture: context mode with pure-function dispatch
+
+Each language frontend overrides four `_build_*()` hook methods on `BaseFrontend`:
 
 ```python
 class BaseFrontend(Frontend):
-    def __init__(self):
-        self._reg_counter: int = 0
-        self._label_counter: int = 0
-        self._instructions: list[IRInstruction] = []
-        self._source: bytes = b""
-        self._loop_stack: list[dict[str, str]] = []
-        self._break_target_stack: list[str] = []
-        self._STMT_DISPATCH: dict[str, Callable] = {}   # ← subclass populates
-        self._EXPR_DISPATCH: dict[str, Callable] = {}   # ← subclass populates
+    BLOCK_SCOPED: bool = False     # True for block-scoped languages
+
+    def _build_constants(self) -> GrammarConstants: ...
+    def _build_stmt_dispatch(self) -> dict[str, Callable]: ...
+    def _build_expr_dispatch(self) -> dict[str, Callable]: ...
+    def _build_type_map(self) -> dict[str, str]: ...
 ```
 
-Subclasses populate these tables in their `__init__` with language-specific node types. The base class provides common handlers that most languages reuse.
-
-### Overridable constants
-
-Tree-sitter grammars use different field names for equivalent constructs. BaseFrontend exposes these as overridable class attributes (`interpreter/frontends/_base.py:25`):
+These return pure data — a `GrammarConstants` dataclass, two dispatch dicts mapping tree-sitter node types to pure functions `(ctx, node) → str|None`, and a type normalization map. `BaseFrontend.lower()` assembles these into a `TreeSitterEmitContext` and kicks off recursive descent:
 
 ```python
-# Function definition fields
-FUNC_NAME_FIELD: str = "name"
-FUNC_PARAMS_FIELD: str = "parameters"
-FUNC_BODY_FIELD: str = "body"
+def lower(self, source: bytes) -> list[IRInstruction]:
+    tree = self._parser_factory.get_parser(self._language).parse(source)
+    constants = self._build_constants()
+    return self._lower_with_context(tree.root_node, source, constants)
 
-# If statement fields
-IF_CONDITION_FIELD: str = "condition"
-IF_CONSEQUENCE_FIELD: str = "consequence"
-IF_ALTERNATIVE_FIELD: str = "alternative"
-
-# Canonical literal constants (Python-form, shared by all frontends)
-NONE_LITERAL: str = "None"
-TRUE_LITERAL: str = "True"
-FALSE_LITERAL: str = "False"
-DEFAULT_RETURN_VALUE: str = "None"  # C: "0", Rust/Scala: "()"
-
-# Attribute access node type
-ATTRIBUTE_NODE_TYPE: str = "attribute"  # Python: "attribute", JS: "member_expression"
-ATTR_OBJECT_FIELD: str = "object"
-ATTR_ATTRIBUTE_FIELD: str = "attribute"  # Python: "attribute", JS: "property"
+def _lower_with_context(self, root, source, constants):
+    ctx = TreeSitterEmitContext(
+        source=source,
+        constants=constants,
+        stmt_dispatch=self._build_stmt_dispatch(),
+        expr_dispatch=self._build_expr_dispatch(),
+        type_map=self._build_type_map(),
+        block_scoped=self.BLOCK_SCOPED,
+        ...
+    )
+    ctx.emit(Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)
+    ctx.lower_block(root)
+    self._type_env_builder.var_scope_metadata = dict(ctx.var_scope_metadata)
+    return ctx.instructions
 ```
 
-This enables the **same lowering logic** to work across grammars that structure equivalent constructs differently.
+### GrammarConstants
 
-### Code generation primitives
-
-Three primitives form the foundation (`interpreter/frontends/_base.py:79`):
+`GrammarConstants` (`interpreter/frontends/context.py`) is a frozen dataclass that centralizes all language-specific grammar field names, node type sets, and literal values:
 
 ```python
-def _fresh_reg(self) -> str:
-    r = f"%{self._reg_counter}"
-    self._reg_counter += 1
-    return r
+@dataclass(frozen=True)
+class GrammarConstants:
+    # Field names (tree-sitter child_by_field_name)
+    func_name_field: str = "name"
+    func_params_field: str = "parameters"
+    func_body_field: str = "body"
+    if_condition_field: str = "condition"
+    if_consequence_field: str = "consequence"
+    if_alternative_field: str = "alternative"
+    while_condition_field: str = "condition"
+    while_body_field: str = "body"
+    for_condition_field: str = "condition"
+    for_body_field: str = "body"
+    for_update_field: str = "update"
+    call_function_field: str = "function"
+    call_arguments_field: str = "arguments"
+    class_name_field: str = "name"
+    class_body_field: str = "body"
+    assign_left_field: str = "left"
+    assign_right_field: str = "right"
+    attr_object_field: str = "object"
+    attr_attribute_field: str = "attribute"
+    subscript_value_field: str = "value"
+    subscript_index_field: str = "index"
 
-def _fresh_label(self, prefix: str = "L") -> str:
-    lbl = f"{prefix}_{self._label_counter}"
-    self._label_counter += 1
-    return lbl
+    # Node type sets
+    block_node_types: frozenset[str] = frozenset()    # types iterated by lower_block()
+    comment_types: frozenset[str] = frozenset()       # filtered out
+    noise_types: frozenset[str] = frozenset()         # filtered out
 
-def _emit(self, opcode, *, result_reg="", operands=[], label="",
-          source_location=NO_SOURCE_LOCATION, node=None) -> IRInstruction:
-    # Auto-derives source_location from node if not provided
-    inst = IRInstruction(opcode=opcode, result_reg=result_reg or None, ...)
-    self._instructions.append(inst)
-    return inst
+    # Canonical literals
+    none_literal: str = "None"
+    true_literal: str = "True"
+    false_literal: str = "False"
+    default_return_value: str = "None"     # C: "0", Rust/Scala: "()"
+
+    # Special node types
+    paren_expr_type: str = "parenthesized_expression"
+    attribute_node_type: str = "attribute"
 ```
 
-### Entry point
+This replaces the old per-class attribute overrides. Each frontend returns a customized `GrammarConstants` from `_build_constants()`.
 
-`lower()` (`interpreter/frontends/_base.py:128`) resets all state, emits the entry label, and kicks off recursive descent:
+### TreeSitterEmitContext — state and recursive descent
 
-```python
-def lower(self, tree, source: bytes) -> list[IRInstruction]:
-    self._reg_counter = 0
-    self._label_counter = 0
-    self._instructions = []
-    self._source = source
-    self._loop_stack = []
-    self._break_target_stack = []
-    root = tree.root_node
-    self._emit(Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)
-    self._lower_block(root)
-    return self._instructions
-```
+`TreeSitterEmitContext` holds all mutable lowering state:
 
-### Dispatch flow
+| Category | Fields |
+|---|---|
+| **Configuration** | `source`, `language`, `constants`, `type_map`, `stmt_dispatch`, `expr_dispatch`, `block_scoped` |
+| **Counters** | `reg_counter`, `label_counter` |
+| **Output** | `instructions: list[IRInstruction]` |
+| **Loop tracking** | `loop_stack`, `break_target_stack` |
+| **Type info** | `type_env_builder`, `_current_func_label`, `_current_class_name` |
+| **Block scopes** | `_block_scope_stack`, `_scope_counter`, `_var_scope_metadata`, `_base_declared_vars` |
+
+**Code generation primitives:**
+
+| Method | Purpose |
+|---|---|
+| `fresh_reg() → str` | Generate `%0`, `%1`, ... |
+| `fresh_label(prefix) → str` | Generate `if_true_0`, `while_cond_1`, ... |
+| `emit(opcode, ..., node=...) → IRInstruction` | Emit instruction, auto-derive source location from AST node |
+| `node_text(node) → str` | Extract source text from tree-sitter node |
+| `source_loc(node) → SourceLocation` | Extract AST span |
+
+**Recursive descent entry points:**
+
+| Method | Behaviour |
+|---|---|
+| `lower_block(node)` | If node type is in `stmt_dispatch` and not in `block_node_types`, dispatch directly. Otherwise iterate named children, calling `lower_stmt()` on each. Auto-enters/exits block scopes if `block_scoped=True` and node type is in `block_node_types`. |
+| `lower_stmt(node)` | Filter comments/noise. Check `stmt_dispatch` first; if found, call handler. Else check `block_node_types` for redirect to `lower_block()`. Else fallback to `lower_expr()`. |
+| `lower_expr(node) → str` | Check `expr_dispatch`; if found, call handler and return register. Else emit `SYMBOLIC "unsupported:type"` and return register. |
+
+**Dispatch flow:**
 
 ```mermaid
 flowchart TD
-    lb["_lower_block(node)"]
-    stmt_match{"node.type in\n_STMT_DISPATCH?"}
-    handler1["call handler directly"]
-    iterate["iterate node.children"]
-    ls["_lower_stmt(child)"]
-    skip["Skip comments\nand noise nodes"]
-    stmt_match2{"child.type in\n_STMT_DISPATCH?"}
-    handler2["call handler"]
-    le["_lower_expr(child)"]
-    expr_match{"child.type in\n_EXPR_DISPATCH?"}
-    handler3["call handler\n→ return register"]
+    lb["lower_block(node)"]
+    scope{"block_scoped AND\nnode in block_node_types?"}
+    enter["enter_block_scope()"]
+    iterate["iterate named children"]
+    ls["lower_stmt(child)"]
+    exit["exit_block_scope()"]
+    skip["Skip comments/noise"]
+    stmt_match{"child.type in\nstmt_dispatch?"}
+    handler["call handler(ctx, child)"]
+    block_match{"child.type in\nblock_node_types?"}
+    redirect["lower_block(child)"]
+    le["lower_expr(child)"]
+    expr_match{"child.type in\nexpr_dispatch?"}
+    handler2["call handler(ctx, child)\n→ return register"]
     symbolic["emit SYMBOLIC\nunsupported:type\n→ return register"]
 
-    lb --> stmt_match
-    stmt_match -- "yes" --> handler1
-    stmt_match -- "no" --> iterate --> ls
-    ls --> skip
-    ls --> stmt_match2
-    stmt_match2 -- "yes" --> handler2
-    stmt_match2 -- "no (fallback)" --> le
+    lb --> scope
+    scope -- "yes" --> enter --> iterate
+    scope -- "no" --> iterate
+    iterate --> ls --> skip
+    skip --> stmt_match
+    stmt_match -- "yes" --> handler
+    stmt_match -- "no" --> block_match
+    block_match -- "yes" --> redirect
+    block_match -- "no (fallback)" --> le
     le --> expr_match
-    expr_match -- "yes" --> handler3
+    expr_match -- "yes" --> handler2
     expr_match -- "no (fallback)" --> symbolic
+    handler --> exit
+    redirect --> exit
+    le --> exit
 ```
 
 The **fallback to SYMBOLIC** is a critical design decision: unknown constructs produce a `SYMBOLIC` instruction with a descriptive hint rather than crashing. This enables graceful degradation — the VM can still execute the rest of the program symbolically.
 
-### Common expression lowerers
+### Common lowerers (`interpreter/frontends/common/`)
 
-BaseFrontend provides reusable handlers that most languages share:
+Shared pure-function lowerers used by multiple language frontends. Each function takes `(ctx: TreeSitterEmitContext, node)`:
 
-| Handler | Opcode(s) | Description |
+**`common/expressions.py`** — expression lowerers:
+
+| Function | Opcode(s) | Description |
 |---|---|---|
-| `_lower_const_literal` | `CONST` | Number, string literals (raw text) |
-| `_lower_canonical_none` | `CONST "None"` | Null/nil/undefined → canonical `"None"` |
-| `_lower_canonical_true` | `CONST "True"` | Boolean true → canonical `"True"` |
-| `_lower_canonical_false` | `CONST "False"` | Boolean false → canonical `"False"` |
-| `_lower_canonical_bool` | `CONST "True"`/`"False"` | Boolean literal (reads text to decide) |
-| `_lower_identifier` | `LOAD_VAR` | Variable references |
-| `_lower_paren` | (delegates) | Unwrap parenthesised expression |
-| `_lower_binop` | `BINOP` | Binary operators: lower left, extract op, lower right |
-| `_lower_comparison` | `BINOP` | Comparisons treated as binary ops |
-| `_lower_unop` | `UNOP` | Unary operators |
-| `_lower_call` | `CALL_FUNCTION` / `CALL_METHOD` / `CALL_UNKNOWN` | Function/method calls (see below) |
-| `_lower_attribute` | `LOAD_FIELD` | `obj.field` access |
-| `_lower_subscript` | `LOAD_INDEX` | `arr[i]` access |
-| `_lower_list_literal` | `NEW_ARRAY` + `STORE_INDEX` | List/array construction |
-| `_lower_dict_literal` | `NEW_OBJECT` + `STORE_INDEX` | Dictionary construction |
+| `lower_const_literal` | `CONST` | Number, string literals (raw text) |
+| `lower_canonical_none` | `CONST "None"` | Null/nil/undefined → canonical `"None"` |
+| `lower_canonical_true/false/bool` | `CONST "True"`/`"False"` | Boolean literals |
+| `lower_identifier` | `LOAD_VAR` | Variable references (uses `ctx.resolve_var()` for block scoping) |
+| `lower_paren` | (delegates) | Unwrap parenthesised expression |
+| `lower_binop` | `BINOP` | Binary operators |
+| `lower_comparison` | `BINOP` | Comparisons as binary ops |
+| `lower_unop` | `UNOP` | Unary operators |
+| `lower_call` | `CALL_FUNCTION` / `CALL_METHOD` / `CALL_UNKNOWN` | Function/method calls (three-way split) |
+| `lower_attribute` | `LOAD_FIELD` | `obj.field` access |
+| `lower_subscript` | `LOAD_INDEX` | `arr[i]` access |
+| `lower_list_literal` | `NEW_ARRAY` + `STORE_INDEX` | List/array construction |
+| `lower_dict_literal` | `NEW_OBJECT` + `STORE_INDEX` | Dictionary construction |
+| `lower_store_target` | `STORE_VAR` / `STORE_FIELD` / `STORE_INDEX` | Assignment target dispatch (uses `ctx.resolve_var()` for block scoping) |
+
+**`common/assignments.py`** — assignment/statement lowerers:
+
+| Function | Pattern | Description |
+|---|---|---|
+| `lower_assignment` | `STORE_VAR` / `STORE_FIELD` / `STORE_INDEX` | Simple assignment |
+| `lower_augmented_assignment` | `BINOP` + store | `x += 1` → load, binop, store |
+| `lower_return` | `RETURN` | Return with optional value |
+| `lower_expression_statement` | (delegates) | Unwrap expression statement |
+
+**`common/control_flow.py`** — control flow lowerers:
+
+| Function | Pattern | Description |
+|---|---|---|
+| `lower_if` | `BRANCH_IF` + labels | If/elif/else chains |
+| `lower_while` | Labels + `BRANCH_IF` loop | While loops |
+| `lower_c_style_for` | Init + condition + body + update | C-style for loops |
+| `lower_break` / `lower_continue` | `BRANCH` | Loop control via stack |
+
+**`common/declarations.py`** — declaration lowerers:
+
+| Function | Description |
+|---|---|
+| `lower_function_def` | Function definitions with type extraction and parameter seeding |
+| `lower_params` / `lower_param` | Parameter lowering with type seeding |
+| `lower_class_def` | Class definitions with interface extraction |
+
+**`common/exceptions.py`** — exception lowerers:
+
+| Function | Description |
+|---|---|
+| `lower_raise_or_throw` | Raise/throw statements |
+| `lower_try_catch` | Try/catch/finally with block-scoped catch variables |
+
+**`common/node_types.py`** — `CommonNodeType` class with universal constants (parentheses, commas, etc.).
 
 ### Call lowering — three-way split
 
-`_lower_call_impl()` (`interpreter/frontends/_base.py:265`) distinguishes three call patterns by inspecting the function node's AST type:
+`lower_call()` in `common/expressions.py` distinguishes three call patterns by inspecting the function node's AST type:
 
 ```mermaid
 flowchart TD
     call["call expression"]
     check{"func_node type?"}
-    attr["CALL_METHOD\nobj_reg = lower(object)\nmethod = text(attribute)\n→ CALL_METHOD obj_reg method arg1 arg2 ..."]
-    ident["CALL_FUNCTION\nfunc_name = text(identifier)\n→ CALL_FUNCTION func_name arg1 arg2 ..."]
-    other["CALL_UNKNOWN\ntarget_reg = lower(func_node)\n→ CALL_UNKNOWN target_reg arg1 arg2 ..."]
+    attr["CALL_METHOD\nobj_reg = lower_expr(object)\nmethod = node_text(attribute)\n→ CALL_METHOD obj_reg method arg1 arg2 ..."]
+    ident["CALL_FUNCTION\nfunc_name = node_text(identifier)\n→ CALL_FUNCTION func_name arg1 arg2 ..."]
+    other["CALL_UNKNOWN\ntarget_reg = lower_expr(func_node)\n→ CALL_UNKNOWN target_reg arg1 arg2 ..."]
 
     call --> check
     check -- "attribute /\nmember_expression" --> attr
     check -- "identifier" --> ident
     check -- "anything else" --> other
 ```
-
-### Common statement lowerers
-
-| Handler | Pattern | Description |
-|---|---|---|
-| `_lower_assignment` | `STORE_VAR` / `STORE_FIELD` / `STORE_INDEX` | Simple assignment, destructuring |
-| `_lower_augmented_assignment` | `BINOP` + store | `x += 1` → load, binop, store |
-| `_lower_return` | `RETURN` | Return with optional value |
-| `_lower_if` | `BRANCH_IF` + labels | If/elif/else chains |
-| `_lower_while` | Labels + `BRANCH_IF` loop | While loops |
-| `_lower_c_style_for` | Init + condition + body + update labels | C-style for loops |
-| `_lower_function_def` | See [lowering patterns](#11-lowering-patterns-reference) | Function definitions |
-| `_lower_class_def` | See [lowering patterns](#11-lowering-patterns-reference) | Class definitions |
-| `_lower_try_catch` | Labels per clause | Try/catch/finally |
-| `_lower_break` / `_lower_continue` | `BRANCH` | Loop control via label stack |
 
 ### Block-scope tracking
 
@@ -383,104 +443,168 @@ Mangled names carry `VarScopeInfo(original_name, scope_depth)` metadata, propaga
 
 ### Loop context tracking
 
-Break and continue need to know which labels to jump to. BaseFrontend maintains two parallel stacks:
+Break and continue need to know which labels to jump to. `TreeSitterEmitContext` maintains two parallel stacks:
 
 ```python
-self._loop_stack: list[dict[str, str]]      # {"continue": label, "end": label}
-self._break_target_stack: list[str]          # break target labels
+loop_stack: list[dict[str, str]]      # {"continue": label, "end": label}
+break_target_stack: list[str]          # break target labels
 ```
 
-`_push_loop()` and `_pop_loop()` manage both stacks together. `_lower_break()` emits `BRANCH` to the top of `_break_target_stack`; `_lower_continue()` emits `BRANCH` to the `continue` label from `_loop_stack`.
+`push_loop()` and `pop_loop()` manage both stacks. `lower_break()` emits `BRANCH` to the top of `break_target_stack`; `lower_continue()` emits `BRANCH` to the `continue` label from `loop_stack`.
+
+### Type seeding during lowering
+
+`TreeSitterEmitContext` provides six methods for seeding type information during lowering, each calling `parse_type()` at the boundary to convert raw strings to `TypeExpr`:
+
+| Method | Seeds |
+|---|---|
+| `seed_register_type(reg, type_name)` | Register type (e.g. `"%3" → Int`) |
+| `seed_var_type(var_name, type_name)` | Variable type (e.g. `"x" → Int`) |
+| `seed_param_type(param_name, type_hint)` | Parameter type for current function |
+| `seed_func_return_type(func_label, return_type)` | Function return type |
+| `seed_type_alias(alias_name, target_type)` | Type alias (e.g. `UserId → Int`) |
+| `seed_interface_impl(class_name, interface_name)` | Interface implementation |
+
+See the [Type System Design Document](type-system.md#phase-1-frontend-type-extraction) for the full extraction pipeline.
 
 ---
 
 ## 6. Language-Specific Frontends
 
+### Per-language directory structure
+
+Each language frontend lives in its own directory under `interpreter/frontends/` with a standard set of modules:
+
+```
+interpreter/frontends/<language>/
+├── __init__.py          # re-exports FrontendClass
+├── frontend.py          # BaseFrontend subclass — builds dispatch tables
+├── node_types.py        # frozen dataclass of tree-sitter node type constants
+├── expressions.py       # pure-function expression lowerers (ctx, node) → str
+├── control_flow.py      # pure-function control flow lowerers (ctx, node) → None
+├── declarations.py      # pure-function declaration lowerers (ctx, node) → None
+└── (optional extras)    # e.g. assignments.py (Python, Ruby), pascal_constants.py
+```
+
+**The only exception** is TypeScript, which is a single file (`interpreter/frontends/typescript.py`) extending the JavaScript directory's frontend. Its node types live in `interpreter/frontends/typescript_node_types.py`.
+
 ### Registry and lazy loading
 
-`interpreter/frontends/__init__.py` maps language names to frontend classes via a string-based registry with lazy imports:
+`interpreter/frontends/__init__.py` maps `Language` enum values to `"module.ClassName"` specs:
 
 ```python
-_FRONTEND_CLASSES: dict[str, str] = {
-    "python": "python.PythonFrontend",
-    "javascript": "javascript.JavaScriptFrontend",
-    "typescript": "typescript.TypeScriptFrontend",
-    "java": "java.JavaFrontend",
-    "ruby": "ruby.RubyFrontend",
-    "go": "go.GoFrontend",
-    "php": "php.PhpFrontend",
-    "csharp": "csharp.CSharpFrontend",
-    "c": "c.CFrontend",
-    "cpp": "cpp.CppFrontend",
-    "rust": "rust.RustFrontend",
-    "kotlin": "kotlin.KotlinFrontend",
-    "scala": "scala.ScalaFrontend",
-    "lua": "lua.LuaFrontend",
-    "pascal": "pascal.PascalFrontend",
+_FRONTEND_CLASSES: dict[Language, str] = {
+    Language.PYTHON: "python.PythonFrontend",
+    Language.JAVASCRIPT: "javascript.JavaScriptFrontend",
+    Language.TYPESCRIPT: "typescript.TypeScriptFrontend",
+    Language.JAVA: "java.JavaFrontend",
+    ...
 }
 
-def get_deterministic_frontend(language: str) -> BaseFrontend:
+def get_deterministic_frontend(language: Language, observer=NullFrontendObserver()) -> BaseFrontend:
     spec = _FRONTEND_CLASSES.get(language)
     module_name, class_name = spec.split(".")
     mod = importlib.import_module(f".{module_name}", package=__package__)
     cls = getattr(mod, class_name)
-    return cls()
+    return cls(TreeSitterParserFactory(), language, observer)
 ```
 
-This avoids loading all 15 tree-sitter grammars at startup — only the requested language's frontend is imported.
+Only the requested language's module is imported — avoids loading all 15 tree-sitter grammars at startup.
 
-### What subclasses override
+### What each `frontend.py` does
 
-Each language frontend is a subclass of `BaseFrontend` that:
+Each `frontend.py` is a thin orchestrator (~100–150 lines) that:
 
-1. **Overrides field name constants** where the grammar differs (e.g., `ATTR_ATTRIBUTE_FIELD`)
-2. **Overrides `DEFAULT_RETURN_VALUE`** only for unit-type languages (C: `"0"`, Rust/Scala: `"()"`)
-3. **Populates `_EXPR_DISPATCH` and `_STMT_DISPATCH`** with language-specific handlers — mapping null/boolean node types to canonical lowering methods (`_lower_canonical_none`, `_lower_canonical_true`, etc.)
-4. **Adds language-specific lowerers** for constructs unique to that language
+1. **Returns a customized `GrammarConstants`** from `_build_constants()` — overriding field names, node type sets, and literals where the tree-sitter grammar differs from the defaults
+2. **Builds `stmt_dispatch` and `expr_dispatch` dicts** from `_build_stmt_dispatch()` / `_build_expr_dispatch()` — wiring tree-sitter node types to pure lowering functions from `common/`, the language's own modules, or inline lambdas
+3. **Returns a type normalization map** from `_build_type_map()` — mapping language-native type names to canonical forms (e.g. `"int"` → `"Int"`, `"String"` → `"String"`)
+4. **Sets `BLOCK_SCOPED = True`** for block-scoped languages (Java, C, C++, C#, Rust, Go, Kotlin, Scala, TypeScript)
 
-### Python frontend (`interpreter/frontends/python.py`, ~320 lines)
+Example — Java (`interpreter/frontends/java/frontend.py`, 128 lines):
 
-The canonical and most complete frontend. Inherits all literal constants from `BaseFrontend` unchanged (the base defaults *are* Python-form). Maps `"true"` → `_lower_canonical_true`, `"false"` → `_lower_canonical_false`, `"none"` → `_lower_canonical_none` in its expression dispatch.
+```python
+class JavaFrontend(BaseFrontend):
+    BLOCK_SCOPED = True
 
-Python-specific handlers include:
-- `_lower_for_in()` — Python `for x in iterable` modelled as index-based loop with `len()` and `range()`
-- `_lower_list_comprehension()` / `_lower_generator_expr()` — `SYMBOLIC` placeholders (complex to lower)
-- `_lower_lambda()` — anonymous functions using the function definition pattern
-- `_lower_with_stmt()` — context managers lowered as try/finally
-- `_lower_conditional_expr()` — ternary `a if cond else b` via `BRANCH_IF`
-- `_lower_assert_stmt()` — assert as conditional + raise
-- `import_statement` / `import_from_statement` → `lambda _: None` (no-op, imports are unresolvable)
+    def _build_constants(self) -> GrammarConstants:
+        return GrammarConstants(
+            attr_object_field="object",
+            attr_attribute_field="field",
+            attribute_node_type=JavaNodeType.FIELD_ACCESS,
+            block_node_types=frozenset({JavaNodeType.BLOCK, ...}),
+            none_literal="null", true_literal="true", false_literal="false",
+            ...
+        )
 
-### JavaScript frontend (`interpreter/frontends/javascript.py`, ~1000 lines)
+    def _build_stmt_dispatch(self) -> dict[str, Callable]:
+        return {
+            JavaNodeType.IF_STATEMENT: common_cf.lower_if,
+            JavaNodeType.WHILE_STATEMENT: common_cf.lower_while,
+            JavaNodeType.FOR_STATEMENT: common_cf.lower_c_style_for,
+            JavaNodeType.ENHANCED_FOR: java_cf.lower_enhanced_for,
+            JavaNodeType.METHOD_DECLARATION: java_decl.lower_method,
+            JavaNodeType.CLASS_DECLARATION: java_decl.lower_class,
+            ...
+        }
 
-The largest frontend, handling JavaScript's diverse syntax. Maps both `"null"` and `"undefined"` node types to `_lower_canonical_none` (both canonicalize to `"None"` in IR).
+    def _build_expr_dispatch(self) -> dict[str, Callable]:
+        return {
+            JavaNodeType.IDENTIFIER: common_expr.lower_identifier,
+            JavaNodeType.NULL_LITERAL: common_expr.lower_canonical_none,
+            JavaNodeType.METHOD_INVOCATION: java_expr.lower_method_invocation,
+            ...
+        }
+```
 
-JavaScript-specific handlers include:
-- `_lower_var_declaration()` — `let`/`const`/`var` with destructuring (`{a, b} = obj`, `[x, y] = arr`)
-- `_lower_arrow_function()` — arrow functions as anonymous function definitions
-- `_lower_template_string()` — template literals via `BINOP +` concatenation
-- `_lower_switch_statement()` — modelled as if/else chain with `===` comparisons
-- `_lower_do_statement()` — do-while loop (body first, then condition check)
-- `_lower_new_expression()` — `new Foo(args)` → `NEW_OBJECT` + `CALL_METHOD` constructor
-- `_lower_for_in()` / `_lower_for_of()` — index-based loop models
-- `_lower_await_expression()` / `_lower_yield_expression()` — `CALL_FUNCTION` with special names
-- `_lower_spread_element()` — `CALL_FUNCTION('spread', expr)`
+### `node_types.py` — grammar constants
 
-### Java frontend (`interpreter/frontends/java.py`, ~400 lines)
+Each language defines a frozen dataclass of tree-sitter node type strings, eliminating magic strings from dispatch tables and lowering functions:
 
-Maps `"null_literal"` → `_lower_canonical_none`, `"true"`/`"false"` → canonical lowering methods. Java-specific: explicit type annotations ignored (only names extracted), records, instanceof, method references, synchronized blocks, static initializers.
+```python
+@dataclass(frozen=True)
+class JavaNodeType:
+    IF_STATEMENT: str = "if_statement"
+    WHILE_STATEMENT: str = "while_statement"
+    FOR_STATEMENT: str = "for_statement"
+    ENHANCED_FOR: str = "enhanced_for_statement"
+    METHOD_DECLARATION: str = "method_declaration"
+    FIELD_ACCESS: str = "field_access"
+    ...
+```
 
-### Go frontend (`interpreter/frontends/go.py`, ~400 lines)
+Instances are created once (e.g. `JNT = JavaNodeType()`) and referenced as `JNT.IF_STATEMENT` throughout the language's modules.
 
-Go-specific: multiple return values (multiple `RETURN` instructions), short variable declarations (`:=`), composite literals, type assertions, goroutines/defer as `CALL_FUNCTION`, channel send/select as `SYMBOLIC`.
+### Language-specific lowering modules
 
-### Rust frontend (`interpreter/frontends/rust.py`, ~400 lines)
+**`expressions.py`** — pure functions `(ctx, node) → str` for language-specific expression forms (e.g. Java method invocations, Go composite literals, Rust closures). Common expressions (identifiers, binary ops, calls) are wired to `common/expressions.py` functions.
 
-Rust-specific: let bindings with `mut`, match expressions as if/else chains, closures as anonymous functions, block expressions returning values, macros as `CALL_FUNCTION`, impl blocks, traits skipped.
+**`control_flow.py`** — pure functions `(ctx, node) → None` for language-specific control flow (e.g. Java enhanced-for, Go range loops, Rust match expressions, Scala for-comprehensions). Common control flow (if, while, C-style for, break/continue) is wired to `common/control_flow.py` functions.
 
-### Other frontends
+**`declarations.py`** — pure functions `(ctx, node) → None` for language-specific declarations (e.g. Java records, Go short variable declarations, Rust impl blocks, Kotlin companion objects). Common function/class definitions are wired to `common/declarations.py` functions.
 
-TypeScript extends JavaScript with type annotations (ignored). C/C++ handle pointers, sizeof, struct/union, goto. PHP handles namespaces, traits, match expressions. Ruby handles symbols, ranges, heredocs. Kotlin handles companion objects, elvis operator. Scala handles for-comprehensions, case classes. Lua handles goto/labels.
+Some languages have additional modules:
+- **`python/assignments.py`**, **`ruby/assignments.py`** — override common assignment lowerers for tuple unpacking and multi-assignment
+- **`pascal/pascal_constants.py`**, **`pascal/type_helpers.py`** — Pascal-specific constants and type conversion helpers
+
+### Frontend characteristics
+
+| Language | Block-scoped | Notable constructs |
+|---|---|---|
+| **Python** | No | for-in, list comprehensions, lambda, with, conditional expr, assert |
+| **JavaScript** | No | var/let/const destructuring, arrow functions, template strings, switch, for-in/for-of, spread, await/yield |
+| **TypeScript** | Yes | Extends JavaScript + type annotations (extracted for type env, otherwise lowered identically) |
+| **Java** | Yes | Enhanced-for, records, instanceof, method refs, synchronized, static initializers |
+| **C** | Yes | Pointers, sizeof, struct/union, goto, ternary, typedef |
+| **C++** | Yes | Extends C + classes, templates, new/delete, range-for, structured bindings, lambdas |
+| **C#** | Yes | Foreach, properties, LINQ-style expressions, using statements, nullable types |
+| **Go** | Yes | Range loops, short var decl (`:=`), composite literals, goroutines/defer, channels |
+| **Rust** | Yes | Let bindings with mut, match, closures, block expressions, macros, impl/trait |
+| **Kotlin** | Yes | When-expression, companion objects, elvis operator, string templates, for-in |
+| **Scala** | Yes | For-comprehensions, case classes, match, pattern matching, string interpolation |
+| **Ruby** | No | Symbols, ranges, blocks/procs, heredocs, unless/until, begin/rescue |
+| **PHP** | No | Namespaces, traits, match expressions, foreach, string interpolation |
+| **Lua** | No | goto/labels, tables-as-objects, repeat-until, numeric/generic for |
+| **Pascal** | No | Procedures vs functions, records, case-of, with-do, type declarations |
 
 ---
 
@@ -826,30 +950,115 @@ LABEL try_end_3
 
 ```
 interpreter/
-├── frontend.py                Frontend ABC + get_frontend() factory
-├── parser.py                  ParserFactory ABC + TreeSitterParserFactory + Parser
+├── frontend.py                    Frontend ABC + get_frontend() factory
+├── parser.py                      ParserFactory ABC + TreeSitterParserFactory + Parser
+├── ir.py                          Opcode enum + IRInstruction + SourceLocation
 ├── frontends/
-│   ├── __init__.py            Lazy-loading registry + get_deterministic_frontend()
-│   ├── _base.py               BaseFrontend (~950 lines) — dispatch tables, code gen
-│   ├── python.py              PythonFrontend (~320 lines)
-│   ├── javascript.py          JavaScriptFrontend (~1000 lines)
-│   ├── typescript.py          TypeScriptFrontend (extends JavaScript)
-│   ├── java.py                JavaFrontend (~400 lines)
-│   ├── ruby.py                RubyFrontend
-│   ├── go.py                  GoFrontend (~400 lines)
-│   ├── php.py                 PhpFrontend
-│   ├── csharp.py              CSharpFrontend
-│   ├── c.py                   CFrontend
-│   ├── cpp.py                 CppFrontend (extends C)
-│   ├── rust.py                RustFrontend (~400 lines)
-│   ├── kotlin.py              KotlinFrontend
-│   ├── scala.py               ScalaFrontend
-│   ├── lua.py                 LuaFrontend
-│   └── pascal.py              PascalFrontend
-├── llm_frontend.py            LLMFrontend + prompt templates + parse/validate
-├── chunked_llm_frontend.py    ChunkedLLMFrontend + ChunkExtractor + IRRenumberer
-├── llm_client.py              LLMClient ABC + 4 providers + factory
-└── ir.py                      Opcode enum + IRInstruction + SourceLocation
+│   ├── __init__.py                Lazy-loading registry + get_deterministic_frontend()
+│   ├── _base.py                   BaseFrontend — subclass hooks, lower() entry point
+│   ├── context.py                 TreeSitterEmitContext + GrammarConstants
+│   ├── base_node_types.py         BaseNodeType — shared node type constants
+│   ├── type_extraction.py         Type extraction helpers for frontends
+│   ├── common/                    Shared pure-function lowerers
+│   │   ├── expressions.py         Identifiers, literals, binops, calls, subscripts (~434 lines)
+│   │   ├── assignments.py         Simple/augmented assignment, return (~71 lines)
+│   │   ├── control_flow.py        If, while, C-style for, break/continue (~198 lines)
+│   │   ├── declarations.py        Function/class definitions, params (~177 lines)
+│   │   ├── exceptions.py          Try/catch/finally, raise/throw (~114 lines)
+│   │   └── node_types.py          CommonNodeType — universal constants (~46 lines)
+│   ├── python/                    PythonFrontend (function-scoped)
+│   │   ├── frontend.py            Dispatch tables (~129 lines)
+│   │   ├── node_types.py          PythonNodeType
+│   │   ├── expressions.py         Lambda, conditional, list comp, f-strings
+│   │   ├── control_flow.py        For-in, with, assert
+│   │   ├── declarations.py        (minimal — delegates to common)
+│   │   └── assignments.py         Tuple/pattern unpacking
+│   ├── javascript/                JavaScriptFrontend (function-scoped)
+│   │   ├── frontend.py            Dispatch tables (~102 lines)
+│   │   ├── node_types.py          JSNodeType
+│   │   ├── expressions.py         Arrow functions, template strings, spread, new, await/yield
+│   │   ├── control_flow.py        For-in, for-of, do-while, switch
+│   │   └── declarations.py        Var/let/const with destructuring
+│   ├── typescript.py              TypeScriptFrontend — extends JavaScript (~569 lines)
+│   ├── typescript_node_types.py   TSNodeType
+│   ├── java/                      JavaFrontend (block-scoped)
+│   │   ├── frontend.py            Dispatch tables (~128 lines)
+│   │   ├── node_types.py          JavaNodeType
+│   │   ├── expressions.py         Method invocations, object creation, instanceof
+│   │   ├── control_flow.py        Enhanced-for, switch, synchronized
+│   │   └── declarations.py        Methods, classes, records, interfaces
+│   ├── c/                         CFrontend (block-scoped)
+│   │   ├── frontend.py            Dispatch tables (~125 lines)
+│   │   ├── node_types.py          CNodeType
+│   │   ├── expressions.py         Pointers, sizeof, ternary, casts
+│   │   ├── control_flow.py        Goto, do-while
+│   │   └── declarations.py        Structs, unions, typedefs, function defs
+│   ├── cpp/                       CppFrontend (block-scoped, extends C patterns)
+│   │   ├── frontend.py            Dispatch tables (~109 lines)
+│   │   ├── node_types.py          CppNodeType
+│   │   ├── expressions.py         New/delete, lambdas, structured bindings
+│   │   ├── control_flow.py        Range-for, try/catch with parameter extraction
+│   │   └── declarations.py        Classes, templates, constructors, namespaces
+│   ├── csharp/                    CSharpFrontend (block-scoped)
+│   │   ├── frontend.py            Dispatch tables (~150 lines)
+│   │   ├── node_types.py          CSharpNodeType
+│   │   ├── expressions.py         Properties, nullable types, LINQ-style
+│   │   ├── control_flow.py        Foreach, using, switch
+│   │   └── declarations.py        Classes, interfaces, records, structs
+│   ├── go/                        GoFrontend (block-scoped)
+│   │   ├── frontend.py            Dispatch tables (~118 lines)
+│   │   ├── node_types.py          GoNodeType
+│   │   ├── expressions.py         Composite literals, type assertions, slices
+│   │   ├── control_flow.py        Range loops, select, goroutines/defer
+│   │   └── declarations.py        Short var decl, func/method decl, interfaces
+│   ├── rust/                      RustFrontend (block-scoped)
+│   │   ├── frontend.py            Dispatch tables (~144 lines)
+│   │   ├── node_types.py          RustNodeType
+│   │   ├── expressions.py         Closures, block expressions, macros, references
+│   │   ├── control_flow.py        Match, loop, for-in, if-let
+│   │   └── declarations.py        Let bindings, impl blocks, traits, structs
+│   ├── kotlin/                    KotlinFrontend (block-scoped)
+│   │   ├── frontend.py            Dispatch tables (~110 lines)
+│   │   ├── node_types.py          KotlinNodeType
+│   │   ├── expressions.py         When, elvis, string templates, lambdas
+│   │   ├── control_flow.py        For-in, try/catch extraction
+│   │   └── declarations.py        Classes, objects, companion objects, data classes
+│   ├── scala/                     ScalaFrontend (block-scoped)
+│   │   ├── frontend.py            Dispatch tables (~129 lines)
+│   │   ├── node_types.py          ScalaNodeType
+│   │   ├── expressions.py         Match, string interpolation, apply
+│   │   ├── control_flow.py        For-comprehensions, try/catch
+│   │   └── declarations.py        Case classes, traits, objects, vals/vars
+│   ├── ruby/                      RubyFrontend (function-scoped)
+│   │   ├── frontend.py            Dispatch tables (~118 lines)
+│   │   ├── node_types.py          RubyNodeType
+│   │   ├── expressions.py         Symbols, ranges, blocks/procs, heredocs
+│   │   ├── control_flow.py        Unless/until, begin/rescue, case-when
+│   │   ├── declarations.py        Methods, classes, modules
+│   │   └── assignments.py         Multi-assignment, operator-assignment
+│   ├── php/                       PhpFrontend (function-scoped)
+│   │   ├── frontend.py            Dispatch tables (~132 lines)
+│   │   ├── node_types.py          PhpNodeType
+│   │   ├── expressions.py         String interpolation, match, arrays
+│   │   ├── control_flow.py        Foreach, switch, goto
+│   │   └── declarations.py        Functions, classes, traits, interfaces
+│   ├── lua/                       LuaFrontend (function-scoped)
+│   │   ├── frontend.py            Dispatch tables (~68 lines)
+│   │   ├── node_types.py          LuaNodeType
+│   │   ├── expressions.py         Tables-as-objects, string concatenation
+│   │   ├── control_flow.py        Repeat-until, numeric/generic for, goto
+│   │   └── declarations.py        Local functions, tables
+│   └── pascal/                    PascalFrontend (function-scoped)
+│       ├── frontend.py            Dispatch tables (~106 lines)
+│       ├── node_types.py          PascalNodeType
+│       ├── expressions.py         Set expressions, type casts
+│       ├── control_flow.py        Case-of, with-do, repeat-until
+│       ├── declarations.py        Procedures, functions, records, type declarations
+│       ├── pascal_constants.py    Pascal-specific constants
+│       └── type_helpers.py        Pascal type conversion helpers
+├── llm_frontend.py                LLMFrontend + prompt templates + parse/validate
+├── chunked_llm_frontend.py        ChunkedLLMFrontend + ChunkExtractor + IRRenumberer
+└── llm_client.py                  LLMClient ABC + 4 providers + factory
 ```
 
 ### Dependency flow
@@ -861,15 +1070,21 @@ frontend.py (ABC)
   ↑
 parser.py (ParserFactory, Parser)
   ↑
-frontends/_base.py ← ir.py, frontend.py, constants.py
+frontends/context.py ← ir.py (GrammarConstants, TreeSitterEmitContext)
   ↑
-frontends/*.py ← _base.py
+frontends/_base.py ← context.py, frontend.py
+  ↑
+frontends/common/*.py ← context.py, ir.py (shared lowerers)
+  ↑
+frontends/<lang>/node_types.py (no deps — pure constants)
+frontends/<lang>/{expressions,control_flow,declarations}.py ← context.py, common/*.py, node_types.py
+frontends/<lang>/frontend.py ← _base.py, all of the above
   ↑
 llm_client.py (LLMClient ABC + implementations)
   ↑
-llm_frontend.py ← frontend.py, ir.py, llm_client.py, constants.py
+llm_frontend.py ← frontend.py, ir.py, llm_client.py
   ↑
-chunked_llm_frontend.py ← frontend.py, ir.py, llm_frontend.py, parser.py, constants.py
+chunked_llm_frontend.py ← frontend.py, ir.py, llm_frontend.py, parser.py
 ```
 
 ---
@@ -891,24 +1106,24 @@ Produces an AST with nodes: `module` → `function_definition` (name=`greet`, pa
 
 ### Step 2: PythonFrontend.lower()
 
-1. `_emit(LABEL, label="entry")`
-2. `_lower_stmt(function_definition)` → `_lower_function_def()`:
-   - `_emit(BRANCH, label="end_greet_1")` — skip body
-   - `_emit(LABEL, label="func_greet_0")` — function entry
-   - `_lower_params()`:
+1. `ctx.emit(LABEL, label="entry")`
+2. `ctx.lower_stmt(function_definition)` → `lower_function_def(ctx, node)`:
+   - `ctx.emit(BRANCH, label="end_greet_1")` — skip body
+   - `ctx.emit(LABEL, label="func_greet_0")` — function entry
+   - `lower_params(ctx, params_node)`:
      - `%0 = SYMBOLIC "param:name"` + `STORE_VAR name %0`
-   - `_lower_block(body)` → `_lower_return()`:
-     - `_lower_expr(binary_operator)` → `_lower_binop()`:
+   - `ctx.lower_block(body)` → `lower_return(ctx, node)`:
+     - `ctx.lower_expr(binary_operator)` → `lower_binop(ctx, node)`:
        - `%1 = CONST "\"Hello, \""` (left operand)
        - `%2 = LOAD_VAR name` (right operand)
        - `%3 = BINOP + %1 %2`
      - `RETURN %3`
    - `%4 = CONST "None"` + `RETURN %4` — implicit return
-   - `_emit(LABEL, label="end_greet_1")`
+   - `ctx.emit(LABEL, label="end_greet_1")`
    - `%5 = CONST "<function:greet@func_greet_0>"`
    - `STORE_VAR greet %5`
-3. `_lower_stmt(expression_statement)` → `_lower_assignment()`:
-   - `_lower_expr(call)` → `_lower_call()`:
+3. `ctx.lower_stmt(expression_statement)` → `lower_assignment(ctx, node)`:
+   - `ctx.lower_expr(call)` → `lower_call(ctx, node)`:
      - `%6 = CONST "\"world\""` (argument)
      - `%7 = CALL_FUNCTION greet %6`
    - `STORE_VAR msg %7`
