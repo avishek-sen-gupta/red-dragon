@@ -55,9 +55,10 @@ class TestMergeOverlapping:
         source = b"def foo(:\ndef bar(:\nx = 1\n"
         tree = parser.parse(source)
         spans = extract(tree.root_node, source)
-        # May be 1 or 2 spans depending on parser, but if both on adjacent lines they merge
-        for span in spans:
-            assert span.start_line <= span.end_line
+        # Adjacent error lines merge into a single span covering both
+        assert len(spans) == 1
+        assert spans[0].start_line == 0
+        assert spans[0].end_line == 1
 
 
 class TestContextLines:
