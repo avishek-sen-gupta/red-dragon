@@ -29,3 +29,6 @@ class TypeEnvironment:
     var_types: MappingProxyType[str, TypeExpr]
     func_signatures: MappingProxyType[str, FunctionSignature]
     type_aliases: MappingProxyType[str, TypeExpr] = MappingProxyType({})
+    interface_implementations: MappingProxyType[str, tuple[str, ...]] = (
+        MappingProxyType({})
+    )

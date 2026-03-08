@@ -1687,3 +1687,22 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 - **Store aliases in TypeGraph as edges**: Rejected — aliases are transparent (no subtype relationship), just name mappings.
 
 **Consequences:** 7 new tests (5 unit, 2 integration). 3 existing C frontend typedef tests updated to check alias seeding instead of CONST/STORE_VAR emission. All 9753 tests pass.
+
+### ADR-092: Interface/trait typing with TypeGraph extension (2026-03-08)
+
+**Context:** Java `implements`, Kotlin `:`, and TypeScript `implements` clauses were partially extracted (interfaces included in the class reference parent list for method resolution) but not available for TypeGraph subtype queries. `Dog ⊆ Comparable` could not be checked.
+
+**Decision:** Add `interface_implementations: dict[str, list[str]]` to `TypeEnvironmentBuilder` and `TypeEnvironment`, and `extend_with_interfaces()` to `TypeGraph` for building class→interface subtype edges.
+
+**Design details:**
+- `TypeNode.kind` field added: `"class"` (default) or `"interface"` — distinguishes interfaces from concrete types
+- `TypeGraph.extend_with_interfaces(implementations)`: for each `class → [iface1, iface2]`, adds interface nodes as children of `Any` (if missing), and adds the class node with interfaces as parents (preserving existing parents)
+- `TypeEnvironmentBuilder.interface_implementations` and `TreeSitterEmitContext.seed_interface_impl()` for frontend seeding
+- Java `_extract_java_parents` extended to extract `super_interfaces → type_list → type_identifier` nodes alongside `superclass`
+- Separate `_extract_java_interfaces` for dedicated interface extraction and seeding
+
+**Alternatives considered:**
+- **Interfaces as TypeExpr variants**: Rejected — interfaces are graph nodes, not type expressions
+- **Automatic TypeGraph extension in infer_types**: Deferred — callers can extend TypeGraph themselves using `env.interface_implementations`
+
+**Consequences:** 8 new tests (6 unit for TypeGraph interface subtype/extension, 2 integration for Java source programs). All 9761 tests pass. No existing test changed.
