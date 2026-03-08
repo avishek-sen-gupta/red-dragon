@@ -1,250 +1,287 @@
 # PHP Frontend
 
-> `interpreter/frontends/php.py` · Extends `BaseFrontend` · ~1405 lines
+> `interpreter/frontends/php/` -- Extends `BaseFrontend` -- per-language directory architecture
 
 ## Overview
 
-The PHP frontend lowers tree-sitter PHP ASTs into the RedDragon three-address-code (TAC) IR. PHP's sigil-prefixed variables (`$var`), `->` member access, `::` static access, and extensive OOP constructs (classes, interfaces, traits, enums) all receive dedicated lowering methods. The frontend handles PHP-specific idioms including `echo`, `foreach` with key-value pairs, arrow functions (`fn() =>`), anonymous functions (closures), match expressions, heredoc/nowdoc strings, goto/labels, and nullsafe member access (`?->`).
+The PHP frontend lowers tree-sitter PHP ASTs into the RedDragon three-address-code (TAC) IR. PHP's sigil-prefixed variables (`$var`), `->` member access, `::` static access, and extensive OOP constructs (classes, interfaces, traits, enums) all receive dedicated lowering functions. The frontend handles PHP-specific idioms including `echo`, `foreach` with key-value pairs, arrow functions (`fn() =>`), anonymous functions (closures), match expressions, heredoc/nowdoc strings, goto/labels, nullsafe member access (`?->`), string interpolation, dynamic variables, include/require, and variadic unpacking.
+
+## Directory Structure
+
+```
+interpreter/frontends/php/
+  frontend.py         -- PhpFrontend class (thin orchestrator)
+  node_types.py       -- PHPNodeType constants class
+  expressions.py      -- PHP-specific expression lowerers (pure functions)
+  control_flow.py     -- PHP-specific control flow lowerers (pure functions)
+  declarations.py     -- PHP-specific declaration lowerers (pure functions)
+```
 
 ## Class Hierarchy
 
 ```
 Frontend (abstract)
-  └── BaseFrontend (_base.py)
-        └── PhpFrontend (php.py)
+  +-- BaseFrontend (_base.py)
+        +-- PhpFrontend (php/frontend.py)
 ```
 
-`PhpFrontend` inherits all common lowering infrastructure from `BaseFrontend` (register allocation, label generation, `_emit`, `_lower_block`, `_lower_while`, `_lower_c_style_for`, `_lower_break`, `_lower_continue`, `_lower_expression_statement`, `_lower_try_catch`, `_lower_raise_or_throw`, `_lower_update_expr`, `_lower_paren`, `_lower_binop`, `_lower_unop`, `_lower_const_literal`, `_lower_identifier`, canonical literal helpers).
+`PhpFrontend` is a thin orchestrator that builds dispatch tables from pure functions. All lowering logic lives in the `expressions`, `control_flow`, and `declarations` modules as pure functions taking `(ctx: TreeSitterEmitContext, node)`. Common lowering infrastructure (register allocation, label generation, `emit`, `lower_block`, canonical literal helpers) is inherited from `BaseFrontend`.
 
-## Overridden Constants
+## Grammar Constants (`_build_constants()`)
 
-| Constant | BaseFrontend Default | PhpFrontend Value |
-|---|---|---|
-| `ATTRIBUTE_NODE_TYPE` | `"attribute"` | `"member_access_expression"` |
-| `ATTR_OBJECT_FIELD` | `"object"` | `"object"` (same) |
-| `ATTR_ATTRIBUTE_FIELD` | `"attribute"` | `"name"` |
-| `COMMENT_TYPES` | `frozenset({"comment"})` | `frozenset({"comment"})` (same) |
-| `NOISE_TYPES` | `frozenset({"newline", "\n"})` | `frozenset({"php_tag", "text_interpolation", "php_end_tag", "\n"})` |
+| Field | Value |
+|---|---|
+| `attr_object_field` | `"object"` |
+| `attr_attribute_field` | `"name"` |
+| `attribute_node_type` | `PHPNodeType.MEMBER_ACCESS_EXPRESSION` |
+| `comment_types` | `frozenset({PHPNodeType.COMMENT})` |
+| `noise_types` | `frozenset({PHPNodeType.PHP_TAG, PHPNodeType.TEXT_INTERPOLATION, PHPNodeType.PHP_END_TAG, PHPNodeType.NEWLINE})` |
+| `block_node_types` | `frozenset({PHPNodeType.COMPOUND_STATEMENT, PHPNodeType.PROGRAM})` |
 
-Note: `NONE_LITERAL`, `TRUE_LITERAL`, `FALSE_LITERAL`, `DEFAULT_RETURN_VALUE` all retain their BaseFrontend defaults (`"None"`, `"True"`, `"False"`, `"None"` respectively), since canonical lowering methods are used.
+Note: `none_literal`, `true_literal`, `false_literal`, `default_return_value` all retain their `GrammarConstants` defaults (`"None"`, `"True"`, `"False"`, `"None"` respectively), since canonical lowering methods are used.
 
-## Expression Dispatch Table
-
-| AST Node Type | Handler | Emitted IR |
-|---|---|---|
-| `variable_name` | `_lower_php_variable` | `LOAD_VAR` with `$`-prefixed name |
-| `name` | `_lower_identifier` | `LOAD_VAR` |
-| `integer` | `_lower_const_literal` | `CONST` (raw text) |
-| `float` | `_lower_const_literal` | `CONST` (raw text) |
-| `string` | `_lower_const_literal` | `CONST` (raw text) |
-| `encapsed_string` | `_lower_const_literal` | `CONST` (raw text) |
-| `boolean` | `_lower_canonical_bool` | `CONST "True"` or `CONST "False"` |
-| `null` | `_lower_canonical_none` | `CONST "None"` |
-| `binary_expression` | `_lower_binop` | `BINOP` |
-| `unary_op_expression` | `_lower_unop` | `UNOP` |
-| `update_expression` | `_lower_update_expr` | `BINOP` + `STORE_VAR` (i++/i--) |
-| `function_call_expression` | `_lower_php_func_call` | `CALL_FUNCTION` or `CALL_UNKNOWN` |
-| `member_call_expression` | `_lower_php_method_call` | `CALL_METHOD` |
-| `member_access_expression` | `_lower_php_member_access` | `LOAD_FIELD` |
-| `subscript_expression` | `_lower_php_subscript` | `LOAD_INDEX` |
-| `parenthesized_expression` | `_lower_paren` | (unwraps inner expr) |
-| `array_creation_expression` | `_lower_php_array` | `NEW_ARRAY`/`NEW_OBJECT` + `STORE_INDEX` |
-| `assignment_expression` | `_lower_php_assignment_expr` | `STORE_VAR`/`STORE_FIELD`/`STORE_INDEX` |
-| `augmented_assignment_expression` | `_lower_php_augmented_assignment_expr` | `BINOP` + `STORE_*` |
-| `cast_expression` | `_lower_php_cast` | (passthrough to inner expr) |
-| `conditional_expression` | `_lower_php_ternary` | `BRANCH_IF` + `STORE_VAR` + `LOAD_VAR` |
-| `throw_expression` | `_lower_php_throw_expr` | `THROW` + `CONST "None"` |
-| `object_creation_expression` | `_lower_php_object_creation` | `CALL_FUNCTION` (type name) |
-| `match_expression` | `_lower_php_match_expression` | `BINOP ===` + `BRANCH_IF` chain |
-| `arrow_function` | `_lower_php_arrow_function` | `BRANCH`/`LABEL`/`RETURN` (func ref) |
-| `scoped_call_expression` | `_lower_php_scoped_call` | `CALL_FUNCTION` (qualified `Class::method`) |
-| `anonymous_function` | `_lower_php_anonymous_function` | `BRANCH`/`LABEL`/`RETURN` (func ref) |
-| `nullsafe_member_access_expression` | `_lower_php_nullsafe_member_access` | `LOAD_FIELD` (null-safety is semantic) |
-| `class_constant_access_expression` | `_lower_php_class_constant_access` | `LOAD_FIELD` on class |
-| `scoped_property_access_expression` | `_lower_php_scoped_property_access` | `LOAD_FIELD` on class |
-| `yield_expression` | `_lower_php_yield` | `CALL_FUNCTION("yield", ...)` |
-| `reference_assignment_expression` | `_lower_php_reference_assignment` | `STORE_VAR` (ignores reference semantics) |
-| `heredoc` | `_lower_const_literal` | `CONST` (raw text) |
-| `nowdoc` | `_lower_const_literal` | `CONST` (raw text) |
-
-## Statement Dispatch Table
+## Expression Dispatch Table (`_build_expr_dispatch()`)
 
 | AST Node Type | Handler | Emitted IR |
 |---|---|---|
-| `expression_statement` | `_lower_expression_statement` | (unwraps inner expr) |
-| `return_statement` | `_lower_php_return` | `RETURN` |
-| `echo_statement` | `_lower_php_echo` | `CALL_FUNCTION("echo", ...)` |
-| `if_statement` | `_lower_php_if` | `BRANCH_IF` + labels |
-| `while_statement` | `_lower_while` | (inherited) `BRANCH_IF` loop |
-| `for_statement` | `_lower_c_style_for` | (inherited) C-style for loop |
-| `foreach_statement` | `_lower_php_foreach` | Index-based loop with `LOAD_INDEX` |
-| `function_definition` | `_lower_php_func_def` | `BRANCH`/`LABEL`/`RETURN`/`STORE_VAR` |
-| `method_declaration` | `_lower_php_method_decl` | `BRANCH`/`LABEL`/`RETURN`/`STORE_VAR` |
-| `class_declaration` | `_lower_php_class` | `BRANCH`/`LABEL`/`STORE_VAR` (class ref) |
-| `throw_expression` | `_lower_php_throw` | `THROW` |
-| `compound_statement` | `_lower_php_compound` | (iterates children, skips `{`/`}`) |
-| `program` | `_lower_block` | (inherited block lowering) |
-| `break_statement` | `_lower_break` | `BRANCH` to break target |
-| `continue_statement` | `_lower_continue` | `BRANCH` to continue label |
-| `try_statement` | `_lower_try` | `LABEL`/`SYMBOLIC`/`BRANCH` (try/catch/finally) |
-| `switch_statement` | `_lower_php_switch` | `BINOP ==` + `BRANCH_IF` chain |
-| `do_statement` | `_lower_php_do` | Body-first loop + `BRANCH_IF` |
-| `namespace_definition` | `_lower_php_namespace` | (lowers body compound_statement) |
-| `interface_declaration` | `_lower_php_interface` | `BRANCH`/`LABEL`/`STORE_VAR` (class ref) |
-| `trait_declaration` | `_lower_php_trait` | `BRANCH`/`LABEL`/`STORE_VAR` (class ref) |
-| `function_static_declaration` | `_lower_php_function_static` | `STORE_VAR` per static variable |
-| `enum_declaration` | `_lower_php_enum` | `BRANCH`/`LABEL`/`STORE_VAR` (class ref) |
-| `named_label_statement` | `_lower_php_named_label` | `LABEL user_{name}` |
-| `goto_statement` | `_lower_php_goto` | `BRANCH user_{name}` |
-| `property_declaration` | `_lower_php_property_declaration` | `STORE_FIELD` on `"self"` |
-| `use_declaration` | `_lower_php_use_declaration` | `SYMBOLIC("use_trait:{name}")` |
-| `namespace_use_declaration` | `_lower_php_namespace_use_declaration` | No-op |
-| `enum_case` | `_lower_php_enum_case` | `STORE_FIELD` on `"self"` |
+| `variable_name` | `php_expr.lower_php_variable` | `LOAD_VAR` with `$`-prefixed name |
+| `name` | `common_expr.lower_identifier` | `LOAD_VAR` |
+| `integer` | `common_expr.lower_const_literal` | `CONST` (raw text) |
+| `float` | `common_expr.lower_const_literal` | `CONST` (raw text) |
+| `string` | `common_expr.lower_const_literal` | `CONST` (raw text) |
+| `encapsed_string` | `php_expr.lower_php_encapsed_string` | `CONST` or interpolation (`CONST` + `LOAD_VAR` + `BINOP +`) |
+| `boolean` | `common_expr.lower_canonical_bool` | `CONST "True"` or `CONST "False"` |
+| `null` | `common_expr.lower_canonical_none` | `CONST "None"` |
+| `binary_expression` | `common_expr.lower_binop` | `BINOP` |
+| `unary_op_expression` | `common_expr.lower_unop` | `UNOP` |
+| `update_expression` | `common_expr.lower_update_expr` | `BINOP` + `STORE_VAR` (i++/i--) |
+| `function_call_expression` | `php_expr.lower_php_func_call` | `CALL_FUNCTION` or `CALL_UNKNOWN` |
+| `member_call_expression` | `php_expr.lower_php_method_call` | `CALL_METHOD` |
+| `member_access_expression` | `php_expr.lower_php_member_access` | `LOAD_FIELD` |
+| `subscript_expression` | `php_expr.lower_php_subscript` | `LOAD_INDEX` |
+| `parenthesized_expression` | `common_expr.lower_paren` | (unwraps inner expr) |
+| `array_creation_expression` | `php_expr.lower_php_array` | `NEW_ARRAY`/`NEW_OBJECT` + `STORE_INDEX` |
+| `assignment_expression` | `php_expr.lower_php_assignment_expr` | `STORE_VAR`/`STORE_FIELD`/`STORE_INDEX` |
+| `augmented_assignment_expression` | `php_expr.lower_php_augmented_assignment_expr` | `BINOP` + `STORE_*` |
+| `cast_expression` | `php_expr.lower_php_cast` | (passthrough to inner expr) |
+| `conditional_expression` | `php_expr.lower_php_ternary` | `BRANCH_IF` + `STORE_VAR` + `LOAD_VAR` |
+| `throw_expression` | `php_expr.lower_php_throw_expr` | `THROW` + `CONST "None"` |
+| `object_creation_expression` | `php_expr.lower_php_object_creation` | `NEW_OBJECT` + `CALL_METHOD("__construct")` |
+| `match_expression` | `php_expr.lower_php_match_expression` | `BINOP ===` + `BRANCH_IF` chain |
+| `arrow_function` | `php_expr.lower_php_arrow_function` | `BRANCH`/`LABEL`/`RETURN` (func ref) |
+| `scoped_call_expression` | `php_expr.lower_php_scoped_call` | `CALL_FUNCTION` (qualified `Class::method`) |
+| `anonymous_function` | `php_expr.lower_php_anonymous_function` | `BRANCH`/`LABEL`/`RETURN` (func ref) |
+| `nullsafe_member_access_expression` | `php_expr.lower_php_nullsafe_member_access` | `LOAD_FIELD` (null-safety is semantic) |
+| `class_constant_access_expression` | `php_expr.lower_php_class_constant_access` | `LOAD_FIELD` on class |
+| `scoped_property_access_expression` | `php_expr.lower_php_scoped_property_access` | `LOAD_FIELD` on class |
+| `yield_expression` | `php_expr.lower_php_yield` | `CALL_FUNCTION("yield", ...)` |
+| `reference_assignment_expression` | `php_expr.lower_php_reference_assignment` | `STORE_VAR` (ignores reference semantics) |
+| `heredoc` | `php_expr.lower_php_heredoc` | `CONST` or interpolation |
+| `nowdoc` | `common_expr.lower_const_literal` | `CONST` (raw text) |
+| `relative_scope` | `common_expr.lower_identifier` | `LOAD_VAR` |
+| `dynamic_variable_name` | `php_expr.lower_php_dynamic_variable` | Unwraps to inner variable/expression |
+| `include_expression` | `php_expr.lower_php_include` | `CALL_FUNCTION("include", ...)` |
+| `nullsafe_member_call_expression` | `php_expr.lower_php_nullsafe_method_call` | `CALL_METHOD` (like regular method call) |
+| `require_once_expression` | `php_expr.lower_php_include` | `CALL_FUNCTION("require_once", ...)` |
+| `variadic_unpacking` | `php_expr.lower_php_variadic_unpacking` | `CALL_FUNCTION("spread", inner)` |
+
+## Statement Dispatch Table (`_build_stmt_dispatch()`)
+
+| AST Node Type | Handler | Emitted IR |
+|---|---|---|
+| `expression_statement` | `common_assign.lower_expression_statement` | (unwraps inner expr) |
+| `return_statement` | `php_cf.lower_php_return` | `RETURN` |
+| `echo_statement` | `php_cf.lower_php_echo` | `CALL_FUNCTION("echo", ...)` |
+| `if_statement` | `php_cf.lower_php_if` | `BRANCH_IF` + labels |
+| `while_statement` | `common_cf.lower_while` | (inherited) `BRANCH_IF` loop |
+| `for_statement` | `common_cf.lower_c_style_for` | (inherited) C-style for loop |
+| `foreach_statement` | `php_cf.lower_php_foreach` | Index-based loop with `LOAD_INDEX` |
+| `function_definition` | `php_decl.lower_php_func_def` | `BRANCH`/`LABEL`/`RETURN`/`STORE_VAR` |
+| `method_declaration` | `php_decl.lower_php_method_decl` | `BRANCH`/`LABEL`/`RETURN`/`STORE_VAR` |
+| `class_declaration` | `php_decl.lower_php_class` | `BRANCH`/`LABEL`/`STORE_VAR` (class ref) |
+| `throw_expression` | `php_cf.lower_php_throw` | `THROW` |
+| `compound_statement` | `php_cf.lower_php_compound` | (iterates children, skips `{`/`}`) |
+| `program` | `lambda ctx, node: ctx.lower_block(node)` | (inherited block lowering) |
+| `break_statement` | `common_cf.lower_break` | `BRANCH` to break target |
+| `continue_statement` | `common_cf.lower_continue` | `BRANCH` to continue label |
+| `try_statement` | `php_cf.lower_php_try` | `LABEL`/`SYMBOLIC`/`BRANCH` (try/catch/finally) |
+| `switch_statement` | `php_cf.lower_php_switch` | `BINOP ==` + `BRANCH_IF` chain |
+| `do_statement` | `php_cf.lower_php_do` | Body-first loop + `BRANCH_IF` |
+| `namespace_definition` | `php_cf.lower_php_namespace` | (lowers body compound_statement) |
+| `interface_declaration` | `php_decl.lower_php_interface` | `BRANCH`/`LABEL`/`STORE_VAR` (class ref) |
+| `trait_declaration` | `php_decl.lower_php_trait` | `BRANCH`/`LABEL`/`STORE_VAR` (class ref) |
+| `function_static_declaration` | `php_decl.lower_php_function_static` | `STORE_VAR` per static variable |
+| `enum_declaration` | `php_decl.lower_php_enum` | `BRANCH`/`LABEL`/`STORE_VAR` (class ref) |
+| `named_label_statement` | `php_cf.lower_php_named_label` | `LABEL user_{name}` |
+| `goto_statement` | `php_cf.lower_php_goto` | `BRANCH user_{name}` |
+| `property_declaration` | `php_decl.lower_php_property_declaration` | `STORE_FIELD` on `"self"` |
+| `use_declaration` | `php_decl.lower_php_use_declaration` | `SYMBOLIC("use_trait:{name}")` |
+| `namespace_use_declaration` | `php_decl.lower_php_namespace_use_declaration` | No-op |
+| `enum_case` | `php_decl.lower_php_enum_case` | `STORE_FIELD` on `"self"` |
+| `global_declaration` | `php_decl.lower_php_global_declaration` | `LOAD_VAR` + `STORE_VAR` per variable |
 
 ## Language-Specific Lowering Methods
 
-### `_lower_php_variable(node) -> str`
+### `php_expr.lower_php_variable(ctx, node) -> str`
 Handles PHP's `$`-prefixed variable names (`variable_name` nodes). Emits `LOAD_VAR` with the full `$`-prefixed text as the variable name. Unlike most languages that strip sigils, PHP variables retain their `$` prefix throughout IR.
 
-### `_lower_php_func_call(node) -> str`
-Handles `function_call_expression`. Extracts `function` and `arguments` fields. If the function node is of type `name` or `qualified_name`, emits `CALL_FUNCTION` with the plain name. Otherwise emits `CALL_UNKNOWN` with a dynamically-lowered target register. Uses `_extract_call_args_unwrap` to handle PHP's `argument` wrapper nodes.
+### `php_expr.lower_php_encapsed_string(ctx, node) -> str`
+Handles double-quoted strings with interpolation. If no interpolation variables are present, delegates to `lower_const_literal`. Otherwise decomposes into `CONST` fragments, `LOAD_VAR` for embedded variables, and `BINOP +` for concatenation.
 
-### `_lower_php_method_call(node) -> str`
+### `php_expr.lower_php_heredoc(ctx, node) -> str`
+Handles heredoc strings (`<<<EOT ... EOT`). Finds the `heredoc_body` child and checks for interpolation. If present, decomposes like encapsed strings; otherwise uses `lower_const_literal`.
+
+### `php_expr.lower_php_func_call(ctx, node) -> str`
+Handles `function_call_expression`. Extracts function and arguments fields. If the function node is of type `name` or `qualified_name`, emits `CALL_FUNCTION` with the plain name. Otherwise emits `CALL_UNKNOWN` with a dynamically-lowered target register. Uses `extract_call_args_unwrap` to handle PHP's `argument` wrapper nodes.
+
+### `php_expr.lower_php_method_call(ctx, node) -> str`
 Handles `member_call_expression` (`$obj->method(args)`). Extracts `object`, `name`, and `arguments` fields. Emits `CALL_METHOD` with `[obj_reg, method_name, ...arg_regs]`.
 
-### `_lower_php_member_access(node) -> str`
+### `php_expr.lower_php_member_access(ctx, node) -> str`
 Handles `member_access_expression` (`$obj->field`). Emits `LOAD_FIELD` with object register and field name.
 
-### `_lower_php_subscript(node) -> str`
+### `php_expr.lower_php_subscript(ctx, node) -> str`
 Handles `subscript_expression` (`$arr[$idx]`). Extracts the first two named children as object and index, emits `LOAD_INDEX`.
 
-### `_lower_php_assignment_expr(node) -> str`
-Handles `assignment_expression`. Lowers the right-hand side, then delegates to `_lower_store_target`. Returns the value register (assignments are expressions in PHP).
+### `php_expr.lower_php_assignment_expr(ctx, node) -> str`
+Handles `assignment_expression`. Lowers the right-hand side, then delegates to `php_expr.lower_php_store_target`. Returns the value register (assignments are expressions in PHP).
 
-### `_lower_php_augmented_assignment_expr(node) -> str`
-Handles `augmented_assignment_expression` (`$x += 1`). Strips `=` from the operator, emits `BINOP` then `_lower_store_target`. Returns the result register.
+### `php_expr.lower_php_augmented_assignment_expr(ctx, node) -> str`
+Handles `augmented_assignment_expression` (`$x += 1`). Strips `=` from the operator, emits `BINOP` then `php_expr.lower_php_store_target`. Returns the result register.
 
-### `_lower_php_return(node)`
-Handles `return_statement`. Filters out the `return` keyword token, lowers the expression child. If no return value, emits `CONST "None"` (the `DEFAULT_RETURN_VALUE`). Then emits `RETURN`.
+### `php_expr.lower_php_store_target(ctx, target, val_reg, parent_node)`
+Handles PHP-specific target types for store operations:
+- `variable_name` / `name` -> `STORE_VAR`
+- `member_access_expression` -> `STORE_FIELD` (extracts `object` and `name` fields)
+- `subscript_expression` -> `STORE_INDEX`
+- Fallback -> `STORE_VAR` with raw text
 
-### `_lower_php_echo(node)`
+### `php_cf.lower_php_return(ctx, node)`
+Handles `return_statement`. Filters out the `return` keyword token, lowers the expression child. If no return value, emits `CONST "None"` (the `default_return_value`). Then emits `RETURN`.
+
+### `php_cf.lower_php_echo(ctx, node)`
 Handles `echo_statement`. Lowers all expression children and emits `CALL_FUNCTION("echo", ...arg_regs)`.
 
-### `_lower_php_if(node)`
-Handles `if_statement`. Extracts `condition` and `body` fields. Collects `else_clause` and `else_if_clause` children. Emits `BRANCH_IF` for the condition, lowers the body inside a true-label block, then processes else clauses via `_lower_php_else_clause`. Each `else_if_clause` creates a nested condition test with its own true/false labels.
+### `php_cf.lower_php_if(ctx, node)`
+Handles `if_statement`. Extracts `condition` and `body` fields. Collects `else_clause` and `else_if_clause` children. Emits `BRANCH_IF` for the condition, lowers the body inside a true-label block, then processes else clauses via the private `_lower_php_else_clause` helper. Each `else_if_clause` creates a nested condition test with its own true/false labels.
 
-### `_lower_php_foreach(node)`
+### `php_cf.lower_php_foreach(ctx, node)`
 Handles `foreach_statement`. Supports both `foreach ($arr as $v)` and `foreach ($arr as $k => $v)`. Desugars to an index-based loop:
 1. Initializes an index register to `0`
 2. Calls `len(iter_reg)` for the bound
 3. On each iteration: `BINOP <`, `BRANCH_IF`, `LOAD_INDEX`, `STORE_VAR` for value (and key if present)
 4. Increments index with `BINOP +`
 
-### `_lower_php_func_def(node)` / `_lower_php_method_decl(node)`
-Both handle function/method definitions with nearly identical logic. Extracts `name`, `parameters`, `body`. Emits: `BRANCH` to skip, `LABEL` for func entry, parameter lowering via `_lower_php_params`, body lowering via `_lower_php_compound`, implicit `RETURN`, end label, then `CONST`/`STORE_VAR` for the function reference.
+### `php_decl.lower_php_func_def(ctx, node)` / `php_decl.lower_php_method_decl(ctx, node)`
+Both handle function/method definitions with nearly identical logic. Extracts `name`, `parameters`, `body`. Emits: `BRANCH` to skip, `LABEL` for func entry, parameter lowering via `php_decl.lower_php_params`, body lowering via `php_cf.lower_php_compound`, implicit `RETURN`, end label, then `CONST`/`STORE_VAR` for the function reference. Method declarations additionally emit a `$this` parameter (via `_emit_this_param`) unless the method has a `static_modifier`.
 
-### `_lower_php_params(params_node)`
-Iterates parameter children. Handles `simple_parameter`, `variadic_parameter`, and bare `variable_name` nodes. For each, extracts the `name` field and emits `SYMBOLIC("param:{name}")` + `STORE_VAR`.
+### `php_decl.lower_php_params(ctx, params_node)`
+Iterates parameter children. Handles `simple_parameter`, `variadic_parameter`, and bare `variable_name` nodes. For each, extracts the `name` field and emits `SYMBOLIC("param:{name}")` + `STORE_VAR`. Extracts type hints and seeds register/param/var types.
 
-### `_lower_php_class(node)`
-Handles `class_declaration`. Emits `BRANCH` to skip, `LABEL` for class, lowers body via `_lower_php_class_body`, end label, then `CONST`/`STORE_VAR` for the class reference using `constants.CLASS_REF_TEMPLATE`.
+### `php_decl.lower_php_class(ctx, node)`
+Handles `class_declaration`. Extracts parent classes from `base_clause`. Emits `BRANCH` to skip, `LABEL` for class, lowers body via `_lower_php_class_body`, end label, then `CONST`/`STORE_VAR` for the class reference using `make_class_ref`.
 
-### `_lower_php_class_body(node)`
-Iterates `declaration_list` children. Dispatches `method_declaration` to `_lower_php_method_decl`, `property_declaration` to `_lower_php_property_declaration`, and other named children (excluding visibility/modifier nodes) to `_lower_stmt`.
+### `php_cf.lower_php_try(ctx, node)`
+Handles `try_statement`. Extracts `body` field, iterates children for `catch_clause` (with `named_type`/`name`/`qualified_name` for exception type and `variable_name` for variable) and `finally_clause`. Delegates to `lower_try_catch`.
 
-### `_lower_store_target(target, val_reg, parent_node)`
-**Overrides** `BaseFrontend._lower_store_target`. Handles PHP-specific target types:
-- `variable_name` / `name` -> `STORE_VAR`
-- `member_access_expression` -> `STORE_FIELD` (extracts `object` and `name` fields)
-- `subscript_expression` -> `STORE_INDEX`
-- Fallback -> `STORE_VAR` with raw text
+### `php_cf.lower_php_throw(ctx, node)` / `php_expr.lower_php_throw_expr(ctx, node) -> str`
+`lower_php_throw` delegates to `lower_raise_or_throw(ctx, node, keyword="throw")`.
+`lower_php_throw_expr` does the same but additionally returns a `CONST "None"` register (since `throw` can appear in expression context in PHP 8).
 
-### `_lower_try(node)`
-Handles `try_statement`. Extracts `body` field, iterates children for `catch_clause` (with `named_type`/`name`/`qualified_name` for exception type and `variable_name` for variable) and `finally_clause`. Delegates to `_lower_try_catch`.
+### `php_expr.lower_php_object_creation(ctx, node) -> str`
+Handles `new Foo(args)`. Emits `NEW_OBJECT(type_name)` then `CALL_METHOD(obj_reg, "__construct", ...args)`. Returns the object register.
 
-### `_lower_php_throw(node)` / `_lower_php_throw_expr(node) -> str`
-`_lower_php_throw` delegates to `_lower_raise_or_throw(node, keyword="throw")`.
-`_lower_php_throw_expr` does the same but additionally returns a `CONST "None"` register (since `throw` can appear in expression context in PHP 8).
-
-### `_lower_php_object_creation(node) -> str`
-Handles `new ClassName(args)`. Extracts the class name from `name` field and arguments, emits `CALL_FUNCTION(type_name, ...args)`.
-
-### `_lower_php_array(node) -> str`
+### `php_expr.lower_php_array(ctx, node) -> str`
 Handles `array_creation_expression`. Detects whether the array is associative (any `=>` in elements):
 - **Associative**: Emits `NEW_OBJECT("array")` + `STORE_INDEX(key, value)` per pair
 - **Indexed**: Emits `NEW_ARRAY("array", size)` + `STORE_INDEX(idx, value)` per element
 
-### `_lower_php_cast(node) -> str`
+### `php_expr.lower_php_cast(ctx, node) -> str`
 Handles `cast_expression` (`(int)$x`). Simply lowers the last named child (the cast operand), ignoring the cast type. Passthrough semantics.
 
-### `_lower_php_ternary(node) -> str`
+### `php_expr.lower_php_ternary(ctx, node) -> str`
 Handles `conditional_expression` (`$a ? $b : $c`). Emits `BRANCH_IF` with true/false labels, stores result in a temporary variable `__ternary_{counter}`, loads it at the merge point. Supports Elvis operator (`$a ?: $c`) where `true_node` may be absent (uses `cond_reg` as true value).
 
-### `_lower_php_match_expression(node) -> str`
+### `php_expr.lower_php_match_expression(ctx, node) -> str`
 Handles PHP 8 `match(subject) { ... }`. Iterates `match_conditional_expression` arms, comparing with `BINOP ===` (strict equality). Handles `match_default_expression` as unconditional branch. Stores arm results in `__match_{counter}` temp variable.
 
-### `_lower_php_arrow_function(node) -> str`
+### `php_expr.lower_php_arrow_function(ctx, node) -> str`
 Handles `fn($x) => expr`. Creates a function body with implicit `RETURN` of the body expression. Returns a function reference constant.
 
-### `_lower_php_scoped_call(node) -> str`
+### `php_expr.lower_php_scoped_call(ctx, node) -> str`
 Handles `ClassName::method(args)`. Constructs qualified name `{scope}::{method}`, emits `CALL_FUNCTION(qualified_name, ...args)`.
 
-### `_lower_php_switch(node)`
-Handles `switch_statement`. Lowers selector expression, pushes end label to `_break_target_stack`. Iterates `case_statement` and `default_statement` children. Cases emit `BINOP ==` + `BRANCH_IF`; default emits unconditional `BRANCH`.
-
-### `_lower_php_do(node)`
-Handles `do_statement` (`do { } while ()`). Body-first loop: emits body label, lowers body with loop context (`_push_loop`/`_pop_loop`), then condition check with `BRANCH_IF` looping back to body on true.
-
-### `_lower_php_namespace(node)`
-Handles `namespace_definition`. Finds the `compound_statement` child and lowers it. Namespace is purely structural.
-
-### `_lower_php_interface(node)` / `_lower_php_trait(node)` / `_lower_php_enum(node)`
-All three follow the same pattern as `_lower_php_class`: `BRANCH` to skip, `LABEL`, body via `_lower_php_class_body`, end label, class reference `CONST`/`STORE_VAR`.
-
-### `_lower_php_function_static(node)`
-Handles `function_static_declaration` (`static $x = val;`). Iterates `static_variable_declaration` children, extracts `name`/`value`, emits `STORE_VAR`.
-
-### `_lower_php_named_label(node)` / `_lower_php_goto(node)`
-Handle goto/label. `named_label_statement` emits `LABEL user_{name}`. `goto_statement` emits `BRANCH user_{name}`.
-
-### `_lower_php_anonymous_function(node) -> str`
+### `php_expr.lower_php_anonymous_function(ctx, node) -> str`
 Handles `function($x) use ($y) { body }`. Creates a named function body `__anon_{counter}` with parameter lowering and compound body. Returns a function reference constant. The `use` clause is not explicitly modeled (captured variables are not tracked).
 
-### `_lower_php_nullsafe_member_access(node) -> str`
+### `php_cf.lower_php_switch(ctx, node)`
+Handles `switch_statement`. Lowers selector expression, pushes end label to `break_target_stack`. Iterates `case_statement` and `default_statement` children. Cases emit `BINOP ==` + `BRANCH_IF`; default emits unconditional `BRANCH`.
+
+### `php_cf.lower_php_do(ctx, node)`
+Handles `do_statement` (`do { } while ()`). Body-first loop: emits body label, lowers body with loop context (`push_loop`/`pop_loop`), then condition check with `BRANCH_IF` looping back to body on true.
+
+### `php_cf.lower_php_namespace(ctx, node)`
+Handles `namespace_definition`. Finds the `compound_statement` child and lowers it. Namespace is purely structural.
+
+### `php_decl.lower_php_interface(ctx, node)` / `php_decl.lower_php_trait(ctx, node)` / `php_decl.lower_php_enum(ctx, node)`
+All three follow the same pattern as `php_decl.lower_php_class`: `BRANCH` to skip, `LABEL`, body via `_lower_php_class_body`, end label, class reference `CONST`/`STORE_VAR`.
+
+### `php_decl.lower_php_function_static(ctx, node)`
+Handles `function_static_declaration` (`static $x = val;`). Iterates `static_variable_declaration` children, extracts `name`/`value`, emits `STORE_VAR`.
+
+### `php_cf.lower_php_named_label(ctx, node)` / `php_cf.lower_php_goto(ctx, node)`
+Handle goto/label. `named_label_statement` emits `LABEL user_{name}`. `goto_statement` emits `BRANCH user_{name}`.
+
+### `php_expr.lower_php_nullsafe_member_access(ctx, node) -> str`
 Handles `$obj?->field`. Emits `LOAD_FIELD` identically to regular member access; null-safety is semantic, not structural in IR.
 
-### `_lower_php_class_constant_access(node) -> str` / `_lower_php_scoped_property_access(node) -> str`
+### `php_expr.lower_php_nullsafe_method_call(ctx, node) -> str`
+Handles `$obj?->method(args)`. Emits `CALL_METHOD` identically to regular method call; null-safety is semantic.
+
+### `php_expr.lower_php_class_constant_access(ctx, node) -> str` / `php_expr.lower_php_scoped_property_access(ctx, node) -> str`
 Both handle `ClassName::CONST` and `ClassName::$prop` respectively. Lower the class as an expression, then emit `LOAD_FIELD` for the constant/property name.
 
-### `_lower_php_yield(node) -> str`
+### `php_expr.lower_php_yield(ctx, node) -> str`
 Handles `yield_expression`. Lowers all named children as arguments, emits `CALL_FUNCTION("yield", ...args)`.
 
-### `_lower_php_reference_assignment(node) -> str`
-Handles `$x = &$y`. Ignores reference semantics; lowers right side and stores via `_lower_store_target`.
+### `php_expr.lower_php_reference_assignment(ctx, node) -> str`
+Handles `$x = &$y`. Ignores reference semantics; lowers right side and stores via `lower_php_store_target`.
 
-### `_lower_php_property_declaration(node)`
+### `php_decl.lower_php_property_declaration(ctx, node)`
 Handles property declarations inside classes (`public $x = 10;`). Iterates `property_element` children, emits `STORE_FIELD("self", prop_name, val_reg)`. Uninitialized properties get `CONST "None"`.
 
-### `_lower_php_use_declaration(node)`
+### `php_decl.lower_php_use_declaration(ctx, node)`
 Handles `use SomeTrait;` inside classes. Emits `SYMBOLIC("use_trait:{name}")` per trait.
 
-### `_lower_php_namespace_use_declaration(node)`
+### `php_decl.lower_php_namespace_use_declaration(ctx, node)`
 Handles `use Some\Namespace;`. No-op (pass).
 
-### `_lower_php_enum_case(node)`
+### `php_decl.lower_php_enum_case(ctx, node)`
 Handles enum case inside `enum_declaration`. Emits `STORE_FIELD("self", case_name, val_reg)`. If no explicit value, uses the case name string as the value.
 
-### `_lower_php_compound(node)`
-Handles `compound_statement` (curly-brace blocks). Iterates named children, skipping `{` and `}`, dispatching each to `_lower_stmt`.
+### `php_cf.lower_php_compound(ctx, node)`
+Handles `compound_statement` (curly-brace blocks). Iterates named children, skipping `{` and `}`, dispatching each to `ctx.lower_stmt`.
+
+### `php_expr.lower_php_dynamic_variable(ctx, node) -> str`
+Handles `${x}` -- unwraps to the inner variable_name or expression.
+
+### `php_expr.lower_php_include(ctx, node) -> str`
+Handles `include 'file.php'` and `require_once 'file.php'`. Emits `CALL_FUNCTION` with the keyword as the function name.
+
+### `php_expr.lower_php_variadic_unpacking(ctx, node) -> str`
+Handles `...$arr`. Emits `CALL_FUNCTION("spread", inner_reg)`.
+
+### `php_decl.lower_php_global_declaration(ctx, node)`
+Handles `global $config;`. Emits `LOAD_VAR` + `STORE_VAR` for each `variable_name` child.
 
 ## Canonical Literal Handling
 
 | PHP Node Type | Handler | Canonical IR Value |
 |---|---|---|
-| `boolean` | `_lower_canonical_bool` | `CONST "True"` or `CONST "False"` (text-based detection) |
-| `null` | `_lower_canonical_none` | `CONST "None"` |
+| `boolean` | `common_expr.lower_canonical_bool` | `CONST "True"` or `CONST "False"` (text-based detection) |
+| `null` | `common_expr.lower_canonical_none` | `CONST "None"` |
 
-PHP's `true`/`false`/`TRUE`/`FALSE` are all parsed as `boolean` nodes; `_lower_canonical_bool` normalizes via `text.strip().lower()` comparison to `"true"`. PHP's `null`/`NULL` is parsed as the `null` node type.
+PHP's `true`/`false`/`TRUE`/`FALSE` are all parsed as `boolean` nodes; `lower_canonical_bool` normalizes via `text.strip().lower()` comparison to `"true"`. PHP's `null`/`NULL` is parsed as the `null` node type.
 
 ## Example
 
@@ -288,7 +325,7 @@ CALL_FUNCTION %11  "echo"  %10
 
 1. **Variables retain `$` prefix**: Unlike some frontends that strip language-specific sigils, PHP variables keep their `$` prefix in IR. This is intentional -- it preserves PHP's variable semantics and avoids collision with function/class names.
 
-2. **`_lower_store_target` override**: PHP overrides the base `_lower_store_target` because PHP's assignment target types (`variable_name`, `member_access_expression`, `subscript_expression`) differ from the base class's expected types.
+2. **`lower_php_store_target` as a standalone function**: PHP has its own store target function (`php_expr.lower_php_store_target`) because PHP's assignment target types (`variable_name`, `member_access_expression`, `subscript_expression`) differ from other languages' expected types.
 
 3. **Match uses strict equality (`===`)**: PHP's `match` expression uses strict comparison (`===`), which the frontend preserves in IR (unlike `switch` which uses `==`).
 
@@ -296,10 +333,14 @@ CALL_FUNCTION %11  "echo"  %10
 
 5. **Reference semantics ignored**: `$x = &$y` is lowered as a plain assignment. Reference tracking would require more complex IR modeling.
 
-6. **Null-safety is semantic**: `$obj?->field` produces the same IR as `$obj->field`. The null-safety check is not represented in the IR.
+6. **Null-safety is semantic**: `$obj?->field` and `$obj?->method()` produce the same IR as their non-nullsafe counterparts. The null-safety check is not represented in the IR.
 
 7. **Echo is a function call**: `echo $x` is lowered as `CALL_FUNCTION("echo", $x)` rather than a special opcode, keeping the IR uniform.
 
-8. **Foreach desugared to index loop**: PHP's `foreach` is lowered to an explicit index-based loop using `len()` and `LOAD_INDEX`, identical to how C# and Rust foreach/for-in are handled.
+8. **Foreach desugared to index loop**: PHP's `foreach` is lowered to an explicit index-based loop using `len()` and `LOAD_INDEX`, identical to how other languages' foreach/for-in are handled.
 
 9. **Goto/label support**: PHP is one of the few frontends that supports `goto` statements, lowered directly to `BRANCH` and `LABEL` instructions with `user_` prefix.
+
+10. **Object creation uses NEW_OBJECT + CALL_METHOD**: `new Foo(args)` emits `NEW_OBJECT("Foo")` followed by `CALL_METHOD(obj, "__construct", ...args)`, modeling PHP's two-phase construction.
+
+11. **String interpolation decomposition**: Double-quoted strings and heredocs with embedded variables are decomposed into `CONST` + `LOAD_VAR` + `BINOP +` chains, making interpolation explicit in the IR.

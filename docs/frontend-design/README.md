@@ -1,6 +1,6 @@
 # Frontend Design Documentation
 
-This directory contains exhaustive per-file documentation for the RedDragon frontend subsystem -- the pipeline that lowers language-specific tree-sitter ASTs into a common, language-agnostic IR consumed by the VM, CFG builder, and dataflow analysis.
+This directory contains exhaustive per-language documentation for the RedDragon frontend subsystem -- the pipeline that lowers language-specific tree-sitter ASTs into a common, language-agnostic IR consumed by the VM, CFG builder, and dataflow analysis.
 
 ---
 
@@ -8,84 +8,99 @@ This directory contains exhaustive per-file documentation for the RedDragon fron
 
 The frontend subsystem converts source code in any of 15 supported languages into a universal flattened three-address code IR ([27 opcodes](../ir-reference.md)). The deterministic frontend strategy uses tree-sitter to parse source into an AST, then performs recursive descent over that AST to emit IR instructions.
 
-The architecture follows a classic **base class + per-language subclass** pattern:
+The architecture follows a **context-mode** pattern: `BaseFrontend` subclasses return pure data (dispatch tables, grammar constants) via `_build_*()` hooks, and all lowering is performed by pure functions that receive a shared `TreeSitterEmitContext` as their first argument.
 
 ```
 Frontend (ABC)                          interpreter/frontend.py
   |
   +-- BaseFrontend                      interpreter/frontends/_base.py
-        |
-        +-- PythonFrontend              interpreter/frontends/python.py
-        +-- JavaScriptFrontend          interpreter/frontends/javascript.py
-        +-- TypeScriptFrontend          interpreter/frontends/typescript.py  (extends JS)
-        +-- JavaFrontend                interpreter/frontends/java.py
-        +-- KotlinFrontend              interpreter/frontends/kotlin.py
-        +-- ScalaFrontend               interpreter/frontends/scala.py
-        +-- CFrontend                   interpreter/frontends/c.py
-        +-- CppFrontend                 interpreter/frontends/cpp.py         (extends C)
-        +-- CSharpFrontend              interpreter/frontends/csharp.py
-        +-- GoFrontend                  interpreter/frontends/go.py
-        +-- RubyFrontend                interpreter/frontends/ruby.py
-        +-- LuaFrontend                 interpreter/frontends/lua.py
-        +-- PhpFrontend                 interpreter/frontends/php.py
-        +-- PascalFrontend              interpreter/frontends/pascal.py
-        +-- RustFrontend                interpreter/frontends/rust.py
+  |     |
+  |     +-- PythonFrontend              interpreter/frontends/python/frontend.py
+  |     +-- JavaScriptFrontend          interpreter/frontends/javascript/frontend.py
+  |     +-- TypeScriptFrontend          interpreter/frontends/typescript.py  (extends JS)
+  |     +-- JavaFrontend                interpreter/frontends/java/frontend.py
+  |     +-- KotlinFrontend              interpreter/frontends/kotlin/frontend.py
+  |     +-- ScalaFrontend               interpreter/frontends/scala/frontend.py
+  |     +-- CFrontend                   interpreter/frontends/c/frontend.py
+  |     +-- CppFrontend                 interpreter/frontends/cpp/frontend.py  (extends C)
+  |     +-- CSharpFrontend              interpreter/frontends/csharp/frontend.py
+  |     +-- GoFrontend                  interpreter/frontends/go/frontend.py
+  |     +-- RustFrontend                interpreter/frontends/rust/frontend.py
+  |     +-- RubyFrontend                interpreter/frontends/ruby/frontend.py
+  |     +-- LuaFrontend                 interpreter/frontends/lua/frontend.py
+  |     +-- PhpFrontend                 interpreter/frontends/php/frontend.py
+  |     +-- PascalFrontend              interpreter/frontends/pascal/frontend.py
+  |
+  +-- TreeSitterEmitContext             interpreter/frontends/context.py
+  |     (mutable lowering state: registers, labels, instructions, scopes)
+  |
+  +-- GrammarConstants                  interpreter/frontends/context.py
+  |     (frozen dataclass of per-language field names and literal tokens)
+  |
+  +-- common/                           interpreter/frontends/common/
+        (shared pure-function lowerers: expressions, control_flow, declarations, assignments, exceptions)
 ```
 
-`BaseFrontend` provides:
-- Two dispatch tables (`_STMT_DISPATCH`, `_EXPR_DISPATCH`) mapping tree-sitter node type strings to handler methods
-- Overridable class-level constants for field names and literal tokens where grammars differ
-- A library of ~30 reusable lowering methods (expressions, statements, control flow, function/class definitions)
-- Code generation primitives: register allocation, label generation, instruction emission
+Each language frontend is a **directory** with a standard module layout:
 
-Each language subclass populates the dispatch tables with its grammar's node types, overrides constants where the grammar diverges from Python defaults, and adds handlers for language-specific constructs.
+```
+interpreter/frontends/<language>/
+├── frontend.py          # BaseFrontend subclass — _build_*() hooks return dispatch tables
+├── node_types.py        # Frozen dataclass of tree-sitter node type constants
+├── expressions.py       # Pure-function expression lowerers: (ctx, node) → str
+├── control_flow.py      # Pure-function control flow lowerers: (ctx, node) → None
+├── declarations.py      # Pure-function declaration lowerers: (ctx, node) → None
+└── (optional extras)    # e.g. assignments.py (Python, Ruby), pascal_constants.py
+```
 
 ---
 
 ## Document Index
 
-| Document | Source File | Lines | Description |
-|---|---|---|---|
-| [base-frontend.md](base-frontend.md) | `interpreter/frontends/_base.py` | 985 | Shared lowering infrastructure, dispatch tables, all reusable methods |
-| [python.md](python.md) | `interpreter/frontends/python.py` | 1138 | Python frontend -- the reference implementation |
-| [javascript.md](javascript.md) | `interpreter/frontends/javascript.py` | 1006 | JavaScript frontend -- destructuring, arrow functions, template strings |
-| [typescript.md](typescript.md) | `interpreter/frontends/typescript.py` | 172 | TypeScript frontend -- extends JavaScript, strips type annotations |
-| [java.md](java.md) | `interpreter/frontends/java.py` | 1109 | Java frontend -- records, instanceof, method references |
-| [kotlin.md](kotlin.md) | `interpreter/frontends/kotlin.py` | 1115 | Kotlin frontend -- companion objects, elvis operator, when expressions |
-| [scala.md](scala.md) | `interpreter/frontends/scala.py` | 849 | Scala frontend -- for-comprehensions, case classes, pattern matching |
-| [c.md](c.md) | `interpreter/frontends/c.py` | 821 | C frontend -- pointers, sizeof, struct/union, goto |
-| [cpp.md](cpp.md) | `interpreter/frontends/cpp.py` | 612 | C++ frontend -- extends C, adds namespaces, templates, classes |
-| [csharp.md](csharp.md) | `interpreter/frontends/csharp.py` | 1454 | C# frontend -- LINQ, properties, events, using statements |
-| [go.md](go.md) | `interpreter/frontends/go.py` | 1116 | Go frontend -- goroutines, channels, multiple returns, short declarations |
-| [ruby.md](ruby.md) | `interpreter/frontends/ruby.py` | 1150 | Ruby frontend -- symbols, ranges, blocks, heredocs |
-| [lua.md](lua.md) | `interpreter/frontends/lua.py` | 787 | Lua frontend -- goto/labels, table constructors, `..` concat |
-| [php.md](php.md) | `interpreter/frontends/php.py` | 1404 | PHP frontend -- namespaces, traits, match expressions |
-| [pascal.md](pascal.md) | `interpreter/frontends/pascal.py` | 914 | Pascal frontend -- begin/end blocks, procedure/function distinction |
-| [rust.md](rust.md) | `interpreter/frontends/rust.py` | 944 | Rust frontend -- let bindings, match, closures, impl blocks, macros |
-| [cobol.md](cobol.md) | `interpreter/cobol/cobol_frontend.py` | 1394 | COBOL frontend -- ProLeap bridge, byte-addressed regions, PIC encoding, 20 statement types |
-
-**Total**: 16,970 lines across 17 source files (base + 15 languages + COBOL).
+| Document | Source Directory | Description |
+|---|---|---|
+| [base-frontend.md](base-frontend.md) | `_base.py` + `context.py` + `common/` | BaseFrontend, TreeSitterEmitContext, GrammarConstants, common lowerers |
+| [python.md](python.md) | `frontends/python/` | Python frontend -- the reference implementation |
+| [javascript.md](javascript.md) | `frontends/javascript/` | JavaScript frontend -- destructuring, arrow functions, template strings |
+| [typescript.md](typescript.md) | `frontends/typescript.py` | TypeScript frontend -- extends JavaScript, type extraction |
+| [java.md](java.md) | `frontends/java/` | Java frontend -- records, instanceof, method references |
+| [kotlin.md](kotlin.md) | `frontends/kotlin/` | Kotlin frontend -- companion objects, elvis operator, when expressions |
+| [scala.md](scala.md) | `frontends/scala/` | Scala frontend -- for-comprehensions, case classes, pattern matching |
+| [c.md](c.md) | `frontends/c/` | C frontend -- pointers, sizeof, struct/union, goto |
+| [cpp.md](cpp.md) | `frontends/cpp/` | C++ frontend -- extends C, adds namespaces, templates, classes |
+| [csharp.md](csharp.md) | `frontends/csharp/` | C# frontend -- LINQ, properties, events, using statements |
+| [go.md](go.md) | `frontends/go/` | Go frontend -- goroutines, channels, multiple returns, short declarations |
+| [ruby.md](ruby.md) | `frontends/ruby/` | Ruby frontend -- symbols, ranges, blocks, heredocs |
+| [lua.md](lua.md) | `frontends/lua/` | Lua frontend -- goto/labels, table constructors, `..` concat |
+| [php.md](php.md) | `frontends/php/` | PHP frontend -- namespaces, traits, match expressions |
+| [pascal.md](pascal.md) | `frontends/pascal/` | Pascal frontend -- begin/end blocks, procedure/function distinction |
+| [rust.md](rust.md) | `frontends/rust/` | Rust frontend -- let bindings, match, closures, impl blocks, macros |
+| [cobol.md](cobol.md) | `interpreter/cobol/cobol_frontend.py` | COBOL frontend -- ProLeap bridge, byte-addressed regions, PIC encoding |
 
 ---
 
 ## How Subclasses Customise Behaviour
 
-Each language frontend customises `BaseFrontend` through four mechanisms:
+Each language frontend customises `BaseFrontend` through four `_build_*()` hook methods:
 
-1. **Override class-level constants** -- field names (`FUNC_PARAMS_FIELD`, `ATTR_ATTRIBUTE_FIELD`, etc.), literal tokens (`NONE_LITERAL`, `TRUE_LITERAL`), and node type sets (`BLOCK_NODE_TYPES`, `COMMENT_TYPES`).
+1. **`_build_constants() → GrammarConstants`** -- returns a frozen dataclass specifying tree-sitter field names (e.g., `attr_attribute_field="field"` for Java), node type sets (`block_node_types`, `comment_types`, `noise_types`), and canonical literal tokens (`none_literal="null"`, `true_literal="true"`, `default_return_value="()"`, etc.).
 
-2. **Populate dispatch tables** -- in `__init__`, map tree-sitter node type strings (e.g., `"if_statement"`, `"binary_expression"`) to handler methods (e.g., `self._lower_if`, `self._lower_binop`).
+2. **`_build_stmt_dispatch() → dict[str, Callable]`** -- returns a mapping of tree-sitter statement node types to pure-function handlers `(ctx, node) → None`. Handlers come from `common/` modules (e.g., `common_cf.lower_if`), language-specific modules (e.g., `java_cf.lower_enhanced_for`), or inline lambdas for no-ops.
 
-3. **Canonical literal mapping** -- map language-specific null/boolean node types to the canonical lowering methods (`_lower_canonical_none`, `_lower_canonical_true`, `_lower_canonical_false`) so that all languages produce `CONST "None"`, `CONST "True"`, `CONST "False"` in the IR.
+3. **`_build_expr_dispatch() → dict[str, Callable]`** -- returns a mapping of tree-sitter expression node types to pure-function handlers `(ctx, node) → str` (returning the result register). Canonical literal handlers (e.g., `common_expr.lower_canonical_none`) canonicalize language-native null/boolean node types to Python-form IR constants.
 
-4. **Add language-specific lowerers** -- implement new methods for constructs unique to that language (e.g., Python list comprehensions, JavaScript destructuring, Go goroutines).
+4. **`_build_type_map() → dict[str, str]`** -- returns a mapping from language-native type names to canonical forms (e.g., `"int" → "Int"`, `"String" → "String"`). Used for type seeding during lowering.
+
+Additionally, block-scoped frontends set the class attribute `BLOCK_SCOPED = True`, which enables LLVM-style variable name mangling in `TreeSitterEmitContext`.
 
 ---
 
 ## Related Resources
 
 - [Frontend design notes](../notes-on-frontend-design.md) -- high-level architecture overview, LLM frontend, chunked LLM frontend, worked examples
+- [Type system design](../type-system.md) -- type extraction pipeline, block-scope tracking algorithm
 - `interpreter/ir.py` -- IR instruction set definition (Opcode enum, IRInstruction, SourceLocation)
-- `interpreter/constants.py` -- shared constant strings used across frontends
 - `interpreter/frontend.py` -- `Frontend` ABC and `get_frontend()` factory
-- `interpreter/frontends/__init__.py` -- lazy-loading registry mapping language names to frontend classes
+- `interpreter/frontends/__init__.py` -- lazy-loading registry mapping Language enum to frontend classes
+- `interpreter/frontends/context.py` -- `TreeSitterEmitContext` and `GrammarConstants` definitions
+- `interpreter/frontends/common/` -- shared pure-function lowerers
