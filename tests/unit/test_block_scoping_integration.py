@@ -785,6 +785,23 @@ class TestCStyleForInitScoping:
         mangled = [n for n in stores if n.startswith("i$")]
         assert len(mangled) >= 1
 
+    def test_go_for_init_shadows_outer(self):
+        """Go for i := 0; ... should shadow an outer i."""
+        source = """
+        package main
+
+        func main() {
+            i := 99
+            for i := 0; i < 10; i++ {
+            }
+            z := i
+        }
+        """
+        ir = _lower(GoFrontend, "go", source)
+        stores = _store_var_names(ir)
+        mangled = [n for n in stores if n.startswith("i$")]
+        assert len(mangled) >= 1
+
 
 # ---------------------------------------------------------------------------
 # Ruby scoping — call-frame isolation for lambdas/blocks, no mangling

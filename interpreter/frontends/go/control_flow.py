@@ -85,6 +85,16 @@ def lower_go_for(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def _lower_go_for_clause(ctx: TreeSitterEmitContext, clause, body_node, parent) -> None:
+    """Lower a Go C-style for clause (init; cond; update).
+
+    When ``ctx.block_scoped`` is True, the entire loop is wrapped in a
+    block scope so that variables declared in the init (e.g.
+    ``for i := 0; ...``) are scoped to the loop.
+    """
+    scope_entered = ctx.block_scoped
+    if scope_entered:
+        ctx.enter_block_scope()
+
     init_node = clause.child_by_field_name("initializer")
     cond_node = clause.child_by_field_name(ctx.constants.for_condition_field)
     update_node = clause.child_by_field_name(ctx.constants.for_update_field)
@@ -119,6 +129,9 @@ def _lower_go_for_clause(ctx: TreeSitterEmitContext, clause, body_node, parent) 
     ctx.emit(Opcode.BRANCH, label=loop_label)
 
     ctx.emit(Opcode.LABEL, label=end_label)
+
+    if scope_entered:
+        ctx.exit_block_scope()
 
 
 def _lower_go_range(ctx: TreeSitterEmitContext, clause, body_node, parent) -> None:
