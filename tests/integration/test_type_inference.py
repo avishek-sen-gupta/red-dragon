@@ -2575,3 +2575,35 @@ outer = (inner, "a")
 """
         _, env = _lower_and_infer(source, "python")
         assert env.var_types["inner"] == tuple_of(scalar("Int"), scalar("Int"))
+
+
+# ---------------------------------------------------------------------------
+# Type Aliases
+# ---------------------------------------------------------------------------
+
+
+class TestTypeAliasIntegration:
+    """Integration: C typedef seeds type aliases and resolves them."""
+
+    def test_c_typedef_seeds_alias(self):
+        """C: typedef int UserId; UserId x = 42; → x is Int."""
+        source = """\
+typedef int UserId;
+UserId x = 42;
+"""
+        _, env = _lower_and_infer(source, "c")
+        assert env.var_types["x"] == scalar("Int")
+        assert "UserId" in env.type_aliases
+        assert env.type_aliases["UserId"] == scalar("Int")
+
+    def test_c_typedef_pointer_alias(self):
+        """C: typedef int* IntPtr; IntPtr p; → p is Pointer[Int]."""
+        source = """\
+typedef int* IntPtr;
+IntPtr p;
+"""
+        _, env = _lower_and_infer(source, "c")
+        from interpreter.type_expr import pointer
+
+        assert env.var_types["p"] == pointer(scalar("Int"))
+        assert "IntPtr" in env.type_aliases

@@ -422,32 +422,36 @@ def lower_union_def(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_typedef(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower type_definition as CONST type_name -> STORE_VAR alias."""
-    named_children = [c for c in node.children if c.is_named]
-    alias_node = next(
-        (c for c in reversed(named_children) if c.type == CNodeType.TYPE_IDENTIFIER),
-        None,
-    )
-    type_nodes = [
-        c
-        for c in named_children
-        if c != alias_node and c.type != CNodeType.TYPE_IDENTIFIER
-    ]
-    type_name = ctx.node_text(type_nodes[0]) if type_nodes else "unknown_type"
-    alias_name = ctx.node_text(alias_node) if alias_node else "unknown_alias"
+    """Lower typedef as a type alias seed.
 
-    type_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=type_reg,
-        operands=[type_name],
-        node=node,
+    Examples: ``typedef int UserId;`` → alias UserId = Int
+              ``typedef int* IntPtr;`` → alias IntPtr = Pointer[Int]
+    """
+    named_children = [c for c in node.children if c.is_named]
+    # Extract base type from the first primitive/type specifier
+    raw_type = extract_type_from_field(ctx, node, "type")
+    base_type = normalize_type_hint(raw_type, ctx.type_map)
+
+    # Find alias name: last type_identifier, or from pointer_declarator
+    alias_name = ""
+    ptr_depth = 0
+    for child in reversed(named_children):
+        if child.type == CNodeType.TYPE_IDENTIFIER:
+            alias_name = ctx.node_text(child)
+            break
+        if child.type == CNodeType.POINTER_DECLARATOR:
+            alias_name = extract_declarator_name(ctx, child)
+            ptr_depth = _count_pointer_depth(child)
+            break
+
+    if not alias_name:
+        return
+
+    effective_type = (
+        _wrap_pointer_type(base_type, ptr_depth) if ptr_depth else base_type
     )
-    ctx.emit(
-        Opcode.STORE_VAR,
-        operands=[alias_name, type_reg],
-        node=node,
-    )
+    ctx.seed_type_alias(alias_name, effective_type)
+    logger.debug("Typedef alias: %s → %s", alias_name, effective_type)
 
 
 def lower_preproc_function_def(ctx: TreeSitterEmitContext, node) -> None:

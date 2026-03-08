@@ -569,24 +569,24 @@ void f() {
 
 class TestCFrontendTypedef:
     def test_typedef_simple(self):
+        """typedef int myint; seeds alias myint → Int."""
         source = "typedef int myint;"
-        ir = _parse_and_lower(source)
-        consts = _find_all(ir, Opcode.CONST)
-        assert any("int" in str(inst.operands) for inst in consts)
-        stores = _find_all(ir, Opcode.STORE_VAR)
-        assert any("myint" in inst.operands for inst in stores)
+        _, builder = _parse_and_lower_with_types(source)
+        assert "myint" in builder.type_aliases
+        assert str(builder.type_aliases["myint"]) == "Int"
 
     def test_typedef_struct(self):
+        """typedef struct Point { ... } Point; seeds alias Point."""
         source = "typedef struct Point { int x; int y; } Point;"
-        ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
-        assert any("Point" in inst.operands for inst in stores)
+        ir, builder = _parse_and_lower_with_types(source)
+        # Point should be seeded as alias (the struct body is still lowered)
+        assert "Point" in builder.type_aliases
 
     def test_typedef_unsigned(self):
+        """typedef unsigned long ulong; seeds alias ulong → Int."""
         source = "typedef unsigned long ulong;"
-        ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
-        assert any("ulong" in inst.operands for inst in stores)
+        _, builder = _parse_and_lower_with_types(source)
+        assert "ulong" in builder.type_aliases
 
 
 class TestCFrontendEnumSpecifier:

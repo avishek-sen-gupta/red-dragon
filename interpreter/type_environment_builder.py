@@ -33,6 +33,7 @@ class TypeEnvironmentBuilder:
     func_param_types: dict[str, list[tuple[str, TypeExpr]]] = field(
         default_factory=dict
     )
+    type_aliases: dict[str, TypeExpr] = field(default_factory=dict)
 
     def build(self) -> TypeEnvironment:
         """Freeze accumulated type info into an immutable TypeEnvironment."""

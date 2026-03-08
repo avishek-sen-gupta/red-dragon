@@ -193,6 +193,11 @@ class TreeSitterEmitContext:
         if var_name and type_name:
             self.type_env_builder.var_types[var_name] = parse_type(type_name)
 
+    def seed_type_alias(self, alias_name: str, target_type: str) -> None:
+        """Seed a type alias (e.g., typedef int UserId → alias UserId = Int)."""
+        if alias_name and target_type:
+            self.type_env_builder.type_aliases[alias_name] = parse_type(target_type)
+
     def seed_param_type(self, param_name: str, type_hint: str) -> None:
         """Seed a parameter type for the current function."""
         if self._current_func_label:

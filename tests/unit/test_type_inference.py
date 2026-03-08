@@ -2363,3 +2363,92 @@ class TestTupleTypeInference:
         env = infer_types(instructions, _default_resolver())
         assert env.var_types["t"] == tuple_of(scalar("Int"), scalar("String"))
         assert env.var_types["val"] == scalar("String")
+
+
+class TestTypeAliasInference:
+    """Unit tests for type alias resolution during inference."""
+
+    def test_alias_resolves_in_var_type(self):
+        """Variable seeded with alias name resolves to the aliased type."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
+        ]
+        builder = TypeEnvironmentBuilder(
+            var_types={"x": scalar("UserId")},
+            type_aliases={"UserId": scalar("Int")},
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        assert env.var_types["x"] == scalar("Int")
+
+    def test_alias_resolves_transitively(self):
+        """Chained aliases resolve fully: Km → Distance → Int."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["10"]),
+            _make_inst(Opcode.STORE_VAR, operands=["d", "%0"]),
+        ]
+        builder = TypeEnvironmentBuilder(
+            var_types={"d": scalar("Km")},
+            type_aliases={
+                "Km": scalar("Distance"),
+                "Distance": scalar("Int"),
+            },
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        assert env.var_types["d"] == scalar("Int")
+
+    def test_alias_resolves_parameterized(self):
+        """Alias to parameterized type: StringMap → Map[String, String]."""
+        from interpreter.type_expr import map_of
+
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=['"key"']),
+            _make_inst(Opcode.STORE_VAR, operands=["m", "%0"]),
+        ]
+        builder = TypeEnvironmentBuilder(
+            var_types={"m": scalar("StringMap")},
+            type_aliases={"StringMap": map_of(scalar("String"), scalar("String"))},
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        assert env.var_types["m"] == map_of(scalar("String"), scalar("String"))
+
+    def test_aliases_exposed_in_environment(self):
+        """TypeEnvironment includes alias registry."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+        ]
+        builder = TypeEnvironmentBuilder(
+            type_aliases={"UserId": scalar("Int")},
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        assert "UserId" in env.type_aliases
+        assert env.type_aliases["UserId"] == scalar("Int")
+
+    def test_func_return_alias_resolves(self):
+        """Function return type seeded as alias resolves to concrete type."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_f_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:f@func_f_0>"],
+            ),
+            _make_inst(
+                Opcode.CALL_FUNCTION,
+                result_reg="%2",
+                operands=["f"],
+            ),
+        ]
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_f_0": scalar("UserId")},
+            type_aliases={"UserId": scalar("Int")},
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        assert env.register_types["%2"] == scalar("Int")
