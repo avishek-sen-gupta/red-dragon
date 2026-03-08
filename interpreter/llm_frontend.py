@@ -168,6 +168,28 @@ IR:
   {"opcode":"STORE_VAR","result_reg":null,"operands":["result","%17"],"label":null,"source_location":null}
 ]
 
+## Array initialization example
+
+Source: `arr = [5, 3, 8]`
+
+IR:
+[
+  {"opcode":"LABEL","result_reg":null,"operands":[],"label":"entry","source_location":null},
+  {"opcode":"NEW_ARRAY","result_reg":"%0","operands":["int"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%1","operands":["5"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%2","operands":["0"],"label":null,"source_location":null},
+  {"opcode":"STORE_INDEX","result_reg":null,"operands":["%0","%2","%1"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%3","operands":["3"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%4","operands":["1"],"label":null,"source_location":null},
+  {"opcode":"STORE_INDEX","result_reg":null,"operands":["%0","%4","%3"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%5","operands":["8"],"label":null,"source_location":null},
+  {"opcode":"CONST","result_reg":"%6","operands":["2"],"label":null,"source_location":null},
+  {"opcode":"STORE_INDEX","result_reg":null,"operands":["%0","%6","%5"],"label":null,"source_location":null},
+  {"opcode":"STORE_VAR","result_reg":null,"operands":["arr","%0"],"label":null,"source_location":null}
+]
+
+Note: each element value AND each index gets its own CONST + register. STORE_INDEX takes [array_reg, index_reg, value_reg].
+
 ## Rules
 
 - The first instruction is always LABEL "entry"
@@ -179,6 +201,7 @@ IR:
 - Boolean literals: ["True"], ["False"]. None: ["None"]
 - Do NOT add comments in the JSON
 - Return ONLY the JSON array. No markdown fences. No text outside the array
+- NEVER reuse a register for a different purpose. Register names (%0, %1, ...) are arbitrary identifiers — the number has NO relationship to the value stored. If you need the integer 3 as an index, you MUST emit CONST "3" into a fresh register, even if %3 already exists holding a different value
 """
 
     USER_PROMPT_TEMPLATE = (
