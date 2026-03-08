@@ -21,7 +21,11 @@ class TestStructAsClass:
     def test_single_method(self):
         """Struct with one function pointer field acting as a method."""
         source = """\
-struct Shape { int width; int height; };
+struct Shape {
+    int width;
+    int height;
+    int (*area)(struct Shape *self);
+};
 
 int rect_area(struct Shape *self) {
     return self->width * self->height;
@@ -39,7 +43,12 @@ int result = (*s.area)(&s);
     def test_multiple_methods(self):
         """Struct with several function pointer fields simulating a full class."""
         source = """\
-struct Counter { int count; };
+struct Counter {
+    int count;
+    void (*increment)(struct Counter *self);
+    void (*add)(struct Counter *self, int n);
+    int (*get)(struct Counter *self);
+};
 
 void counter_increment(struct Counter *self) {
     self->count = self->count + 1;
@@ -70,7 +79,12 @@ int result = (*c.get)(&c);
     def test_constructor_pattern(self):
         """A function that initialises a struct and attaches method pointers."""
         source = """\
-struct Vec2 { int x; int y; };
+struct Vec2 {
+    int x;
+    int y;
+    int (*dot)(struct Vec2 *self, struct Vec2 *other);
+    int (*magnitude_sq)(struct Vec2 *self);
+};
 
 int vec2_dot(struct Vec2 *self, struct Vec2 *other) {
     return self->x * other->x + self->y * other->y;
@@ -104,7 +118,10 @@ class TestStructPolymorphism:
     def test_method_swap(self):
         """Reassigning a function pointer field changes which function is called."""
         source = """\
-struct Animal { int legs; };
+struct Animal {
+    int legs;
+    int (*speak)(struct Animal *self);
+};
 
 int dog_speak(struct Animal *self) {
     return 1;
@@ -130,7 +147,10 @@ int r2 = (*a.speak)(&a);
         """Two structs with the same function pointer field, each bound to
         a different implementation — dispatched through a common helper."""
         source = """\
-struct Shape { int param; };
+struct Shape {
+    int param;
+    int (*area)(struct Shape *self);
+};
 
 int circle_area(struct Shape *self) {
     return 3 * self->param * self->param;
