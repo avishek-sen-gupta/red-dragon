@@ -506,14 +506,18 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
 def _handle_unop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
     oper = inst.operands[0]
     operand = _resolve_reg(vm, inst.operands[1])
-    # In C, &func is equivalent to func for function references.
-    if oper == "&" and isinstance(operand, str) and _parse_func_ref(operand).matched:
-        return ExecutionResult.success(
-            StateUpdate(
-                register_writes={inst.result_reg: operand},
-                reasoning=f"unop &{operand} → {operand} (address-of function is identity)",
+    # Address-of (&) on a value that is already a reference (function ref or
+    # heap object) returns the reference unchanged — our model already uses
+    # references rather than inline values for these.
+    if oper == "&":
+        addr = _heap_addr(operand)
+        if addr and (_parse_func_ref(operand).matched or addr in vm.heap):
+            return ExecutionResult.success(
+                StateUpdate(
+                    register_writes={inst.result_reg: operand},
+                    reasoning=f"unop &{operand} → {operand} (address-of reference is identity)",
+                )
             )
-        )
     if _is_symbolic(operand):
         op_desc = _symbolic_name(operand)
         sym = vm.fresh_symbolic(hint=f"{oper}{op_desc}")
