@@ -184,6 +184,40 @@ def _lower_control_body(ctx: TreeSitterEmitContext, body_node) -> str:
         reg = ctx.fresh_reg()
         ctx.emit(Opcode.CONST, result_reg=reg, operands=[ctx.constants.none_literal])
         return reg
+    # If the sole child is a block node (e.g. `statements`), unwrap it
+    if len(children) == 1 and children[0].type in ctx.constants.block_node_types:
+        inner = [
+            c
+            for c in children[0].children
+            if c.is_named and c.type not in ctx.constants.comment_types
+        ]
+        scope_entered = ctx.block_scoped
+        if scope_entered:
+            ctx.enter_block_scope()
+        for child in inner[:-1]:
+            ctx.lower_stmt(child)
+        # Try lowering last child as expression; if it's a statement-only
+        # node (no expr handler), lower as statement and return None
+        if inner and inner[-1].type in ctx.expr_dispatch:
+            result = ctx.lower_expr(inner[-1])
+        elif inner:
+            ctx.lower_stmt(inner[-1])
+            result = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.CONST,
+                result_reg=result,
+                operands=[ctx.constants.none_literal],
+            )
+        else:
+            result = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.CONST,
+                result_reg=result,
+                operands=[ctx.constants.none_literal],
+            )
+        if scope_entered:
+            ctx.exit_block_scope()
+        return result
     for child in children[:-1]:
         ctx.lower_stmt(child)
     return ctx.lower_expr(children[-1])

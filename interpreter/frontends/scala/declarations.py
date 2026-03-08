@@ -74,7 +74,8 @@ def _lower_val_or_var_def(ctx: TreeSitterEmitContext, node) -> None:
     if pattern_node is not None and pattern_node.type == NT.TUPLE_PATTERN:
         _lower_scala_tuple_destructure(ctx, pattern_node, val_reg, node)
     else:
-        var_name = _extract_pattern_name(ctx, pattern_node)
+        raw_name = _extract_pattern_name(ctx, pattern_node)
+        var_name = ctx.declare_block_var(raw_name)
         ctx.emit(
             Opcode.STORE_VAR,
             operands=[var_name, val_reg],

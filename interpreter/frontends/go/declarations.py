@@ -32,9 +32,10 @@ def lower_short_var_decl(ctx: TreeSitterEmitContext, node) -> None:
     right_regs = lower_expression_list(ctx, right)
 
     for name, val_reg in zip(left_names, right_regs):
+        var_name = ctx.declare_block_var(name)
         ctx.emit(
             Opcode.STORE_VAR,
-            operands=[name, val_reg],
+            operands=[var_name, val_reg],
             node=node,
         )
 
@@ -265,7 +266,7 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
     if value_node:
         val_regs = lower_expression_list(ctx, value_node)
         for name_node, val_reg in zip(names, val_regs):
-            name_str = ctx.node_text(name_node)
+            name_str = ctx.declare_block_var(ctx.node_text(name_node))
             ctx.emit(
                 Opcode.STORE_VAR,
                 operands=[name_str, val_reg],
@@ -274,7 +275,7 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
             ctx.seed_var_type(name_str, type_hint)
         # If more names than values (e.g. `var a, b int`), store None for remainder
         for name_node in names[len(val_regs) :]:
-            name_str = ctx.node_text(name_node)
+            name_str = ctx.declare_block_var(ctx.node_text(name_node))
             val_reg = ctx.fresh_reg()
             ctx.emit(
                 Opcode.CONST,
@@ -289,7 +290,7 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
             ctx.seed_var_type(name_str, type_hint)
     else:
         for name_node in names:
-            name_str = ctx.node_text(name_node)
+            name_str = ctx.declare_block_var(ctx.node_text(name_node))
             val_reg = ctx.fresh_reg()
             ctx.emit(
                 Opcode.CONST,

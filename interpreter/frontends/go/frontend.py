@@ -18,6 +18,8 @@ from interpreter.frontends.go.node_types import GoNodeType
 class GoFrontend(BaseFrontend):
     """Lowers a Go tree-sitter AST into flattened TAC IR."""
 
+    BLOCK_SCOPED = True
+
     def _build_constants(self) -> GrammarConstants:
         return GrammarConstants(
             attr_object_field="operand",
