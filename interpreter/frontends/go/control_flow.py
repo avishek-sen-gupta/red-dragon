@@ -127,7 +127,7 @@ def _lower_go_range(ctx: TreeSitterEmitContext, clause, body_node, parent) -> No
     right = clause.child_by_field_name(ctx.constants.assign_right_field)
 
     iter_reg = ctx.lower_expr(right) if right else ctx.fresh_reg()
-    var_names = extract_expression_list(ctx, left) if left else ["__range_var"]
+    raw_names = extract_expression_list(ctx, left) if left else ["__range_var"]
 
     idx_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
@@ -148,6 +148,8 @@ def _lower_go_range(ctx: TreeSitterEmitContext, clause, body_node, parent) -> No
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.enter_block_scope()
+    var_names = [ctx.declare_block_var(n) for n in raw_names]
     # Store index variable
     if len(var_names) >= 1:
         ctx.emit(Opcode.STORE_VAR, operands=[var_names[0], idx_reg])
@@ -166,6 +168,7 @@ def _lower_go_range(ctx: TreeSitterEmitContext, clause, body_node, parent) -> No
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
+    ctx.exit_block_scope()
 
     ctx.emit(Opcode.LABEL, label=update_label)
     one_reg = ctx.fresh_reg()

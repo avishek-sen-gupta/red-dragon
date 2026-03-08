@@ -329,6 +329,306 @@ class TestTypeScriptBlockScoping:
 
 
 # ---------------------------------------------------------------------------
+# Loop variable scoping (P1 gaps)
+# ---------------------------------------------------------------------------
+
+
+class TestJavaForEachScoping:
+    def test_enhanced_for_var_shadows_outer(self):
+        """Enhanced for loop variable shadowing outer should mangle."""
+        source = """
+        class M {
+            void m() {
+                int x = 0;
+                int[] arr = {1, 2, 3};
+                for (int x : arr) {
+                    int y = x;
+                }
+            }
+        }
+        """
+        ir = _lower(JavaFrontend, "java", source)
+        stores = _store_var_names(ir)
+        assert "x" in stores
+        mangled = [n for n in stores if n.startswith("x$")]
+        assert len(mangled) >= 1
+
+
+class TestCppRangeForScoping:
+    def test_range_for_var_shadows_outer(self):
+        source = """
+        int main() {
+            int x = 0;
+            int arr[] = {1, 2, 3};
+            for (int x : arr) {
+                int y = x;
+            }
+        }
+        """
+        ir = _lower(CppFrontend, "cpp", source)
+        stores = _store_var_names(ir)
+        assert "x" in stores
+        mangled = [n for n in stores if n.startswith("x$")]
+        assert len(mangled) >= 1
+
+
+class TestCSharpForeachScoping:
+    def test_foreach_var_shadows_outer(self):
+        source = """
+        class M {
+            void Main() {
+                int x = 0;
+                int[] arr = {1, 2, 3};
+                foreach (int x in arr) {
+                    int y = x;
+                }
+            }
+        }
+        """
+        ir = _lower(CSharpFrontend, "csharp", source)
+        stores = _store_var_names(ir)
+        assert "x" in stores
+        mangled = [n for n in stores if n.startswith("x$")]
+        assert len(mangled) >= 1
+
+
+class TestRustForInScoping:
+    def test_for_in_var_shadows_outer(self):
+        source = """
+        fn main() {
+            let x = 0;
+            let arr = vec![1, 2, 3];
+            for x in arr {
+                let y = x;
+            }
+        }
+        """
+        ir = _lower(RustFrontend, "rust", source)
+        stores = _store_var_names(ir)
+        assert "x" in stores
+        mangled = [n for n in stores if n.startswith("x$")]
+        assert len(mangled) >= 1
+
+
+class TestGoRangeScoping:
+    def test_range_var_shadows_outer(self):
+        source = """
+        package main
+        func main() {
+            x := 0
+            arr := []int{1, 2, 3}
+            for x, _ := range arr {
+                _ = x
+            }
+            _ = x
+        }
+        """
+        ir = _lower(GoFrontend, "go", source)
+        stores = _store_var_names(ir)
+        assert "x" in stores
+        mangled = [n for n in stores if n.startswith("x$")]
+        assert len(mangled) >= 1
+
+
+class TestKotlinForScoping:
+    def test_for_var_shadows_outer(self):
+        source = """
+        fun main() {
+            val x = 0
+            val arr = listOf(1, 2, 3)
+            for (x in arr) {
+                val y = x
+            }
+        }
+        """
+        ir = _lower(KotlinFrontend, "kotlin", source)
+        stores = _store_var_names(ir)
+        assert "x" in stores
+        mangled = [n for n in stores if n.startswith("x$")]
+        assert len(mangled) >= 1
+
+
+class TestTypeScriptForOfScoping:
+    def test_for_of_var_shadows_outer(self):
+        source = """
+        function main() {
+            let x = 0;
+            let arr = [1, 2, 3];
+            for (let x of arr) {
+                let y = x;
+            }
+        }
+        """
+        ir = _lower(TypeScriptFrontend, "typescript", source)
+        stores = _store_var_names(ir)
+        assert "x" in stores
+        mangled = [n for n in stores if n.startswith("x$")]
+        assert len(mangled) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Catch variable scoping (P2 gap)
+# ---------------------------------------------------------------------------
+
+
+class TestJavaCatchVarScoping:
+    def test_catch_var_shadows_outer(self):
+        source = """
+        class M {
+            void m() {
+                int e = 0;
+                try {
+                    int x = 1;
+                } catch (Exception e) {
+                    int y = 2;
+                }
+            }
+        }
+        """
+        ir = _lower(JavaFrontend, "java", source)
+        stores = _store_var_names(ir)
+        assert "e" in stores
+        mangled = [n for n in stores if n.startswith("e$")]
+        assert len(mangled) >= 1
+
+
+class TestJavaScriptForInScoping:
+    def test_for_in_var_shadows_outer(self):
+        source = """
+        function main() {
+            let x = 0;
+            let obj = {a: 1, b: 2};
+            for (let x in obj) {
+                let y = x;
+            }
+        }
+        """
+        ir = _lower(TypeScriptFrontend, "typescript", source)
+        stores = _store_var_names(ir)
+        assert "x" in stores
+        mangled = [n for n in stores if n.startswith("x$")]
+        assert len(mangled) >= 1
+
+
+class TestScalaForComprehensionScoping:
+    def test_for_comprehension_var_shadows_outer(self):
+        source = """
+        object Main {
+            def main(): Unit = {
+                val x = 0
+                for (x <- List(1, 2, 3)) {
+                    val y = x
+                }
+            }
+        }
+        """
+        ir = _lower(ScalaFrontend, "scala", source)
+        stores = _store_var_names(ir)
+        assert "x" in stores
+        mangled = [n for n in stores if n.startswith("x$")]
+        assert len(mangled) >= 1
+
+
+class TestCSharpCatchVarScoping:
+    def test_catch_var_shadows_outer(self):
+        source = """
+        class M {
+            void Main() {
+                int e = 0;
+                try {
+                    int x = 1;
+                } catch (Exception e) {
+                    int y = 2;
+                }
+            }
+        }
+        """
+        ir = _lower(CSharpFrontend, "csharp", source)
+        stores = _store_var_names(ir)
+        assert "e" in stores
+        mangled = [n for n in stores if n.startswith("e$")]
+        assert len(mangled) >= 1
+
+
+class TestCppCatchVarScoping:
+    def test_catch_var_shadows_outer(self):
+        source = """
+        int main() {
+            int e = 0;
+            try {
+                int x = 1;
+            } catch (std::exception& e) {
+                int y = 2;
+            }
+        }
+        """
+        ir = _lower(CppFrontend, "cpp", source)
+        stores = _store_var_names(ir)
+        assert "e" in stores
+        mangled = [n for n in stores if n.startswith("e$")]
+        assert len(mangled) >= 1
+
+
+class TestKotlinCatchVarScoping:
+    def test_catch_var_shadows_outer(self):
+        source = """
+        fun main() {
+            val e = 0
+            try {
+                val x = 1
+            } catch (e: Exception) {
+                val y = 2
+            }
+        }
+        """
+        ir = _lower(KotlinFrontend, "kotlin", source)
+        stores = _store_var_names(ir)
+        assert "e" in stores
+        mangled = [n for n in stores if n.startswith("e$")]
+        assert len(mangled) >= 1
+
+
+class TestTypeScriptCatchVarScoping:
+    def test_catch_var_shadows_outer(self):
+        source = """
+        function main() {
+            let e = 0;
+            try {
+                let x = 1;
+            } catch (e) {
+                let y = 2;
+            }
+        }
+        """
+        ir = _lower(TypeScriptFrontend, "typescript", source)
+        stores = _store_var_names(ir)
+        assert "e" in stores
+        mangled = [n for n in stores if n.startswith("e$")]
+        assert len(mangled) >= 1
+
+
+class TestScalaCatchVarScoping:
+    def test_catch_var_shadows_outer(self):
+        source = """
+        object Main {
+            def main(): Unit = {
+                val e = 0
+                try {
+                    val x = 1
+                } catch {
+                    case e: Exception => val y = 2
+                }
+            }
+        }
+        """
+        ir = _lower(ScalaFrontend, "scala", source)
+        stores = _store_var_names(ir)
+        assert "e" in stores
+        mangled = [n for n in stores if n.startswith("e$")]
+        assert len(mangled) >= 1
+
+
+# ---------------------------------------------------------------------------
 # Function-scoped languages should NOT mangle
 # ---------------------------------------------------------------------------
 

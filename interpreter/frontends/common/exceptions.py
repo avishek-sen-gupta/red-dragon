@@ -57,6 +57,7 @@ def lower_try_catch(
     # ── catch clauses ──
     for i, clause in enumerate(catch_clauses):
         ctx.emit(Opcode.LABEL, label=catch_labels[i])
+        ctx.enter_block_scope()
         exc_type = clause.get("type", DEFAULT_EXCEPTION_TYPE) or DEFAULT_EXCEPTION_TYPE
         exc_reg = ctx.fresh_reg()
         ctx.emit(
@@ -67,14 +68,16 @@ def lower_try_catch(
         )
         exc_var = clause.get("variable")
         if exc_var:
+            resolved_var = ctx.declare_block_var(exc_var)
             ctx.emit(
                 Opcode.STORE_VAR,
-                operands=[exc_var, exc_reg],
+                operands=[resolved_var, exc_reg],
                 node=node,
             )
         catch_body = clause.get("body")
         if catch_body:
             ctx.lower_block(catch_body)
+        ctx.exit_block_scope()
         ctx.emit(Opcode.BRANCH, label=exit_target)
 
     # ── else clause (Python/Ruby) ──
