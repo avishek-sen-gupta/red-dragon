@@ -105,12 +105,22 @@ class TestTypeScriptTypeFeatures:
         assert Opcode.STORE_VAR in opcodes
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
+        # The `as` cast should be handled transparently — no unsupported SYMBOLIC
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any(
+            "as_expression" in str(inst.operands) for inst in symbolics
+        ), "as_expression should be handled, not emitted as unsupported SYMBOLIC"
 
     def test_non_null_assertion(self):
         instructions = _parse_ts("const x = y!;")
         opcodes = _opcodes(instructions)
         assert Opcode.LOAD_VAR in opcodes
         assert Opcode.STORE_VAR in opcodes
+        # The `!` non-null assertion should be handled transparently — no unsupported SYMBOLIC
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any(
+            "non_null" in str(inst.operands) for inst in symbolics
+        ), "non_null_expression should be handled, not emitted as unsupported SYMBOLIC"
 
 
 class TestTypeScriptFunctions:
