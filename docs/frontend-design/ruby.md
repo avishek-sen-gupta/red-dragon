@@ -343,6 +343,8 @@ LABEL         unlessmod_end_N
 
 3. **Block/do_block as closures** -- Ruby blocks (`{ |x| ... }` and `do |x| ... end`) are lowered as inline anonymous functions and passed as additional arguments to the enclosing method call. This is handled in `ruby_expr.lower_ruby_call` which detects `block`/`do_block` children.
 
+   **Scoping model**: Ruby does NOT use `BLOCK_SCOPED = True` (no LLVM-style name mangling). Instead, lambdas and blocks get variable isolation through the VM's call-frame mechanism — each is emitted as an inline function (`BRANCH` → `LABEL` → params → body → `RETURN` → `LABEL end`), and the VM creates a new call frame when invoking them via `CALL_FUNCTION` / `CALL_METHOD`. This means block/lambda parameters naturally shadow outer variables without `$` mangling. In contrast, `for..in` is lowered inline (no function boundary, no `RETURN`), so its loop variable intentionally leaks to the enclosing scope — matching Ruby's real semantics where `for` does not create a new scope but blocks do.
+
 4. **`unless` and `until` via negation** -- Rather than special IR opcodes, `unless` is lowered as `UNOP("!") + BRANCH_IF` (i.e., inverted `if`), and `until` as `UNOP("!") + BRANCH_IF` (inverted `while`).
 
 5. **begin/rescue uses custom try/catch lowering** -- `_lower_try_catch_ruby` in `control_flow.py` accepts a list of body children rather than a single body node, because Ruby's `begin` block can have interleaved children. Default exception type is `"StandardError"` (not `"Exception"`).
