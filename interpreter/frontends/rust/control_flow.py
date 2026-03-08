@@ -37,7 +37,7 @@ def lower_for(ctx: TreeSitterEmitContext, node) -> None:
     value_node = node.child_by_field_name("value")
     body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
-    var_name = ctx.node_text(pattern_node) if pattern_node else "__for_var"
+    raw_name = ctx.node_text(pattern_node) if pattern_node else "__for_var"
     iter_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
 
     idx_reg = ctx.fresh_reg()
@@ -59,6 +59,8 @@ def lower_for(ctx: TreeSitterEmitContext, node) -> None:
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.enter_block_scope()
+    var_name = ctx.declare_block_var(raw_name)
     elem_reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
     ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
@@ -68,6 +70,7 @@ def lower_for(ctx: TreeSitterEmitContext, node) -> None:
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
+    ctx.exit_block_scope()
 
     ctx.emit(Opcode.LABEL, label=update_label)
     one_reg = ctx.fresh_reg()

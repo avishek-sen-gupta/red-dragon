@@ -128,7 +128,7 @@ def lower_for_stmt(ctx: TreeSitterEmitContext, node) -> None:
     # Iterable is the expression between "in" and body
     iterable_node = _find_for_iterable(ctx, node)
 
-    var_name = _extract_for_var_name(ctx, var_node) if var_node else "__for_var"
+    raw_name = _extract_for_var_name(ctx, var_node) if var_node else "__for_var"
     iter_reg = ctx.lower_expr(iterable_node) if iterable_node else ctx.fresh_reg()
 
     idx_reg = ctx.fresh_reg()
@@ -150,6 +150,8 @@ def lower_for_stmt(ctx: TreeSitterEmitContext, node) -> None:
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.enter_block_scope()
+    var_name = ctx.declare_block_var(raw_name)
     elem_reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
     ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
@@ -159,6 +161,7 @@ def lower_for_stmt(ctx: TreeSitterEmitContext, node) -> None:
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
+    ctx.exit_block_scope()
 
     ctx.emit(Opcode.LABEL, label=update_label)
     one_reg = ctx.fresh_reg()
@@ -260,10 +263,14 @@ def _extract_try_parts(ctx: TreeSitterEmitContext, node):
     finally_node = None
     for child in node.children:
         if child.type == KNT.CATCH_BLOCK:
-            # catch_block children: "catch", "(", annotation*, simple_identifier (type), simple_identifier (var), ")", statements
+            # catch_block children: "catch", "(", simple_identifier (var), ":", user_type (type), ")", statements
             ids = [c for c in child.children if c.type == KNT.SIMPLE_IDENTIFIER]
-            exc_type = ctx.node_text(ids[0]) if ids else None
-            exc_var = ctx.node_text(ids[1]) if len(ids) > 1 else None
+            exc_var = ctx.node_text(ids[0]) if ids else None
+            type_node = next(
+                (c for c in child.children if c.type == KNT.USER_TYPE),
+                None,
+            )
+            exc_type = ctx.node_text(type_node) if type_node else None
             catch_body = next(
                 (
                     c

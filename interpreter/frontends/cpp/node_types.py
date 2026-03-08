@@ -76,6 +76,8 @@ class CppNodeType:
     # Exception handling
     CATCH_CLAUSE = "catch_clause"
     CATCH_DECLARATOR = "catch_declarator"
+    PARAMETER_DECLARATION = "parameter_declaration"
+    REFERENCE_DECLARATOR = "reference_declarator"
 
     # Field initializers
     FIELD_INITIALIZER_LIST = "field_initializer_list"

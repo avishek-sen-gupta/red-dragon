@@ -67,7 +67,7 @@ def lower_foreach(ctx: TreeSitterEmitContext, node) -> None:
     body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
     iter_reg = ctx.lower_expr(right_node) if right_node else ctx.fresh_reg()
-    var_name = ctx.node_text(left_node) if left_node else "__foreach_var"
+    raw_name = ctx.node_text(left_node) if left_node else "__foreach_var"
 
     idx_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
@@ -88,6 +88,8 @@ def lower_foreach(ctx: TreeSitterEmitContext, node) -> None:
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.enter_block_scope()
+    var_name = ctx.declare_block_var(raw_name)
     elem_reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
     ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
@@ -97,6 +99,7 @@ def lower_foreach(ctx: TreeSitterEmitContext, node) -> None:
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
+    ctx.exit_block_scope()
 
     ctx.emit(Opcode.LABEL, label=update_label)
     one_reg = ctx.fresh_reg()
