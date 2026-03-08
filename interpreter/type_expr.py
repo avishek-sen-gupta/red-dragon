@@ -202,6 +202,11 @@ def fn_type(params: list[TypeExpr], ret: TypeExpr) -> FunctionType:
     return FunctionType(params=tuple(params), return_type=ret)
 
 
+def tuple_of(*elements: TypeExpr) -> ParameterizedType:
+    """Create a ``Tuple[elements...]`` type."""
+    return ParameterizedType("Tuple", tuple(elements))
+
+
 def union_of(*types: TypeExpr) -> TypeExpr:
     """Create a union type, with flattening, dedup, and singleton elimination.
 

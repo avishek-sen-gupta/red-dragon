@@ -23,6 +23,7 @@ from interpreter.type_expr import (
     unwrap_optional,
     unknown,
     fn_type,
+    tuple_of,
 )
 
 
@@ -674,3 +675,50 @@ class TestFunctionTypeParsing:
         result = parse_type("Fn")
         assert isinstance(result, ScalarType)
         assert result.name == "Fn"
+
+
+class TestTupleOfConstructor:
+    """Tests for the tuple_of() convenience constructor."""
+
+    def test_single_element_tuple(self):
+        t = tuple_of(scalar("Int"))
+        assert isinstance(t, ParameterizedType)
+        assert t.constructor == "Tuple"
+        assert t.arguments == (scalar("Int"),)
+        assert str(t) == "Tuple[Int]"
+
+    def test_two_element_tuple(self):
+        t = tuple_of(scalar("Int"), scalar("String"))
+        assert str(t) == "Tuple[Int, String]"
+        assert t.arguments == (scalar("Int"), scalar("String"))
+
+    def test_three_element_tuple(self):
+        t = tuple_of(scalar("Int"), scalar("String"), scalar("Bool"))
+        assert str(t) == "Tuple[Int, String, Bool]"
+
+    def test_nested_tuple(self):
+        inner = tuple_of(scalar("Int"), scalar("String"))
+        outer = tuple_of(inner, scalar("Bool"))
+        assert str(outer) == "Tuple[Tuple[Int, String], Bool]"
+
+    def test_tuple_with_parameterized_element(self):
+        t = tuple_of(array_of(scalar("Int")), scalar("String"))
+        assert str(t) == "Tuple[Array[Int], String]"
+
+    def test_tuple_equality_with_string(self):
+        t = tuple_of(scalar("Int"), scalar("String"))
+        assert t == "Tuple[Int, String]"
+
+    def test_tuple_roundtrip_through_parser(self):
+        original = "Tuple[Int, String, Bool]"
+        assert str(parse_type(original)) == original
+
+    def test_nested_tuple_roundtrip(self):
+        original = "Tuple[Tuple[Int, String], Bool]"
+        assert str(parse_type(original)) == original
+
+    def test_tuple_hash_consistency(self):
+        t1 = tuple_of(scalar("Int"), scalar("String"))
+        t2 = parse_type("Tuple[Int, String]")
+        assert hash(t1) == hash(t2)
+        assert t1 == t2
