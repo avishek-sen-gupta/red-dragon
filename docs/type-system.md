@@ -333,11 +333,32 @@ var_types:                 MappingProxyType[str, TypeExpr]                # "x" 
 func_signatures:           MappingProxyType[str, FunctionSignature]       # "add" → FunctionSignature(...)
 type_aliases:              MappingProxyType[str, TypeExpr]                # "UserId" → ScalarType("Int")
 interface_implementations: MappingProxyType[str, tuple[str, ...]]         # "Dog" → ("Comparable",)
+scoped_var_types:          MappingProxyType[str, MappingProxyType[str, TypeExpr]]  # per-function scoped types
+var_scope_metadata:        MappingProxyType[str, VarScopeInfo]            # "x$1" → VarScopeInfo("x", 1)
 ```
 
 `FunctionSignature` is a frozen dataclass with `params: tuple[tuple[str, str], ...]` and `return_type: str`. Only user-facing function names (not internal labels like `func_add_0`) appear in `func_signatures`.
 
+`scoped_var_types` preserves per-function variable types without flattening — useful for scope-aware analysis. `var_scope_metadata` maps mangled variable names back to their original names and scope depths.
+
 All fields use `MappingProxyType` for true immutability — the environment cannot be modified after construction.
+
+### Block-Scope Tracking (LLVM-style)
+
+For block-scoped languages (Java, C, C++, C#, Rust, Go, Kotlin, Scala, TypeScript `let`/`const`), `TreeSitterEmitContext` provides LLVM-style scope tracking that disambiguates variable names at IR emission time:
+
+| Method | Purpose |
+|---|---|
+| `enter_block_scope()` | Push a new block scope onto the stack |
+| `exit_block_scope()` | Pop the innermost scope |
+| `declare_block_var(name) → str` | Declare a variable; returns mangled name if shadowing |
+| `resolve_var(name) → str` | Resolve name through scope stack (innermost first) |
+| `reset_block_scopes()` | Clear all scopes (used at function boundaries) |
+| `var_scope_metadata` | `dict[str, VarScopeInfo]` — mangled→original metadata |
+
+When `declare_block_var("x")` detects that `x` already exists in an outer scope, it generates a mangled name (`x$1`, `x$2`, ...) and records `VarScopeInfo(original_name="x", scope_depth=N)`. The IR then uses the mangled name, so the inference engine sees distinct variables. Function-scoped languages (Python, JavaScript `var`, Ruby, Lua, PHP, Pascal) bypass this entirely.
+
+The `flat_var_types()` method on `_InferenceContext` merges per-scope variable types using `union_of()` when the same name appears in multiple scopes with different types, rather than last-writer-wins overwriting.
 
 ## Phase 3: Runtime Type Coercion
 
@@ -526,5 +547,6 @@ The type system is designed for extension via dependency injection:
 | `interpreter/conversion_rules.py` | `TypeConversionRules` — ABC for coercion rules |
 | `interpreter/conversion_result.py` | `ConversionResult` — coercion descriptor |
 | `interpreter/default_conversion_rules.py` | `DefaultTypeConversionRules` — standard coercion table |
-| `interpreter/frontends/context.py` | `TreeSitterEmitContext.seed_*_type()` — frontend seeding API (register, var, alias, interface) |
+| `interpreter/var_scope_info.py` | `VarScopeInfo` — frozen metadata for mangled block-scoped variable names |
+| `interpreter/frontends/context.py` | `TreeSitterEmitContext.seed_*_type()` — frontend seeding API; block-scope tracking |
 | `interpreter/vm.py` | `_coerce_value()`, `apply_update()` — runtime coercion |

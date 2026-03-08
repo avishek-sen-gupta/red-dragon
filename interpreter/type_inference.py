@@ -193,10 +193,19 @@ class _InferenceContext:
         return global_dict.get(name, UNKNOWN)
 
     def flat_var_types(self) -> dict[str, TypeExpr]:
-        """Flatten all scoped var types into a single dict for TypeEnvironment."""
+        """Flatten all scoped var types into a single dict for TypeEnvironment.
+
+        When the same variable name appears in multiple scopes with different
+        types, the result is a union of those types rather than last-writer-wins.
+        """
         result: dict[str, TypeExpr] = {}
         for scope_dict in self.scoped_var_types.values():
-            result.update(scope_dict)
+            for name, type_expr in scope_dict.items():
+                existing = result.get(name, UNKNOWN)
+                if not existing:
+                    result[name] = type_expr
+                elif existing != type_expr:
+                    result[name] = union_of(existing, type_expr)
         return result
 
 
@@ -352,6 +361,12 @@ def infer_types(
         len(ctx.register_types),
         len(flat_vars),
     )
+    frozen_scoped = MappingProxyType(
+        {
+            scope: MappingProxyType(dict(var_dict))
+            for scope, var_dict in ctx.scoped_var_types.items()
+        }
+    )
     return TypeEnvironment(
         register_types=MappingProxyType(ctx.register_types),
         var_types=MappingProxyType(flat_vars),
@@ -360,6 +375,8 @@ def infer_types(
         interface_implementations=MappingProxyType(
             {k: tuple(v) for k, v in type_env_builder.interface_implementations.items()}
         ),
+        scoped_var_types=frozen_scoped,
+        var_scope_metadata=MappingProxyType(dict(type_env_builder.var_scope_metadata)),
     )
 
 
