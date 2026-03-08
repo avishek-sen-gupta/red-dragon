@@ -1213,7 +1213,7 @@ Updated tier classification: Tier 1 (11): Python, Java, C#, Kotlin, Scala, JS, T
 
 ---
 
-### ADR-2026-03-04: Refactor tree-sitter frontends from monolithic files to modular packages with pure functions + context
+### ADR-063.1: Refactor tree-sitter frontends from monolithic files to modular packages with pure functions + context (2026-03-04)
 
 **Status:** Accepted
 
@@ -1237,7 +1237,7 @@ Updated tier classification: Tier 1 (11): Python, Java, C#, Kotlin, Scala, JS, T
 
 ---
 
-### ADR-019: Migrate from provider-specific SDKs to LiteLLM (2026-03-04)
+### ADR-063.2: Migrate from provider-specific SDKs to LiteLLM (2026-03-04)
 
 **Context:** The LLM integration layer had 4 near-identical `LLMClient` subclasses (`ClaudeLLMClient`, `OpenAILLMClient`, `OllamaLLMClient`, `HuggingFaceLLMClient`) each wrapping a provider-specific SDK, and 4 identical `LLMBackend` subclasses differing only in the provider string passed to the factory. This duplication meant every new provider required a new class pair, and two direct SDK dependencies (`anthropic`, `openai`) had to be maintained separately.
 
