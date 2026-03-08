@@ -600,3 +600,65 @@ class TestTypeGraphTupleLUB:
         g = self._graph()
         t = tuple_of(scalar("Int"), scalar("String"))
         assert g.common_supertype_expr(t, scalar("Int")) == scalar("Any")
+
+
+class TestTypeGraphInterfaceExtension:
+    """Tests for extend_with_interfaces."""
+
+    def test_class_becomes_subtype_of_interface(self):
+        """Dog implements Comparable → Dog ⊆ Comparable."""
+        g = TypeGraph(DEFAULT_TYPE_NODES).extend_with_interfaces(
+            {"Dog": ("Comparable",)}
+        )
+        assert g.is_subtype("Dog", "Comparable")
+
+    def test_interface_is_subtype_of_any(self):
+        """Interface nodes are children of Any."""
+        g = TypeGraph(DEFAULT_TYPE_NODES).extend_with_interfaces(
+            {"Dog": ("Comparable",)}
+        )
+        assert g.is_subtype("Comparable", "Any")
+
+    def test_class_with_multiple_interfaces(self):
+        """Dog implements Comparable, Serializable → Dog ⊆ both."""
+        g = TypeGraph(DEFAULT_TYPE_NODES).extend_with_interfaces(
+            {"Dog": ("Comparable", "Serializable")}
+        )
+        assert g.is_subtype("Dog", "Comparable")
+        assert g.is_subtype("Dog", "Serializable")
+        assert g.is_subtype("Dog", "Any")
+
+    def test_interface_not_subtype_of_class(self):
+        """Comparable is NOT ⊆ Dog."""
+        g = TypeGraph(DEFAULT_TYPE_NODES).extend_with_interfaces(
+            {"Dog": ("Comparable",)}
+        )
+        assert not g.is_subtype("Comparable", "Dog")
+
+    def test_preserves_existing_parent(self):
+        """Class with existing parent gets interface added without losing parent."""
+        base = TypeGraph(DEFAULT_TYPE_NODES).extend(
+            (TypeNode(name="Animal", parents=("Any",)),)
+        )
+        g = base.extend_with_interfaces({"Dog": ("Comparable",)})
+        # Dog doesn't have Animal as parent yet since we only added interface
+        # But we can add both:
+        g2 = (
+            TypeGraph(DEFAULT_TYPE_NODES)
+            .extend(
+                (
+                    TypeNode(name="Animal", parents=("Any",)),
+                    TypeNode(name="Dog", parents=("Animal",)),
+                )
+            )
+            .extend_with_interfaces({"Dog": ("Comparable",)})
+        )
+        assert g2.is_subtype("Dog", "Animal")
+        assert g2.is_subtype("Dog", "Comparable")
+
+    def test_expr_subtype_with_interface(self):
+        """ScalarType('Dog') ⊆ ScalarType('Comparable') via TypeGraph."""
+        g = TypeGraph(DEFAULT_TYPE_NODES).extend_with_interfaces(
+            {"Dog": ("Comparable",)}
+        )
+        assert g.is_subtype_expr(scalar("Dog"), scalar("Comparable"))

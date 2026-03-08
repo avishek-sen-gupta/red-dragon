@@ -34,6 +34,7 @@ class TypeEnvironmentBuilder:
         default_factory=dict
     )
     type_aliases: dict[str, TypeExpr] = field(default_factory=dict)
+    interface_implementations: dict[str, list[str]] = field(default_factory=dict)
 
     def build(self) -> TypeEnvironment:
         """Freeze accumulated type info into an immutable TypeEnvironment."""

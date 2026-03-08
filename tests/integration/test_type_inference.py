@@ -2607,3 +2607,38 @@ IntPtr p;
 
         assert env.var_types["p"] == pointer(scalar("Int"))
         assert "IntPtr" in env.type_aliases
+
+
+# ---------------------------------------------------------------------------
+# Interface/Trait Typing
+# ---------------------------------------------------------------------------
+
+
+class TestInterfaceTypingIntegration:
+    """Integration: Java implements extracts interface relationships."""
+
+    def test_java_implements_single_interface(self):
+        """Java: class Dog implements Comparable → interface_implementations includes it."""
+        source = """\
+class Dog implements Comparable {
+    int compareTo(Object o) {
+        return 0;
+    }
+}
+"""
+        _, env = _lower_and_infer(source, "java")
+        assert "Dog" in env.interface_implementations
+        assert "Comparable" in env.interface_implementations["Dog"]
+
+    def test_java_implements_multiple_interfaces(self):
+        """Java: class Dog implements A, B → both recorded."""
+        source = """\
+class Dog implements Comparable, Serializable {
+    int compareTo(Object o) { return 0; }
+}
+"""
+        _, env = _lower_and_infer(source, "java")
+        assert "Dog" in env.interface_implementations
+        impls = env.interface_implementations["Dog"]
+        assert "Comparable" in impls
+        assert "Serializable" in impls

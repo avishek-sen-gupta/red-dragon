@@ -209,3 +209,27 @@ class TypeGraph:
         for node in additional:
             merged[node.name] = node
         return TypeGraph(tuple(merged.values()))
+
+    def extend_with_interfaces(
+        self, implementations: dict[str, tuple[str, ...]]
+    ) -> "TypeGraph":
+        """Return a new TypeGraph with class→interface edges added.
+
+        For each ``class_name → (iface1, iface2, ...)``, adds interface
+        nodes (if missing) and a class node with those interfaces as parents.
+        Existing parents are preserved.
+        """
+        merged = self._nodes.copy()
+        for class_name, interfaces in implementations.items():
+            for iface in interfaces:
+                if iface not in merged:
+                    merged[iface] = TypeNode(
+                        name=iface, parents=(TypeName.ANY,), kind="interface"
+                    )
+            existing = merged.get(class_name)
+            existing_parents = existing.parents if existing else ()
+            all_parents = tuple(
+                dict.fromkeys(list(existing_parents) + list(interfaces))
+            )
+            merged[class_name] = TypeNode(name=class_name, parents=all_parents)
+        return TypeGraph(tuple(merged.values()))

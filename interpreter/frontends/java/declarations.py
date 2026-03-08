@@ -156,17 +156,59 @@ def _lower_deferred_class_child(ctx: TreeSitterEmitContext, child) -> None:
 
 
 def _extract_java_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
-    """Extract parent class names from a Java class_declaration node."""
+    """Extract parent class and interface names from a Java class_declaration node."""
+    parents: list[str] = []
     superclass_node = next(
         (c for c in node.children if c.type == JavaNodeType.SUPERCLASS), None
     )
-    if superclass_node is None:
+    if superclass_node:
+        parent_id = next(
+            (
+                c
+                for c in superclass_node.children
+                if c.type == JavaNodeType.TYPE_IDENTIFIER
+            ),
+            None,
+        )
+        if parent_id:
+            parents.append(ctx.node_text(parent_id))
+    # Extract interfaces from super_interfaces clause
+    interfaces_node = next(
+        (c for c in node.children if c.type == JavaNodeType.SUPER_INTERFACES), None
+    )
+    if interfaces_node:
+        type_list = next(
+            (c for c in interfaces_node.children if c.type == JavaNodeType.TYPE_LIST),
+            None,
+        )
+        if type_list:
+            interface_names = [
+                ctx.node_text(c)
+                for c in type_list.children
+                if c.type == JavaNodeType.TYPE_IDENTIFIER
+            ]
+            parents.extend(interface_names)
+    return parents
+
+
+def _extract_java_interfaces(ctx: TreeSitterEmitContext, node) -> list[str]:
+    """Extract interface names from super_interfaces clause."""
+    interfaces_node = next(
+        (c for c in node.children if c.type == JavaNodeType.SUPER_INTERFACES), None
+    )
+    if not interfaces_node:
         return []
-    parent_id = next(
-        (c for c in superclass_node.children if c.type == JavaNodeType.TYPE_IDENTIFIER),
+    type_list = next(
+        (c for c in interfaces_node.children if c.type == JavaNodeType.TYPE_LIST),
         None,
     )
-    return [ctx.node_text(parent_id)] if parent_id else []
+    if not type_list:
+        return []
+    return [
+        ctx.node_text(c)
+        for c in type_list.children
+        if c.type == JavaNodeType.TYPE_IDENTIFIER
+    ]
 
 
 def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
@@ -174,6 +216,9 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
     parents = _extract_java_parents(ctx, node)
+    # Seed interface implementations
+    for iface in _extract_java_interfaces(ctx, node):
+        ctx.seed_interface_impl(class_name, iface)
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")

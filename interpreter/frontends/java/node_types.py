@@ -76,6 +76,8 @@ class JavaNodeType:
     ANNOTATION_TYPE_DECLARATION = "annotation_type_declaration"
     RECORD_DECLARATION = "record_declaration"
     SUPERCLASS = "superclass"
+    SUPER_INTERFACES = "super_interfaces"
+    TYPE_LIST = "type_list"
     CONSTRUCTOR_DECLARATION = "constructor_declaration"
     FIELD_DECLARATION = "field_declaration"
     STATIC_INITIALIZER = "static_initializer"
