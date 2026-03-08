@@ -111,6 +111,7 @@ class PythonNodeType:
 
     # ── Definitions ──────────────────────────────────────────────────
     FUNCTION_DEFINITION = "function_definition"
+    ARGUMENT_LIST = "argument_list"
     CLASS_DEFINITION = "class_definition"
     DECORATED_DEFINITION = "decorated_definition"
     DECORATOR = "decorator"

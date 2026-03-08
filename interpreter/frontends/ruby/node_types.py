@@ -105,6 +105,7 @@ class RubyNodeType:
     METHOD = "method"
     SINGLETON_METHOD = "singleton_method"
     CLASS = "class"
+    SUPERCLASS = "superclass"
     SINGLETON_CLASS = "singleton_class"
     MODULE = "module"
 

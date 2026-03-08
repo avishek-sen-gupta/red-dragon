@@ -8,6 +8,7 @@ from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.ruby.expressions import lower_ruby_params
 from interpreter.frontends.ruby.node_types import RubyNodeType
+from interpreter.frontends.common.declarations import make_class_ref
 
 
 def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> str:
@@ -104,11 +105,26 @@ def lower_ruby_method_stmt(ctx: TreeSitterEmitContext, node) -> None:
     lower_ruby_method(ctx, node, inject_self=False)
 
 
+def _extract_ruby_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
+    """Extract parent class name from a Ruby class definition (single inheritance)."""
+    superclass_node = next(
+        (c for c in node.children if c.type == RubyNodeType.SUPERCLASS), None
+    )
+    if superclass_node is None:
+        return []
+    parent_id = next(
+        (c for c in superclass_node.children if c.type == RubyNodeType.CONSTANT),
+        None,
+    )
+    return [ctx.node_text(parent_id)] if parent_id else []
+
+
 def lower_ruby_class(ctx: TreeSitterEmitContext, node) -> None:
     """Lower Ruby class definition with method body handling."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
+    parents = _extract_ruby_parents(ctx, node)
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
@@ -127,9 +143,7 @@ def lower_ruby_class(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.CONST,
         result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
-        ],
+        operands=[make_class_ref(class_name, class_label, parents)],
     )
     ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
 

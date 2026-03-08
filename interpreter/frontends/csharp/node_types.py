@@ -118,6 +118,7 @@ class CSharpNodeType:
     GENERIC_NAME = "generic_name"
     DECLARATION_LIST = "declaration_list"
     COMPILATION_UNIT = "compilation_unit"
+    BASE_LIST = "base_list"
 
     # -- Directives / noise --
     USING_DIRECTIVE = "using_directive"

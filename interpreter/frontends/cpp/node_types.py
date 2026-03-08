@@ -37,6 +37,7 @@ class CppNodeType:
     # Class / struct
     CLASS_SPECIFIER = "class_specifier"
     STRUCT_SPECIFIER = "struct_specifier"
+    BASE_CLASS_CLAUSE = "base_class_clause"
 
     # Templates
     TEMPLATE_DECLARATION = "template_declaration"

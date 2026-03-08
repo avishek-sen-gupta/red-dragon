@@ -61,6 +61,7 @@ class ScalaNodeType:
     OBJECT_DEFINITION = "object_definition"
     TRAIT_DEFINITION = "trait_definition"
     CASE_CLASS_DEFINITION = "case_class_definition"
+    EXTENDS_CLAUSE = "extends_clause"
     LAZY_VAL_DEFINITION = "lazy_val_definition"
     TYPE_DEFINITION = "type_definition"
     IMPORT_DECLARATION = "import_declaration"

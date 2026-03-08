@@ -55,6 +55,7 @@ class JavaScriptNodeType:
     GENERATOR_FUNCTION_DECLARATION = "generator_function_declaration"
     FUNCTION_DECLARATION = "function_declaration"
     CLASS_DECLARATION = "class_declaration"
+    CLASS_HERITAGE = "class_heritage"
     METHOD_DEFINITION = "method_definition"
     CLASS_STATIC_BLOCK = "class_static_block"
     FIELD_DEFINITION = "field_definition"

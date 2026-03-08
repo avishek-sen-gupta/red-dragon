@@ -114,7 +114,19 @@ def extract_param_name(ctx: TreeSitterEmitContext, child) -> str | None:
     return None
 
 
-def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
+def make_class_ref(class_name: str, class_label: str, parents: list[str]) -> str:
+    """Build the class reference string, with parents if present.
+
+    Shared by all frontends that emit class references.
+    """
+    if parents:
+        return constants.CLASS_REF_WITH_PARENTS_TEMPLATE.format(
+            name=class_name, label=class_label, parents=",".join(parents)
+        )
+    return constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
+
+
+def lower_class_def(ctx: TreeSitterEmitContext, node, parents: list[str] = []) -> None:
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node)
@@ -132,9 +144,7 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.CONST,
         result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
-        ],
+        operands=[make_class_ref(class_name, class_label, parents)],
     )
     ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
 

@@ -12,6 +12,7 @@ from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
 )
+from interpreter.frontends.common.declarations import make_class_ref
 
 
 def lower_local_decl_stmt(ctx: TreeSitterEmitContext, node) -> None:
@@ -211,10 +212,23 @@ def _lower_deferred_class_child(ctx: TreeSitterEmitContext, child) -> None:
         ctx.lower_stmt(child)
 
 
+def _extract_csharp_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
+    """Extract parent class/interface names from a C# class_declaration node."""
+    base_list = next((c for c in node.children if c.type == NT.BASE_LIST), None)
+    if base_list is None:
+        return []
+    return [
+        ctx.node_text(c)
+        for c in base_list.children
+        if c.type in (NT.IDENTIFIER, NT.TYPE_IDENTIFIER, NT.GENERIC_NAME)
+    ]
+
+
 def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
+    parents = _extract_csharp_parents(ctx, node)
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
@@ -228,9 +242,7 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.CONST,
         result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
-        ],
+        operands=[make_class_ref(class_name, class_label, parents)],
     )
     ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
 

@@ -12,6 +12,7 @@ from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
 from interpreter.frontends.php.node_types import PHPNodeType
+from interpreter.frontends.common.declarations import make_class_ref
 
 
 def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
@@ -203,11 +204,24 @@ def _lower_php_class_body(ctx: TreeSitterEmitContext, node) -> None:
             ctx.lower_stmt(child)
 
 
+def _extract_php_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
+    """Extract parent class name from a PHP class declaration."""
+    base_clause = next(
+        (c for c in node.children if c.type == PHPNodeType.BASE_CLAUSE), None
+    )
+    if base_clause is None:
+        return []
+    return [
+        ctx.node_text(c) for c in base_clause.children if c.type == PHPNodeType.NAME
+    ]
+
+
 def lower_php_class(ctx: TreeSitterEmitContext, node) -> None:
     """Lower class declaration."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
+    parents = _extract_php_parents(ctx, node)
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
@@ -224,9 +238,7 @@ def lower_php_class(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.CONST,
         result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
-        ],
+        operands=[make_class_ref(class_name, class_label, parents)],
     )
     ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
 

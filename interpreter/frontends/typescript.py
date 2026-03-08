@@ -19,6 +19,7 @@ from interpreter.frontends.type_extraction import (
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.typescript_node_types import TypeScriptNodeType
+from interpreter.frontends.common.declarations import make_class_ref
 
 
 class TypeScriptFrontend(JavaScriptFrontend):
@@ -211,11 +212,30 @@ def lower_ts_export_statement(ctx: TreeSitterEmitContext, node) -> None:
             ctx.lower_stmt(child)
 
 
+def _extract_ts_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
+    """Extract parent class name from a TS class declaration."""
+    heritage = next(
+        (c for c in node.children if c.type == TypeScriptNodeType.CLASS_HERITAGE),
+        None,
+    )
+    if heritage is None:
+        return []
+    id_types = (TypeScriptNodeType.IDENTIFIER, TypeScriptNodeType.TYPE_IDENTIFIER)
+    return [
+        ctx.node_text(c)
+        for clause in heritage.children
+        if clause.type == "extends_clause"
+        for c in clause.children
+        if c.type in id_types
+    ]
+
+
 def lower_ts_class_def(ctx: TreeSitterEmitContext, node) -> None:
     """Lower class_declaration using TS-specific param handling for methods."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node)
+    parents = _extract_ts_parents(ctx, node)
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
@@ -248,9 +268,7 @@ def lower_ts_class_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.CONST,
         result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
-        ],
+        operands=[make_class_ref(class_name, class_label, parents)],
     )
     ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
 

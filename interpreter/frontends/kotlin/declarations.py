@@ -11,6 +11,7 @@ from interpreter.frontends.type_extraction import (
     extract_type_from_child,
     normalize_type_hint,
 )
+from interpreter.frontends.common.declarations import make_class_ref
 
 # -- property declaration ----------------------------------------------
 
@@ -297,6 +298,44 @@ def _lower_enum_entry(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.STORE_VAR, operands=[entry_name, reg])
 
 
+def _extract_kotlin_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
+    """Extract parent class/interface names from a Kotlin class_declaration."""
+    parents: list[str] = []
+    for child in node.children:
+        if child.type == KNT.DELEGATION_SPECIFIER:
+            # delegation_specifier may contain user_type → type_identifier,
+            # or constructor_invocation → user_type → type_identifier
+            type_id = next(
+                (c for c in child.children if c.type == KNT.TYPE_IDENTIFIER),
+                None,
+            )
+            if type_id:
+                parents.append(ctx.node_text(type_id))
+                continue
+            # Look deeper: constructor_invocation → user_type → type_identifier
+            for sub in child.children:
+                inner_id = next(
+                    (c for c in sub.children if c.type == KNT.TYPE_IDENTIFIER),
+                    None,
+                )
+                if inner_id:
+                    parents.append(ctx.node_text(inner_id))
+                    break
+                # One more level: user_type wrapping inside constructor_invocation
+                for subsub in sub.children:
+                    deep_id = next(
+                        (c for c in subsub.children if c.type == KNT.TYPE_IDENTIFIER),
+                        None,
+                    )
+                    if deep_id:
+                        parents.append(ctx.node_text(deep_id))
+                        break
+                else:
+                    continue
+                break
+    return parents
+
+
 def lower_class_decl(ctx: TreeSitterEmitContext, node) -> None:
     name_node = next(
         (c for c in node.children if c.type == KNT.TYPE_IDENTIFIER),
@@ -307,6 +346,7 @@ def lower_class_decl(ctx: TreeSitterEmitContext, node) -> None:
         None,
     )
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
+    parents = _extract_kotlin_parents(ctx, node)
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
@@ -324,9 +364,7 @@ def lower_class_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.CONST,
         result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
-        ],
+        operands=[make_class_ref(class_name, class_label, parents)],
     )
     ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
 
