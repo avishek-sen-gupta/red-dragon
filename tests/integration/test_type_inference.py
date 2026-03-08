@@ -6,7 +6,13 @@ from interpreter.constants import Language, TypeName
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.frontend import get_frontend
 from interpreter.ir import Opcode
-from interpreter.type_expr import FunctionType, scalar, fn_type
+from interpreter.type_expr import (
+    FunctionType,
+    ParameterizedType,
+    scalar,
+    fn_type,
+    tuple_of,
+)
 from interpreter.type_inference import infer_types
 from interpreter.type_resolver import TypeResolver
 
@@ -2527,3 +2533,45 @@ f = add
         assert len(func_ref_consts) >= 1
         func_reg = func_ref_consts[0].result_reg
         assert isinstance(env.register_types[func_reg], FunctionType)
+
+
+# ---------------------------------------------------------------------------
+# Tuple Types
+# ---------------------------------------------------------------------------
+
+
+class TestTupleTypeInferenceIntegration:
+    """Integration: Python tuple literals produce Tuple[T1, T2, ...] types."""
+
+    def test_python_homogeneous_tuple(self):
+        """Python (1, 2, 3) → Tuple[Int, Int, Int]."""
+        source = "x = (1, 2, 3)\n"
+        _, env = _lower_and_infer(source, "python")
+        assert env.var_types["x"] == tuple_of(
+            scalar("Int"), scalar("Int"), scalar("Int")
+        )
+
+    def test_python_heterogeneous_tuple(self):
+        """Python (1, 'hello') → Tuple[Int, String]."""
+        source = 'x = (1, "hello")\n'
+        _, env = _lower_and_infer(source, "python")
+        assert env.var_types["x"] == tuple_of(scalar("Int"), scalar("String"))
+
+    def test_python_tuple_element_access(self):
+        """Python y = t[0] where t = (1, 'hi') → y is Int."""
+        source = """\
+t = (1, "hi")
+y = t[0]
+"""
+        _, env = _lower_and_infer(source, "python")
+        assert env.var_types["t"] == tuple_of(scalar("Int"), scalar("String"))
+        assert env.var_types["y"] == scalar("Int")
+
+    def test_python_nested_tuple(self):
+        """Python ((1, 2), 'a') → Tuple[Tuple[Int, Int], String]."""
+        source = """\
+inner = (1, 2)
+outer = (inner, "a")
+"""
+        _, env = _lower_and_infer(source, "python")
+        assert env.var_types["inner"] == tuple_of(scalar("Int"), scalar("Int"))

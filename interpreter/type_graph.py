@@ -16,6 +16,7 @@ from interpreter.type_expr import (
     FunctionType,
     scalar,
     union_of,
+    tuple_of,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ DEFAULT_TYPE_NODES: tuple[TypeNode, ...] = (
     TypeNode(name=TypeName.FLOAT, parents=(TypeName.NUMBER,)),
     TypeNode(name=TypeName.POINTER, parents=(TypeName.ANY,)),
     TypeNode(name=TypeName.MAP, parents=(TypeName.ANY,)),
+    TypeNode(name=TypeName.TUPLE, parents=(TypeName.ANY,)),
     TypeNode(name=TypeName.REGION, parents=(TypeName.ANY,)),
 )
 

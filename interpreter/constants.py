@@ -107,4 +107,5 @@ class TypeName(StrEnum):
     ARRAY = "Array"
     POINTER = "Pointer"
     MAP = "Map"
+    TUPLE = "Tuple"
     REGION = "Region"

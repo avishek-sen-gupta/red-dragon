@@ -33,10 +33,20 @@ from interpreter.type_expr import (
     scalar,
     union_of,
     fn_type,
+    tuple_of,
 )
 from interpreter.type_resolver import TypeResolver
 
 logger = logging.getLogger(__name__)
+
+
+def _try_parse_int(s: str) -> int:
+    """Try to parse s as an integer, returning -1 on failure."""
+    try:
+        return int(s)
+    except (ValueError, TypeError):
+        return -1
+
 
 _BUILTIN_RETURN_TYPES: dict[str, TypeExpr] = {
     "len": scalar(TypeName.INT),
@@ -146,6 +156,12 @@ class _InferenceContext:
     field_types: dict[TypeExpr, dict[str, TypeExpr]] = field(default_factory=dict)
     array_element_types: dict[str, TypeExpr] = field(default_factory=dict)
     var_array_element_types: dict[str, TypeExpr] = field(default_factory=dict)
+    const_values: dict[str, str] = field(default_factory=dict)
+    tuple_registers: set[str] = field(default_factory=set)
+    tuple_element_types: dict[str, dict[int, TypeExpr]] = field(default_factory=dict)
+    var_tuple_element_types: dict[str, dict[int, TypeExpr]] = field(
+        default_factory=dict
+    )
     register_source_var: dict[str, str] = field(default_factory=dict)
     _seeded_var_names: frozenset[str] = field(default_factory=frozenset)
 
@@ -201,6 +217,26 @@ def _promote_array_element_types(ctx: _InferenceContext) -> None:
     for reg, elem_type in ctx.array_element_types.items():
         if ctx.register_types.get(reg, UNKNOWN) == TypeName.ARRAY:
             ctx.register_types[reg] = array_of(elem_type)
+
+
+def _promote_tuple_element_types(ctx: _InferenceContext) -> None:
+    """Promote Tuple variables with known per-index types to Tuple[T1, T2, ...].
+
+    After inference converges, variables typed as ``Tuple`` that have known
+    per-index element types are promoted to ``Tuple[T1, T2, ...]``.  Register
+    types for tuple registers are also promoted.
+    """
+    for var_name, idx_types in ctx.var_tuple_element_types.items():
+        for scope_dict in ctx.scoped_var_types.values():
+            if var_name in scope_dict and scope_dict[var_name] == TypeName.TUPLE:
+                ordered = tuple(idx_types[i] for i in sorted(idx_types.keys()))
+                scope_dict[var_name] = tuple_of(*ordered)
+                logger.debug("Promoted %s: Tuple → Tuple[%s]", var_name, ordered)
+
+    for reg, idx_types in ctx.tuple_element_types.items():
+        if ctx.register_types.get(reg, UNKNOWN) == TypeName.TUPLE:
+            ordered = tuple(idx_types[i] for i in sorted(idx_types.keys()))
+            ctx.register_types[reg] = tuple_of(*ordered)
 
 
 def _build_func_signatures(
@@ -264,8 +300,9 @@ def infer_types(
 
     logger.debug("Type inference converged after %d pass(es)", passes)
 
-    # Promote Array variables with known element types to Array[ElementType]
+    # Promote Array/Tuple variables with known element types
     _promote_array_element_types(ctx)
+    _promote_tuple_element_types(ctx)
 
     # Build TypeEnvironment directly — no roundtrip through builder
     flat_vars = ctx.flat_var_types()
@@ -386,6 +423,7 @@ def _infer_const(
                 params=param_types, return_type=ret_type
             )
         return
+    ctx.const_values[inst.result_reg] = raw
     inferred = _infer_const_type(raw)
     if inferred:
         ctx.register_types[inst.result_reg] = inferred
@@ -407,6 +445,12 @@ def _infer_load_var(
         ctx.array_element_types[inst.result_reg] = ctx.var_array_element_types[
             str(name)
         ]
+    # Propagate tuple element types from variable to register
+    if inst.result_reg and str(name) in ctx.var_tuple_element_types:
+        ctx.tuple_element_types[inst.result_reg] = ctx.var_tuple_element_types[
+            str(name)
+        ]
+        ctx.tuple_registers.add(inst.result_reg)
 
 
 def _infer_store_var(
@@ -424,6 +468,9 @@ def _infer_store_var(
         # Track array element types at the variable level
         if value_reg in ctx.array_element_types:
             ctx.var_array_element_types[str(name)] = ctx.array_element_types[value_reg]
+        # Track tuple element types at the variable level
+        if value_reg in ctx.tuple_element_types:
+            ctx.var_tuple_element_types[str(name)] = ctx.tuple_element_types[value_reg]
 
 
 def _infer_binop(
@@ -482,7 +529,13 @@ def _infer_new_array(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if inst.result_reg:
+    if not inst.result_reg:
+        return
+    is_tuple = inst.operands and str(inst.operands[0]) == "tuple"
+    if is_tuple:
+        ctx.register_types[inst.result_reg] = scalar(TypeName.TUPLE)
+        ctx.tuple_registers.add(inst.result_reg)
+    else:
         ctx.register_types[inst.result_reg] = scalar(TypeName.ARRAY)
 
 
@@ -609,9 +662,17 @@ def _infer_store_index(
     if len(inst.operands) < 3:
         return
     arr_reg = str(inst.operands[0])
+    index_reg = str(inst.operands[1])
     value_reg = str(inst.operands[2])
     value_type = ctx.register_types.get(value_reg, UNKNOWN)
-    if value_type:
+    if not value_type:
+        return
+    if arr_reg in ctx.tuple_registers:
+        # Track per-index element types for tuples
+        idx = _try_parse_int(ctx.const_values.get(index_reg, ""))
+        if idx >= 0:
+            ctx.tuple_element_types.setdefault(arr_reg, {})[idx] = value_type
+    else:
         ctx.array_element_types[arr_reg] = value_type
 
 
@@ -623,6 +684,14 @@ def _infer_load_index(
     if not inst.result_reg or len(inst.operands) < 2:
         return
     arr_reg = str(inst.operands[0])
+    # Tuple: resolve per-index element type
+    if arr_reg in ctx.tuple_registers and len(inst.operands) >= 2:
+        index_reg = str(inst.operands[1])
+        idx = _try_parse_int(ctx.const_values.get(index_reg, ""))
+        idx_types = ctx.tuple_element_types.get(arr_reg, {})
+        if idx >= 0 and idx in idx_types:
+            ctx.register_types[inst.result_reg] = idx_types[idx]
+            return
     element_type = ctx.array_element_types.get(arr_reg, UNKNOWN)
     if element_type:
         ctx.register_types[inst.result_reg] = element_type

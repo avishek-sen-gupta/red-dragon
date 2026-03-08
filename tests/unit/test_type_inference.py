@@ -21,6 +21,7 @@ from interpreter.type_expr import (
     scalar,
     union_of,
     fn_type,
+    tuple_of,
 )
 from interpreter.type_inference import infer_types, _infer_const_type
 from interpreter.type_resolver import TypeResolver
@@ -2288,3 +2289,77 @@ class TestFunctionTypeInference:
         builder = TypeEnvironmentBuilder(func_return_types={"func_f_0": scalar("Bool")})
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%2"] == "Bool"
+
+
+class TestTupleTypeInference:
+    """Unit tests for tuple type inference from IR instructions."""
+
+    def test_new_array_tuple_typed_as_tuple(self):
+        """NEW_ARRAY with 'tuple' operand produces Tuple type, not Array."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["2"]),
+            _make_inst(Opcode.NEW_ARRAY, result_reg="%1", operands=["tuple", "%0"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%1"] == "Tuple"
+
+    def test_tuple_promotion_with_element_types(self):
+        """Tuple register promoted to Tuple[Int, String] after STORE_INDEX."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["2"]),
+            _make_inst(Opcode.NEW_ARRAY, result_reg="%1", operands=["tuple", "%0"]),
+            _make_inst(Opcode.CONST, result_reg="%2", operands=["42"]),
+            _make_inst(Opcode.CONST, result_reg="%3", operands=["0"]),
+            _make_inst(Opcode.STORE_INDEX, operands=["%1", "%3", "%2"]),
+            _make_inst(Opcode.CONST, result_reg="%4", operands=['"hello"']),
+            _make_inst(Opcode.CONST, result_reg="%5", operands=["1"]),
+            _make_inst(Opcode.STORE_INDEX, operands=["%1", "%5", "%4"]),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.var_types["x"] == tuple_of(scalar("Int"), scalar("String"))
+
+    def test_tuple_load_index_resolves_per_element(self):
+        """LOAD_INDEX on a tuple at known index resolves to that element type."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["2"]),
+            _make_inst(Opcode.NEW_ARRAY, result_reg="%1", operands=["tuple", "%0"]),
+            _make_inst(Opcode.CONST, result_reg="%2", operands=["42"]),
+            _make_inst(Opcode.CONST, result_reg="%3", operands=["0"]),
+            _make_inst(Opcode.STORE_INDEX, operands=["%1", "%3", "%2"]),
+            _make_inst(Opcode.CONST, result_reg="%4", operands=['"hello"']),
+            _make_inst(Opcode.CONST, result_reg="%5", operands=["1"]),
+            _make_inst(Opcode.STORE_INDEX, operands=["%1", "%5", "%4"]),
+            # Load element at index 0 → should be Int
+            _make_inst(Opcode.CONST, result_reg="%6", operands=["0"]),
+            _make_inst(Opcode.LOAD_INDEX, result_reg="%7", operands=["%1", "%6"]),
+            _make_inst(Opcode.STORE_VAR, operands=["y", "%7"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.var_types["y"] == scalar("Int")
+
+    def test_tuple_var_propagation(self):
+        """Tuple element types propagate through STORE_VAR → LOAD_VAR."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["2"]),
+            _make_inst(Opcode.NEW_ARRAY, result_reg="%1", operands=["tuple", "%0"]),
+            _make_inst(Opcode.CONST, result_reg="%2", operands=["42"]),
+            _make_inst(Opcode.CONST, result_reg="%3", operands=["0"]),
+            _make_inst(Opcode.STORE_INDEX, operands=["%1", "%3", "%2"]),
+            _make_inst(Opcode.CONST, result_reg="%4", operands=['"hi"']),
+            _make_inst(Opcode.CONST, result_reg="%5", operands=["1"]),
+            _make_inst(Opcode.STORE_INDEX, operands=["%1", "%5", "%4"]),
+            _make_inst(Opcode.STORE_VAR, operands=["t", "%1"]),
+            # Load variable t into new register, then index
+            _make_inst(Opcode.LOAD_VAR, result_reg="%6", operands=["t"]),
+            _make_inst(Opcode.CONST, result_reg="%7", operands=["1"]),
+            _make_inst(Opcode.LOAD_INDEX, result_reg="%8", operands=["%6", "%7"]),
+            _make_inst(Opcode.STORE_VAR, operands=["val", "%8"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.var_types["t"] == tuple_of(scalar("Int"), scalar("String"))
+        assert env.var_types["val"] == scalar("String")
