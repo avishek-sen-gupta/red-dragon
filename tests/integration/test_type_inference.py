@@ -2644,6 +2644,60 @@ class Dog implements Comparable, Serializable {
         assert "Serializable" in impls
 
 
+class TestVarianceIntegration:
+    """Integration: variance annotations affect subtype and LUB in TypeGraph."""
+
+    def test_invariant_blocks_mutable_container_subtype(self):
+        """MutableList[Int] should NOT be subtype of MutableList[Number] with INVARIANT."""
+        from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+        from interpreter.type_expr import scalar, ParameterizedType
+        from interpreter.constants import TypeName, Variance
+
+        graph = TypeGraph(
+            DEFAULT_TYPE_NODES,
+            variance_registry={"MutableList": (Variance.INVARIANT,)},
+        )
+        ml_int = ParameterizedType("MutableList", (scalar(TypeName.INT),))
+        ml_num = ParameterizedType("MutableList", (scalar(TypeName.NUMBER),))
+        # Invariant: MutableList[Int] is NOT a subtype of MutableList[Number]
+        assert not graph.is_subtype_expr(ml_int, ml_num)
+        # But MutableList[Int] IS a subtype of itself
+        assert graph.is_subtype_expr(ml_int, ml_int)
+
+    def test_covariant_allows_readonly_container_subtype(self):
+        """ReadOnlyList[Int] should be subtype of ReadOnlyList[Number] with default covariant."""
+        from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+        from interpreter.type_expr import scalar, ParameterizedType
+        from interpreter.constants import TypeName
+
+        graph = TypeGraph(DEFAULT_TYPE_NODES)
+        ro_int = ParameterizedType("ReadOnlyList", (scalar(TypeName.INT),))
+        ro_num = ParameterizedType("ReadOnlyList", (scalar(TypeName.NUMBER),))
+        # Default covariant: ReadOnlyList[Int] IS a subtype of ReadOnlyList[Number]
+        assert graph.is_subtype_expr(ro_int, ro_num)
+
+    def test_mixed_variance_map(self):
+        """Map with invariant key and covariant value."""
+        from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+        from interpreter.type_expr import scalar, map_of
+        from interpreter.constants import TypeName, Variance
+
+        graph = TypeGraph(
+            DEFAULT_TYPE_NODES,
+            variance_registry={"Map": (Variance.INVARIANT, Variance.COVARIANT)},
+        )
+        # Same key, covariant value: Map[String, Int] <: Map[String, Number]
+        assert graph.is_subtype_expr(
+            map_of(scalar(TypeName.STRING), scalar(TypeName.INT)),
+            map_of(scalar(TypeName.STRING), scalar(TypeName.NUMBER)),
+        )
+        # Different key: Map[Int, Int] NOT <: Map[String, Int] (invariant key)
+        assert not graph.is_subtype_expr(
+            map_of(scalar(TypeName.INT), scalar(TypeName.INT)),
+            map_of(scalar(TypeName.STRING), scalar(TypeName.INT)),
+        )
+
+
 class TestBoundedTypeVarIntegration:
     """Integration: bounded type variables interact correctly with TypeGraph."""
 
