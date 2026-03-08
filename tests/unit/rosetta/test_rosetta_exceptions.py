@@ -210,8 +210,8 @@ class TestExceptionsLowering:
             for s in symbolics
             if any("caught_exception" in str(op) for op in s.operands)
         ]
-        assert len(caught) >= 1, (
-            f"[{lang}] expected at least 1 SYMBOLIC caught_exception "
+        assert len(caught) == 1, (
+            f"[{lang}] expected exactly 1 SYMBOLIC caught_exception "
             f"in try/catch lowering, got {len(caught)}"
         )
 

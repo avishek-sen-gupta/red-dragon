@@ -120,8 +120,8 @@ class TestClosuresLambdaLowering:
             if inst.opcode == Opcode.LABEL and inst.label and "func_" in inst.label
         ]
         assert (
-            len(labels) >= 2
-        ), f"[{lang}] lambda closure should produce >= 2 nested func_ labels, got {labels}"
+            len(labels) == 2
+        ), f"[{lang}] lambda closure should produce exactly 2 nested func_ labels, got {labels}"
 
 
 # ---------------------------------------------------------------------------

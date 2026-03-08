@@ -79,7 +79,7 @@ class TestConditionNameExpansion:
         assert result_reg.startswith("%r")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
-        assert len(eq_ops) >= 1
+        assert len(eq_ops) == 1
 
     def test_multi_value_or_expansion(self):
         """IF STATUS-VALID expands to WS-STATUS == 'A' OR WS-STATUS == 'B' OR WS-STATUS == 'C'."""
@@ -212,4 +212,4 @@ class TestConditionNameExpansion:
         assert result_reg.startswith("%r")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
-        assert len(eq_ops) >= 1
+        assert len(eq_ops) == 1

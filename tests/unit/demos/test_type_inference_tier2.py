@@ -144,16 +144,18 @@ class Dog {
         instructions, env = _lower_and_infer(source, "java")
 
         call_methods = [i for i in instructions if i.opcode == Opcode.CALL_METHOD]
-        assert len(call_methods) >= 2
-        # Verify return types were actually inferred for the method calls
-        inferred_regs = [
-            cm.result_reg
+        assert len(call_methods) == 2
+        # Build method_name → inferred return type mapping
+        method_return_types = {
+            str(cm.operands[1]): env.register_types[cm.result_reg]
             for cm in call_methods
             if cm.result_reg and cm.result_reg in env.register_types
-        ]
+        }
         assert (
-            len(inferred_regs) >= 2
+            len(method_return_types) == 2
         ), "CALL_METHOD result registers should have inferred types"
+        assert method_return_types["getName"] == "String"
+        assert method_return_types["getAge"] == "Int"
 
 
 class TestFieldTypeTable:
@@ -174,17 +176,21 @@ class Dog:
         store_fields = [i for i in instructions if i.opcode == Opcode.STORE_FIELD]
         load_fields = [i for i in instructions if i.opcode == Opcode.LOAD_FIELD]
 
-        assert len(store_fields) >= 2
-        assert len(load_fields) >= 2
+        assert len(store_fields) == 2
+        assert len(load_fields) == 2
+
+        # Build field_name → load instruction mapping
+        field_loads = {
+            str(i.operands[1]): i for i in load_fields if len(i.operands) >= 2
+        }
 
         # LOAD_FIELD for self.age should resolve to Int (stored as literal 5)
-        age_loads = [
-            i
-            for i in load_fields
-            if len(i.operands) >= 2 and str(i.operands[1]) == "age"
-        ]
-        assert len(age_loads) >= 1
-        assert env.register_types[age_loads[0].result_reg] == "Int"
+        assert "age" in field_loads
+        assert env.register_types[field_loads["age"].result_reg] == "Int"
+
+        # LOAD_FIELD for self.name: parameter 'name' is untyped, so no type inferred
+        assert "name" in field_loads
+        assert field_loads["name"].result_reg not in env.register_types
 
 
 class TestRegionTagging:

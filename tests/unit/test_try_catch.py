@@ -66,7 +66,7 @@ class TestBasicTryCatch:
         assert len(caught) == 1
         # Exception variable is stored
         stores = [i for i in ir if i.opcode == Opcode.STORE_VAR and "e" in i.operands]
-        assert len(stores) >= 1
+        assert len(stores) == 1
 
     def test_javascript_try_catch(self):
         ir = _parse_and_lower(
@@ -83,7 +83,7 @@ class TestBasicTryCatch:
         assert len(caught) == 1
         # Exception variable is stored
         stores = [i for i in ir if i.opcode == Opcode.STORE_VAR and "e" in i.operands]
-        assert len(stores) >= 1
+        assert len(stores) == 1
 
     def test_java_try_catch(self):
         ir = _parse_and_lower(
@@ -98,7 +98,7 @@ class TestBasicTryCatch:
         caught = [s for s in _symbolics(ir) if "caught_exception" in str(s.operands)]
         assert len(caught) == 1
         stores = [i for i in ir if i.opcode == Opcode.STORE_VAR and "e" in i.operands]
-        assert len(stores) >= 1
+        assert len(stores) == 1
 
     def test_cpp_try_catch(self):
         ir = _parse_and_lower(
@@ -126,7 +126,7 @@ class TestBasicTryCatch:
         caught = [s for s in _symbolics(ir) if "caught_exception" in str(s.operands)]
         assert len(caught) == 1
         stores = [i for i in ir if i.opcode == Opcode.STORE_VAR and "e" in i.operands]
-        assert len(stores) >= 1
+        assert len(stores) == 1
 
     def test_php_try_catch(self):
         ir = _parse_and_lower(
@@ -141,7 +141,7 @@ class TestBasicTryCatch:
         caught = [s for s in _symbolics(ir) if "caught_exception" in str(s.operands)]
         assert len(caught) == 1
         stores = [i for i in ir if i.opcode == Opcode.STORE_VAR and "$e" in i.operands]
-        assert len(stores) >= 1
+        assert len(stores) == 1
 
     def test_kotlin_try_catch(self):
         ir = _parse_and_lower(
@@ -169,7 +169,7 @@ class TestBasicTryCatch:
         caught = [s for s in _symbolics(ir) if "caught_exception" in str(s.operands)]
         assert len(caught) == 1
         stores = [i for i in ir if i.opcode == Opcode.STORE_VAR and "e" in i.operands]
-        assert len(stores) >= 1
+        assert len(stores) == 1
 
 
 # ── Try/finally without catch ───────────────────────────────────────

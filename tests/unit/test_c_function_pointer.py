@@ -56,7 +56,7 @@ class TestFunctionPointerDeclaratorName:
         ir = _parse_and_lower(source)
         unops = _find_all(ir, Opcode.UNOP)
         addr_of_ops = [u for u in unops if u.operands[0] == "&"]
-        assert len(addr_of_ops) >= 1
+        assert len(addr_of_ops) == 1
 
 
 # ── Executor: address-of function reference ──────────────────────
