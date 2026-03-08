@@ -1665,3 +1665,25 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 - **Array with union element type**: Rejected — `Array[Union[Int, String]]` loses positional information. Tuples are heterogeneous by position.
 
 **Consequences:** 28 new tests (9 unit for tuple_of constructor/parsing, 11 unit for TypeGraph subtype/LUB, 4 unit for inference, 4 integration for Python source programs). All 9746 tests pass. No existing test changed.
+
+### ADR-091: Type aliases with transitive resolution (2026-03-08)
+
+**Context:** C `typedef int UserId;`, TypeScript `type StringMap = Map<string, string>`, and similar type alias declarations were either ignored or emitted as runtime CONST/STORE_VAR instructions. Variable types seeded as alias names (e.g., `UserId`) were never resolved to their underlying types.
+
+**Decision:** Add a type alias registry (`type_aliases: dict[str, TypeExpr]`) to `TypeEnvironmentBuilder`, `_InferenceContext`, and `TypeEnvironment`. Resolve aliases at the seeding boundary in `infer_types()`.
+
+**Design details:**
+- `_resolve_alias(t, aliases)` expands `ScalarType` names through the alias registry transitively (with depth limit for cycle protection). `ParameterizedType` arguments are resolved recursively.
+- `_resolve_aliases_in_dict(d, aliases)` resolves all values in a dict.
+- `infer_types()` resolves all seeded register types, var types, func return types, and param types through the alias registry before starting the inference walk.
+- `TypeEnvironment.type_aliases` exposes the alias registry in the final result.
+- `TreeSitterEmitContext.seed_type_alias(alias_name, target_type)` lets frontends seed aliases.
+
+**Frontend changes:**
+- C `lower_typedef`: now seeds type alias instead of emitting CONST/STORE_VAR. Handles pointer declarators (e.g., `typedef int* IntPtr` → `IntPtr = Pointer[Int]`).
+
+**Alternatives considered:**
+- **Resolve at parse_type boundary**: Rejected — aliases are structural, not syntactic. Resolution belongs in the inference engine.
+- **Store aliases in TypeGraph as edges**: Rejected — aliases are transparent (no subtype relationship), just name mappings.
+
+**Consequences:** 7 new tests (5 unit, 2 integration). 3 existing C frontend typedef tests updated to check alias seeding instead of CONST/STORE_VAR emission. All 9753 tests pass.
