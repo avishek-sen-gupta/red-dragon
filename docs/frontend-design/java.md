@@ -35,6 +35,7 @@ Nothing extends `JavaFrontend`. It inherits all common lowering infrastructure f
 | `comment_types` | `frozenset({"comment"})` | `frozenset({"comment", "line_comment", "block_comment"})` |
 | `noise_types` | `frozenset({"newline", "\n"})` | `frozenset({"\n"})` |
 | `block_node_types` | `frozenset()` | `frozenset({"block", "program"})` |
+| `for_initializer_field` | `"initializer"` | `"init"` (Java tree-sitter uses `init` for for-loop initializer) |
 
 All other constants (`none_literal`, `true_literal`, `false_literal`, `default_return_value`, `paren_expr_type`, field names for if/while/call/class/assign/subscript) retain their `GrammarConstants` defaults.
 
@@ -87,7 +88,7 @@ All other constants (`none_literal`, `true_literal`, `false_literal`, `default_r
 | `return_statement` | `common_assign.lower_return` | `RETURN` |
 | `if_statement` | `java_cf.lower_if` | `BRANCH_IF` / `LABEL` / `BRANCH` |
 | `while_statement` | `common_cf.lower_while` | `BRANCH_IF` loop |
-| `for_statement` | `common_cf.lower_c_style_for` | init + `BRANCH_IF` loop + update |
+| `for_statement` | `common_cf.lower_c_style_for` | init + `BRANCH_IF` loop + update; init vars block-scoped (`for_initializer_field="init"`) |
 | `enhanced_for_statement` | `java_cf.lower_enhanced_for` | index-based iteration loop |
 | `method_declaration` | `java_decl.lower_method_decl_stmt` | `BRANCH`/`LABEL` func + params + `RETURN` + `STORE_VAR` |
 | `class_declaration` | `java_decl.lower_class_def` | `BRANCH`/`LABEL` class + deferred body + `STORE_VAR` |

@@ -119,7 +119,7 @@ The full statement dispatch returned by `_build_stmt_dispatch()`:
 | `return_statement` | `common_assign.lower_return` | `RETURN val` (default: `CONST "0"`) |
 | `if_statement` | `common_cf.lower_if` | `BRANCH_IF` + true/false/end labels |
 | `while_statement` | `common_cf.lower_while` | `LABEL` + `BRANCH_IF` + body + `BRANCH` loop |
-| `for_statement` | `common_cf.lower_c_style_for` | init + `LABEL` cond + `BRANCH_IF` + body + update + `BRANCH` |
+| `for_statement` | `common_cf.lower_c_style_for` | init + `LABEL` cond + `BRANCH_IF` + body + update + `BRANCH`; init vars block-scoped |
 | `do_statement` | `c_cf.lower_do_while` | `LABEL` body + body + `LABEL` cond + `BRANCH_IF` |
 | `function_definition` | `c_decl.lower_function_def_c` | `BRANCH` end + `LABEL` func + params + body + `RETURN` + `STORE_VAR` |
 | `struct_specifier` | `c_decl.lower_struct_def` | `BRANCH` end + `LABEL` class + fields + `LABEL` end + `STORE_VAR` |

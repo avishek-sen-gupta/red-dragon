@@ -104,7 +104,7 @@ The full statement dispatch returned by `_build_stmt_dispatch()`:
 | `return_statement` | `common_assign.lower_return` | `RETURN` |
 | `if_statement` | `csharp_cf.lower_if` | `BRANCH_IF` + labels |
 | `while_statement` | `common_cf.lower_while` | (inherited) `BRANCH_IF` loop |
-| `for_statement` | `common_cf.lower_c_style_for` | (inherited) C-style for loop |
+| `for_statement` | `common_cf.lower_c_style_for` | (inherited) C-style for loop; init vars block-scoped |
 | `foreach_statement` | `csharp_cf.lower_foreach` | Index-based loop with `LOAD_INDEX` |
 | `method_declaration` | `csharp_decl.lower_method_decl` | `BRANCH`/`LABEL`/`RETURN`/`STORE_VAR` |
 | `class_declaration` | `csharp_decl.lower_class_def` | `BRANCH`/`LABEL`/`STORE_VAR` (class ref) |

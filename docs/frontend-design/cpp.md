@@ -137,7 +137,7 @@ The full statement dispatch after `CppFrontend._build_stmt_dispatch()` completes
 | `return_statement` | `common_assign.lower_return` | **(C)** | `RETURN val` |
 | `if_statement` | `cpp_cf.lower_cpp_if` | **(C++)** override | `BRANCH_IF` + labels (handles `condition_clause`) |
 | `while_statement` | `cpp_cf.lower_cpp_while` | **(C++)** override | `LABEL` + `BRANCH_IF` + body (handles `condition_clause`) |
-| `for_statement` | `common_cf.lower_c_style_for` | **(C)** | init + cond + body + update loop |
+| `for_statement` | `common_cf.lower_c_style_for` | **(C)** | init + cond + body + update loop; init vars block-scoped |
 | `do_statement` | `c_cf.lower_do_while` | **(C)** | body + cond + `BRANCH_IF` |
 | `function_definition` | `cpp_decl.lower_cpp_function_def` | **(C++)** override | Adds `field_initializer_list` support |
 | `struct_specifier` | `cpp_decl.lower_cpp_struct_def` | **(C++)** override | Uses C++ class body handling |
