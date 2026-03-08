@@ -1535,19 +1535,19 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 2. ~~Extract parameterized types from Java/C#/Scala/Kotlin generics~~ (DONE — ADR-086)
 3. Add type variable support for true generics
 
-**Type representation boundary (decided 2026-03-08):** The type inference engine (`_InferenceContext`) deliberately stays on strings. The conversion to `TypeExpr` happens at a single boundary: `TypeEnvironmentBuilder.build()` calls `parse_type()` on every string value. This is an intentional architectural decision, not a migration gap:
-- **Frontends** produce strings → `TypeEnvironmentBuilder` (stores `dict[str, str]`)
-- **`_InferenceContext`** operates on strings — 69+ type operations across 8 context fields
-- **`TypeResolver`** and **`TypeConversionRules`** accept/return strings
-- **Builtin lookup tables** (`_BUILTIN_RETURN_TYPES`, `_BUILTIN_METHOD_RETURN_TYPES`) are `dict[str, str]`
-- **`build()`** calls `parse_type()` on every value → produces `TypeExpr` objects
-- **`TypeEnvironment`** stores frozen `TypeExpr` objects with string-compatible equality
+**Type representation boundary (updated 2026-03-08):** The type inference engine (`_InferenceContext`) now operates on `TypeExpr` objects internally.  The `parse_type()` boundary has moved upstream: `infer_types()` parses the builder's string seeds into `TypeExpr` before starting the inference walk.  After convergence, `TypeEnvironment` is built directly from `TypeExpr` values — no roundtrip through strings.
 
-Migrating `_InferenceContext` to `TypeExpr` was evaluated and rejected: it would require 69+ call-site changes, `parse_type()` wrappers around every `TypeResolver` roundtrip, and conversions at every builtin map lookup — all for no functional gain. The current boundary follows the "Functional Core, Imperative Shell" pattern: inference is the imperative shell (mutable strings), `TypeEnvironment` is the functional core (frozen `TypeExpr`).
+- **Frontends** produce strings → `TypeEnvironmentBuilder` (stores `dict[str, str]`)
+- **`infer_types()`** calls `parse_type()` on builder fields at the boundary
+- **`_InferenceContext`** operates on `TypeExpr` — all registers, vars, return types, field types store `TypeExpr`
+- **`UNKNOWN` sentinel** (`UnknownType` singleton) replaces empty strings as the "type not yet known" marker; falsy for `if expr:` checks
+- **Builtin lookup tables** (`_BUILTIN_RETURN_TYPES`, `_BUILTIN_METHOD_RETURN_TYPES`) store `TypeExpr` values
+- **`TypeResolver`** and **`TypeConversionRules`** still accept/return strings (Phase 2)
+- **`TypeEnvironment`** stores frozen `TypeExpr` objects with string-compatible equality
 
 **Alternatives considered:**
 - **String conventions without ADT** (e.g., `"Pointer[Int]"` with ad-hoc parsing): Rejected — fragile for nesting, no structured equality/hashing, no subtype logic.
-- **Immediate full migration** (replace all `str` with `TypeExpr` everywhere including inference): Rejected — adds complexity at 69+ sites with no functional benefit; the single `parse_type()` boundary at `build()` is cleaner.
+- **Keep inference on strings** (original decision 2026-03-08): Superseded — type algebra operations (unification, LUB, variance) require structured types during inference, not just at the output boundary.
 
 **Consequences:** C pointer types now carry full type information through the pipeline. The TypeExpr ADT provides a foundation for future parameterized type extraction across all frontends. TypeGraph can answer subtype and LUB questions for arbitrary nesting depth. No existing tests broken — all changes are additive.
 

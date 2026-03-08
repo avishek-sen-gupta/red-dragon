@@ -9,6 +9,13 @@ from interpreter.ir import IRInstruction, Opcode
 from interpreter.null_type_resolver import NullTypeResolver
 from interpreter.function_signature import FunctionSignature
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.type_expr import (
+    TypeExpr,
+    ScalarType,
+    ParameterizedType,
+    UnknownType,
+    UNKNOWN,
+)
 from interpreter.type_inference import infer_types, _infer_const_type
 from interpreter.type_resolver import TypeResolver
 
@@ -1788,3 +1795,163 @@ class TestVarTypeScoping:
         assert env.register_types["%0"] == TypeName.FLOAT
         # z at global scope was never defined, so %1 should have no type
         assert "%1" not in env.register_types
+
+
+# ---------------------------------------------------------------------------
+# TypeExpr emission — inference engine returns TypeExpr, not strings
+# ---------------------------------------------------------------------------
+
+
+class TestInferConstTypeReturnsTypeExpr:
+    """_infer_const_type returns TypeExpr objects, not raw strings."""
+
+    def test_int_literal_returns_scalar_type(self):
+        result = _infer_const_type("42")
+        assert isinstance(result, ScalarType)
+        assert result == TypeName.INT
+
+    def test_float_literal_returns_scalar_type(self):
+        result = _infer_const_type("3.14")
+        assert isinstance(result, ScalarType)
+        assert result == TypeName.FLOAT
+
+    def test_bool_literal_returns_scalar_type(self):
+        result = _infer_const_type("True")
+        assert isinstance(result, ScalarType)
+        assert result == TypeName.BOOL
+
+    def test_string_literal_returns_scalar_type(self):
+        result = _infer_const_type('"hello"')
+        assert isinstance(result, ScalarType)
+        assert result == TypeName.STRING
+
+    def test_none_returns_unknown(self):
+        result = _infer_const_type("None")
+        assert isinstance(result, UnknownType)
+        assert result is UNKNOWN
+
+    def test_func_ref_returns_unknown(self):
+        result = _infer_const_type("<function:add@func_add_0>")
+        assert isinstance(result, UnknownType)
+
+    def test_class_ref_returns_unknown(self):
+        result = _infer_const_type("<class:Dog@class_Dog_0>")
+        assert isinstance(result, UnknownType)
+
+    def test_unrecognised_literal_returns_unknown(self):
+        result = _infer_const_type("some_identifier")
+        assert isinstance(result, UnknownType)
+
+
+class TestInferenceInternalTypeExpr:
+    """Verify inference engine stores TypeExpr internally, not strings."""
+
+    def test_const_stores_type_expr_in_register(self):
+        """CONST instruction should store a TypeExpr in register_types."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+        ]
+        env = infer_types(instructions, _null_resolver())
+        reg_type = env.register_types["%0"]
+        assert isinstance(reg_type, TypeExpr)
+        assert isinstance(reg_type, ScalarType)
+
+    def test_new_array_then_store_index_produces_parameterized_type(self):
+        """Array promotion should produce ParameterizedType, not a string."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.NEW_ARRAY, result_reg="%arr"),
+            _make_inst(Opcode.CONST, result_reg="%val", operands=["42"]),
+            _make_inst(Opcode.CONST, result_reg="%idx", operands=["0"]),
+            _make_inst(Opcode.STORE_INDEX, operands=["%arr", "%idx", "%val"]),
+        ]
+        env = infer_types(instructions, _null_resolver())
+        arr_type = env.register_types["%arr"]
+        assert isinstance(arr_type, ParameterizedType)
+        assert arr_type.constructor == "Array"
+        assert arr_type.arguments == (ScalarType("Int"),)
+
+    def test_binop_result_is_type_expr(self):
+        """BINOP result type from TypeResolver should be stored as TypeExpr."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["10"]),
+            _make_inst(Opcode.CONST, result_reg="%1", operands=["20"]),
+            _make_inst(Opcode.BINOP, result_reg="%2", operands=["+", "%0", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert isinstance(env.register_types["%2"], ScalarType)
+        assert env.register_types["%2"] == TypeName.INT
+
+    def test_store_var_type_is_type_expr(self):
+        """Variable types stored during inference should be TypeExpr."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
+        ]
+        env = infer_types(instructions, _null_resolver())
+        assert isinstance(env.var_types["x"], ScalarType)
+        assert env.var_types["x"] == TypeName.INT
+
+    def test_seeded_register_type_becomes_type_expr(self):
+        """Seeded string types from builder should be parsed to TypeExpr."""
+        builder = TypeEnvironmentBuilder(register_types={"%0": "List[String]"})
+        instructions = [_make_inst(Opcode.LABEL, label="entry")]
+        env = infer_types(instructions, _null_resolver(), type_env_builder=builder)
+        reg_type = env.register_types["%0"]
+        assert isinstance(reg_type, ParameterizedType)
+        assert reg_type.constructor == "List"
+        assert reg_type.arguments == (ScalarType("String"),)
+
+    def test_seeded_var_type_becomes_type_expr(self):
+        """Seeded var types from builder should be parsed to TypeExpr."""
+        builder = TypeEnvironmentBuilder(var_types={"items": "Map[String, Int]"})
+        instructions = [_make_inst(Opcode.LABEL, label="entry")]
+        env = infer_types(instructions, _null_resolver(), type_env_builder=builder)
+        var_type = env.var_types["items"]
+        assert isinstance(var_type, ParameterizedType)
+        assert var_type.constructor == "Map"
+
+    def test_new_object_class_name_is_scalar_type(self):
+        """NEW_OBJECT stores class name as ScalarType."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.NEW_OBJECT, result_reg="%0", operands=["Dog"]),
+        ]
+        env = infer_types(instructions, _null_resolver())
+        assert isinstance(env.register_types["%0"], ScalarType)
+        assert env.register_types["%0"] == "Dog"
+
+    def test_unop_fixed_type_is_type_expr(self):
+        """UNOP with fixed result type (e.g., 'not' → Bool) stores TypeExpr."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["True"]),
+            _make_inst(Opcode.UNOP, result_reg="%1", operands=["not", "%0"]),
+        ]
+        env = infer_types(instructions, _null_resolver())
+        assert isinstance(env.register_types["%1"], ScalarType)
+        assert env.register_types["%1"] == TypeName.BOOL
+
+    def test_alloc_region_is_scalar_type(self):
+        """ALLOC_REGION stores 'Region' as ScalarType."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.ALLOC_REGION, result_reg="%0"),
+        ]
+        env = infer_types(instructions, _null_resolver())
+        assert isinstance(env.register_types["%0"], ScalarType)
+        assert env.register_types["%0"] == "Region"
+
+    def test_load_region_is_scalar_type(self):
+        """LOAD_REGION stores 'Array' as ScalarType."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.ALLOC_REGION, result_reg="%0"),
+            _make_inst(Opcode.LOAD_REGION, result_reg="%1", operands=["%0", "field"]),
+        ]
+        env = infer_types(instructions, _null_resolver())
+        assert isinstance(env.register_types["%1"], ScalarType)
+        assert env.register_types["%1"] == TypeName.ARRAY

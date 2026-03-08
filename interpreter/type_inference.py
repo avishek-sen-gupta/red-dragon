@@ -1,11 +1,14 @@
 """Static type inference pass — walks IR instructions and builds a TypeEnvironment.
 
-**Type representation:** This module operates entirely on strings, not
-``TypeExpr`` objects.  The conversion to ``TypeExpr`` happens at a single
-boundary: ``TypeEnvironmentBuilder.build()`` calls ``parse_type()`` on
-every string.  This is a deliberate architectural decision (see ADR-085)
-— migrating the 69+ type-string operations here to ``TypeExpr`` was
-evaluated and rejected as added complexity with no functional gain.
+**Type representation:** This module operates on ``TypeExpr`` objects
+internally.  Frontends seed type information as strings via
+``TypeEnvironmentBuilder``; the ``infer_types()`` entry point parses
+those strings into ``TypeExpr`` at the boundary.  All internal
+operations (comparisons, storage, promotion) use ``TypeExpr``.
+
+The ``UNKNOWN`` sentinel (an ``UnknownType`` instance) replaces empty
+strings as the "type not yet known" marker.  It is falsy, so existing
+``if type_expr:`` checks continue to work.
 """
 
 from __future__ import annotations
@@ -21,88 +24,96 @@ from interpreter.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.type_environment import TypeEnvironment
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.type_expr import (
+    TypeExpr,
+    ScalarType,
+    UNKNOWN,
+    array_of,
+    parse_type,
+    scalar,
+)
 from interpreter.type_resolver import TypeResolver
 
 logger = logging.getLogger(__name__)
 
-_BUILTIN_RETURN_TYPES: dict[str, str] = {
-    "len": TypeName.INT,
-    "int": TypeName.INT,
-    "float": TypeName.FLOAT,
-    "str": TypeName.STRING,
-    "bool": TypeName.BOOL,
-    "range": TypeName.ARRAY,
-    "abs": TypeName.NUMBER,
-    "max": TypeName.NUMBER,
-    "min": TypeName.NUMBER,
-    "arrayOf": TypeName.ARRAY,
-    "intArrayOf": TypeName.ARRAY,
-    "Array": TypeName.ARRAY,
+_BUILTIN_RETURN_TYPES: dict[str, TypeExpr] = {
+    "len": scalar(TypeName.INT),
+    "int": scalar(TypeName.INT),
+    "float": scalar(TypeName.FLOAT),
+    "str": scalar(TypeName.STRING),
+    "bool": scalar(TypeName.BOOL),
+    "range": scalar(TypeName.ARRAY),
+    "abs": scalar(TypeName.NUMBER),
+    "max": scalar(TypeName.NUMBER),
+    "min": scalar(TypeName.NUMBER),
+    "arrayOf": scalar(TypeName.ARRAY),
+    "intArrayOf": scalar(TypeName.ARRAY),
+    "Array": scalar(TypeName.ARRAY),
 }
 
-_BUILTIN_METHOD_RETURN_TYPES: dict[str, str] = {
+_BUILTIN_METHOD_RETURN_TYPES: dict[str, TypeExpr] = {
     # String → String
-    "upper": TypeName.STRING,
-    "lower": TypeName.STRING,
-    "strip": TypeName.STRING,
-    "lstrip": TypeName.STRING,
-    "rstrip": TypeName.STRING,
-    "replace": TypeName.STRING,
-    "format": TypeName.STRING,
-    "join": TypeName.STRING,
-    "capitalize": TypeName.STRING,
-    "title": TypeName.STRING,
-    "swapcase": TypeName.STRING,
-    "trim": TypeName.STRING,
-    "toLowerCase": TypeName.STRING,
-    "toUpperCase": TypeName.STRING,
-    "substring": TypeName.STRING,
-    "charAt": TypeName.STRING,
-    "toString": TypeName.STRING,
-    "concat": TypeName.STRING,
-    "downcase": TypeName.STRING,
-    "upcase": TypeName.STRING,
-    "chomp": TypeName.STRING,
-    "chop": TypeName.STRING,
-    "gsub": TypeName.STRING,
-    "sub": TypeName.STRING,
-    "encode": TypeName.STRING,
-    "decode": TypeName.STRING,
+    "upper": scalar(TypeName.STRING),
+    "lower": scalar(TypeName.STRING),
+    "strip": scalar(TypeName.STRING),
+    "lstrip": scalar(TypeName.STRING),
+    "rstrip": scalar(TypeName.STRING),
+    "replace": scalar(TypeName.STRING),
+    "format": scalar(TypeName.STRING),
+    "join": scalar(TypeName.STRING),
+    "capitalize": scalar(TypeName.STRING),
+    "title": scalar(TypeName.STRING),
+    "swapcase": scalar(TypeName.STRING),
+    "trim": scalar(TypeName.STRING),
+    "toLowerCase": scalar(TypeName.STRING),
+    "toUpperCase": scalar(TypeName.STRING),
+    "substring": scalar(TypeName.STRING),
+    "charAt": scalar(TypeName.STRING),
+    "toString": scalar(TypeName.STRING),
+    "concat": scalar(TypeName.STRING),
+    "downcase": scalar(TypeName.STRING),
+    "upcase": scalar(TypeName.STRING),
+    "chomp": scalar(TypeName.STRING),
+    "chop": scalar(TypeName.STRING),
+    "gsub": scalar(TypeName.STRING),
+    "sub": scalar(TypeName.STRING),
+    "encode": scalar(TypeName.STRING),
+    "decode": scalar(TypeName.STRING),
     # → Int
-    "find": TypeName.INT,
-    "index": TypeName.INT,
-    "rfind": TypeName.INT,
-    "rindex": TypeName.INT,
-    "count": TypeName.INT,
-    "indexOf": TypeName.INT,
-    "lastIndexOf": TypeName.INT,
-    "size": TypeName.INT,
-    "length": TypeName.INT,
+    "find": scalar(TypeName.INT),
+    "index": scalar(TypeName.INT),
+    "rfind": scalar(TypeName.INT),
+    "rindex": scalar(TypeName.INT),
+    "count": scalar(TypeName.INT),
+    "indexOf": scalar(TypeName.INT),
+    "lastIndexOf": scalar(TypeName.INT),
+    "size": scalar(TypeName.INT),
+    "length": scalar(TypeName.INT),
     # → Bool
-    "startswith": TypeName.BOOL,
-    "endswith": TypeName.BOOL,
-    "isdigit": TypeName.BOOL,
-    "isalpha": TypeName.BOOL,
-    "isalnum": TypeName.BOOL,
-    "isupper": TypeName.BOOL,
-    "islower": TypeName.BOOL,
-    "isspace": TypeName.BOOL,
-    "startsWith": TypeName.BOOL,
-    "endsWith": TypeName.BOOL,
-    "includes": TypeName.BOOL,
-    "contains": TypeName.BOOL,
-    "isEmpty": TypeName.BOOL,
-    "has": TypeName.BOOL,
+    "startswith": scalar(TypeName.BOOL),
+    "endswith": scalar(TypeName.BOOL),
+    "isdigit": scalar(TypeName.BOOL),
+    "isalpha": scalar(TypeName.BOOL),
+    "isalnum": scalar(TypeName.BOOL),
+    "isupper": scalar(TypeName.BOOL),
+    "islower": scalar(TypeName.BOOL),
+    "isspace": scalar(TypeName.BOOL),
+    "startsWith": scalar(TypeName.BOOL),
+    "endsWith": scalar(TypeName.BOOL),
+    "includes": scalar(TypeName.BOOL),
+    "contains": scalar(TypeName.BOOL),
+    "isEmpty": scalar(TypeName.BOOL),
+    "has": scalar(TypeName.BOOL),
     # → Array
-    "split": TypeName.ARRAY,
-    "splitlines": TypeName.ARRAY,
-    "rsplit": TypeName.ARRAY,
-    "keys": TypeName.ARRAY,
-    "values": TypeName.ARRAY,
-    "items": TypeName.ARRAY,
-    "entries": TypeName.ARRAY,
-    "toArray": TypeName.ARRAY,
-    "toList": TypeName.ARRAY,
+    "split": scalar(TypeName.ARRAY),
+    "splitlines": scalar(TypeName.ARRAY),
+    "rsplit": scalar(TypeName.ARRAY),
+    "keys": scalar(TypeName.ARRAY),
+    "values": scalar(TypeName.ARRAY),
+    "items": scalar(TypeName.ARRAY),
+    "entries": scalar(TypeName.ARRAY),
+    "toArray": scalar(TypeName.ARRAY),
+    "toList": scalar(TypeName.ARRAY),
 }
 
 _SELF_PARAM_NAMES = constants.SELF_PARAM_NAMES
@@ -119,19 +130,21 @@ _GLOBAL_SCOPE = ""
 class _InferenceContext:
     """Mutable bundle of all state accumulated during the inference walk."""
 
-    register_types: dict[str, str] = field(default_factory=dict)
-    scoped_var_types: dict[str, dict[str, str]] = field(default_factory=dict)
-    func_return_types: dict[str, str] = field(default_factory=dict)
-    func_param_types: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
+    register_types: dict[str, TypeExpr] = field(default_factory=dict)
+    scoped_var_types: dict[str, dict[str, TypeExpr]] = field(default_factory=dict)
+    func_return_types: dict[str, TypeExpr] = field(default_factory=dict)
+    func_param_types: dict[str, list[tuple[str, TypeExpr]]] = field(
+        default_factory=dict
+    )
     current_func_label: str = ""
     current_class_name: str = ""
-    class_method_types: dict[str, dict[str, str]] = field(default_factory=dict)
-    field_types: dict[str, dict[str, str]] = field(default_factory=dict)
-    array_element_types: dict[str, str] = field(default_factory=dict)
-    var_array_element_types: dict[str, str] = field(default_factory=dict)
+    class_method_types: dict[str, dict[str, TypeExpr]] = field(default_factory=dict)
+    field_types: dict[str, dict[str, TypeExpr]] = field(default_factory=dict)
+    array_element_types: dict[str, TypeExpr] = field(default_factory=dict)
+    var_array_element_types: dict[str, TypeExpr] = field(default_factory=dict)
     register_source_var: dict[str, str] = field(default_factory=dict)
 
-    def store_var_type(self, name: str, type_name: str) -> None:
+    def store_var_type(self, name: str, type_expr: TypeExpr) -> None:
         """Store a variable type in the current function scope.
 
         Does not overwrite if the variable already has a type in any scope
@@ -141,20 +154,20 @@ class _InferenceContext:
             return
         scope = self.current_func_label
         scope_dict = self.scoped_var_types.setdefault(scope, {})
-        scope_dict[name] = type_name
+        scope_dict[name] = type_expr
 
-    def lookup_var_type(self, name: str) -> str:
+    def lookup_var_type(self, name: str) -> TypeExpr:
         """Look up a variable type: current scope first, then global."""
         scope = self.current_func_label
         scope_dict = self.scoped_var_types.get(scope, {})
         if name in scope_dict:
             return scope_dict[name]
         global_dict = self.scoped_var_types.get(_GLOBAL_SCOPE, {})
-        return global_dict.get(name, "")
+        return global_dict.get(name, UNKNOWN)
 
-    def flat_var_types(self) -> dict[str, str]:
+    def flat_var_types(self) -> dict[str, TypeExpr]:
         """Flatten all scoped var types into a single dict for TypeEnvironment."""
-        result: dict[str, str] = {}
+        result: dict[str, TypeExpr] = {}
         for scope_dict in self.scoped_var_types.values():
             result.update(scope_dict)
         return result
@@ -167,19 +180,60 @@ def _promote_array_element_types(ctx: _InferenceContext) -> None:
     have known element types are promoted to ``Array[ElementType]``.  Register
     types for array registers are also promoted.
     """
-    from interpreter.constants import TypeName
-
     for var_name, elem_type in ctx.var_array_element_types.items():
         for scope_dict in ctx.scoped_var_types.values():
             if var_name in scope_dict:
                 current = scope_dict[var_name]
                 if current == TypeName.ARRAY:
-                    scope_dict[var_name] = f"Array[{elem_type}]"
+                    scope_dict[var_name] = array_of(elem_type)
                     logger.debug("Promoted %s: Array → Array[%s]", var_name, elem_type)
 
     for reg, elem_type in ctx.array_element_types.items():
-        if ctx.register_types.get(reg) == TypeName.ARRAY:
-            ctx.register_types[reg] = f"Array[{elem_type}]"
+        if ctx.register_types.get(reg, UNKNOWN) == TypeName.ARRAY:
+            ctx.register_types[reg] = array_of(elem_type)
+
+
+def _parse_builder_types(
+    builder: TypeEnvironmentBuilder,
+) -> tuple[
+    dict[str, TypeExpr],
+    dict[str, TypeExpr],
+    dict[str, TypeExpr],
+    dict[str, list[tuple[str, TypeExpr]]],
+]:
+    """Parse all string types from the builder into TypeExpr at the boundary."""
+    register_types = {k: parse_type(v) for k, v in builder.register_types.items()}
+    var_types = {k: parse_type(v) for k, v in builder.var_types.items()}
+    func_return_types = {k: parse_type(v) for k, v in builder.func_return_types.items()}
+    func_param_types = {
+        k: [(pname, parse_type(ptype)) for pname, ptype in v]
+        for k, v in builder.func_param_types.items()
+    }
+    return register_types, var_types, func_return_types, func_param_types
+
+
+def _build_func_signatures(
+    func_return_types: dict[str, TypeExpr],
+    func_param_types: dict[str, list[tuple[str, TypeExpr]]],
+) -> dict[str, FunctionSignature]:
+    """Build signatures keyed only by user-facing function names.
+
+    Internal labels (func_add_0) are excluded — only names that came
+    through a <function:name@label> CONST mapping are included.
+    """
+    user_facing_names = {
+        name
+        for name in set(func_return_types) | set(func_param_types)
+        if not name.startswith("func_")
+    }
+
+    return {
+        name: FunctionSignature(
+            params=tuple(func_param_types.get(name, [])),
+            return_type=func_return_types.get(name, UNKNOWN),
+        )
+        for name in user_facing_names
+    }
 
 
 def infer_types(
@@ -197,13 +251,13 @@ def infer_types(
 
     Pure function — no mutation of the input instructions.
     """
+    reg_types, var_types, func_ret, func_params = _parse_builder_types(type_env_builder)
+
     ctx = _InferenceContext(
-        register_types=dict(type_env_builder.register_types),
-        scoped_var_types={_GLOBAL_SCOPE: dict(type_env_builder.var_types)},
-        func_return_types=dict(type_env_builder.func_return_types),
-        func_param_types={
-            k: list(v) for k, v in type_env_builder.func_param_types.items()
-        },
+        register_types=reg_types,
+        scoped_var_types={_GLOBAL_SCOPE: var_types},
+        func_return_types=func_ret,
+        func_param_types={k: list(v) for k, v in func_params.items()},
     )
 
     prev_size = -1
@@ -221,13 +275,10 @@ def infer_types(
     # Promote Array variables with known element types to Array[ElementType]
     _promote_array_element_types(ctx)
 
-    # Use builder for final assembly
+    # Build TypeEnvironment directly — no roundtrip through builder
     flat_vars = ctx.flat_var_types()
-    final_builder = TypeEnvironmentBuilder(
-        register_types=ctx.register_types,
-        var_types=flat_vars,
-        func_return_types=ctx.func_return_types,
-        func_param_types=ctx.func_param_types,
+    func_signatures = _build_func_signatures(
+        ctx.func_return_types, ctx.func_param_types
     )
 
     logger.debug(
@@ -235,7 +286,11 @@ def infer_types(
         len(ctx.register_types),
         len(flat_vars),
     )
-    return final_builder.build()
+    return TypeEnvironment(
+        register_types=MappingProxyType(ctx.register_types),
+        var_types=MappingProxyType(flat_vars),
+        func_signatures=MappingProxyType(func_signatures),
+    )
 
 
 def _infer_instruction(
@@ -290,7 +345,7 @@ def _infer_symbolic(
                 for p in ctx.func_param_types.get(ctx.current_func_label, [])
             )
             if not already_seeded:
-                param_type = ctx.register_types.get(inst.result_reg, "")
+                param_type = ctx.register_types.get(inst.result_reg, UNKNOWN)
                 ctx.func_param_types[ctx.current_func_label].append(
                     (param_name, param_type)
                 )
@@ -306,7 +361,7 @@ def _infer_symbolic(
         if operand.startswith("param:"):
             param_name = operand[len("param:") :]
             if param_name in _SELF_PARAM_NAMES:
-                ctx.register_types[inst.result_reg] = ctx.current_class_name
+                ctx.register_types[inst.result_reg] = scalar(ctx.current_class_name)
 
 
 def _infer_const(
@@ -326,7 +381,7 @@ def _infer_const(
         if func_label in ctx.func_param_types:
             ctx.func_param_types[func_name] = ctx.func_param_types[func_label]
         if ctx.current_class_name:
-            ret_type = ctx.func_return_types.get(func_label, "")
+            ret_type = ctx.func_return_types.get(func_label, UNKNOWN)
             ctx.class_method_types.setdefault(ctx.current_class_name, {})[
                 func_name
             ] = ret_type
@@ -344,7 +399,7 @@ def _infer_load_var(
     name = inst.operands[0] if inst.operands else ""
     if inst.result_reg and name:
         ctx.register_source_var[inst.result_reg] = str(name)
-    var_type = ctx.lookup_var_type(str(name)) if name else ""
+    var_type = ctx.lookup_var_type(str(name)) if name else UNKNOWN
     if inst.result_reg and var_type:
         ctx.register_types[inst.result_reg] = var_type
     # Propagate array element types from variable to register
@@ -379,18 +434,19 @@ def _infer_binop(
     if not inst.result_reg or len(inst.operands) < 3:
         return
     operator = str(inst.operands[0])
-    left_hint = ctx.register_types.get(str(inst.operands[1]), "")
-    right_hint = ctx.register_types.get(str(inst.operands[2]), "")
-    result = type_resolver.resolve_binop(operator, left_hint, right_hint)
+    left_hint = ctx.register_types.get(str(inst.operands[1]), UNKNOWN)
+    right_hint = ctx.register_types.get(str(inst.operands[2]), UNKNOWN)
+    # TypeResolver still accepts strings (Phase 2 migration)
+    result = type_resolver.resolve_binop(operator, str(left_hint), str(right_hint))
     if result.result_type:
-        ctx.register_types[inst.result_reg] = result.result_type
+        ctx.register_types[inst.result_reg] = parse_type(result.result_type)
 
 
-_UNOP_FIXED_TYPES: dict[str, str] = {
-    "not": TypeName.BOOL,
-    "!": TypeName.BOOL,
-    "#": TypeName.INT,
-    "~": TypeName.INT,
+_UNOP_FIXED_TYPES: dict[str, TypeExpr] = {
+    "not": scalar(TypeName.BOOL),
+    "!": scalar(TypeName.BOOL),
+    "#": scalar(TypeName.INT),
+    "~": scalar(TypeName.INT),
 }
 
 
@@ -406,7 +462,7 @@ def _infer_unop(
     if fixed:
         ctx.register_types[inst.result_reg] = fixed
         return
-    operand_hint = ctx.register_types.get(str(inst.operands[1]), "")
+    operand_hint = ctx.register_types.get(str(inst.operands[1]), UNKNOWN)
     if operand_hint:
         ctx.register_types[inst.result_reg] = operand_hint
 
@@ -419,7 +475,7 @@ def _infer_new_object(
     if inst.result_reg and inst.operands:
         class_name = str(inst.operands[0])
         if class_name:
-            ctx.register_types[inst.result_reg] = class_name
+            ctx.register_types[inst.result_reg] = scalar(class_name)
 
 
 def _infer_new_array(
@@ -428,7 +484,7 @@ def _infer_new_array(
     type_resolver: TypeResolver,
 ) -> None:
     if inst.result_reg:
-        ctx.register_types[inst.result_reg] = TypeName.ARRAY
+        ctx.register_types[inst.result_reg] = scalar(TypeName.ARRAY)
 
 
 def _infer_call_function(
@@ -455,7 +511,7 @@ def _infer_alloc_region(
     type_resolver: TypeResolver,
 ) -> None:
     if inst.result_reg:
-        ctx.register_types[inst.result_reg] = "Region"
+        ctx.register_types[inst.result_reg] = scalar("Region")
 
 
 def _infer_load_region(
@@ -464,7 +520,7 @@ def _infer_load_region(
     type_resolver: TypeResolver,
 ) -> None:
     if inst.result_reg:
-        ctx.register_types[inst.result_reg] = TypeName.ARRAY
+        ctx.register_types[inst.result_reg] = scalar(TypeName.ARRAY)
 
 
 def _infer_store_field(
@@ -477,10 +533,10 @@ def _infer_store_field(
     obj_reg = str(inst.operands[0])
     field_name = str(inst.operands[1])
     value_reg = str(inst.operands[2])
-    class_name = ctx.register_types.get(obj_reg, "")
-    value_type = ctx.register_types.get(value_reg, "")
+    class_name = ctx.register_types.get(obj_reg, UNKNOWN)
+    value_type = ctx.register_types.get(value_reg, UNKNOWN)
     if class_name and value_type:
-        ctx.field_types.setdefault(class_name, {})[field_name] = value_type
+        ctx.field_types.setdefault(str(class_name), {})[field_name] = value_type
 
 
 def _infer_load_field(
@@ -492,9 +548,9 @@ def _infer_load_field(
         return
     obj_reg = str(inst.operands[0])
     field_name = str(inst.operands[1])
-    class_name = ctx.register_types.get(obj_reg, "")
-    if class_name and class_name in ctx.field_types:
-        field_type = ctx.field_types[class_name].get(field_name, "")
+    class_name = ctx.register_types.get(obj_reg, UNKNOWN)
+    if class_name and str(class_name) in ctx.field_types:
+        field_type = ctx.field_types[str(class_name)].get(field_name, UNKNOWN)
         if field_type:
             ctx.register_types[inst.result_reg] = field_type
 
@@ -508,9 +564,9 @@ def _infer_call_method(
         return
     obj_reg = str(inst.operands[0])
     method_name = str(inst.operands[1])
-    class_name = ctx.register_types.get(obj_reg, "")
-    if class_name and class_name in ctx.class_method_types:
-        ret_type = ctx.class_method_types[class_name].get(method_name, "")
+    class_name = ctx.register_types.get(obj_reg, UNKNOWN)
+    if class_name and str(class_name) in ctx.class_method_types:
+        ret_type = ctx.class_method_types[str(class_name)].get(method_name, UNKNOWN)
         if ret_type:
             ctx.register_types[inst.result_reg] = ret_type
             return
@@ -519,7 +575,7 @@ def _infer_call_method(
         ctx.register_types[inst.result_reg] = ctx.func_return_types[method_name]
         return
     # Final fallback: builtin method return types (e.g. .upper()→String, .split()→Array)
-    builtin_type = _BUILTIN_METHOD_RETURN_TYPES.get(method_name, "")
+    builtin_type = _BUILTIN_METHOD_RETURN_TYPES.get(method_name, UNKNOWN)
     if builtin_type:
         ctx.register_types[inst.result_reg] = builtin_type
 
@@ -550,7 +606,7 @@ def _infer_store_index(
         return
     arr_reg = str(inst.operands[0])
     value_reg = str(inst.operands[2])
-    value_type = ctx.register_types.get(value_reg, "")
+    value_type = ctx.register_types.get(value_reg, UNKNOWN)
     if value_type:
         ctx.array_element_types[arr_reg] = value_type
 
@@ -563,7 +619,7 @@ def _infer_load_index(
     if not inst.result_reg or len(inst.operands) < 2:
         return
     arr_reg = str(inst.operands[0])
-    element_type = ctx.array_element_types.get(arr_reg, "")
+    element_type = ctx.array_element_types.get(arr_reg, UNKNOWN)
     if element_type:
         ctx.register_types[inst.result_reg] = element_type
 
@@ -580,7 +636,7 @@ def _infer_return(
     if not inst.operands:
         return
     value_reg = str(inst.operands[0])
-    ret_type = ctx.register_types.get(value_reg, "")
+    ret_type = ctx.register_types.get(value_reg, UNKNOWN)
     if ret_type:
         ctx.func_return_types[ctx.current_func_label] = ret_type
 
@@ -608,26 +664,26 @@ _DISPATCH: dict[Opcode, callable] = {
 }
 
 
-def _infer_const_type(raw: str) -> str:
+def _infer_const_type(raw: str) -> TypeExpr:
     """Infer a canonical type from a CONST literal string."""
     if raw in (CanonicalLiteral.TRUE, CanonicalLiteral.FALSE):
-        return TypeName.BOOL
+        return scalar(TypeName.BOOL)
     if raw == CanonicalLiteral.NONE:
-        return ""
+        return UNKNOWN
     if _FUNC_REF_PATTERN.search(str(raw)):
-        return ""
+        return UNKNOWN
     if _CLASS_REF_PATTERN.search(str(raw)):
-        return ""
+        return UNKNOWN
     try:
         int(raw)
-        return TypeName.INT
+        return scalar(TypeName.INT)
     except (ValueError, TypeError):
         pass
     try:
         float(raw)
-        return TypeName.FLOAT
+        return scalar(TypeName.FLOAT)
     except (ValueError, TypeError):
         pass
     if len(str(raw)) >= 2 and str(raw)[0] in ('"', "'") and str(raw)[-1] == str(raw)[0]:
-        return TypeName.STRING
-    return ""
+        return scalar(TypeName.STRING)
+    return UNKNOWN
