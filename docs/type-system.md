@@ -39,9 +39,78 @@ The type system operates in three phases:
 2. **Static inference** — `infer_types()` walks the IR to fixpoint, propagating types through registers, variables, and function signatures
 3. **Runtime coercion** — During execution, the VM applies write-time coercion when storing values into typed registers
 
+## TypeExpr — Algebraic Data Type for Types
+
+All types in the system are represented as `TypeExpr` values (`interpreter/type_expr.py`), an algebraic data type with the following variants:
+
+| Variant | Example | Description |
+|---|---|---|
+| `ScalarType("Int")` | `Int`, `String`, `Bool` | Simple non-parameterized type |
+| `ParameterizedType("Pointer", (ScalarType("Int"),))` | `Pointer[Int]`, `Map[String, Int]` | Type constructor with arguments |
+| `UnionType(frozenset({ScalarType("Int"), ScalarType("String")}))` | `Union[Int, String]` | Union of two or more types |
+| `FunctionType(params, return_type)` | `Fn(Int, String) -> Bool` | Callable type with params and return |
+| `TypeVar("T", bound=ScalarType("Number"))` | `T: Number` | Bounded generic type variable |
+| `UnknownType()` | `""` (falsy) | Sentinel for "type not yet known" |
+
+**String compatibility**: All `TypeExpr` values compare equal to their `str()` representation (`ScalarType("Int") == "Int"` is `True`), enabling gradual migration from string-based type storage.
+
+**Convenience constructors**: `scalar()`, `pointer()`, `array_of()`, `map_of()`, `tuple_of()`, `fn_type()`, `typevar()`, `union_of()`, `optional()`, `unknown()`.
+
+**Parser**: `parse_type("Map[String, Int]")` → `ParameterizedType("Map", (ScalarType("String"), ScalarType("Int")))`. Round-trips through `__str__`.
+
+### Union Types
+
+`UnionType(members: frozenset[TypeExpr])` represents a type that could be any of its members:
+
+- **Construction**: `union_of(*types)` — auto-flattens nested unions, deduplicates, eliminates singletons, filters `UNKNOWN`
+- **Optional sugar**: `optional(T)` = `Union[T, Null]`, `is_optional(t)`, `unwrap_optional(t)`
+- **Inference**: When a variable is assigned different types on different branches, the engine widens to a union (e.g., `x = 5; x = "hello"` → `Union[Int, String]`)
+- **Canonical string**: Members sorted alphabetically: `"Union[Int, String]"` (deterministic hashing)
+
+### Function Types
+
+`FunctionType(params: tuple[TypeExpr, ...], return_type: TypeExpr)` represents callable types:
+
+- **Syntax**: `Fn(Int, String) -> Bool`
+- **Inference**: CONST function references get `FunctionType` when param/return types are known; `CALL_UNKNOWN` resolves return types from `FunctionType` targets
+- **Subtyping**: Contravariant parameters, covariant return (standard function subtyping)
+
+### Tuple Types
+
+Tuple types use `ParameterizedType("Tuple", (element_types...))` for heterogeneous fixed-size tuples:
+
+- **Construction**: `tuple_of(ScalarType("Int"), ScalarType("String"))` → `Tuple[Int, String]`
+- **Per-index tracking**: Inference tracks element types per-index, so `t[0]` on `Tuple[Int, String]` resolves to `Int`
+- **Subtyping**: Covariant per-element, same length required
+
+### Type Aliases
+
+Type aliases map alias names to their target types with transitive resolution:
+
+- **Seeding**: Frontends call `seed_type_alias(alias_name, target_type)` (e.g., C `typedef int UserId;` → `UserId = Int`)
+- **Resolution**: `_resolve_alias()` expands transitively with cycle protection (depth limit 20)
+- **Available aliases**: `TypeEnvironment.type_aliases` provides the full alias map for inspection
+
+### Interface/Trait Typing
+
+Java `implements` (and similar) clauses create class→interface edges in the TypeGraph:
+
+- **TypeNode.kind**: `"class"` (default) or `"interface"`
+- **Seeding**: `seed_interface_impl(class_name, interface_name)` during frontend lowering
+- **TypeGraph extension**: `extend_with_interfaces(implementations)` adds interface nodes (parented under `Any`) and class→interface edges
+- **Result**: `Dog ⊆ Comparable` subtype checks work after extension
+
+### Bounded Type Variables
+
+`TypeVar(name: str, bound: TypeExpr = UNKNOWN)` represents generic type parameters:
+
+- **Construction**: `typevar("T", bound=scalar("Number"))` → `T: Number`
+- **Unbounded**: Defaults to `Any` — any concrete type satisfies it
+- **Subtyping**: A concrete type satisfies `T: Number` iff it's a subtype of `Number`; a `TypeVar` child is a subtype if its bound is
+
 ## Type Hierarchy
 
-The default type hierarchy is a DAG rooted at `ANY`:
+The default type hierarchy is a DAG rooted at `ANY` with 12 nodes:
 
 ```mermaid
 graph TD
@@ -53,19 +122,29 @@ graph TD
     BOOL["BOOL"]
     OBJECT["OBJECT"]
     ARRAY["ARRAY"]
+    POINTER["POINTER"]
+    MAP["MAP"]
+    TUPLE["TUPLE"]
+    REGION["REGION"]
 
     ANY --> NUMBER
     ANY --> STRING
     ANY --> BOOL
     ANY --> OBJECT
     ANY --> ARRAY
+    ANY --> POINTER
+    ANY --> MAP
+    ANY --> TUPLE
+    ANY --> REGION
     NUMBER --> INT
     NUMBER --> FLOAT
 ```
 
-**`TypeNode`** (`interpreter/type_node.py`) — Each node is a frozen dataclass with a `name` and a tuple of `parents`, forming the edges of the DAG.
+**`TypeNode`** (`interpreter/type_node.py`) — Each node is a frozen dataclass with a `name`, a tuple of `parents`, and a `kind` (`"class"` or `"interface"`).
 
-**`TypeGraph`** (`interpreter/type_graph.py`) — Immutable DAG built from a tuple of `TypeNode` values. Supports three operations:
+**`TypeGraph`** (`interpreter/type_graph.py`) — Immutable DAG built from a tuple of `TypeNode` values. Supports both string-based and TypeExpr-based operations:
+
+### String-Based Operations (Legacy)
 
 | Operation | Algorithm | Complexity |
 |---|---|---|
@@ -73,6 +152,27 @@ graph TD
 | `is_subtype(child, parent)` | BFS from child through parent edges | O(V + E) |
 | `common_supertype(a, b)` | Intersect BFS ancestor lists; return first common | O(V + E) |
 | `extend(nodes)` | Merge and return new graph (immutable) | O(V) |
+
+### TypeExpr-Based Operations
+
+| Operation | Description |
+|---|---|
+| `is_subtype_expr(child, parent)` | Full TypeExpr subtype check with union, function, variance, TypeVar support |
+| `common_supertype_expr(a, b)` | LUB of two TypeExpr values with union merge, pairwise LUB |
+| `extend_with_interfaces(impls)` | Add class→interface edges to the graph |
+| `with_variance(registry)` | Return new graph with variance annotations |
+
+### Variance Annotations
+
+The `variance_registry` maps constructor names to per-argument variance:
+
+| Variance | Subtype Rule | LUB Rule | Example |
+|---|---|---|---|
+| `COVARIANT` (default) | child arg ⊆ parent arg | Standard LUB | `List[Int] ⊆ List[Number]` |
+| `CONTRAVARIANT` | parent arg ⊆ child arg | Standard LUB | Function params |
+| `INVARIANT` | args must be equal | Must be equal (else Any) | `MutableList[Int] ⊄ MutableList[Number]` |
+
+Unlisted constructors default to all-covariant (backwards-compatible).
 
 ### Subtype Check Algorithm
 
@@ -128,14 +228,16 @@ The graph can be extended with user-defined class types at runtime via `extend()
 
 ## Phase 1: Frontend Type Extraction
 
-During IR lowering, the `TreeSitterEmitContext` provides four seeding methods that populate the `TypeEnvironmentBuilder`:
+During IR lowering, the `TreeSitterEmitContext` provides seeding methods that populate the `TypeEnvironmentBuilder`:
 
 | Method | Seeds | Example |
 |---|---|---|
-| `seed_register_type(reg, type)` | `register_types["%3"] = "Int"` | Typed parameter `int x` → `%3 = Int` |
-| `seed_var_type(var, type)` | `var_types["x"] = "Int"` | Typed declaration `int x = 5` |
+| `seed_register_type(reg, type)` | `register_types["%3"] = ScalarType("Int")` | Typed parameter `int x` → `%3 = Int` |
+| `seed_var_type(var, type)` | `var_types["x"] = ScalarType("Int")` | Typed declaration `int x = 5` |
 | `seed_param_type(name, type)` | `func_param_types["func_add_0"].append(("x", "Int"))` | Function param `(int x)` |
-| `seed_func_return_type(label, type)` | `func_return_types["func_add_0"] = "Int"` | Return annotation `-> int` |
+| `seed_func_return_type(label, type)` | `func_return_types["func_add_0"] = ScalarType("Int")` | Return annotation `-> int` |
+| `seed_type_alias(alias, target)` | `type_aliases["UserId"] = ScalarType("Int")` | `typedef int UserId;` |
+| `seed_interface_impl(class, iface)` | `interface_implementations["Dog"].append("Comparable")` | `class Dog implements Comparable` |
 
 Type annotations are extracted via `extract_type_from_field()` and normalized through `normalize_type_hint()`, which maps language-specific type names to canonical names (e.g. `int` → `Int`, `double` → `Float`, `str`/`String`/`string` → `String`).
 
@@ -146,10 +248,12 @@ Languages with explicit type annotations (Java, C#, C++, Kotlin, TypeScript, Sca
 `TypeEnvironmentBuilder` (`interpreter/type_environment_builder.py`) is a mutable dataclass that accumulates type information during lowering:
 
 ```
-register_types:   dict[str, str]                    # "%0" → "Int"
-var_types:        dict[str, str]                    # "x"  → "Int"
-func_return_types: dict[str, str]                   # "func_add_0" → "Int"
-func_param_types:  dict[str, list[tuple[str, str]]] # "func_add_0" → [("a", "Int"), ("b", "Int")]
+register_types:            dict[str, TypeExpr]                    # "%0" → ScalarType("Int")
+var_types:                 dict[str, TypeExpr]                    # "x"  → ScalarType("Int")
+func_return_types:         dict[str, TypeExpr]                    # "func_add_0" → ScalarType("Int")
+func_param_types:          dict[str, list[tuple[str, str]]]       # "func_add_0" → [("a", "Int"), ("b", "Int")]
+type_aliases:              dict[str, TypeExpr]                    # "UserId" → ScalarType("Int")
+interface_implementations: dict[str, list[str]]                   # "Dog" → ["Comparable", "Serializable"]
 ```
 
 Its `.build()` method freezes the accumulated state into an immutable `TypeEnvironment`.
@@ -224,9 +328,11 @@ The inference engine has built-in knowledge of common function and method return
 The inference pass produces a frozen `TypeEnvironment` (`interpreter/type_environment.py`):
 
 ```
-register_types:  MappingProxyType[str, str]                    # "%0" → "Int"
-var_types:       MappingProxyType[str, str]                    # "x"  → "Int"
-func_signatures: MappingProxyType[str, FunctionSignature]      # "add" → FunctionSignature(...)
+register_types:            MappingProxyType[str, TypeExpr]                # "%0" → ScalarType("Int")
+var_types:                 MappingProxyType[str, TypeExpr]                # "x"  → ScalarType("Int")
+func_signatures:           MappingProxyType[str, FunctionSignature]       # "add" → FunctionSignature(...)
+type_aliases:              MappingProxyType[str, TypeExpr]                # "UserId" → ScalarType("Int")
+interface_implementations: MappingProxyType[str, tuple[str, ...]]         # "Dog" → ("Comparable",)
 ```
 
 `FunctionSignature` is a frozen dataclass with `params: tuple[tuple[str, str], ...]` and `return_type: str`. Only user-facing function names (not internal labels like `func_add_0`) appear in `func_signatures`.
@@ -398,22 +504,27 @@ When `d = 3` is stored into `%7` (target type Int): runtime type matches, no coe
 The type system is designed for extension via dependency injection:
 
 - **Custom type hierarchies**: Provide additional `TypeNode` entries via `TypeGraph.extend()` to add user-defined class types with inheritance relationships
+- **Interface hierarchies**: Use `TypeGraph.extend_with_interfaces()` to add class→interface subtype edges
+- **Variance annotations**: Use `TypeGraph.with_variance()` to annotate parameterized type constructors with per-argument variance
 - **Custom coercion rules**: Implement `TypeConversionRules` to define domain-specific operator semantics (e.g. COBOL decimal arithmetic)
-- **Frontend seeding**: Any frontend can populate the `TypeEnvironmentBuilder` with language-specific type information via the four `seed_*_type()` methods
+- **Frontend seeding**: Any frontend can populate the `TypeEnvironmentBuilder` with type information via `seed_register_type()`, `seed_var_type()`, `seed_type_alias()`, `seed_interface_impl()`, etc.
+- **Type aliases**: Frontends can register type aliases that are transitively resolved during inference
 
 ## File Reference
 
 | File | Role |
 |---|---|
-| `interpreter/type_node.py` | `TypeNode` — frozen dataclass for DAG nodes |
-| `interpreter/type_graph.py` | `TypeGraph` — immutable DAG with subtype/LUB queries |
-| `interpreter/type_environment_builder.py` | `TypeEnvironmentBuilder` — mutable accumulator for frontend seeds |
+| `interpreter/type_expr.py` | `TypeExpr` ADT — `ScalarType`, `ParameterizedType`, `UnionType`, `FunctionType`, `TypeVar`, `UnknownType` |
+| `interpreter/type_node.py` | `TypeNode` — frozen dataclass for DAG nodes (with `kind` for class/interface) |
+| `interpreter/type_graph.py` | `TypeGraph` — immutable DAG with string and TypeExpr subtype/LUB queries, variance, interface extension |
+| `interpreter/constants.py` | `TypeName` enum, `Variance` enum (`COVARIANT`, `CONTRAVARIANT`, `INVARIANT`) |
+| `interpreter/type_environment_builder.py` | `TypeEnvironmentBuilder` — mutable accumulator for frontend seeds (types, aliases, interfaces) |
 | `interpreter/type_environment.py` | `TypeEnvironment` — frozen inference result |
 | `interpreter/function_signature.py` | `FunctionSignature` — frozen param/return type record |
-| `interpreter/type_inference.py` | `infer_types()` — fixpoint inference engine |
+| `interpreter/type_inference.py` | `infer_types()` — fixpoint inference engine with tuple/alias/union support |
 | `interpreter/type_resolver.py` | `TypeResolver` — composes rules with missing-hint logic |
 | `interpreter/conversion_rules.py` | `TypeConversionRules` — ABC for coercion rules |
 | `interpreter/conversion_result.py` | `ConversionResult` — coercion descriptor |
 | `interpreter/default_conversion_rules.py` | `DefaultTypeConversionRules` — standard coercion table |
-| `interpreter/frontends/context.py` | `TreeSitterEmitContext.seed_*_type()` — frontend seeding API |
+| `interpreter/frontends/context.py` | `TreeSitterEmitContext.seed_*_type()` — frontend seeding API (register, var, alias, interface) |
 | `interpreter/vm.py` | `_coerce_value()`, `apply_update()` — runtime coercion |
