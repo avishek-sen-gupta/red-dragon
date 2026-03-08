@@ -15,6 +15,8 @@ from interpreter.type_expr import (
     ParameterizedType,
     UnknownType,
     UNKNOWN,
+    parse_type,
+    scalar,
 )
 from interpreter.type_inference import infer_types, _infer_const_type
 from interpreter.type_resolver import TypeResolver
@@ -88,7 +90,7 @@ class TestSymbolicInference:
             _make_inst(Opcode.LABEL, label="entry"),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
         ]
-        builder = TypeEnvironmentBuilder(register_types={"%0": "Int"})
+        builder = TypeEnvironmentBuilder(register_types={"%0": scalar("Int")})
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%0"] == "Int"
 
@@ -170,7 +172,7 @@ class TestStoreVarInference:
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
         ]
-        builder = TypeEnvironmentBuilder(var_types={"x": "Int"})
+        builder = TypeEnvironmentBuilder(var_types={"x": scalar("Int")})
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.var_types["x"] == "Int"
 
@@ -190,7 +192,7 @@ class TestStoreVarInference:
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
         ]
-        builder = TypeEnvironmentBuilder(var_types={"x": "Float"})
+        builder = TypeEnvironmentBuilder(var_types={"x": scalar("Float")})
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.var_types["x"] == "Float"
 
@@ -208,7 +210,7 @@ class TestLoadVarInference:
             _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"]),
         ]
-        builder = TypeEnvironmentBuilder(var_types={"x": "Int"})
+        builder = TypeEnvironmentBuilder(var_types={"x": scalar("Int")})
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%1"] == "Int"
 
@@ -407,7 +409,9 @@ class TestFullChain:
             _make_inst(Opcode.BINOP, result_reg="%4", operands=["/", "%2", "%3"]),
             _make_inst(Opcode.STORE_VAR, operands=["z", "%4"]),
         ]
-        builder = TypeEnvironmentBuilder(var_types={"x": "Int", "y": "Int", "z": "Int"})
+        builder = TypeEnvironmentBuilder(
+            var_types={"x": scalar("Int"), "y": scalar("Int"), "z": scalar("Int")}
+        )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
 
         assert env.register_types["%0"] == TypeName.INT
@@ -435,7 +439,7 @@ class TestNullTypeResolver:
             _make_inst(Opcode.CONST, result_reg="%1", operands=["3.14"]),
         ]
         builder = TypeEnvironmentBuilder(
-            register_types={"%0": "Int"}, var_types={"x": "Int"}
+            register_types={"%0": scalar("Int")}, var_types={"x": scalar("Int")}
         )
         env = infer_types(instructions, _null_resolver(), type_env_builder=builder)
         assert env.register_types["%0"] == "Int"
@@ -479,7 +483,7 @@ class TestCallFunctionInference:
                 operands=["Dog", "%1", "%2"],
             ),
         ]
-        builder = TypeEnvironmentBuilder(register_types={"%0": "Dog"})
+        builder = TypeEnvironmentBuilder(register_types={"%0": scalar("Dog")})
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%0"] == "Dog"
 
@@ -664,7 +668,9 @@ class TestReturnTypeInference:
             _make_inst(Opcode.RETURN, operands=["%0"]),
             _make_inst(Opcode.LABEL, label="end_add_0"),
         ]
-        builder = TypeEnvironmentBuilder(func_return_types={"func_add_0": "Int"})
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_add_0": scalar("Int")}
+        )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         # LABEL itself produces no register type
         assert len(env.register_types) == 0
@@ -694,7 +700,9 @@ class TestReturnTypeInference:
                 operands=["add", "%2", "%3"],
             ),
         ]
-        builder = TypeEnvironmentBuilder(func_return_types={"func_add_0": "Int"})
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_add_0": scalar("Int")}
+        )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%4"] == "Int"
 
@@ -718,8 +726,8 @@ class TestReturnTypeInference:
             ),
         ]
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_Dog_0": "void"},
-            register_types={"%2": "Dog"},
+            func_return_types={"func_Dog_0": scalar("void")},
+            register_types={"%2": scalar("Dog")},
         )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         # Pre-seeded register type wins
@@ -829,7 +837,7 @@ class TestBuiltinReturnTypes:
                 operands=["len", "%1"],
             ),
         ]
-        builder = TypeEnvironmentBuilder(register_types={"%0": "CustomType"})
+        builder = TypeEnvironmentBuilder(register_types={"%0": scalar("CustomType")})
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%0"] == "CustomType"
 
@@ -847,7 +855,9 @@ class TestBuiltinReturnTypes:
             ),
             _make_inst(Opcode.CALL_FUNCTION, result_reg="%2", operands=["len", "%3"]),
         ]
-        builder = TypeEnvironmentBuilder(func_return_types={"func_len_0": "String"})
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_len_0": scalar("String")}
+        )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%2"] == "String"
 
@@ -918,7 +928,9 @@ class TestReturnBackfill:
             ),
             _make_inst(Opcode.STORE_VAR, operands=["add", "%1"]),
         ]
-        builder = TypeEnvironmentBuilder(func_return_types={"func_add_0": "Float"})
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_add_0": scalar("Float")}
+        )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         # Float (from annotation) should NOT be overwritten by Int (from CONST 42)
         assert env.func_signatures["add"].return_type == "Float"
@@ -973,7 +985,9 @@ class TestCallMethodReturnTypes:
                 operands=["%2", "getAge"],
             ),
         ]
-        builder = TypeEnvironmentBuilder(func_return_types={"func_getAge_0": "Int"})
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_getAge_0": scalar("Int")}
+        )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%3"] == "Int"
 
@@ -1012,7 +1026,9 @@ class TestCallMethodReturnTypes:
                 operands=["%2", "getAge"],
             ),
         ]
-        builder = TypeEnvironmentBuilder(func_return_types={"func_getAge_0": "Int"})
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_getAge_0": scalar("Int")}
+        )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%3"] == "Int"
 
@@ -1107,7 +1123,9 @@ class TestCallMethodReturnTypes:
                 operands=["%2", "split"],
             ),
         ]
-        builder = TypeEnvironmentBuilder(func_return_types={"func_split_0": "Int"})
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_split_0": scalar("Int")}
+        )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         # User-defined Widget.split() returns Int, not the builtin Array
         assert env.register_types["%3"] == "Int"
@@ -1149,8 +1167,8 @@ class TestCallMethodReturnTypes:
         ]
         builder = TypeEnvironmentBuilder(
             func_return_types={
-                "func_speak_0": "String",
-                "func_bark_0": "Int",
+                "func_speak_0": scalar("String"),
+                "func_bark_0": scalar("Int"),
             }
         )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
@@ -1276,9 +1294,11 @@ class TestFunctionSignatures:
             _make_inst(Opcode.STORE_VAR, operands=["add", "%3"]),
         ]
         builder = TypeEnvironmentBuilder(
-            register_types={"%0": "Int", "%1": "Int"},
-            func_return_types={"func_add_0": "Int"},
-            func_param_types={"func_add_0": [("a", "Int"), ("b", "Int")]},
+            register_types={"%0": scalar("Int"), "%1": scalar("Int")},
+            func_return_types={"func_add_0": scalar("Int")},
+            func_param_types={
+                "func_add_0": [("a", scalar("Int")), ("b", scalar("Int"))]
+            },
         )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert "add" in env.func_signatures
@@ -1325,9 +1345,9 @@ class TestFunctionSignatures:
             _make_inst(Opcode.STORE_VAR, operands=["add", "%1"]),
         ]
         builder = TypeEnvironmentBuilder(
-            register_types={"%0": "Int"},
-            func_return_types={"func_add_0": "Int"},
-            func_param_types={"func_add_0": [("a", "Int")]},
+            register_types={"%0": scalar("Int")},
+            func_return_types={"func_add_0": scalar("Int")},
+            func_param_types={"func_add_0": [("a", scalar("Int"))]},
         )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert "func_add_0" not in env.func_signatures
@@ -1348,7 +1368,9 @@ class TestFunctionSignatures:
             ),
             _make_inst(Opcode.STORE_VAR, operands=["main", "%1"]),
         ]
-        builder = TypeEnvironmentBuilder(func_return_types={"func_main_0": "void"})
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_main_0": scalar("void")}
+        )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.func_signatures["main"] == FunctionSignature(
             params=(), return_type="void"
@@ -1385,11 +1407,18 @@ class TestFunctionSignatures:
             _make_inst(Opcode.STORE_VAR, operands=["greet", "%6"]),
         ]
         builder = TypeEnvironmentBuilder(
-            register_types={"%0": "Int", "%1": "Int", "%4": "String"},
-            func_return_types={"func_add_0": "Int", "func_greet_0": "String"},
+            register_types={
+                "%0": scalar("Int"),
+                "%1": scalar("Int"),
+                "%4": scalar("String"),
+            },
+            func_return_types={
+                "func_add_0": scalar("Int"),
+                "func_greet_0": scalar("String"),
+            },
             func_param_types={
-                "func_add_0": [("a", "Int"), ("b", "Int")],
-                "func_greet_0": [("name", "String")],
+                "func_add_0": [("a", scalar("Int")), ("b", scalar("Int"))],
+                "func_greet_0": [("name", scalar("String"))],
             },
         )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
@@ -1415,7 +1444,7 @@ class TestFunctionSignatures:
             ),
             _make_inst(Opcode.STORE_VAR, operands=["f", "%1"]),
         ]
-        builder = TypeEnvironmentBuilder(func_return_types={"func_f_0": "Int"})
+        builder = TypeEnvironmentBuilder(func_return_types={"func_f_0": scalar("Int")})
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         with pytest.raises(TypeError):
             env.func_signatures["bogus"] = FunctionSignature(params=(), return_type="")
@@ -1561,7 +1590,7 @@ class TestSelfThisTyping:
             ),
             _make_inst(Opcode.LABEL, label="end_class_Dog_0"),
         ]
-        builder = TypeEnvironmentBuilder(register_types={"%0": "SpecialDog"})
+        builder = TypeEnvironmentBuilder(register_types={"%0": scalar("SpecialDog")})
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         # Pre-seeded type takes priority over class name
         assert env.register_types["%0"] == "SpecialDog"
@@ -1596,7 +1625,9 @@ class TestCallUnknown:
                 operands=["%2", "%4"],
             ),
         ]
-        builder = TypeEnvironmentBuilder(func_return_types={"func_add_0": "Int"})
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_add_0": scalar("Int")}
+        )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%3"] == "Int"
 
@@ -1897,7 +1928,9 @@ class TestInferenceInternalTypeExpr:
 
     def test_seeded_register_type_becomes_type_expr(self):
         """Seeded string types from builder should be parsed to TypeExpr."""
-        builder = TypeEnvironmentBuilder(register_types={"%0": "List[String]"})
+        builder = TypeEnvironmentBuilder(
+            register_types={"%0": parse_type("List[String]")}
+        )
         instructions = [_make_inst(Opcode.LABEL, label="entry")]
         env = infer_types(instructions, _null_resolver(), type_env_builder=builder)
         reg_type = env.register_types["%0"]
@@ -1907,7 +1940,9 @@ class TestInferenceInternalTypeExpr:
 
     def test_seeded_var_type_becomes_type_expr(self):
         """Seeded var types from builder should be parsed to TypeExpr."""
-        builder = TypeEnvironmentBuilder(var_types={"items": "Map[String, Int]"})
+        builder = TypeEnvironmentBuilder(
+            var_types={"items": parse_type("Map[String, Int]")}
+        )
         instructions = [_make_inst(Opcode.LABEL, label="entry")]
         env = infer_types(instructions, _null_resolver(), type_env_builder=builder)
         var_type = env.var_types["items"]

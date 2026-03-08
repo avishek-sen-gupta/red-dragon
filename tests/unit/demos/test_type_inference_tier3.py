@@ -11,6 +11,7 @@ from interpreter.api import lower_and_infer
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.type_expr import parse_type, scalar
 from interpreter.type_inference import infer_types
 from interpreter.type_resolver import TypeResolver
 
@@ -112,9 +113,11 @@ class TestCallUnknownResolution:
         ]
 
         builder = TypeEnvironmentBuilder(
-            func_return_types={"func_add_0": "Int"},
-            func_param_types={"func_add_0": [("a", "Int"), ("b", "Int")]},
-            register_types={"%0": "Int", "%1": "Int"},
+            func_return_types={"func_add_0": scalar("Int")},
+            func_param_types={
+                "func_add_0": [("a", scalar("Int")), ("b", scalar("Int"))]
+            },
+            register_types={"%0": scalar("Int"), "%1": scalar("Int")},
         )
         env = infer_types(instructions, _resolver(), type_env_builder=builder)
 
@@ -224,7 +227,9 @@ class TestArrayElementTypePromotion:
 
     def test_seeded_type_not_overwritten_by_inference(self):
         """Seeded var type from declaration takes precedence over inferred type."""
-        builder = TypeEnvironmentBuilder(var_types={"items": "List[String]"})
+        builder = TypeEnvironmentBuilder(
+            var_types={"items": parse_type("List[String]")}
+        )
         instructions = [
             IRInstruction(opcode=Opcode.LABEL, label="entry"),
             IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=["obj"]),

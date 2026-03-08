@@ -1,10 +1,10 @@
 """Static type inference pass — walks IR instructions and builds a TypeEnvironment.
 
-**Type representation:** This module operates on ``TypeExpr`` objects
-internally.  Frontends seed type information as strings via
-``TypeEnvironmentBuilder``; the ``infer_types()`` entry point parses
-those strings into ``TypeExpr`` at the boundary.  All internal
-operations (comparisons, storage, promotion) use ``TypeExpr``.
+**Type representation:** The entire type pipeline operates on ``TypeExpr``
+objects end-to-end.  Frontends call ``parse_type()`` at the seeding
+boundary (``TreeSitterEmitContext.seed_*``), so ``TypeEnvironmentBuilder``
+already stores ``TypeExpr``.  This module copies those values directly —
+no string parsing or serialization anywhere in the pipeline.
 
 The ``UNKNOWN`` sentinel (an ``UnknownType`` instance) replaces empty
 strings as the "type not yet known" marker.  It is falsy, so existing
@@ -29,7 +29,6 @@ from interpreter.type_expr import (
     ScalarType,
     UNKNOWN,
     array_of,
-    parse_type,
     scalar,
 )
 from interpreter.type_resolver import TypeResolver
@@ -193,25 +192,6 @@ def _promote_array_element_types(ctx: _InferenceContext) -> None:
             ctx.register_types[reg] = array_of(elem_type)
 
 
-def _parse_builder_types(
-    builder: TypeEnvironmentBuilder,
-) -> tuple[
-    dict[str, TypeExpr],
-    dict[str, TypeExpr],
-    dict[str, TypeExpr],
-    dict[str, list[tuple[str, TypeExpr]]],
-]:
-    """Parse all string types from the builder into TypeExpr at the boundary."""
-    register_types = {k: parse_type(v) for k, v in builder.register_types.items()}
-    var_types = {k: parse_type(v) for k, v in builder.var_types.items()}
-    func_return_types = {k: parse_type(v) for k, v in builder.func_return_types.items()}
-    func_param_types = {
-        k: [(pname, parse_type(ptype)) for pname, ptype in v]
-        for k, v in builder.func_param_types.items()
-    }
-    return register_types, var_types, func_return_types, func_param_types
-
-
 def _build_func_signatures(
     func_return_types: dict[str, TypeExpr],
     func_param_types: dict[str, list[tuple[str, TypeExpr]]],
@@ -251,13 +231,13 @@ def infer_types(
 
     Pure function — no mutation of the input instructions.
     """
-    reg_types, var_types, func_ret, func_params = _parse_builder_types(type_env_builder)
-
     ctx = _InferenceContext(
-        register_types=reg_types,
-        scoped_var_types={_GLOBAL_SCOPE: var_types},
-        func_return_types=func_ret,
-        func_param_types={k: list(v) for k, v in func_params.items()},
+        register_types=dict(type_env_builder.register_types),
+        scoped_var_types={_GLOBAL_SCOPE: dict(type_env_builder.var_types)},
+        func_return_types=dict(type_env_builder.func_return_types),
+        func_param_types={
+            k: list(v) for k, v in type_env_builder.func_param_types.items()
+        },
     )
 
     prev_size = -1
