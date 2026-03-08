@@ -36,6 +36,9 @@ class TypeExpr:
     def __hash__(self) -> int:
         return hash(str(self))
 
+    def __bool__(self) -> bool:
+        return bool(str(self))
+
 
 @dataclass(frozen=True, eq=False)
 class ScalarType(TypeExpr):

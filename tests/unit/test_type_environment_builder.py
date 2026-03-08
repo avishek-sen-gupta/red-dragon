@@ -4,6 +4,7 @@ from types import MappingProxyType
 
 from interpreter.function_signature import FunctionSignature
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.type_expr import TypeExpr, ScalarType, ParameterizedType
 
 
 class TestTypeEnvironmentBuilder:
@@ -82,3 +83,51 @@ class TestTypeEnvironmentBuilder:
         sig = env.func_signatures["add"]
         assert sig.return_type == ""
         assert sig.params == (("a", "Int"), ("b", "Int"))
+
+
+class TestTypeEnvironmentStoresTypeExpr:
+    """Verify that TypeEnvironment stores TypeExpr objects, not raw strings."""
+
+    def test_register_types_are_type_expr(self):
+        builder = TypeEnvironmentBuilder(register_types={"%0": "Int"})
+        env = builder.build()
+        assert isinstance(env.register_types["%0"], TypeExpr)
+        assert isinstance(env.register_types["%0"], ScalarType)
+
+    def test_var_types_are_type_expr(self):
+        builder = TypeEnvironmentBuilder(var_types={"x": "Float"})
+        env = builder.build()
+        assert isinstance(env.var_types["x"], TypeExpr)
+        assert isinstance(env.var_types["x"], ScalarType)
+
+    def test_parameterized_type_preserved(self):
+        builder = TypeEnvironmentBuilder(var_types={"ptr": "Pointer[Int]"})
+        env = builder.build()
+        assert isinstance(env.var_types["ptr"], ParameterizedType)
+        assert env.var_types["ptr"].constructor == "Pointer"
+        assert env.var_types["ptr"].arguments == (ScalarType("Int"),)
+
+    def test_func_signature_return_type_is_type_expr(self):
+        builder = TypeEnvironmentBuilder(func_return_types={"add": "Int"})
+        env = builder.build()
+        assert isinstance(env.func_signatures["add"].return_type, TypeExpr)
+
+    def test_func_signature_param_types_are_type_expr(self):
+        builder = TypeEnvironmentBuilder(
+            func_param_types={"f": [("x", "Int"), ("p", "Pointer[Float]")]}
+        )
+        env = builder.build()
+        sig = env.func_signatures["f"]
+        assert isinstance(sig.params[0][1], TypeExpr)
+        assert isinstance(sig.params[1][1], ParameterizedType)
+        assert sig.params[1][1] == "Pointer[Float]"
+
+    def test_string_comparison_still_works(self):
+        """Backward compat: env.register_types['%0'] == 'Int' must hold."""
+        builder = TypeEnvironmentBuilder(
+            register_types={"%0": "Int"},
+            var_types={"x": "Pointer[Int]"},
+        )
+        env = builder.build()
+        assert env.register_types["%0"] == "Int"
+        assert env.var_types["x"] == "Pointer[Int]"
