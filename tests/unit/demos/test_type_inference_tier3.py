@@ -137,7 +137,7 @@ class TestStoreLoadIndex:
 
         env = infer_types(instructions, _resolver())
 
-        assert env.register_types["%0"] == "Array"
+        assert env.register_types["%0"] == "Array[Int]"
         assert env.register_types["%1"] == "Int"
         assert env.register_types["%4"] == "Int"
 
@@ -158,3 +158,77 @@ class TestStoreLoadIndex:
         env = infer_types(instructions, _resolver())
 
         assert env.register_types["%3"] == "String"
+
+
+class TestArrayElementTypePromotion:
+    """Unit tests for Array → Array[ElementType] promotion in type inference."""
+
+    def test_array_register_promoted_to_array_of_int(self):
+        """NEW_ARRAY + STORE_INDEX with Int value → register type is Array[Int]."""
+        instructions = [
+            IRInstruction(opcode=Opcode.LABEL, label="entry"),
+            IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg="%arr"),
+            IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=["42"]),
+            IRInstruction(opcode=Opcode.CONST, result_reg="%idx", operands=["0"]),
+            IRInstruction(opcode=Opcode.STORE_INDEX, operands=["%arr", "%idx", "%val"]),
+        ]
+        env = infer_types(instructions, _resolver())
+        assert env.register_types["%arr"] == "Array[Int]"
+
+    def test_array_var_promoted_to_array_of_int(self):
+        """STORE_VAR of an array with Int elements → var type is Array[Int]."""
+        instructions = [
+            IRInstruction(opcode=Opcode.LABEL, label="entry"),
+            IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg="%arr"),
+            IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=["42"]),
+            IRInstruction(opcode=Opcode.CONST, result_reg="%idx", operands=["0"]),
+            IRInstruction(opcode=Opcode.STORE_INDEX, operands=["%arr", "%idx", "%val"]),
+            IRInstruction(opcode=Opcode.STORE_VAR, operands=["nums", "%arr"]),
+        ]
+        env = infer_types(instructions, _resolver())
+        assert env.var_types["nums"] == "Array[Int]"
+
+    def test_array_var_promoted_to_array_of_string(self):
+        """STORE_VAR of an array with String elements → var type is Array[String]."""
+        instructions = [
+            IRInstruction(opcode=Opcode.LABEL, label="entry"),
+            IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg="%arr"),
+            IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=['"hello"']),
+            IRInstruction(opcode=Opcode.CONST, result_reg="%idx", operands=["0"]),
+            IRInstruction(opcode=Opcode.STORE_INDEX, operands=["%arr", "%idx", "%val"]),
+            IRInstruction(opcode=Opcode.STORE_VAR, operands=["names", "%arr"]),
+        ]
+        env = infer_types(instructions, _resolver())
+        assert env.var_types["names"] == "Array[String]"
+
+    def test_element_type_propagated_through_load_var(self):
+        """Array element types propagate through STORE_VAR → LOAD_VAR → LOAD_INDEX."""
+        instructions = [
+            IRInstruction(opcode=Opcode.LABEL, label="entry"),
+            IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg="%arr"),
+            IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=["42"]),
+            IRInstruction(opcode=Opcode.CONST, result_reg="%idx", operands=["0"]),
+            IRInstruction(opcode=Opcode.STORE_INDEX, operands=["%arr", "%idx", "%val"]),
+            IRInstruction(opcode=Opcode.STORE_VAR, operands=["nums", "%arr"]),
+            # Load the variable into a new register
+            IRInstruction(
+                opcode=Opcode.LOAD_VAR, result_reg="%loaded", operands=["nums"]
+            ),
+            IRInstruction(opcode=Opcode.CONST, result_reg="%i", operands=["0"]),
+            IRInstruction(
+                opcode=Opcode.LOAD_INDEX, result_reg="%elem", operands=["%loaded", "%i"]
+            ),
+        ]
+        env = infer_types(instructions, _resolver())
+        assert env.register_types["%elem"] == "Int"
+
+    def test_seeded_type_not_overwritten_by_inference(self):
+        """Seeded var type from declaration takes precedence over inferred type."""
+        builder = TypeEnvironmentBuilder(var_types={"items": "List[String]"})
+        instructions = [
+            IRInstruction(opcode=Opcode.LABEL, label="entry"),
+            IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=["obj"]),
+            IRInstruction(opcode=Opcode.STORE_VAR, operands=["items", "%val"]),
+        ]
+        env = infer_types(instructions, _resolver(), type_env_builder=builder)
+        assert env.var_types["items"] == "List[String]"

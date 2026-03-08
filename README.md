@@ -47,7 +47,7 @@ Generic types are extracted structurally from tree-sitter ASTs (not string repla
 - **Class method return types** — class scope tracking via LABEL prefixes, CALL_METHOD dispatch with fallback to global function table
 - **Class field type tracking** — STORE_FIELD records field types per class, LOAD_FIELD looks them up
 - **CALL_UNKNOWN resolution** — indirect calls through registers resolved via variable-to-function mapping with builtin fallback
-- **Array element type tracking** — STORE_INDEX records element types per array register, LOAD_INDEX retrieves them
+- **Array element type promotion** — STORE_INDEX records element types per array register; after inference, variables and registers typed as `Array` are promoted to `Array[ElementType]` (e.g., `items = [1, 2, 3]` → `Array[Int]`). Element types propagate through LOAD_VAR, so `x = items[0]` infers `x` as `Int`
 - **Builtin method return types** — 60+ common method names (`.upper()`→String, `.split()`→Array, `.find()`→Int, `.startswith()`→Bool, etc.) resolved as a final fallback when no user-defined class method matches
 - **Function-scoped variable types** — variable types are tracked per function scope, preventing cross-function name collisions (e.g. `x = 42` in one function and `x = "hello"` in another infer independently). Global-scope variables are visible as fallback inside functions.
 - **Region tagging** — ALLOC_REGION→Region, LOAD_REGION→Array
