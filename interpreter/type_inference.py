@@ -27,10 +27,12 @@ from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.type_expr import (
     TypeExpr,
     ScalarType,
+    FunctionType,
     UNKNOWN,
     array_of,
     scalar,
     union_of,
+    fn_type,
 )
 from interpreter.type_resolver import TypeResolver
 
@@ -375,6 +377,14 @@ def _infer_const(
             ctx.class_method_types.setdefault(ctx.current_class_name, {})[
                 func_name
             ] = ret_type
+        # Infer FunctionType for the register holding the function reference
+        ret_type = ctx.func_return_types.get(func_label, UNKNOWN)
+        if ret_type:
+            param_pairs = ctx.func_param_types.get(func_label, [])
+            param_types = tuple(pt for _, pt in param_pairs)
+            ctx.register_types[inst.result_reg] = FunctionType(
+                params=param_types, return_type=ret_type
+            )
         return
     inferred = _infer_const_type(raw)
     if inferred:
@@ -577,6 +587,11 @@ def _infer_call_unknown(
     if not inst.result_reg or not inst.operands:
         return
     target_reg = str(inst.operands[0])
+    # Check if the target register has a FunctionType directly
+    target_type = ctx.register_types.get(target_reg, UNKNOWN)
+    if isinstance(target_type, FunctionType) and target_type.return_type:
+        ctx.register_types[inst.result_reg] = target_type.return_type
+        return
     func_name = ctx.register_source_var.get(target_reg, "")
     if not func_name:
         return

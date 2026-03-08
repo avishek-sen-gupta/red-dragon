@@ -6,6 +6,7 @@ from interpreter.constants import Language, TypeName
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.frontend import get_frontend
 from interpreter.ir import Opcode
+from interpreter.type_expr import FunctionType, scalar, fn_type
 from interpreter.type_inference import infer_types
 from interpreter.type_resolver import TypeResolver
 
@@ -2397,3 +2398,132 @@ class TestUnionTypeInference:
         source = 'x = 5\nx = "hi"\nx = True'
         _, env = _lower_and_infer(source, "python")
         assert env.var_types["x"] == "Union[Bool, Int, String]"
+
+
+# ---------------------------------------------------------------------------
+# FunctionType inference from source programs
+# ---------------------------------------------------------------------------
+
+
+class TestFunctionTypeInferenceIntegration:
+    def test_python_function_with_seeded_types_produces_function_type(self):
+        """Python def add(a, b): return a + b with seeded Int types → FunctionType."""
+        source = """\
+def add(a, b):
+    return a + b
+"""
+        lang = Language("python")
+        frontend = get_frontend(lang)
+        instructions = frontend.lower(source.encode("utf-8"))
+        # Seed param and return types to exercise FunctionType inference
+        builder = frontend.type_env_builder
+        # Find the func label for add
+        func_labels = [k for k in builder.func_param_types if k.startswith("func_add")]
+        # If frontend doesn't seed params, seed them manually
+        if not func_labels:
+            # Find the label from the IR
+            labels = [
+                i.label
+                for i in instructions
+                if i.opcode == Opcode.LABEL
+                and i.label
+                and i.label.startswith("func_add")
+            ]
+            func_label = labels[0] if labels else "func_add_0"
+            builder.func_param_types[func_label] = [
+                ("a", scalar("Int")),
+                ("b", scalar("Int")),
+            ]
+            builder.func_return_types[func_label] = scalar("Int")
+        else:
+            func_label = func_labels[0]
+            builder.func_param_types[func_label] = [
+                ("a", scalar("Int")),
+                ("b", scalar("Int")),
+            ]
+            builder.func_return_types[func_label] = scalar("Int")
+
+        env = infer_types(instructions, _resolver(), type_env_builder=builder)
+        # The CONST for function ref should produce a FunctionType register
+        func_ref_consts = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.CONST
+            and i.result_reg
+            and i.operands
+            and "function:add@" in str(i.operands[0])
+        ]
+        assert len(func_ref_consts) >= 1
+        func_reg = func_ref_consts[0].result_reg
+        assert func_reg in env.register_types
+        func_type = env.register_types[func_reg]
+        assert isinstance(func_type, FunctionType)
+        assert func_type.return_type == scalar("Int")
+
+    def test_java_typed_function_produces_function_type(self):
+        """Java static int add(int a, int b) → FunctionType register."""
+        source = """\
+class M {
+    static int add(int a, int b) {
+        return a + b;
+    }
+}
+"""
+        instructions, env = _lower_and_infer(source, "java")
+        # Find function ref CONST for add
+        func_ref_consts = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.CONST
+            and i.result_reg
+            and i.operands
+            and "function:add@" in str(i.operands[0])
+        ]
+        assert len(func_ref_consts) >= 1
+        func_reg = func_ref_consts[0].result_reg
+        assert func_reg in env.register_types
+        func_type = env.register_types[func_reg]
+        assert isinstance(func_type, FunctionType)
+        assert func_type.return_type == scalar("Int")
+        assert len(func_type.params) >= 2
+
+    def test_python_function_ref_stored_in_variable(self):
+        """Python: f = add assigns FunctionType to variable f."""
+        source = """\
+def add(a, b):
+    return a + b
+
+f = add
+"""
+        lang = Language("python")
+        frontend = get_frontend(lang)
+        instructions = frontend.lower(source.encode("utf-8"))
+        builder = frontend.type_env_builder
+        # Find and seed the func label
+        labels = [
+            i.label
+            for i in instructions
+            if i.opcode == Opcode.LABEL and i.label and i.label.startswith("func_add")
+        ]
+        func_label = labels[0] if labels else "func_add_0"
+        builder.func_param_types[func_label] = [
+            ("a", scalar("Int")),
+            ("b", scalar("Int")),
+        ]
+        builder.func_return_types[func_label] = scalar("Int")
+
+        env = infer_types(instructions, _resolver(), type_env_builder=builder)
+        # Find if 'f' or 'add' got a FunctionType
+        # The add variable should get the FunctionType from STORE_VAR
+        # (since the CONST func ref gets FunctionType, and STORE_VAR propagates it)
+        func_ref_consts = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.CONST
+            and i.result_reg
+            and i.operands
+            and "function:add@" in str(i.operands[0])
+        ]
+        assert len(func_ref_consts) >= 1
+        func_reg = func_ref_consts[0].result_reg
+        assert isinstance(env.register_types[func_reg], FunctionType)

@@ -15,10 +15,12 @@ from interpreter.type_expr import (
     ParameterizedType,
     UnionType,
     UnknownType,
+    FunctionType,
     UNKNOWN,
     parse_type,
     scalar,
     union_of,
+    fn_type,
 )
 from interpreter.type_inference import infer_types, _infer_const_type
 from interpreter.type_resolver import TypeResolver
@@ -2148,3 +2150,141 @@ class TestUnionAwareVarTyping:
         env = infer_types(instructions, _default_resolver())
         assert isinstance(env.var_types["x"], UnionType)
         assert env.var_types["x"] == "Union[Bool, Int, String]"
+
+
+# ---------------------------------------------------------------------------
+# FunctionType inference from CONST function references
+# ---------------------------------------------------------------------------
+
+
+class TestFunctionTypeInference:
+    def test_const_func_ref_infers_function_type_when_known(self):
+        """CONST <function:add@func_add_0> with seeded params and return → FunctionType."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            # Define function with known param types and return type
+            _make_inst(Opcode.BRANCH, label="end_add_0"),
+            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"]),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%1", operands=["param:b"]),
+            _make_inst(Opcode.BINOP, result_reg="%2", operands=["+", "%0", "%1"]),
+            _make_inst(Opcode.RETURN, operands=["%2"]),
+            _make_inst(Opcode.LABEL, label="end_add_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%3",
+                operands=["<function:add@func_add_0>"],
+            ),
+        ]
+        builder = TypeEnvironmentBuilder(
+            register_types={"%0": scalar("Int"), "%1": scalar("Int")},
+            func_return_types={"func_add_0": scalar("Int")},
+            func_param_types={
+                "func_add_0": [("a", scalar("Int")), ("b", scalar("Int"))]
+            },
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        assert "%3" in env.register_types
+        expected = fn_type([scalar("Int"), scalar("Int")], scalar("Int"))
+        assert env.register_types["%3"] == expected
+
+    def test_const_func_ref_no_params_known(self):
+        """CONST func ref with no param types known → no FunctionType inferred."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.BRANCH, label="end_f_0"),
+            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_f_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:f@func_f_0>"],
+            ),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        # Without known param or return types, no FunctionType is produced
+        assert "%1" not in env.register_types
+
+    def test_const_func_ref_only_return_known_infers_function_type(self):
+        """CONST func ref with return type but no param types → FunctionType with empty params."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.BRANCH, label="end_g_0"),
+            _make_inst(Opcode.LABEL, label="func_g_0"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_g_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:g@func_g_0>"],
+            ),
+        ]
+        builder = TypeEnvironmentBuilder(func_return_types={"func_g_0": scalar("Int")})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        # With return type known, FunctionType should be inferred
+        assert "%1" in env.register_types
+        expected = fn_type([], scalar("Int"))
+        assert env.register_types["%1"] == expected
+
+    def test_call_unknown_with_function_type_uses_return_type(self):
+        """CALL_UNKNOWN on register with FunctionType → result gets return_type."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            # Define function
+            _make_inst(Opcode.BRANCH, label="end_add_0"),
+            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"]),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%1", operands=["param:b"]),
+            _make_inst(Opcode.BINOP, result_reg="%2", operands=["+", "%0", "%1"]),
+            _make_inst(Opcode.RETURN, operands=["%2"]),
+            _make_inst(Opcode.LABEL, label="end_add_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%3",
+                operands=["<function:add@func_add_0>"],
+            ),
+            # Load add into a variable, then call via CALL_UNKNOWN
+            _make_inst(Opcode.STORE_VAR, operands=["add", "%3"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg="%4", operands=["add"]),
+            _make_inst(
+                Opcode.CALL_UNKNOWN,
+                result_reg="%5",
+                operands=["%4", "%6", "%7"],
+            ),
+        ]
+        builder = TypeEnvironmentBuilder(
+            register_types={"%0": scalar("Int"), "%1": scalar("Int")},
+            func_return_types={"func_add_0": scalar("Int")},
+            func_param_types={
+                "func_add_0": [("a", scalar("Int")), ("b", scalar("Int"))]
+            },
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        assert env.register_types["%5"] == "Int"
+
+    def test_call_unknown_uses_function_type_from_register(self):
+        """CALL_UNKNOWN on register with FunctionType (no var name) → uses return_type."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.BRANCH, label="end_f_0"),
+            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_f_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:f@func_f_0>"],
+            ),
+            # Call via CALL_UNKNOWN directly on register
+            _make_inst(
+                Opcode.CALL_UNKNOWN,
+                result_reg="%2",
+                operands=["%1"],
+            ),
+        ]
+        builder = TypeEnvironmentBuilder(func_return_types={"func_f_0": scalar("Bool")})
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        assert env.register_types["%2"] == "Bool"
