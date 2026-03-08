@@ -367,7 +367,18 @@ def lower_go_stmt(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_expression_switch(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower expression_switch_statement as if/else chain."""
+    """Lower expression_switch_statement as if/else chain.
+
+    Go allows ``switch x := expr; x { }``.  The init variable is scoped
+    to the switch body.
+    """
+    init_node = node.child_by_field_name("initializer")
+    scope_entered = init_node is not None and ctx.block_scoped
+    if scope_entered:
+        ctx.enter_block_scope()
+    if init_node:
+        ctx.lower_stmt(init_node)
+
     value_node = node.child_by_field_name("value")
     val_reg = (
         ctx.lower_expr(value_node)
@@ -429,6 +440,9 @@ def lower_expression_switch(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.pop_loop()
     ctx.emit(Opcode.LABEL, label=end_label)
+
+    if scope_entered:
+        ctx.exit_block_scope()
 
 
 def _make_const_val(ctx: TreeSitterEmitContext, value: str) -> str:
