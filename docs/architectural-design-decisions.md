@@ -1530,9 +1530,9 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 
 **C/C++ frontend integration:** The C frontend detects `pointer_declarator` nesting in declarations and parameters, counts the depth, and wraps the base type using `pointer(scalar(base))`. `int **pp` becomes `"Pointer[Pointer[Int]]"`. The C++ frontend reuses C's `lower_declaration` and gets this for free. Previously, bare pointer declarations (e.g., `float *fp;`) were silently dropped — now they emit proper `STORE_VAR` with pointer types.
 
-**Migration strategy:** Existing string-based APIs (`TypeEnvironment.register_types`, `var_types`) continue to work unchanged — parameterized types are represented as strings like `"Pointer[Int]"`. Future phases will:
-1. Migrate `TypeEnvironment` internals to store `TypeExpr` objects
-2. Extract parameterized types from Java generics, Python type hints, etc.
+**Migration strategy:** `TypeEnvironment` now stores `TypeExpr` objects (Phase 1 complete). `TypeEnvironmentBuilder` stays string-based; `build()` converts via `parse_type()`. Future phases will:
+1. ~~Migrate `TypeEnvironment` internals to store `TypeExpr` objects~~ (DONE — ADR-085a)
+2. ~~Extract parameterized types from Java/C#/Scala/Kotlin generics~~ (DONE — ADR-086)
 3. Add type variable support for true generics
 
 **Alternatives considered:**
@@ -1540,3 +1540,24 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 - **Immediate full migration** (replace all `str` with `TypeExpr`): Deferred — 9400+ tests depend on string-based APIs; incremental migration is safer.
 
 **Consequences:** C pointer types now carry full type information through the pipeline. The TypeExpr ADT provides a foundation for future parameterized type extraction across all frontends. TypeGraph can answer subtype and LUB questions for arbitrary nesting depth. No existing tests broken — all changes are additive.
+
+### ADR-086: Generic type extraction for Java, C#, Scala, Kotlin (2026-03-08)
+
+**Context:** After establishing the parameterised type system (ADR-085), the next step was extracting generic types from language-specific AST nodes so that `List<String>` in Java becomes `List[String]` in the type environment, not the raw source text `"List<String>"`.
+
+**Decision:** Add structural generic type extraction in `type_extraction.py` that walks the tree-sitter AST for generic type nodes and recursively decomposes them into bracket notation, normalising each component type through the frontend's `type_map`. This is a shared utility used by all four frontends.
+
+**AST patterns handled:**
+- Java: `generic_type` → `type_identifier` + `type_arguments`
+- C#: `generic_name` → `identifier` + `type_argument_list`
+- Scala: `generic_type` → `type_identifier` + `type_arguments` (Scala uses `[]` in source but tree-sitter uses the same node structure)
+- Kotlin: `user_type` → `type_identifier` + `type_arguments` → `type_projection` (unwrapped)
+
+**Key functions:**
+- `extract_normalized_type(ctx, node, field_name, type_map)` — replaces the `extract_type_from_field` + `normalize_type_hint` combo for frontends with generics
+- `extract_normalized_type_from_child(ctx, node, child_types, type_map)` — same but for languages using child-based type extraction (Kotlin)
+- `_decompose_generic()` — recursive decomposition with per-component normalisation
+
+**Type inference priority fix:** `_InferenceContext.store_var_type()` now checks `lookup_var_type()` across all scopes before writing, ensuring seeded types from explicit declarations take precedence over inferred types from constructor calls (e.g., `List<String> items = new ArrayList<>()` keeps `List[String]`, not `ArrayList<>`).
+
+**Consequences:** Generic type declarations in Java, C#, Scala, and Kotlin now produce structured parameterised types in the type environment. Inner types are normalised (e.g., Java's `Integer` → `Int`). Nested generics work recursively. 25 unit tests + 9 integration tests added. All 9543 existing tests pass.

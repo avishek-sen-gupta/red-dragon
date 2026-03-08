@@ -8,16 +8,14 @@ from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.java.expressions import lower_java_params
 from interpreter.frontends.type_extraction import (
-    extract_type_from_field,
-    normalize_type_hint,
+    extract_normalized_type,
 )
 from interpreter.frontends.java.node_types import JavaNodeType
 from interpreter.frontends.common.declarations import make_class_ref
 
 
 def lower_local_var_decl(ctx: TreeSitterEmitContext, node) -> None:
-    raw_type = extract_type_from_field(ctx, node, "type")
-    type_hint = normalize_type_hint(raw_type, ctx.type_map)
+    type_hint = extract_normalized_type(ctx, node, "type", ctx.type_map)
     for child in node.children:
         if child.type == JavaNodeType.VARIABLE_DECLARATOR:
             name_node = child.child_by_field_name("name")
@@ -83,8 +81,7 @@ def lower_method_decl(
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    raw_return = extract_type_from_field(ctx, node, "type")
-    return_hint = normalize_type_hint(raw_return, ctx.type_map)
+    return_hint = extract_normalized_type(ctx, node, "type", ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=func_label)
@@ -268,8 +265,7 @@ def _lower_constructor_decl(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def _lower_field_decl(ctx: TreeSitterEmitContext, node) -> None:
-    raw_type = extract_type_from_field(ctx, node, "type")
-    type_hint = normalize_type_hint(raw_type, ctx.type_map)
+    type_hint = extract_normalized_type(ctx, node, "type", ctx.type_map)
     for child in node.children:
         if child.type == JavaNodeType.VARIABLE_DECLARATOR:
             name_node = child.child_by_field_name("name")

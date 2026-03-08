@@ -123,11 +123,16 @@ class _InferenceContext:
     register_source_var: dict[str, str] = field(default_factory=dict)
 
     def store_var_type(self, name: str, type_name: str) -> None:
-        """Store a variable type in the current function scope."""
+        """Store a variable type in the current function scope.
+
+        Does not overwrite if the variable already has a type in any scope
+        (seeded types in _GLOBAL_SCOPE take precedence over inferred types).
+        """
+        if self.lookup_var_type(name):
+            return
         scope = self.current_func_label
         scope_dict = self.scoped_var_types.setdefault(scope, {})
-        if name not in scope_dict:
-            scope_dict[name] = type_name
+        scope_dict[name] = type_name
 
     def lookup_var_type(self, name: str) -> str:
         """Look up a variable type: current scope first, then global."""

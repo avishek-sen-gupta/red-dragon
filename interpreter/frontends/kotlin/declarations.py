@@ -8,8 +8,7 @@ from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
 from interpreter.frontends.type_extraction import (
-    extract_type_from_child,
-    normalize_type_hint,
+    extract_normalized_type_from_child,
 )
 from interpreter.frontends.common.declarations import make_class_ref
 
@@ -89,12 +88,13 @@ def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
     var_name = _extract_property_name(ctx, var_decl) if var_decl else "__unknown"
 
     # Extract type from the variable_declaration child
-    raw_type = (
-        extract_type_from_child(ctx, var_decl, (KNT.USER_TYPE, KNT.NULLABLE_TYPE))
+    type_hint = (
+        extract_normalized_type_from_child(
+            ctx, var_decl, (KNT.USER_TYPE, KNT.NULLABLE_TYPE), ctx.type_map
+        )
         if var_decl
         else ""
     )
-    type_hint = normalize_type_hint(raw_type, ctx.type_map)
 
     # Find the value expression: skip keywords, type annotations, '='
     value_node = _find_property_value(ctx, node)
@@ -146,10 +146,9 @@ def _lower_kotlin_params(ctx: TreeSitterEmitContext, params_node) -> None:
             )
             if id_node:
                 pname = ctx.node_text(id_node)
-                raw_type = extract_type_from_child(
-                    ctx, child, (KNT.USER_TYPE, KNT.NULLABLE_TYPE)
+                type_hint = extract_normalized_type_from_child(
+                    ctx, child, (KNT.USER_TYPE, KNT.NULLABLE_TYPE), ctx.type_map
                 )
-                type_hint = normalize_type_hint(raw_type, ctx.type_map)
                 ctx.emit(
                     Opcode.SYMBOLIC,
                     result_reg=ctx.fresh_reg(),
@@ -208,8 +207,9 @@ def lower_function_decl(
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    raw_return = extract_type_from_child(ctx, node, (KNT.USER_TYPE, KNT.NULLABLE_TYPE))
-    return_hint = normalize_type_hint(raw_return, ctx.type_map)
+    return_hint = extract_normalized_type_from_child(
+        ctx, node, (KNT.USER_TYPE, KNT.NULLABLE_TYPE), ctx.type_map
+    )
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=func_label)
