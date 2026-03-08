@@ -15,6 +15,7 @@ from interpreter.type_expr import (
     union_of,
     optional,
     fn_type,
+    tuple_of,
 )
 
 
@@ -514,3 +515,88 @@ class TestTypeGraphFunctionLUB:
         g = self._graph()
         f = fn_type([scalar("Int")], scalar("Bool"))
         assert g.common_supertype_expr(f, scalar("Int")) == scalar("Any")
+
+
+class TestTypeGraphTupleSubtype:
+    """Subtype checks for Tuple types."""
+
+    def _graph(self) -> TypeGraph:
+        return TypeGraph(DEFAULT_TYPE_NODES)
+
+    def test_identical_tuples_are_subtypes(self):
+        g = self._graph()
+        t = tuple_of(scalar("Int"), scalar("String"))
+        assert g.is_subtype_expr(t, t)
+
+    def test_covariant_element_subtype(self):
+        """Tuple[Int, Int] ⊆ Tuple[Number, Number] (covariant elements)."""
+        g = self._graph()
+        child = tuple_of(scalar("Int"), scalar("Int"))
+        parent = tuple_of(scalar("Number"), scalar("Number"))
+        assert g.is_subtype_expr(child, parent)
+
+    def test_not_subtype_when_element_not_subtype(self):
+        """Tuple[String, Int] is NOT ⊆ Tuple[Int, Int]."""
+        g = self._graph()
+        child = tuple_of(scalar("String"), scalar("Int"))
+        parent = tuple_of(scalar("Int"), scalar("Int"))
+        assert not g.is_subtype_expr(child, parent)
+
+    def test_different_length_not_subtype(self):
+        """Tuple[Int] is NOT ⊆ Tuple[Int, String] (length mismatch)."""
+        g = self._graph()
+        child = tuple_of(scalar("Int"))
+        parent = tuple_of(scalar("Int"), scalar("String"))
+        assert not g.is_subtype_expr(child, parent)
+
+    def test_tuple_subtype_of_any(self):
+        """Tuple[Int, String] ⊆ Any (via constructor)."""
+        g = self._graph()
+        t = tuple_of(scalar("Int"), scalar("String"))
+        assert g.is_subtype_expr(t, scalar("Any"))
+
+    def test_nested_tuple_subtype(self):
+        """Tuple[Tuple[Int], String] ⊆ Tuple[Tuple[Number], String]."""
+        g = self._graph()
+        child = tuple_of(tuple_of(scalar("Int")), scalar("String"))
+        parent = tuple_of(tuple_of(scalar("Number")), scalar("String"))
+        assert g.is_subtype_expr(child, parent)
+
+    def test_tuple_not_subtype_of_array(self):
+        """Tuple[Int] is NOT ⊆ Array[Int] (different constructors)."""
+        g = self._graph()
+        assert not g.is_subtype_expr(tuple_of(scalar("Int")), array_of(scalar("Int")))
+
+
+class TestTypeGraphTupleLUB:
+    """LUB (common supertype) for Tuple types."""
+
+    def _graph(self) -> TypeGraph:
+        return TypeGraph(DEFAULT_TYPE_NODES)
+
+    def test_lub_same_tuple(self):
+        g = self._graph()
+        t = tuple_of(scalar("Int"), scalar("String"))
+        assert g.common_supertype_expr(t, t) == t
+
+    def test_lub_covariant_elements(self):
+        """LUB of Tuple[Int, Int] and Tuple[Float, Float] = Tuple[Number, Number]."""
+        g = self._graph()
+        a = tuple_of(scalar("Int"), scalar("Int"))
+        b = tuple_of(scalar("Float"), scalar("Float"))
+        result = g.common_supertype_expr(a, b)
+        assert isinstance(result, ParameterizedType)
+        assert result.constructor == "Tuple"
+        assert result.arguments == (scalar("Number"), scalar("Number"))
+
+    def test_lub_different_length_falls_back_to_any(self):
+        """LUB of Tuple[Int] and Tuple[Int, String] = Any."""
+        g = self._graph()
+        a = tuple_of(scalar("Int"))
+        b = tuple_of(scalar("Int"), scalar("String"))
+        assert g.common_supertype_expr(a, b) == scalar("Any")
+
+    def test_lub_tuple_and_scalar_falls_back_to_any(self):
+        g = self._graph()
+        t = tuple_of(scalar("Int"), scalar("String"))
+        assert g.common_supertype_expr(t, scalar("Int")) == scalar("Any")

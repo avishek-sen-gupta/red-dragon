@@ -1642,3 +1642,26 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 - **Separate CallableType class**: Rejected — `FunctionType` with params tuple is sufficient. Overloaded callables can use `UnionType` of multiple `FunctionType`s.
 
 **Consequences:** 54 new tests (31 unit for FunctionType/parsing, 15 unit for TypeGraph function subtype/LUB, 5 unit for inference, 3 integration for Python/Java source programs). All 9718 tests pass. No existing test changed.
+
+### ADR-090: Tuple types with per-index element tracking (2026-03-08)
+
+**Context:** Python tuple literals `(1, "hello")` lowered via `NEW_ARRAY` with a `"tuple"` kind marker but were typed identically to arrays (`Array`). This lost the heterogeneous, fixed-size nature of tuples — `t[0]` on a `Tuple[Int, String]` should resolve to `Int`, not an unspecific element type.
+
+**Decision:** Reuse `ParameterizedType("Tuple", ...)` (no new TypeExpr class) with per-index element type tracking in the inference engine.
+
+**Design details:**
+- `tuple_of(*elements)` convenience constructor returns `ParameterizedType("Tuple", tuple(elements))`
+- `TypeName.TUPLE` added to constants; `TypeNode("Tuple", parents=("Any",))` added to `DEFAULT_TYPE_NODES`
+- `_InferenceContext` extended with: `const_values` (register → raw CONST string), `tuple_registers` (set of registers created via `NEW_ARRAY "tuple"`), `tuple_element_types` (register → {index: TypeExpr}), `var_tuple_element_types` (var name → {index: TypeExpr})
+- `_infer_new_array`: detects `"tuple"` first operand, types register as `Tuple` (not `Array`), marks it as tuple
+- `_infer_store_index`: for tuple registers, records per-index element type using `const_values` to resolve the integer index
+- `_infer_load_index`: for tuple registers, resolves the specific element type at the known index
+- `_promote_tuple_element_types`: after fixpoint, promotes `Tuple` registers/variables to `Tuple[T1, T2, ...]` using sorted index order
+
+**TypeGraph:** Already handled — `ParameterizedType` subtype/LUB with same constructor + pairwise elements covers `Tuple[A, B] ⊆ Tuple[C, D]` (covariant) and length-mismatch rejection.
+
+**Alternatives considered:**
+- **Dedicated TupleType class**: Rejected — `ParameterizedType("Tuple", ...)` is sufficient and reuses existing infrastructure.
+- **Array with union element type**: Rejected — `Array[Union[Int, String]]` loses positional information. Tuples are heterogeneous by position.
+
+**Consequences:** 28 new tests (9 unit for tuple_of constructor/parsing, 11 unit for TypeGraph subtype/LUB, 4 unit for inference, 4 integration for Python source programs). All 9746 tests pass. No existing test changed.
