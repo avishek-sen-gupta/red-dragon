@@ -1772,3 +1772,42 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 **Consequences:** Core infrastructure commit adds scope tracker to context, metadata storage, flat_var_types fix, and scoped_var_types exposure. Per-frontend commits follow for each block-scoped language.
 
 **Status (2026-03-09):** Fully integrated into all 9 block-scoped frontends (Java, C, C++, C#, Rust, Go, Kotlin, Scala, TypeScript). Each frontend sets `BLOCK_SCOPED = True` on `BaseFrontend`, which passes `block_scoped=True` to `TreeSitterEmitContext`. `lower_block()` auto-enters/exits scopes for block node types. Declaration lowerers call `declare_block_var()` for local variable declarations. `lower_identifier()` and `lower_store_target()` call `resolve_var()` for all variable reads/writes. Pascal's `STATEMENT` was removed from its `block_node_types` (it's a statement wrapper, not a block container). `lower_stmt()` dispatch order fixed: stmt_dispatch handlers take priority, block_node_types fallback handles bare `{ }` blocks. Kotlin's `_lower_control_body` extended to unwrap `statements` blocks with proper scope entry/exit. 16 integration tests verify shadowing across all 9 block-scoped frontends and non-mangling for Python and JavaScript `var`.
+
+### ADR-096: Frontend scoping gap audit (2026-03-09)
+
+**Context:** After implementing LLVM-style block scoping (ADR-095) for the standard scenarios (nested blocks, loop variables, catch clauses, C-style for-loop init), a deep audit revealed 12 additional variable-binding constructs across 8 languages where scoping is incorrect or the construct is not fully lowered. These are recorded here for future resolution.
+
+**Gaps identified:**
+
+**P0 — Init statements silently dropped (code lost from IR):**
+
+| # | Construct | Language | File | Issue |
+|---|-----------|----------|------|-------|
+| 1 | `if x := expr; cond { }` | Go | `go/control_flow.py` `lower_go_if` | `initializer` field completely ignored; init statement never lowered |
+| 2 | `switch x := expr; val { }` | Go | `go/control_flow.py` `lower_expression_switch` | `initializer` field completely ignored; init statement never lowered |
+| 3 | `try (Resource r = new ...) { }` | Java | `java/control_flow.py` `lower_try` | `resource_specification` field ignored; resource var never declared or initialized |
+
+**P1 — Variable not bound or scoped correctly:**
+
+| # | Construct | Language | File | Issue |
+|---|-----------|----------|------|-------|
+| 4 | `if let Some(x) = expr { }` | Rust | `rust/expressions.py` `lower_let_condition` | Pattern variable `x` not destructured/bound; treated as value comparison |
+| 5 | `while let Some(x) = expr { }` | Rust | common `lower_while` + `lower_let_condition` | Same as if-let; pattern variable not bound |
+| 6 | `match expr { Some(x) => { } }` | Rust | `rust/expressions.py` `lower_match_expr` | Match arm pattern variables not bound or scoped per arm |
+| 7 | `if (int x = expr) { }` | C++ | `cpp/expressions.py` `lower_condition_clause` | `condition_clause` handler picks init-statement as condition; actual condition never evaluated |
+| 8 | `using (var x = ...) { }` | C# | `csharp/control_flow.py` `lower_using_stmt` | Variable not scoped to using block; leaks to enclosing scope |
+| 9 | `case Pattern(x) =>` in match | Scala | `scala/expressions.py` `lower_match_expr` | Pattern-bound variables not scoped per case arm |
+
+**P2 — Destructuring not decomposed:**
+
+| # | Construct | Language | File | Issue |
+|---|-----------|----------|------|-------|
+| 10 | `when (val x = expr) { }` | Kotlin | `kotlin/expressions.py` `lower_when_expr` | Bound variable in when subject not declared/scoped |
+| 11 | Destructuring in for `for ((k,v) in map)` | Kotlin | `kotlin/control_flow.py` `lower_for_stmt` | Only single var extracted; multi-binding not decomposed |
+| 12 | Structured bindings `auto [a,b] = pair` in for | C++ | `cpp/control_flow.py` `lower_range_for` | Structured binding not decomposed into individual vars |
+| 13 | Switch expression pattern vars | C# | `csharp/control_flow.py` `lower_switch_expr` | Pattern-bound variables in switch arms not scoped |
+| 14 | `for (const [k,v] of map) { }` | TS/JS | `javascript/control_flow.py` `lower_for_of` | Destructuring pattern not decomposed; `declare_block_var(None)` called |
+
+**Decision:** Record these gaps for incremental resolution. P0s (Go if/switch init, Java try-with-resources) are functional breakage — code is silently lost from the IR. P1s are scoping errors where variables leak or aren't bound. P2s are destructuring limitations where only partial variable extraction occurs.
+
+**Status:** Open. C-style for-loop init scoping (the original gap) has been fixed for all languages including Go's custom `_lower_go_for_clause`. The 12 gaps above remain.
