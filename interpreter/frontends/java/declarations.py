@@ -12,6 +12,7 @@ from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
 from interpreter.frontends.java.node_types import JavaNodeType
+from interpreter.frontends.common.declarations import make_class_ref
 
 
 def lower_local_var_decl(ctx: TreeSitterEmitContext, node) -> None:
@@ -171,15 +172,6 @@ def _extract_java_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
     return [ctx.node_text(parent_id)] if parent_id else []
 
 
-def _make_class_ref(class_name: str, class_label: str, parents: list[str]) -> str:
-    """Build the class reference string, with parents if present."""
-    if parents:
-        return constants.CLASS_REF_WITH_PARENTS_TEMPLATE.format(
-            name=class_name, label=class_label, parents=",".join(parents)
-        )
-    return constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
-
-
 def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -198,7 +190,7 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.CONST,
         result_reg=cls_reg,
-        operands=[_make_class_ref(class_name, class_label, parents)],
+        operands=[make_class_ref(class_name, class_label, parents)],
     )
     ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
 

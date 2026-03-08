@@ -11,6 +11,7 @@ from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT
+from interpreter.frontends.common.declarations import make_class_ref
 
 
 def _extract_pattern_name(ctx: TreeSitterEmitContext, pattern_node) -> str:
@@ -215,10 +216,25 @@ def _lower_class_body_hoisted(
         ctx.lower_stmt(child)
 
 
+def _extract_scala_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
+    """Extract parent class/trait names from a Scala class/trait/object definition."""
+    extends_clause = next(
+        (c for c in node.children if c.type == NT.EXTENDS_CLAUSE), None
+    )
+    if extends_clause is None:
+        return []
+    return [
+        ctx.node_text(c)
+        for c in extends_clause.children
+        if c.type == NT.TYPE_IDENTIFIER
+    ]
+
+
 def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
+    parents = _extract_scala_parents(ctx, node)
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
@@ -231,9 +247,7 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.CONST,
         result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
-        ],
+        operands=[make_class_ref(class_name, class_label, parents)],
     )
     ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
 
@@ -275,6 +289,7 @@ def lower_trait_def(ctx: TreeSitterEmitContext, node) -> None:
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     trait_name = ctx.node_text(name_node) if name_node else "__anon_trait"
+    parents = _extract_scala_parents(ctx, node)
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{trait_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{trait_name}")
@@ -289,9 +304,7 @@ def lower_trait_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.CONST,
         result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=trait_name, label=class_label)
-        ],
+        operands=[make_class_ref(trait_name, class_label, parents)],
     )
     ctx.emit(Opcode.STORE_VAR, operands=[trait_name, cls_reg])
 

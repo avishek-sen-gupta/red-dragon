@@ -13,6 +13,7 @@ from interpreter.frontends.common import declarations as common_decl
 from interpreter.frontends.python import expressions as py_expr
 from interpreter.frontends.python import control_flow as py_cf
 from interpreter.frontends.python import assignments as py_assign
+from interpreter.frontends.python import declarations as py_decl
 from interpreter.frontends.python.node_types import PythonNodeType
 
 
@@ -109,7 +110,7 @@ class PythonFrontend(BaseFrontend):
             PythonNodeType.WHILE_STATEMENT: common_cf.lower_while,
             PythonNodeType.FOR_STATEMENT: py_cf.lower_for,
             PythonNodeType.FUNCTION_DEFINITION: common_decl.lower_function_def,
-            PythonNodeType.CLASS_DEFINITION: common_decl.lower_class_def,
+            PythonNodeType.CLASS_DEFINITION: py_decl.lower_python_class_def,
             PythonNodeType.RAISE_STATEMENT: py_cf.lower_raise,
             PythonNodeType.TRY_STATEMENT: py_cf.lower_try,
             PythonNodeType.PASS_STATEMENT: lambda ctx, node: None,

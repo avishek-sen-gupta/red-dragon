@@ -18,6 +18,7 @@ from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
 from interpreter.frontends.cpp.node_types import CppNodeType
+from interpreter.frontends.common.declarations import make_class_ref
 
 
 def lower_cpp_declaration(ctx: TreeSitterEmitContext, node) -> None:
@@ -92,11 +93,26 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     ctx.seed_var_type("this", class_name)
 
 
+def _extract_cpp_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
+    """Extract parent class names from a C++ class/struct specifier."""
+    base_clause = next(
+        (c for c in node.children if c.type == CppNodeType.BASE_CLASS_CLAUSE), None
+    )
+    if base_clause is None:
+        return []
+    return [
+        ctx.node_text(c)
+        for c in base_clause.children
+        if c.type == CppNodeType.TYPE_IDENTIFIER
+    ]
+
+
 def lower_class_specifier(ctx: TreeSitterEmitContext, node) -> None:
     """Lower class_specifier (C++ class with field_declaration_list body)."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
+    parents = _extract_cpp_parents(ctx, node)
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
@@ -111,9 +127,7 @@ def lower_class_specifier(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.CONST,
         result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
-        ],
+        operands=[make_class_ref(class_name, class_label, parents)],
     )
     ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
 
@@ -344,6 +358,7 @@ def lower_cpp_struct_def(ctx: TreeSitterEmitContext, node) -> None:
         return
 
     struct_name = ctx.node_text(name_node) if name_node else "__anon_struct"
+    parents = _extract_cpp_parents(ctx, node)
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{struct_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{struct_name}")
@@ -358,8 +373,6 @@ def lower_cpp_struct_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.CONST,
         result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=struct_name, label=class_label)
-        ],
+        operands=[make_class_ref(struct_name, class_label, parents)],
     )
     ctx.emit(Opcode.STORE_VAR, operands=[struct_name, cls_reg])
