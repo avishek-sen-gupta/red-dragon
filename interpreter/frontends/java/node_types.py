@@ -91,6 +91,7 @@ class JavaNodeType:
     CATCH_CLAUSE = "catch_clause"
     CATCH_FORMAL_PARAMETER = "catch_formal_parameter"
     FINALLY_CLAUSE = "finally_clause"
+    RESOURCE = "resource"
 
     # ── Parameter types ──────────────────────────────────────────────
     FORMAL_PARAMETERS = "formal_parameters"

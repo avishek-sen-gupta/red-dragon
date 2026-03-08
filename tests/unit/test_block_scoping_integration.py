@@ -1046,3 +1046,47 @@ class TestGoSwitchInitScoping:
         assert "y" in stores
         mangled = [n for n in stores if n.startswith("y$")]
         assert len(mangled) == 0
+
+
+# ---------------------------------------------------------------------------
+# Java try-with-resources scoping (P0 #3)
+# ---------------------------------------------------------------------------
+
+
+class TestJavaTryWithResourcesScoping:
+    """Java try(Type r = expr) { } — resource var should be scoped."""
+
+    def test_resource_var_shadows_outer(self):
+        source = """
+        class M {
+            void m() {
+                Object r = null;
+                try (AutoCloseable r = getResource()) {
+                    int y = 1;
+                } catch (Exception e) {
+                }
+                Object z = r;
+            }
+        }
+        """
+        ir = _lower(JavaFrontend, "java", source)
+        stores = _store_var_names(ir)
+        mangled = [n for n in stores if n.startswith("r$")]
+        assert len(mangled) >= 1
+        assert "r" in stores
+
+    def test_resource_var_emitted(self):
+        """try-with-resources should emit STORE_VAR for the resource variable."""
+        source = """
+        class M {
+            void m() {
+                try (AutoCloseable r = getResource()) {
+                    int y = 1;
+                } catch (Exception e) {
+                }
+            }
+        }
+        """
+        ir = _lower(JavaFrontend, "java", source)
+        stores = _store_var_names(ir)
+        assert "r" in stores
