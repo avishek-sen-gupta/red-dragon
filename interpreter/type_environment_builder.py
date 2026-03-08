@@ -14,6 +14,7 @@ from types import MappingProxyType
 from interpreter.function_signature import FunctionSignature
 from interpreter.type_environment import TypeEnvironment
 from interpreter.type_expr import TypeExpr, UNKNOWN
+from interpreter.var_scope_info import VarScopeInfo
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class TypeEnvironmentBuilder:
     )
     type_aliases: dict[str, TypeExpr] = field(default_factory=dict)
     interface_implementations: dict[str, list[str]] = field(default_factory=dict)
+    var_scope_metadata: dict[str, VarScopeInfo] = field(default_factory=dict)
 
     def build(self) -> TypeEnvironment:
         """Freeze accumulated type info into an immutable TypeEnvironment."""

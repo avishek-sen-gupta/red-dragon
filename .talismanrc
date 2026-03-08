@@ -49,9 +49,9 @@ fileignoreconfig:
 - filename: interpreter/registry.py
   checksum: af467ca3418f518967b604d790de151f9b1a98fbbc19898769acf0109dfa903b
 - filename: interpreter/type_environment.py
-  checksum: 86c4ab62247fc99f149a6a9641eb3d0e466aac12a98b3d4b6b620fa30337ff24
+  checksum: 2c960e4dced6ea78624af6a7f15116b16b0d52eb0359f295d75d5a064154e089
 - filename: interpreter/type_environment_builder.py
-  checksum: 72e99133a870c0156e297e83df491b7c3c6233f5ccedb686e100c71708d47b3e
+  checksum: 9f9ad9ce8ba943e18533c85fcbaf942f31e3b2f91b0d825f81da09444c561e77
 - filename: tests/unit/test_type_environment_builder.py
   checksum: f8825cf5be5ca386e1788ddd86fdde6206b3fa22443ff14dcecbdd65c3e06daf
 - filename: scripts/paper-results-code/05_execution_equivalence.py
