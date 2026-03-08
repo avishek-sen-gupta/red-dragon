@@ -10,6 +10,7 @@ from interpreter.conversion_result import (
     IDENTITY_CONVERSION,
     _identity,
 )
+from interpreter.type_expr import TypeExpr
 
 
 class IdentityConversionRules(TypeConversionRules):
@@ -20,11 +21,11 @@ class IdentityConversionRules(TypeConversionRules):
     """
 
     def resolve(
-        self, operator: str, left_type: str, right_type: str
+        self, operator: str, left_type: TypeExpr, right_type: TypeExpr
     ) -> ConversionResult:
         return IDENTITY_CONVERSION
 
     def coerce_assignment(
-        self, value_type: str, target_type: str
+        self, value_type: TypeExpr, target_type: TypeExpr
     ) -> Callable[[Any], Any]:
         return _identity

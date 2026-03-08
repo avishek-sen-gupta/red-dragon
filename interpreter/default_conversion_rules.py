@@ -13,6 +13,7 @@ from interpreter.conversion_result import (
     IDENTITY_CONVERSION,
     _identity,
 )
+from interpreter.type_expr import TypeExpr, scalar
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +42,10 @@ class DefaultTypeConversionRules(TypeConversionRules):
     """
 
     def resolve(
-        self, operator: str, left_type: str, right_type: str
+        self, operator: str, left_type: TypeExpr, right_type: TypeExpr
     ) -> ConversionResult:
         if operator in _COMPARISON_OPS:
-            return ConversionResult(result_type=TypeName.BOOL)
+            return ConversionResult(result_type=scalar(TypeName.BOOL))
 
         if operator in _ARITHMETIC_OPS:
             return self._resolve_arithmetic(operator, left_type, right_type)
@@ -58,58 +59,76 @@ class DefaultTypeConversionRules(TypeConversionRules):
         return IDENTITY_CONVERSION
 
     def _resolve_arithmetic(
-        self, operator: str, left_type: str, right_type: str
+        self, operator: str, left_type: TypeExpr, right_type: TypeExpr
     ) -> ConversionResult:
         pair = (left_type, right_type)
 
         if pair == (TypeName.INT, TypeName.INT):
-            return ConversionResult(result_type=TypeName.INT)
+            return ConversionResult(result_type=scalar(TypeName.INT))
 
         if pair == (TypeName.INT, TypeName.FLOAT):
-            return ConversionResult(result_type=TypeName.FLOAT, left_coercer=_to_float)
+            return ConversionResult(
+                result_type=scalar(TypeName.FLOAT), left_coercer=_to_float
+            )
 
         if pair == (TypeName.FLOAT, TypeName.INT):
-            return ConversionResult(result_type=TypeName.FLOAT, right_coercer=_to_float)
+            return ConversionResult(
+                result_type=scalar(TypeName.FLOAT), right_coercer=_to_float
+            )
 
         if pair == (TypeName.FLOAT, TypeName.FLOAT):
-            return ConversionResult(result_type=TypeName.FLOAT)
+            return ConversionResult(result_type=scalar(TypeName.FLOAT))
 
         # Bool promotion
         if pair == (TypeName.BOOL, TypeName.INT):
-            return ConversionResult(result_type=TypeName.INT, left_coercer=_to_int)
+            return ConversionResult(
+                result_type=scalar(TypeName.INT), left_coercer=_to_int
+            )
 
         if pair == (TypeName.INT, TypeName.BOOL):
-            return ConversionResult(result_type=TypeName.INT, right_coercer=_to_int)
+            return ConversionResult(
+                result_type=scalar(TypeName.INT), right_coercer=_to_int
+            )
 
         return IDENTITY_CONVERSION
 
-    def _resolve_division(self, left_type: str, right_type: str) -> ConversionResult:
+    def _resolve_division(
+        self, left_type: TypeExpr, right_type: TypeExpr
+    ) -> ConversionResult:
         pair = (left_type, right_type)
 
         if pair == (TypeName.INT, TypeName.INT):
-            return ConversionResult(result_type=TypeName.INT, operator_override="//")
+            return ConversionResult(
+                result_type=scalar(TypeName.INT), operator_override="//"
+            )
 
         if pair == (TypeName.INT, TypeName.FLOAT):
-            return ConversionResult(result_type=TypeName.FLOAT, left_coercer=_to_float)
+            return ConversionResult(
+                result_type=scalar(TypeName.FLOAT), left_coercer=_to_float
+            )
 
         if pair == (TypeName.FLOAT, TypeName.INT):
-            return ConversionResult(result_type=TypeName.FLOAT, right_coercer=_to_float)
+            return ConversionResult(
+                result_type=scalar(TypeName.FLOAT), right_coercer=_to_float
+            )
 
         if pair == (TypeName.FLOAT, TypeName.FLOAT):
-            return ConversionResult(result_type=TypeName.FLOAT)
+            return ConversionResult(result_type=scalar(TypeName.FLOAT))
 
         return IDENTITY_CONVERSION
 
-    def _resolve_modulo(self, left_type: str, right_type: str) -> ConversionResult:
+    def _resolve_modulo(
+        self, left_type: TypeExpr, right_type: TypeExpr
+    ) -> ConversionResult:
         pair = (left_type, right_type)
 
         if pair == (TypeName.INT, TypeName.INT):
-            return ConversionResult(result_type=TypeName.INT)
+            return ConversionResult(result_type=scalar(TypeName.INT))
 
         return IDENTITY_CONVERSION
 
     def coerce_assignment(
-        self, value_type: str, target_type: str
+        self, value_type: TypeExpr, target_type: TypeExpr
     ) -> Callable[[Any], Any]:
         if value_type == target_type:
             return _identity

@@ -4,6 +4,7 @@ from interpreter.constants import TypeName
 from interpreter.conversion_result import IDENTITY_CONVERSION
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.null_type_resolver import NullTypeResolver
+from interpreter.type_expr import ScalarType, UNKNOWN, scalar
 from interpreter.type_resolver import TypeResolver
 
 
@@ -77,3 +78,39 @@ class TestNullTypeResolver:
         resolver = NullTypeResolver()
         result = resolver.resolve_binop("/", TypeName.FLOAT, TypeName.INT)
         assert result.operator_override == ""
+
+
+class TestTypeResolverTypeExpr:
+    """TypeResolver accepts and returns TypeExpr objects."""
+
+    def test_resolve_binop_accepts_type_expr(self):
+        result = _resolver().resolve_binop(
+            "+", scalar(TypeName.INT), scalar(TypeName.FLOAT)
+        )
+        assert isinstance(result.result_type, ScalarType)
+        assert result.result_type == TypeName.FLOAT
+
+    def test_resolve_binop_with_unknown_returns_identity(self):
+        result = _resolver().resolve_binop("+", UNKNOWN, UNKNOWN)
+        assert result is IDENTITY_CONVERSION
+
+    def test_resolve_binop_partial_hint_left_only(self):
+        result = _resolver().resolve_binop("/", scalar(TypeName.INT), UNKNOWN)
+        assert result.result_type == TypeName.INT
+        assert result.operator_override == "//"
+
+    def test_resolve_binop_partial_hint_right_only(self):
+        result = _resolver().resolve_binop("/", UNKNOWN, scalar(TypeName.INT))
+        assert result.result_type == TypeName.INT
+
+    def test_resolve_assignment_accepts_type_expr(self):
+        coercer = _resolver().resolve_assignment(
+            scalar(TypeName.FLOAT), scalar(TypeName.INT)
+        )
+        assert coercer(3.7) == 3
+
+    def test_resolve_assignment_with_unknown_returns_identity(self):
+        from interpreter.conversion_result import _identity
+
+        coercer = _resolver().resolve_assignment(UNKNOWN, UNKNOWN)
+        assert coercer is _identity

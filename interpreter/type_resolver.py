@@ -11,6 +11,7 @@ from interpreter.conversion_result import (
     IDENTITY_CONVERSION,
     _identity,
 )
+from interpreter.type_expr import TypeExpr
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +20,12 @@ class TypeResolver:
     """Resolves type coercion for binary operations and assignments.
 
     BINOP logic:
-    - Both hints empty → identity (current VM behavior, no coercion).
+    - Both hints falsy (UNKNOWN) → identity (current VM behavior, no coercion).
     - One hint missing → assume the other's type (symmetric).
     - Both present → delegate to the injected TypeConversionRules.
 
     Assignment logic:
-    - Either hint empty → identity (no coercion without both types known).
+    - Either hint falsy → identity (no coercion without both types known).
     - Both present → delegate to TypeConversionRules.coerce_assignment().
     """
 
@@ -32,7 +33,7 @@ class TypeResolver:
         self._conversion_rules = conversion_rules
 
     def resolve_binop(
-        self, operator: str, left_hint: str, right_hint: str
+        self, operator: str, left_hint: TypeExpr, right_hint: TypeExpr
     ) -> ConversionResult:
         if not left_hint and not right_hint:
             return IDENTITY_CONVERSION
@@ -49,7 +50,7 @@ class TypeResolver:
         return self._conversion_rules.resolve(operator, effective_left, effective_right)
 
     def resolve_assignment(
-        self, value_hint: str, target_hint: str
+        self, value_hint: TypeExpr, target_hint: TypeExpr
     ) -> Callable[[Any], Any]:
         if not value_hint or not target_hint:
             return _identity
