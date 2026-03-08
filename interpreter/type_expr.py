@@ -122,6 +122,35 @@ class ParameterizedType(TypeExpr):
         return hash(str(self))
 
 
+@dataclass(frozen=True, eq=False)
+class UnionType(TypeExpr):
+    """A union of two or more types: ``Union[Int, String]``.
+
+    Members are stored as a frozenset for order-independent equality.
+    The canonical string uses alphabetically sorted member names.
+    Use ``union_of()`` to construct — it handles flattening, dedup,
+    and singleton elimination.
+    """
+
+    members: frozenset[TypeExpr]
+
+    def __str__(self) -> str:
+        sorted_members = sorted(str(m) for m in self.members)
+        return f"Union[{', '.join(sorted_members)}]"
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, UnionType):
+            return self.members == other.members
+        if isinstance(other, str):
+            return str(self) == other
+        if isinstance(other, TypeExpr):
+            return False
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(str(self))
+
+
 # ---------------------------------------------------------------------------
 # Convenience constructors
 # ---------------------------------------------------------------------------
@@ -152,6 +181,53 @@ def map_of(key: TypeExpr, value: TypeExpr) -> ParameterizedType:
     return ParameterizedType("Map", (key, value))
 
 
+def union_of(*types: TypeExpr) -> TypeExpr:
+    """Create a union type, with flattening, dedup, and singleton elimination.
+
+    - Nested unions are flattened: ``union_of(Union[A, B], C)`` → ``Union[A, B, C]``
+    - Duplicates removed: ``union_of(Int, Int)`` → ``Int``
+    - Singleton: ``union_of(Int)`` → ``ScalarType("Int")``
+    - Empty: ``union_of()`` → ``UNKNOWN``
+    - UNKNOWN members are filtered out
+    """
+    members: set[TypeExpr] = set()
+    for t in types:
+        if isinstance(t, UnionType):
+            members.update(t.members)
+        elif t and not isinstance(t, UnknownType):
+            members.add(t)
+    if not members:
+        return UNKNOWN
+    if len(members) == 1:
+        return next(iter(members))
+    return UnionType(frozenset(members))
+
+
+_NULL = ScalarType("Null")
+
+
+def optional(inner: TypeExpr) -> TypeExpr:
+    """Create ``Optional[inner]`` = ``Union[inner, Null]``."""
+    return union_of(inner, _NULL)
+
+
+def is_optional(t: TypeExpr) -> bool:
+    """Return True if *t* is a union containing Null."""
+    return isinstance(t, UnionType) and _NULL in t.members
+
+
+def unwrap_optional(t: TypeExpr) -> TypeExpr:
+    """Remove Null from a union type. Non-optional types returned as-is."""
+    if not isinstance(t, UnionType):
+        return t
+    remaining = t.members - {_NULL}
+    if not remaining:
+        return UNKNOWN
+    if len(remaining) == 1:
+        return next(iter(remaining))
+    return UnionType(frozenset(remaining))
+
+
 # ---------------------------------------------------------------------------
 # Parser: string → TypeExpr
 # ---------------------------------------------------------------------------
@@ -175,6 +251,10 @@ def _parse_expr(s: str, pos: int) -> tuple[TypeExpr, int]:
     name, pos = _parse_name(s, pos)
     if pos < len(s) and s[pos] == "[":
         args, pos = _parse_args(s, pos + 1)
+        if name == "Union":
+            return union_of(*args), pos
+        if name == "Optional":
+            return (optional(args[0]), pos) if args else (UNKNOWN, pos)
         return ParameterizedType(name, tuple(args)), pos
     return ScalarType(name), pos
 

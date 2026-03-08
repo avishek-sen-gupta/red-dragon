@@ -8,6 +8,7 @@ from interpreter.type_expr import (
     TypeExpr,
     ScalarType,
     ParameterizedType,
+    UnionType,
     UnknownType,
     UNKNOWN,
     parse_type,
@@ -15,6 +16,10 @@ from interpreter.type_expr import (
     pointer,
     array_of,
     map_of,
+    union_of,
+    optional,
+    is_optional,
+    unwrap_optional,
     unknown,
 )
 
@@ -337,3 +342,162 @@ class TestUnknownType:
         """Contrast: ScalarType('Int') should be truthy."""
         result = scalar("Int")
         assert result
+
+
+# ---------------------------------------------------------------------------
+# UnionType
+# ---------------------------------------------------------------------------
+
+
+class TestUnionType:
+    def test_str_canonical_sorted(self):
+        """Union members are sorted alphabetically in str output."""
+        u = union_of(scalar("String"), scalar("Int"))
+        assert str(u) == "Union[Int, String]"
+
+    def test_str_three_members(self):
+        u = union_of(scalar("Bool"), scalar("String"), scalar("Int"))
+        assert str(u) == "Union[Bool, Int, String]"
+
+    def test_eq_with_string(self):
+        u = union_of(scalar("Int"), scalar("String"))
+        assert u == "Union[Int, String]"
+
+    def test_eq_with_same_union(self):
+        a = union_of(scalar("Int"), scalar("String"))
+        b = union_of(scalar("String"), scalar("Int"))
+        assert a == b
+
+    def test_hash_consistent_with_str(self):
+        u = union_of(scalar("Int"), scalar("String"))
+        assert hash(u) == hash("Union[Int, String]")
+
+    def test_hash_order_independent(self):
+        a = union_of(scalar("Int"), scalar("String"))
+        b = union_of(scalar("String"), scalar("Int"))
+        assert hash(a) == hash(b)
+
+    def test_truthy(self):
+        u = union_of(scalar("Int"), scalar("String"))
+        assert u
+
+    def test_is_type_expr(self):
+        u = union_of(scalar("Int"), scalar("String"))
+        assert isinstance(u, TypeExpr)
+        assert isinstance(u, UnionType)
+
+    def test_members_frozenset(self):
+        u = union_of(scalar("Int"), scalar("String"))
+        assert isinstance(u, UnionType)
+        assert u.members == frozenset({scalar("Int"), scalar("String")})
+
+    def test_singleton_elimination(self):
+        """Union of a single type collapses to that type."""
+        result = union_of(scalar("Int"))
+        assert isinstance(result, ScalarType)
+        assert result == "Int"
+
+    def test_dedup(self):
+        """Duplicate members are removed, may collapse to singleton."""
+        result = union_of(scalar("Int"), scalar("Int"))
+        assert isinstance(result, ScalarType)
+        assert result == "Int"
+
+    def test_flatten_nested_unions(self):
+        """Nested unions are flattened into a single union."""
+        inner = union_of(scalar("Int"), scalar("String"))
+        outer = union_of(inner, scalar("Bool"))
+        assert isinstance(outer, UnionType)
+        assert str(outer) == "Union[Bool, Int, String]"
+
+    def test_empty_union_returns_unknown(self):
+        """Union with no members returns UNKNOWN."""
+        result = union_of()
+        assert result is UNKNOWN
+
+    def test_unknown_members_ignored(self):
+        """UNKNOWN members are filtered out."""
+        result = union_of(scalar("Int"), UNKNOWN)
+        assert isinstance(result, ScalarType)
+        assert result == "Int"
+
+    def test_eq_different_members(self):
+        a = union_of(scalar("Int"), scalar("String"))
+        b = union_of(scalar("Int"), scalar("Bool"))
+        assert a != b
+
+    def test_eq_with_scalar_is_false(self):
+        u = union_of(scalar("Int"), scalar("String"))
+        assert u != scalar("Int")
+
+    def test_parameterized_members(self):
+        """Union can contain parameterized types."""
+        u = union_of(array_of(scalar("Int")), scalar("String"))
+        assert str(u) == "Union[Array[Int], String]"
+
+
+class TestUnionTypeParsing:
+    def test_parse_union(self):
+        result = parse_type("Union[Int, String]")
+        assert isinstance(result, UnionType)
+        assert result.members == frozenset({scalar("Int"), scalar("String")})
+
+    def test_parse_union_three_members(self):
+        result = parse_type("Union[Bool, Int, String]")
+        assert isinstance(result, UnionType)
+        assert len(result.members) == 3
+
+    def test_parse_union_with_parameterized(self):
+        result = parse_type("Union[Array[Int], String]")
+        assert isinstance(result, UnionType)
+        assert array_of(scalar("Int")) in result.members
+
+    def test_roundtrip(self):
+        original = "Union[Array[Int], String]"
+        assert str(parse_type(original)) == original
+
+    def test_parse_optional(self):
+        """Optional[Int] parses as Union[Int, Null]."""
+        result = parse_type("Optional[Int]")
+        assert isinstance(result, UnionType)
+        assert scalar("Int") in result.members
+        assert scalar("Null") in result.members
+
+    def test_roundtrip_optional_becomes_union(self):
+        """Optional[Int] round-trips as Union[Int, Null] (canonical form)."""
+        result = parse_type("Optional[Int]")
+        assert str(result) == "Union[Int, Null]"
+
+
+class TestOptionalConvenience:
+    def test_optional_creates_union_with_null(self):
+        result = optional(scalar("Int"))
+        assert isinstance(result, UnionType)
+        assert scalar("Int") in result.members
+        assert scalar("Null") in result.members
+
+    def test_is_optional_true(self):
+        assert is_optional(optional(scalar("Int")))
+
+    def test_is_optional_false_for_scalar(self):
+        assert not is_optional(scalar("Int"))
+
+    def test_is_optional_false_for_union_without_null(self):
+        assert not is_optional(union_of(scalar("Int"), scalar("String")))
+
+    def test_unwrap_optional(self):
+        result = unwrap_optional(optional(scalar("Int")))
+        assert result == scalar("Int")
+
+    def test_unwrap_optional_multi_member(self):
+        """Optional of a union: unwrap removes Null, keeps rest as union."""
+        t = union_of(scalar("Int"), scalar("String"), scalar("Null"))
+        result = unwrap_optional(t)
+        assert isinstance(result, UnionType)
+        assert scalar("Null") not in result.members
+        assert scalar("Int") in result.members
+        assert scalar("String") in result.members
+
+    def test_unwrap_non_optional_returns_as_is(self):
+        result = unwrap_optional(scalar("Int"))
+        assert result == scalar("Int")

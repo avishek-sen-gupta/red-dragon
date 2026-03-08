@@ -1587,3 +1587,32 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 - Type inference priority: seeded types from explicit declarations (in any scope) take precedence over inferred types from constructor calls
 
 **Consequences:** `items = [1, 2, 3]` now produces `var_types["items"] == "Array[Int]"` across Python, JavaScript, Ruby, and any language using NEW_ARRAY + STORE_INDEX. 5 unit tests + 4 integration tests added. All 9552 tests pass.
+
+### ADR-088: Union types, Optional, and union-aware type inference (2026-03-08)
+
+**Context:** The type system could not represent values that may be one of several types. Variables assigned different types on different code paths (e.g. `x = 5; x = "hello"`) retained only the first type. TypeScript union types (`string | number`), Kotlin nullable (`String?`), Rust `Option<T>`, and Python `Union[str, int]` were all unrepresentable.
+
+**Decision:** Add `UnionType(members: frozenset[TypeExpr])` as a fourth TypeExpr variant alongside ScalarType, ParameterizedType, and UnknownType.
+
+**Design details:**
+- `union_of(*types)` constructor handles flattening nested unions, deduplication, singleton elimination (`Union[Int]` → `Int`), and UNKNOWN filtering
+- Canonical string form: `"Union[Int, String]"` with alphabetically sorted members for deterministic hashing
+- `parse_type("Union[Int, String]")` and `parse_type("Optional[Int]")` produce UnionType (Optional is sugar for `Union[T, Null]`)
+- `optional(T)`, `is_optional(t)`, `unwrap_optional(t)` convenience functions
+- `Null` is `ScalarType("Null")` — no new class needed
+
+**TypeGraph extensions:**
+- `is_subtype_expr`: `Union[A, B] ⊆ T` iff all members are subtypes of T; `T ⊆ Union[A, B]` iff T is subtype of at least one member
+- `common_supertype_expr`: when either operand is a union, merge all members into a single union
+
+**Inference engine:**
+- `store_var_type` widened to union-aware: if a variable already has inferred type T and a new assignment has type S ≠ T, the variable type becomes `Union[T, S]`
+- Seeded types (from `TypeEnvironmentBuilder.var_types`) are tracked via `_seeded_var_names` frozenset and are never widened — explicit declarations always take precedence
+- Fixpoint convergence guaranteed: union widening is monotonic (types only grow, never shrink)
+
+**Alternatives considered:**
+- **Widen to common supertype** (e.g. `Int + String → Any`): Rejected — loses information. Union preserves all possible types.
+- **Branch-aware narrowing** (track types per CFG path): Deferred to Phase 5 (Type Narrowing). Current linear-pass widening is simpler and handles the common case.
+- **Separate NullType class**: Rejected — `ScalarType("Null")` is sufficient and avoids adding another class.
+
+**Consequences:** 51 new tests (30 unit for UnionType/Optional, 13 unit for TypeGraph union subtype/LUB, 4 unit for inference widening, 4 integration for Python/JS source programs). All 9664 tests pass. No existing test changed.

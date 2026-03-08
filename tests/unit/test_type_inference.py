@@ -13,10 +13,12 @@ from interpreter.type_expr import (
     TypeExpr,
     ScalarType,
     ParameterizedType,
+    UnionType,
     UnknownType,
     UNKNOWN,
     parse_type,
     scalar,
+    union_of,
 )
 from interpreter.type_inference import infer_types, _infer_const_type
 from interpreter.type_resolver import TypeResolver
@@ -2083,3 +2085,66 @@ class TestFieldTypeTableUsesTypeExprKeys:
         # Method return type resolved as TypeExpr
         assert isinstance(env.register_types["%3"], TypeExpr)
         assert env.register_types["%3"] == "Int"
+
+
+# ---------------------------------------------------------------------------
+# Union-aware variable type widening
+# ---------------------------------------------------------------------------
+
+
+class TestUnionAwareVarTyping:
+    """Variable assigned different types across instructions → union type."""
+
+    def test_var_assigned_int_then_string_produces_union(self):
+        """STORE_VAR x with Int, then STORE_VAR x with String → Union[Int, String]."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
+            _make_inst(Opcode.CONST, result_reg="%1", operands=['"hello"']),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert isinstance(env.var_types["x"], UnionType)
+        assert env.var_types["x"] == "Union[Int, String]"
+
+    def test_var_assigned_same_type_twice_no_union(self):
+        """STORE_VAR x with Int twice → stays Int (no trivial union)."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
+            _make_inst(Opcode.CONST, result_reg="%1", operands=["99"]),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%1"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.var_types["x"] == "Int"
+        assert not isinstance(env.var_types["x"], UnionType)
+
+    def test_seeded_type_not_widened_to_union(self):
+        """Seeded var type from builder is NOT widened by inference."""
+        builder = TypeEnvironmentBuilder(
+            var_types={"items": parse_type("List[String]")}
+        )
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["obj"]),
+            _make_inst(Opcode.STORE_VAR, operands=["items", "%0"]),
+        ]
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        assert env.var_types["items"] == "List[String]"
+
+    def test_three_types_produce_three_member_union(self):
+        """Three different types → Union[Bool, Int, String]."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
+            _make_inst(Opcode.CONST, result_reg="%1", operands=['"hello"']),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%1"]),
+            _make_inst(Opcode.CONST, result_reg="%2", operands=["True"]),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%2"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert isinstance(env.var_types["x"], UnionType)
+        assert env.var_types["x"] == "Union[Bool, Int, String]"

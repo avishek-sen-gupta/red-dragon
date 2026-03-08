@@ -6,10 +6,13 @@ from interpreter.constants import TypeName
 from interpreter.type_expr import (
     ScalarType,
     ParameterizedType,
+    UnionType,
     scalar,
     pointer,
     array_of,
     map_of,
+    union_of,
+    optional,
 )
 
 
@@ -277,3 +280,112 @@ class TestTypeGraphParameterizedLUB:
         assert result == map_of(
             scalar("Number"), map_of(scalar("Number"), scalar("Number"))
         )
+
+
+# ---------------------------------------------------------------------------
+# UnionType subtype checks
+# ---------------------------------------------------------------------------
+
+
+class TestTypeGraphUnionSubtype:
+    def _graph(self) -> TypeGraph:
+        return _default_graph()
+
+    def test_union_subtype_of_common_parent(self):
+        """Union[Int, Float] ⊆ Number (all members are subtypes of Number)."""
+        g = self._graph()
+        u = union_of(scalar("Int"), scalar("Float"))
+        assert g.is_subtype_expr(u, scalar("Number"))
+
+    def test_union_not_subtype_when_member_fails(self):
+        """Union[Int, String] ⊄ Number (String is not subtype of Number)."""
+        g = self._graph()
+        u = union_of(scalar("Int"), scalar("String"))
+        assert not g.is_subtype_expr(u, scalar("Number"))
+
+    def test_union_subtype_of_any(self):
+        """Union[Int, String] ⊆ Any."""
+        g = self._graph()
+        u = union_of(scalar("Int"), scalar("String"))
+        assert g.is_subtype_expr(u, scalar("Any"))
+
+    def test_scalar_subtype_of_union_member(self):
+        """Int ⊆ Union[Int, String] (Int is a member)."""
+        g = self._graph()
+        u = union_of(scalar("Int"), scalar("String"))
+        assert g.is_subtype_expr(scalar("Int"), u)
+
+    def test_scalar_subtype_of_union_via_member_parent(self):
+        """Int ⊆ Union[Number, String] (Int ⊆ Number which is a member)."""
+        g = self._graph()
+        u = union_of(scalar("Number"), scalar("String"))
+        assert g.is_subtype_expr(scalar("Int"), u)
+
+    def test_scalar_not_subtype_of_union(self):
+        """Bool ⊄ Union[Int, String] (Bool is not subtype of either)."""
+        g = self._graph()
+        u = union_of(scalar("Int"), scalar("String"))
+        assert not g.is_subtype_expr(scalar("Bool"), u)
+
+    def test_union_subtype_of_union(self):
+        """Union[Int, Float] ⊆ Union[Number, String] (each member ⊆ some member)."""
+        g = self._graph()
+        child = union_of(scalar("Int"), scalar("Float"))
+        parent = union_of(scalar("Number"), scalar("String"))
+        assert g.is_subtype_expr(child, parent)
+
+    def test_union_not_subtype_of_smaller_union(self):
+        """Union[Int, String] ⊄ Union[Int, Float]."""
+        g = self._graph()
+        child = union_of(scalar("Int"), scalar("String"))
+        parent = union_of(scalar("Int"), scalar("Float"))
+        assert not g.is_subtype_expr(child, parent)
+
+    def test_parameterized_subtype_of_union(self):
+        """Array[Int] ⊆ Union[Array[Int], String]."""
+        g = self._graph()
+        u = union_of(array_of(scalar("Int")), scalar("String"))
+        assert g.is_subtype_expr(array_of(scalar("Int")), u)
+
+
+# ---------------------------------------------------------------------------
+# UnionType LUB
+# ---------------------------------------------------------------------------
+
+
+class TestTypeGraphUnionLUB:
+    def _graph(self) -> TypeGraph:
+        return _default_graph()
+
+    def test_lub_scalar_and_union(self):
+        """LUB(Int, Union[String, Bool]) includes all three."""
+        g = self._graph()
+        u = union_of(scalar("String"), scalar("Bool"))
+        result = g.common_supertype_expr(scalar("Int"), u)
+        assert isinstance(result, UnionType)
+        assert scalar("Int") in result.members
+        assert scalar("String") in result.members
+        assert scalar("Bool") in result.members
+
+    def test_lub_two_unions(self):
+        """LUB(Union[Int, String], Union[Bool, Float]) merges all."""
+        g = self._graph()
+        a = union_of(scalar("Int"), scalar("String"))
+        b = union_of(scalar("Bool"), scalar("Float"))
+        result = g.common_supertype_expr(a, b)
+        assert isinstance(result, UnionType)
+        assert len(result.members) == 4
+
+    def test_lub_union_with_overlapping_member(self):
+        """LUB(Union[Int, String], Int) → Union[Int, String]."""
+        g = self._graph()
+        u = union_of(scalar("Int"), scalar("String"))
+        result = g.common_supertype_expr(u, scalar("Int"))
+        assert result == u
+
+    def test_lub_produces_union_for_unrelated_scalars(self):
+        """LUB of two unrelated scalars that aren't in the DAG produces union."""
+        g = self._graph()
+        result = g.common_supertype_expr(scalar("Dog"), scalar("Cat"))
+        # Dog and Cat aren't in the graph, so LUB falls back to Any
+        assert result == scalar("Any")

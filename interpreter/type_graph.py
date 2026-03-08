@@ -8,7 +8,14 @@ from functools import reduce
 
 from interpreter.type_node import TypeNode
 from interpreter.constants import TypeName
-from interpreter.type_expr import TypeExpr, ScalarType, ParameterizedType, scalar
+from interpreter.type_expr import (
+    TypeExpr,
+    ScalarType,
+    ParameterizedType,
+    UnionType,
+    scalar,
+    union_of,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +108,8 @@ class TypeGraph:
         """Check subtype relationship between two TypeExpr values.
 
         Rules (covariant):
+        - UnionType child: all members must be subtypes of parent.
+        - UnionType parent: child must be a subtype of at least one member.
         - ScalarType vs ScalarType: delegates to string-based is_subtype.
         - ParameterizedType vs ParameterizedType: same constructor + all
           arguments pairwise subtypes.
@@ -108,6 +117,12 @@ class TypeGraph:
           subtype of the parent scalar (e.g. Pointer[Int] ⊆ Pointer ⊆ Any).
         - ScalarType vs ParameterizedType: never (Int is not ⊆ Pointer[X]).
         """
+        # Union child: every member must be a subtype of parent
+        if isinstance(child, UnionType):
+            return all(self.is_subtype_expr(m, parent) for m in child.members)
+        # Union parent: child must be subtype of at least one member
+        if isinstance(parent, UnionType):
+            return any(self.is_subtype_expr(child, m) for m in parent.members)
         match (child, parent):
             case (ScalarType(name=cn), ScalarType(name=pn)):
                 return self.is_subtype(cn, pn)
@@ -129,6 +144,7 @@ class TypeGraph:
         """Compute the least upper bound of two TypeExpr values.
 
         Rules:
+        - Union involved: merge all members into a single union.
         - Both scalar: delegates to string-based common_supertype.
         - Both parameterized with same constructor: constructor applied to
           pairwise LUBs of arguments.
@@ -136,6 +152,15 @@ class TypeGraph:
         """
         if type_a == type_b:
             return type_a
+        # Union: collect all members and merge
+        if isinstance(type_a, UnionType) or isinstance(type_b, UnionType):
+            members_a = (
+                type_a.members if isinstance(type_a, UnionType) else frozenset({type_a})
+            )
+            members_b = (
+                type_b.members if isinstance(type_b, UnionType) else frozenset({type_b})
+            )
+            return union_of(*members_a, *members_b)
         match (type_a, type_b):
             case (ScalarType(name=na), ScalarType(name=nb)):
                 return scalar(self.common_supertype(na, nb))

@@ -2366,3 +2366,34 @@ class TestArrayElementTypePromotion:
             "ruby",
         )
         assert env.var_types["items"] == "Array[Int]"
+
+
+# ---------------------------------------------------------------------------
+# Union type inference (variable assigned different types)
+# ---------------------------------------------------------------------------
+
+
+class TestUnionTypeInference:
+    def test_python_var_assigned_int_then_string(self):
+        """Python: x = 5; x = 'hello' → x is Union[Int, String]."""
+        source = 'x = 5\nx = "hello"'
+        _, env = _lower_and_infer(source, "python")
+        assert env.var_types["x"] == "Union[Int, String]"
+
+    def test_javascript_var_assigned_different_types(self):
+        """JS: let x = 5; x = 'hello' → x is Union[Int, String]."""
+        source = 'let x = 5;\nx = "hello";'
+        _, env = _lower_and_infer(source, "javascript")
+        assert env.var_types["x"] == "Union[Int, String]"
+
+    def test_python_var_same_type_no_union(self):
+        """Python: x = 5; x = 10 → x is Int (no union)."""
+        source = "x = 5\nx = 10"
+        _, env = _lower_and_infer(source, "python")
+        assert env.var_types["x"] == "Int"
+
+    def test_python_three_types(self):
+        """Python: x = 5; x = 'hi'; x = True → Union[Bool, Int, String]."""
+        source = 'x = 5\nx = "hi"\nx = True'
+        _, env = _lower_and_infer(source, "python")
+        assert env.var_types["x"] == "Union[Bool, Int, String]"
