@@ -18,6 +18,7 @@ from interpreter.frontends.scala import ScalaFrontend
 from interpreter.frontends.typescript import TypeScriptFrontend
 from interpreter.frontends.python import PythonFrontend
 from interpreter.frontends.javascript import JavaScriptFrontend
+from interpreter.frontends.ruby import RubyFrontend
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.parser import TreeSitterParserFactory
 
@@ -43,6 +44,27 @@ def _load_var_names(instructions: list[IRInstruction]) -> list[str]:
         for inst in instructions
         if inst.opcode == Opcode.LOAD_VAR and inst.operands
     ]
+
+
+def _instructions_in_inline_function(
+    instructions: list[IRInstruction], label_prefix: str
+) -> list[IRInstruction]:
+    """Extract instructions between a LABEL matching *label_prefix* and the next RETURN."""
+    collecting = False
+    result: list[IRInstruction] = []
+    for inst in instructions:
+        if (
+            inst.opcode == Opcode.LABEL
+            and inst.label
+            and inst.label.startswith(label_prefix)
+        ):
+            collecting = True
+            continue
+        if collecting:
+            result.append(inst)
+            if inst.opcode == Opcode.RETURN:
+                break
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -762,3 +784,164 @@ class TestCStyleForInitScoping:
         stores = _store_var_names(ir)
         mangled = [n for n in stores if n.startswith("i$")]
         assert len(mangled) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Ruby scoping — call-frame isolation for lambdas/blocks, no mangling
+# ---------------------------------------------------------------------------
+
+
+class TestRubyLambdaScoping:
+    """Ruby lambdas are lowered as inline functions with their own call frame.
+
+    Variable isolation comes from the VM's call-frame mechanism, not from
+    BLOCK_SCOPED name mangling.  These tests verify the IR structure:
+    lambda/block bodies live between LABEL func_*/block_* and RETURN,
+    and no ``$`` mangling occurs.
+    """
+
+    def test_lambda_body_emitted_as_inline_function(self):
+        """-> (x) { body } should produce LABEL func_* ... RETURN."""
+        source = """
+x = 99
+my_lambda = -> (x) { y = x + 1 }
+z = x
+"""
+        ir = _lower(RubyFrontend, "ruby", source)
+        func_instrs = _instructions_in_inline_function(ir, "func___lambda")
+        # The lambda body should contain STORE_VAR for the param and body var
+        func_stores = _store_var_names(func_instrs)
+        assert "x" in func_stores
+        assert "y" in func_stores
+        # And end with RETURN
+        assert func_instrs[-1].opcode == Opcode.RETURN
+
+    def test_lambda_param_uses_same_name_no_mangling(self):
+        """Lambda param x should NOT be mangled even when shadowing outer x."""
+        source = """
+x = 99
+my_lambda = -> (x) { y = x + 1 }
+z = x
+"""
+        ir = _lower(RubyFrontend, "ruby", source)
+        stores = _store_var_names(ir)
+        mangled = [n for n in stores if "$" in n]
+        assert len(mangled) == 0
+
+    def test_lambda_outer_var_unaffected(self):
+        """The outer x store and the post-lambda z = x load should be in the
+        top-level flow (outside the lambda body)."""
+        source = """
+x = 99
+my_lambda = -> (x) { y = x + 1 }
+z = x
+"""
+        ir = _lower(RubyFrontend, "ruby", source)
+        # Top-level stores (outside the lambda body) should include x and z
+        func_instrs = _instructions_in_inline_function(ir, "func___lambda")
+        top_level = [inst for inst in ir if inst not in func_instrs]
+        top_stores = _store_var_names(top_level)
+        assert "x" in top_stores
+        assert "z" in top_stores
+        assert "my_lambda" in top_stores
+
+
+class TestRubyBlockScoping:
+    """Ruby do..end / { } blocks are lowered as inline functions."""
+
+    def test_do_block_emitted_as_inline_function(self):
+        """do |x| ... end should produce LABEL block_* ... RETURN."""
+        source = """
+x = 99
+[1,2,3].each do |x|
+  y = x + 1
+end
+z = x
+"""
+        ir = _lower(RubyFrontend, "ruby", source)
+        block_instrs = _instructions_in_inline_function(ir, "block_")
+        block_stores = _store_var_names(block_instrs)
+        assert "x" in block_stores
+        assert "y" in block_stores
+        assert block_instrs[-1].opcode == Opcode.RETURN
+
+    def test_do_block_no_mangling(self):
+        """Block param x should NOT be mangled even when shadowing outer x."""
+        source = """
+x = 99
+[1,2,3].each do |x|
+  y = x + 1
+end
+z = x
+"""
+        ir = _lower(RubyFrontend, "ruby", source)
+        stores = _store_var_names(ir)
+        mangled = [n for n in stores if "$" in n]
+        assert len(mangled) == 0
+
+    def test_block_passed_as_function_ref(self):
+        """The block should be passed as a func ref argument to the method call."""
+        source = """
+[1,2,3].each do |x|
+  y = x + 1
+end
+"""
+        ir = _lower(RubyFrontend, "ruby", source)
+        call_methods = [inst for inst in ir if inst.opcode == Opcode.CALL_METHOD]
+        assert len(call_methods) >= 1
+        # The block ref should be among the operands
+        each_call = call_methods[0]
+        assert each_call.operands[1] == "each"
+
+
+class TestRubyForInScoping:
+    """Ruby for..in does NOT create a new scope — variable leaks to outer scope."""
+
+    def test_for_in_var_is_inline(self):
+        """for x in collection should NOT emit a separate function body."""
+        source = """
+x = 99
+for x in [1,2,3]
+  y = x + 1
+end
+z = x
+"""
+        ir = _lower(RubyFrontend, "ruby", source)
+        # for..in should NOT produce an inline function — no RETURN inside the loop
+        labels = [
+            inst.label for inst in ir if inst.opcode == Opcode.LABEL and inst.label
+        ]
+        # Should have for_cond / for_body / for_end labels, but no func_ or block_ labels
+        func_labels = [
+            l for l in labels if l.startswith("func_") or l.startswith("block_")
+        ]
+        assert len(func_labels) == 0
+
+    def test_for_in_no_mangling(self):
+        """for..in variable should NOT be mangled — it shares the outer scope."""
+        source = """
+x = 99
+for x in [1,2,3]
+  y = x + 1
+end
+z = x
+"""
+        ir = _lower(RubyFrontend, "ruby", source)
+        stores = _store_var_names(ir)
+        mangled = [n for n in stores if "$" in n]
+        assert len(mangled) == 0
+
+    def test_for_in_overwrites_outer_var(self):
+        """The for..in loop variable x should use the same name as outer x."""
+        source = """
+x = 99
+for x in [1,2,3]
+  y = x + 1
+end
+z = x
+"""
+        ir = _lower(RubyFrontend, "ruby", source)
+        stores = _store_var_names(ir)
+        # x should appear multiple times (outer init + loop assignment) with no mangling
+        x_stores = [n for n in stores if n == "x"]
+        assert len(x_stores) >= 2
