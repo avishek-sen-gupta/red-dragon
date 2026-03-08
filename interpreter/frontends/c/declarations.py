@@ -12,6 +12,7 @@ from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
 from interpreter.frontends.c.node_types import CNodeType
+from interpreter.type_expr import scalar, pointer
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,27 @@ def extract_declarator_name(ctx: TreeSitterEmitContext, decl_node) -> str:
     return ctx.node_text(decl_node)
 
 
+def _count_pointer_depth(decl_node) -> int:
+    """Count how many pointer_declarator wrappers surround the identifier."""
+    depth = 0
+    current = decl_node
+    while current and current.type == CNodeType.POINTER_DECLARATOR:
+        depth += 1
+        current = current.child_by_field_name("declarator")
+    return depth
+
+
+def _wrap_pointer_type(base_type: str, depth: int) -> str:
+    """Wrap *base_type* in *depth* layers of ``Pointer[...]``.
+
+    Uses the TypeExpr ADT for formatting, then returns the string
+    representation (e.g. ``"Pointer[Int]"``, ``"Pointer[Pointer[Int]]"``).
+    """
+    from functools import reduce
+
+    return str(reduce(lambda inner, _: pointer(inner), range(depth), scalar(base_type)))
+
+
 def _extract_struct_type(ctx: TreeSitterEmitContext, node) -> str:
     """Return the struct type name if *node* has a struct_specifier, else ''."""
     for child in node.children:
@@ -64,8 +86,12 @@ def lower_declaration(ctx: TreeSitterEmitContext, node) -> None:
             _lower_init_declarator(
                 ctx, child, struct_type=struct_type, type_hint=type_hint
             )
-        elif child.type == CNodeType.IDENTIFIER:
-            var_name = ctx.node_text(child)
+        elif child.type in (CNodeType.IDENTIFIER, CNodeType.POINTER_DECLARATOR):
+            var_name = extract_declarator_name(ctx, child)
+            ptr_depth = _count_pointer_depth(child)
+            effective_type = (
+                _wrap_pointer_type(type_hint, ptr_depth) if ptr_depth else type_hint
+            )
             if struct_type:
                 val_reg = ctx.fresh_reg()
                 ctx.emit(
@@ -86,7 +112,7 @@ def lower_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 operands=[var_name, val_reg],
                 node=node,
             )
-            ctx.seed_var_type(var_name, type_hint)
+            ctx.seed_var_type(var_name, effective_type)
 
 
 def _lower_init_declarator(
@@ -97,6 +123,10 @@ def _lower_init_declarator(
     value_node = node.child_by_field_name("value")
 
     var_name = extract_declarator_name(ctx, decl_node) if decl_node else "__anon"
+    ptr_depth = _count_pointer_depth(decl_node) if decl_node else 0
+    effective_type = (
+        _wrap_pointer_type(type_hint, ptr_depth) if ptr_depth else type_hint
+    )
 
     if value_node:
         val_reg = ctx.lower_expr(value_node)
@@ -120,7 +150,7 @@ def _lower_init_declarator(
         operands=[var_name, val_reg],
         node=node,
     )
-    ctx.seed_var_type(var_name, type_hint)
+    ctx.seed_var_type(var_name, effective_type)
 
 
 def _find_function_declarator(node) -> object | None:
@@ -164,6 +194,10 @@ def lower_c_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 pname = extract_declarator_name(ctx, decl_node)
                 raw_type = extract_type_from_field(ctx, child, "type")
                 type_hint = normalize_type_hint(raw_type, ctx.type_map)
+                ptr_depth = _count_pointer_depth(decl_node)
+                effective_type = (
+                    _wrap_pointer_type(type_hint, ptr_depth) if ptr_depth else type_hint
+                )
                 sym_reg = ctx.fresh_reg()
                 ctx.emit(
                     Opcode.SYMBOLIC,
@@ -171,13 +205,13 @@ def lower_c_params(ctx: TreeSitterEmitContext, params_node) -> None:
                     operands=[f"{constants.PARAM_PREFIX}{pname}"],
                     node=child,
                 )
-                ctx.seed_register_type(sym_reg, type_hint)
-                ctx.seed_param_type(pname, type_hint)
+                ctx.seed_register_type(sym_reg, effective_type)
+                ctx.seed_param_type(pname, effective_type)
                 ctx.emit(
                     Opcode.STORE_VAR,
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
                 )
-                ctx.seed_var_type(pname, type_hint)
+                ctx.seed_var_type(pname, effective_type)
 
 
 def lower_function_def_c(ctx: TreeSitterEmitContext, node) -> None:

@@ -285,6 +285,46 @@ int add(int a, int b) {
         )
         assert env.var_types["pi"] == "Float"
 
+    def test_pointer_variable_typed_as_pointer_int(self):
+        """C int *ptr should infer var type Pointer[Int]."""
+        _instructions, env = _lower_and_infer(
+            "void f() { int *ptr; }",
+            "c",
+        )
+        assert env.var_types["ptr"] == "Pointer[Int]"
+
+    def test_double_pointer(self):
+        """C int **pp should infer Pointer[Pointer[Int]]."""
+        _instructions, env = _lower_and_infer(
+            "void f() { int **pp; }",
+            "c",
+        )
+        assert env.var_types["pp"] == "Pointer[Pointer[Int]]"
+
+    def test_pointer_parameter_type(self):
+        """C function with int *arr param should have Pointer[Int] in signature."""
+        _instructions, env = _lower_and_infer(
+            "void f(int *arr) { }",
+            "c",
+        )
+        assert "f" in env.func_signatures
+        param_types = dict(env.func_signatures["f"].params)
+        assert param_types["arr"] == "Pointer[Int]"
+
+    def test_pointer_return_type_propagated(self):
+        """Pointer variable typed as Pointer[Int] should propagate through LOAD_VAR."""
+        instructions, env = _lower_and_infer(
+            """\
+void f() {
+    int *p;
+    int *q = p;
+}
+""",
+            "c",
+        )
+        assert env.var_types["p"] == "Pointer[Int]"
+        assert env.var_types["q"] == "Pointer[Int]"
+
 
 # ---------------------------------------------------------------------------
 # Cross-language: same program, types inferred consistently
