@@ -13,7 +13,7 @@ from types import MappingProxyType
 
 from interpreter.function_signature import FunctionSignature
 from interpreter.type_environment import TypeEnvironment
-from interpreter.type_expr import TypeExpr, parse_type
+from interpreter.type_expr import TypeExpr, UNKNOWN
 
 logger = logging.getLogger(__name__)
 
@@ -22,26 +22,24 @@ logger = logging.getLogger(__name__)
 class TypeEnvironmentBuilder:
     """Mutable accumulator that frontends populate during lowering.
 
-    Stores type information as strings during lowering (frontends produce
-    strings). Converts to ``TypeExpr`` objects when building the final
-    ``TypeEnvironment``.
+    Stores type information as ``TypeExpr`` objects.  Frontends call
+    ``parse_type()`` at the seeding boundary (in ``TreeSitterEmitContext``)
+    so that all stored values are already structured ``TypeExpr``.
     """
 
-    register_types: dict[str, str] = field(default_factory=dict)
-    var_types: dict[str, str] = field(default_factory=dict)
-    func_return_types: dict[str, str] = field(default_factory=dict)
-    func_param_types: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
+    register_types: dict[str, TypeExpr] = field(default_factory=dict)
+    var_types: dict[str, TypeExpr] = field(default_factory=dict)
+    func_return_types: dict[str, TypeExpr] = field(default_factory=dict)
+    func_param_types: dict[str, list[tuple[str, TypeExpr]]] = field(
+        default_factory=dict
+    )
 
     def build(self) -> TypeEnvironment:
         """Freeze accumulated type info into an immutable TypeEnvironment."""
         func_signatures = _build_func_signatures(self)
         return TypeEnvironment(
-            register_types=MappingProxyType(
-                {k: parse_type(v) for k, v in self.register_types.items()}
-            ),
-            var_types=MappingProxyType(
-                {k: parse_type(v) for k, v in self.var_types.items()}
-            ),
+            register_types=MappingProxyType(dict(self.register_types)),
+            var_types=MappingProxyType(dict(self.var_types)),
             func_signatures=MappingProxyType(func_signatures),
         )
 
@@ -62,11 +60,8 @@ def _build_func_signatures(
 
     return {
         name: FunctionSignature(
-            params=tuple(
-                (pname, parse_type(ptype))
-                for pname, ptype in builder.func_param_types.get(name, [])
-            ),
-            return_type=parse_type(builder.func_return_types.get(name, "")),
+            params=tuple(builder.func_param_types.get(name, [])),
+            return_type=builder.func_return_types.get(name, UNKNOWN),
         )
         for name in user_facing_names
     }

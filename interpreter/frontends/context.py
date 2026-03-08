@@ -16,6 +16,7 @@ from interpreter.constants import CanonicalLiteral, Language
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.type_expr import parse_type
 
 logger = logging.getLogger(__name__)
 
@@ -178,23 +179,25 @@ class TreeSitterEmitContext:
     def seed_func_return_type(self, func_label: str, return_type: str) -> None:
         """Seed the return type for a function label."""
         if return_type:
-            self.type_env_builder.func_return_types[func_label] = return_type
+            self.type_env_builder.func_return_types[func_label] = parse_type(
+                return_type
+            )
 
     def seed_register_type(self, reg: str, type_name: str) -> None:
         """Seed the type for a register."""
         if reg and type_name:
-            self.type_env_builder.register_types[reg] = type_name
+            self.type_env_builder.register_types[reg] = parse_type(type_name)
 
     def seed_var_type(self, var_name: str, type_name: str) -> None:
         """Seed the type for a variable."""
         if var_name and type_name:
-            self.type_env_builder.var_types[var_name] = type_name
+            self.type_env_builder.var_types[var_name] = parse_type(type_name)
 
     def seed_param_type(self, param_name: str, type_hint: str) -> None:
         """Seed a parameter type for the current function."""
         if self._current_func_label:
             self.type_env_builder.func_param_types[self._current_func_label].append(
-                (param_name, type_hint or "")
+                (param_name, parse_type(type_hint or ""))
             )
 
     def node_text(self, node) -> str:
