@@ -10,7 +10,7 @@ This document describes the design of the frontend subsystem — the pipeline st
 2. [The Frontend Contract](#2-the-frontend-contract)
 3. [IR — The Target Format](#3-ir--the-target-format)
 4. [Tree-Sitter Parser Layer](#4-tree-sitter-parser-layer)
-5. [BaseFrontend — The Lowering Engine](#5-basefrontend--the-lowering-engine)
+5. [BaseFrontend — The Lowering Engine](#5-basefrontend--the-lowering-engine) (includes [Block-scope tracking](#block-scope-tracking))
 6. [Language-Specific Frontends](#6-language-specific-frontends)
 7. [LLM Frontend](#7-llm-frontend)
 8. [Chunked LLM Frontend](#8-chunked-llm-frontend)
@@ -366,6 +366,20 @@ flowchart TD
 | `_lower_class_def` | See [lowering patterns](#11-lowering-patterns-reference) | Class definitions |
 | `_lower_try_catch` | Labels per clause | Try/catch/finally |
 | `_lower_break` / `_lower_continue` | `BRANCH` | Loop control via label stack |
+
+### Block-scope tracking
+
+9 block-scoped frontends (Java, C, C++, C#, Rust, Go, Kotlin, Scala, TypeScript) set `BLOCK_SCOPED = True` on their frontend class. This enables LLVM-style variable name mangling in `TreeSitterEmitContext`:
+
+- **`lower_block()`** automatically calls `enter_block_scope()`/`exit_block_scope()` when the node type is in `block_node_types` and `block_scoped=True`
+- **`declare_block_var(name)`** — called by declaration lowerers (e.g. `lower_local_var_decl()`, `lower_let_decl()`). Returns the original name if no shadowing, or a mangled name (`x$1`, `x$2`) if the name shadows an outer scope
+- **`resolve_var(name)`** — called by `lower_identifier()` and `lower_store_target()` to resolve reads/writes through the scope stack
+- **Loop variables** — for-each style loops (`lower_enhanced_for`, `lower_range_for`, `lower_foreach`, `lower_for_in`, etc.) enter their own block scope before declaring the iteration variable, so `for (int x : list)` correctly shadows an outer `x`
+- **Catch clause variables** — each catch clause enters a block scope before declaring the exception variable via `declare_block_var()` in `lower_try_catch()`
+
+Function-scoped languages (Python, JavaScript `var`, Ruby, Lua, PHP, Pascal) set `BLOCK_SCOPED = False` and bypass scoping entirely.
+
+Mangled names carry `VarScopeInfo(original_name, scope_depth)` metadata, propagated through `TypeEnvironmentBuilder` to the final `TypeEnvironment.var_scope_metadata`. See the [Type System Design Document](type-system.md#block-scope-tracking-llvm-style) for the full algorithm.
 
 ### Loop context tracking
 
