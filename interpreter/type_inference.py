@@ -136,9 +136,11 @@ class _InferenceContext:
         default_factory=dict
     )
     current_func_label: str = ""
-    current_class_name: str = ""
-    class_method_types: dict[str, dict[str, TypeExpr]] = field(default_factory=dict)
-    field_types: dict[str, dict[str, TypeExpr]] = field(default_factory=dict)
+    current_class_name: TypeExpr = UNKNOWN
+    class_method_types: dict[TypeExpr, dict[str, TypeExpr]] = field(
+        default_factory=dict
+    )
+    field_types: dict[TypeExpr, dict[str, TypeExpr]] = field(default_factory=dict)
     array_element_types: dict[str, TypeExpr] = field(default_factory=dict)
     var_array_element_types: dict[str, TypeExpr] = field(default_factory=dict)
     register_source_var: dict[str, str] = field(default_factory=dict)
@@ -298,9 +300,9 @@ def _infer_label(
     elif inst.label.startswith(
         constants.CLASS_LABEL_PREFIX
     ) and not inst.label.startswith(constants.END_CLASS_LABEL_PREFIX):
-        ctx.current_class_name = inst.label.removeprefix(
-            constants.CLASS_LABEL_PREFIX
-        ).rsplit("_", 1)[0]
+        ctx.current_class_name = scalar(
+            inst.label.removeprefix(constants.CLASS_LABEL_PREFIX).rsplit("_", 1)[0]
+        )
         ctx.class_method_types.setdefault(ctx.current_class_name, {})
         ctx.current_func_label = ""
     else:
@@ -341,7 +343,7 @@ def _infer_symbolic(
         if operand.startswith("param:"):
             param_name = operand[len("param:") :]
             if param_name in _SELF_PARAM_NAMES:
-                ctx.register_types[inst.result_reg] = scalar(ctx.current_class_name)
+                ctx.register_types[inst.result_reg] = ctx.current_class_name
 
 
 def _infer_const(
@@ -515,7 +517,7 @@ def _infer_store_field(
     class_name = ctx.register_types.get(obj_reg, UNKNOWN)
     value_type = ctx.register_types.get(value_reg, UNKNOWN)
     if class_name and value_type:
-        ctx.field_types.setdefault(str(class_name), {})[field_name] = value_type
+        ctx.field_types.setdefault(class_name, {})[field_name] = value_type
 
 
 def _infer_load_field(
@@ -528,8 +530,8 @@ def _infer_load_field(
     obj_reg = str(inst.operands[0])
     field_name = str(inst.operands[1])
     class_name = ctx.register_types.get(obj_reg, UNKNOWN)
-    if class_name and str(class_name) in ctx.field_types:
-        field_type = ctx.field_types[str(class_name)].get(field_name, UNKNOWN)
+    if class_name and class_name in ctx.field_types:
+        field_type = ctx.field_types[class_name].get(field_name, UNKNOWN)
         if field_type:
             ctx.register_types[inst.result_reg] = field_type
 
@@ -544,8 +546,8 @@ def _infer_call_method(
     obj_reg = str(inst.operands[0])
     method_name = str(inst.operands[1])
     class_name = ctx.register_types.get(obj_reg, UNKNOWN)
-    if class_name and str(class_name) in ctx.class_method_types:
-        ret_type = ctx.class_method_types[str(class_name)].get(method_name, UNKNOWN)
+    if class_name and class_name in ctx.class_method_types:
+        ret_type = ctx.class_method_types[class_name].get(method_name, UNKNOWN)
         if ret_type:
             ctx.register_types[inst.result_reg] = ret_type
             return

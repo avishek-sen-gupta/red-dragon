@@ -1990,3 +1990,96 @@ class TestInferenceInternalTypeExpr:
         env = infer_types(instructions, _null_resolver())
         assert isinstance(env.register_types["%1"], ScalarType)
         assert env.register_types["%1"] == TypeName.ARRAY
+
+
+# ---------------------------------------------------------------------------
+# TypeExpr keys in field_types / class_method_types (no str() roundtrip)
+# ---------------------------------------------------------------------------
+
+
+class TestFieldTypeTableUsesTypeExprKeys:
+    """Verify field_types and class_method_types use TypeExpr keys, not strings."""
+
+    def test_store_field_uses_type_expr_class_key(self):
+        """STORE_FIELD on typed object → field lookup works with TypeExpr key."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.NEW_OBJECT, result_reg="%0", operands=["Dog"]),
+            _make_inst(Opcode.CONST, result_reg="%1", operands=["5"]),
+            _make_inst(Opcode.STORE_FIELD, operands=["%0", "age", "%1"]),
+            _make_inst(Opcode.LOAD_FIELD, result_reg="%2", operands=["%0", "age"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        # The result type should be TypeExpr, not str
+        assert isinstance(env.register_types["%2"], TypeExpr)
+        assert env.register_types["%2"] == "Int"
+
+    def test_self_typed_field_store_uses_type_expr_key(self):
+        """param:self typed as Dog → STORE_FIELD → LOAD_FIELD uses TypeExpr class key."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label="class_Dog_0"),
+            _make_inst(Opcode.BRANCH, label="end___init___0"),
+            _make_inst(Opcode.LABEL, label="func___init___0"),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:self"]),
+            _make_inst(Opcode.CONST, result_reg="%1", operands=["5"]),
+            _make_inst(Opcode.STORE_FIELD, operands=["%0", "age", "%1"]),
+            _make_inst(Opcode.RETURN, operands=[]),
+            _make_inst(Opcode.LABEL, label="end___init___0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%9",
+                operands=["<function:__init__@func___init___0>"],
+            ),
+            # get_age method
+            _make_inst(Opcode.BRANCH, label="end_get_age_0"),
+            _make_inst(Opcode.LABEL, label="func_get_age_0"),
+            _make_inst(Opcode.SYMBOLIC, result_reg="%2", operands=["param:self"]),
+            _make_inst(Opcode.LOAD_FIELD, result_reg="%3", operands=["%2", "age"]),
+            _make_inst(Opcode.RETURN, operands=["%3"]),
+            _make_inst(Opcode.LABEL, label="end_get_age_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%8",
+                operands=["<function:get_age@func_get_age_0>"],
+            ),
+            _make_inst(Opcode.LABEL, label="end_class_Dog_0"),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        # self registers typed as TypeExpr Dog
+        assert isinstance(env.register_types["%0"], ScalarType)
+        assert env.register_types["%0"] == "Dog"
+        # LOAD_FIELD result is TypeExpr
+        assert isinstance(env.register_types["%3"], TypeExpr)
+        assert env.register_types["%3"] == "Int"
+
+    def test_class_method_type_resolution_uses_type_expr_key(self):
+        """CALL_METHOD on typed object → resolves return type via TypeExpr class key."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label="class_Cat_0"),
+            _make_inst(Opcode.BRANCH, label="end_get_lives_0"),
+            _make_inst(Opcode.LABEL, label="func_get_lives_0"),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_get_lives_0"),
+            _make_inst(
+                Opcode.CONST,
+                result_reg="%1",
+                operands=["<function:get_lives@func_get_lives_0>"],
+            ),
+            _make_inst(Opcode.LABEL, label="end_class_Cat_0"),
+            # Call get_lives on a Cat object
+            _make_inst(Opcode.NEW_OBJECT, result_reg="%2", operands=["Cat"]),
+            _make_inst(
+                Opcode.CALL_METHOD,
+                result_reg="%3",
+                operands=["%2", "get_lives"],
+            ),
+        ]
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_get_lives_0": scalar("Int")}
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        # Method return type resolved as TypeExpr
+        assert isinstance(env.register_types["%3"], TypeExpr)
+        assert env.register_types["%3"] == "Int"

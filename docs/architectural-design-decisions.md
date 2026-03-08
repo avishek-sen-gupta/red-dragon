@@ -1539,7 +1539,7 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 
 - **Frontends** extract type text from ASTs → `TreeSitterEmitContext.seed_*()` calls `parse_type()` → `TypeEnvironmentBuilder` (stores `dict[str, TypeExpr]`)
 - **`infer_types()`** copies builder's `TypeExpr` values directly — no parsing needed
-- **`_InferenceContext`** operates on `TypeExpr` — all registers, vars, return types, field types store `TypeExpr`
+- **`_InferenceContext`** operates on `TypeExpr` — all registers, vars, return types, field types, class method types store `TypeExpr`; `current_class_name` is `TypeExpr`; `field_types` and `class_method_types` use `TypeExpr` outer keys (no `str()` conversion for dict lookup)
 - **`UNKNOWN` sentinel** (`UnknownType` singleton) replaces empty strings as the "type not yet known" marker; falsy for `if expr:` checks
 - **Builtin lookup tables** (`_BUILTIN_RETURN_TYPES`, `_BUILTIN_METHOD_RETURN_TYPES`) store `TypeExpr` values
 - **`TypeResolver`** and **`TypeConversionRules`** accept/return `TypeExpr`
