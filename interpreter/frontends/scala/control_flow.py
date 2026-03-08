@@ -88,11 +88,13 @@ def lower_for_expr(ctx: TreeSitterEmitContext, node) -> None:
         )
 
     ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.enter_block_scope()
 
     for gen in generators:
         gen_children = [c for c in gen.children if c.is_named]
         binding_node = gen_children[0] if gen_children else None
-        var_name = ctx.node_text(binding_node) if binding_node else "__for_var"
+        raw_name = ctx.node_text(binding_node) if binding_node else "__for_var"
+        var_name = ctx.declare_block_var(raw_name)
         next_reg = ctx.fresh_reg()
         ctx.emit(
             Opcode.CALL_FUNCTION,
@@ -122,6 +124,7 @@ def lower_for_expr(ctx: TreeSitterEmitContext, node) -> None:
     if body_node:
         ctx.lower_stmt(body_node)
 
+    ctx.exit_block_scope()
     ctx.emit(Opcode.BRANCH, label=loop_label)
     ctx.emit(Opcode.LABEL, label=end_label)
 

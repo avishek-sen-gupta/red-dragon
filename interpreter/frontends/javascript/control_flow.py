@@ -84,7 +84,7 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
         node=node,
     )
 
-    var_name = _extract_var_name(ctx, left) if left else "__for_in_var"
+    raw_name = _extract_var_name(ctx, left) if left else "__for_in_var"
 
     idx_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
@@ -113,6 +113,8 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.enter_block_scope()
+    var_name = ctx.declare_block_var(raw_name)
     elem_reg = ctx.fresh_reg()
     ctx.emit(
         Opcode.LOAD_INDEX,
@@ -127,6 +129,7 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
+    ctx.exit_block_scope()
 
     ctx.emit(Opcode.LABEL, label=update_label)
     one_reg = ctx.fresh_reg()
@@ -150,7 +153,7 @@ def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
     body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
     iter_reg = ctx.lower_expr(right)
-    var_name = _extract_var_name(ctx, left) if left else "__for_of_var"
+    raw_name = _extract_var_name(ctx, left) if left else "__for_of_var"
 
     idx_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
@@ -171,6 +174,8 @@ def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.enter_block_scope()
+    var_name = ctx.declare_block_var(raw_name)
     elem_reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
     if var_name:
@@ -181,6 +186,7 @@ def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
+    ctx.exit_block_scope()
 
     ctx.emit(Opcode.LABEL, label=update_label)
     one_reg = ctx.fresh_reg()

@@ -121,9 +121,9 @@ def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
     right_node = node.child_by_field_name(ctx.constants.assign_right_field)
     body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
-    var_name = "__range_var"
+    raw_name = "__range_var"
     if declarator_node:
-        var_name = extract_declarator_name(ctx, declarator_node)
+        raw_name = extract_declarator_name(ctx, declarator_node)
 
     iter_reg = ctx.lower_expr(right_node) if right_node else ctx.fresh_reg()
 
@@ -146,6 +146,8 @@ def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.enter_block_scope()
+    var_name = ctx.declare_block_var(raw_name)
     elem_reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
     ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
@@ -155,6 +157,7 @@ def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
+    ctx.exit_block_scope()
 
     ctx.emit(Opcode.LABEL, label=update_label)
     one_reg = ctx.fresh_reg()
@@ -172,33 +175,67 @@ def lower_throw(ctx: TreeSitterEmitContext, node) -> None:
     lower_raise_or_throw(ctx, node, keyword="throw")
 
 
+def _extract_catch_param(
+    ctx: TreeSitterEmitContext, param_decl
+) -> tuple[str | None, str | None]:
+    """Extract (variable, type) from a C++ catch parameter_declaration.
+
+    Handles both direct identifiers and reference_declarator wrappers
+    (e.g., `std::exception& e`).
+    """
+    # Find identifier — may be a direct child or nested inside reference_declarator
+    id_node = next(
+        (c for c in param_decl.children if c.type == CppNodeType.IDENTIFIER),
+        None,
+    )
+    if id_node is None:
+        ref_decl = next(
+            (
+                c
+                for c in param_decl.children
+                if c.type == CppNodeType.REFERENCE_DECLARATOR
+            ),
+            None,
+        )
+        if ref_decl:
+            id_node = next(
+                (c for c in ref_decl.children if c.type == CppNodeType.IDENTIFIER),
+                None,
+            )
+    exc_var = ctx.node_text(id_node) if id_node else None
+    type_nodes = [
+        c
+        for c in param_decl.children
+        if c.is_named and c != id_node and c.type != CppNodeType.REFERENCE_DECLARATOR
+    ]
+    exc_type = ctx.node_text(type_nodes[0]) if type_nodes else None
+    return exc_var, exc_type
+
+
 def lower_try(ctx: TreeSitterEmitContext, node) -> None:
     """Lower C++ try/catch."""
     body_node = node.child_by_field_name("body")
     catch_clauses = []
     for child in node.children:
         if child.type == CppNodeType.CATCH_CLAUSE:
-            param_node = next(
-                (c for c in child.children if c.type == CppNodeType.CATCH_DECLARATOR),
-                None,
-            )
             exc_var = None
             exc_type = None
-            if param_node:
-                id_node = next(
+            # C++ catch uses parameter_list > parameter_declaration
+            param_list = next(
+                (c for c in child.children if c.type == CppNodeType.PARAMETER_LIST),
+                None,
+            )
+            if param_list:
+                param_decl = next(
                     (
                         c
-                        for c in param_node.children
-                        if c.type == CppNodeType.IDENTIFIER
+                        for c in param_list.children
+                        if c.type == CppNodeType.PARAMETER_DECLARATION
                     ),
                     None,
                 )
-                exc_var = ctx.node_text(id_node) if id_node else None
-                type_nodes = [
-                    c for c in param_node.children if c.is_named and c != id_node
-                ]
-                if type_nodes:
-                    exc_type = ctx.node_text(type_nodes[0])
+                if param_decl:
+                    exc_var, exc_type = _extract_catch_param(ctx, param_decl)
             catch_body = child.child_by_field_name("body")
             catch_clauses.append(
                 {"body": catch_body, "variable": exc_var, "type": exc_type}
