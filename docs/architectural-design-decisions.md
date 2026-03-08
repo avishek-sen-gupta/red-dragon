@@ -1537,8 +1537,8 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 
 **Type representation boundary (updated 2026-03-08):** The type inference engine (`_InferenceContext`) now operates on `TypeExpr` objects internally.  The `parse_type()` boundary has moved upstream: `infer_types()` parses the builder's string seeds into `TypeExpr` before starting the inference walk.  After convergence, `TypeEnvironment` is built directly from `TypeExpr` values — no roundtrip through strings.
 
-- **Frontends** produce strings → `TypeEnvironmentBuilder` (stores `dict[str, str]`)
-- **`infer_types()`** calls `parse_type()` on builder fields at the boundary
+- **Frontends** extract type text from ASTs → `TreeSitterEmitContext.seed_*()` calls `parse_type()` → `TypeEnvironmentBuilder` (stores `dict[str, TypeExpr]`)
+- **`infer_types()`** copies builder's `TypeExpr` values directly — no parsing needed
 - **`_InferenceContext`** operates on `TypeExpr` — all registers, vars, return types, field types store `TypeExpr`
 - **`UNKNOWN` sentinel** (`UnknownType` singleton) replaces empty strings as the "type not yet known" marker; falsy for `if expr:` checks
 - **Builtin lookup tables** (`_BUILTIN_RETURN_TYPES`, `_BUILTIN_METHOD_RETURN_TYPES`) store `TypeExpr` values
