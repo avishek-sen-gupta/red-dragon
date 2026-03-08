@@ -120,6 +120,7 @@ class _InferenceContext:
     class_method_types: dict[str, dict[str, str]] = field(default_factory=dict)
     field_types: dict[str, dict[str, str]] = field(default_factory=dict)
     array_element_types: dict[str, str] = field(default_factory=dict)
+    var_array_element_types: dict[str, str] = field(default_factory=dict)
     register_source_var: dict[str, str] = field(default_factory=dict)
 
     def store_var_type(self, name: str, type_name: str) -> None:
@@ -149,6 +150,28 @@ class _InferenceContext:
         for scope_dict in self.scoped_var_types.values():
             result.update(scope_dict)
         return result
+
+
+def _promote_array_element_types(ctx: _InferenceContext) -> None:
+    """Promote Array variables with known element types to Array[ElementType].
+
+    After inference converges, variables typed as ``Array`` (or untyped) that
+    have known element types are promoted to ``Array[ElementType]``.  Register
+    types for array registers are also promoted.
+    """
+    from interpreter.constants import TypeName
+
+    for var_name, elem_type in ctx.var_array_element_types.items():
+        for scope_dict in ctx.scoped_var_types.values():
+            if var_name in scope_dict:
+                current = scope_dict[var_name]
+                if current == TypeName.ARRAY:
+                    scope_dict[var_name] = f"Array[{elem_type}]"
+                    logger.debug("Promoted %s: Array → Array[%s]", var_name, elem_type)
+
+    for reg, elem_type in ctx.array_element_types.items():
+        if ctx.register_types.get(reg) == TypeName.ARRAY:
+            ctx.register_types[reg] = f"Array[{elem_type}]"
 
 
 def infer_types(
@@ -186,6 +209,9 @@ def infer_types(
         passes += 1
 
     logger.debug("Type inference converged after %d pass(es)", passes)
+
+    # Promote Array variables with known element types to Array[ElementType]
+    _promote_array_element_types(ctx)
 
     # Use builder for final assembly
     flat_vars = ctx.flat_var_types()
@@ -313,6 +339,11 @@ def _infer_load_var(
     var_type = ctx.lookup_var_type(str(name)) if name else ""
     if inst.result_reg and var_type:
         ctx.register_types[inst.result_reg] = var_type
+    # Propagate array element types from variable to register
+    if inst.result_reg and str(name) in ctx.var_array_element_types:
+        ctx.array_element_types[inst.result_reg] = ctx.var_array_element_types[
+            str(name)
+        ]
 
 
 def _infer_store_var(
@@ -327,6 +358,9 @@ def _infer_store_var(
         value_reg = str(inst.operands[1])
         if value_reg in ctx.register_types:
             ctx.store_var_type(str(name), ctx.register_types[value_reg])
+        # Track array element types at the variable level
+        if value_reg in ctx.array_element_types:
+            ctx.var_array_element_types[str(name)] = ctx.array_element_types[value_reg]
 
 
 def _infer_binop(

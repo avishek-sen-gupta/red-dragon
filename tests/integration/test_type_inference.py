@@ -2325,3 +2325,44 @@ class TestKotlinGenericTypeInference:
             "kotlin",
         )
         assert env.var_types["m"] == "Map[String, Int]"
+
+
+# ---------------------------------------------------------------------------
+# Array element type promotion → Array[ElementType]
+# ---------------------------------------------------------------------------
+
+
+class TestArrayElementTypePromotion:
+    """End-to-end: array element types are promoted to Array[ElementType]."""
+
+    def test_python_list_element_type_int(self):
+        """Python items = [1, 2, 3] should infer Array[Int] for items."""
+        instructions, env = _lower_and_infer(
+            "items = [1, 2, 3]",
+            "python",
+        )
+        assert env.var_types["items"] == "Array[Int]"
+
+    def test_python_list_element_type_string(self):
+        """Python names = ['a', 'b'] should infer Array[String] for names."""
+        instructions, env = _lower_and_infer(
+            'names = ["a", "b"]',
+            "python",
+        )
+        assert env.var_types["names"] == "Array[String]"
+
+    def test_javascript_array_element_type(self):
+        """JS const items = [1, 2, 3] should infer Array[Int] for items."""
+        instructions, env = _lower_and_infer(
+            "const items = [1, 2, 3];",
+            "javascript",
+        )
+        assert env.var_types["items"] == "Array[Int]"
+
+    def test_ruby_array_element_type(self):
+        """Ruby items = [1, 2, 3] should infer Array[Int] for items."""
+        instructions, env = _lower_and_infer(
+            "items = [1, 2, 3]",
+            "ruby",
+        )
+        assert env.var_types["items"] == "Array[Int]"
