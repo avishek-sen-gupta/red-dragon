@@ -2,7 +2,7 @@
 
 from interpreter.type_node import TypeNode
 from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
-from interpreter.constants import TypeName
+from interpreter.constants import TypeName, Variance
 from interpreter.type_expr import (
     ScalarType,
     ParameterizedType,
@@ -662,3 +662,88 @@ class TestTypeGraphInterfaceExtension:
             {"Dog": ("Comparable",)}
         )
         assert g.is_subtype_expr(scalar("Dog"), scalar("Comparable"))
+
+
+class TestTypeGraphVariance:
+    """Tests for variance-aware parameterized type subtyping and LUB."""
+
+    def _graph(self) -> TypeGraph:
+        return TypeGraph(DEFAULT_TYPE_NODES)
+
+    def test_covariant_default(self):
+        """Default variance is covariant: List[Int] ⊆ List[Number]."""
+        g = self._graph()
+        child = ParameterizedType("List", (scalar("Int"),))
+        parent = ParameterizedType("List", (scalar("Number"),))
+        assert g.is_subtype_expr(child, parent)
+
+    def test_invariant_blocks_subtype(self):
+        """Invariant: MutableList[Int] is NOT ⊆ MutableList[Number]."""
+        g = self._graph().with_variance({"MutableList": (Variance.INVARIANT,)})
+        child = ParameterizedType("MutableList", (scalar("Int"),))
+        parent = ParameterizedType("MutableList", (scalar("Number"),))
+        assert not g.is_subtype_expr(child, parent)
+
+    def test_invariant_allows_equal(self):
+        """Invariant: MutableList[Int] ⊆ MutableList[Int] (same type)."""
+        g = self._graph().with_variance({"MutableList": (Variance.INVARIANT,)})
+        t = ParameterizedType("MutableList", (scalar("Int"),))
+        assert g.is_subtype_expr(t, t)
+
+    def test_contravariant_subtype(self):
+        """Contravariant: Consumer[Number] ⊆ Consumer[Int]."""
+        g = self._graph().with_variance({"Consumer": (Variance.CONTRAVARIANT,)})
+        child = ParameterizedType("Consumer", (scalar("Number"),))
+        parent = ParameterizedType("Consumer", (scalar("Int"),))
+        assert g.is_subtype_expr(child, parent)
+
+    def test_contravariant_blocks_covariant(self):
+        """Contravariant: Consumer[Int] is NOT ⊆ Consumer[Number]."""
+        g = self._graph().with_variance({"Consumer": (Variance.CONTRAVARIANT,)})
+        child = ParameterizedType("Consumer", (scalar("Int"),))
+        parent = ParameterizedType("Consumer", (scalar("Number"),))
+        assert not g.is_subtype_expr(child, parent)
+
+    def test_mixed_variance(self):
+        """Map with invariant key and covariant value."""
+        g = self._graph().with_variance(
+            {"Map": (Variance.INVARIANT, Variance.COVARIANT)}
+        )
+        # Map[String, Int] ⊆ Map[String, Number] — key invariant (ok, same), value covariant (ok)
+        assert g.is_subtype_expr(
+            ParameterizedType("Map", (scalar("String"), scalar("Int"))),
+            ParameterizedType("Map", (scalar("String"), scalar("Number"))),
+        )
+        # Map[Int, Int] NOT ⊆ Map[Number, Int] — key invariant (fails)
+        assert not g.is_subtype_expr(
+            ParameterizedType("Map", (scalar("Int"), scalar("Int"))),
+            ParameterizedType("Map", (scalar("Number"), scalar("Int"))),
+        )
+
+    def test_invariant_lub_same_type(self):
+        """LUB of MutableList[Int] and MutableList[Int] = MutableList[Int]."""
+        g = self._graph().with_variance({"MutableList": (Variance.INVARIANT,)})
+        t = ParameterizedType("MutableList", (scalar("Int"),))
+        assert g.common_supertype_expr(t, t) == t
+
+    def test_invariant_lub_different_falls_to_any(self):
+        """LUB of MutableList[Int] and MutableList[String] = Any."""
+        g = self._graph().with_variance({"MutableList": (Variance.INVARIANT,)})
+        a = ParameterizedType("MutableList", (scalar("Int"),))
+        b = ParameterizedType("MutableList", (scalar("String"),))
+        assert g.common_supertype_expr(a, b) == scalar("Any")
+
+    def test_with_variance_preserves_nodes(self):
+        """with_variance returns a graph with same nodes but new variance."""
+        g = self._graph()
+        g2 = g.with_variance({"MutableList": (Variance.INVARIANT,)})
+        # Original graph unchanged — covariant default
+        assert g.is_subtype_expr(
+            ParameterizedType("List", (scalar("Int"),)),
+            ParameterizedType("List", (scalar("Number"),)),
+        )
+        # New graph has invariant MutableList
+        assert not g2.is_subtype_expr(
+            ParameterizedType("MutableList", (scalar("Int"),)),
+            ParameterizedType("MutableList", (scalar("Number"),)),
+        )
