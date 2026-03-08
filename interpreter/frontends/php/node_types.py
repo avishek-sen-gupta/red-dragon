@@ -65,6 +65,7 @@ class PHPNodeType:
     FOREACH_STATEMENT = "foreach_statement"
     FUNCTION_DEFINITION = "function_definition"
     METHOD_DECLARATION = "method_declaration"
+    BASE_CLAUSE = "base_clause"
     CLASS_DECLARATION = "class_declaration"
     COMPOUND_STATEMENT = "compound_statement"
     PROGRAM = "program"

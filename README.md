@@ -6,7 +6,7 @@
 
 ![CI](https://github.com/avishek-sen-gupta/red-dragon/actions/workflows/ci.yml/badge.svg) [![Technical Presentation](https://img.shields.io/badge/Technical-slides-blue)](presentation/technical-presentation.html) [![Overview Presentation](https://img.shields.io/badge/Overview-slides-green)](presentation/overview-presentation.html) [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE.md)
 
-**RedDragon** is an experiment in building infrastructure for **analysing frequently-incomplete code** — the kind found in legacy code, decompiled binaries, partial extracts, and codebases with missing dependencies. It explores three ideas:
+**RedDragon** is an experiment in building infrastructure for **"executing" frequently-incomplete code** — the kind found in legacy code, decompiled binaries, partial extracts, and codebases with missing dependencies. It explores three ideas:
 
 1. **Deterministic language frontends with LLM-assisted repair** — tree-sitter frontends (15 languages) and a ProLeap bridge (COBOL) handle well-formed source deterministically. When tree-sitter hits malformed syntax, an optional **LLM repair loop** fixes only the broken fragments and re-parses, maximising deterministic coverage for real-world incomplete code. All paths produce the same universal [27-opcode IR](docs/ir-reference.md).
 2. **Full LLM frontends for unsupported languages** — for languages without a tree-sitter frontend, an LLM lowers source to IR entirely — supporting any language without new parser code. A chunked variant splits large files into per-function chunks via tree-sitter, lowering each independently. Both produce the same [27-opcode IR](docs/ir-reference.md).
@@ -14,7 +14,9 @@
 
 When source is complete and all dependencies are present, the entire pipeline (parse → lower → execute) is **deterministic with 0 LLM calls**. LLMs are only invoked at the boundaries where information is genuinely missing.
 
-Concretely, RedDragon:
+**Note that "execution" is a tricky concept, when dealing with these many languages.** It is important to cover the big-ticket features of the supported languages, but this project makes no claims to cover all features of every language exhaustively, because that would imply (potentially) writing full-fledged compiler frontends for every language. I have taken some liberties in terms of how some of the language features are implemented at a global / language level, and I hope that this will not detract from the inherent usefulness of this toolkit.
+
+Concretely, RedDragon does the following:
 
 - **Parses and lowers** source in 15 languages via tree-sitter (with optional LLM-assisted repair), COBOL via ProLeap bridge, or **any language** via full LLM-based lowering — each frontend owns its parsing internally; callers only provide `source: bytes`
 - **Produces** a universal flattened three-address code [IR (27 opcodes)](docs/ir-reference.md) with structured source location traceability
@@ -50,6 +52,7 @@ The result is an immutable `TypeEnvironment` lookup table, backed by a pluggable
 The VM executes programs deterministically, tracking data flow through incomplete programs with missing imports or unknown externals entirely **without LLM calls**.
 
 - **Write-time type coercion** — coerces register values to their statically-inferred types at the point of write (e.g. Float→Int via `math.trunc` for array indices), so all downstream reads get correctly-typed values
+- **Class inheritance and method resolution** — all 10 OOP frontends (Java, Python, C#, Kotlin, Ruby, JavaScript, TypeScript, Scala, PHP, C++) extract parent class information into extended class references (`<class:Dog@label:Animal>`). The registry pre-linearizes parent chains via BFS, and the executor walks the parent chain on method miss — enabling inherited method dispatch, method overrides, and multi-level inheritance across all supported languages
 - **LLM plausible-value resolver** — optionally replaces symbolic placeholders with concrete values for unresolved function/method calls
 
 ## How it works

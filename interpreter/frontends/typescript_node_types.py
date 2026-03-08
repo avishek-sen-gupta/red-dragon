@@ -28,6 +28,7 @@ class TypeScriptNodeType:
 
     FUNCTION_DECLARATION = "function_declaration"
     CLASS_DECLARATION = "class_declaration"
+    CLASS_HERITAGE = "class_heritage"
     INTERFACE_DECLARATION = "interface_declaration"
     ENUM_DECLARATION = "enum_declaration"
     TYPE_ALIAS_DECLARATION = "type_alias_declaration"
