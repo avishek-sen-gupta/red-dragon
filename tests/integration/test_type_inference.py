@@ -2239,3 +2239,89 @@ class TestVarTypeScopingCrossLanguage:
             env.func_signatures["make_int"].return_type
             != env.func_signatures["make_str"].return_type
         )
+
+
+# ---------------------------------------------------------------------------
+# Generic type extraction → type inference (end-to-end)
+# ---------------------------------------------------------------------------
+
+
+class TestJavaGenericTypeInference:
+    """End-to-end: Java generic type annotations flow through inference."""
+
+    def test_list_of_string_var_type(self):
+        instructions, env = _lower_and_infer(
+            "class M { void m() { List<String> items = new ArrayList<>(); } }",
+            "java",
+        )
+        assert env.var_types["items"] == "List[String]"
+
+    def test_map_generic_normalises_inner_types(self):
+        instructions, env = _lower_and_infer(
+            "class M { void m() { Map<String, Integer> m = new HashMap<>(); } }",
+            "java",
+        )
+        assert env.var_types["m"] == "Map[String, Int]"
+
+    def test_generic_return_type_in_signature(self):
+        instructions, env = _lower_and_infer(
+            "class M { List<String> getNames() { return null; } }",
+            "java",
+        )
+        assert any(
+            sig.return_type == "List[String]" for sig in env.func_signatures.values()
+        )
+
+
+class TestCSharpGenericTypeInference:
+    """End-to-end: C# generic type annotations flow through inference."""
+
+    def test_list_of_string_var_type(self):
+        instructions, env = _lower_and_infer(
+            "class M { void m() { List<string> items = new List<string>(); } }",
+            "csharp",
+        )
+        assert env.var_types["items"] == "List[String]"
+
+    def test_dictionary_normalises_inner_types(self):
+        instructions, env = _lower_and_infer(
+            "class M { void m() { Dictionary<string, int> d = new Dictionary<string, int>(); } }",
+            "csharp",
+        )
+        assert env.var_types["d"] == "Dictionary[String, Int]"
+
+
+class TestScalaGenericTypeInference:
+    """End-to-end: Scala generic type annotations flow through inference."""
+
+    def test_list_of_string_var_type(self):
+        instructions, env = _lower_and_infer(
+            'object M { val items: List[String] = List("a") }',
+            "scala",
+        )
+        assert env.var_types["items"] == "List[String]"
+
+    def test_map_generic_var_type(self):
+        instructions, env = _lower_and_infer(
+            "object M { val m: Map[String, Int] = Map() }",
+            "scala",
+        )
+        assert env.var_types["m"] == "Map[String, Int]"
+
+
+class TestKotlinGenericTypeInference:
+    """End-to-end: Kotlin generic type annotations flow through inference."""
+
+    def test_list_of_string_var_type(self):
+        instructions, env = _lower_and_infer(
+            'fun main() { val items: List<String> = listOf("a") }',
+            "kotlin",
+        )
+        assert env.var_types["items"] == "List[String]"
+
+    def test_map_generic_var_type(self):
+        instructions, env = _lower_and_infer(
+            "fun main() { val m: Map<String, Int> = mapOf() }",
+            "kotlin",
+        )
+        assert env.var_types["m"] == "Map[String, Int]"

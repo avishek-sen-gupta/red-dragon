@@ -29,7 +29,14 @@ Concretely, RedDragon does the following:
 
 RedDragon has a two-phase type system: **frontend extraction** and **static inference**.
 
-**Frontend type extraction** — 13 statically-typed frontends extract type annotations from tree-sitter ASTs during lowering and normalize them to canonical names (`Int`, `Float`, `Bool`, `String`, etc.). Seeds are accumulated in a `TypeEnvironmentBuilder` covering register types, variable types, function return types, and parameter types. IR instructions stay purely about computation and control flow. **Parameterized types** (e.g. `Pointer[Int]`, `Pointer[Pointer[Int]]`) are supported via the `TypeExpr` algebraic data type — the C/C++ frontend extracts pointer declarator nesting to produce structured pointer types instead of collapsing them to `Int`.
+**Frontend type extraction** — 13 statically-typed frontends extract type annotations from tree-sitter ASTs during lowering and normalize them to canonical names (`Int`, `Float`, `Bool`, `String`, etc.). Seeds are accumulated in a `TypeEnvironmentBuilder` covering register types, variable types, function return types, and parameter types. IR instructions stay purely about computation and control flow. **Parameterized types** (e.g. `Pointer[Int]`, `List[String]`, `Map[String, Int]`) are supported via the `TypeExpr` algebraic data type:
+- **C/C++**: pointer declarator nesting → `Pointer[Int]`, `Pointer[Pointer[Int]]`
+- **Java**: `List<String>`, `Map<String, Integer>` → `List[String]`, `Map[String, Int]`
+- **C#**: `List<string>`, `Dictionary<string, int>` → `List[String]`, `Dictionary[String, Int]`
+- **Scala**: `List[String]`, `Map[String, Int]` → preserved as-is with normalised components
+- **Kotlin**: `List<String>`, `Map<String, Int>` → `List[String]`, `Map[String, Int]`
+
+Generic types are extracted structurally from tree-sitter ASTs (not string replacement), with each component normalised through the frontend's type map. Nested generics (e.g. `List<Map<String, Integer>>`) are handled recursively. Seeded types from explicit declarations take precedence over types inferred from constructor calls.
 
 **Static type inference** — `infer_types()` accepts the pre-seeded builder and propagates types through register/variable chains across 15 opcodes (CONST through RETURN). The pass runs to fixpoint, resolving forward references where a function calls another function defined later in the IR. The inference pass handles:
 

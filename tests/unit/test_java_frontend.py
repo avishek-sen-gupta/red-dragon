@@ -5,11 +5,20 @@ from __future__ import annotations
 from interpreter.frontends.java import JavaFrontend
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.type_environment_builder import TypeEnvironmentBuilder
 
 
 def _parse_java(source: str) -> list[IRInstruction]:
     frontend = JavaFrontend(TreeSitterParserFactory(), "java")
     return frontend.lower(source.encode("utf-8"))
+
+
+def _parse_java_with_types(
+    source: str,
+) -> tuple[list[IRInstruction], TypeEnvironmentBuilder]:
+    frontend = JavaFrontend(TreeSitterParserFactory(), "java")
+    instructions = frontend.lower(source.encode("utf-8"))
+    return instructions, frontend.type_env_builder
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:
@@ -850,3 +859,55 @@ class M {
         instructions = _parse_java(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+
+class TestJavaGenericTypeSeeding:
+    """Verify that Java generic types (List<String>, Map<K,V>) are extracted
+    as parameterised bracket-notation strings in the TypeEnvironmentBuilder."""
+
+    def test_local_var_list_of_string(self):
+        """List<String> items = ... should seed var_types['items'] = 'List[String]'."""
+        source = "class M { void m() { List<String> items = new ArrayList<>(); } }"
+        _, builder = _parse_java_with_types(source)
+        assert builder.var_types["items"] == "List[String]"
+
+    def test_local_var_map_of_string_integer(self):
+        """Map<String, Integer> m = ... should seed 'Map[String, Int]' (Integer normalised)."""
+        source = "class M { void m() { Map<String, Integer> m = new HashMap<>(); } }"
+        _, builder = _parse_java_with_types(source)
+        assert builder.var_types["m"] == "Map[String, Int]"
+
+    def test_nested_generic_type(self):
+        """List<Map<String, Integer>> should produce 'List[Map[String, Int]]'."""
+        source = "class M { void m() { List<Map<String, Integer>> x = null; } }"
+        _, builder = _parse_java_with_types(source)
+        assert builder.var_types["x"] == "List[Map[String, Int]]"
+
+    def test_method_return_generic_type(self):
+        """Method returning List<String> should seed func_return_types with 'List[String]'."""
+        source = "class M { List<String> getNames() { return null; } }"
+        _, builder = _parse_java_with_types(source)
+        return_types = builder.func_return_types
+        assert any(v == "List[String]" for v in return_types.values())
+
+    def test_param_generic_type(self):
+        """Parameter List<String> items should seed param type 'List[String]'."""
+        source = "class M { void process(List<String> items) { } }"
+        _, builder = _parse_java_with_types(source)
+        param_types = builder.func_param_types
+        assert any(
+            any(ptype == "List[String]" for _, ptype in params)
+            for params in param_types.values()
+        )
+
+    def test_field_generic_type(self):
+        """Field List<String> names; should seed var_types['names'] = 'List[String]'."""
+        source = "class M { List<String> names = new ArrayList<>(); }"
+        _, builder = _parse_java_with_types(source)
+        assert builder.var_types["names"] == "List[String]"
+
+    def test_non_generic_type_unchanged(self):
+        """Plain int x = 42; should still seed 'Int' (regression check)."""
+        source = "class M { void m() { int x = 42; } }"
+        _, builder = _parse_java_with_types(source)
+        assert builder.var_types["x"] == "Int"

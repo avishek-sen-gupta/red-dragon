@@ -5,11 +5,20 @@ from __future__ import annotations
 from interpreter.frontends.csharp import CSharpFrontend
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.type_environment_builder import TypeEnvironmentBuilder
 
 
 def _parse_and_lower(source: str) -> list[IRInstruction]:
     frontend = CSharpFrontend(TreeSitterParserFactory(), "csharp")
     return frontend.lower(source.encode("utf-8"))
+
+
+def _parse_csharp_with_types(
+    source: str,
+) -> tuple[list[IRInstruction], TypeEnvironmentBuilder]:
+    frontend = CSharpFrontend(TreeSitterParserFactory(), "csharp")
+    instructions = frontend.lower(source.encode("utf-8"))
+    return instructions, frontend.type_env_builder
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:
@@ -1053,3 +1062,49 @@ class C {
         ir = _parse_and_lower(source)
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("result" in inst.operands for inst in stores)
+
+
+class TestCSharpGenericTypeSeeding:
+    """Verify that C# generic types (List<string>, Dictionary<K,V>) are extracted
+    as parameterised bracket-notation strings in the TypeEnvironmentBuilder."""
+
+    def test_local_var_list_of_string(self):
+        """List<string> items = ... should seed var_types['items'] = 'List[String]'."""
+        source = "class M { void m() { List<string> items = new List<string>(); } }"
+        _, builder = _parse_csharp_with_types(source)
+        assert builder.var_types["items"] == "List[String]"
+
+    def test_local_var_dictionary(self):
+        """Dictionary<string, int> d = ... should seed 'Dictionary[String, Int]'."""
+        source = "class M { void m() { Dictionary<string, int> d = new Dictionary<string, int>(); } }"
+        _, builder = _parse_csharp_with_types(source)
+        assert builder.var_types["d"] == "Dictionary[String, Int]"
+
+    def test_nested_generic_type(self):
+        """List<Dictionary<string, int>> should produce 'List[Dictionary[String, Int]]'."""
+        source = "class M { void m() { List<Dictionary<string, int>> x = null; } }"
+        _, builder = _parse_csharp_with_types(source)
+        assert builder.var_types["x"] == "List[Dictionary[String, Int]]"
+
+    def test_method_return_generic_type(self):
+        """Method returning List<string> should seed func_return_types with 'List[String]'."""
+        source = "class M { List<string> GetNames() { return null; } }"
+        _, builder = _parse_csharp_with_types(source)
+        return_types = builder.func_return_types
+        assert any(v == "List[String]" for v in return_types.values())
+
+    def test_param_generic_type(self):
+        """Parameter List<string> items should seed param type 'List[String]'."""
+        source = "class M { void Process(List<string> items) { } }"
+        _, builder = _parse_csharp_with_types(source)
+        param_types = builder.func_param_types
+        assert any(
+            any(ptype == "List[String]" for _, ptype in params)
+            for params in param_types.values()
+        )
+
+    def test_non_generic_type_unchanged(self):
+        """Plain int x = 42; should still seed 'Int' (regression check)."""
+        source = "class M { void m() { int x = 42; } }"
+        _, builder = _parse_csharp_with_types(source)
+        assert builder.var_types["x"] == "Int"

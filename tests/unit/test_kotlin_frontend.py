@@ -5,12 +5,21 @@ from __future__ import annotations
 from interpreter.frontends.kotlin import KotlinFrontend
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
 def _parse_kotlin(source: str) -> list[IRInstruction]:
     frontend = KotlinFrontend(TreeSitterParserFactory(), "kotlin")
     return frontend.lower(source.encode("utf-8"))
+
+
+def _parse_kotlin_with_types(
+    source: str,
+) -> tuple[list[IRInstruction], TypeEnvironmentBuilder]:
+    frontend = KotlinFrontend(TreeSitterParserFactory(), "kotlin")
+    instructions = frontend.lower(source.encode("utf-8"))
+    return instructions, frontend.type_env_builder
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:
@@ -851,3 +860,49 @@ fun main() {
         instructions = _parse_kotlin(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+
+class TestKotlinGenericTypeSeeding:
+    """Verify that Kotlin generic types (List<String>, Map<K,V>) are extracted
+    as parameterised bracket-notation strings in the TypeEnvironmentBuilder."""
+
+    def test_val_list_of_string(self):
+        """val items: List<String> = ... should seed var_types['items'] = 'List[String]'."""
+        source = 'fun main() { val items: List<String> = listOf("a") }'
+        _, builder = _parse_kotlin_with_types(source)
+        assert builder.var_types["items"] == "List[String]"
+
+    def test_val_map_of_string_int(self):
+        """val m: Map<String, Int> = ... should seed 'Map[String, Int]'."""
+        source = "fun main() { val m: Map<String, Int> = mapOf() }"
+        _, builder = _parse_kotlin_with_types(source)
+        assert builder.var_types["m"] == "Map[String, Int]"
+
+    def test_nested_generic_type(self):
+        """List<Map<String, Int>> should produce 'List[Map[String, Int]]'."""
+        source = "fun main() { val x: List<Map<String, Int>> = listOf() }"
+        _, builder = _parse_kotlin_with_types(source)
+        assert builder.var_types["x"] == "List[Map[String, Int]]"
+
+    def test_fun_return_generic_type(self):
+        """fun getNames(): List<String> should seed func_return_types with 'List[String]'."""
+        source = 'fun getNames(): List<String> { return listOf("a") }'
+        _, builder = _parse_kotlin_with_types(source)
+        return_types = builder.func_return_types
+        assert any(v == "List[String]" for v in return_types.values())
+
+    def test_param_generic_type(self):
+        """Parameter items: List<String> should seed param type 'List[String]'."""
+        source = "fun process(items: List<String>) { }"
+        _, builder = _parse_kotlin_with_types(source)
+        param_types = builder.func_param_types
+        assert any(
+            any(ptype == "List[String]" for _, ptype in params)
+            for params in param_types.values()
+        )
+
+    def test_non_generic_type_unchanged(self):
+        """val x: Int = 42 should still seed 'Int' (regression check)."""
+        source = "fun main() { val x: Int = 42 }"
+        _, builder = _parse_kotlin_with_types(source)
+        assert builder.var_types["x"] == "Int"
