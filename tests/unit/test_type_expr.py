@@ -8,11 +8,14 @@ from interpreter.type_expr import (
     TypeExpr,
     ScalarType,
     ParameterizedType,
+    UnknownType,
+    UNKNOWN,
     parse_type,
     scalar,
     pointer,
     array_of,
     map_of,
+    unknown,
 )
 
 
@@ -130,8 +133,10 @@ class TestParseType:
         original = "Map[String, Array[Pointer[Int]]]"
         assert str(parse_type(original)) == original
 
-    def test_parse_empty_string(self):
-        assert parse_type("") == ScalarType("")
+    def test_parse_empty_string_returns_unknown(self):
+        result = parse_type("")
+        assert isinstance(result, UnknownType)
+        assert result is UNKNOWN
 
     def test_parse_unknown_type(self):
         """Unknown type names are valid scalars — frontends pass through raw names."""
@@ -236,3 +241,61 @@ class TestTypeExprProperties:
         """The constructor name is the 'base' for TypeGraph lookups."""
         t = ParameterizedType("Array", (ScalarType("Int"),))
         assert t.constructor == "Array"
+
+
+class TestUnknownType:
+    """Tests for the UnknownType sentinel representing 'type not yet known'."""
+
+    def test_singleton_identity(self):
+        assert unknown() is UNKNOWN
+
+    def test_str_returns_empty(self):
+        assert str(UNKNOWN) == ""
+
+    def test_bool_is_falsy(self):
+        assert not UNKNOWN
+        assert bool(UNKNOWN) is False
+
+    def test_equals_empty_string(self):
+        assert UNKNOWN == ""
+
+    def test_empty_string_equals_unknown(self):
+        assert "" == UNKNOWN
+
+    def test_not_equals_nonempty_string(self):
+        assert UNKNOWN != "Int"
+
+    def test_equals_another_unknown(self):
+        assert UNKNOWN == UnknownType()
+
+    def test_not_equals_scalar(self):
+        assert UNKNOWN != ScalarType("Int")
+
+    def test_not_equals_empty_scalar(self):
+        """UnknownType is distinct from ScalarType('') — they represent different concepts."""
+        # UnknownType means "type not known"; ScalarType("") would be a type named ""
+        # After migration, ScalarType("") should not appear — parse_type("") returns UNKNOWN
+        assert UNKNOWN != ScalarType("")
+
+    def test_hash_matches_empty_string(self):
+        assert hash(UNKNOWN) == hash("")
+
+    def test_is_type_expr(self):
+        assert isinstance(UNKNOWN, TypeExpr)
+
+    def test_parse_type_roundtrip(self):
+        """parse_type(str(UNKNOWN)) returns UNKNOWN."""
+        assert parse_type(str(UNKNOWN)) is UNKNOWN
+
+    def test_unknown_in_if_check(self):
+        """Common pattern: 'if type_expr:' should be False for UNKNOWN."""
+        result = UNKNOWN
+        executed = False
+        if result:
+            executed = True
+        assert not executed
+
+    def test_known_type_in_if_check(self):
+        """Contrast: ScalarType('Int') should be truthy."""
+        result = scalar("Int")
+        assert result
