@@ -1715,3 +1715,76 @@ class TestStoreIndexLoadIndex:
         env = infer_types(instructions, _default_resolver())
         # STORE_INDEX should not add any new register beyond %0, %1, %2
         assert set(env.register_types.keys()) <= {"%0", "%1", "%2"}
+
+
+# ---------------------------------------------------------------------------
+# Variable type scoping per function
+# ---------------------------------------------------------------------------
+
+
+class TestVarTypeScoping:
+    def test_same_var_name_different_types_in_two_functions(self):
+        """Variable 'x' in function f is Int, in function g is String."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            # function f: x = 42
+            _make_inst(Opcode.BRANCH, label="end_f"),
+            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"]),
+            _make_inst(Opcode.RETURN, operands=["%1"]),
+            _make_inst(Opcode.LABEL, label="end_f"),
+            # function g: x = "hello"
+            _make_inst(Opcode.BRANCH, label="end_g"),
+            _make_inst(Opcode.LABEL, label="func_g_1"),
+            _make_inst(Opcode.CONST, result_reg="%2", operands=['"hello"']),
+            _make_inst(Opcode.STORE_VAR, operands=["x", "%2"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg="%3", operands=["x"]),
+            _make_inst(Opcode.RETURN, operands=["%3"]),
+            _make_inst(Opcode.LABEL, label="end_g"),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == TypeName.INT
+        assert env.register_types["%2"] == TypeName.STRING
+        # LOAD_VAR x in f should be Int, in g should be String
+        assert env.register_types["%1"] == TypeName.INT
+        assert env.register_types["%3"] == TypeName.STRING
+
+    def test_global_var_visible_inside_function(self):
+        """A top-level variable should be visible from within a function."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            # global: y = 99
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["99"]),
+            _make_inst(Opcode.STORE_VAR, operands=["y", "%0"]),
+            # function f: loads y
+            _make_inst(Opcode.BRANCH, label="end_f"),
+            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(Opcode.LOAD_VAR, result_reg="%1", operands=["y"]),
+            _make_inst(Opcode.RETURN, operands=["%1"]),
+            _make_inst(Opcode.LABEL, label="end_f"),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == TypeName.INT
+        # y loaded inside f should inherit the global type
+        assert env.register_types["%1"] == TypeName.INT
+
+    def test_function_var_does_not_leak_to_global(self):
+        """A variable defined inside a function should not affect global scope."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            # function f: z = 3.14
+            _make_inst(Opcode.BRANCH, label="end_f"),
+            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(Opcode.CONST, result_reg="%0", operands=["3.14"]),
+            _make_inst(Opcode.STORE_VAR, operands=["z", "%0"]),
+            _make_inst(Opcode.RETURN, operands=["%0"]),
+            _make_inst(Opcode.LABEL, label="end_f"),
+            # global: load z (should NOT get Float from f's scope)
+            _make_inst(Opcode.LOAD_VAR, result_reg="%1", operands=["z"]),
+        ]
+        env = infer_types(instructions, _default_resolver())
+        assert env.register_types["%0"] == TypeName.FLOAT
+        # z at global scope was never defined, so %1 should have no type
+        assert "%1" not in env.register_types

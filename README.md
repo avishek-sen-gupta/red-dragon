@@ -42,6 +42,7 @@ RedDragon has a two-phase type system: **frontend extraction** and **static infe
 - **CALL_UNKNOWN resolution** — indirect calls through registers resolved via variable-to-function mapping with builtin fallback
 - **Array element type tracking** — STORE_INDEX records element types per array register, LOAD_INDEX retrieves them
 - **Builtin method return types** — 60+ common method names (`.upper()`→String, `.split()`→Array, `.find()`→Int, `.startswith()`→Bool, etc.) resolved as a final fallback when no user-defined class method matches
+- **Function-scoped variable types** — variable types are tracked per function scope, preventing cross-function name collisions (e.g. `x = 42` in one function and `x = "hello"` in another infer independently). Global-scope variables are visible as fallback inside functions.
 - **Region tagging** — ALLOC_REGION→Region, LOAD_REGION→Array
 - **Function signature collection** — parameter names/types from SYMBOLIC `param:` instructions combined with return types into `FunctionSignature` records
 
