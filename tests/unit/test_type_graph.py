@@ -8,6 +8,7 @@ from interpreter.type_expr import (
     ParameterizedType,
     UnionType,
     FunctionType,
+    TypeVar,
     scalar,
     pointer,
     array_of,
@@ -16,6 +17,7 @@ from interpreter.type_expr import (
     optional,
     fn_type,
     tuple_of,
+    typevar,
 )
 
 
@@ -747,3 +749,60 @@ class TestTypeGraphVariance:
             ParameterizedType("MutableList", (scalar("Int"),)),
             ParameterizedType("MutableList", (scalar("Number"),)),
         )
+
+
+class TestTypeGraphTypeVar:
+    """Tests for TypeVar subtype checks."""
+
+    def _graph(self) -> TypeGraph:
+        return TypeGraph(DEFAULT_TYPE_NODES)
+
+    def test_bounded_typevar_is_subtype_of_bound(self):
+        """TypeVar T: Number ⊆ Number."""
+        g = self._graph()
+        t = typevar("T", scalar("Number"))
+        assert g.is_subtype_expr(t, scalar("Number"))
+
+    def test_bounded_typevar_is_subtype_of_ancestor(self):
+        """TypeVar T: Number ⊆ Any (transitive through bound)."""
+        g = self._graph()
+        t = typevar("T", scalar("Number"))
+        assert g.is_subtype_expr(t, scalar("Any"))
+
+    def test_bounded_typevar_not_subtype_of_unrelated(self):
+        """TypeVar T: Number is NOT ⊆ String."""
+        g = self._graph()
+        t = typevar("T", scalar("Number"))
+        assert not g.is_subtype_expr(t, scalar("String"))
+
+    def test_concrete_satisfies_typevar(self):
+        """Int ⊆ TypeVar T: Number (Int satisfies bound Number)."""
+        g = self._graph()
+        t = typevar("T", scalar("Number"))
+        assert g.is_subtype_expr(scalar("Int"), t)
+
+    def test_concrete_doesnt_satisfy_typevar(self):
+        """String is NOT ⊆ TypeVar T: Number."""
+        g = self._graph()
+        t = typevar("T", scalar("Number"))
+        assert not g.is_subtype_expr(scalar("String"), t)
+
+    def test_unbounded_typevar_subtype_of_any(self):
+        """Unbounded TypeVar T ⊆ Any."""
+        g = self._graph()
+        t = typevar("T")
+        assert g.is_subtype_expr(t, scalar("Any"))
+
+    def test_any_concrete_satisfies_unbounded_typevar(self):
+        """Int ⊆ TypeVar T (unbounded accepts anything)."""
+        g = self._graph()
+        t = typevar("T")
+        assert g.is_subtype_expr(scalar("Int"), t)
+
+    def test_typevar_in_parameterized_type(self):
+        """List[TypeVar T: Number] — Int satisfies T."""
+        g = self._graph()
+        t = typevar("T", scalar("Number"))
+        child = ParameterizedType("List", (scalar("Int"),))
+        parent = ParameterizedType("List", (t,))
+        assert g.is_subtype_expr(child, parent)
