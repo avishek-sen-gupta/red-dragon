@@ -30,6 +30,7 @@ from interpreter.type_expr import (
     UNKNOWN,
     array_of,
     scalar,
+    union_of,
 )
 from interpreter.type_resolver import TypeResolver
 
@@ -144,18 +145,24 @@ class _InferenceContext:
     array_element_types: dict[str, TypeExpr] = field(default_factory=dict)
     var_array_element_types: dict[str, TypeExpr] = field(default_factory=dict)
     register_source_var: dict[str, str] = field(default_factory=dict)
+    _seeded_var_names: frozenset[str] = field(default_factory=frozenset)
 
     def store_var_type(self, name: str, type_expr: TypeExpr) -> None:
         """Store a variable type in the current function scope.
 
-        Does not overwrite if the variable already has a type in any scope
-        (seeded types in _GLOBAL_SCOPE take precedence over inferred types).
+        Seeded types (from the builder) take precedence and are never widened.
+        For inferred types, if the variable already has a different type in
+        the current scope, the type is widened to a union.
         """
-        if self.lookup_var_type(name):
+        if name in self._seeded_var_names:
             return
         scope = self.current_func_label
         scope_dict = self.scoped_var_types.setdefault(scope, {})
-        scope_dict[name] = type_expr
+        existing = scope_dict.get(name, UNKNOWN)
+        if not existing:
+            scope_dict[name] = type_expr
+        elif existing != type_expr:
+            scope_dict[name] = union_of(existing, type_expr)
 
     def lookup_var_type(self, name: str) -> TypeExpr:
         """Look up a variable type: current scope first, then global."""
@@ -240,6 +247,7 @@ def infer_types(
         func_param_types={
             k: list(v) for k, v in type_env_builder.func_param_types.items()
         },
+        _seeded_var_names=frozenset(type_env_builder.var_types.keys()),
     )
 
     prev_size = -1

@@ -45,6 +45,7 @@ Generic types are extracted structurally from tree-sitter ASTs (not string repla
 - **Builtin return types** — `len`→Int, `str`→String, `range`→Array, `abs`→Number, etc.
 - **UNOP refinement** — `not`/`!`→Bool, `#`→Int
 - **Class method return types** — class scope tracking via LABEL prefixes, CALL_METHOD dispatch with fallback to global function table
+- **Union types** — when a variable is assigned different types (e.g. `x = 5; x = "hello"`), the inference engine widens to `Union[Int, String]`. `UnionType` is a first-class `TypeExpr` variant with sorted canonical string form, flattening, dedup, and singleton elimination. `Optional[T]` is sugar for `Union[T, Null]`. TypeGraph supports union subtype checks (`Union[A, B] ⊆ T` iff both `A ⊆ T` and `B ⊆ T`) and LUB operations
 - **Class field type tracking** — STORE_FIELD records field types per class, LOAD_FIELD looks them up
 - **CALL_UNKNOWN resolution** — indirect calls through registers resolved via variable-to-function mapping with builtin fallback
 - **Array element type promotion** — STORE_INDEX records element types per array register; after inference, variables and registers typed as `Array` are promoted to `Array[ElementType]` (e.g., `items = [1, 2, 3]` → `Array[Int]`). Element types propagate through LOAD_VAR, so `x = items[0]` infers `x` as `Int`
