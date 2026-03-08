@@ -9,6 +9,7 @@ from interpreter.constants import CanonicalLiteral, TypeName
 from interpreter.conversion_rules import TypeConversionRules
 from interpreter.identity_conversion_rules import IdentityConversionRules
 from interpreter.type_environment import TypeEnvironment
+from interpreter.type_expr import UNKNOWN, scalar
 from interpreter.vm_types import (  # noqa: F401 — re-exported for backwards compatibility
     SymbolicValue,
     HeapObject,
@@ -47,13 +48,13 @@ def _coerce_value(
     """
     if not isinstance(reg, str) or not reg.startswith("%"):
         return val
-    target_type = type_env.register_types.get(reg, "")
+    target_type = type_env.register_types.get(reg, UNKNOWN)
     if not target_type:
         return val
-    runtime_type = _runtime_type_name(val)
-    if not runtime_type or runtime_type == target_type:
+    runtime_type_name = _runtime_type_name(val)
+    if not runtime_type_name or runtime_type_name == target_type:
         return val
-    coercer = conversion_rules.coerce_assignment(runtime_type, target_type)
+    coercer = conversion_rules.coerce_assignment(scalar(runtime_type_name), target_type)
     return coercer(val)
 
 

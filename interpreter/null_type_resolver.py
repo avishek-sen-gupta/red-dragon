@@ -10,6 +10,7 @@ from interpreter.conversion_result import (
     _identity,
 )
 from interpreter.identity_conversion_rules import IdentityConversionRules
+from interpreter.type_expr import TypeExpr
 from interpreter.type_resolver import TypeResolver
 
 
@@ -24,11 +25,11 @@ class NullTypeResolver(TypeResolver):
         super().__init__(IdentityConversionRules())
 
     def resolve_binop(
-        self, operator: str, left_hint: str, right_hint: str
+        self, operator: str, left_hint: TypeExpr, right_hint: TypeExpr
     ) -> ConversionResult:
         return IDENTITY_CONVERSION
 
     def resolve_assignment(
-        self, value_hint: str, target_hint: str
+        self, value_hint: TypeExpr, target_hint: TypeExpr
     ) -> Callable[[Any], Any]:
         return _identity
