@@ -1561,3 +1561,18 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 **Type inference priority fix:** `_InferenceContext.store_var_type()` now checks `lookup_var_type()` across all scopes before writing, ensuring seeded types from explicit declarations take precedence over inferred types from constructor calls (e.g., `List<String> items = new ArrayList<>()` keeps `List[String]`, not `ArrayList<>`).
 
 **Consequences:** Generic type declarations in Java, C#, Scala, and Kotlin now produce structured parameterised types in the type environment. Inner types are normalised (e.g., Java's `Integer` → `Int`). Nested generics work recursively. 25 unit tests + 9 integration tests added. All 9543 existing tests pass.
+
+### ADR-087: Array element type promotion to Array[ElementType] (2026-03-08)
+
+**Context:** The type inference engine tracked array element types (via STORE_INDEX) in `array_element_types` but discarded this information when building the final `TypeEnvironment`. Variables typed as `Array` contained no information about their element type.
+
+**Decision:** After inference converges, promote variables and registers typed as `Array` to `Array[ElementType]` when the element type is known from STORE_INDEX operations. Also propagate element types through LOAD_VAR so that `items = [1, 2, 3]; x = items[0]` correctly infers `x` as `Int`.
+
+**Implementation:**
+- New `var_array_element_types` dict in `_InferenceContext` maps variable names to their known element types
+- `_infer_store_var` records element type associations when storing an array register into a variable
+- `_infer_load_var` propagates element types from variables to loaded registers
+- `_promote_array_element_types()` runs after inference converges, upgrading `Array` → `Array[ElementType]`
+- Type inference priority: seeded types from explicit declarations (in any scope) take precedence over inferred types from constructor calls
+
+**Consequences:** `items = [1, 2, 3]` now produces `var_types["items"] == "Array[Int]"` across Python, JavaScript, Ruby, and any language using NEW_ARRAY + STORE_INDEX. 5 unit tests + 4 integration tests added. All 9552 tests pass.
