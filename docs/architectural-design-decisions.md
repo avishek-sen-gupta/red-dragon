@@ -1424,3 +1424,62 @@ Updated tier classification: Tier 1 (11): Python, Java, C#, Kotlin, Scala, JS, T
 **Decision:** Replace the single `for inst in instructions` loop with a fixpoint loop that repeats until no new types are discovered. Convergence is measured by `len(register_types) + len(func_return_types)` — when neither dict grows, the loop terminates. All existing handler guards (`if result_reg in register_types: return`, `if func_label in func_return_types: return`, etc.) are already correct for multi-pass: they prevent clobbering types from earlier passes while allowing unfilled gaps to be resolved on subsequent passes.
 
 **Consequences:** Test count: 9298 passed, 4 skipped, 22 xfailed (9 new tests: 5 unit, 4 integration across Python/JavaScript/Ruby). Forward reference chains of arbitrary depth resolve correctly (tested with a→b→c chain). Programs without forward references converge in one pass (no performance regression). The fixpoint loop typically runs 2 passes for real code with forward references.
+
+---
+
+### ADR-083: Class inheritance via linearized parent chain in FunctionRegistry (2026-03-08)
+
+**Context:** The VM currently has no concept of class inheritance. Classes are lowered to labeled IR blocks; `NEW_OBJECT` creates a heap object tagged with a `type_hint` string; `CALL_METHOD` resolves methods via a flat `registry.class_methods[type_hint][method_name]` lookup. This works for single-class dispatch but fails when a subclass inherits methods from a parent: `Dog extends Animal` where `Dog` doesn't override `getLegs()` — the executor looks for `getLegs` in `Dog`'s method table, doesn't find it, and falls through to the symbolic resolver. There is no parent chain to walk. Similarly, `super.method()` is emitted as a raw `CALL_FUNCTION("super", ...)` which goes symbolic.
+
+Multiple frontends already parse inheritance syntax — Java's tree-sitter grammar exposes a `superclass` field on `class_declaration`, Python exposes parent classes via `argument_list` on `class_definition` — but no frontend extracts or records these relationships.
+
+**Decision:** Add a linearized parent chain to `FunctionRegistry` and walk it during method dispatch. The design has three layers:
+
+1. **Registry (data model):** Add `class_parents: dict[str, list[str]]` to `FunctionRegistry`. Each entry maps a class name to its **already-linearized** method resolution order (MRO), excluding the class itself. For `class Dog extends Animal`, the entry is `{"Dog": ["Animal"]}`. For Python's `class C(A, B)` with C3 linearization, the entry is `{"C": ["A", "B"]}` (the frontend computes the order).
+
+2. **Frontends (extraction):** Each frontend extracts inheritance relationships during class lowering and records them in the emit context. The `_scan_classes` function in `registry.py` is extended to detect inheritance metadata emitted as IR annotations or by parsing the class reference format. The language-specific MRO computation (trivial linear chain for Java/C#/Kotlin; C3 linearization for Python; trait linearization for Scala/Ruby) is the frontend's responsibility — the registry stores only the final resolved order.
+
+3. **Executor (resolution):** `_handle_call_method` is extended with a fallback loop: when `class_methods[type_hint]` does not contain the requested method, iterate through `class_parents[type_hint]` and check each parent's method table. The first match wins. This is a single, language-agnostic loop — all language-specific complexity is in how the parent list was constructed.
+
+**`super` handling:** `super.method()` is resolved by looking up the method starting from `class_parents[current_class][0]` (the immediate parent), skipping the current class's own method table. The frontend emits enough context (the enclosing class name) for the executor to determine where to start the search.
+
+**Why not vtable lowering (LLVM-style)?** An alternative is to have each frontend copy parent methods into the child's IR block during lowering, so the flat registry already contains everything. This was rejected because: (a) it duplicates method-copying logic across 15 frontends; (b) it loses the inheritance relationship, which is valuable for code analysis; (c) it doesn't naturally handle `super`, which requires knowing the parent chain at dispatch time.
+
+**Why a pre-linearized list?** The alternative is storing raw parent declarations and computing MRO at dispatch time. Pre-linearization was chosen because: (a) MRO computation is a frontend concern — each language has different rules; (b) the executor stays language-agnostic with a simple linear scan; (c) the list is computed once at lowering time, not on every method call.
+
+**Language-specific MRO strategies:**
+
+| Language | Inheritance model | MRO strategy |
+|----------|-------------------|--------------|
+| Java, C#, Kotlin | Single class inheritance (+ interfaces) | Linear chain: `[Parent, Grandparent, ...]` |
+| Python | Multiple inheritance | C3 linearization |
+| Ruby | Single inheritance + mixins | Linear: `[Mixin2, Mixin1, Parent]` (last included first) |
+| Scala | Single class + traits | Trait linearization (right-to-left, depth-first, deduplicated) |
+| C++ | Multiple inheritance (virtual/non-virtual) | Frontend resolves; virtual bases deduplicated |
+| JavaScript/TypeScript | Prototype chain (no `extends` in class sense until ES6) | Single prototype chain |
+| Go | Embedding (not inheritance) | Flat — embedded struct methods promoted to embedder |
+| PHP | Single inheritance + traits | Linear chain + trait `use` order |
+| C, Rust, Lua, Pascal | No class inheritance | Not applicable |
+
+**Implementation plan:**
+
+Phase 1 — Data model and single inheritance:
+- Add `class_parents` field to `FunctionRegistry`
+- Extend `_scan_classes` to populate parent chains from IR metadata
+- Add parent-chain fallback loop to `_handle_call_method`
+- Implement extraction in Java frontend (simplest case: `superclass` field)
+- Unit tests: inherited method dispatch, `super` calls
+- Integration tests: Java polymorphism with inherited methods
+
+Phase 2 — Remaining single-inheritance languages:
+- Python, C#, Kotlin, Ruby, PHP, JavaScript/TypeScript, Scala
+- Each frontend extracts its specific syntax and computes MRO
+
+Phase 3 — Multiple inheritance:
+- Python C3 linearization
+- Scala trait linearization
+- C++ virtual base classes (if needed)
+
+**IR changes:** None. The 27-opcode IR is unchanged. Inheritance metadata is conveyed either through an extension to the `<class:Name@label>` reference format (e.g., `<class:Dog@label:Animal>`) or through a new metadata instruction that the registry scanner picks up. The preferred approach is extending the class reference format, as it keeps inheritance co-located with the class definition and requires no new opcodes.
+
+**Consequences:** Method dispatch for inherited methods will resolve concretely instead of going symbolic. `super` calls will dispatch to the correct parent method. The flat `class_methods` table remains the primary lookup; the parent chain is only consulted on cache miss. No performance impact for classes without inheritance. The executor remains language-agnostic — all MRO complexity is pushed to frontends, consistent with the ports-and-adapters architecture (ADR-002).
