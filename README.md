@@ -29,7 +29,7 @@ Concretely, RedDragon does the following:
 
 RedDragon has a two-phase type system: **frontend extraction** and **static inference**.
 
-**Frontend type extraction** — 13 statically-typed frontends extract type annotations from tree-sitter ASTs during lowering and normalize them to canonical names (`Int`, `Float`, `Bool`, `String`, etc.). Seeds are accumulated in a `TypeEnvironmentBuilder` covering register types, variable types, function return types, and parameter types. IR instructions stay purely about computation and control flow.
+**Frontend type extraction** — 13 statically-typed frontends extract type annotations from tree-sitter ASTs during lowering and normalize them to canonical names (`Int`, `Float`, `Bool`, `String`, etc.). Seeds are accumulated in a `TypeEnvironmentBuilder` covering register types, variable types, function return types, and parameter types. IR instructions stay purely about computation and control flow. **Parameterized types** (e.g. `Pointer[Int]`, `Pointer[Pointer[Int]]`) are supported via the `TypeExpr` algebraic data type — the C/C++ frontend extracts pointer declarator nesting to produce structured pointer types instead of collapsing them to `Int`.
 
 **Static type inference** — `infer_types()` accepts the pre-seeded builder and propagates types through register/variable chains across 15 opcodes (CONST through RETURN). The pass runs to fixpoint, resolving forward references where a function calls another function defined later in the IR. The inference pass handles:
 
@@ -46,7 +46,7 @@ RedDragon has a two-phase type system: **frontend extraction** and **static infe
 - **Region tagging** — ALLOC_REGION→Region, LOAD_REGION→Array
 - **Function signature collection** — parameter names/types from SYMBOLIC `param:` instructions combined with return types into `FunctionSignature` records
 
-The result is an immutable `TypeEnvironment` lookup table, backed by a pluggable **type ontology** (TypeGraph DAG with subtype queries, TypeConversionRules for operator coercion, TypeResolver for BINOP dispatch). `TypeConversionRules` is an ABC — the default implementation (`DefaultTypeConversionRules`) handles Int/Float promotion, Int division → floor division, Bool→Int coercion, and Float→Int truncation. Languages with different semantics (e.g. COBOL's fixed-point arithmetic or a language where `/` always produces Float) can supply their own subclass.
+The result is an immutable `TypeEnvironment` lookup table, backed by a pluggable **type ontology** (TypeGraph DAG with subtype queries including covariant parameterized types, TypeConversionRules for operator coercion, TypeResolver for BINOP dispatch). `TypeConversionRules` is an ABC — the default implementation (`DefaultTypeConversionRules`) handles Int/Float promotion, Int division → floor division, Bool→Int coercion, and Float→Int truncation. Languages with different semantics (e.g. COBOL's fixed-point arithmetic or a language where `/` always produces Float) can supply their own subclass.
 
 ### VM features
 
