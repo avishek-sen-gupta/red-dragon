@@ -662,3 +662,103 @@ if True:
         stores = _store_var_names(ir)
         mangled = [n for n in stores if n.startswith("x$")]
         assert len(mangled) == 0
+
+
+# ---------------------------------------------------------------------------
+# C-style for loop init scoping
+# ---------------------------------------------------------------------------
+
+
+class TestCStyleForInitScoping:
+    """C-style for(init; cond; update) should scope init vars to the loop."""
+
+    def test_java_for_init_shadows_outer(self):
+        """for(int i = ...) should shadow an outer i."""
+        source = """
+        class M {
+            void m() {
+                int i = 99;
+                for (int i = 0; i < 10; i++) {
+                    int y = i;
+                }
+                int z = i;
+            }
+        }
+        """
+        ir = _lower(JavaFrontend, "java", source)
+        stores = _store_var_names(ir)
+        # The for-init i should be mangled since it shadows the outer i
+        mangled = [n for n in stores if n.startswith("i$")]
+        assert len(mangled) >= 1
+        # The outer reference after the loop should resolve to unmangled "i"
+        loads = _load_var_names(ir)
+        # Find loads that assign to z — the last LOAD_VAR i should be unmangled
+        assert "i" in loads
+
+    def test_c_for_init_shadows_outer(self):
+        """C for(int i = ...) should shadow an outer i."""
+        source = """
+        int main() {
+            int i = 99;
+            for (int i = 0; i < 10; i++) {
+                int y = i;
+            }
+            int z = i;
+            return 0;
+        }
+        """
+        ir = _lower(CFrontend, "c", source)
+        stores = _store_var_names(ir)
+        mangled = [n for n in stores if n.startswith("i$")]
+        assert len(mangled) >= 1
+
+    def test_cpp_for_init_shadows_outer(self):
+        """C++ for(int i = ...) should shadow an outer i."""
+        source = """
+        int main() {
+            int i = 99;
+            for (int i = 0; i < 10; i++) {
+                int y = i;
+            }
+            int z = i;
+            return 0;
+        }
+        """
+        ir = _lower(CppFrontend, "cpp", source)
+        stores = _store_var_names(ir)
+        mangled = [n for n in stores if n.startswith("i$")]
+        assert len(mangled) >= 1
+
+    def test_csharp_for_init_shadows_outer(self):
+        """C# for(int i = ...) should shadow an outer i."""
+        source = """
+        class M {
+            void m() {
+                int i = 99;
+                for (int i = 0; i < 10; i++) {
+                    int y = i;
+                }
+                int z = i;
+            }
+        }
+        """
+        ir = _lower(CSharpFrontend, "csharp", source)
+        stores = _store_var_names(ir)
+        mangled = [n for n in stores if n.startswith("i$")]
+        assert len(mangled) >= 1
+
+    def test_typescript_for_init_shadows_outer(self):
+        """TypeScript for(let i = ...) should shadow an outer i."""
+        source = """
+        function main() {
+            let i = 99;
+            for (let i = 0; i < 10; i++) {
+                let y = i;
+            }
+            let z = i;
+        }
+        """
+        ir = _lower(TypeScriptFrontend, "typescript", source)
+        stores = _store_var_names(ir)
+        mangled = [n for n in stores if n.startswith("i$")]
+        assert len(mangled) >= 1
