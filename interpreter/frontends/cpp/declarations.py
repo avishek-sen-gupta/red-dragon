@@ -34,7 +34,7 @@ def lower_cpp_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 ctx, child, struct_type=struct_type, type_hint=type_hint
             )
         elif child.type == CppNodeType.IDENTIFIER:
-            var_name = ctx.node_text(child)
+            var_name = ctx.declare_block_var(ctx.node_text(child))
             if struct_type:
                 val_reg = ctx.fresh_reg()
                 ctx.emit(

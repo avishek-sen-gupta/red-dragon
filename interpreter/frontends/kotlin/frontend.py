@@ -16,6 +16,8 @@ from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
 class KotlinFrontend(BaseFrontend):
     """Lowers a Kotlin tree-sitter AST into flattened TAC IR."""
 
+    BLOCK_SCOPED = True
+
     def _build_constants(self) -> GrammarConstants:
         return GrammarConstants(
             comment_types=frozenset(

@@ -85,6 +85,8 @@ class BaseFrontend(Frontend):
 
     ATTRIBUTE_NODE_TYPE: str = BaseNodeType.ATTRIBUTE
 
+    BLOCK_SCOPED: bool = False
+
     # ── init ─────────────────────────────────────────────────────
 
     def __init__(
@@ -217,10 +219,12 @@ class BaseFrontend(Frontend):
             type_map=self._build_type_map(),
             stmt_dispatch=self._build_stmt_dispatch(),
             expr_dispatch=self._build_expr_dispatch(),
+            block_scoped=self.BLOCK_SCOPED,
         )
         ctx.emit(Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)
         ctx.lower_block(root)
         self._type_env_builder = ctx.type_env_builder
+        self._type_env_builder.var_scope_metadata = dict(ctx.var_scope_metadata)
         return ctx.instructions
 
     # ── dispatchers ──────────────────────────────────────────────

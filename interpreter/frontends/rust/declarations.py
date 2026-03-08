@@ -160,7 +160,8 @@ def lower_let_decl(ctx: TreeSitterEmitContext, node) -> None:
     elif pattern_node is not None and pattern_node.type == RustNodeType.STRUCT_PATTERN:
         _lower_struct_destructure(ctx, pattern_node, val_reg, node)
     else:
-        var_name = _extract_let_pattern_name(ctx, pattern_node)
+        raw_name = _extract_let_pattern_name(ctx, pattern_node)
+        var_name = ctx.declare_block_var(raw_name)
         ctx.emit(
             Opcode.STORE_VAR,
             operands=[var_name, val_reg],

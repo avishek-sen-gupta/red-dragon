@@ -27,7 +27,6 @@ class PascalFrontend(BaseFrontend):
                     PascalNodeType.ROOT,
                     PascalNodeType.PROGRAM,
                     PascalNodeType.STATEMENTS,
-                    PascalNodeType.STATEMENT,
                 }
             ),
         )
