@@ -1706,3 +1706,23 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 - **Automatic TypeGraph extension in infer_types**: Deferred — callers can extend TypeGraph themselves using `env.interface_implementations`
 
 **Consequences:** 8 new tests (6 unit for TypeGraph interface subtype/extension, 2 integration for Java source programs). All 9761 tests pass. No existing test changed.
+
+### ADR-093: Variance annotations for parameterized type subtyping (2026-03-08)
+
+**Context:** All parameterized type arguments were treated as covariant (`List[Int] ⊆ List[Number]`). This is correct for read-only containers but unsound for mutable ones — `MutableList[Int]` should NOT be a subtype of `MutableList[Number]`.
+
+**Decision:** Add a variance registry to `TypeGraph` mapping constructor names to per-argument variance annotations.
+
+**Design details:**
+- `Variance` enum in constants: `COVARIANT`, `CONTRAVARIANT`, `INVARIANT`
+- `TypeGraph.__init__` accepts optional `variance_registry: dict[str, tuple[Variance, ...]]`
+- `is_subtype_expr`: per-argument check uses `_check_variance` — covariant (default): child ⊆ parent, contravariant: parent ⊆ child, invariant: must be equal
+- `common_supertype_expr`: `_lub_with_variance` — invariant arguments must be equal (fallback to Any), covariant/contravariant use standard LUB
+- `with_variance(registry)`: produces new TypeGraph with merged variance annotations
+- `extend()` and `extend_with_interfaces()` preserve the variance registry
+
+**Alternatives considered:**
+- **Variance in TypeExpr**: Rejected — variance is a property of the constructor, not the type expression. Registry-based approach is simpler and avoids polluting TypeExpr.
+- **Default to invariant**: Rejected — breaks backwards compatibility. Covariant default matches existing behavior.
+
+**Consequences:** 9 new tests (all unit for TypeGraph variance subtype/LUB). All 9770 tests pass. No existing test changed.

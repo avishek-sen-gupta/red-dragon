@@ -7,7 +7,7 @@ from collections import deque
 from functools import reduce
 
 from interpreter.type_node import TypeNode
-from interpreter.constants import TypeName
+from interpreter.constants import TypeName, Variance
 from interpreter.type_expr import (
     TypeExpr,
     ScalarType,
@@ -43,10 +43,19 @@ class TypeGraph:
 
     Constructed from a tuple of TypeNode values. Use extend() to produce
     a new graph with additional nodes without mutating the original.
+
+    ``variance_registry`` maps constructor names to per-argument variance:
+    e.g. ``{"MutableList": (Variance.INVARIANT,)}``.  Unlisted constructors
+    default to all-covariant.
     """
 
-    def __init__(self, nodes: tuple[TypeNode, ...]) -> None:
+    def __init__(
+        self,
+        nodes: tuple[TypeNode, ...],
+        variance_registry: dict[str, tuple[Variance, ...]] = {},
+    ) -> None:
         self._nodes: dict[str, TypeNode] = {node.name: node for node in nodes}
+        self._variance_registry = variance_registry
 
     def contains(self, type_name: str) -> bool:
         return type_name in self._nodes
@@ -135,8 +144,14 @@ class TypeGraph:
             ):
                 if cc != pc or len(ca) != len(pa):
                     return False
+                variances = self._variance_registry.get(cc, ())
                 return all(
-                    self.is_subtype_expr(ca_i, pa_i) for ca_i, pa_i in zip(ca, pa)
+                    self._check_variance(
+                        ca_i,
+                        pa_i,
+                        variances[i] if i < len(variances) else Variance.COVARIANT,
+                    )
+                    for i, (ca_i, pa_i) in enumerate(zip(ca, pa))
                 )
             case (ParameterizedType(constructor=cc), ScalarType(name=pn)):
                 return self.is_subtype(cc, pn)
@@ -154,6 +169,27 @@ class TypeGraph:
                 return params_ok and self.is_subtype_expr(cr, pr)
             case _:
                 return False
+
+    def _lub_with_variance(
+        self, a: TypeExpr, b: TypeExpr, variance: Variance
+    ) -> TypeExpr:
+        """Compute LUB for a single type argument according to its variance."""
+        if variance == Variance.INVARIANT:
+            # Invariant: must be exactly equal
+            return a if a == b else scalar(TypeName.ANY)
+        # Covariant and contravariant both use the standard LUB
+        return self.common_supertype_expr(a, b)
+
+    def _check_variance(
+        self, child_arg: TypeExpr, parent_arg: TypeExpr, variance: Variance
+    ) -> bool:
+        """Check a single type argument pair according to its variance."""
+        if variance == Variance.COVARIANT:
+            return self.is_subtype_expr(child_arg, parent_arg)
+        if variance == Variance.CONTRAVARIANT:
+            return self.is_subtype_expr(parent_arg, child_arg)
+        # INVARIANT: must be exactly equal
+        return child_arg == parent_arg
 
     def common_supertype_expr(self, type_a: TypeExpr, type_b: TypeExpr) -> TypeExpr:
         """Compute the least upper bound of two TypeExpr values.
@@ -185,9 +221,26 @@ class TypeGraph:
             ):
                 if ca != cb or len(aa) != len(ab):
                     return scalar(TypeName.ANY)
+                variances = self._variance_registry.get(ca, ())
                 merged_args = tuple(
-                    self.common_supertype_expr(aa_i, ab_i) for aa_i, ab_i in zip(aa, ab)
+                    self._lub_with_variance(
+                        aa_i,
+                        ab_i,
+                        variances[i] if i < len(variances) else Variance.COVARIANT,
+                    )
+                    for i, (aa_i, ab_i) in enumerate(zip(aa, ab))
                 )
+                # If any invariant argument couldn't match, fall back to Any
+                if any(a == scalar(TypeName.ANY) for a in merged_args):
+                    inv_positions = [
+                        i
+                        for i in range(len(merged_args))
+                        if i < len(variances)
+                        and variances[i] == Variance.INVARIANT
+                        and aa[i] != ab[i]
+                    ]
+                    if inv_positions:
+                        return scalar(TypeName.ANY)
                 return ParameterizedType(ca, merged_args)
             case (
                 FunctionType(params=pa, return_type=ra),
@@ -208,7 +261,7 @@ class TypeGraph:
         merged = self._nodes.copy()
         for node in additional:
             merged[node.name] = node
-        return TypeGraph(tuple(merged.values()))
+        return TypeGraph(tuple(merged.values()), self._variance_registry)
 
     def extend_with_interfaces(
         self, implementations: dict[str, tuple[str, ...]]
@@ -232,4 +285,12 @@ class TypeGraph:
                 dict.fromkeys(list(existing_parents) + list(interfaces))
             )
             merged[class_name] = TypeNode(name=class_name, parents=all_parents)
-        return TypeGraph(tuple(merged.values()))
+        return TypeGraph(tuple(merged.values()), self._variance_registry)
+
+    def with_variance(
+        self, variance_registry: dict[str, tuple[Variance, ...]]
+    ) -> "TypeGraph":
+        """Return a new TypeGraph with the given variance annotations."""
+        merged = dict(self._variance_registry)
+        merged.update(variance_registry)
+        return TypeGraph(tuple(self._nodes.values()), merged)
