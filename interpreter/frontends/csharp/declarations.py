@@ -9,8 +9,7 @@ from interpreter import constants
 from interpreter.frontends.csharp.expressions import lower_csharp_params
 from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
 from interpreter.frontends.type_extraction import (
-    extract_type_from_field,
-    normalize_type_hint,
+    extract_normalized_type,
 )
 from interpreter.frontends.common.declarations import make_class_ref
 
@@ -24,8 +23,7 @@ def lower_local_decl_stmt(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_variable_declaration(ctx: TreeSitterEmitContext, node) -> None:
     """Lower a variable_declaration node with one or more declarators."""
-    raw_type = extract_type_from_field(ctx, node, "type")
-    type_hint = normalize_type_hint(raw_type, ctx.type_map)
+    type_hint = extract_normalized_type(ctx, node, "type", ctx.type_map)
     for child in node.children:
         if child.type == NT.VARIABLE_DECLARATOR:
             _lower_csharp_declarator(ctx, child, type_hint=type_hint)
@@ -107,8 +105,7 @@ def lower_method_decl(
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    raw_return = extract_type_from_field(ctx, node, "returns")
-    return_hint = normalize_type_hint(raw_return, ctx.type_map)
+    return_hint = extract_normalized_type(ctx, node, "returns", ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=func_label)

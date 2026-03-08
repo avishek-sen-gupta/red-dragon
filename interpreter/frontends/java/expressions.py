@@ -12,8 +12,7 @@ from interpreter.frontends.common.expressions import (
     lower_store_target,
 )
 from interpreter.frontends.type_extraction import (
-    extract_type_from_field,
-    normalize_type_hint,
+    extract_normalized_type,
 )
 from interpreter.frontends.java.node_types import JavaNodeType
 
@@ -406,8 +405,7 @@ def lower_java_params(ctx: TreeSitterEmitContext, params_node) -> None:
             name_node = child.child_by_field_name("name")
             if name_node:
                 pname = ctx.node_text(name_node)
-                raw_type = extract_type_from_field(ctx, child, "type")
-                type_hint = normalize_type_hint(raw_type, ctx.type_map)
+                type_hint = extract_normalized_type(ctx, child, "type", ctx.type_map)
                 param_reg = ctx.fresh_reg()
                 ctx.emit(
                     Opcode.SYMBOLIC,

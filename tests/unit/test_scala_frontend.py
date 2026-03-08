@@ -7,11 +7,20 @@ import pytest
 from interpreter.frontends.scala import ScalaFrontend
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.type_environment_builder import TypeEnvironmentBuilder
 
 
 def _parse_scala(source: str) -> list[IRInstruction]:
     frontend = ScalaFrontend(TreeSitterParserFactory(), "scala")
     return frontend.lower(source.encode("utf-8"))
+
+
+def _parse_scala_with_types(
+    source: str,
+) -> tuple[list[IRInstruction], TypeEnvironmentBuilder]:
+    frontend = ScalaFrontend(TreeSitterParserFactory(), "scala")
+    instructions = frontend.lower(source.encode("utf-8"))
+    return instructions, frontend.type_env_builder
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:
@@ -947,3 +956,49 @@ object M {
             "Expected at least 2 SYMBOLIC caught_exception (one per case clause), "
             f"got {len(caught)}"
         )
+
+
+class TestScalaGenericTypeSeeding:
+    """Verify that Scala generic types (List[String], Map[K,V]) are extracted
+    as parameterised bracket-notation strings in the TypeEnvironmentBuilder."""
+
+    def test_val_list_of_string(self):
+        """val items: List[String] = ... should seed var_types['items'] = 'List[String]'."""
+        source = 'object M { val items: List[String] = List("a") }'
+        _, builder = _parse_scala_with_types(source)
+        assert builder.var_types["items"] == "List[String]"
+
+    def test_val_map_of_string_int(self):
+        """val m: Map[String, Int] = ... should seed 'Map[String, Int]'."""
+        source = "object M { val m: Map[String, Int] = Map() }"
+        _, builder = _parse_scala_with_types(source)
+        assert builder.var_types["m"] == "Map[String, Int]"
+
+    def test_nested_generic_type(self):
+        """List[Map[String, Int]] should produce 'List[Map[String, Int]]'."""
+        source = "object M { val x: List[Map[String, Int]] = List() }"
+        _, builder = _parse_scala_with_types(source)
+        assert builder.var_types["x"] == "List[Map[String, Int]]"
+
+    def test_def_return_generic_type(self):
+        """def getNames: List[String] should seed func_return_types with 'List[String]'."""
+        source = 'object M { def getNames: List[String] = List("a") }'
+        _, builder = _parse_scala_with_types(source)
+        return_types = builder.func_return_types
+        assert any(v == "List[String]" for v in return_types.values())
+
+    def test_param_generic_type(self):
+        """Parameter items: List[String] should seed param type 'List[String]'."""
+        source = "object M { def process(items: List[String]): Unit = {} }"
+        _, builder = _parse_scala_with_types(source)
+        param_types = builder.func_param_types
+        assert any(
+            any(ptype == "List[String]" for _, ptype in params)
+            for params in param_types.values()
+        )
+
+    def test_non_generic_type_unchanged(self):
+        """val x: Int = 42 should still seed 'Int' (regression check)."""
+        source = "object M { val x: Int = 42 }"
+        _, builder = _parse_scala_with_types(source)
+        assert builder.var_types["x"] == "Int"

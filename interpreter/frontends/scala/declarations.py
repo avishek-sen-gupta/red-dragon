@@ -7,8 +7,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.type_extraction import (
-    extract_type_from_field,
-    normalize_type_hint,
+    extract_normalized_type,
 )
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 from interpreter.frontends.common.declarations import make_class_ref
@@ -61,8 +60,7 @@ def _lower_val_or_var_def(ctx: TreeSitterEmitContext, node) -> None:
     """Shared logic for val_definition and var_definition, with tuple destructuring."""
     pattern_node = node.child_by_field_name("pattern")
     value_node = node.child_by_field_name("value")
-    raw_type = extract_type_from_field(ctx, node, "type")
-    type_hint = normalize_type_hint(raw_type, ctx.type_map)
+    type_hint = extract_normalized_type(ctx, node, "type", ctx.type_map)
     if value_node:
         val_reg = ctx.lower_expr(value_node)
     else:
@@ -117,8 +115,7 @@ def lower_scala_params(ctx: TreeSitterEmitContext, params_node) -> None:
             name_node = child.child_by_field_name("name")
             if name_node:
                 pname = ctx.node_text(name_node)
-                raw_type = extract_type_from_field(ctx, child, "type")
-                type_hint = normalize_type_hint(raw_type, ctx.type_map)
+                type_hint = extract_normalized_type(ctx, child, "type", ctx.type_map)
                 ctx.emit(
                     Opcode.SYMBOLIC,
                     result_reg=ctx.fresh_reg(),
@@ -145,8 +142,7 @@ def lower_function_def(
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    raw_return = extract_type_from_field(ctx, node, "return_type")
-    return_hint = normalize_type_hint(raw_return, ctx.type_map)
+    return_hint = extract_normalized_type(ctx, node, "return_type", ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=func_label)
