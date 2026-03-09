@@ -140,9 +140,16 @@ def lower_cpp_cast(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_condition_clause(ctx: TreeSitterEmitContext, node) -> str:
-    """Unwrap condition_clause to reach the inner expression."""
+    """Unwrap condition_clause to reach the inner expression.
+
+    Skips init_statement children (handled by the enclosing if/while lowerer).
+    """
     for child in node.children:
-        if child.is_named and child.type not in ("(", ")"):
+        if (
+            child.is_named
+            and child.type not in ("(", ")")
+            and child.type != CppNodeType.INIT_STATEMENT
+        ):
             return ctx.lower_expr(child)
     return lower_const_literal(ctx, node)
 
