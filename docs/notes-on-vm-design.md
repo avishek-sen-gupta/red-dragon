@@ -15,12 +15,13 @@ This document describes the design and internals of the RedDragon virtual machin
 7. [Call Dispatch and Return](#7-call-dispatch-and-return)
 8. [Best-Effort Execution](#8-best-effort-execution)
 9. [Closure Capture and Mutation](#9-closure-capture-and-mutation)
-10. [Built-in Functions](#10-built-in-functions)
-11. [LLM Backend (Oracle Fallback)](#11-llm-backend-oracle-fallback)
-12. [Function and Class Registry](#12-function-and-class-registry)
-13. [Dataflow Analysis](#13-dataflow-analysis)
-14. [Module Map](#14-module-map)
-15. [End-to-End Worked Example](#15-end-to-end-worked-example)
+10. [Pointer Aliasing (C/Rust)](#10-pointer-aliasing-crust)
+11. [Built-in Functions](#11-built-in-functions)
+12. [LLM Backend (Oracle Fallback)](#12-llm-backend-oracle-fallback)
+13. [Function and Class Registry](#13-function-and-class-registry)
+14. [Dataflow Analysis](#14-dataflow-analysis)
+15. [Module Map](#15-module-map)
+16. [End-to-End Worked Example](#16-end-to-end-worked-example)
 
 ---
 
@@ -106,13 +107,14 @@ The IR is a **flattened high-level three-address code** defined in `interpreter/
 
 ### Opcodes
 
-The `Opcode` enum (`interpreter/ir.py:11`) defines 27 opcodes in five categories:
+The `Opcode` enum (`interpreter/ir.py:11`) defines 28 opcodes in six categories:
 
 | Category | Opcodes | Description |
 |---|---|---|
 | **Value producers** | `CONST`, `LOAD_VAR`, `LOAD_FIELD`, `LOAD_INDEX`, `NEW_OBJECT`, `NEW_ARRAY`, `BINOP`, `UNOP`, `CALL_FUNCTION`, `CALL_METHOD`, `CALL_UNKNOWN` | Write result to a register (`result_reg`) |
 | **Consumers / Control** | `STORE_VAR`, `STORE_FIELD`, `STORE_INDEX`, `BRANCH_IF`, `BRANCH`, `RETURN`, `THROW`, `TRY_PUSH`, `TRY_POP` | Consume values, affect control flow |
 | **Special** | `SYMBOLIC`, `LABEL` | Parameters, block boundaries |
+| **Pointer ops** | `ADDRESS_OF` | Pointer creation (`&x`), promotes variable to heap-backed storage |
 | **Region ops** | `ALLOC_REGION`, `WRITE_REGION`, `LOAD_REGION` | Byte-addressed memory (COBOL) |
 | **Continuation ops** | `SET_CONTINUATION`, `RESUME_CONTINUATION` | Named return points (COBOL PERFORM) |
 
@@ -290,6 +292,7 @@ VMState
 │       ├── function_name: str     (e.g., "factorial", "<main>")
 │       ├── registers: dict        (%0 → value)
 │       ├── local_vars: dict       (x → value)
+│       ├── var_heap_aliases: dict  (var_name → Pointer, for &x aliasing)
 │       ├── return_label: str      (caller's block to resume at)
 │       ├── return_ip: int         (instruction index in caller's block)
 │       ├── result_reg: str        (caller's register for return value)
@@ -459,7 +462,7 @@ def apply_update(vm: VMState, update: StateUpdate):
 
 ### Dispatch table
 
-The local executor (`interpreter/executor.py:782`) uses a static dispatch table mapping opcodes to handler functions:
+The local executor (`interpreter/executor.py`) uses a static dispatch table mapping opcodes to handler functions:
 
 ```python
 class LocalExecutor:
@@ -471,9 +474,10 @@ class LocalExecutor:
         Opcode.BRANCH_IF: _handle_branch_if,
         Opcode.BINOP: _handle_binop,
         Opcode.UNOP: _handle_unop,
+        Opcode.ADDRESS_OF: _handle_address_of,
         Opcode.CALL_FUNCTION: _handle_call_function,
         Opcode.CALL_METHOD: _handle_call_method,
-        ... # all 27 opcodes covered
+        ... # all 28 opcodes covered
     }
 ```
 
@@ -829,7 +833,48 @@ After `get()`:        reads `env_0.bindings["count"] → 1`
 
 ---
 
-## 10. Built-in Functions
+## 10. Pointer Aliasing (C/Rust)
+
+The VM implements a **KLEE-inspired promote-on-address-of** memory model for languages with pointer semantics (C, Rust). The core abstraction is the `Pointer` dataclass (`interpreter/vm_types.py`):
+
+```python
+@dataclass(frozen=True)
+class Pointer:
+    base: str       # heap object address (e.g., "mem_0", "arr_0")
+    offset: int = 0 # element offset within the object
+```
+
+### Promote-on-address-of
+
+When `&x` is taken on a primitive variable, the `ADDRESS_OF` handler:
+
+1. Creates a new `HeapObject` with `fields={"0": current_value}`
+2. Records the alias in `frame.var_heap_aliases[var_name] = Pointer(base=heap_addr, offset=0)`
+3. Returns the `Pointer` as the instruction result
+
+After promotion, all reads (`LOAD_VAR`) and writes (`STORE_VAR`) for that variable are **alias-aware** — they go through the heap object instead of `local_vars`. This means `*ptr = 99` (via `STORE_FIELD ptr, "*", 99`) writes to the heap, and the next `LOAD_VAR x` reads back `99` from the same heap location.
+
+### Pointer operations
+
+| Operation | IR pattern | Executor behaviour |
+|---|---|---|
+| **Dereference read** (`*ptr`) | `LOAD_FIELD %ptr "*"` | Reads `heap[ptr.base].fields[str(ptr.offset)]` |
+| **Dereference write** (`*ptr = val`) | `STORE_FIELD %ptr "*" %val` | Writes to `heap[ptr.base].fields[str(ptr.offset)]` |
+| **Pointer + int** | `BINOP "+" %ptr %n` | `Pointer(base=ptr.base, offset=ptr.offset + n)` |
+| **Pointer - int** | `BINOP "-" %ptr %n` | `Pointer(base=ptr.base, offset=ptr.offset - n)` |
+| **Pointer - Pointer** | `BINOP "-" %p2 %p1` | `p2.offset - p1.offset` (integer result, same base required) |
+| **Pointer comparison** | `BINOP "<" %p1 %p2` | Compares offsets within same base object |
+| **Array decay** (C) | Heap address string in arithmetic | Auto-wraps as `Pointer(base=addr, offset=0)` |
+
+### What does NOT get aliased
+
+- **Structs/arrays** already on the heap: `&s` wraps the existing heap address in a `Pointer` but does **not** create an alias entry (the variable already points to the heap).
+- **Function references**: `&func` returns the function reference unchanged (identity — functions are already values).
+- **Nested pointers**: `int **pp = &ptr` promotes `ptr` itself to the heap, enabling double dereference (`**pp`).
+
+---
+
+## 11. Built-in Functions
 
 Built-in functions are defined in `interpreter/builtins.py`. They are dispatched before user functions in the call chain.
 
@@ -880,7 +925,7 @@ if result is Operators.UNCOMPUTABLE:
 
 ---
 
-## 11. LLM Backend (Oracle Fallback)
+## 12. LLM Backend (Oracle Fallback)
 
 The LLM backend (`interpreter/backend.py`) is the fallback for instructions the local executor can't handle. In practice, the local executor handles all 27 opcodes, so the LLM is only called when the local executor explicitly delegates (which currently doesn't happen — all opcodes have handlers).
 
@@ -926,7 +971,7 @@ The system prompt (`interpreter/backend.py:16`) defines the `StateUpdate` JSON s
 
 ---
 
-## 12. Function and Class Registry
+## 13. Function and Class Registry
 
 The `FunctionRegistry` (`interpreter/registry.py:62`) is built by scanning IR instructions and the CFG:
 
@@ -956,7 +1001,7 @@ LABEL func_factorial_0
 
 ---
 
-## 13. Dataflow Analysis
+## 14. Dataflow Analysis
 
 `interpreter/dataflow.py` implements classic intraprocedural dataflow analysis on the CFG.
 
@@ -1043,7 +1088,7 @@ Both graphs are returned in `DataflowResult`: `raw_dependency_graph` (direct edg
 
 ---
 
-## 14. Module Map
+## 15. Module Map
 
 ```
 interpreter/
@@ -1090,7 +1135,7 @@ The new `*_types.py` files are **pure data** with no business-logic imports, ens
 
 ---
 
-## 15. End-to-End Worked Example
+## 16. End-to-End Worked Example
 
 ### Source
 
