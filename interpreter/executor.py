@@ -611,6 +611,25 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
             else None
         )
     )
+    if lhs_ptr and rhs_ptr:
+        # Pointer - Pointer: offset difference (must share same base)
+        if oper == "-" and lhs_ptr.base == rhs_ptr.base:
+            diff = lhs_ptr.offset - rhs_ptr.offset
+            return ExecutionResult.success(
+                StateUpdate(
+                    register_writes={inst.result_reg: diff},
+                    reasoning=f"pointer diff {lhs!r} - {rhs!r} = {diff}",
+                )
+            )
+        # Pointer relational comparison (same base)
+        if oper in ("<", ">", "<=", ">=", "==", "!=") and lhs_ptr.base == rhs_ptr.base:
+            result = Operators.eval_binop(oper, lhs_ptr.offset, rhs_ptr.offset)
+            return ExecutionResult.success(
+                StateUpdate(
+                    register_writes={inst.result_reg: result},
+                    reasoning=f"pointer cmp {lhs!r} {oper} {rhs!r} = {result!r}",
+                )
+            )
     if oper in ("+", "-") and (lhs_ptr or rhs_ptr):
         ptr = lhs_ptr or rhs_ptr
         offset_val = rhs if lhs_ptr else lhs
