@@ -525,7 +525,7 @@ The **Rosetta suite** (`tests/unit/rosetta/`) implements 15 cross-language test 
 
 - **8 algorithms + closures + classes + exceptions + variable scoping** — all 15 languages
 - **closures-lambda** — 5 languages with lambda/arrow syntax (Python, JS, TS, Kotlin, Scala)
-- **destructuring** — 6 languages (Python, JS, TS, Rust, Scala, Kotlin)
+- **destructuring** — 6 languages (Python, JS, TS, Rust, Scala, Kotlin) in variable declarations; for-loop destructuring in JS/TS (`for (const [k, v] of arr)`), Kotlin (`for ((a, b) in pairs)`), and C++ (`for (auto [a, b] : pairs)`)
 - **nested functions** — 10 languages (Python, JS, TS, Rust, Lua, Ruby, Go, Kotlin, Scala, PHP)
 
 Each problem tests:

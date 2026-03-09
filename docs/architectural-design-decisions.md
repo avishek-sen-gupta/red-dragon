@@ -1810,4 +1810,20 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 
 **Decision:** Record these gaps for incremental resolution. P0s (Go if/switch init, Java try-with-resources) are functional breakage — code is silently lost from the IR. P1s are scoping errors where variables leak or aren't bound. P2s are destructuring limitations where only partial variable extraction occurs.
 
-**Status:** Open. C-style for-loop init scoping (the original gap) has been fixed for all languages including Go's custom `_lower_go_for_clause`. The 12 gaps above remain.
+**Status:** Mostly resolved. P0 #1-3 (Go if/switch init, Java try-with-resources), P1 #7-8 (C++ if-init, C# using scope), P2 #10 (Kotlin when-subject binding), P2 #11-12, #14 (for-loop destructuring in Kotlin, C++, JS/TS) are all fixed. Remaining open: P1 #4-6 (Rust pattern matching), P1 #9 (Scala pattern matching), P2 #13 (C# switch expression patterns) — all require pattern matching architecture.
+
+---
+
+### ADR-097: For-loop destructuring support (2026-03-09)
+
+**Context:** For-of/for-in loops with destructuring patterns (`for (const [k, v] of arr)` in JS/TS, `for ((a, b) in pairs)` in Kotlin, `for (auto [a, b] : pairs)` in C++) were not decomposing the pattern into individual variables — they either extracted a single variable name or produced `None`.
+
+**Decision:** Reuse existing per-language destructuring helpers where available (JS `_lower_array_destructure`/`_lower_object_destructure`, Kotlin `_lower_multi_variable_destructure` pattern). For C++ structured bindings, add new `_lower_structured_binding` helper. All share the same IR pattern: positional `LOAD_INDEX` + `STORE_VAR` per element, or `LOAD_FIELD` + `STORE_VAR` for object destructuring.
+
+**Changes:**
+- `javascript/control_flow.py`: `lower_for_of` and `lower_for_in` detect `array_pattern`/`object_pattern` nodes and delegate to existing destructuring helpers via `_lower_for_destructure`
+- `kotlin/control_flow.py`: `lower_for_stmt` detects `multi_variable_declaration` and decomposes via `_lower_for_multi_destructure`
+- `cpp/control_flow.py`: `lower_range_for` detects `structured_binding_declarator` and decomposes via `_lower_structured_binding`
+- `cpp/node_types.py`: Added `STRUCTURED_BINDING_DECLARATOR` constant
+
+**Status:** Complete. 11 unit tests + 20 integration tests.
