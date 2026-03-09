@@ -197,6 +197,30 @@ def _lower_lua_for_numeric(
     ctx.emit(Opcode.LABEL, label=end_label)
 
 
+_ITERATOR_WRAPPERS = frozenset({"ipairs", "pairs"})
+
+
+def _strip_iterator_wrapper(ctx: TreeSitterEmitContext, expr_list_node):
+    """If the expression list is a single ipairs(t)/pairs(t) call, return t.
+
+    Otherwise return the original expression list node unchanged.
+    """
+    named = [c for c in expr_list_node.children if c.is_named]
+    if len(named) != 1 or named[0].type != LuaNodeType.FUNCTION_CALL:
+        return expr_list_node
+    call_node = named[0]
+    name_node = call_node.child_by_field_name("name")
+    if name_node is None or ctx.node_text(name_node) not in _ITERATOR_WRAPPERS:
+        return expr_list_node
+    args_node = call_node.child_by_field_name(ctx.constants.call_arguments_field)
+    if args_node is None:
+        return expr_list_node
+    inner_args = [c for c in args_node.children if c.is_named]
+    if len(inner_args) != 1:
+        return expr_list_node
+    return inner_args[0]
+
+
 def _lower_lua_for_generic(
     ctx: TreeSitterEmitContext, clause, body_node, for_node
 ) -> None:
@@ -213,8 +237,10 @@ def _lower_lua_for_generic(
         [ctx.node_text(c) for c in var_list.children if c.is_named] if var_list else []
     )
 
-    # Lower the iterable expression (e.g., pairs(t) or ipairs(t))
-    iter_reg = ctx.lower_expr(expr_list) if expr_list else ctx.fresh_reg()
+    # Strip ipairs()/pairs() wrappers — these are semantically no-ops for
+    # index-based iteration.  Lower the inner argument directly instead.
+    iterable_node = _strip_iterator_wrapper(ctx, expr_list) if expr_list else None
+    iter_reg = ctx.lower_expr(iterable_node) if iterable_node else ctx.fresh_reg()
 
     init_idx = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
