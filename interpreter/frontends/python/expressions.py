@@ -236,8 +236,9 @@ def _lower_comprehension_loop(
     iterable_node = clause_named[1] if len(clause_named) > 1 else None
 
     iter_reg = ctx.lower_expr(iterable_node) if iterable_node else ctx.fresh_reg()
-    idx_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
+    init_idx = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
+    ctx.emit(Opcode.STORE_VAR, operands=["__for_idx", init_idx])
     len_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
 
@@ -246,6 +247,8 @@ def _lower_comprehension_loop(
     loop_end_label = ctx.fresh_label("comp_loop_end")
 
     ctx.emit(Opcode.LABEL, label=loop_label)
+    idx_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=idx_reg, operands=["__for_idx"])
     cond_reg = ctx.fresh_reg()
     ctx.emit(Opcode.BINOP, result_reg=cond_reg, operands=["<", idx_reg, len_reg])
     ctx.emit(
@@ -255,9 +258,19 @@ def _lower_comprehension_loop(
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
+    # Register the loop var name as a base-level variable so that
+    # declare_block_var will mangle it in the comprehension scope,
+    # preventing the comprehension variable from leaking (Python 3 semantics).
+    if loop_var and loop_var.type == PythonNodeType.IDENTIFIER:
+        ctx._base_declared_vars.add(ctx.node_text(loop_var))
+    ctx.enter_block_scope()
     elem_reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
-    lower_store_target(ctx, loop_var, elem_reg, node)
+    if loop_var and loop_var.type == PythonNodeType.IDENTIFIER:
+        var_name = ctx.declare_block_var(ctx.node_text(loop_var))
+        ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+    else:
+        lower_store_target(ctx, loop_var, elem_reg, node)
 
     if remaining_fors:
         # Recurse for nested for-clauses (filters apply at innermost level)
@@ -300,6 +313,8 @@ def _lower_comprehension_loop(
         if skip_label:
             ctx.emit(Opcode.LABEL, label=skip_label)
 
+    ctx.exit_block_scope()
+
     # Increment source index
     _emit_for_increment(ctx, idx_reg, loop_label)
 
@@ -333,8 +348,9 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> str:
     iterable_node = clause_named[1] if len(clause_named) > 1 else None
 
     iter_reg = ctx.lower_expr(iterable_node) if iterable_node else ctx.fresh_reg()
-    idx_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
+    init_idx = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
+    ctx.emit(Opcode.STORE_VAR, operands=["__for_idx", init_idx])
     len_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
 
@@ -343,6 +359,8 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> str:
     end_label = ctx.fresh_label("dcomp_end")
 
     ctx.emit(Opcode.LABEL, label=loop_label)
+    idx_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=idx_reg, operands=["__for_idx"])
     cond_reg = ctx.fresh_reg()
     ctx.emit(Opcode.BINOP, result_reg=cond_reg, operands=["<", idx_reg, len_reg])
     ctx.emit(
@@ -352,9 +370,18 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> str:
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
+    # Register the loop var name as a base-level variable so that
+    # declare_block_var will mangle it (Python 3 comprehension scoping).
+    if loop_var and loop_var.type == PythonNodeType.IDENTIFIER:
+        ctx._base_declared_vars.add(ctx.node_text(loop_var))
+    ctx.enter_block_scope()
     elem_reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
-    lower_store_target(ctx, loop_var, elem_reg, node)
+    if loop_var and loop_var.type == PythonNodeType.IDENTIFIER:
+        var_name = ctx.declare_block_var(ctx.node_text(loop_var))
+        ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+    else:
+        lower_store_target(ctx, loop_var, elem_reg, node)
 
     # Handle if clause (filter)
     store_label = ctx.fresh_label("dcomp_store")
@@ -382,6 +409,8 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> str:
 
     if skip_label:
         ctx.emit(Opcode.LABEL, label=skip_label)
+
+    ctx.exit_block_scope()
 
     # Increment source index
     _emit_for_increment(ctx, idx_reg, loop_label)
