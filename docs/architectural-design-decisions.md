@@ -1827,3 +1827,20 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 - `cpp/node_types.py`: Added `STRUCTURED_BINDING_DECLARATOR` constant
 
 **Status:** Complete. 11 unit tests + 20 integration tests.
+
+---
+
+### ADR-098: Python comprehension variable scoping (2026-03-09)
+
+**Context:** Python 3 scopes comprehension loop variables to the comprehension body — `[x for x in items]` should not leak `x` to the enclosing scope. The Python frontend was lowering comprehension loops without block scoping, causing the loop variable to overwrite any outer variable with the same name. Additionally, comprehension loops had an SSA counter bug (same pattern as for-each loops — using SSA register directly instead of STORE_VAR/LOAD_VAR).
+
+**Decision:** Apply two fixes to `_lower_comprehension_loop` and `lower_dict_comprehension` in `python/expressions.py`:
+1. **SSA counter fix**: Use `STORE_VAR`/`LOAD_VAR` for `__for_idx` instead of reusing the SSA register directly.
+2. **Block scoping**: Register the loop variable name in `_base_declared_vars` before entering a block scope, then use `declare_block_var()` to mangle the name (e.g., `x` → `x$1`). Body expressions automatically resolve the mangled name via `resolve_var()`. `exit_block_scope()` is called before the increment section.
+
+**Changes:**
+- `interpreter/frontends/python/expressions.py`: `_lower_comprehension_loop` and `lower_dict_comprehension` — SSA fix + block scope with name mangling
+- List, set comprehensions and generator expressions all share `_lower_comprehension_loop`, so the fix applies uniformly
+- Dict comprehension has its own inline loop that was separately fixed
+
+**Status:** Complete. 5 unit tests + 4 integration tests.
