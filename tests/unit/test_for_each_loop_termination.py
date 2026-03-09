@@ -101,7 +101,6 @@ class M {
 
 
 class TestKotlinForTermination:
-    @pytest.mark.xfail(reason="Kotlin arrayOf() lowering produces off-by-one in len()")
     def test_for_accumulates_correctly(self):
         vm, stats = execute_for_language(
             "kotlin",
