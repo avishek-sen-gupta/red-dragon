@@ -110,9 +110,39 @@ def _extract_for_var_name(ctx: TreeSitterEmitContext, var_node) -> str:
     return ctx.node_text(id_node) if id_node else "__for_var"
 
 
+def _lower_for_multi_destructure(
+    ctx: TreeSitterEmitContext, multi_var_node, elem_reg: str
+) -> None:
+    """Decompose ``(a, b)`` in a for loop into positional LOAD_INDEX + STORE_VAR."""
+    var_decls = [
+        c for c in multi_var_node.children if c.type == KNT.VARIABLE_DECLARATION
+    ]
+    for i, var_decl in enumerate(var_decls):
+        name_node = next(
+            (c for c in var_decl.children if c.type == KNT.SIMPLE_IDENTIFIER), None
+        )
+        raw_name = ctx.node_text(name_node) if name_node else f"__destructure_{i}"
+        var_name = ctx.declare_block_var(raw_name)
+        idx_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+        part_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.LOAD_INDEX,
+            result_reg=part_reg,
+            operands=[elem_reg, idx_reg],
+            node=var_decl,
+        )
+        ctx.emit(Opcode.STORE_VAR, operands=[var_name, part_reg], node=var_decl)
+
+
 def lower_for_stmt(ctx: TreeSitterEmitContext, node) -> None:
     named_children = [c for c in node.children if c.is_named]
     # Typically: variable_declaration, iterable expression, control_structure_body
+    # May also be multi_variable_declaration for destructuring
+    multi_var_node = next(
+        (c for c in named_children if c.type == KNT.MULTI_VARIABLE_DECLARATION),
+        None,
+    )
     var_node = next(
         (
             c
@@ -128,7 +158,12 @@ def lower_for_stmt(ctx: TreeSitterEmitContext, node) -> None:
     # Iterable is the expression between "in" and body
     iterable_node = _find_for_iterable(ctx, node)
 
-    raw_name = _extract_for_var_name(ctx, var_node) if var_node else "__for_var"
+    is_destructure = multi_var_node is not None
+    raw_name = (
+        "__for_destructure"
+        if is_destructure
+        else (_extract_for_var_name(ctx, var_node) if var_node else "__for_var")
+    )
     iter_reg = ctx.lower_expr(iterable_node) if iterable_node else ctx.fresh_reg()
 
     idx_reg = ctx.fresh_reg()
@@ -151,10 +186,14 @@ def lower_for_stmt(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit(Opcode.LABEL, label=body_label)
     ctx.enter_block_scope()
-    var_name = ctx.declare_block_var(raw_name)
     elem_reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
-    ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+
+    if is_destructure:
+        _lower_for_multi_destructure(ctx, multi_var_node, elem_reg)
+    else:
+        var_name = ctx.declare_block_var(raw_name)
+        ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
 
     update_label = ctx.fresh_label("for_update")
     ctx.push_loop(update_label, end_label)
