@@ -14,10 +14,33 @@ from interpreter.frontends.cpp.node_types import CppNodeType
 
 
 def lower_cpp_if(ctx: TreeSitterEmitContext, node) -> None:
-    """Override if lowering to handle C++ condition_clause wrapper."""
+    """Override if lowering to handle C++ condition_clause wrapper.
+
+    C++17 allows ``if (init; cond) { }`` where the init variable is
+    scoped to the entire if/else chain.  The init_statement lives inside
+    the condition_clause node.
+    """
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
     alt_node = node.child_by_field_name(ctx.constants.if_alternative_field)
+
+    # Handle C++17 if-init: condition_clause may contain an init_statement
+    init_node = (
+        next(
+            (c for c in cond_node.children if c.type == CppNodeType.INIT_STATEMENT),
+            None,
+        )
+        if cond_node
+        else None
+    )
+    scope_entered = init_node is not None and ctx.block_scoped
+    if scope_entered:
+        ctx.enter_block_scope()
+    if init_node:
+        # Lower the declaration inside init_statement
+        for child in init_node.children:
+            if child.is_named:
+                ctx.lower_stmt(child)
 
     cond_reg = ctx.lower_expr(cond_node)
     true_label = ctx.fresh_label("if_true")
@@ -52,6 +75,9 @@ def lower_cpp_if(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(Opcode.BRANCH, label=end_label)
 
     ctx.emit(Opcode.LABEL, label=end_label)
+
+    if scope_entered:
+        ctx.exit_block_scope()
 
 
 def lower_cpp_while(ctx: TreeSitterEmitContext, node) -> None:

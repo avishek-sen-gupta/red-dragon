@@ -1090,3 +1090,45 @@ class TestJavaTryWithResourcesScoping:
         ir = _lower(JavaFrontend, "java", source)
         stores = _store_var_names(ir)
         assert "r" in stores
+
+
+# ---------------------------------------------------------------------------
+# C++ if-init scoping (P1 #7)
+# ---------------------------------------------------------------------------
+
+
+class TestCppIfInitScoping:
+    """C++17 if (init; cond) — init var should be scoped to the if chain."""
+
+    def test_if_init_shadows_outer(self):
+        source = """
+        int main() {
+            int x = 99;
+            if (int x = 42; x > 0) {
+                int y = x;
+            }
+            int z = x;
+        }
+        """
+        ir = _lower(CppFrontend, "cpp", source)
+        stores = _store_var_names(ir)
+        mangled = [n for n in stores if n.startswith("x$")]
+        assert len(mangled) >= 1
+        assert "x" in stores
+        # z = x should load the unmangled outer x
+        loads = _load_var_names(ir)
+        assert "x" in loads
+
+    def test_if_init_no_shadow_no_mangle(self):
+        source = """
+        int main() {
+            if (int y = 42; y > 0) {
+                int z = y;
+            }
+        }
+        """
+        ir = _lower(CppFrontend, "cpp", source)
+        stores = _store_var_names(ir)
+        assert "y" in stores
+        mangled = [n for n in stores if n.startswith("y$")]
+        assert len(mangled) == 0
