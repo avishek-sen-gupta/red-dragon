@@ -314,6 +314,89 @@ class TestPointerArithmetic:
         assert vm.current_frame.registers["%val"] == 20
 
 
+# ── Pointer subtraction and comparison ────────────────────────────
+
+
+class TestPointerSubtraction:
+    def test_pointer_minus_pointer_same_base(self):
+        """Pointer - Pointer with same base should return offset difference."""
+        vm = _make_vm()
+        vm.current_frame.registers["%p1"] = Pointer("arr_0", 1)
+        vm.current_frame.registers["%p2"] = Pointer("arr_0", 4)
+
+        inst = _make_inst(
+            Opcode.BINOP, result_reg="%diff", operands=["-", "%p2", "%p1"]
+        )
+        result = _handle_binop(inst, vm)
+        _apply(vm, result)
+
+        assert vm.current_frame.registers["%diff"] == 3
+
+    def test_pointer_minus_pointer_negative(self):
+        """Lower pointer minus higher pointer should give negative difference."""
+        vm = _make_vm()
+        vm.current_frame.registers["%p1"] = Pointer("arr_0", 5)
+        vm.current_frame.registers["%p2"] = Pointer("arr_0", 2)
+
+        inst = _make_inst(
+            Opcode.BINOP, result_reg="%diff", operands=["-", "%p2", "%p1"]
+        )
+        result = _handle_binop(inst, vm)
+        _apply(vm, result)
+
+        assert vm.current_frame.registers["%diff"] == -3
+
+
+class TestPointerComparison:
+    def test_less_than(self):
+        """Pointer < Pointer should compare offsets."""
+        vm = _make_vm()
+        vm.current_frame.registers["%p1"] = Pointer("arr_0", 0)
+        vm.current_frame.registers["%p2"] = Pointer("arr_0", 1)
+
+        inst = _make_inst(Opcode.BINOP, result_reg="%r", operands=["<", "%p1", "%p2"])
+        result = _handle_binop(inst, vm)
+        _apply(vm, result)
+
+        assert vm.current_frame.registers["%r"] is True
+
+    def test_greater_than(self):
+        """Pointer > Pointer should compare offsets."""
+        vm = _make_vm()
+        vm.current_frame.registers["%p1"] = Pointer("arr_0", 3)
+        vm.current_frame.registers["%p2"] = Pointer("arr_0", 1)
+
+        inst = _make_inst(Opcode.BINOP, result_reg="%r", operands=[">", "%p1", "%p2"])
+        result = _handle_binop(inst, vm)
+        _apply(vm, result)
+
+        assert vm.current_frame.registers["%r"] is True
+
+    def test_less_than_or_equal(self):
+        """Pointer <= Pointer with equal offsets should be True."""
+        vm = _make_vm()
+        vm.current_frame.registers["%p1"] = Pointer("arr_0", 2)
+        vm.current_frame.registers["%p2"] = Pointer("arr_0", 2)
+
+        inst = _make_inst(Opcode.BINOP, result_reg="%r", operands=["<=", "%p1", "%p2"])
+        result = _handle_binop(inst, vm)
+        _apply(vm, result)
+
+        assert vm.current_frame.registers["%r"] is True
+
+    def test_not_equal(self):
+        """Pointer != Pointer with different offsets should be True."""
+        vm = _make_vm()
+        vm.current_frame.registers["%p1"] = Pointer("arr_0", 0)
+        vm.current_frame.registers["%p2"] = Pointer("arr_0", 3)
+
+        inst = _make_inst(Opcode.BINOP, result_reg="%r", operands=["!=", "%p1", "%p2"])
+        result = _handle_binop(inst, vm)
+        _apply(vm, result)
+
+        assert vm.current_frame.registers["%r"] is True
+
+
 # ── Nested pointers ──────────────────────────────────────────────
 
 

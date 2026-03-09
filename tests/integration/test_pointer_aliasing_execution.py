@@ -65,6 +65,43 @@ int answer = *(ptr + 1);
         assert local_vars["answer"] == 20
 
 
+class TestPointerSubtractionExecution:
+    def test_pointer_difference(self):
+        """p2 - p1 should return the element distance."""
+        vm, local_vars = _run_c("""\
+int arr[4] = {10, 20, 30, 40};
+int *p1 = arr;
+int *p2 = arr;
+p2 = p2 + 3;
+int diff = p2 - p1;
+""")
+        assert local_vars["diff"] == 3
+
+
+class TestPointerComparisonExecution:
+    def test_pointer_less_than(self):
+        """p1 < p2 should be true when p1 points before p2."""
+        vm, local_vars = _run_c("""\
+int arr[3] = {10, 20, 30};
+int *p1 = arr;
+int *p2 = p1 + 2;
+int lt = p1 < p2;
+""")
+        assert local_vars["lt"] == True
+
+    def test_pointer_greater_equal(self):
+        """p2 >= p1 should be true when p2 points at or after p1."""
+        vm, local_vars = _run_c("""\
+int arr[3] = {10, 20, 30};
+int *p1 = arr;
+int *p2 = p1 + 1;
+int ge = p2 >= p1;
+int ge_eq = p1 >= p1;
+""")
+        assert local_vars["ge"] == True
+        assert local_vars["ge_eq"] == True
+
+
 class TestNestedPointerExecution:
     def test_double_pointer_write(self):
         """**pp = 99 should update x through two levels of indirection."""
