@@ -1132,3 +1132,46 @@ class TestCppIfInitScoping:
         assert "y" in stores
         mangled = [n for n in stores if n.startswith("y$")]
         assert len(mangled) == 0
+
+
+# ---------------------------------------------------------------------------
+# C# using-statement scoping (P1 #8)
+# ---------------------------------------------------------------------------
+
+
+class TestCSharpUsingStmtScoping:
+    """C# using(var r = expr) { } — resource var should be scoped."""
+
+    def test_using_var_shadows_outer(self):
+        source = """
+        class M {
+            void Main() {
+                object r = null;
+                using (var r = GetResource()) {
+                    int y = 1;
+                }
+                object z = r;
+            }
+        }
+        """
+        ir = _lower(CSharpFrontend, "csharp", source)
+        stores = _store_var_names(ir)
+        mangled = [n for n in stores if n.startswith("r$")]
+        assert len(mangled) >= 1
+        assert "r" in stores
+
+    def test_using_var_no_shadow_no_mangle(self):
+        source = """
+        class M {
+            void Main() {
+                using (var r = GetResource()) {
+                    int y = 1;
+                }
+            }
+        }
+        """
+        ir = _lower(CSharpFrontend, "csharp", source)
+        stores = _store_var_names(ir)
+        assert "r" in stores
+        mangled = [n for n in stores if n.startswith("r$")]
+        assert len(mangled) == 0
