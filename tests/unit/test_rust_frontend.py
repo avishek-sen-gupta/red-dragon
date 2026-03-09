@@ -178,8 +178,8 @@ class TestRustExpressions:
 
     def test_dereference_expression(self):
         instructions = _parse_rust("fn main() { let v = *x; }")
-        unops = _find_all(instructions, Opcode.UNOP)
-        assert any("*" in inst.operands for inst in unops)
+        load_fields = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert any("*" in inst.operands for inst in load_fields)
 
     def test_assignment_expression(self):
         instructions = _parse_rust("fn main() { x = 10; }")
@@ -337,10 +337,9 @@ fn main() {
         # &x now emits ADDRESS_OF instead of UNOP "&"
         addr_ofs = _find_all(instructions, Opcode.ADDRESS_OF)
         assert any("x" in inst.operands for inst in addr_ofs)
-        # *r still emits UNOP "*"
-        unops = _find_all(instructions, Opcode.UNOP)
-        operators = [inst.operands[0] for inst in unops if inst.operands]
-        assert "*" in operators
+        # *r now emits LOAD_FIELD r, "*" (pointer dereference)
+        load_fields = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert any("*" in inst.operands for inst in load_fields)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
         assert any("r" in inst.operands for inst in stores)

@@ -69,18 +69,28 @@ def lower_reference_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_deref_expr(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower *expr -> UNOP '*'."""
+    """Lower *expr -> LOAD_FIELD expr, '*' (pointer dereference read)."""
     children = [c for c in node.children if c.type != RustNodeType.ASTERISK]
     inner = children[0] if children else node
     inner_reg = ctx.lower_expr(inner)
     reg = ctx.fresh_reg()
     ctx.emit(
-        Opcode.UNOP,
+        Opcode.LOAD_FIELD,
         result_reg=reg,
-        operands=["*", inner_reg],
+        operands=[inner_reg, "*"],
         node=node,
     )
     return reg
+
+
+def lower_unary_or_deref(ctx: TreeSitterEmitContext, node) -> str:
+    """Route unary_expression: '*' -> pointer deref, else -> generic unop."""
+    from interpreter.frontends.common.expressions import lower_unop
+
+    op_node = next((c for c in node.children if c.type == RustNodeType.ASTERISK), None)
+    if op_node is not None:
+        return lower_deref_expr(ctx, node)
+    return lower_unop(ctx, node)
 
 
 def lower_if_expr(ctx: TreeSitterEmitContext, node) -> str:
