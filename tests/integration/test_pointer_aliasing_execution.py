@@ -1,4 +1,4 @@
-"""Integration tests for pointer aliasing — end-to-end C execution.
+"""Integration tests for pointer aliasing — end-to-end C and Rust execution.
 
 Verifies that pointer operations (address-of, dereference, assignment
 through pointer, pointer arithmetic) produce correct results through
@@ -14,6 +14,12 @@ from interpreter.run import run
 def _run_c(source: str, max_steps: int = 300):
     """Run a C program and return (vm, frame.local_vars)."""
     vm = run(source, language=Language.C, max_steps=max_steps)
+    return vm, dict(vm.call_stack[0].local_vars)
+
+
+def _run_rust(source: str, max_steps: int = 300):
+    """Run a Rust program and return (vm, frame.local_vars)."""
+    vm = run(source, language=Language.RUST, max_steps=max_steps)
     return vm, dict(vm.call_stack[0].local_vars)
 
 
@@ -70,3 +76,39 @@ int **pp = &ptr;
 int answer = x;
 """)
         assert local_vars["answer"] == 99
+
+
+# ── Rust source-level integration tests ──────────────────────────
+
+
+class TestRustReferenceRead:
+    def test_read_through_reference(self):
+        """let ptr = &x; *ptr should read x's value."""
+        vm, local_vars = _run_rust("""\
+let x = 42;
+let ptr = &x;
+let answer = *ptr;
+""")
+        assert local_vars["answer"] == 42
+
+
+class TestRustMutableReferenceWrite:
+    def test_write_through_mutable_reference_updates_original(self):
+        """*ptr = 99 should update x when ptr = &mut x."""
+        vm, local_vars = _run_rust("""\
+let mut x = 42;
+let ptr = &mut x;
+*ptr = 99;
+let answer = x;
+""")
+        assert local_vars["answer"] == 99
+
+    def test_modify_original_visible_through_reference(self):
+        """Changing x after &x should be visible through *ptr."""
+        vm, local_vars = _run_rust("""\
+let mut x = 42;
+let ptr = &x;
+x = 100;
+let answer = *ptr;
+""")
+        assert local_vars["answer"] == 100
