@@ -53,6 +53,7 @@ class CppNodeType:
     ASSIGNMENT_EXPRESSION = "assignment_expression"
     SUBSCRIPT_EXPRESSION = "subscript_expression"
     CONDITION_CLAUSE = "condition_clause"
+    INIT_STATEMENT = "init_statement"
 
     # Cast expressions
     STATIC_CAST_EXPRESSION = "static_cast_expression"
