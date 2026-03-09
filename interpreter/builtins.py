@@ -21,7 +21,10 @@ def _builtin_len(args: list[Any], vm: VMState) -> Any:
     val = args[0]
     addr = _heap_addr(val)
     if addr and addr in vm.heap:
-        return len(vm.heap[addr].fields)
+        fields = vm.heap[addr].fields
+        if "length" in fields:
+            return fields["length"]
+        return len(fields)
     if isinstance(val, (list, tuple, str)):
         return len(val)
     return _UNCOMPUTABLE
