@@ -13,6 +13,7 @@ from interpreter.vm import (
     HeapObject,
     ClosureEnvironment,
     ExceptionHandler,
+    Pointer,
     StackFramePush,
     StateUpdate,
     HeapWrite,
@@ -110,7 +111,17 @@ def _handle_load_var(
     inst: IRInstruction, vm: VMState, **kwargs: Any
 ) -> ExecutionResult:
     name = inst.operands[0]
+    # Alias-aware: if variable is backed by a heap object, read from heap
     for f in reversed(vm.call_stack):
+        alias_ptr = f.var_heap_aliases.get(name)
+        if alias_ptr and alias_ptr.base in vm.heap:
+            val = vm.heap[alias_ptr.base].fields.get(str(alias_ptr.offset))
+            return ExecutionResult.success(
+                StateUpdate(
+                    register_writes={inst.result_reg: _serialize_value(val)},
+                    reasoning=f"load {name} = {val!r} (via heap alias {alias_ptr.base})",
+                )
+            )
         if name in f.local_vars:
             val = f.local_vars[name]
             return ExecutionResult.success(
@@ -138,6 +149,68 @@ def _handle_store_var(
         StateUpdate(
             var_writes={name: _serialize_value(val)},
             reasoning=f"store {name} = {val!r}",
+        )
+    )
+
+
+def _handle_address_of(
+    inst: IRInstruction, vm: VMState, **kwargs: Any
+) -> ExecutionResult:
+    """ADDRESS_OF var_name: promote variable to heap and return a Pointer."""
+    name = inst.operands[0]
+    frame = vm.current_frame
+
+    # Already aliased — return the existing Pointer
+    if name in frame.var_heap_aliases:
+        ptr = frame.var_heap_aliases[name]
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: ptr},
+                reasoning=f"address_of {name} → {ptr} (already aliased)",
+            )
+        )
+
+    # Look up the variable's current value across the call stack
+    current_val = None
+    for f in reversed(vm.call_stack):
+        if name in f.local_vars:
+            current_val = f.local_vars[name]
+            break
+
+    # Function reference: &func_name returns the reference unchanged
+    # (identity semantics — our model already uses references for functions)
+    if isinstance(current_val, str) and _parse_func_ref(current_val).matched:
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: current_val},
+                reasoning=f"address_of {name} → {current_val} (function ref, identity)",
+            )
+        )
+
+    # If variable holds a heap address (struct/array/symbolic), wrap it in a Pointer
+    # but do NOT alias the variable — structs are already on the heap, so
+    # LOAD_VAR should continue to return the heap address string directly.
+    addr = _heap_addr(current_val)
+    if addr and addr in vm.heap:
+        ptr = Pointer(base=addr, offset=0)
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: ptr},
+                reasoning=f"address_of {name} → {ptr} (existing heap object)",
+            )
+        )
+
+    # Promote primitive to heap: allocate a HeapObject with field "0"
+    mem_addr = f"mem_{vm.symbolic_counter}"
+    vm.symbolic_counter += 1
+    vm.heap[mem_addr] = HeapObject(type_hint=None, fields={"0": current_val})
+    ptr = Pointer(base=mem_addr, offset=0)
+    frame.var_heap_aliases[name] = ptr
+    logger.debug("address_of: promoted %s=%r to heap %s", name, current_val, mem_addr)
+    return ExecutionResult.success(
+        StateUpdate(
+            register_writes={inst.result_reg: ptr},
+            reasoning=f"address_of {name} → {ptr} (promoted to heap {mem_addr})",
         )
     )
 
@@ -213,6 +286,22 @@ def _handle_store_field(
     obj_val = _resolve_reg(vm, inst.operands[0])
     field_name = inst.operands[1]
     val = _resolve_reg(vm, inst.operands[2])
+    # Pointer field/dereference write
+    if isinstance(obj_val, Pointer):
+        # *ptr = val — dereference writes to the offset field
+        target_field = str(obj_val.offset) if field_name == "*" else field_name
+        return ExecutionResult.success(
+            StateUpdate(
+                heap_writes=[
+                    HeapWrite(
+                        obj_addr=obj_val.base,
+                        field=target_field,
+                        value=_serialize_value(val),
+                    )
+                ],
+                reasoning=f"store {obj_val.base}.{target_field} = {val!r} (via Pointer)",
+            )
+        )
     addr = _heap_addr(obj_val)
     if addr and addr not in vm.heap:
         # Materialise a synthetic heap entry for symbolic objects so that
@@ -245,6 +334,35 @@ def _handle_load_field(
 ) -> ExecutionResult:
     obj_val = _resolve_reg(vm, inst.operands[0])
     field_name = inst.operands[1]
+    # Pointer field/dereference access
+    if isinstance(obj_val, Pointer) and obj_val.base in vm.heap:
+        heap_obj = vm.heap[obj_val.base]
+        # *ptr — dereference reads from the offset field
+        if field_name == "*":
+            val = heap_obj.fields.get(str(obj_val.offset))
+            return ExecutionResult.success(
+                StateUpdate(
+                    register_writes={inst.result_reg: _serialize_value(val)},
+                    reasoning=f"load *{obj_val} = {val!r}",
+                )
+            )
+        # ptr->field — struct pointer field access (reads field from the object)
+        if field_name in heap_obj.fields:
+            val = heap_obj.fields[field_name]
+            return ExecutionResult.success(
+                StateUpdate(
+                    register_writes={inst.result_reg: _serialize_value(val)},
+                    reasoning=f"load {obj_val.base}.{field_name} = {val!r} (via Pointer)",
+                )
+            )
+    if isinstance(obj_val, Pointer) and obj_val.base not in vm.heap:
+        sym = vm.fresh_symbolic(hint=f"*{obj_val}")
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: sym.to_dict()},
+                reasoning=f"load *{obj_val} (not on heap) → {sym.name}",
+            )
+        )
     # In C, *fp where fp is a function pointer is equivalent to fp.
     if (
         field_name == "*"
@@ -472,6 +590,43 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
     oper = inst.operands[0]
     lhs = _resolve_reg(vm, inst.operands[1])
     rhs = _resolve_reg(vm, inst.operands[2])
+
+    # Pointer arithmetic: Pointer +/- int or int + Pointer
+    # Also handles heap address strings (array decay to pointer in C)
+    lhs_ptr = (
+        lhs
+        if isinstance(lhs, Pointer)
+        else (
+            Pointer(base=lhs, offset=0)
+            if isinstance(lhs, str) and _heap_addr(lhs) and _heap_addr(lhs) in vm.heap
+            else None
+        )
+    )
+    rhs_ptr = (
+        rhs
+        if isinstance(rhs, Pointer)
+        else (
+            Pointer(base=rhs, offset=0)
+            if isinstance(rhs, str) and _heap_addr(rhs) and _heap_addr(rhs) in vm.heap
+            else None
+        )
+    )
+    if oper in ("+", "-") and (lhs_ptr or rhs_ptr):
+        ptr = lhs_ptr or rhs_ptr
+        offset_val = rhs if lhs_ptr else lhs
+        if isinstance(offset_val, (int, float)):
+            new_offset = (
+                ptr.offset + int(offset_val)
+                if oper == "+" or not lhs_ptr
+                else ptr.offset - int(offset_val)
+            )
+            result_ptr = Pointer(base=ptr.base, offset=new_offset)
+            return ExecutionResult.success(
+                StateUpdate(
+                    register_writes={inst.result_reg: result_ptr},
+                    reasoning=f"pointer arith {lhs!r} {oper} {rhs!r} = {result_ptr!r}",
+                )
+            )
 
     if _is_symbolic(lhs) or _is_symbolic(rhs):
         lhs_desc = _symbolic_name(lhs)
@@ -1075,6 +1230,7 @@ class LocalExecutor:
         Opcode.ALLOC_REGION: _handle_alloc_region,
         Opcode.WRITE_REGION: _handle_write_region,
         Opcode.LOAD_REGION: _handle_load_region,
+        Opcode.ADDRESS_OF: _handle_address_of,
     }
 
     @classmethod

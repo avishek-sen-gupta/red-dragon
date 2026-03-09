@@ -25,6 +25,19 @@ class SymbolicValue:
         return d
 
 
+@dataclass(frozen=True)
+class Pointer:
+    """Typed pointer — (base heap address, element offset).
+
+    Models C/C++/Rust pointers. Pointer arithmetic produces new Pointer
+    objects with adjusted offsets. Dereferencing reads/writes
+    heap[base].fields[str(offset)].
+    """
+
+    base: str
+    offset: int = 0
+
+
 @dataclass
 class HeapObject:
     type_hint: str | None = None
@@ -66,6 +79,7 @@ class StackFrame:
     result_reg: str | None = None  # caller's register for return value
     closure_env_id: str = ""
     captured_var_names: frozenset[str] = field(default_factory=frozenset)
+    var_heap_aliases: dict[str, Pointer] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         d: dict[str, Any] = {
@@ -84,6 +98,8 @@ def _serialize_value(v: Any) -> Any:
         return v.to_dict()
     if isinstance(v, HeapObject):
         return v.to_dict()
+    if isinstance(v, Pointer):
+        return {"__pointer__": True, "base": v.base, "offset": v.offset}
     return v
 
 

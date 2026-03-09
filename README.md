@@ -555,6 +555,8 @@ Each problem tests:
 
 **Python comprehension scoping** follows Python 3 semantics — loop variables in list, dict, set comprehensions and generator expressions are scoped to the comprehension body using `enter_block_scope`/`exit_block_scope` with name mangling, preventing leakage to the enclosing scope.
 
+**Pointer aliasing** uses a KLEE-inspired promote-on-address-of model for C and Rust. The `ADDRESS_OF` opcode promotes primitive variables to heap-backed storage when their address is taken (`&x`), enabling `*ptr = 99` to correctly update the original variable. Supports nested pointers (`int **pp = &ptr`), pointer arithmetic (`ptr + n`), struct pointers (`ptr->field`), and array pointer decay.
+
 All frontends emit **canonical Python-form literals** (`"None"`, `"True"`, `"False"`) — language-native forms (`nil`, `null`, `undefined`, `NULL`, `true`, `false`) are canonicalized at lowering time.
 
 ### Equivalence suite

@@ -40,6 +40,8 @@ class Opcode(str, Enum):
     # Continuation operations (named return points)
     SET_CONTINUATION = "SET_CONTINUATION"
     RESUME_CONTINUATION = "RESUME_CONTINUATION"
+    # Pointer operations
+    ADDRESS_OF = "ADDRESS_OF"
     # Labels (pseudo-instruction)
     LABEL = "LABEL"
 

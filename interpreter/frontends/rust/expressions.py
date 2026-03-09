@@ -32,13 +32,31 @@ def lower_field_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_reference_expr(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower &expr or &mut expr -> UNOP '&'."""
+    """Lower &expr or &mut expr -> ADDRESS_OF for identifiers, UNOP '&' otherwise."""
     children = [
         c
         for c in node.children
-        if c.type not in (RustNodeType.AMPERSAND, RustNodeType.MUT_KEYWORD)
+        if c.type
+        not in (
+            RustNodeType.AMPERSAND,
+            RustNodeType.MUT_KEYWORD,
+            RustNodeType.MUTABLE_SPECIFIER,
+        )
     ]
     inner = children[0] if children else node
+
+    # For simple identifiers, emit ADDRESS_OF for alias tracking
+    if inner.type == RustNodeType.IDENTIFIER:
+        var_name = ctx.node_text(inner)
+        reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.ADDRESS_OF,
+            result_reg=reg,
+            operands=[var_name],
+            node=node,
+        )
+        return reg
+
     inner_reg = ctx.lower_expr(inner)
     reg = ctx.fresh_reg()
     ctx.emit(
@@ -730,13 +748,18 @@ def lower_rust_store_target(
                 operands=[obj_reg, idx_reg, val_reg],
                 node=parent_node,
             )
-    elif target.type == RustNodeType.DEREFERENCE_EXPRESSION:
+    elif target.type in (
+        RustNodeType.DEREFERENCE_EXPRESSION,
+        RustNodeType.UNARY_EXPRESSION,
+    ):
         inner_children = [c for c in target.children if c.type != RustNodeType.ASTERISK]
+        # Filter out the '*' operator text node for unary_expression
+        inner_children = [c for c in inner_children if c.is_named]
         if inner_children:
-            ctx.lower_expr(inner_children[0])
+            inner_reg = ctx.lower_expr(inner_children[0])
             ctx.emit(
-                Opcode.STORE_VAR,
-                operands=[f"*{ctx.node_text(inner_children[0])}", val_reg],
+                Opcode.STORE_FIELD,
+                operands=[inner_reg, "*", val_reg],
                 node=parent_node,
             )
     else:

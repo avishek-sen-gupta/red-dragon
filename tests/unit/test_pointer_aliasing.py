@@ -1,0 +1,349 @@
+"""Unit tests for pointer aliasing — promote-on-address-of model.
+
+Covers:
+  1. Pointer dataclass basics (creation, arithmetic, equality)
+  2. ADDRESS_OF opcode handler (promotes variable to heap, returns Pointer)
+  3. Alias-aware LOAD_VAR / STORE_VAR (reads/writes go through heap)
+  4. LOAD_FIELD/STORE_FIELD with "*" on Pointer (dereference read/write)
+  5. BINOP pointer arithmetic (Pointer + int, Pointer - int)
+  6. Nested pointers (int **pp = &ptr)
+"""
+
+from __future__ import annotations
+
+from interpreter.ir import IRInstruction, Opcode
+from interpreter.vm_types import (
+    HeapObject,
+    Pointer,
+    StackFrame,
+    VMState,
+    ExecutionResult,
+    StateUpdate,
+)
+from interpreter.vm import apply_update
+from interpreter.executor import (
+    _handle_address_of,
+    _handle_load_var,
+    _handle_store_var,
+    _handle_load_field,
+    _handle_store_field,
+    _handle_binop,
+    _handle_unop,
+)
+
+
+def _make_vm(**local_vars: object) -> VMState:
+    """Create a VMState with a single frame containing the given local vars."""
+    frame = StackFrame(function_name="test", local_vars=dict(local_vars))
+    return VMState(call_stack=[frame])
+
+
+def _make_inst(
+    opcode: Opcode, result_reg: str = "", operands: list = ()
+) -> IRInstruction:
+    return IRInstruction(
+        opcode=opcode,
+        result_reg=result_reg or None,
+        operands=list(operands),
+    )
+
+
+def _apply(vm: VMState, result: ExecutionResult) -> None:
+    """Apply an ExecutionResult's state update to the VM."""
+    apply_update(vm, result.update)
+
+
+# ── Pointer dataclass ─────────────────────────────────────────────
+
+
+class TestPointerDataclass:
+    def test_pointer_creation(self):
+        p = Pointer(base="mem_0", offset=0)
+        assert p.base == "mem_0"
+        assert p.offset == 0
+
+    def test_pointer_with_offset(self):
+        p = Pointer(base="mem_0", offset=3)
+        assert p.offset == 3
+
+    def test_pointer_equality(self):
+        assert Pointer("mem_0", 0) == Pointer("mem_0", 0)
+        assert Pointer("mem_0", 0) != Pointer("mem_0", 1)
+        assert Pointer("mem_0", 0) != Pointer("mem_1", 0)
+
+    def test_pointer_is_frozen(self):
+        p = Pointer("mem_0", 0)
+        try:
+            p.offset = 5
+            assert False, "Should not be able to mutate frozen dataclass"
+        except AttributeError:
+            pass
+
+
+# ── ADDRESS_OF handler ────────────────────────────────────────────
+
+
+class TestAddressOfHandler:
+    def test_promotes_primitive_to_heap(self):
+        """ADDRESS_OF 'x' should move x=42 to a HeapObject and return a Pointer."""
+        vm = _make_vm(x=42)
+        inst = _make_inst(Opcode.ADDRESS_OF, result_reg="%0", operands=["x"])
+        result = _handle_address_of(inst, vm)
+
+        assert result.handled
+        _apply(vm, result)
+
+        # Result register should hold a Pointer
+        ptr = vm.current_frame.registers["%0"]
+        assert isinstance(ptr, Pointer)
+        assert ptr.offset == 0
+
+        # The variable should be aliased
+        assert "x" in vm.current_frame.var_heap_aliases
+
+        # The heap object should hold the original value
+        alias_ptr = vm.current_frame.var_heap_aliases["x"]
+        assert vm.heap[alias_ptr.base].fields["0"] == 42
+
+    def test_second_address_of_returns_same_pointer(self):
+        """Taking &x twice should return the same Pointer (same heap object)."""
+        vm = _make_vm(x=42)
+        inst = _make_inst(Opcode.ADDRESS_OF, result_reg="%0", operands=["x"])
+        result1 = _handle_address_of(inst, vm)
+        _apply(vm, result1)
+
+        inst2 = _make_inst(Opcode.ADDRESS_OF, result_reg="%1", operands=["x"])
+        result2 = _handle_address_of(inst2, vm)
+        _apply(vm, result2)
+
+        ptr1 = vm.current_frame.registers["%0"]
+        ptr2 = vm.current_frame.registers["%1"]
+        assert ptr1 == ptr2
+
+    def test_address_of_struct_returns_pointer_to_existing_heap(self):
+        """ADDRESS_OF on a variable holding a heap address should wrap it in a Pointer."""
+        vm = _make_vm(s="obj_0")
+        vm.heap["obj_0"] = HeapObject(type_hint="Point", fields={"x": 10, "y": 20})
+        inst = _make_inst(Opcode.ADDRESS_OF, result_reg="%0", operands=["s"])
+        result = _handle_address_of(inst, vm)
+        _apply(vm, result)
+
+        ptr = vm.current_frame.registers["%0"]
+        assert isinstance(ptr, Pointer)
+        assert ptr.base == "obj_0"
+        assert ptr.offset == 0
+
+
+# ── Alias-aware LOAD_VAR / STORE_VAR ─────────────────────────────
+
+
+class TestAliasAwareLoadStore:
+    def _promote(self, vm: VMState, var_name: str) -> Pointer:
+        """Helper: promote a variable via ADDRESS_OF and return the Pointer."""
+        inst = _make_inst(Opcode.ADDRESS_OF, result_reg="%ptr", operands=[var_name])
+        result = _handle_address_of(inst, vm)
+        _apply(vm, result)
+        return vm.current_frame.registers["%ptr"]
+
+    def test_load_var_reads_from_heap_when_aliased(self):
+        """After &x, LOAD_VAR 'x' should read from the heap object."""
+        vm = _make_vm(x=42)
+        self._promote(vm, "x")
+
+        # Directly modify the heap to simulate *ptr = 99
+        alias = vm.current_frame.var_heap_aliases["x"]
+        vm.heap[alias.base].fields["0"] = 99
+
+        inst = _make_inst(Opcode.LOAD_VAR, result_reg="%val", operands=["x"])
+        result = _handle_load_var(inst, vm)
+        _apply(vm, result)
+
+        assert vm.current_frame.registers["%val"] == 99
+
+    def test_store_var_writes_to_heap_when_aliased(self):
+        """After &x, STORE_VAR 'x' should write to the heap object."""
+        vm = _make_vm(x=42)
+        ptr = self._promote(vm, "x")
+
+        # Store a new value into x
+        vm.current_frame.registers["%newval"] = 77
+        inst = _make_inst(Opcode.STORE_VAR, operands=["x", "%newval"])
+        result = _handle_store_var(inst, vm)
+        _apply(vm, result)
+
+        # The heap should reflect the new value
+        assert vm.heap[ptr.base].fields["0"] == 77
+
+    def test_store_via_pointer_then_load_var(self):
+        """*ptr = 99 then read x should see 99."""
+        vm = _make_vm(x=42)
+        ptr = self._promote(vm, "x")
+
+        # Write through pointer: STORE_FIELD ptr, "*", 99
+        vm.current_frame.registers["%ptr"] = ptr
+        vm.current_frame.registers["%99"] = 99
+        store_inst = _make_inst(Opcode.STORE_FIELD, operands=["%ptr", "*", "%99"])
+        store_result = _handle_store_field(store_inst, vm)
+        _apply(vm, store_result)
+
+        # Now LOAD_VAR x should see 99
+        load_inst = _make_inst(Opcode.LOAD_VAR, result_reg="%val", operands=["x"])
+        load_result = _handle_load_var(load_inst, vm)
+        _apply(vm, load_result)
+
+        assert vm.current_frame.registers["%val"] == 99
+
+
+# ── Dereference via LOAD_FIELD / STORE_FIELD with "*" ─────────────
+
+
+class TestPointerDereference:
+    def _promote(self, vm: VMState, var_name: str) -> Pointer:
+        inst = _make_inst(Opcode.ADDRESS_OF, result_reg="%ptr", operands=[var_name])
+        result = _handle_address_of(inst, vm)
+        _apply(vm, result)
+        return vm.current_frame.registers["%ptr"]
+
+    def test_load_field_star_reads_through_pointer(self):
+        """LOAD_FIELD ptr, '*' should read from heap[ptr.base].fields[str(ptr.offset)]."""
+        vm = _make_vm(x=42)
+        ptr = self._promote(vm, "x")
+        vm.current_frame.registers["%ptr"] = ptr
+
+        inst = _make_inst(Opcode.LOAD_FIELD, result_reg="%val", operands=["%ptr", "*"])
+        result = _handle_load_field(inst, vm)
+        _apply(vm, result)
+
+        assert vm.current_frame.registers["%val"] == 42
+
+    def test_store_field_star_writes_through_pointer(self):
+        """STORE_FIELD ptr, '*', 99 should write to heap."""
+        vm = _make_vm(x=42)
+        ptr = self._promote(vm, "x")
+        vm.current_frame.registers["%ptr"] = ptr
+        vm.current_frame.registers["%99"] = 99
+
+        inst = _make_inst(Opcode.STORE_FIELD, operands=["%ptr", "*", "%99"])
+        result = _handle_store_field(inst, vm)
+        _apply(vm, result)
+
+        assert vm.heap[ptr.base].fields["0"] == 99
+
+
+# ── Pointer arithmetic ───────────────────────────────────────────
+
+
+class TestPointerArithmetic:
+    def test_pointer_plus_int(self):
+        """Pointer + int should produce Pointer with adjusted offset."""
+        vm = _make_vm()
+        ptr = Pointer("mem_0", 0)
+        vm.current_frame.registers["%ptr"] = ptr
+        vm.current_frame.registers["%3"] = 3
+
+        inst = _make_inst(
+            Opcode.BINOP, result_reg="%result", operands=["+", "%ptr", "%3"]
+        )
+        result = _handle_binop(inst, vm)
+        _apply(vm, result)
+
+        new_ptr = vm.current_frame.registers["%result"]
+        assert isinstance(new_ptr, Pointer)
+        assert new_ptr.base == "mem_0"
+        assert new_ptr.offset == 3
+
+    def test_int_plus_pointer(self):
+        """int + Pointer should also produce Pointer (commutative)."""
+        vm = _make_vm()
+        ptr = Pointer("mem_0", 2)
+        vm.current_frame.registers["%2"] = 2
+        vm.current_frame.registers["%ptr"] = ptr
+
+        inst = _make_inst(
+            Opcode.BINOP, result_reg="%result", operands=["+", "%2", "%ptr"]
+        )
+        result = _handle_binop(inst, vm)
+        _apply(vm, result)
+
+        new_ptr = vm.current_frame.registers["%result"]
+        assert isinstance(new_ptr, Pointer)
+        assert new_ptr.base == "mem_0"
+        assert new_ptr.offset == 4
+
+    def test_pointer_minus_int(self):
+        """Pointer - int should produce Pointer with decreased offset."""
+        vm = _make_vm()
+        ptr = Pointer("mem_0", 5)
+        vm.current_frame.registers["%ptr"] = ptr
+        vm.current_frame.registers["%2"] = 2
+
+        inst = _make_inst(
+            Opcode.BINOP, result_reg="%result", operands=["-", "%ptr", "%2"]
+        )
+        result = _handle_binop(inst, vm)
+        _apply(vm, result)
+
+        new_ptr = vm.current_frame.registers["%result"]
+        assert isinstance(new_ptr, Pointer)
+        assert new_ptr.base == "mem_0"
+        assert new_ptr.offset == 3
+
+    def test_pointer_arithmetic_then_deref(self):
+        """(ptr + 1) then LOAD_FIELD '*' should read offset 1 from the heap."""
+        vm = _make_vm()
+        # Set up a heap array with 3 elements
+        vm.heap["arr_0"] = HeapObject(fields={"0": 10, "1": 20, "2": 30, "length": 3})
+        ptr = Pointer("arr_0", 0)
+        vm.current_frame.registers["%ptr"] = ptr
+        vm.current_frame.registers["%1"] = 1
+
+        # ptr + 1
+        add_inst = _make_inst(
+            Opcode.BINOP, result_reg="%ptr1", operands=["+", "%ptr", "%1"]
+        )
+        add_result = _handle_binop(add_inst, vm)
+        _apply(vm, add_result)
+
+        # *(ptr + 1)
+        deref_inst = _make_inst(
+            Opcode.LOAD_FIELD, result_reg="%val", operands=["%ptr1", "*"]
+        )
+        deref_result = _handle_load_field(deref_inst, vm)
+        _apply(vm, deref_result)
+
+        assert vm.current_frame.registers["%val"] == 20
+
+
+# ── Nested pointers ──────────────────────────────────────────────
+
+
+class TestNestedPointers:
+    def test_double_pointer(self):
+        """int **pp = &ptr where ptr = &x: **pp should reach x's value."""
+        vm = _make_vm(x=42)
+
+        # ptr = &x
+        inst1 = _make_inst(Opcode.ADDRESS_OF, result_reg="%ptr", operands=["x"])
+        _apply(vm, _handle_address_of(inst1, vm))
+        # Store ptr as a local variable
+        vm.current_frame.local_vars["ptr"] = vm.current_frame.registers["%ptr"]
+
+        # pp = &ptr
+        inst2 = _make_inst(Opcode.ADDRESS_OF, result_reg="%pp", operands=["ptr"])
+        _apply(vm, _handle_address_of(inst2, vm))
+        pp = vm.current_frame.registers["%pp"]
+
+        # *pp should give us the Pointer to x
+        deref1 = _make_inst(
+            Opcode.LOAD_FIELD, result_reg="%inner", operands=["%pp", "*"]
+        )
+        _apply(vm, _handle_load_field(deref1, vm))
+        inner = vm.current_frame.registers["%inner"]
+        assert isinstance(inner, Pointer)
+
+        # **pp should give us 42
+        deref2 = _make_inst(
+            Opcode.LOAD_FIELD, result_reg="%val", operands=["%inner", "*"]
+        )
+        _apply(vm, _handle_load_field(deref2, vm))
+        assert vm.current_frame.registers["%val"] == 42
