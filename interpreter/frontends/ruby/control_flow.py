@@ -107,7 +107,16 @@ def lower_ruby_for(ctx: TreeSitterEmitContext, node) -> None:
     value_node = node.child_by_field_name("value")
     body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
-    iter_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
+    # The 'value' field returns the 'in' wrapper node — extract the actual
+    # iterable expression from inside it (the named child that isn't 'in').
+    if value_node and value_node.type == RubyNodeType.IN:
+        iterable_node = next(
+            (c for c in value_node.children if c.is_named),
+            value_node,
+        )
+    else:
+        iterable_node = value_node
+    iter_reg = ctx.lower_expr(iterable_node) if iterable_node else ctx.fresh_reg()
     var_name = ctx.node_text(pattern_node) if pattern_node else "__for_var"
 
     init_idx = ctx.fresh_reg()
