@@ -28,6 +28,7 @@ class CppNodeType:
     STATIC_ASSERT_DECLARATION = "static_assert_declaration"
     ACCESS_SPECIFIER = "access_specifier"
     FUNCTION_DECLARATOR = "function_declarator"
+    STRUCTURED_BINDING_DECLARATOR = "structured_binding_declarator"
 
     # Definitions
     FUNCTION_DEFINITION = "function_definition"

@@ -139,16 +139,45 @@ def lower_template_decl(ctx: TreeSitterEmitContext, node) -> None:
         )
 
 
+def _lower_structured_binding(
+    ctx: TreeSitterEmitContext, binding_node, elem_reg: str
+) -> None:
+    """Decompose ``auto [a, b]`` into positional LOAD_INDEX + STORE_VAR."""
+    identifiers = [c for c in binding_node.children if c.type == CppNodeType.IDENTIFIER]
+    for i, id_node in enumerate(identifiers):
+        raw_name = ctx.node_text(id_node)
+        var_name = ctx.declare_block_var(raw_name)
+        idx_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+        part_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.LOAD_INDEX,
+            result_reg=part_reg,
+            operands=[elem_reg, idx_reg],
+            node=id_node,
+        )
+        ctx.emit(Opcode.STORE_VAR, operands=[var_name, part_reg], node=id_node)
+
+
 def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower for (auto x : container) { body }."""
+    """Lower for (auto x : container) { body }.
+
+    Handles structured bindings: ``for (auto [a, b] : pairs)`` by
+    decomposing into positional LOAD_INDEX + STORE_VAR per element.
+    """
     from interpreter.frontends.c.declarations import extract_declarator_name
 
     declarator_node = node.child_by_field_name("declarator")
     right_node = node.child_by_field_name(ctx.constants.assign_right_field)
     body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
+    is_structured_binding = (
+        declarator_node is not None
+        and declarator_node.type == CppNodeType.STRUCTURED_BINDING_DECLARATOR
+    )
+
     raw_name = "__range_var"
-    if declarator_node:
+    if declarator_node and not is_structured_binding:
         raw_name = extract_declarator_name(ctx, declarator_node)
 
     iter_reg = ctx.lower_expr(right_node) if right_node else ctx.fresh_reg()
@@ -173,10 +202,14 @@ def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit(Opcode.LABEL, label=body_label)
     ctx.enter_block_scope()
-    var_name = ctx.declare_block_var(raw_name)
     elem_reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
-    ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+
+    if is_structured_binding:
+        _lower_structured_binding(ctx, declarator_node, elem_reg)
+    else:
+        var_name = ctx.declare_block_var(raw_name)
+        ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
 
     update_label = ctx.fresh_label("range_for_update")
     ctx.push_loop(update_label, end_label)
