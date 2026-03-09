@@ -1175,3 +1175,46 @@ class TestCSharpUsingStmtScoping:
         assert "r" in stores
         mangled = [n for n in stores if n.startswith("r$")]
         assert len(mangled) == 0
+
+
+# ---------------------------------------------------------------------------
+# Kotlin when-subject binding scoping (P2 #10)
+# ---------------------------------------------------------------------------
+
+
+class TestKotlinWhenSubjectScoping:
+    """Kotlin when(val x = expr) { } — subject var should be scoped."""
+
+    def test_when_subject_shadows_outer(self):
+        source = """
+        fun main() {
+            val x = 99
+            val result = when(val x = getVal()) {
+                1 -> "one"
+                else -> "other"
+            }
+            val z = x
+        }
+        """
+        ir = _lower(KotlinFrontend, "kotlin", source)
+        stores = _store_var_names(ir)
+        mangled = [n for n in stores if n.startswith("x$")]
+        assert len(mangled) >= 1
+        assert "x" in stores
+        # z = x should load the unmangled outer x
+        loads = _load_var_names(ir)
+        assert "x" in loads
+
+    def test_when_subject_emitted(self):
+        """when(val x = expr) should emit STORE_VAR for subject variable."""
+        source = """
+        fun main() {
+            val result = when(val x = getVal()) {
+                1 -> "one"
+                else -> "other"
+            }
+        }
+        """
+        ir = _lower(KotlinFrontend, "kotlin", source)
+        stores = _store_var_names(ir)
+        assert "x" in stores
