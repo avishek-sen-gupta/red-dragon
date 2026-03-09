@@ -49,14 +49,14 @@ class TestFunctionPointerDeclaratorName:
         assert "(*fp)" not in store_names
 
     def test_function_pointer_emits_address_of(self):
-        """int (*fp)(int, int) = &add; should emit UNOP '&' for address-of."""
+        """int (*fp)(int, int) = &add; should emit ADDRESS_OF for address-of."""
         source = (
             "int add(int a, int b) { return a + b; }\n" "int (*fp)(int, int) = &add;"
         )
         ir = _parse_and_lower(source)
-        unops = _find_all(ir, Opcode.UNOP)
-        addr_of_ops = [u for u in unops if u.operands[0] == "&"]
+        addr_of_ops = _find_all(ir, Opcode.ADDRESS_OF)
         assert len(addr_of_ops) == 1
+        assert addr_of_ops[0].operands[0] == "add"
 
 
 # ── Executor: address-of function reference ──────────────────────

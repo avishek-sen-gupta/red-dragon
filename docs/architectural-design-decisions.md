@@ -1844,3 +1844,29 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 - Dict comprehension has its own inline loop that was separately fixed
 
 **Status:** Complete. 5 unit tests + 4 integration tests.
+
+---
+
+### ADR-099: Pointer aliasing with promote-on-address-of (2026-03-09)
+
+**Context:** The symbolic VM models struct/object fields on the heap but keeps primitive variables in `StackFrame.local_vars`. Taking `&x` on a primitive produces a symbolic value with no backing storage, so `*ptr = 99` doesn't update `x`. This breaks faithful execution of C/C++/Rust pointer semantics.
+
+**Decision:** Adopt a KLEE-inspired memory model with three components:
+
+1. **`Pointer(base, offset)` dataclass** — immutable value type representing a typed pointer. `base` is a heap address, `offset` is an integer byte/element offset. Pointer arithmetic produces new Pointer objects with adjusted offsets.
+
+2. **`ADDRESS_OF` opcode** — new IR opcode that takes a variable name as operand and returns a `Pointer`. When executed, promotes the variable's value from `local_vars` to a `HeapObject` (with field `"0"` holding the value), records the mapping in `StackFrame.var_heap_aliases`, and returns `Pointer(heap_addr, 0)`.
+
+3. **Alias-aware variable access** — `LOAD_VAR` and `STORE_VAR` check `var_heap_aliases` first; if the variable is aliased, reads/writes go through the heap object instead of `local_vars`. This ensures `*ptr = 99` (which writes to the heap) is visible when reading `x`.
+
+**Scope:** C and Rust frontends (C++ inherits from C). Supports nested pointers (`int **pp = &ptr`), pointer arithmetic (`ptr + n`), and pointer indexing (`ptr[n]` = `*(ptr + n)`). Does not yet support `&arr[i]` or `&s.field` (complex lvalue addressing).
+
+**Changes:**
+- `interpreter/vm_types.py`: New `Pointer` dataclass, `var_heap_aliases` on `StackFrame`
+- `interpreter/ir.py`: New `ADDRESS_OF` opcode
+- `interpreter/executor.py`: New `_handle_address_of`, modified `_handle_load_var`, `_handle_store_var`, `_handle_load_field`, `_handle_store_field`, `_handle_binop`, `_handle_load_index`
+- `interpreter/vm.py`: Pointer deserialization
+- `interpreter/frontends/c/expressions.py`: `lower_pointer_expr` emits `ADDRESS_OF` for `&identifier`
+- `interpreter/frontends/rust/expressions.py`: `lower_reference_expr` emits `ADDRESS_OF` for `&identifier`
+
+**Status:** In progress.

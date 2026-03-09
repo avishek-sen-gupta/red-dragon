@@ -311,9 +311,9 @@ class TestCFrontendPointerOps:
         source = "void f() { int *p = &x; }"
         ir = _parse_and_lower(source)
         opcodes = _opcodes(ir)
-        assert Opcode.UNOP in opcodes
-        unops = _find_all(ir, Opcode.UNOP)
-        assert any("&" in inst.operands for inst in unops)
+        assert Opcode.ADDRESS_OF in opcodes
+        addr_ofs = _find_all(ir, Opcode.ADDRESS_OF)
+        assert any("x" in inst.operands for inst in addr_ofs)
 
     def test_pointer_store(self):
         source = "void f() { *ptr = 42; }"
@@ -407,10 +407,10 @@ void f() {
 """
         ir = _parse_and_lower(source)
         opcodes = _opcodes(ir)
-        # Address-of produces UNOP with "&"
-        assert Opcode.UNOP in opcodes
-        unops = _find_all(ir, Opcode.UNOP)
-        assert any("&" in inst.operands for inst in unops)
+        # Address-of produces ADDRESS_OF for identifiers
+        assert Opcode.ADDRESS_OF in opcodes
+        addr_ofs = _find_all(ir, Opcode.ADDRESS_OF)
+        assert any("x" in inst.operands for inst in addr_ofs)
         # Pointer dereference produces LOAD_FIELD with "*"
         assert Opcode.LOAD_FIELD in opcodes
         loads = _find_all(ir, Opcode.LOAD_FIELD)
