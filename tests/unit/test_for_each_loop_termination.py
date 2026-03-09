@@ -31,9 +31,6 @@ for (const x of arr) {
         assert extract_answer(vm, "javascript") == 18
         assert stats.steps < 200
 
-    @pytest.mark.xfail(
-        reason="VM keys() returns symbolic — loop condition never resolves to False"
-    )
     def test_for_in_accumulates_correctly(self):
         vm, stats = execute_for_language(
             "javascript",
