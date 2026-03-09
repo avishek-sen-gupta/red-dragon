@@ -1,6 +1,6 @@
 # IR Reference
 
-RedDragon uses a flattened high-level three-address code IR. Every program — regardless of source language or frontend — is lowered to a linear sequence of `IRInstruction`s drawn from 27 opcodes.
+RedDragon uses a flattened high-level three-address code IR. Every program — regardless of source language or frontend — is lowered to a linear sequence of `IRInstruction`s drawn from 28 opcodes.
 
 ## Instruction format
 
@@ -52,6 +52,8 @@ Read a named variable.
 
 Searches the call stack from the current frame backwards. If the variable is not found, the VM creates a fresh symbolic value.
 
+**Alias-aware**: If the variable has been promoted to the heap via `ADDRESS_OF` (i.e., it has an entry in `var_heap_aliases`), the read goes through the heap object instead of `local_vars`. This ensures that writes through pointers (`*ptr = 99`) are visible when the original variable is read.
+
 For block-scoped languages, `var_name` may be a mangled name (e.g. `x$1`) produced by the frontend's scope tracker. See [Block-Scope Tracking](type-system.md#block-scope-tracking-llvm-style).
 
 ```
@@ -69,8 +71,11 @@ Read a field from a heap object.
 
 Resolves `obj_reg` to a heap address, then looks up `field_name` in the object's fields. Returns a fresh symbolic value if the field does not exist.
 
+When `field_name` is `"*"` and the resolved value is a `Pointer`, performs a **pointer dereference read**: reads `heap[ptr.base].fields[str(ptr.offset)]`. This is how both C and Rust lower `*ptr` in read context.
+
 ```
 %5 = load_field %obj "name"
+%6 = load_field %ptr "*"        // pointer dereference: *ptr
 ```
 
 ### LOAD_INDEX
@@ -131,9 +136,14 @@ Resolves both operand registers. If either is symbolic, produces a symbolic resu
 
 Operators: `+`, `-`, `*`, `/`, `//`, `%`, `mod`, `**`, `==`, `!=`, `~=`, `<`, `>`, `<=`, `>=`, `and`, `or`, `in`, `&`, `|`, `^`, `<<`, `>>`, `..`, `.`, `===`, `?:`.
 
+**Pointer arithmetic**: When one operand is a `Pointer` (or a heap address string, for C array decay), `+` and `-` with an integer produce a new `Pointer` with adjusted offset. `Pointer - Pointer` (same base) returns the integer offset difference. Relational operators (`<`, `>`, `<=`, `>=`, `==`, `!=`) between same-base Pointers compare offsets.
+
 ```
 %9 = binop + %a %b
 %10 = binop <= %x %limit
+%11 = binop + %ptr %1          // pointer arithmetic: ptr + 1
+%12 = binop - %p2 %p1          // pointer difference: p2 - p1 → int
+%13 = binop < %p1 %p2          // pointer comparison: p1 < p2 → bool
 ```
 
 ### UNOP
@@ -150,6 +160,28 @@ Operators: `-`, `+`, `not`, `~`, `#` (length), `!`, `!!`.
 ```
 %11 = unop - %x
 %12 = unop not %cond
+```
+
+### ADDRESS_OF
+
+Take the address of a named variable (pointer creation).
+
+| Field | Value |
+|-------|-------|
+| `result_reg` | target register (receives a `Pointer`) |
+| `operands` | `[var_name]` |
+
+Implements the `&x` operator for C and Rust. The operand is a **variable name** (not a register), because the VM needs the variable's identity to set up aliasing.
+
+**Behaviour by variable type:**
+- **Primitive** (int, float, bool, string): promotes the value from `local_vars` to a `HeapObject` on the heap, records the variable in `var_heap_aliases`, and returns a `Pointer(base=heap_addr, offset=0)`. Subsequent reads/writes to the variable go through the heap.
+- **Struct/array** (already on heap): wraps the existing heap address in a `Pointer` without aliasing (the variable already points to the heap).
+- **Function reference**: returns the function reference unchanged (identity — `&func` is the function itself).
+
+Taking `&x` twice on the same variable returns the same `Pointer` (idempotent).
+
+```
+%0 = address_of x              // &x → Pointer to x's heap-backed storage
 ```
 
 ### CALL_FUNCTION
@@ -215,6 +247,8 @@ Write a value into a named variable.
 
 Stores in the current call frame's local variables. If inside a closure, also updates the captured environment.
 
+**Alias-aware**: If the variable has been promoted to the heap via `ADDRESS_OF` (i.e., it has an entry in `var_heap_aliases`), the write goes through the heap object instead of `local_vars`. This ensures that assignments to the original variable are visible through pointers.
+
 For block-scoped languages, `var_name` may be a mangled name (e.g. `x$1`) produced by the frontend's scope tracker. See [Block-Scope Tracking](type-system.md#block-scope-tracking-llvm-style).
 
 ```
@@ -229,8 +263,11 @@ Write a value into a heap object field.
 |-------|-------|
 | `operands` | `[obj_reg, field_name, value_reg]` |
 
+When `field_name` is `"*"` and the resolved value is a `Pointer`, performs a **pointer dereference write**: writes `value` to `heap[ptr.base].fields[str(ptr.offset)]`. This is how both C and Rust lower `*ptr = val`.
+
 ```
 store_field %obj "name" %val
+store_field %ptr "*" %val       // pointer dereference write: *ptr = val
 ```
 
 ### STORE_INDEX
@@ -529,4 +566,32 @@ catch_0:
 finally_0:
   ... finally body ...
 end_try_0:
+```
+
+### Pointer aliasing (C/Rust)
+
+The `ADDRESS_OF` + `LOAD_FIELD`/`STORE_FIELD` with `"*"` pattern implements pointer semantics:
+
+```
+// C source: int x = 42; int *ptr = &x; *ptr = 99; int answer = x;
+%0 = const 42
+store_var x %0
+%1 = address_of x              // promotes x to heap, returns Pointer
+store_var ptr %1
+%2 = load_var ptr
+%3 = const 99
+store_field %2 "*" %3           // *ptr = 99 (writes through to x's heap storage)
+%4 = load_var x                 // reads 99 from heap (alias-aware)
+store_var answer %4
+```
+
+Pointer arithmetic on arrays:
+
+```
+// C source: int arr[3] = {10, 20, 30}; int *p = arr; int val = *(p + 1);
+... arr setup ...
+%p = load_var arr               // heap address string, auto-wraps to Pointer
+%1 = const 1
+%p1 = binop + %p %1            // Pointer(base=arr_0, offset=1)
+%val = load_field %p1 "*"      // reads heap[arr_0].fields["1"] → 20
 ```
