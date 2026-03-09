@@ -152,9 +152,6 @@ func main() {
 
 
 class TestRubyForTermination:
-    @pytest.mark.xfail(
-        reason="Ruby array literal lowering produces unexpected structure for iteration"
-    )
     def test_for_accumulates_correctly(self):
         vm, stats = execute_for_language(
             "ruby",
