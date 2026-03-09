@@ -273,15 +273,51 @@ def lower_if_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_when_expr(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower when(subject) { entries } as an if/else chain.
+
+    Kotlin allows ``when(val x = expr) { }`` where the subject variable
+    is scoped to the when expression body.
+    """
     subject_node = next(
         (c for c in node.children if c.type == KNT.WHEN_SUBJECT),
         None,
     )
+
+    # Detect when-subject binding: when(val x = expr) { }
+    subject_var_decl = (
+        next(
+            (c for c in subject_node.children if c.type == KNT.VARIABLE_DECLARATION),
+            None,
+        )
+        if subject_node
+        else None
+    )
+    scope_entered = subject_var_decl is not None and ctx.block_scoped
+    if scope_entered:
+        ctx.enter_block_scope()
+
     val_reg = ctx.fresh_reg()
     if subject_node:
-        inner = next((c for c in subject_node.children if c.is_named), None)
-        if inner:
-            val_reg = ctx.lower_expr(inner)
+        if subject_var_decl:
+            # Lower the value expression (sibling of variable_declaration)
+            value_expr = next(
+                (
+                    c
+                    for c in subject_node.children
+                    if c.is_named and c.type != KNT.VARIABLE_DECLARATION
+                ),
+                None,
+            )
+            val_reg = ctx.lower_expr(value_expr) if value_expr else ctx.fresh_reg()
+            # Bind the subject variable
+            name_node = next((c for c in subject_var_decl.children if c.is_named), None)
+            raw_name = ctx.node_text(name_node) if name_node else "__when_subject"
+            var_name = ctx.declare_block_var(raw_name)
+            ctx.emit(Opcode.STORE_VAR, operands=[var_name, val_reg])
+        else:
+            inner = next((c for c in subject_node.children if c.is_named), None)
+            if inner:
+                val_reg = ctx.lower_expr(inner)
 
     result_var = f"__when_result_{ctx.label_counter}"
     end_label = ctx.fresh_label("when_end")
@@ -349,6 +385,10 @@ def lower_when_expr(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.LABEL, label=end_label)
     reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[result_var])
+
+    if scope_entered:
+        ctx.exit_block_scope()
+
     return reg
 
 
