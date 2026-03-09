@@ -119,7 +119,7 @@ def lower_cast_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_pointer_expr(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower pointer dereference (*p) as LOAD_FIELD or address-of (&x) as UNOP."""
+    """Lower pointer dereference (*p) as LOAD_FIELD or address-of (&x) as ADDRESS_OF."""
     operand_node = node.child_by_field_name("argument")
     # Detect operator: first non-named child is '*' or '&'
     op_char = next(
@@ -133,9 +133,20 @@ def lower_pointer_expr(ctx: TreeSitterEmitContext, node) -> str:
     if operand_node is None:
         operand_node = next((c for c in node.children if c.is_named), None)
 
-    inner_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
-
     if op_char == "&":
+        # For simple identifiers, emit ADDRESS_OF for alias tracking.
+        # For complex expressions (field access, array index), fall back to UNOP.
+        if operand_node and operand_node.type == CNodeType.IDENTIFIER:
+            var_name = ctx.node_text(operand_node)
+            reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.ADDRESS_OF,
+                result_reg=reg,
+                operands=[var_name],
+                node=node,
+            )
+            return reg
+        inner_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
         reg = ctx.fresh_reg()
         ctx.emit(
             Opcode.UNOP,
@@ -146,6 +157,7 @@ def lower_pointer_expr(ctx: TreeSitterEmitContext, node) -> str:
         return reg
 
     # Dereference: *ptr -> LOAD_FIELD ptr, "*"
+    inner_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
     reg = ctx.fresh_reg()
     ctx.emit(
         Opcode.LOAD_FIELD,

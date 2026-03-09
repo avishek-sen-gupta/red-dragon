@@ -15,6 +15,7 @@ from interpreter.vm_types import (  # noqa: F401 — re-exported for backwards c
     HeapObject,
     ClosureEnvironment,
     ExceptionHandler,
+    Pointer,
     StackFrame,
     VMState,
     HeapWrite,
@@ -124,7 +125,12 @@ def apply_update(
     target_frame = vm.current_frame
     for var, val in update.var_writes.items():
         deserialized = _deserialize_value(val, vm)
-        target_frame.local_vars[var] = deserialized
+        # Alias-aware: if variable is backed by a heap object, write there
+        alias_ptr = target_frame.var_heap_aliases.get(var)
+        if alias_ptr and alias_ptr.base in vm.heap:
+            vm.heap[alias_ptr.base].fields[str(alias_ptr.offset)] = deserialized
+        else:
+            target_frame.local_vars[var] = deserialized
         if target_frame.closure_env_id and var in target_frame.captured_var_names:
             env = vm.closures.get(target_frame.closure_env_id)
             if env:
@@ -136,13 +142,15 @@ def apply_update(
 
 
 def _deserialize_value(val: Any, vm: VMState) -> Any:
-    """Convert a dict with __symbolic__ into a SymbolicValue."""
+    """Convert a dict with __symbolic__ or __pointer__ into typed objects."""
     if isinstance(val, dict) and val.get("__symbolic__"):
         return SymbolicValue(
             name=val.get("name", f"sym_{vm.symbolic_counter}"),
             type_hint=val.get("type_hint"),
             constraints=val.get("constraints", []),
         )
+    if isinstance(val, dict) and val.get("__pointer__"):
+        return Pointer(base=val["base"], offset=val.get("offset", 0))
     return val
 
 

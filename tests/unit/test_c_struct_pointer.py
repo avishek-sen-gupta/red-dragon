@@ -62,8 +62,8 @@ class TestArrowOperatorLowering:
 
 
 class TestAddressOfHeapObject:
-    def test_address_of_struct_returns_same_reference(self):
-        """&struct_var should return the heap reference, not a symbolic."""
+    def test_address_of_struct_returns_pointer(self):
+        """&struct_var should return a Pointer wrapping the heap address."""
         source = (
             "struct Point { int x; int y; };\n"
             "struct Point pt;\n"
@@ -73,7 +73,10 @@ class TestAddressOfHeapObject:
         )
         vars_ = _run_c(source)
         assert vars_["val"] == 42
-        assert vars_["p"] == vars_["pt"]
+        from interpreter.vm_types import Pointer
+
+        assert isinstance(vars_["p"], Pointer)
+        assert vars_["p"].offset == 0
 
 
 # ── Executor: reading through struct pointer ─────────────────────
