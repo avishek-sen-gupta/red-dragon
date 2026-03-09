@@ -889,6 +889,4 @@ def _emit_for_increment(
     new_idx = ctx.fresh_reg()
     ctx.emit(Opcode.BINOP, result_reg=new_idx, operands=["+", idx_reg, one_reg])
     ctx.emit(Opcode.STORE_VAR, operands=["__for_idx", new_idx])
-    idx_reload = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=idx_reload, operands=["__for_idx"])
     ctx.emit(Opcode.BRANCH, label=loop_label)
