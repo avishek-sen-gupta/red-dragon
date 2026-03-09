@@ -105,6 +105,21 @@ def _builtin_min(args: list[Any], vm: VMState) -> Any:
     return _UNCOMPUTABLE
 
 
+def _builtin_keys(args: list[Any], vm: VMState) -> Any:
+    """Return a heap-allocated array of the object's field names.
+
+    Excludes metadata fields like 'length' to match JS Object.keys() semantics.
+    """
+    if not args:
+        return _UNCOMPUTABLE
+    val = args[0]
+    addr = _heap_addr(val)
+    if not addr or addr not in vm.heap:
+        return _UNCOMPUTABLE
+    field_names = [k for k in vm.heap[addr].fields if k != "length"]
+    return _builtin_array_of(field_names, vm)
+
+
 def _builtin_array_of(args: list[Any], vm: VMState) -> Any:
     """Create a heap-allocated array from arguments (arrayOf, intArrayOf, Array, etc.)."""
     addr = f"{ARR_ADDR_PREFIX}{vm.symbolic_counter}"
@@ -129,6 +144,7 @@ class Builtins:
         "abs": _builtin_abs,
         "max": _builtin_max,
         "min": _builtin_min,
+        "keys": _builtin_keys,
         "arrayOf": _builtin_array_of,
         "intArrayOf": _builtin_array_of,
         "Array": _builtin_array_of,
