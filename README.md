@@ -293,7 +293,7 @@ Functions compose hierarchically: `dump_ir` calls `lower_source`; `dump_cfg` and
 
 Python, JavaScript, TypeScript, Java, Ruby, Go, PHP, C#, C, C++, Rust, Kotlin, Scala, Lua, Pascal
 
-Control flow constructs (if/else, while, for, for-of/foreach, switch, break/continue, try/catch/finally, do-while) are lowered into real LABEL+BRANCH IR rather than `SYMBOLIC` placeholders. For-each style loops (for-of, for-in, range-for, enhanced-for) use STORE_VAR/LOAD_VAR for the loop index counter so that SSA-immutable registers correctly advance each iteration.
+Control flow constructs (if/else, while, for, for-of/foreach, switch, break/continue, try/catch/finally, do-while) are lowered into real LABEL+BRANCH IR rather than `SYMBOLIC` placeholders. For-each style loops (for-of, for-in, range-for, enhanced-for) use STORE_VAR/LOAD_VAR for the loop index counter so that SSA-immutable registers correctly advance each iteration. Built-in functions `len()` and `keys()` produce concrete results from heap objects, and Lua `ipairs()`/`pairs()` wrappers are stripped at lowering time, ensuring all for-each loops terminate correctly.
 
 <details>
 <summary><strong>Language-specific features</strong> (click to expand)</summary>
