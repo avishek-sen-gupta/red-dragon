@@ -182,8 +182,9 @@ def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
 
     iter_reg = ctx.lower_expr(right_node) if right_node else ctx.fresh_reg()
 
-    idx_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
+    init_idx = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
+    ctx.emit(Opcode.STORE_VAR, operands=["__range_idx", init_idx])
     len_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
 
@@ -192,6 +193,8 @@ def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
     end_label = ctx.fresh_label("range_for_end")
 
     ctx.emit(Opcode.LABEL, label=loop_label)
+    idx_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=idx_reg, operands=["__range_idx"])
     cond_reg = ctx.fresh_reg()
     ctx.emit(Opcode.BINOP, result_reg=cond_reg, operands=["<", idx_reg, len_reg])
     ctx.emit(
