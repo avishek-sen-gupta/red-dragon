@@ -553,6 +553,8 @@ Each problem tests:
 
 **Inner function scoping** is verified for 7 languages (Python, JavaScript, TypeScript, Rust, Go, Kotlin, Scala) — inner functions are inaccessible outside the enclosing scope (the VM produces a symbolic value instead of a concrete result).
 
+**Python comprehension scoping** follows Python 3 semantics — loop variables in list, dict, set comprehensions and generator expressions are scoped to the comprehension body using `enter_block_scope`/`exit_block_scope` with name mangling, preventing leakage to the enclosing scope.
+
 All frontends emit **canonical Python-form literals** (`"None"`, `"True"`, `"False"`) — language-native forms (`nil`, `null`, `undefined`, `NULL`, `true`, `false`) are canonicalized at lowering time.
 
 ### Equivalence suite
