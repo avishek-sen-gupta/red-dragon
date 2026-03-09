@@ -181,9 +181,6 @@ for (auto x : arr) {
 
 
 class TestLuaGenericForTermination:
-    @pytest.mark.xfail(
-        reason="VM ipairs() returns symbolic — loop condition never resolves to False"
-    )
     def test_generic_for_accumulates_correctly(self):
         vm, stats = execute_for_language(
             "lua",
