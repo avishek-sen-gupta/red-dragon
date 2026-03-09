@@ -84,7 +84,12 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
         node=node,
     )
 
-    raw_name = _extract_var_name(ctx, left) if left else "__for_in_var"
+    is_destructure = left is not None and _is_destructuring_pattern(left)
+    raw_name = (
+        "__for_in_destructure"
+        if is_destructure
+        else (_extract_var_name(ctx, left) if left else "__for_in_var")
+    )
 
     idx_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
@@ -114,15 +119,19 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit(Opcode.LABEL, label=body_label)
     ctx.enter_block_scope()
-    var_name = ctx.declare_block_var(raw_name)
     elem_reg = ctx.fresh_reg()
     ctx.emit(
         Opcode.LOAD_INDEX,
         result_reg=elem_reg,
         operands=[keys_reg, idx_reg],
     )
-    if var_name:
-        ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+
+    if is_destructure:
+        _lower_for_destructure(ctx, left, elem_reg)
+    else:
+        var_name = ctx.declare_block_var(raw_name)
+        if var_name:
+            ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
 
     update_label = ctx.fresh_label("for_in_update")
     ctx.push_loop(update_label, end_label)
@@ -147,13 +156,23 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower for (const x of iterable) as index-based iteration."""
+    """Lower for (const x of iterable) as index-based iteration.
+
+    Handles destructuring patterns: ``for (const [k, v] of arr)`` and
+    ``for (const {x, y} of arr)`` by delegating to the existing
+    array/object destructure helpers.
+    """
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     body_node = node.child_by_field_name(ctx.constants.for_body_field)
 
     iter_reg = ctx.lower_expr(right)
-    raw_name = _extract_var_name(ctx, left) if left else "__for_of_var"
+    is_destructure = left is not None and _is_destructuring_pattern(left)
+    raw_name = (
+        "__for_of_destructure"
+        if is_destructure
+        else (_extract_var_name(ctx, left) if left else "__for_of_var")
+    )
 
     idx_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
@@ -175,11 +194,15 @@ def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit(Opcode.LABEL, label=body_label)
     ctx.enter_block_scope()
-    var_name = ctx.declare_block_var(raw_name)
     elem_reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
-    if var_name:
-        ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+
+    if is_destructure:
+        _lower_for_destructure(ctx, left, elem_reg)
+    else:
+        var_name = ctx.declare_block_var(raw_name)
+        if var_name:
+            ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
 
     update_label = ctx.fresh_label("for_of_update")
     ctx.push_loop(update_label, end_label)
@@ -210,6 +233,30 @@ def _extract_var_name(ctx: TreeSitterEmitContext, node) -> str | None:
                 if name_node:
                     return ctx.node_text(name_node)
     return None
+
+
+def _is_destructuring_pattern(node) -> bool:
+    """Check if node is an array_pattern or object_pattern."""
+    return node.type in (JSN.ARRAY_PATTERN, JSN.OBJECT_PATTERN)
+
+
+def _lower_for_destructure(
+    ctx: TreeSitterEmitContext, pattern_node, elem_reg: str
+) -> None:
+    """Lower destructuring in a for-of/for-in loop body.
+
+    Delegates to the existing array/object destructure helpers from
+    ``javascript.declarations``.
+    """
+    from interpreter.frontends.javascript.declarations import (
+        _lower_array_destructure,
+        _lower_object_destructure,
+    )
+
+    if pattern_node.type == JSN.ARRAY_PATTERN:
+        _lower_array_destructure(ctx, pattern_node, elem_reg, pattern_node)
+    elif pattern_node.type == JSN.OBJECT_PATTERN:
+        _lower_object_destructure(ctx, pattern_node, elem_reg, pattern_node)
 
 
 def lower_js_try(ctx: TreeSitterEmitContext, node) -> None:
