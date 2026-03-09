@@ -329,8 +329,16 @@ def lower_lock_stmt(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_using_stmt(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower using(resource) { body }: lower resource, then body."""
+    """Lower using(resource) { body }: lower resource, then body.
+
+    The resource variable is scoped to the using block.
+    """
     named_children = [c for c in node.children if c.is_named]
+    has_decl = any(c.type == NT.VARIABLE_DECLARATION for c in named_children)
+    scope_entered = has_decl and ctx.block_scoped
+    if scope_entered:
+        ctx.enter_block_scope()
+
     for child in named_children:
         if child.type == NT.VARIABLE_DECLARATION:
             from interpreter.frontends.csharp.declarations import (
@@ -342,6 +350,9 @@ def lower_using_stmt(ctx: TreeSitterEmitContext, node) -> None:
             ctx.lower_block(child)
         elif child.type not in (NT.BLOCK,):
             ctx.lower_expr(child)
+
+    if scope_entered:
+        ctx.exit_block_scope()
 
 
 def lower_checked_stmt(ctx: TreeSitterEmitContext, node) -> None:
