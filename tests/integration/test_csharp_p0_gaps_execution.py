@@ -26,6 +26,32 @@ int y = 2;
         assert local_vars["y"] == 2
 
 
+    def test_goto_label_interaction(self):
+        """goto should jump to a defined label and execute code after it."""
+        source = """\
+int x = 1;
+goto done;
+x = 99;
+done:
+int y = x + 10;
+"""
+        local_vars = _run_csharp(source)
+        assert local_vars["x"] == 1, "goto should skip x = 99"
+        assert local_vars["y"] == 11, "code after label should use original x"
+
+    def test_goto_backward_jump(self):
+        """goto can jump backward to create a loop-like construct."""
+        source = """\
+int x = 0;
+start:
+x = x + 1;
+if (x < 3) goto start;
+int y = x;
+"""
+        local_vars = _run_csharp(source)
+        assert local_vars["y"] == 3
+
+
 class TestCSharpLabeledStatementExecution:
     def test_labeled_statement_executes_body(self):
         """Statement after label should execute normally."""

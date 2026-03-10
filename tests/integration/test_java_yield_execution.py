@@ -48,3 +48,22 @@ int result = m.compute(1);
 """
         local_vars = _run_java(source)
         assert local_vars["result"] == 10
+
+    def test_yield_default_arm(self):
+        """When no case matches, the default arm's yield should produce the value."""
+        source = """\
+class M {
+    int compute(int x) {
+        return switch (x) {
+            case 1 -> { yield 10; }
+            case 2 -> { yield 20; }
+            default -> { yield 99; }
+        };
+    }
+}
+
+M m = new M();
+int result = m.compute(999);
+"""
+        local_vars = _run_java(source)
+        assert local_vars["result"] == 99

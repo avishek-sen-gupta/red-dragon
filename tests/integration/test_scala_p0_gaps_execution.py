@@ -70,3 +70,18 @@ object M {
         vm, stats = execute_for_language("scala", source)
         assert extract_answer(vm, "scala") == 42
         assert stats.llm_calls == 0
+
+    def test_match_wildcard_arm(self):
+        """When no literal case matches, the wildcard arm should execute."""
+        source = """\
+object M {
+    val x = 999
+    val answer = x match {
+        case 42 => 42
+        case _ => 0
+    }
+}
+"""
+        vm, stats = execute_for_language("scala", source)
+        assert extract_answer(vm, "scala") == 0
+        assert stats.llm_calls == 0

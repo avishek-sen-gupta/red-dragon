@@ -22,6 +22,18 @@ val answer = y ?: throw Exception("err")
         assert stats.llm_calls == 0
 
 
+    def test_elvis_with_null_uses_fallback(self):
+        """When LHS of ?: is null, the fallback value should be used."""
+        source = """\
+var answer = 0
+val x: Int? = null
+answer = x ?: 42
+"""
+        vm, stats = execute_for_language("kotlin", source)
+        assert extract_answer(vm, "kotlin") == 42
+        assert stats.llm_calls == 0
+
+
 class TestKotlinWhenStatementExecution:
     """Verify when-expression at statement level executes correctly through VM."""
 
