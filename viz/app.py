@@ -12,6 +12,7 @@ from textual.timer import Timer
 from textual.widgets import Footer, Header, Static
 
 from viz.panels.source_panel import SourcePanel
+from viz.panels.ast_panel import ASTPanel
 from viz.panels.ir_panel import IRPanel
 from viz.panels.vm_state_panel import VMStatePanel
 from viz.panels.cfg_panel import CFGPanel
@@ -36,6 +37,11 @@ class PipelineApp(App):
 
     #source-container {
         border: solid rgb(80,80,120);
+        overflow-y: auto;
+    }
+
+    #ast-container {
+        border: solid rgb(100,80,140);
         overflow-y: auto;
     }
 
@@ -67,6 +73,10 @@ class PipelineApp(App):
         padding: 0 1;
         text-style: bold;
     }
+
+    .hidden {
+        display: none;
+    }
     """
 
     BINDINGS = [
@@ -75,6 +85,8 @@ class PipelineApp(App):
         Binding("space", "toggle_play", "Play/Pause", show=True),
         Binding("home", "step_first", "First", show=True),
         Binding("end", "step_last", "Last", show=True),
+        Binding("a", "toggle_ast", "AST", show=True),
+        Binding("g", "toggle_cfg", "CFG", show=True),
         Binding("q", "quit", "Quit", show=True),
     ]
 
@@ -83,6 +95,8 @@ class PipelineApp(App):
         self._result = result
         self._current_step_index = 0
         self._play_timer: Timer | None = None
+        self._ast_visible = True
+        self._cfg_visible = True
 
     @property
     def _steps(self):
@@ -99,20 +113,21 @@ class PipelineApp(App):
             yield Static(f" Source ({self._result.language})", classes="panel-title")
             yield SourcePanel(self._result.source, id="source-panel")
 
-        with Vertical(id="ir-container"):
-            yield Static(" IR", classes="panel-title")
-            yield IRPanel(self._result.cfg, id="ir-panel")
+        with Vertical(id="ast-container"):
+            yield Static(" AST", classes="panel-title")
+            yield ASTPanel(self._result.ast, id="ast-panel")
 
         with Vertical(id="vm-state-container"):
             yield Static(" VM State", classes="panel-title")
             yield VMStatePanel(id="vm-state-panel")
 
-        with Vertical(id="cfg-container"):
-            yield Static(" CFG", classes="panel-title")
-            yield CFGPanel(self._result.cfg, id="cfg-panel")
+        with Vertical(id="ir-container"):
+            yield Static(" IR", classes="panel-title")
+            yield IRPanel(self._result.cfg, id="ir-panel")
 
-        with Vertical(id="step-container"):
-            yield Static(" Step", classes="panel-title")
+        with Vertical(id="cfg-container"):
+            yield Static(" CFG  │  Step", classes="panel-title")
+            yield CFGPanel(self._result.cfg, id="cfg-panel")
             yield StepPanel(id="step-panel")
 
         yield Footer()
@@ -126,12 +141,14 @@ class PipelineApp(App):
 
         step = self._steps[self._current_step_index]
         source_panel = self.query_one("#source-panel", SourcePanel)
+        ast_panel = self.query_one("#ast-panel", ASTPanel)
         ir_panel = self.query_one("#ir-panel", IRPanel)
         vm_panel = self.query_one("#vm-state-panel", VMStatePanel)
         cfg_panel = self.query_one("#cfg-panel", CFGPanel)
         step_panel = self.query_one("#step-panel", StepPanel)
 
         source_panel.current_instruction = step.instruction
+        ast_panel.current_instruction = step.instruction
         ir_panel.current_step = step
         vm_panel.current_step = step
         cfg_panel.current_step = step
@@ -165,6 +182,16 @@ class PipelineApp(App):
         else:
             step_panel.playing = True
             self._play_timer = self.set_interval(0.5, self._auto_step)
+
+    def action_toggle_ast(self) -> None:
+        ast_container = self.query_one("#ast-container")
+        self._ast_visible = not self._ast_visible
+        ast_container.set_class(not self._ast_visible, "hidden")
+
+    def action_toggle_cfg(self) -> None:
+        cfg_container = self.query_one("#cfg-container")
+        self._cfg_visible = not self._cfg_visible
+        cfg_container.set_class(not self._cfg_visible, "hidden")
 
     def _auto_step(self) -> None:
         if self._current_step_index < self._total_steps - 1:
