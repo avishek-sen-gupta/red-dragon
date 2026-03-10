@@ -27,6 +27,12 @@ class SourcePanel(Static):
     def watch_current_instruction(self, inst: IRInstruction | None) -> None:
         self._render_source()
 
+    def highlight_lines(self, start_line: int, end_line: int) -> None:
+        """Highlight a range of source lines (1-indexed)."""
+        self._highlight_start = start_line - 1
+        self._highlight_end = end_line - 1
+        self._render_source()
+
     def _render_source(self) -> None:
         if not self._lines:
             self.update("[dim]No source loaded[/dim]")
@@ -38,6 +44,11 @@ class SourcePanel(Static):
         if inst and not inst.source_location.is_unknown():
             highlight_start = inst.source_location.start_line - 1
             highlight_end = inst.source_location.end_line - 1
+
+        # Allow manual highlight override (used by lowering app)
+        if hasattr(self, "_highlight_start") and self._highlight_start >= 0:
+            highlight_start = self._highlight_start
+            highlight_end = self._highlight_end
 
         text = Text()
         for i, line in enumerate(self._lines):

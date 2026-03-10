@@ -85,9 +85,20 @@ poetry run python -m viz viz/examples/factorial.py -l python
 
 # Compare mode — side-by-side across languages
 poetry run python -m viz compare c:viz/examples/pointer_demo.c rust:viz/examples/pointer_demo.rs
+
+# Lowering trace — interactive exploration of how frontend lowers AST to IR
+poetry run python -m viz lower viz/examples/factorial.py -l python
+
+# Coverage matrix — cross-language frontend handler availability
+poetry run python -m viz coverage
+poetry run python -m viz coverage -l python,javascript,rust
 ```
 
 Six synchronized panels: **Source** (span-highlighted), **AST** (collapsible tree, toggle `a`), **IR** (grouped by CFG block), **VM State** (heap/stack/registers with diff highlighting), **CFG** (box-drawing graph, toggle `g`), and **Step** (delta summary). Arrow keys step forward/backward, space toggles auto-play, `q` quits.
+
+The **lowering trace** mode shows four panels: source with highlighted spans, a collapsible tree of handler invocations (which handler processed which AST node), handler details (emitted IR, dispatch type, module), and the full IR output. Click any node in the trace tree to see its handler, emitted instructions, and source location.
+
+The **coverage matrix** mode displays a cross-language grid showing which AST node types each frontend handles, distinguishing language-specific handlers (`✓`) from shared/common handlers (`✓*`). Supports filtering by node type name.
 
 ## Setup
 
