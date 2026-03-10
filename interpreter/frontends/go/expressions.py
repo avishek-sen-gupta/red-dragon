@@ -177,6 +177,42 @@ def lower_composite_literal(ctx: TreeSitterEmitContext, node) -> str:
     return obj_reg
 
 
+# -- Go: type conversion expression ----------------------------------------
+
+
+def lower_type_conversion(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower type_conversion_expression: []byte(s), Foo[int](y) -> CALL_FUNCTION.
+
+    The node has a ``type`` field (the target type, e.g. ``[]byte``,
+    ``generic_type``) and an ``operand`` field (the expression being converted).
+    We emit CALL_FUNCTION with the type text as the function name.
+    """
+    type_node = node.child_by_field_name("type")
+    operand_node = node.child_by_field_name("operand")
+    type_name = ctx.node_text(type_node) if type_node else "unknown_type"
+    operand_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
+    reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_FUNCTION,
+        result_reg=reg,
+        operands=[type_name, operand_reg],
+        node=node,
+    )
+    return reg
+
+
+# -- Go: generic type (Foo[int]) as expression reference ------------------
+
+
+def lower_generic_type(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower generic_type: Foo[int] -> lower as identifier using the full text.
+
+    When generic_type appears in expression context (e.g. inside
+    type_conversion_expression), we treat it as a type name reference.
+    """
+    return lower_const_literal(ctx, node)
+
+
 # -- Go: type assertion expression -----------------------------------------
 
 

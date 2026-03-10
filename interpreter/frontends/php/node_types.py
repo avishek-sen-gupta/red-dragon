@@ -54,6 +54,8 @@ class PHPNodeType:
     NULLSAFE_MEMBER_CALL_EXPRESSION = "nullsafe_member_call_expression"
     REQUIRE_ONCE_EXPRESSION = "require_once_expression"
     VARIADIC_UNPACKING = "variadic_unpacking"
+    PRINT_INTRINSIC = "print_intrinsic"
+    CLONE_EXPRESSION = "clone_expression"
 
     # -- Statements --------------------------------------------------------
     EXPRESSION_STATEMENT = "expression_statement"
@@ -86,6 +88,10 @@ class PHPNodeType:
     NAMESPACE_USE_DECLARATION = "namespace_use_declaration"
     ENUM_CASE = "enum_case"
     GLOBAL_DECLARATION = "global_declaration"
+    CONST_DECLARATION = "const_declaration"
+
+    # -- Const element nodes -----------------------------------------------
+    CONST_ELEMENT = "const_element"
 
     # -- Control-flow clause types -----------------------------------------
     ELSE_CLAUSE = "else_clause"

@@ -81,6 +81,8 @@ class GoFrontend(BaseFrontend):
             GoNodeType.TYPE_ASSERTION_EXPRESSION: go_expr.lower_type_assertion,
             GoNodeType.SLICE_EXPRESSION: go_expr.lower_slice_expr,
             GoNodeType.FUNC_LITERAL: go_expr.lower_func_literal,
+            GoNodeType.TYPE_CONVERSION_EXPRESSION: go_expr.lower_type_conversion,
+            GoNodeType.GENERIC_TYPE: go_expr.lower_generic_type,
             GoNodeType.CHANNEL_TYPE: common_expr.lower_const_literal,
             GoNodeType.SLICE_TYPE: common_expr.lower_const_literal,
             GoNodeType.EXPRESSION_LIST: common_expr.lower_const_literal,

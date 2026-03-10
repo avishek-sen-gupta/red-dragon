@@ -147,4 +147,5 @@ class CSharpFrontend(BaseFrontend):
             NT.DELEGATE_DECLARATION: csharp_decl.lower_delegate_declaration,
             NT.LOCAL_FUNCTION_STATEMENT: csharp_decl.lower_local_function_stmt,
             NT.YIELD_STATEMENT: csharp_cf.lower_yield_stmt,
+            NT.EMPTY_STATEMENT: lambda ctx, node: None,
         }

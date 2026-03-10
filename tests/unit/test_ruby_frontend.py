@@ -1168,3 +1168,52 @@ end
         instructions = _parse_ruby(source)
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH in opcodes
+
+
+class TestRubyScopeResolution:
+    def test_scope_resolution_basic(self):
+        """Foo::Bar should produce LOAD_VAR + LOAD_FIELD, not SYMBOLIC."""
+        instructions = _parse_ruby("x = Foo::Bar")
+        opcodes = _opcodes(instructions)
+        assert Opcode.LOAD_FIELD in opcodes
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert any("Bar" in inst.operands for inst in loads)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_scope_resolution_stores_result(self):
+        """Foo::Bar assigned to a variable should produce STORE_VAR."""
+        instructions = _parse_ruby("x = Foo::Bar")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_scope_resolution_loads_scope(self):
+        """Left side (Foo) should be loaded as LOAD_VAR."""
+        instructions = _parse_ruby("x = Foo::Bar")
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("Foo" in inst.operands for inst in loads)
+
+    def test_scope_resolution_chained_with_method(self):
+        """Module::Class.new should produce NEW_OBJECT + CALL_METHOD."""
+        instructions = _parse_ruby("x = Net::HTTP.new()")
+        opcodes = _opcodes(instructions)
+        assert Opcode.NEW_OBJECT in opcodes
+        assert Opcode.CALL_METHOD in opcodes
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_scope_resolution_nested(self):
+        """A::B::C should produce two LOAD_FIELD instructions."""
+        instructions = _parse_ruby("x = A::B::C")
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert len(loads) >= 2
+        assert any("B" in inst.operands for inst in loads)
+        assert any("C" in inst.operands for inst in loads)
+
+    def test_root_scope_resolution(self):
+        """::TopLevel (root scope) should produce LOAD_VAR, not SYMBOLIC."""
+        instructions = _parse_ruby("x = ::TopLevel")
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("TopLevel" in inst.operands for inst in loads)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)

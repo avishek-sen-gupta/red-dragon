@@ -1108,3 +1108,47 @@ class TestCSharpGenericTypeSeeding:
         source = "class M { void m() { int x = 42; } }"
         _, builder = _parse_csharp_with_types(source)
         assert builder.var_types["x"] == "Int"
+
+
+class TestCSharpEmptyStatement:
+    """Bare `;` (empty_statement) must be a no-op — no SYMBOLIC fallthrough."""
+
+    def test_empty_statement_produces_no_symbolic(self):
+        """A bare `;` should not produce any SYMBOLIC instructions."""
+        ir = _parse_and_lower(";")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("empty_statement" in str(inst.operands) for inst in symbolics)
+
+    def test_multiple_empty_statements_no_symbolic(self):
+        """Multiple bare `;` should not produce any SYMBOLIC instructions."""
+        ir = _parse_and_lower(";;;")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("empty_statement" in str(inst.operands) for inst in symbolics)
+
+    def test_empty_statement_among_real_statements(self):
+        """Empty statements mixed with real code should not affect IR output."""
+        source = "int x = 10; ; int y = 20; ;"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("empty_statement" in str(inst.operands) for inst in symbolics)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+        assert any("y" in inst.operands for inst in stores)
+
+    def test_empty_statement_in_method_body(self):
+        """Empty statement inside a method body should be silently skipped."""
+        source = """\
+class C {
+    void M() {
+        int x = 1;
+        ;
+        int y = 2;
+    }
+}
+"""
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("empty_statement" in str(inst.operands) for inst in symbolics)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+        assert any("y" in inst.operands for inst in stores)
