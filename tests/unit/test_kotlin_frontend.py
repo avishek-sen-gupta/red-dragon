@@ -192,12 +192,13 @@ class TestKotlinSpecial:
         assert instructions[0].opcode == Opcode.LABEL
         assert instructions[0].label == "entry"
 
-    def test_fallback_symbolic(self):
+    def test_anonymous_function_no_longer_symbolic(self):
+        """anonymous_function should now produce a function ref, not SYMBOLIC."""
         instructions = _parse_kotlin("fun main() { val x = fun(a: Int): Int = a + 1 }")
-        opcodes = _opcodes(instructions)
-        assert Opcode.SYMBOLIC in opcodes
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
-        assert any("unsupported:" in str(inst.operands) for inst in symbolics)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("__anon_fun" in str(inst.operands) for inst in consts)
 
     def test_method_call_via_navigation(self):
         instructions = _parse_kotlin("fun main() { obj.doSomething(1) }")
@@ -911,3 +912,158 @@ class TestKotlinGenericTypeSeeding:
         source = "fun main() { val x: Int = 42 }"
         _, builder = _parse_kotlin_with_types(source)
         assert builder.var_types["x"] == "Int"
+
+
+class TestKotlinThrowExpression:
+    """P0 gap: throw as expression in elvis and other expression contexts."""
+
+    def test_throw_in_elvis_no_symbolic(self):
+        """val x = y ?: throw Exception('err') should lower without SYMBOLIC."""
+        instructions = _parse_kotlin('val x = y ?: throw Exception("err")')
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_throw_in_elvis_emits_throw(self):
+        """throw in elvis RHS should produce a THROW opcode."""
+        instructions = _parse_kotlin('val x = y ?: throw Exception("err")')
+        throws = _find_all(instructions, Opcode.THROW)
+        assert len(throws) >= 1
+
+    def test_throw_in_elvis_stores_result(self):
+        """The val binding should still produce a STORE_VAR for x."""
+        instructions = _parse_kotlin('val x = y ?: throw Exception("err")')
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+    def test_throw_in_elvis_calls_exception_constructor(self):
+        """The Exception() constructor call should appear."""
+        instructions = _parse_kotlin('val x = y ?: throw Exception("err")')
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("Exception" in inst.operands for inst in calls)
+
+
+class TestKotlinWhenExpressionAsStatement:
+    """P0 gap: when_expression used at statement level should be in stmt dispatch."""
+
+    def test_when_stmt_no_symbolic(self):
+        """when at statement level should not produce unsupported SYMBOLIC."""
+        source = """\
+fun main() {
+    when(x) {
+        1 -> println("one")
+        2 -> println("two")
+        else -> println("other")
+    }
+}
+"""
+        instructions = _parse_kotlin(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_when_stmt_produces_branch_if(self):
+        """when at statement level should produce BRANCH_IF for each arm."""
+        source = """\
+fun main() {
+    when(x) {
+        1 -> println("one")
+        2 -> println("two")
+        else -> println("other")
+    }
+}
+"""
+        instructions = _parse_kotlin(source)
+        branches = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branches) >= 2
+
+    def test_when_stmt_calls_println(self):
+        """when arms should produce CALL_FUNCTION for println."""
+        source = """\
+fun main() {
+    when(x) {
+        1 -> println("one")
+    }
+}
+"""
+        instructions = _parse_kotlin(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("println" in inst.operands for inst in calls)
+
+    def test_when_stmt_in_dispatch_table(self):
+        """when_expression should be in both expr and stmt dispatch tables."""
+        frontend = KotlinFrontend(TreeSitterParserFactory(), "kotlin")
+        # Force initialization by lowering empty program
+        frontend.lower(b"")
+        from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
+
+        assert KNT.WHEN_EXPRESSION in frontend._build_stmt_dispatch()
+
+
+class TestKotlinAnonymousFunction:
+    """P0 gap: anonymous_function (fun(x: Int): Int { ... }) should lower as function def."""
+
+    def test_anonymous_function_no_symbolic(self):
+        """fun(x: Int): Int { return x * 2 } should NOT produce unsupported SYMBOLIC."""
+        instructions = _parse_kotlin(
+            "fun main() { val f = fun(x: Int): Int { return x * 2 } }"
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_anonymous_function_produces_func_ref(self):
+        """anonymous_function should produce a function reference CONST."""
+        instructions = _parse_kotlin(
+            "fun main() { val f = fun(x: Int): Int { return x * 2 } }"
+        )
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("__anon_fun" in str(inst.operands) for inst in consts)
+
+    def test_anonymous_function_has_params(self):
+        """anonymous_function params should produce SYMBOLIC param: entries."""
+        instructions = _parse_kotlin(
+            "fun main() { val f = fun(x: Int): Int { return x * 2 } }"
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        param_names = [
+            inst.operands[0]
+            for inst in symbolics
+            if inst.operands and str(inst.operands[0]).startswith("param:")
+        ]
+        assert any("x" in p for p in param_names)
+
+    def test_anonymous_function_has_return(self):
+        """anonymous_function body should produce RETURN."""
+        instructions = _parse_kotlin(
+            "fun main() { val f = fun(x: Int): Int { return x * 2 } }"
+        )
+        returns = _find_all(instructions, Opcode.RETURN)
+        assert len(returns) >= 1
+
+    def test_anonymous_function_stored_in_var(self):
+        """val f = fun(...) should store the function ref in f."""
+        instructions = _parse_kotlin(
+            "fun main() { val f = fun(x: Int): Int { return x * 2 } }"
+        )
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("f" in inst.operands for inst in stores)
+
+    def test_anonymous_function_no_params(self):
+        """fun(): Unit { println(1) } should lower without errors."""
+        instructions = _parse_kotlin(
+            "fun main() { val f = fun(): Unit { println(1) } }"
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_anonymous_function_multiple_params(self):
+        """fun(a: Int, b: Int): Int { return a + b } should handle multiple params."""
+        instructions = _parse_kotlin(
+            "fun main() { val f = fun(a: Int, b: Int): Int { return a + b } }"
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        param_names = [
+            inst.operands[0]
+            for inst in symbolics
+            if inst.operands and str(inst.operands[0]).startswith("param:")
+        ]
+        assert any("a" in p for p in param_names)
+        assert any("b" in p for p in param_names)

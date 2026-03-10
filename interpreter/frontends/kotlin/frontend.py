@@ -86,6 +86,7 @@ class KotlinFrontend(BaseFrontend):
             KNT.DO_WHILE_STATEMENT: kotlin_expr.lower_loop_as_expr,
             KNT.TYPE_TEST: kotlin_expr.lower_type_test,
             KNT.LABEL: common_expr.lower_const_literal,
+            KNT.ANONYMOUS_FUNCTION: kotlin_expr.lower_anonymous_function,
         }
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:
@@ -95,6 +96,7 @@ class KotlinFrontend(BaseFrontend):
             KNT.FUNCTION_DECLARATION: kotlin_decl.lower_function_decl,
             KNT.CLASS_DECLARATION: kotlin_decl.lower_class_decl,
             KNT.IF_EXPRESSION: kotlin_cf.lower_if_stmt,
+            KNT.WHEN_EXPRESSION: kotlin_cf.lower_when_stmt,
             KNT.WHILE_STATEMENT: kotlin_cf.lower_while_stmt,
             KNT.FOR_STATEMENT: kotlin_cf.lower_for_stmt,
             KNT.JUMP_EXPRESSION: kotlin_cf.lower_jump_expr,
