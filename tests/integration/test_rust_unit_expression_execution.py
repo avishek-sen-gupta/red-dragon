@@ -29,3 +29,14 @@ let x = ();
 """)
         assert local_vars["a"] == 42
         assert "x" in local_vars
+
+    def test_unit_as_function_return(self):
+        """Function returning () should not crash the VM."""
+        _, local_vars = _run_rust("""\
+fn do_nothing() {
+    ()
+}
+let x = do_nothing();
+let y = 42;
+""")
+        assert local_vars["y"] == 42

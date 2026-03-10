@@ -34,3 +34,13 @@ t.add = function(self, x) return x end
 local r = t:add(42)
 """)
         assert "r" in local_vars
+
+    def test_method_call_chained(self):
+        """obj:method1():method2() chained call should not crash."""
+        _, local_vars = _run_lua("""\
+local t = {}
+t.get = function(self) return self end
+t.val = function(self) return 42 end
+local r = t:get():val()
+""")
+        assert "r" in local_vars
