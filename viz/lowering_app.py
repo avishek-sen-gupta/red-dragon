@@ -21,14 +21,14 @@ class LoweringIRPanel(Static):
     """Displays IR instructions emitted by the currently selected lowering event."""
 
     def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
+        super().__init__("Select a node in the lowering trace", **kwargs)
         self._event: LoweringEvent | None = None
 
     def set_event(self, event: LoweringEvent | None) -> None:
         self._event = event
-        self._render()
+        self._render_detail()
 
-    def _render(self) -> None:
+    def _render_detail(self) -> None:
         if not self._event:
             self.update("[dim]Select a node in the lowering trace[/dim]")
             return
@@ -68,7 +68,7 @@ class LoweringFullIRPanel(Static):
     """Displays the complete IR output from the lowering pass."""
 
     def __init__(self, result: LoweringResult, **kwargs) -> None:
-        super().__init__(**kwargs)
+        super().__init__("Loading IR...", **kwargs)
         self._result = result
 
     def on_mount(self) -> None:

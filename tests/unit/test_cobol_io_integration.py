@@ -137,11 +137,11 @@ class TestExecutorIOProviderDispatch:
             result, list
         ), f"Expected concrete list, got {type(result)}: {result}"
 
-    def test_non_cobol_call_not_intercepted_by_provider(self):
-        """Non __cobol_* calls bypass the provider entirely."""
+    def test_non_cobol_call_handled_by_builtin(self):
+        """Non __cobol_* calls are handled by builtins, not the IO provider."""
         ir = _build_call_function_ir("print", "hello")
         provider = StubIOProvider()
         vm = _execute_with_provider(ir, provider)
-        # print returns None (the builtin handles it)
+        # print returns None (the builtin handles it, not the provider)
         result = vm.current_frame.registers.get("%result")
         assert result is None

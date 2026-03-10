@@ -569,7 +569,7 @@ class TestRegionOpcodeDataflow:
 
 
 class TestEdgeCases:
-    def test_symbolic_instruction_passthrough(self):
+    def test_symbolic_instruction_does_not_crash_analysis(self):
         """SYMBOLIC instruction doesn't crash analysis."""
         ir = [
             _make_inst(Opcode.LABEL, label="entry"),

@@ -271,15 +271,16 @@ class TestClosuresLowering:
     def test_closure_emits_nested_function_label(self, language_ir):
         """Closure languages must emit at least 2 nested func_ labels (outer + inner)."""
         lang, ir = language_ir
+        if lang not in CLOSURE_LANGUAGES:
+            pytest.skip(f"{lang} is not a closure language")
         labels = [
             inst.label
             for inst in ir
             if inst.opcode == Opcode.LABEL and inst.label and "func_" in inst.label
         ]
-        if lang in CLOSURE_LANGUAGES:
-            assert (
-                len(labels) == 2
-            ), f"[{lang}] closure should produce exactly 2 nested func_ labels, got {labels}"
+        assert (
+            len(labels) == 2
+        ), f"[{lang}] closure should produce exactly 2 nested func_ labels, got {labels}"
 
 
 # ---------------------------------------------------------------------------

@@ -42,7 +42,8 @@ for (var k in obj) {
 }
 """,
         )
-        # answer = 2 + number of keys
+        # answer = 2 + number of keys (2) = 4
+        assert extract_answer(vm, "javascript") == 4
         assert stats.steps < 200
 
 
@@ -78,7 +79,7 @@ for x in arr:
 
 
 class TestJavaForEachTermination:
-    def test_enhanced_for_accumulates_correctly(self):
+    def test_enhanced_for_terminates(self):
         vm, stats = execute_for_language(
             "java",
             """\
@@ -93,7 +94,7 @@ class M {
 }
 """,
         )
-        # Java answer is inside a method, not at top level
+        # Java answer is inside a method — not extractable from frame 0
         assert stats.steps < 200
 
 
@@ -114,7 +115,7 @@ for (x in arr) {
 
 
 class TestRustForTermination:
-    def test_for_accumulates_correctly(self):
+    def test_for_terminates(self):
         vm, stats = execute_for_language(
             "rust",
             """\
@@ -127,11 +128,12 @@ fn main() {
 }
 """,
         )
+        # Rust answer is inside fn main() — not extractable from frame 0
         assert stats.steps < 200
 
 
 class TestGoRangeTermination:
-    def test_range_accumulates_correctly(self):
+    def test_range_terminates(self):
         vm, stats = execute_for_language(
             "go",
             """\
@@ -145,6 +147,7 @@ func main() {
 }
 """,
         )
+        # Go answer is inside func main() — not extractable from frame 0
         assert stats.steps < 200
 
 
@@ -181,7 +184,7 @@ for (auto x : arr) {
 
 
 class TestLuaGenericForTermination:
-    def test_generic_for_accumulates_correctly(self):
+    def test_generic_for_terminates(self):
         vm, stats = execute_for_language(
             "lua",
             """\
@@ -192,4 +195,5 @@ for _, x in ipairs(arr) do
 end
 """,
         )
+        # Lua ipairs iteration produces symbolic values — verify termination only
         assert stats.steps < 200

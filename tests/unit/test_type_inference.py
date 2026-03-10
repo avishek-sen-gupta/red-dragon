@@ -1677,14 +1677,13 @@ class TestCallUnknown:
         env = infer_types(instructions, _default_resolver())
         assert "%1" not in env.register_types
 
-    def test_no_result_reg_does_not_crash(self):
-        """CALL_UNKNOWN without result_reg → no crash."""
+    def test_no_result_reg_leaves_state_clean(self):
+        """CALL_UNKNOWN without result_reg does not pollute register or var types."""
         instructions = [
             _make_inst(Opcode.LABEL, label="entry"),
             _make_inst(Opcode.CALL_UNKNOWN, operands=["%0"]),
         ]
         env = infer_types(instructions, _default_resolver())
-        # CALL_UNKNOWN with no result_reg should not pollute register_types
         assert "%0" not in env.register_types
         assert len(env.var_types) == 0
 

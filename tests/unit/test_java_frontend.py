@@ -78,6 +78,7 @@ class TestJavaExpressions:
         )
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
+        # Cast is lowered as pass-through: d flows directly into x
         loads = _find_all(instructions, Opcode.LOAD_VAR)
         assert any("d" in inst.operands for inst in loads)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
