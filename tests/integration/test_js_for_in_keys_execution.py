@@ -53,3 +53,18 @@ for (var k in obj) {
 """,
         )
         assert extract_answer(vm, "javascript") == 42
+
+    def test_for_in_single_key(self):
+        """for-in over a 1-key object should iterate once."""
+        vm, stats = execute_for_language(
+            "javascript",
+            """\
+var obj = {solo: 99};
+var answer = 0;
+for (var k in obj) {
+    answer = answer + 1;
+}
+""",
+        )
+        assert extract_answer(vm, "javascript") == 1
+        assert stats.steps < 200
