@@ -553,6 +553,99 @@ def lower_lambda_literal(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
+# -- anonymous function expression ------------------------------------
+
+
+def lower_anonymous_function(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower `fun(x: Int): Int { return x * 2 }` as a function definition.
+
+    Structurally similar to lambda_literal but uses function_value_parameters
+    and function_body (identical to named function_declaration minus the name).
+    """
+    func_name = f"__anon_fun_{ctx.label_counter}"
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+    end_label = ctx.fresh_label(f"end_{func_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit(Opcode.LABEL, label=func_label)
+
+    # Extract and lower parameters
+    params_node = next(
+        (c for c in node.children if c.type == KNT.FUNCTION_VALUE_PARAMETERS),
+        None,
+    )
+    if params_node:
+        _lower_anon_func_params(ctx, params_node)
+
+    # Lower function body
+    body_node = next(
+        (c for c in node.children if c.type == KNT.FUNCTION_BODY),
+        None,
+    )
+    expr_reg = _lower_anon_func_body(ctx, body_node) if body_node else ""
+
+    if expr_reg:
+        ctx.emit(Opcode.RETURN, operands=[expr_reg])
+    else:
+        none_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[ctx.constants.default_return_value],
+        )
+        ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=reg,
+        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
+    )
+    return reg
+
+
+def _lower_anon_func_params(ctx: TreeSitterEmitContext, params_node) -> None:
+    """Emit SYMBOLIC param: + STORE_VAR for each parameter in function_value_parameters."""
+    for child in params_node.children:
+        if child.type == KNT.PARAMETER:
+            id_node = next(
+                (c for c in child.children if c.type == KNT.SIMPLE_IDENTIFIER),
+                None,
+            )
+            if id_node:
+                pname = ctx.node_text(id_node)
+                ctx.emit(
+                    Opcode.SYMBOLIC,
+                    result_reg=ctx.fresh_reg(),
+                    operands=[f"{constants.PARAM_PREFIX}{pname}"],
+                    node=child,
+                )
+                ctx.emit(
+                    Opcode.STORE_VAR,
+                    operands=[pname, f"%{ctx.reg_counter - 1}"],
+                )
+
+
+def _lower_anon_func_body(ctx: TreeSitterEmitContext, body_node) -> str:
+    """Lower function_body, returning last expression register for expression-bodied funs."""
+    last_reg = ""
+    for child in body_node.children:
+        if child.type in ("{", "}", "="):
+            continue
+        if child.is_named:
+            is_stmt = (
+                ctx.stmt_dispatch.get(child.type) is not None
+                or child.type in ctx.constants.block_node_types
+            )
+            if is_stmt:
+                ctx.lower_stmt(child)
+                last_reg = ""
+            else:
+                last_reg = ctx.lower_expr(child)
+    return last_reg
+
+
 # -- object literal (anonymous object expression) ------------------------
 
 
@@ -641,13 +734,31 @@ def lower_try_expr(ctx: TreeSitterEmitContext, node) -> str:
 # -- elvis expression (?:) ---------------------------------------------
 
 
+def _rhs_has_throw(node) -> bool:
+    """Check if the RHS of an elvis expression is a throw (jump_expression)."""
+    return node.type == KNT.JUMP_EXPRESSION and any(
+        c.type == "throw" for c in node.children
+    )
+
+
 def lower_elvis_expr(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower `x ?: default` as BINOP('?:', left, right)."""
+    """Lower `x ?: default` as BINOP or conditional branch (when RHS is throw).
+
+    When the RHS is a throw expression, short-circuit evaluation is required:
+    the throw must only execute when the LHS is null.  We emit an if-else
+    branch instead of an eager BINOP.
+    """
     named_children = [c for c in node.children if c.is_named]
     if len(named_children) < 2:
         return lower_const_literal(ctx, node)
+
+    rhs_node = named_children[-1]
+
+    if _rhs_has_throw(rhs_node):
+        return _lower_elvis_with_throw(ctx, node, named_children[0], rhs_node)
+
     left_reg = ctx.lower_expr(named_children[0])
-    right_reg = ctx.lower_expr(named_children[-1])
+    right_reg = ctx.lower_expr(rhs_node)
     reg = ctx.fresh_reg()
     ctx.emit(
         Opcode.BINOP,
@@ -655,6 +766,45 @@ def lower_elvis_expr(ctx: TreeSitterEmitContext, node) -> str:
         operands=["?:", left_reg, right_reg],
         node=node,
     )
+    return reg
+
+
+def _lower_elvis_with_throw(
+    ctx: TreeSitterEmitContext, node, lhs_node, rhs_node
+) -> str:
+    """Lower `x ?: throw E()` as conditional: if x != null use x, else throw."""
+    left_reg = ctx.lower_expr(lhs_node)
+
+    null_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=null_reg, operands=[ctx.constants.none_literal])
+
+    cond_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.BINOP, result_reg=cond_reg, operands=["!=", left_reg, null_reg])
+
+    non_null_label = ctx.fresh_label("elvis_non_null")
+    throw_label = ctx.fresh_label("elvis_throw")
+    end_label = ctx.fresh_label("elvis_end")
+
+    result_var = f"__elvis_result_{ctx.label_counter}"
+
+    ctx.emit(
+        Opcode.BRANCH_IF,
+        operands=[cond_reg],
+        label=f"{non_null_label},{throw_label}",
+        node=node,
+    )
+
+    ctx.emit(Opcode.LABEL, label=non_null_label)
+    ctx.emit(Opcode.STORE_VAR, operands=[result_var, left_reg])
+    ctx.emit(Opcode.BRANCH, label=end_label)
+
+    ctx.emit(Opcode.LABEL, label=throw_label)
+    ctx.lower_expr(rhs_node)
+    ctx.emit(Opcode.BRANCH, label=end_label)
+
+    ctx.emit(Opcode.LABEL, label=end_label)
+    reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[result_var])
     return reg
 
 

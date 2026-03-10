@@ -48,6 +48,7 @@ class KotlinNodeType:
     INDEXING_EXPRESSION = "indexing_expression"
     AS_EXPRESSION = "as_expression"
     JUMP_EXPRESSION = "jump_expression"
+    ANONYMOUS_FUNCTION = "anonymous_function"
     TYPE_TEST = "type_test"
 
     # -- declarations & statements ---------------------------------------
