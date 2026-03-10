@@ -291,16 +291,20 @@ class TestClassesLowering:
         )
 
     def test_class_specific_opcodes_present(self, language_ir):
-        """Languages with class/object semantics must emit CALL_METHOD or STORE_INDEX."""
+        """All languages emit object-related opcodes: CALL_METHOD/STORE_INDEX or STORE_FIELD/LOAD_FIELD."""
         lang, ir = language_ir
-        # C uses plain structs, Pascal uses records — no class-specific opcodes expected
-        if lang in ("c", "pascal"):
-            return
         ops = {inst.opcode for inst in ir}
-        class_ops = ops & {Opcode.CALL_METHOD, Opcode.STORE_INDEX}
-        assert (
-            class_ops
-        ), f"[{lang}] expected CALL_METHOD or STORE_INDEX for class operations"
+        if lang in ("c", "pascal"):
+            # C structs and Pascal records use field ops instead of method calls
+            field_ops = ops & {Opcode.STORE_FIELD, Opcode.LOAD_FIELD}
+            assert (
+                field_ops
+            ), f"[{lang}] expected STORE_FIELD or LOAD_FIELD for struct/record, got: {ops}"
+        else:
+            class_ops = ops & {Opcode.CALL_METHOD, Opcode.STORE_INDEX}
+            assert (
+                class_ops
+            ), f"[{lang}] expected CALL_METHOD or STORE_INDEX for class operations"
 
 
 # ---------------------------------------------------------------------------

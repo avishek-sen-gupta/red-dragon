@@ -11,6 +11,8 @@ Covers:
 
 from __future__ import annotations
 
+import pytest
+
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.vm_types import (
     HeapObject,
@@ -73,11 +75,8 @@ class TestPointerDataclass:
 
     def test_pointer_is_frozen(self):
         p = Pointer("mem_0", 0)
-        try:
+        with pytest.raises(AttributeError):
             p.offset = 5
-            assert False, "Should not be able to mutate frozen dataclass"
-        except AttributeError:
-            pass
 
 
 # ── ADDRESS_OF handler ────────────────────────────────────────────

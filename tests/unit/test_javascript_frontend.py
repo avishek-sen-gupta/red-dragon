@@ -366,7 +366,7 @@ try {
         # No catch_clause: SYMBOLIC placeholders
         symbolics = [i for i in instructions if i.opcode == Opcode.SYMBOLIC]
         assert not any("catch_clause:" in str(s.operands) for s in symbolics)
-        assert len(instructions) > 1
+        assert len(instructions) > 10
 
     def test_object_literal_with_method_calls(self):
         source = """\

@@ -356,6 +356,11 @@ fun main() {
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("name" in inst.operands for inst in stores)
         assert any("upper" in inst.operands for inst in stores)
+        # Verify navigation expressions are lowered
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert any("name" in inst.operands for inst in loads)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("toUpperCase" in inst.operands for inst in calls)
         assert len(instructions) > 3
 
 

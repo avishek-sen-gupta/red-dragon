@@ -1758,7 +1758,7 @@ class TestStoreIndexLoadIndex:
         ]
         env = infer_types(instructions, _default_resolver())
         # STORE_INDEX should not add any new register beyond %0, %1, %2
-        assert set(env.register_types.keys()) <= {"%0", "%1", "%2"}
+        assert set(env.register_types.keys()) == {"%0", "%1", "%2"}
 
 
 # ---------------------------------------------------------------------------
