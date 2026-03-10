@@ -25,7 +25,6 @@ int y = 2;
         assert local_vars["x"] == 1, "goto should skip x = 99"
         assert local_vars["y"] == 2
 
-
     def test_goto_label_interaction(self):
         """goto should jump to a defined label and execute code after it."""
         source = """\

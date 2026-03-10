@@ -66,6 +66,8 @@ class GoFrontend(BaseFrontend):
             GoNodeType.FLOAT_LITERAL: common_expr.lower_const_literal,
             GoNodeType.INTERPRETED_STRING_LITERAL: common_expr.lower_const_literal,
             GoNodeType.RAW_STRING_LITERAL: common_expr.lower_const_literal,
+            GoNodeType.RUNE_LITERAL: common_expr.lower_const_literal,
+            GoNodeType.BLANK_IDENTIFIER: common_expr.lower_const_literal,
             GoNodeType.TRUE: common_expr.lower_canonical_true,
             GoNodeType.FALSE: common_expr.lower_canonical_false,
             GoNodeType.NIL: common_expr.lower_canonical_none,
@@ -116,5 +118,6 @@ class GoFrontend(BaseFrontend):
             GoNodeType.LABELED_STATEMENT: go_cf.lower_labeled_stmt,
             GoNodeType.CONST_DECLARATION: go_decl.lower_go_const_decl,
             GoNodeType.GOTO_STATEMENT: go_cf.lower_goto_stmt,
+            GoNodeType.FALLTHROUGH_STATEMENT: lambda ctx, node: None,
             GoNodeType.RECEIVE_STATEMENT: go_cf.lower_receive_stmt,
         }

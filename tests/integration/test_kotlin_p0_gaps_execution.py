@@ -21,7 +21,6 @@ val answer = y ?: throw Exception("err")
         assert extract_answer(vm, "kotlin") == 42
         assert stats.llm_calls == 0
 
-
     def test_elvis_with_null_uses_fallback(self):
         """When LHS of ?: is null, the fallback value should be used."""
         source = """\
