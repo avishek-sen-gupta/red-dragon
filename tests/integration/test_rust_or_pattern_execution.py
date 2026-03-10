@@ -84,3 +84,27 @@ let r = match x {
 };
 """)
         assert local_vars["r"] == 30
+
+    def test_multiple_or_pattern_arms(self):
+        """Two separate or-pattern arms in the same match."""
+        _, local_vars = _run_rust("""\
+let x = 4;
+let r = match x {
+    1 | 2 => 10,
+    3 | 4 => 20,
+    _ => 0,
+};
+""")
+        assert local_vars["r"] == 20
+
+    def test_or_pattern_first_arm_of_two(self):
+        """First or-pattern arm should match when appropriate."""
+        _, local_vars = _run_rust("""\
+let x = 1;
+let r = match x {
+    1 | 2 => 10,
+    3 | 4 => 20,
+    _ => 0,
+};
+""")
+        assert local_vars["r"] == 10

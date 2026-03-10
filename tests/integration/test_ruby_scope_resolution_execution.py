@@ -45,3 +45,27 @@ answer = PI
         vm, stats = execute_for_language("ruby", source)
         assert extract_answer(vm, "ruby") == 3
         assert stats.llm_calls == 0
+
+    def test_scope_resolution_with_class_method(self):
+        """Constant accessed via scope resolution used in class method."""
+        source = """\
+module Math
+end
+
+PI = 3
+
+class Circle
+    def initialize(r)
+        @r = r
+    end
+    def area()
+        return @r * @r * PI
+    end
+end
+
+c = Circle.new(2)
+answer = c.area()
+"""
+        vm, stats = execute_for_language("ruby", source)
+        assert extract_answer(vm, "ruby") == 12
+        assert stats.llm_calls == 0
