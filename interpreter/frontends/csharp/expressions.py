@@ -670,3 +670,16 @@ def lower_csharp_params(ctx: TreeSitterEmitContext, params_node) -> None:
                     operands=[pname, param_reg],
                 )
                 ctx.seed_var_type(pname, type_hint)
+
+
+# -- P1 gap handlers ------------------------------------------------------
+
+
+def lower_checked_expr(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower checked(expr) / unchecked(expr) — just lower the inner expression."""
+    named_children = [c for c in node.children if c.is_named]
+    return (
+        ctx.lower_expr(named_children[0])
+        if named_children
+        else lower_const_literal(ctx, node)
+    )

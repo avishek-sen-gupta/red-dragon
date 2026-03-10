@@ -218,12 +218,13 @@ class TestPhpFrontendFallback:
         assert ir[0].label == "entry"
 
     def test_unsupported_construct_fallback(self):
-        source = "<?php declare(strict_types=1); ?>"
+        source = "<?php $x = `ls -la`; ?>"
         ir = _parse_and_lower(source)
         opcodes = _opcodes(ir)
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert any(
-            "unsupported:declare_statement" in str(inst.operands) for inst in symbolics
+            "unsupported:shell_command_expression" in str(inst.operands)
+            for inst in symbolics
         )
 
 

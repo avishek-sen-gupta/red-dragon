@@ -775,3 +775,13 @@ def lower_php_variadic_unpacking(ctx: TreeSitterEmitContext, node) -> str:
         node=node,
     )
     return reg
+
+
+def lower_php_error_suppression(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower @expr — just lower the inner expression (error suppression is a no-op for us)."""
+    named_children = [c for c in node.children if c.is_named]
+    return (
+        ctx.lower_expr(named_children[0])
+        if named_children
+        else lower_const_literal(ctx, node)
+    )
