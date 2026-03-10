@@ -9,8 +9,26 @@ from interpreter import constants
 from interpreter.frontends.common.expressions import (
     lower_const_literal,
     lower_interpolated_string_parts,
+    lower_call_impl,
 )
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT
+
+
+def lower_scala_call(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower call_expression, unwrapping generic_function to its inner function.
+
+    In Scala, foo[Int](x) parses as call_expression(generic_function(foo, [Int]), (x)).
+    We unwrap the generic_function to expose the raw function node (identifier or
+    field_expression) so that lower_call_impl can dispatch correctly.
+    """
+    func_node = node.child_by_field_name(ctx.constants.call_function_field)
+    args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
+    unwrapped_func = (
+        func_node.child_by_field_name("function")
+        if func_node and func_node.type == NT.GENERIC_FUNCTION
+        else func_node
+    )
+    return lower_call_impl(ctx, unwrapped_func, args_node, node)
 
 
 def lower_field_expr(ctx: TreeSitterEmitContext, node) -> str:
@@ -480,9 +498,13 @@ def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_case_class_pattern(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower case class pattern like Circle(r) in match arms."""
+    """Lower case class pattern like Circle(r) or pkg.Circle(r) in match arms."""
     type_node = next(
-        (c for c in node.children if c.type in (NT.TYPE_IDENTIFIER, NT.IDENTIFIER)),
+        (
+            c
+            for c in node.children
+            if c.type in (NT.TYPE_IDENTIFIER, NT.IDENTIFIER, NT.STABLE_TYPE_IDENTIFIER)
+        ),
         None,
     )
     class_name = ctx.node_text(type_node) if type_node else ctx.node_text(node)
@@ -498,7 +520,8 @@ def lower_case_class_pattern(ctx: TreeSitterEmitContext, node) -> str:
     inner_bindings = [
         c
         for c in node.children
-        if c.is_named and c.type not in (NT.TYPE_IDENTIFIER, NT.IDENTIFIER)
+        if c.is_named
+        and c.type not in (NT.TYPE_IDENTIFIER, NT.IDENTIFIER, NT.STABLE_TYPE_IDENTIFIER)
     ]
     for i, child in enumerate(inner_bindings):
         child_reg = ctx.lower_expr(child)
@@ -570,6 +593,59 @@ def lower_infix_pattern(ctx: TreeSitterEmitContext, node) -> str:
     if named_children:
         return ctx.lower_expr(named_children[0])
     return lower_const_literal(ctx, node)
+
+
+def lower_generic_function(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower generic_function: foo[Int] -> delegate to the inner function expression.
+
+    The generic_function node has field 'function' (the base expression) and
+    field 'type_arguments' (the type params, which we strip). When used as a
+    callee in call_expression, the call_expression handler manages the call;
+    here we just resolve the function reference by lowering the inner expression.
+    """
+    func_node = node.child_by_field_name("function")
+    return ctx.lower_expr(func_node)
+
+
+def lower_postfix_expression(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower postfix_expression: 'list sorted' -> CALL_METHOD(sorted) on list with 0 args.
+
+    The node has two named children: child[0] is the receiver, child[1] is the method name.
+    """
+    named_children = [c for c in node.children if c.is_named]
+    receiver_node = named_children[0]
+    method_node = named_children[1]
+    obj_reg = ctx.lower_expr(receiver_node)
+    method_name = ctx.node_text(method_node)
+    reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_METHOD,
+        result_reg=reg,
+        operands=[obj_reg, method_name],
+        node=node,
+    )
+    return reg
+
+
+def lower_stable_type_identifier(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower stable_type_identifier: pkg.MyClass -> LOAD_VAR(pkg), LOAD_FIELD(MyClass).
+
+    The node has named children: identifier(s) separated by '.', ending with type_identifier.
+    Lower as a chain of LOAD_FIELD operations on the base identifier.
+    """
+    named_children = [c for c in node.children if c.is_named]
+    result = ctx.lower_expr(named_children[0])
+    for child in named_children[1:]:
+        field_name = ctx.node_text(child)
+        reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.LOAD_FIELD,
+            result_reg=reg,
+            operands=[result, field_name],
+            node=node,
+        )
+        result = reg
+    return result
 
 
 def lower_case_clause_expr(ctx: TreeSitterEmitContext, node) -> str:
