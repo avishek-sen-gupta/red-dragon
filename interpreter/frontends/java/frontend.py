@@ -126,4 +126,5 @@ class JavaFrontend(BaseFrontend):
             JavaNodeType.EXPLICIT_CONSTRUCTOR_INVOCATION: java_cf.lower_explicit_constructor_invocation,
             JavaNodeType.ANNOTATION_TYPE_DECLARATION: java_decl.lower_annotation_type_decl,
             JavaNodeType.RECORD_DECLARATION: java_decl.lower_record_decl,
+            JavaNodeType.YIELD_STATEMENT: java_cf.lower_yield_statement,
         }

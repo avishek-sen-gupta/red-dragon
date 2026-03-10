@@ -193,6 +193,9 @@ def lower_java_switch_expr(ctx: TreeSitterEmitContext, node) -> str:
     result_var = f"__switch_result_{ctx.label_counter}"
     end_label = ctx.fresh_label("switch_end")
 
+    ctx.switch_result_stack.append(result_var)
+    ctx.break_target_stack.append(end_label)
+
     groups = (
         [
             c
@@ -243,17 +246,39 @@ def lower_java_switch_expr(ctx: TreeSitterEmitContext, node) -> str:
             ctx.emit(Opcode.BRANCH, label=arm_label)
 
         ctx.emit(Opcode.LABEL, label=arm_label)
-        arm_result = ctx.fresh_reg()
-        for stmt in body_stmts:
-            arm_result = ctx.lower_expr(stmt)
-        ctx.emit(Opcode.STORE_VAR, operands=[result_var, arm_result])
-        ctx.emit(Opcode.BRANCH, label=end_label)
+        has_block = any(s.type == JavaNodeType.BLOCK for s in body_stmts)
+        if has_block:
+            # Block-form arm: yield_statement inside handles STORE_VAR + BRANCH
+            for stmt in body_stmts:
+                ctx.lower_stmt(stmt)
+        else:
+            arm_result = ctx.fresh_reg()
+            for stmt in body_stmts:
+                arm_result = ctx.lower_expr(stmt)
+            ctx.emit(Opcode.STORE_VAR, operands=[result_var, arm_result])
+            ctx.emit(Opcode.BRANCH, label=end_label)
         ctx.emit(Opcode.LABEL, label=next_label)
 
+    ctx.break_target_stack.pop()
+    ctx.switch_result_stack.pop()
     ctx.emit(Opcode.LABEL, label=end_label)
     reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[result_var])
     return reg
+
+
+def lower_yield_statement(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower Java yield_statement inside switch expression block arms.
+
+    ``yield expr;`` stores expr into the enclosing switch expression's
+    result variable and branches to the switch end label.
+    """
+    value_children = [c for c in node.children if c.is_named]
+    val_reg = ctx.lower_expr(value_children[0]) if value_children else ctx.fresh_reg()
+    result_var = ctx.switch_result_stack[-1]
+    end_label = ctx.break_target_stack[-1]
+    ctx.emit(Opcode.STORE_VAR, operands=[result_var, val_reg], node=node)
+    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
 
 
 def lower_do_statement(ctx: TreeSitterEmitContext, node) -> None:

@@ -661,3 +661,48 @@ def lower_ruby_retry(ctx: TreeSitterEmitContext, node) -> None:
         operands=["retry"],
         node=node,
     )
+
+
+# ── rescue_modifier (expr rescue fallback) ────────────────────────
+
+
+def lower_ruby_rescue_modifier_expr(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower ``expr rescue fallback`` as an expression — inline exception handling.
+
+    Wraps the body expression in TRY_PUSH / TRY_POP; on exception,
+    evaluates the fallback expression instead.  Returns the result register.
+    """
+    named = [c for c in node.children if c.is_named]
+    if len(named) < 2:
+        logger.warning(
+            "rescue_modifier with fewer than 2 children: %s",
+            ctx.node_text(node)[:40],
+        )
+        return ctx.fresh_reg()
+    body_node = named[0]
+    fallback_node = named[1]
+
+    result_var = f"__rescue_result_{ctx.label_counter}"
+    catch_label = ctx.fresh_label("rescue_catch")
+    end_label = ctx.fresh_label("rescue_end")
+
+    ctx.emit(Opcode.TRY_PUSH, operands=[catch_label, "", end_label])
+    body_reg = ctx.lower_expr(body_node)
+    ctx.emit(Opcode.STORE_VAR, operands=[result_var, body_reg], node=node)
+    ctx.emit(Opcode.TRY_POP)
+    ctx.emit(Opcode.BRANCH, label=end_label)
+
+    ctx.emit(Opcode.LABEL, label=catch_label)
+    fallback_reg = ctx.lower_expr(fallback_node)
+    ctx.emit(Opcode.STORE_VAR, operands=[result_var, fallback_reg], node=node)
+    ctx.emit(Opcode.BRANCH, label=end_label)
+
+    ctx.emit(Opcode.LABEL, label=end_label)
+    reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[result_var])
+    return reg
+
+
+def lower_ruby_rescue_modifier(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower ``expr rescue fallback`` at statement level."""
+    lower_ruby_rescue_modifier_expr(ctx, node)

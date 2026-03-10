@@ -63,6 +63,7 @@ class JavaNodeType:
     PACKAGE_DECLARATION = "package_declaration"
 
     # ── Switch ───────────────────────────────────────────────────────
+    YIELD_STATEMENT = "yield_statement"
     SWITCH_EXPRESSION = "switch_expression"
     SWITCH_BLOCK_STATEMENT_GROUP = "switch_block_statement_group"
     SWITCH_RULE = "switch_rule"
