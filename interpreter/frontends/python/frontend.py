@@ -124,6 +124,7 @@ class PythonFrontend(BaseFrontend):
             PythonNodeType.DELETE_STATEMENT: py_cf.lower_delete,
             PythonNodeType.IMPORT_STATEMENT: py_cf.lower_import,
             PythonNodeType.IMPORT_FROM_STATEMENT: py_cf.lower_import_from,
+            PythonNodeType.FUTURE_IMPORT_STATEMENT: lambda ctx, node: None,
             PythonNodeType.MATCH_STATEMENT: py_cf.lower_match,
             PythonNodeType.TYPE_ALIAS_STATEMENT: lambda ctx, node: None,
         }

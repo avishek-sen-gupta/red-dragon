@@ -118,6 +118,7 @@ class ScalaFrontend(BaseFrontend):
             NT.TEMPLATE_BODY: lambda ctx, node: ctx.lower_block(node),
             NT.COMPILATION_UNIT: lambda ctx, node: ctx.lower_block(node),
             NT.IMPORT_DECLARATION: lambda ctx, node: None,
+            NT.EXPORT_DECLARATION: lambda ctx, node: None,
             NT.PACKAGE_CLAUSE: lambda ctx, node: None,
             NT.BREAK_EXPRESSION: common_cf.lower_break,
             NT.CONTINUE_EXPRESSION: common_cf.lower_continue,

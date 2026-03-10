@@ -45,7 +45,11 @@ class CFrontend(BaseFrontend):
             comment_types=frozenset({CNodeType.COMMENT}),
             noise_types=frozenset({"\n"}) | PREPROC_NOISE_TYPES,
             block_node_types=frozenset(
-                {CNodeType.COMPOUND_STATEMENT, CNodeType.TRANSLATION_UNIT}
+                {
+                    CNodeType.COMPOUND_STATEMENT,
+                    CNodeType.TRANSLATION_UNIT,
+                    CNodeType.DECLARATION_LIST,
+                }
             ),
             none_literal="None",
             true_literal="True",
@@ -122,4 +126,6 @@ class CFrontend(BaseFrontend):
             CNodeType.ENUM_SPECIFIER: c_decl.lower_enum_def,
             CNodeType.UNION_SPECIFIER: c_decl.lower_union_def,
             CNodeType.PREPROC_FUNCTION_DEF: c_decl.lower_preproc_function_def,
+            CNodeType.LINKAGE_SPECIFICATION: c_cf.lower_linkage_spec,
+            CNodeType.DECLARATION_LIST: lambda ctx, node: ctx.lower_block(node),
         }

@@ -69,6 +69,7 @@ class ScalaNodeType:
     LAZY_VAL_DEFINITION = "lazy_val_definition"
     TYPE_DEFINITION = "type_definition"
     IMPORT_DECLARATION = "import_declaration"
+    EXPORT_DECLARATION = "export_declaration"
     PACKAGE_CLAUSE = "package_clause"
     EXPRESSION_STATEMENT = "expression_statement"
     PARAMETER = "parameter"
