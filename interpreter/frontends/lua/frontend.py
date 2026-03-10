@@ -41,6 +41,7 @@ class LuaFrontend(BaseFrontend):
             LuaNodeType.PARENTHESIZED_EXPRESSION: common_expr.lower_paren,
             LuaNodeType.FUNCTION_CALL: lua_expr.lower_lua_call,
             LuaNodeType.DOT_INDEX_EXPRESSION: lua_expr.lower_dot_index,
+            LuaNodeType.METHOD_INDEX_EXPRESSION: lua_expr.lower_method_index,
             LuaNodeType.BRACKET_INDEX_EXPRESSION: lua_expr.lower_bracket_index,
             LuaNodeType.TABLE_CONSTRUCTOR: lua_expr.lower_table_constructor,
             LuaNodeType.EXPRESSION_LIST: lua_expr.lower_expression_list,

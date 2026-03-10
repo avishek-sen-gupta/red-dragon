@@ -903,3 +903,83 @@ class TestGoSliceType:
         ir = _parse_and_lower(source)
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("slice_type" in str(inst.operands) for inst in symbolics)
+
+
+class TestGoTypeConversionExpression:
+    """type_conversion_expression: []byte(s), Foo[int](y) — complex type conversions.
+
+    Note: simple conversions like int(y), float64(x) are parsed by tree-sitter
+    as call_expression and handled by the existing lower_go_call handler.
+    type_conversion_expression is only triggered for complex type syntax.
+    """
+
+    def test_slice_byte_conversion_produces_call_function(self):
+        """[]byte(s) should produce CALL_FUNCTION with '[]byte' as function name."""
+        source = 'package main\nfunc main() { s := "hello"; x := []byte(s) }'
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        byte_calls = [c for c in calls if "[]byte" in c.operands]
+        assert len(byte_calls) >= 1
+
+    def test_slice_byte_conversion_no_symbolic(self):
+        source = 'package main\nfunc main() { x := []byte("hello") }'
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "type_conversion_expression" in str(inst.operands) for inst in symbolics
+        )
+
+    def test_generic_type_conversion_produces_call_function(self):
+        """Foo[int](y) should produce CALL_FUNCTION."""
+        source = "package main\nfunc main() { x := Foo[int](y) }"
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert len(calls) >= 1
+
+    def test_generic_type_conversion_no_symbolic(self):
+        source = "package main\nfunc main() { x := Foo[int](y) }"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "type_conversion_expression" in str(inst.operands) for inst in symbolics
+        )
+
+    def test_type_conversion_operand_is_lowered(self):
+        """The operand expression should be lowered and passed as argument."""
+        source = 'package main\nfunc main() { s := "hi"; x := []byte(s) }'
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        byte_calls = [c for c in calls if "[]byte" in c.operands]
+        assert len(byte_calls) >= 1
+        # The call should have 2 operands: function name + 1 arg register
+        assert len(byte_calls[0].operands) == 2
+
+    def test_simple_int_conversion_still_works(self):
+        """int(y) is call_expression — verify existing handler still covers it."""
+        source = "package main\nfunc main() { y := 3; x := int(y) }"
+        ir = _parse_and_lower(source)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        int_calls = [c for c in calls if "int" in c.operands]
+        assert len(int_calls) >= 1
+
+
+class TestGoGenericType:
+    """generic_type: Foo[int] — Go 1.18+ generic type references.
+
+    tree-sitter Go parses Foo[int] as generic_type (not type_instantiation_expression).
+    generic_type appears in composite_literal types and var declarations.
+    """
+
+    def test_generic_composite_literal_no_symbolic(self):
+        """Foo[int]{} should not produce any unsupported symbolics."""
+        source = "package main\nfunc main() { x := Foo[int]{} }"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("generic_type" in str(inst.operands) for inst in symbolics)
+
+    def test_generic_var_decl_no_symbolic(self):
+        """var x Foo[int] should not produce any unsupported symbolics."""
+        source = "package main\nfunc main() { var x Foo[int] }"
+        ir = _parse_and_lower(source)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("generic_type" in str(inst.operands) for inst in symbolics)

@@ -185,6 +185,99 @@ def lower_return_expr(ctx: TreeSitterEmitContext, node) -> str:
     return val_reg
 
 
+def _unwrap_match_pattern(pattern_node) -> list:
+    """Unwrap match_pattern to get inner pattern node(s).
+
+    Returns a list of named children inside the match_pattern wrapper.
+    """
+    return [c for c in pattern_node.children if c.is_named]
+
+
+def _is_or_pattern(inner_node) -> bool:
+    """Check if a pattern node is an or_pattern (A | B | C)."""
+    return inner_node.type == RustNodeType.OR_PATTERN
+
+
+def _flatten_or_alternatives(or_node) -> list:
+    """Recursively flatten nested or_pattern nodes into leaf pattern nodes.
+
+    Tree-sitter may nest or_patterns for 3+ alternatives:
+    `1 | 2 | 3` -> or_pattern(or_pattern(1, 2), 3).
+    This flattens to [1, 2, 3].
+    """
+    named_children = [c for c in or_node.children if c.is_named]
+    result = []
+    for child in named_children:
+        if _is_or_pattern(child):
+            result.extend(_flatten_or_alternatives(child))
+        else:
+            result.append(child)
+    return result
+
+
+def _lower_or_pattern_condition(
+    ctx: TreeSitterEmitContext, or_node, val_reg: str, arm
+) -> str:
+    """Lower an or_pattern into a combined condition: (val == a) || (val == b) || ...
+
+    Generates == comparisons for each alternative and folds them with ||.
+    Handles nested or_patterns by flattening first.
+    """
+    alternatives = _flatten_or_alternatives(or_node)
+    comparison_regs = [
+        _lower_single_comparison(ctx, alt, val_reg, arm) for alt in alternatives
+    ]
+    return _fold_or(ctx, comparison_regs, arm)
+
+
+def _lower_single_comparison(
+    ctx: TreeSitterEmitContext, pattern_node, val_reg: str, arm
+) -> str:
+    """Lower a single pattern == val_reg comparison."""
+    pattern_reg = ctx.lower_expr(pattern_node)
+    cond_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.BINOP,
+        result_reg=cond_reg,
+        operands=["==", val_reg, pattern_reg],
+        node=arm,
+    )
+    return cond_reg
+
+
+def _fold_or(ctx: TreeSitterEmitContext, regs: list[str], arm) -> str:
+    """Fold a list of boolean registers with || (left-associative)."""
+    from functools import reduce
+
+    def combine(left: str, right: str) -> str:
+        result = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.BINOP,
+            result_reg=result,
+            operands=["||", left, right],
+            node=arm,
+        )
+        return result
+
+    return reduce(combine, regs)
+
+
+def _lower_arm_condition(
+    ctx: TreeSitterEmitContext, arm_pattern, val_reg: str, arm
+) -> str:
+    """Lower a match arm pattern into a condition register.
+
+    Handles or_pattern (A | B) by generating combined || conditions,
+    and plain patterns by generating a single == comparison.
+    """
+    inner_nodes = _unwrap_match_pattern(arm_pattern)
+    inner_node = inner_nodes[0] if inner_nodes else arm_pattern
+
+    if _is_or_pattern(inner_node):
+        return _lower_or_pattern_condition(ctx, inner_node, val_reg, arm)
+    return _lower_single_comparison(ctx, inner_node, val_reg, arm)
+
+
 def lower_match_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower match expression as if/else chain returning last arm value."""
     value_node = node.child_by_field_name("value")
@@ -220,14 +313,7 @@ def lower_match_expr(ctx: TreeSitterEmitContext, node) -> str:
         next_label = ctx.fresh_label("match_next")
 
         if arm_pattern:
-            pattern_reg = ctx.lower_expr(arm_pattern)
-            cond_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.BINOP,
-                result_reg=cond_reg,
-                operands=["==", val_reg, pattern_reg],
-                node=arm,
-            )
+            cond_reg = _lower_arm_condition(ctx, arm_pattern, val_reg, arm)
             ctx.emit(
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],

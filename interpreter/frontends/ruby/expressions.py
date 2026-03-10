@@ -14,6 +14,37 @@ from interpreter.frontends.common.expressions import (
 from interpreter.frontends.ruby.node_types import RubyNodeType
 
 
+def lower_scope_resolution(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower ``Foo::Bar`` as LOAD_VAR(Foo) + LOAD_FIELD(scope_reg, 'Bar').
+
+    For root scope ``::TopLevel`` (no scope child), emits LOAD_VAR('TopLevel').
+    """
+    scope_node = node.child_by_field_name("scope")
+    name_node = node.child_by_field_name("name")
+    name_text = ctx.node_text(name_node)
+
+    if scope_node is None:
+        # ::TopLevel — root scope resolution
+        reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.LOAD_VAR,
+            result_reg=reg,
+            operands=[name_text],
+            node=node,
+        )
+        return reg
+
+    scope_reg = ctx.lower_expr(scope_node)
+    reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.LOAD_FIELD,
+        result_reg=reg,
+        operands=[scope_reg, name_text],
+        node=node,
+    )
+    return reg
+
+
 def lower_instance_variable(ctx: TreeSitterEmitContext, node) -> str:
     """Lower ``@var`` as ``LOAD_VAR self`` + ``LOAD_FIELD self_reg 'var'``."""
     raw = ctx.node_text(node)

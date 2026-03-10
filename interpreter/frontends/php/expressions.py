@@ -735,6 +735,34 @@ def lower_php_nullsafe_method_call(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
+def lower_php_print_intrinsic(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower ``print $x`` as CALL_FUNCTION('print', arg)."""
+    named_children = [c for c in node.children if c.is_named]
+    arg_reg = ctx.lower_expr(named_children[0]) if named_children else ctx.fresh_reg()
+    reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_FUNCTION,
+        result_reg=reg,
+        operands=["print", arg_reg],
+        node=node,
+    )
+    return reg
+
+
+def lower_php_clone_expression(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower ``clone $obj`` as CALL_FUNCTION('clone', arg)."""
+    named_children = [c for c in node.children if c.is_named]
+    arg_reg = ctx.lower_expr(named_children[0]) if named_children else ctx.fresh_reg()
+    reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_FUNCTION,
+        result_reg=reg,
+        operands=["clone", arg_reg],
+        node=node,
+    )
+    return reg
+
+
 def lower_php_variadic_unpacking(ctx: TreeSitterEmitContext, node) -> str:
     """Lower ``...$arr`` as CALL_FUNCTION('spread', inner)."""
     named_children = [c for c in node.children if c.is_named]

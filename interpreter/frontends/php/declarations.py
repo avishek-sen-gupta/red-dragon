@@ -433,6 +433,21 @@ def lower_php_enum_case(ctx: TreeSitterEmitContext, node) -> None:
         )
 
 
+def lower_php_const_declaration(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower ``const FOO = 1, BAR = 2;`` -- STORE_VAR for each const_element."""
+    for child in node.children:
+        if child.type == PHPNodeType.CONST_ELEMENT:
+            named = [c for c in child.children if c.is_named]
+            if len(named) >= 2:
+                name_node, value_node = named[0], named[1]
+                val_reg = ctx.lower_expr(value_node)
+                ctx.emit(
+                    Opcode.STORE_VAR,
+                    operands=[ctx.node_text(name_node), val_reg],
+                    node=child,
+                )
+
+
 def lower_php_global_declaration(ctx: TreeSitterEmitContext, node) -> None:
     """Lower ``global $config;`` -- STORE_VAR for each variable."""
     for child in node.children:

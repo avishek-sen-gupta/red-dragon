@@ -1177,3 +1177,83 @@ class TestPhpVariadicUnpacking:
         ir = _parse_and_lower(source)
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+
+class TestPhpPrintIntrinsic:
+    def test_print_produces_call_function(self):
+        """print $x should lower as CALL_FUNCTION('print', arg)."""
+        ir = _parse_and_lower("<?php print $x; ?>")
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("print" in inst.operands for inst in calls)
+
+    def test_print_no_unsupported_symbolic(self):
+        """print should not produce unsupported SYMBOLIC."""
+        ir = _parse_and_lower("<?php print 42; ?>")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_print_with_string_literal(self):
+        """print 'hello' should emit CONST and CALL_FUNCTION."""
+        ir = _parse_and_lower("<?php print 'hello'; ?>")
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        print_calls = [c for c in calls if "print" in c.operands]
+        assert len(print_calls) >= 1
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("'hello'" in inst.operands for inst in consts)
+
+    def test_print_result_is_stored(self):
+        """$r = print 'hi' should store the result."""
+        ir = _parse_and_lower("<?php $r = print 'hi'; ?>")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("$r" in inst.operands for inst in stores)
+
+
+class TestPhpCloneExpression:
+    def test_clone_produces_call_function(self):
+        """clone $obj should lower as CALL_FUNCTION('clone', arg)."""
+        ir = _parse_and_lower("<?php clone $obj; ?>")
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("clone" in inst.operands for inst in calls)
+
+    def test_clone_no_unsupported_symbolic(self):
+        """clone should not produce unsupported SYMBOLIC."""
+        ir = _parse_and_lower("<?php clone $obj; ?>")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_clone_result_stored(self):
+        """$copy = clone $obj should store the clone result."""
+        ir = _parse_and_lower("<?php $copy = clone $obj; ?>")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("$copy" in inst.operands for inst in stores)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("clone" in inst.operands for inst in calls)
+
+
+class TestPhpConstDeclaration:
+    def test_const_produces_store(self):
+        """const FOO = 1; should produce STORE_VAR for FOO."""
+        ir = _parse_and_lower("<?php const FOO = 1; ?>")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("FOO" in inst.operands for inst in stores)
+
+    def test_const_no_unsupported_symbolic(self):
+        """const should not produce unsupported SYMBOLIC."""
+        ir = _parse_and_lower("<?php const FOO = 1; ?>")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+    def test_const_multiple_in_one_declaration(self):
+        """const FOO = 1, BAR = 2; should produce two STOREs."""
+        ir = _parse_and_lower("<?php const FOO = 1, BAR = 2; ?>")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        foo_stores = [s for s in stores if "FOO" in s.operands]
+        bar_stores = [s for s in stores if "BAR" in s.operands]
+        assert len(foo_stores) >= 1
+        assert len(bar_stores) >= 1
+
+    def test_const_value_is_lowered(self):
+        """const X = 42; should emit CONST 42."""
+        ir = _parse_and_lower("<?php const X = 42; ?>")
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("42" in inst.operands for inst in consts)

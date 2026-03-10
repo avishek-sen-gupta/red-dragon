@@ -70,6 +70,7 @@ class RustFrontend(BaseFrontend):
             RustNodeType.STRING_LITERAL: common_expr.lower_const_literal,
             RustNodeType.CHAR_LITERAL: common_expr.lower_const_literal,
             RustNodeType.BOOLEAN_LITERAL: common_expr.lower_canonical_bool,
+            RustNodeType.UNIT_EXPRESSION: common_expr.lower_const_literal,
             RustNodeType.TRUE: common_expr.lower_canonical_true,
             RustNodeType.FALSE: common_expr.lower_canonical_false,
             RustNodeType.BINARY_EXPRESSION: common_expr.lower_binop,

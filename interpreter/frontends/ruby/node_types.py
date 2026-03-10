@@ -39,6 +39,7 @@ class RubyNodeType:
     CONDITIONAL = "conditional"
 
     # ── Expressions ──────────────────────────────────────────────────
+    SCOPE_RESOLUTION = "scope_resolution"
     CALL = "call"
     PARENTHESIZED_EXPRESSION = "parenthesized_expression"
     PARENTHESIZED_STATEMENTS = "parenthesized_statements"

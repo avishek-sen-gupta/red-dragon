@@ -95,6 +95,8 @@ class PhpFrontend(BaseFrontend):
             PHPNodeType.NULLSAFE_MEMBER_CALL_EXPRESSION: php_expr.lower_php_nullsafe_method_call,
             PHPNodeType.REQUIRE_ONCE_EXPRESSION: php_expr.lower_php_include,
             PHPNodeType.VARIADIC_UNPACKING: php_expr.lower_php_variadic_unpacking,
+            PHPNodeType.PRINT_INTRINSIC: php_expr.lower_php_print_intrinsic,
+            PHPNodeType.CLONE_EXPRESSION: php_expr.lower_php_clone_expression,
         }
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:
@@ -129,4 +131,5 @@ class PhpFrontend(BaseFrontend):
             PHPNodeType.NAMESPACE_USE_DECLARATION: php_decl.lower_php_namespace_use_declaration,
             PHPNodeType.ENUM_CASE: php_decl.lower_php_enum_case,
             PHPNodeType.GLOBAL_DECLARATION: php_decl.lower_php_global_declaration,
+            PHPNodeType.CONST_DECLARATION: php_decl.lower_php_const_declaration,
         }

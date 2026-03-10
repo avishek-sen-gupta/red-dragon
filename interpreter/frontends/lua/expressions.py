@@ -112,6 +112,28 @@ def lower_dot_index(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
+def lower_method_index(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower method_index_expression (obj:method) as attribute load.
+
+    When used standalone (not as the callee inside function_call),
+    this is equivalent to loading the method attribute from the object.
+    """
+    table_node = node.child_by_field_name("table")
+    method_node = node.child_by_field_name("method")
+    if table_node is None or method_node is None:
+        return lower_const_literal(ctx, node)
+    obj_reg = ctx.lower_expr(table_node)
+    method_name = ctx.node_text(method_node)
+    reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.LOAD_FIELD,
+        result_reg=reg,
+        operands=[obj_reg, method_name],
+        node=node,
+    )
+    return reg
+
+
 def lower_bracket_index(ctx: TreeSitterEmitContext, node) -> str:
     """Lower bracket_index_expression (obj[key])."""
     table_node = node.child_by_field_name("table")

@@ -40,6 +40,7 @@ class RubyFrontend(BaseFrontend):
 
     def _build_expr_dispatch(self) -> dict[str, Callable]:
         return {
+            RubyNodeType.SCOPE_RESOLUTION: ruby_expr.lower_scope_resolution,
             RubyNodeType.IDENTIFIER: common_expr.lower_identifier,
             RubyNodeType.INSTANCE_VARIABLE: ruby_expr.lower_instance_variable,
             RubyNodeType.CONSTANT: common_expr.lower_identifier,
