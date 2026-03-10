@@ -50,3 +50,9 @@ class TestPhpConstExecution:
         vars_ = _run(source)
         assert vars_["FOO"] == 10
         assert vars_["BAR"] == 20
+
+    def test_const_used_in_arithmetic(self):
+        """Const value should be usable in subsequent arithmetic."""
+        source = "<?php const TAX = 10; $price = 100; $total = $price + TAX; ?>"
+        vars_ = _run(source)
+        assert vars_["$total"] == 110

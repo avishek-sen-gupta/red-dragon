@@ -40,6 +40,22 @@ end
         assert stats.steps < 200
 
 
+    def test_ipairs_empty_table(self):
+        """ipairs over empty table should not execute body."""
+        vm, stats = execute_for_language(
+            "lua",
+            """\
+local arr = {}
+local answer = 42
+for _, x in ipairs(arr) do
+    answer = 0
+end
+""",
+        )
+        assert stats.steps < 200
+        assert extract_answer(vm, "lua") == 42
+
+
 class TestLuaPairsExecution:
     def test_pairs_terminates(self):
         """for k, v in pairs(t) should terminate within step budget."""
