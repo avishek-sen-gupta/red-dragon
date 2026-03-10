@@ -119,6 +119,7 @@ class PythonNodeType:
     # ── Import ───────────────────────────────────────────────────────
     IMPORT_STATEMENT = "import_statement"
     IMPORT_FROM_STATEMENT = "import_from_statement"
+    FUTURE_IMPORT_STATEMENT = "future_import_statement"
     DOTTED_NAME = "dotted_name"
 
     # ── Match / case ─────────────────────────────────────────────────

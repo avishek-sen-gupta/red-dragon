@@ -75,7 +75,7 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 | `tuple_pattern` | `case (x, y):` -- tuple destructuring in match | TODO |
 | `pattern_list` | Wrapper for multiple patterns in match case | TODO |
 | `as_pattern` | `case x as y:` -- pattern binding | TODO |
-| `future_import_statement` | `from __future__ import annotations` | TODO |
+| `future_import_statement` | `from __future__ import annotations` | DONE |
 | `format_expression` | f-string format expression (distinct from `interpolation`) | TODO |
 
 ### JavaScript (7 P1)
@@ -168,14 +168,14 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 ### Scala (18 P1)
 | Node Type | Description | Status |
 |-----------|-------------|--------|
-| `ascription_expression` | Type ascription `x: Type` | TODO |
+| `ascription_expression` | Type ascription `x: Type` | DONE (consumed by parent handlers) |
 | `val_declaration` | Abstract `val` in traits | TODO |
 | `var_declaration` | Abstract `var` in traits | TODO |
 | `enum_definition` | Scala 3 `enum` definitions | TODO |
 | `extension_definition` | Scala 3 `extension` methods | TODO |
 | `given_definition` | Scala 3 `given` instances | TODO |
 | `given_pattern` | Pattern matching against `given` | TODO |
-| `export_declaration` | Scala 3 `export` clauses | TODO |
+| `export_declaration` | Scala 3 `export` clauses | DONE |
 | `package_object` | `package object foo { ... }` | TODO |
 | `quote_expression` | Scala 3 macro quote `'{ ... }` | TODO |
 | `splice_expression` | Scala 3 macro splice `${ ... }` | TODO |
@@ -216,10 +216,10 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 ### C (4 P1)
 | Node Type | Description | Status |
 |-----------|-------------|--------|
-| `linkage_specification` | `extern "C" { ... }` linkage blocks | TODO |
-| `sized_type_specifier` | `unsigned int`, `long long` compound types | TODO |
-| `storage_class_specifier` | `static`, `extern`, `register`, `auto` | TODO |
-| `type_qualifier` | `const`, `volatile`, `restrict` | TODO |
+| `linkage_specification` | `extern "C" { ... }` linkage blocks | DONE |
+| `sized_type_specifier` | `unsigned int`, `long long` compound types | DONE (consumed by parent declaration handler) |
+| `storage_class_specifier` | `static`, `extern`, `register`, `auto` | DONE (consumed by parent declaration handler) |
+| `type_qualifier` | `const`, `volatile`, `restrict` | DONE (consumed by parent declaration handler) |
 
 ### C++ (11 P1)
 | Node Type | Description | Status |
@@ -229,9 +229,9 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 | `co_yield_statement` | C++20 coroutine yield | TODO |
 | `fold_expression` | `(args + ...)` template folds (C++17) | TODO |
 | `parameter_pack_expansion` | `args...` variadic template expansion | TODO |
-| `template_type` | `vector<int>` template type specifier | TODO |
+| `template_type` | `vector<int>` template type specifier | DONE (consumed by parent handlers) |
 | `template_instantiation` | Explicit `template class Foo<int>` | TODO |
-| `decltype` | `decltype(expr)` type deduction | TODO |
+| `decltype` | `decltype(expr)` type deduction | DONE (consumed by parent handlers) |
 | `placeholder_type_specifier` | `auto` / `decltype(auto)` | TODO |
 | `operator_name` | `operator+`, `operator<<` overloading names | TODO |
 | `destructor_name` | `~ClassName` destructor names | TODO |
@@ -273,7 +273,7 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 ### Lua (1 P1)
 | Node Type | Description | Status |
 |-----------|-------------|--------|
-| `attribute` | Variable attributes `<close>`, `<const>` (Lua 5.4) | TODO |
+| `attribute` | Variable attributes `<close>`, `<const>` (Lua 5.4) | DONE (consumed by parent declaration handler) |
 
 ### Pascal (24 P1)
 | Node Type | Description | Status |
