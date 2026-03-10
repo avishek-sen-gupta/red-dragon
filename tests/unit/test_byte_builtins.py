@@ -503,7 +503,7 @@ class TestStringSplit:
     def test_no_delimiter_match(self):
         assert _builtin_string_split(["hello", ","], None) == ["hello"]
 
-    def test_empty_delimiter_returns_whole(self):
+    def test_empty_delimiter_returns_single_element_list(self):
         assert _builtin_string_split(["hello", ""], None) == ["hello"]
 
     def test_symbolic_returns_uncomputable(self):

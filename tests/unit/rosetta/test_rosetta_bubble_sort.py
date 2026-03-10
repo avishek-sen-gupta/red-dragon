@@ -366,17 +366,21 @@ class TestBubbleSortLowering:
         )
 
     def test_index_operations_present(self, language_ir):
-        """Verify STORE_INDEX and LOAD_INDEX for all languages except Scala."""
+        """Verify STORE_INDEX/LOAD_INDEX for most languages; Scala uses CALL_FUNCTION."""
         lang, ir = language_ir
-        if lang in LANGUAGES_WITHOUT_INDEX_OPS:
-            return
         present = opcodes(ir)
-        assert (
-            Opcode.STORE_INDEX in present
-        ), f"[{lang}] expected STORE_INDEX in opcodes: {present}"
-        assert (
-            Opcode.LOAD_INDEX in present
-        ), f"[{lang}] expected LOAD_INDEX in opcodes: {present}"
+        if lang in LANGUAGES_WITHOUT_INDEX_OPS:
+            # Scala uses CALL_FUNCTION for array indexing instead of index ops
+            assert (
+                Opcode.CALL_FUNCTION in present
+            ), f"[{lang}] expected CALL_FUNCTION for indexing, got: {present}"
+        else:
+            assert (
+                Opcode.STORE_INDEX in present
+            ), f"[{lang}] expected STORE_INDEX in opcodes: {present}"
+            assert (
+                Opcode.LOAD_INDEX in present
+            ), f"[{lang}] expected LOAD_INDEX in opcodes: {present}"
 
 
 # ---------------------------------------------------------------------------

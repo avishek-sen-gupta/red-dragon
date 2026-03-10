@@ -399,8 +399,8 @@ class TestDependencyGraph:
 
 
 class TestIntegration:
-    def test_analyze_returns_complete_result(self):
-        """Smoke test on multi-block program."""
+    def test_analyze_returns_well_formed_result(self):
+        """Multi-block program produces correct structure and content."""
         ir = [
             _make_inst(Opcode.LABEL, label="entry"),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
@@ -423,19 +423,28 @@ class TestIntegration:
         result = analyze(cfg)
 
         assert isinstance(result, DataflowResult)
-        assert len(result.definitions) > 0
         assert len(result.block_facts) == len(cfg.blocks)
-        assert len(result.def_use_chains) > 0
+        # x is defined in entry, y is defined in both then and else
+        x_defs = [d for d in result.definitions if d.variable == "x"]
+        y_defs = [d for d in result.definitions if d.variable == "y"]
+        assert len(x_defs) == 1
+        assert len(y_defs) == 2
+        # y is used in the merge block's LOAD_VAR
+        y_uses = [c for c in result.def_use_chains if c.definition.variable == "y"]
+        assert len(y_uses) >= 1
 
     def test_python_frontend_to_dataflow(self):
-        """End-to-end: Python source → IR → CFG → dataflow."""
+        """End-to-end: Python source → IR → CFG → dataflow with dependency verification."""
         source = "x = 10\ny = x + 1\nz = y * 2"
         cfg = _parse_python_to_cfg(source)
         result = analyze(cfg)
 
         assert isinstance(result, DataflowResult)
-        assert len(result.definitions) > 0
-        assert len(result.def_use_chains) > 0
+        # z depends on y, y depends on x
+        assert "y" in result.dependency_graph
+        assert "x" in result.dependency_graph["y"]
+        assert "z" in result.dependency_graph
+        assert "y" in result.dependency_graph["z"]
 
     def test_analysis_converges_for_loop_program(self):
         """Reaching definitions analysis converges and covers all blocks on a loop program."""

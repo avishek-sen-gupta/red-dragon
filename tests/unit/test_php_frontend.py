@@ -298,7 +298,7 @@ try {
         # No catch_clause: SYMBOLIC placeholders
         symbolics = [i for i in ir if i.opcode == Opcode.SYMBOLIC]
         assert not any("catch_clause:" in str(s.operands) for s in symbolics)
-        assert len(ir) > 1
+        assert len(ir) > 10
 
     def test_nested_if_elseif_else(self):
         source = """\
