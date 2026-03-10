@@ -106,6 +106,7 @@ class CSharpFrontend(BaseFrontend):
             NT.MEMBER_BINDING_EXPRESSION: csharp_expr.lower_member_binding,
             NT.TUPLE_EXPRESSION: csharp_expr.lower_tuple_expr,
             NT.IS_PATTERN_EXPRESSION: csharp_expr.lower_is_pattern_expr,
+            NT.THROW_EXPRESSION: csharp_cf.lower_throw_expr,
         }
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:
@@ -148,4 +149,6 @@ class CSharpFrontend(BaseFrontend):
             NT.LOCAL_FUNCTION_STATEMENT: csharp_decl.lower_local_function_stmt,
             NT.YIELD_STATEMENT: csharp_cf.lower_yield_stmt,
             NT.EMPTY_STATEMENT: lambda ctx, node: None,
+            NT.GOTO_STATEMENT: csharp_cf.lower_goto,
+            NT.LABELED_STATEMENT: csharp_cf.lower_labeled_stmt,
         }

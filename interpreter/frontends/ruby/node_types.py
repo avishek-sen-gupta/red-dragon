@@ -97,6 +97,7 @@ class RubyNodeType:
     BEGIN = "begin"
 
     # ── Exception handling ───────────────────────────────────────────
+    RESCUE_MODIFIER = "rescue_modifier"
     RESCUE = "rescue"
     EXCEPTIONS = "exceptions"
     EXCEPTION_VARIABLE = "exception_variable"

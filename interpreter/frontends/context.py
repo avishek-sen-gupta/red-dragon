@@ -102,6 +102,7 @@ class TreeSitterEmitContext:
     instructions: list[IRInstruction] = field(default_factory=list)
     loop_stack: list[dict[str, str]] = field(default_factory=list)
     break_target_stack: list[str] = field(default_factory=list)
+    switch_result_stack: list[str] = field(default_factory=list)
 
     # Per-language type map: raw type string -> canonical TypeName
     type_map: dict[str, str] = field(default_factory=dict)

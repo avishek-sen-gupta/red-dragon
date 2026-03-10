@@ -116,6 +116,43 @@ def lower_throw(ctx: TreeSitterEmitContext, node) -> None:
     lower_raise_or_throw(ctx, node, keyword="throw")
 
 
+def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower C# throw expression (``throw new Exception()`` used as an expression).
+
+    Emits THROW and returns a fresh register (unreachable but satisfies
+    the expression-return contract).
+    """
+    children = [c for c in node.children if c.is_named]
+    val_reg = ctx.lower_expr(children[0]) if children else ctx.fresh_reg()
+    ctx.emit(Opcode.THROW, operands=[val_reg], node=node)
+    return ctx.fresh_reg()
+
+
+def lower_goto(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower C# goto statement — emit BRANCH to the target label."""
+    id_node = next(
+        (c for c in node.children if c.type in (NT.IDENTIFIER, NT.LABEL_NAME)), None
+    )
+    label_name = ctx.node_text(id_node) if id_node else "unknown"
+    ctx.emit(Opcode.BRANCH, label=label_name, node=node)
+
+
+def lower_labeled_stmt(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower C# labeled statement — emit LABEL, then lower the body statement."""
+    id_node = next(
+        (c for c in node.children if c.type in (NT.IDENTIFIER, NT.LABEL_NAME)), None
+    )
+    label_name = ctx.node_text(id_node) if id_node else "unknown"
+    ctx.emit(Opcode.LABEL, label=label_name, node=node)
+    body_children = [
+        c
+        for c in node.children
+        if c.is_named and c.type not in (NT.IDENTIFIER, NT.LABEL_NAME)
+    ]
+    for child in body_children:
+        ctx.lower_stmt(child)
+
+
 def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
     body_node = node.child_by_field_name(ctx.constants.while_body_field)
     cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
