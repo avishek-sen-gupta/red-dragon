@@ -76,14 +76,18 @@ For programs with concrete inputs and no external dependencies, the entire execu
 
 ### Built-in pipeline visualizer
 
-An interactive TUI for stepping through the full pipeline (source → IR → CFG → execution) is included in `viz/`:
+An interactive TUI for stepping through the full pipeline (source → AST → IR → CFG → execution) is included in `viz/`:
 
 ```bash
+# Single-language mode
 poetry run python -m viz viz/examples/pointer_demo.c -l c
 poetry run python -m viz viz/examples/factorial.py -l python
+
+# Compare mode — side-by-side across languages
+poetry run python -m viz compare c:viz/examples/pointer_demo.c rust:viz/examples/pointer_demo.rs
 ```
 
-Five synchronized panels: **Source** (span-highlighted), **IR** (grouped by CFG block), **VM State** (heap/stack/registers with diff), **CFG** (block list), and **Step** (delta summary). Arrow keys step forward/backward, space toggles auto-play, `q` quits.
+Six synchronized panels: **Source** (span-highlighted), **AST** (collapsible tree, toggle `a`), **IR** (grouped by CFG block), **VM State** (heap/stack/registers with diff highlighting), **CFG** (box-drawing graph, toggle `g`), and **Step** (delta summary). Arrow keys step forward/backward, space toggles auto-play, `q` quits.
 
 ## Setup
 
