@@ -20,7 +20,6 @@ class TestPascalForeachExecution:
         )
         assert "i" in local_vars
 
-
     def test_foreach_accumulates_via_index(self):
         """for-in loop should iterate — verify the index counter advances."""
         _, local_vars = _run_pascal(
@@ -28,9 +27,9 @@ class TestPascalForeachExecution:
             max_steps=500,
         )
         # __foreach_idx_i tracks iterations; should be > 0 if loop ran
-        assert local_vars.get("__foreach_idx_i", 0) > 0, (
-            "foreach should iterate at least once"
-        )
+        assert (
+            local_vars.get("__foreach_idx_i", 0) > 0
+        ), "foreach should iterate at least once"
 
 
 class TestPascalGotoExecution:

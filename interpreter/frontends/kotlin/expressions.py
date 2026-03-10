@@ -1010,3 +1010,27 @@ def lower_kotlin_store_target(
             operands=[ctx.node_text(target), val_reg],
             node=parent_node,
         )
+
+
+# -- P1 gap handlers ------------------------------------------------------
+
+
+def lower_callable_reference(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower ::functionName — emit LOAD_VAR for the referenced function."""
+    named_children = [c for c in node.children if c.is_named]
+    func_name = (
+        ctx.node_text(named_children[-1]) if named_children else ctx.node_text(node)
+    )
+    reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[func_name], node=node)
+    return reg
+
+
+def lower_spread_expression(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower *array — just lower the inner expression (the spread target)."""
+    named_children = [c for c in node.children if c.is_named]
+    return (
+        ctx.lower_expr(named_children[0])
+        if named_children
+        else lower_const_literal(ctx, node)
+    )

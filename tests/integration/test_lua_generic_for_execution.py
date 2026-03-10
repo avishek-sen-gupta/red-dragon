@@ -39,7 +39,6 @@ end
         )
         assert stats.steps < 200
 
-
     def test_ipairs_empty_table(self):
         """ipairs over empty table should not execute body."""
         vm, stats = execute_for_language(
