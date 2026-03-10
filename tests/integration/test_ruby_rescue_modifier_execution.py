@@ -19,3 +19,11 @@ x = 42 rescue 0
 """
         local_vars = _run_ruby(source)
         assert local_vars["x"] == 42
+
+    def test_rescue_modifier_with_raise(self):
+        """When the expression raises, rescue fallback should be used."""
+        source = """\
+x = (raise "boom") rescue 99
+"""
+        local_vars = _run_ruby(source)
+        assert local_vars["x"] == 99
