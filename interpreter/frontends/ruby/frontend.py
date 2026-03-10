@@ -78,6 +78,7 @@ class RubyFrontend(BaseFrontend):
             RubyNodeType.SELF: ruby_expr.lower_ruby_self,
             RubyNodeType.SUPER: ruby_expr.lower_ruby_super,
             RubyNodeType.YIELD: ruby_expr.lower_ruby_yield,
+            RubyNodeType.RESCUE_MODIFIER: ruby_cf.lower_ruby_rescue_modifier_expr,
         }
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:
@@ -116,4 +117,5 @@ class RubyFrontend(BaseFrontend):
             RubyNodeType.YIELD: lambda ctx, node: ruby_expr.lower_ruby_yield(ctx, node),
             RubyNodeType.IN: ruby_cf.lower_ruby_in_clause,
             RubyNodeType.RETRY: ruby_cf.lower_ruby_retry,
+            RubyNodeType.RESCUE_MODIFIER: ruby_cf.lower_ruby_rescue_modifier,
         }
