@@ -74,6 +74,17 @@ For programs with concrete inputs and no external dependencies, the entire execu
 ![Execute Screen](docs/screenshots/execute-screen.png)
 > Step-by-step execution replay via [Rev-Eng TUI](https://github.com/avishek-sen-gupta/reddragon-codescry-tui) — IR with current instruction highlighted, Frame (registers + locals) and Heap (objects + path conditions) in side-by-side panes.
 
+### Built-in pipeline visualizer
+
+An interactive TUI for stepping through the full pipeline (source → IR → CFG → execution) is included in `viz/`:
+
+```bash
+poetry run python -m viz viz/examples/pointer_demo.c -l c
+poetry run python -m viz viz/examples/factorial.py -l python
+```
+
+Five synchronized panels: **Source** (span-highlighted), **IR** (grouped by CFG block), **VM State** (heap/stack/registers with diff), **CFG** (block list), and **Step** (delta summary). Arrow keys step forward/backward, space toggles auto-play, `q` quits.
+
 ## Setup
 
 ### Prerequisites
