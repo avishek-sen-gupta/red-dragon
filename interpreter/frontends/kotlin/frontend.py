@@ -87,6 +87,9 @@ class KotlinFrontend(BaseFrontend):
             KNT.TYPE_TEST: kotlin_expr.lower_type_test,
             KNT.LABEL: common_expr.lower_const_literal,
             KNT.ANONYMOUS_FUNCTION: kotlin_expr.lower_anonymous_function,
+            KNT.UNSIGNED_LITERAL: common_expr.lower_const_literal,
+            KNT.CALLABLE_REFERENCE: kotlin_expr.lower_callable_reference,
+            KNT.SPREAD_EXPRESSION: kotlin_expr.lower_spread_expression,
         }
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:
@@ -104,6 +107,7 @@ class KotlinFrontend(BaseFrontend):
             KNT.STATEMENTS: lambda ctx, node: ctx.lower_block(node),
             KNT.IMPORT_LIST: lambda ctx, node: None,
             KNT.IMPORT_HEADER: lambda ctx, node: None,
+            KNT.WILDCARD_IMPORT: lambda ctx, node: None,
             KNT.PACKAGE_HEADER: lambda ctx, node: None,
             KNT.DO_WHILE_STATEMENT: kotlin_cf.lower_do_while_stmt,
             KNT.OBJECT_DECLARATION: kotlin_decl.lower_object_decl,

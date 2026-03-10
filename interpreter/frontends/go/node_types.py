@@ -14,11 +14,13 @@ class GoNodeType:
     FLOAT_LITERAL = "float_literal"
     INTERPRETED_STRING_LITERAL = "interpreted_string_literal"
     RAW_STRING_LITERAL = "raw_string_literal"
+    RUNE_LITERAL = "rune_literal"
     TRUE = "true"
     FALSE = "false"
     NIL = "nil"
     TYPE_IDENTIFIER = "type_identifier"
     FIELD_IDENTIFIER = "field_identifier"
+    BLANK_IDENTIFIER = "blank_identifier"
 
     # -- Expressions ----------------------------------------------------------
     BINARY_EXPRESSION = "binary_expression"
@@ -68,6 +70,7 @@ class GoNodeType:
     GO_STATEMENT = "go_statement"
     SEND_STATEMENT = "send_statement"
     GOTO_STATEMENT = "goto_statement"
+    FALLTHROUGH_STATEMENT = "fallthrough_statement"
     RECEIVE_STATEMENT = "receive_statement"
     LABELED_STATEMENT = "labeled_statement"
 

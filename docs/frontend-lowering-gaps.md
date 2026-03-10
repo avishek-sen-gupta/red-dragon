@@ -153,8 +153,8 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 ### Kotlin (14 P1)
 | Node Type | Description | Status |
 |-----------|-------------|--------|
-| `callable_reference` | `::functionName`, `ClassName::method` | TODO |
-| `spread_expression` | `*array` spread for varargs | TODO |
+| `callable_reference` | `::functionName`, `ClassName::method` | DONE |
+| `spread_expression` | `*array` spread for varargs | DONE |
 | `annotated_lambda` | Lambda with annotations | TODO |
 | `secondary_constructor` | `constructor(...)` secondary constructors | TODO |
 | `constructor_delegation_call` | `this(...)` or `super(...)` delegation | TODO |
@@ -162,8 +162,8 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 | `explicit_delegation` | `by delegate` delegation pattern | TODO |
 | `getter` | Custom property getter | TODO |
 | `setter` | Custom property setter | TODO |
-| `unsigned_literal` | `42u`, `42UL` unsigned literals | TODO |
-| `wildcard_import` | `import foo.*` | TODO |
+| `unsigned_literal` | `42u`, `42UL` unsigned literals | DONE |
+| `wildcard_import` | `import foo.*` | DONE |
 
 ### Scala (18 P1)
 | Node Type | Description | Status |
@@ -189,8 +189,8 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 ### Go (9 P1)
 | Node Type | Description | Status |
 |-----------|-------------|--------|
-| `fallthrough_statement` | `fallthrough` in switch cases | TODO |
-| `rune_literal` | Character literals like `'a'` | TODO |
+| `fallthrough_statement` | `fallthrough` in switch cases | DONE |
+| `rune_literal` | Character literals like `'a'` | DONE |
 | `iota` | Auto-incrementing constant generator | TODO |
 | `generic_type` | `Map[K, V]` generic type references | TODO |
 | `map_type` | `map[K]V` type expressions | TODO |
@@ -198,7 +198,7 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 | `array_type` | `[N]T` fixed-size array types | TODO |
 | `interface_type` | `interface { ... }` type definitions | TODO |
 | `variadic_argument` | `args...` spread operator | TODO |
-| `blank_identifier` | `_` blank/discard identifier | TODO |
+| `blank_identifier` | `_` blank/discard identifier | DONE |
 
 ### Rust (9 P1)
 | Node Type | Description | Status |
@@ -206,8 +206,8 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 | `foreign_mod_item` | `extern "C" { ... }` FFI blocks | TODO |
 | `union_item` | `union` type definitions | TODO |
 | `macro_definition` | `macro_rules!` definitions | TODO |
-| `raw_string_literal` | `r"..."` and `r#"..."#` raw strings | TODO |
-| `negative_literal` | Negative number patterns like `-1` | TODO |
+| `raw_string_literal` | `r"..."` and `r#"..."#` raw strings | DONE |
+| `negative_literal` | Negative number patterns like `-1` | DONE |
 | `mut_pattern` | `mut x` mutable binding in patterns | TODO |
 | `reference_pattern` | `&x` destructuring references | TODO |
 | `slice_pattern` | `[a, b, ..]` slice destructuring | TODO |

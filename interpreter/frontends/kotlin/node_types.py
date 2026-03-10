@@ -14,6 +14,7 @@ class KotlinNodeType:
     BOOLEAN_LITERAL = "boolean_literal"
     NULL_LITERAL = "null_literal"
     HEX_LITERAL = "hex_literal"
+    UNSIGNED_LITERAL = "unsigned_literal"
     LABEL = "label"
 
     # -- string interpolation --------------------------------------------
@@ -50,6 +51,8 @@ class KotlinNodeType:
     JUMP_EXPRESSION = "jump_expression"
     ANONYMOUS_FUNCTION = "anonymous_function"
     TYPE_TEST = "type_test"
+    CALLABLE_REFERENCE = "callable_reference"
+    SPREAD_EXPRESSION = "spread_expression"
 
     # -- declarations & statements ---------------------------------------
     PROPERTY_DECLARATION = "property_declaration"
@@ -64,6 +67,7 @@ class KotlinNodeType:
     DO_WHILE_STATEMENT = "do_while_statement"
     IMPORT_LIST = "import_list"
     IMPORT_HEADER = "import_header"
+    WILDCARD_IMPORT = "wildcard_import"
     PACKAGE_HEADER = "package_header"
     TYPE_ALIAS = "type_alias"
     SOURCE_FILE = "source_file"
