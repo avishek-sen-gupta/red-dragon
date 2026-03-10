@@ -557,6 +557,60 @@ class TestLuaStringContentEscapeSequence:
         assert len(unsupported) == 0
 
 
+class TestLuaMethodIndexExpression:
+    """Tests for method_index_expression (obj:method) lowering."""
+
+    def test_method_call_produces_call_method(self):
+        """obj:method() should produce CALL_METHOD with obj and method name."""
+        instructions = _parse_lua("obj:method()")
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert len(calls) >= 1
+        assert "method" in calls[0].operands
+
+    def test_method_call_with_args_produces_call_method(self):
+        """obj:method(a, b) should produce CALL_METHOD with args."""
+        instructions = _parse_lua("obj:method(1, 2)")
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert len(calls) >= 1
+        assert "method" in calls[0].operands
+
+    def test_method_call_no_symbolic_fallthrough(self):
+        """obj:method() must NOT produce SYMBOLIC unsupported for method_index_expression."""
+        instructions = _parse_lua("obj:method()")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        unsupported = [
+            s for s in symbolics if any("unsupported:" in str(op) for op in s.operands)
+        ]
+        assert len(unsupported) == 0
+
+    def test_chained_method_calls(self):
+        """obj:foo():bar() should produce two CALL_METHOD instructions."""
+        instructions = _parse_lua("obj:foo():bar()")
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert len(calls) >= 2
+        method_names = [inst.operands[1] for inst in calls if len(inst.operands) > 1]
+        assert "foo" in method_names
+        assert "bar" in method_names
+
+    def test_method_call_result_stored(self):
+        """local r = obj:method() should store result."""
+        instructions = _parse_lua("local r = obj:method()")
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("r" in inst.operands for inst in stores)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert len(calls) >= 1
+
+    def test_method_index_in_dispatch_table(self):
+        """method_index_expression must be in the expr dispatch table."""
+        from interpreter.frontends.lua import LuaFrontend
+        from interpreter.parser import TreeSitterParserFactory
+        from interpreter.frontends.lua.node_types import LuaNodeType
+
+        frontend = LuaFrontend(TreeSitterParserFactory(), "lua")
+        dispatch = frontend._build_expr_dispatch()
+        assert LuaNodeType.METHOD_INDEX_EXPRESSION in dispatch
+
+
 class TestLuaOperatorExecution:
     """VM execution tests for Lua-specific operators."""
 

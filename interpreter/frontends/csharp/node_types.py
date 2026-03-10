@@ -79,6 +79,7 @@ class CSharpNodeType:
     CHECKED_STATEMENT = "checked_statement"
     FIXED_STATEMENT = "fixed_statement"
     YIELD_STATEMENT = "yield_statement"
+    EMPTY_STATEMENT = "empty_statement"
     GLOBAL_STATEMENT = "global_statement"
     LOCAL_FUNCTION_STATEMENT = "local_function_statement"
     BLOCK = "block"

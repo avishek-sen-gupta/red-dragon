@@ -721,6 +721,18 @@ class TestRustMatchPatternUnwrap:
         assert any("1" in inst.operands for inst in consts)
 
 
+class TestRustUnitExpression:
+    def test_unit_expression_emits_const(self):
+        """Rust's unit expression `()` should emit a CONST, not fall through to SYMBOLIC."""
+        instructions = _parse_rust("fn main() { let x = (); }")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("()" in inst.operands for inst in consts)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unit_expression" in str(inst.operands) for inst in symbolics)
+
+
 class TestRustFunctionSignatureItem:
     def test_function_signature_item_no_unsupported(self):
         """trait Shape { fn area(&self) -> f64; } should not produce unsupported SYMBOLIC for the signature."""
@@ -746,3 +758,89 @@ trait Animal {
         instructions = _parse_rust(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+
+class TestRustOrPattern:
+    def test_or_pattern_no_symbolic(self):
+        """match x { 1 | 2 => ... } should NOT produce SYMBOLIC for or_pattern."""
+        source = """\
+fn main() {
+    let r = match x {
+        1 | 2 => 10,
+        _ => 0,
+    };
+}
+"""
+        instructions = _parse_rust(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("or_pattern" in str(inst.operands) for inst in symbolics)
+
+    def test_or_pattern_generates_multiple_comparisons(self):
+        """1 | 2 in match should generate two == comparisons."""
+        source = """\
+fn main() {
+    let r = match x {
+        1 | 2 => 10,
+        _ => 0,
+    };
+}
+"""
+        instructions = _parse_rust(source)
+        binops = _find_all(instructions, Opcode.BINOP)
+        eq_comparisons = [inst for inst in binops if "==" in inst.operands]
+        # At least 2 comparisons for the or_pattern arm (1 == x, 2 == x)
+        assert len(eq_comparisons) >= 2
+
+    def test_or_pattern_both_alternatives_branch_to_same_arm(self):
+        """Both 1 and 2 in '1 | 2 => 10' should branch to the same arm body."""
+        source = """\
+fn main() {
+    let r = match x {
+        1 | 2 => 10,
+        _ => 0,
+    };
+}
+"""
+        instructions = _parse_rust(source)
+        # The or-pattern should produce a BINOP "||" combining the two == checks
+        binops = _find_all(instructions, Opcode.BINOP)
+        or_ops = [inst for inst in binops if "||" in inst.operands]
+        assert len(or_ops) >= 1, "Expected a || combining the two == comparisons"
+
+    def test_or_pattern_three_alternatives(self):
+        """match x { 1 | 2 | 3 => ... } should handle three alternatives."""
+        source = """\
+fn main() {
+    let r = match x {
+        1 | 2 | 3 => 10,
+        _ => 0,
+    };
+}
+"""
+        instructions = _parse_rust(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("or_pattern" in str(inst.operands) for inst in symbolics)
+        binops = _find_all(instructions, Opcode.BINOP)
+        eq_comparisons = [inst for inst in binops if "==" in inst.operands]
+        assert len(eq_comparisons) >= 3
+
+    def test_or_pattern_with_normal_arms(self):
+        """match with or_pattern alongside normal arms should produce correct IR."""
+        source = """\
+fn main() {
+    let r = match x {
+        1 | 2 => 10,
+        3 => 30,
+        _ => 0,
+    };
+}
+"""
+        instructions = _parse_rust(source)
+        consts = _find_all(instructions, Opcode.CONST)
+        const_values = [op for inst in consts for op in inst.operands]
+        assert "10" in const_values
+        assert "30" in const_values
+        assert "0" in const_values
+        # Should have branch_if for or_pattern arm, for arm 3, no branch_if for wildcard
+        branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
+        assert len(branch_ifs) >= 2

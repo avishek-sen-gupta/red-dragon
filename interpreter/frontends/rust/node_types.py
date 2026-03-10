@@ -21,6 +21,7 @@ class RustNodeType:
     BOOLEAN_LITERAL = "boolean_literal"
     TRUE = "true"
     FALSE = "false"
+    UNIT_EXPRESSION = "unit_expression"
 
     # ── Expressions ──────────────────────────────────────────────────
     BINARY_EXPRESSION = "binary_expression"
@@ -77,6 +78,7 @@ class RustNodeType:
     STRUCT_PATTERN = "struct_pattern"
     TUPLE_STRUCT_PATTERN = "tuple_struct_pattern"
     FIELD_PATTERN = "field_pattern"
+    OR_PATTERN = "or_pattern"
 
     # ── Parameters ───────────────────────────────────────────────────
     PARAMETER = "parameter"

@@ -34,6 +34,8 @@ class GoNodeType:
     CHANNEL_TYPE = "channel_type"
     SLICE_TYPE = "slice_type"
     EXPRESSION_LIST = "expression_list"
+    TYPE_CONVERSION_EXPRESSION = "type_conversion_expression"
+    GENERIC_TYPE = "generic_type"
     LITERAL_VALUE = "literal_value"
     KEYED_ELEMENT = "keyed_element"
     LITERAL_ELEMENT = "literal_element"
