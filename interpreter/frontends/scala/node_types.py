@@ -38,7 +38,11 @@ class ScalaNodeType:
     BREAK_EXPRESSION = "break_expression"
     CONTINUE_EXPRESSION = "continue_expression"
     GENERIC_TYPE = "generic_type"
+    GENERIC_FUNCTION = "generic_function"
+    POSTFIX_EXPRESSION = "postfix_expression"
+    STABLE_TYPE_IDENTIFIER = "stable_type_identifier"
     OPERATOR_IDENTIFIER = "operator_identifier"
+    TYPE_ARGUMENTS = "type_arguments"
 
     # Keywords (used as node types in tree-sitter)
     THIS = "this"

@@ -893,3 +893,100 @@ end.
             f"Expected a 'catch' label proving try/except separation, "
             f"got labels: {label_names}"
         )
+
+
+class TestPascalForeach:
+    def test_foreach_no_symbolic(self):
+        instructions = _parse_pascal(
+            "program M; var i: Integer; begin for i in arr do writeln(i); end."
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any(
+            "unsupported:foreach" in str(inst.operands) for inst in symbolics
+        )
+
+    def test_foreach_produces_loop_structure(self):
+        instructions = _parse_pascal(
+            "program M; var i: Integer; begin for i in arr do writeln(i); end."
+        )
+        opcodes = _opcodes(instructions)
+        assert Opcode.BRANCH_IF in opcodes
+        assert Opcode.BRANCH in opcodes
+
+    def test_foreach_stores_loop_variable(self):
+        instructions = _parse_pascal(
+            "program M; var i: Integer; begin for i in arr do writeln(i); end."
+        )
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("i" in inst.operands for inst in stores)
+
+    def test_foreach_lowers_body(self):
+        instructions = _parse_pascal(
+            "program M; var i: Integer; begin for i in arr do writeln(i); end."
+        )
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("writeln" in inst.operands for inst in calls)
+
+
+class TestPascalGoto:
+    def test_goto_no_symbolic(self):
+        instructions = _parse_pascal(
+            "program M; label myLabel; begin goto myLabel; myLabel: writeln(1); end."
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any("unsupported:goto" in str(inst.operands) for inst in symbolics)
+
+    def test_goto_produces_branch(self):
+        instructions = _parse_pascal(
+            "program M; label myLabel; begin goto myLabel; myLabel: writeln(1); end."
+        )
+        branches = _find_all(instructions, Opcode.BRANCH)
+        assert any("myLabel" in (inst.label or "") for inst in branches)
+
+    def test_label_produces_label_instruction(self):
+        instructions = _parse_pascal(
+            "program M; label myLabel; begin goto myLabel; myLabel: writeln(1); end."
+        )
+        labels = _find_all(instructions, Opcode.LABEL)
+        assert any("myLabel" in (inst.label or "") for inst in labels)
+
+    def test_decl_labels_no_symbolic(self):
+        instructions = _parse_pascal(
+            "program M; label myLabel; begin goto myLabel; myLabel: writeln(1); end."
+        )
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any(
+            "unsupported:declLabels" in str(inst.operands) for inst in symbolics
+        )
+
+
+class TestPascalDeclClass:
+    def test_class_no_symbolic(self):
+        source = """\
+program M;
+type
+  TAnimal = class
+    Name: string;
+    procedure Speak;
+  end;
+begin
+end."""
+        instructions = _parse_pascal(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        assert not any(
+            "unsupported:declClass" in str(inst.operands) for inst in symbolics
+        )
+
+    def test_class_produces_class_ref(self):
+        source = """\
+program M;
+type
+  TAnimal = class
+    Name: string;
+    procedure Speak;
+  end;
+begin
+end."""
+        instructions = _parse_pascal(source)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("class:" in str(inst.operands) for inst in consts)

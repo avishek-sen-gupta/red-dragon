@@ -64,7 +64,7 @@ class ScalaFrontend(BaseFrontend):
             NT.INFIX_EXPRESSION: common_expr.lower_binop,
             NT.PREFIX_EXPRESSION: common_expr.lower_unop,
             NT.PARENTHESIZED_EXPRESSION: common_expr.lower_paren,
-            NT.CALL_EXPRESSION: common_expr.lower_call,
+            NT.CALL_EXPRESSION: scala_expr.lower_scala_call,
             NT.FIELD_EXPRESSION: scala_expr.lower_field_expr,
             NT.IF_EXPRESSION: scala_expr.lower_if_expr,
             NT.MATCH_EXPRESSION: scala_expr.lower_match_expr,
@@ -98,6 +98,9 @@ class ScalaFrontend(BaseFrontend):
             NT.CASE_BLOCK: scala_expr.lower_block_expr,
             NT.INFIX_PATTERN: scala_expr.lower_infix_pattern,
             NT.CASE_CLAUSE: scala_expr.lower_case_clause_expr,
+            NT.GENERIC_FUNCTION: scala_expr.lower_generic_function,
+            NT.POSTFIX_EXPRESSION: scala_expr.lower_postfix_expression,
+            NT.STABLE_TYPE_IDENTIFIER: scala_expr.lower_stable_type_identifier,
         }
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:

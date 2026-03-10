@@ -3,7 +3,7 @@
 **Date**: 2026-03-10
 **Method**: Cross-referenced each frontend's `_build_stmt_dispatch()` / `_build_expr_dispatch()` tables against tree-sitter `node-types.json` grammar definitions. Unhandled named node types (excluding punctuation, structural/internal nodes consumed by parent handlers, and comment/noise types) are classified as gaps.
 
-**Totals: 25 P0 (15 DONE, 10 remaining), 187 P1, ~326 P2**
+**Totals: 25 P0 (25 DONE, 0 remaining), 187 P1, ~326 P2**
 
 ---
 
@@ -14,18 +14,18 @@
 | Python | 76 | 0 | 9 | ~25 | Match statement sub-patterns |
 | JavaScript | 63 | 0 | 7 | ~30 | `optional_chain`, anonymous `class`, `decorator` |
 | TypeScript | ~74 | 0 | 18 | ~35 | Inherits JS gaps + `decorator`, `type_assertion` |
-| Java | 64 | 1 | 11 | 14 | `yield_statement` in switch expressions |
-| C# | 84 | 3 | 27 | 16+ | `throw_expression`, 9 pattern-matching gaps (empty_statement DONE) |
-| Kotlin | 58 | 3 | 14 | 13+ | `throw_expression`, `callable_reference` |
-| Scala | 72 | 3 | 18 | 30+ | `generic_function`, pattern-matching gaps |
+| Java | 64 | 0 | 11 | 14 | All P0 gaps resolved |
+| C# | 84 | 0 | 27 | 16+ | All P0 gaps resolved |
+| Kotlin | 58 | 0 | 14 | 13+ | All P0 gaps resolved |
+| Scala | 72 | 0 | 18 | 30+ | All P0 gaps resolved |
 | Go | 55 | 0 | 9 | 18 | All P0 gaps resolved |
 | Rust | ~78 | 0 | 9 | 25 | All P0 gaps resolved |
 | C | 42 | 0 | 4 | ~20 | Most complete; gaps are qualifiers/specifiers |
 | C++ | ~64 | 0 | 11 | ~25 | Coroutines, structured bindings, `auto` |
-| Ruby | 73 | 1 | 12 | 33 | `rescue_modifier` (scope_resolution RESOLVED) |
+| Ruby | 73 | 0 | 12 | 33 | All P0 gaps resolved |
 | PHP | 76 | 0 | 13 | 37 | All P0 gaps resolved |
 | Lua | 31 | 0 | 1 | 1 | All P0 gaps resolved |
-| Pascal | 43 | 4 | 24 | 24 | `foreach`, `goto`/`label`, `declClass` |
+| Pascal | 43 | 0 | 24 | 24 | All P0 gaps resolved |
 
 ---
 
@@ -35,31 +35,31 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 
 | # | Language | Node Type | Impact | Status |
 |---|----------|-----------|--------|--------|
-| 1 | Java | `yield_statement` | Switch expression block arms (`case X -> { yield val; }`) | TODO |
-| 2 | C# | `throw_expression` | `x ?? throw new ...` -- idiomatic C# | TODO |
-| 3 | C# | `goto_statement` | `goto` / `goto case` / `goto default` | TODO |
-| 4 | C# | `labeled_statement` | Labels for goto targets | TODO |
+| 1 | Java | `yield_statement` | Switch expression block arms (`case X -> { yield val; }`) | DONE |
+| 2 | C# | `throw_expression` | `x ?? throw new ...` -- idiomatic C# | DONE |
+| 3 | C# | `goto_statement` | `goto` / `goto case` / `goto default` | DONE |
+| 4 | C# | `labeled_statement` | Labels for goto targets | DONE |
 | 5 | C# | `empty_statement` | Bare `;` no-op | DONE |
-| 6 | Kotlin | `throw_expression` | `val x = y ?: throw ...` -- throw is an expression | TODO |
-| 7 | Kotlin | `when_expression` (stmt) | `when` at statement level may not route through expr dispatch | TODO |
-| 8 | Kotlin | `anonymous_function` | `fun(x: Int) { ... }` anonymous function literals | TODO |
-| 9 | Scala | `generic_function` | `foo[Int](x)`, `list.asInstanceOf[Bar]` -- ubiquitous | TODO |
-| 10 | Scala | `postfix_expression` | `list sorted`, `future await` -- DSL-style calls | TODO |
-| 11 | Scala | `stable_identifier` | `pkg.Class` qualified names in patterns/types | TODO |
+| 6 | Kotlin | `throw_expression` | `val x = y ?: throw ...` -- throw is an expression | DONE |
+| 7 | Kotlin | `when_expression` (stmt) | `when` at statement level may not route through expr dispatch | DONE |
+| 8 | Kotlin | `anonymous_function` | `fun(x: Int) { ... }` anonymous function literals | DONE |
+| 9 | Scala | `generic_function` | `foo[Int](x)`, `list.asInstanceOf[Bar]` -- ubiquitous | DONE |
+| 10 | Scala | `postfix_expression` | `list sorted`, `future await` -- DSL-style calls | DONE |
+| 11 | Scala | `stable_identifier` | `pkg.Class` qualified names in patterns/types | DONE |
 | 12 | Go | `type_conversion_expression` | `[]byte(s)`, `Foo[int](y)` -- complex type conversions | DONE |
 | 13 | Go | `generic_type` (was `type_instantiation_expression`) | `Foo[int]` -- Go 1.18+ generics | DONE |
 | 14 | Rust | `unit_expression` | `()` -- Rust's void, implicit return of many functions | DONE |
 | 15 | Rust | `or_pattern` | `A \| B` in match arms -- extremely idiomatic | DONE |
 | 16 | Ruby | `scope_resolution` | `Module::Class` -- `::` operator, ubiquitous | DONE |
-| 17 | Ruby | `rescue_modifier` | `expr rescue fallback` -- inline error handling | TODO |
+| 17 | Ruby | `rescue_modifier` | `expr rescue fallback` -- inline error handling | DONE |
 | 18 | PHP | `clone_expression` | `clone $obj` -- object cloning | DONE |
 | 19 | PHP | `const_declaration` | `const FOO = 1;` -- constant definitions | DONE |
 | 20 | PHP | `print_intrinsic` | `print $x` -- distinct from `echo` | DONE |
 | 21 | Lua | `method_index_expression` | `obj:method()` -- Lua's primary method call syntax | DONE |
-| 22 | Pascal | `foreach` | `for item in collection do` -- iteration | TODO |
-| 23 | Pascal | `goto` | Unconditional jump -- required for legacy code | TODO |
-| 24 | Pascal | `label` | Label declaration for goto | TODO |
-| 25 | Pascal | `declClass` | Class declarations -- core Object Pascal OOP | TODO |
+| 22 | Pascal | `foreach` | `for item in collection do` -- iteration | DONE |
+| 23 | Pascal | `goto` | Unconditional jump -- required for legacy code | DONE |
+| 24 | Pascal | `label` | Label declaration for goto | DONE |
+| 25 | Pascal | `declClass` | Class declarations -- core Object Pascal OOP | DONE |
 
 ---
 

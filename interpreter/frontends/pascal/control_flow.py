@@ -500,6 +500,84 @@ def lower_pascal_inherited_stmt(ctx: TreeSitterEmitContext, node) -> None:
     lower_pascal_inherited_expr(ctx, node)
 
 
+def lower_pascal_foreach(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower for-in loop: for var in collection do body."""
+    foreach_noise = KEYWORD_NOISE | frozenset({"kIn"})
+    named_children = [
+        c for c in node.children if c.is_named and c.type not in foreach_noise
+    ]
+    var_node = named_children[0]
+    collection_node = named_children[1]
+    body_node = named_children[2] if len(named_children) > 2 else named_children[-1]
+
+    var_name = ctx.node_text(var_node)
+    coll_reg = ctx.lower_expr(collection_node)
+
+    idx_var = f"__foreach_idx_{var_name}"
+    zero_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=zero_reg, operands=["0"])
+    ctx.emit(Opcode.STORE_VAR, operands=[idx_var, zero_reg])
+
+    len_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_FUNCTION,
+        result_reg=len_reg,
+        operands=["len", coll_reg],
+        node=node,
+    )
+
+    loop_label = ctx.fresh_label("foreach_cond")
+    body_label = ctx.fresh_label("foreach_body")
+    end_label = ctx.fresh_label("foreach_end")
+
+    ctx.emit(Opcode.LABEL, label=loop_label)
+    cur_idx_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=cur_idx_reg, operands=[idx_var])
+    cond_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.BINOP, result_reg=cond_reg, operands=["<", cur_idx_reg, len_reg])
+    ctx.emit(
+        Opcode.BRANCH_IF,
+        operands=[cond_reg],
+        label=f"{body_label},{end_label}",
+        node=node,
+    )
+
+    ctx.emit(Opcode.LABEL, label=body_label)
+    elem_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[coll_reg, cur_idx_reg])
+    ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+    ctx.lower_stmt(body_node)
+
+    cur2_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=cur2_reg, operands=[idx_var])
+    one_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
+    next_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.BINOP, result_reg=next_reg, operands=["+", cur2_reg, one_reg])
+    ctx.emit(Opcode.STORE_VAR, operands=[idx_var, next_reg])
+    ctx.emit(Opcode.BRANCH, label=loop_label)
+
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+
+def lower_pascal_goto(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower goto label -- emit BRANCH to the label."""
+    id_node = next(
+        (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
+    )
+    label_name = ctx.node_text(id_node) if id_node else "unknown"
+    ctx.emit(Opcode.BRANCH, label=label_name, node=node)
+
+
+def lower_pascal_label(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower label: statement -- emit LABEL."""
+    id_node = next(
+        (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
+    )
+    label_name = ctx.node_text(id_node) if id_node else "unknown"
+    ctx.emit(Opcode.LABEL, label=label_name)
+
+
 def lower_pascal_noop(ctx: TreeSitterEmitContext, node) -> None:
     """No-op handler -- skips nodes that produce no IR."""
     logger.debug("Skipping %s at %s (no-op)", node.type, ctx.source_loc(node))

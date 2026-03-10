@@ -209,7 +209,8 @@ class TestScalaSpecial:
         assert instructions[0].label == "entry"
 
     def test_fallback_symbolic(self):
-        instructions = _parse_scala("object M { val x = classOf[Int] }")
+        """Unhandled node types (ascription_expression) should produce SYMBOLIC unsupported."""
+        instructions = _parse_scala("object M { val x = (y: Int) }")
         opcodes = _opcodes(instructions)
         assert Opcode.SYMBOLIC in opcodes
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)

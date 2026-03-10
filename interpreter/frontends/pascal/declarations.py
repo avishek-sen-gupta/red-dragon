@@ -361,10 +361,8 @@ def lower_pascal_decl_type(ctx: TreeSitterEmitContext, node) -> None:
     if id_node is None or class_node is None:
         return
 
-    # Only handle record types
+    # Handle both record and class types
     has_record = any(c.type == PascalNodeType.K_RECORD for c in class_node.children)
-    if not has_record:
-        return
 
     type_name = ctx.node_text(id_node)
     record_types: set[str] = getattr(ctx, "_pascal_record_types", set())

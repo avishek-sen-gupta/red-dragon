@@ -56,6 +56,10 @@ class PascalNodeType:
     RAISE = "raise"
     WITH = "with"
     INHERITED = "inherited"
+    FOREACH = "foreach"
+    GOTO = "goto"
+    LABEL = "label"
+    DECL_LABELS = "declLabels"
 
     # -- Declaration sub-nodes ---------------------------------------------
     DECL_ARGS = "declArgs"
