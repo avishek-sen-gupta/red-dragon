@@ -5,6 +5,13 @@ Single file:
 
 Compare mode:
   poetry run python -m viz compare c:demo.c rust:demo.rs
+
+Lowering trace:
+  poetry run python -m viz lower demo.py -l python
+
+Coverage matrix:
+  poetry run python -m viz coverage
+  poetry run python -m viz coverage -l python,javascript,rust
 """
 
 from __future__ import annotations
@@ -15,11 +22,15 @@ import sys
 
 
 def main() -> None:
-    # Detect compare mode by checking if first arg is "compare"
-    if len(sys.argv) > 1 and sys.argv[1] == "compare":
-        _main_compare()
-    else:
-        _main_single()
+    # Detect subcommand by checking first arg
+    subcommand = sys.argv[1] if len(sys.argv) > 1 else ""
+    dispatch = {
+        "compare": _main_compare,
+        "lower": _main_lower,
+        "coverage": _main_coverage,
+    }
+    handler = dispatch.get(subcommand, _main_single)
+    handler()
 
 
 def _main_single() -> None:
@@ -74,15 +85,59 @@ def _main_compare() -> None:
     from viz.compare_app import CompareApp
     from viz.pipeline import run_pipeline
 
-    results = []
-    for spec in args.specs:
-        lang, path = spec.split(":", 1)
-        with open(path) as f:
-            source = f.read()
-        result = run_pipeline(source, language=lang, max_steps=args.max_steps)
-        results.append(result)
+    results = [
+        run_pipeline(open(path).read(), language=lang, max_steps=args.max_steps)
+        for spec in args.specs
+        for lang, path in [spec.split(":", 1)]
+    ]
 
     app = CompareApp(results)
+    app.run()
+
+
+def _main_lower() -> None:
+    parser = argparse.ArgumentParser(
+        description="RedDragon Lowering Trace — interactive TUI"
+    )
+    parser.add_argument("lower", help="lower subcommand")
+    parser.add_argument("source_file", help="Path to source file to trace")
+    parser.add_argument(
+        "-l", "--language", default="python", help="Source language (default: python)"
+    )
+    args = parser.parse_args()
+    logging.basicConfig(level=logging.WARNING)
+
+    from viz.lowering_app import LoweringApp
+    from viz.lowering_trace import trace_lowering
+
+    with open(args.source_file) as f:
+        source = f.read()
+
+    result = trace_lowering(source, language=args.language)
+    app = LoweringApp(result)
+    app.run()
+
+
+def _main_coverage() -> None:
+    parser = argparse.ArgumentParser(
+        description="RedDragon Frontend Coverage Matrix — interactive TUI"
+    )
+    parser.add_argument("coverage", help="coverage subcommand")
+    parser.add_argument(
+        "-l",
+        "--languages",
+        default="",
+        help="Comma-separated languages (default: all)",
+    )
+    args = parser.parse_args()
+    logging.basicConfig(level=logging.WARNING)
+
+    from viz.coverage import build_coverage
+    from viz.coverage_app import CoverageApp
+
+    languages = [l.strip() for l in args.languages.split(",") if l.strip()] or None
+    coverages = build_coverage(languages)
+    app = CoverageApp(coverages)
     app.run()
 
 
