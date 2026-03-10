@@ -36,6 +36,7 @@ pylint = "^3.0"
 import-linter = "^2.0"
 grimp = "^3.0"
 pydeps = "^1.12"
+textual = "^8.1.0"
 
 [tool.radon]
 exclude = "tests/*"
