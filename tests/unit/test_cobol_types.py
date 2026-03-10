@@ -1,5 +1,7 @@
 """Tests for COBOL type descriptors."""
 
+import pytest
+
 from interpreter.cobol.cobol_types import CobolDataCategory, CobolTypeDescriptor
 
 
@@ -33,11 +35,8 @@ class TestCobolTypeDescriptor:
         td = CobolTypeDescriptor(
             category=CobolDataCategory.ZONED_DECIMAL, total_digits=5
         )
-        try:
+        with pytest.raises(AttributeError):
             td.total_digits = 10  # type: ignore
-            assert False, "Should have raised FrozenInstanceError"
-        except AttributeError:
-            pass
 
     def test_with_decimal_digits(self):
         td = CobolTypeDescriptor(

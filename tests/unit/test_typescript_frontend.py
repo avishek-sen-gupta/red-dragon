@@ -92,11 +92,9 @@ class TestTypeScriptEnums:
 class TestTypeScriptTypeFeatures:
     def test_type_alias_ignored(self):
         instructions = _parse_ts("type Alias = string;")
-        opcodes = _opcodes(instructions)
-        assert Opcode.SYMBOLIC not in opcodes or all(
-            "unsupported:" not in str(inst.operands)
-            for inst in _find_all(instructions, Opcode.SYMBOLIC)
-        )
+        # Type alias should produce only the entry label — no real instructions
+        assert len(instructions) == 1
+        assert instructions[0].opcode == Opcode.LABEL
 
     def test_as_expression(self):
         instructions = _parse_ts("const x = y as number;")

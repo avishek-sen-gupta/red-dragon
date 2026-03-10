@@ -176,8 +176,10 @@ class TestExecuteCfgTracedBasic:
 
         vm, trace = execute_cfg_traced(cfg, "entry", registry)
 
-        # First two steps in entry, remaining in then_block
+        # First two steps in entry, remaining in then_block, none in else_block
         assert trace.steps[0].block_label == "entry"
         assert trace.steps[1].block_label == "entry"
         then_steps = [s for s in trace.steps if s.block_label == "then_block"]
-        assert len(then_steps) > 0
+        assert len(then_steps) == 3  # CONST, STORE_VAR, RETURN
+        else_steps = [s for s in trace.steps if s.block_label == "else_block"]
+        assert len(else_steps) == 0
