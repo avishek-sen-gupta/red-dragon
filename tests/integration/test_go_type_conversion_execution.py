@@ -55,3 +55,15 @@ func main() {
 """
         # Should not raise — the lowering produces a CALL_FUNCTION
         _run_go(source)
+
+    def test_float_to_int_truncation(self):
+        """int(3.7) should truncate to 3."""
+        source = """\
+package main
+func main() {
+    x := 3.7
+    y := int(x)
+}
+"""
+        vars_ = _run_go(source)
+        assert vars_["y"] == 3

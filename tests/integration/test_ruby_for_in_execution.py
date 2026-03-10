@@ -39,3 +39,18 @@ end
         )
         assert extract_answer(vm, "ruby") == 42
         assert stats.steps < 200
+
+    def test_for_in_empty_array(self):
+        """for loop over empty array should not execute body."""
+        vm, stats = execute_for_language(
+            "ruby",
+            """\
+arr = []
+answer = 42
+for x in arr
+    answer = 0
+end
+""",
+        )
+        assert extract_answer(vm, "ruby") == 42
+        assert stats.steps < 200
