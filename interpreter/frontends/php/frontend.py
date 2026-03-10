@@ -97,6 +97,7 @@ class PhpFrontend(BaseFrontend):
             PHPNodeType.VARIADIC_UNPACKING: php_expr.lower_php_variadic_unpacking,
             PHPNodeType.PRINT_INTRINSIC: php_expr.lower_php_print_intrinsic,
             PHPNodeType.CLONE_EXPRESSION: php_expr.lower_php_clone_expression,
+            PHPNodeType.ERROR_SUPPRESSION_EXPRESSION: php_expr.lower_php_error_suppression,
         }
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:
@@ -132,4 +133,7 @@ class PhpFrontend(BaseFrontend):
             PHPNodeType.ENUM_CASE: php_decl.lower_php_enum_case,
             PHPNodeType.GLOBAL_DECLARATION: php_decl.lower_php_global_declaration,
             PHPNodeType.CONST_DECLARATION: php_decl.lower_php_const_declaration,
+            PHPNodeType.EXIT_STATEMENT: lambda ctx, node: None,
+            PHPNodeType.DECLARE_STATEMENT: lambda ctx, node: None,
+            PHPNodeType.UNSET_STATEMENT: lambda ctx, node: None,
         }

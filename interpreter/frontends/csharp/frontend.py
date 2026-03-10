@@ -107,6 +107,9 @@ class CSharpFrontend(BaseFrontend):
             NT.TUPLE_EXPRESSION: csharp_expr.lower_tuple_expr,
             NT.IS_PATTERN_EXPRESSION: csharp_expr.lower_is_pattern_expr,
             NT.THROW_EXPRESSION: csharp_cf.lower_throw_expr,
+            NT.DEFAULT_EXPRESSION: common_expr.lower_const_literal,
+            NT.SIZEOF_EXPRESSION: common_expr.lower_const_literal,
+            NT.CHECKED_EXPRESSION: csharp_expr.lower_checked_expr,
         }
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:

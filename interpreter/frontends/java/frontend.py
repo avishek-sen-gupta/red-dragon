@@ -67,6 +67,7 @@ class JavaFrontend(BaseFrontend):
             JavaNodeType.OCTAL_INTEGER_LITERAL: common_expr.lower_const_literal,
             JavaNodeType.BINARY_INTEGER_LITERAL: common_expr.lower_const_literal,
             JavaNodeType.DECIMAL_FLOATING_POINT_LITERAL: common_expr.lower_const_literal,
+            JavaNodeType.HEX_FLOATING_POINT_LITERAL: common_expr.lower_const_literal,
             JavaNodeType.STRING_LITERAL: common_expr.lower_const_literal,
             JavaNodeType.CHARACTER_LITERAL: common_expr.lower_const_literal,
             JavaNodeType.TRUE: common_expr.lower_canonical_true,
