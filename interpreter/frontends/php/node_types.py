@@ -56,6 +56,7 @@ class PHPNodeType:
     VARIADIC_UNPACKING = "variadic_unpacking"
     PRINT_INTRINSIC = "print_intrinsic"
     CLONE_EXPRESSION = "clone_expression"
+    ERROR_SUPPRESSION_EXPRESSION = "error_suppression_expression"
 
     # -- Statements --------------------------------------------------------
     EXPRESSION_STATEMENT = "expression_statement"
@@ -89,6 +90,9 @@ class PHPNodeType:
     ENUM_CASE = "enum_case"
     GLOBAL_DECLARATION = "global_declaration"
     CONST_DECLARATION = "const_declaration"
+    EXIT_STATEMENT = "exit_statement"
+    DECLARE_STATEMENT = "declare_statement"
+    UNSET_STATEMENT = "unset_statement"
 
     # -- Const element nodes -----------------------------------------------
     CONST_ELEMENT = "const_element"

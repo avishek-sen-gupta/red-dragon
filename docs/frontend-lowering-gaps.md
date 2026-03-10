@@ -110,7 +110,7 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 |-----------|-------------|--------|
 | `module_declaration` | Java 9 module-info.java declarations | TODO |
 | `template_expression` | Java 21 string templates | TODO |
-| `hex_floating_point_literal` | `0x1.0p10` hex floats | TODO |
+| `hex_floating_point_literal` | `0x1.0p10` hex floats | DONE |
 | `record_pattern` | Java 21 record deconstruction patterns | TODO |
 | `type_pattern` | Java 16 `x instanceof String s` | TODO |
 | `guard` | Java 21 guarded patterns in switch | TODO |
@@ -125,9 +125,9 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 |-----------|-------------|--------|
 | `range_expression` | `x..y` range expressions (C# 8) | TODO |
 | `with_expression` | `record with { ... }` (C# 9) | TODO |
-| `checked_expression` | `checked(expr)` / `unchecked(expr)` | TODO |
-| `default_expression` | `default` / `default(T)` | TODO |
-| `sizeof_expression` | `sizeof(type)` | TODO |
+| `checked_expression` | `checked(expr)` / `unchecked(expr)` | DONE |
+| `default_expression` | `default` / `default(T)` | DONE |
+| `sizeof_expression` | `sizeof(type)` | DONE |
 | `anonymous_object_creation_expression` | `new { X = 1 }` | TODO |
 | `anonymous_method_expression` | `delegate { ... }` | TODO |
 | `ref_expression` | `ref x` reference expressions | TODO |
@@ -259,13 +259,13 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 | `list_literal` | `list($a, $b) = $arr` destructuring | TODO |
 | `include_once_expression` | `include_once 'file.php'` | TODO |
 | `require_expression` | `require 'file.php'` | TODO |
-| `error_suppression_expression` | `@expr` error suppression | TODO |
+| `error_suppression_expression` | `@expr` error suppression | DONE |
 | `shell_command_expression` | `` `command` `` shell exec | TODO |
 | `sequence_expression` | Comma-separated expressions in `for` | TODO |
 | `anonymous_class` | `new class { ... }` | TODO |
-| `declare_statement` | `declare(strict_types=1)` | TODO |
-| `exit_statement` | `exit(0)` / `die()` | TODO |
-| `unset_statement` | `unset($var)` | TODO |
+| `declare_statement` | `declare(strict_types=1)` | DONE |
+| `exit_statement` | `exit(0)` / `die()` | DONE |
+| `unset_statement` | `unset($var)` | DONE |
 | `attribute_list` | PHP 8 attributes `#[Attribute]` | TODO |
 | `attribute_group` | Group of PHP 8 attributes | TODO |
 | `attribute` | Single PHP 8 attribute | TODO |

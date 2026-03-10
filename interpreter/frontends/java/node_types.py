@@ -15,6 +15,7 @@ class JavaNodeType:
     OCTAL_INTEGER_LITERAL = "octal_integer_literal"
     BINARY_INTEGER_LITERAL = "binary_integer_literal"
     DECIMAL_FLOATING_POINT_LITERAL = "decimal_floating_point_literal"
+    HEX_FLOATING_POINT_LITERAL = "hex_floating_point_literal"
     STRING_LITERAL = "string_literal"
     CHARACTER_LITERAL = "character_literal"
     NULL_LITERAL = "null_literal"
