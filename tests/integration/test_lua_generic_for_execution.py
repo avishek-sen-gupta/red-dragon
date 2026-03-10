@@ -10,8 +10,8 @@ from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
 class TestLuaIpairsExecution:
-    def test_ipairs_accumulates_sum(self):
-        """for _, x in ipairs(arr) should iterate and sum elements."""
+    def test_ipairs_terminates(self):
+        """for _, x in ipairs(arr) should iterate and terminate."""
         vm, stats = execute_for_language(
             "lua",
             """\
@@ -22,10 +22,11 @@ for _, x in ipairs(arr) do
 end
 """,
         )
+        # Lua ipairs iteration produces symbolic values — verify termination only
         assert stats.steps < 200
 
-    def test_ipairs_single_element(self):
-        """ipairs over single-element table."""
+    def test_ipairs_single_element_terminates(self):
+        """ipairs over single-element table terminates."""
         vm, stats = execute_for_language(
             "lua",
             """\
@@ -40,8 +41,8 @@ end
 
 
 class TestLuaPairsExecution:
-    def test_pairs_iterates(self):
-        """for k, v in pairs(t) should terminate."""
+    def test_pairs_terminates(self):
+        """for k, v in pairs(t) should terminate within step budget."""
         vm, stats = execute_for_language(
             "lua",
             """\

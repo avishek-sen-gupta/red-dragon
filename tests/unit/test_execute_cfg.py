@@ -79,7 +79,7 @@ class TestExecuteCfgBasic:
         with pytest.raises(AttributeError):
             config.backend = "openai"
 
-    def test_entry_point_resolution(self):
+    def test_execution_records_steps_and_entry(self):
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": "entry"}),
             (Opcode.CONST, {"result_reg": "%0", "operands": [99]}),
@@ -91,9 +91,7 @@ class TestExecuteCfgBasic:
         vm, stats = execute_cfg(cfg, "entry", registry)
 
         assert vm.current_frame.local_vars["result"] == 99
-        # Verify execution actually ran (distinguishes from test_const_and_store)
         assert stats.steps > 0, "execution must have taken at least one step"
-        # Verify CFG resolved "entry" as its entry point
         assert cfg.entry == "entry", f"CFG entry should be 'entry', got {cfg.entry}"
 
     def test_invalid_entry_point_raises(self):
@@ -171,16 +169,24 @@ class TestExecuteCfgBasic:
         assert stats.llm_calls == 0
         assert vm.current_frame.local_vars["sum"] == 8
 
-    def test_verbose_mode_produces_output(self, caplog):
+    def test_verbose_mode_produces_step_log(self, caplog):
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": "entry"}),
             (Opcode.CONST, {"result_reg": "%0", "operands": [1]}),
             (Opcode.RETURN, {"operands": ["%0"]}),
         )
         cfg, registry = _build_simple_cfg(instructions)
-        config = VMConfig(verbose=True)
 
+        # Run without verbose — capture baseline logs
         with caplog.at_level(logging.INFO, logger="interpreter.run"):
-            execute_cfg(cfg, "entry", registry, config)
+            execute_cfg(cfg, "entry", registry, VMConfig(verbose=False))
+        quiet_log = caplog.text
+        caplog.clear()
 
-        assert "step" in caplog.text.lower()
+        # Run with verbose — should produce additional output
+        with caplog.at_level(logging.INFO, logger="interpreter.run"):
+            execute_cfg(cfg, "entry", registry, VMConfig(verbose=True))
+        verbose_log = caplog.text
+
+        assert "step" in verbose_log.lower()
+        assert len(verbose_log) > len(quiet_log)

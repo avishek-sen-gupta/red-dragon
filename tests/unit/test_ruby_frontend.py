@@ -470,6 +470,11 @@ end
         assert any("map" in inst.operands for inst in calls)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("func:" in str(inst.operands) for inst in consts)
+        # Verify block body is lowered (multiplication and return)
+        opcodes = _opcodes(instructions)
+        assert Opcode.BINOP in opcodes
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any("*" in inst.operands for inst in binops)
 
     def test_do_block(self):
         source = """\
