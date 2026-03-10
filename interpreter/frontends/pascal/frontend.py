@@ -103,4 +103,8 @@ class PascalFrontend(BaseFrontend):
             PascalNodeType.RAISE: pascal_cf.lower_pascal_raise,
             PascalNodeType.WITH: pascal_cf.lower_pascal_with,
             PascalNodeType.INHERITED: pascal_cf.lower_pascal_inherited_stmt,
+            PascalNodeType.FOREACH: pascal_cf.lower_pascal_foreach,
+            PascalNodeType.GOTO: pascal_cf.lower_pascal_goto,
+            PascalNodeType.LABEL: pascal_cf.lower_pascal_label,
+            PascalNodeType.DECL_LABELS: pascal_cf.lower_pascal_noop,
         }
