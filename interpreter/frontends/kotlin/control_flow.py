@@ -15,6 +15,7 @@ from interpreter.frontends.common.exceptions import (
 from interpreter.frontends.kotlin.expressions import (
     lower_if_expr,
     lower_kotlin_store_target,
+    lower_when_expr,
 )
 from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
 
@@ -45,6 +46,11 @@ def lower_kotlin_assignment(ctx: TreeSitterEmitContext, node) -> None:
 def lower_if_stmt(ctx: TreeSitterEmitContext, node) -> None:
     """Lower if as a statement (discard result)."""
     lower_if_expr(ctx, node)
+
+
+def lower_when_stmt(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower when as a statement (discard result)."""
+    lower_when_expr(ctx, node)
 
 
 # -- while statement ---------------------------------------------------
