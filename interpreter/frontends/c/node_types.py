@@ -81,6 +81,10 @@ class CNodeType:
     PREPROC_FUNCTION_DEF = "preproc_function_def"
     PREPROC_ARG = "preproc_arg"
 
+    # Linkage
+    LINKAGE_SPECIFICATION = "linkage_specification"
+    DECLARATION_LIST = "declaration_list"
+
     # Other
     COMMENT = "comment"
     TRANSLATION_UNIT = "translation_unit"

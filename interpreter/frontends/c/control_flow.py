@@ -138,3 +138,10 @@ def lower_labeled_stmt(ctx: TreeSitterEmitContext, node) -> None:
     for child in node.children:
         if child.is_named and child.type != CNodeType.STATEMENT_IDENTIFIER:
             ctx.lower_stmt(child)
+
+
+def lower_linkage_spec(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower extern 'C' { ... } — just lower the body declarations."""
+    for child in node.children:
+        if child.is_named and child.type != CNodeType.STRING_LITERAL:
+            ctx.lower_stmt(child)
