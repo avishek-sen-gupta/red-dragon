@@ -10,6 +10,7 @@ from interpreter.frontends.common.expressions import (
     lower_const_literal,
     lower_interpolated_string_parts,
     lower_call_impl,
+    extract_call_args,
 )
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 
@@ -20,6 +21,9 @@ def lower_scala_call(ctx: TreeSitterEmitContext, node) -> str:
     In Scala, foo[Int](x) parses as call_expression(generic_function(foo, [Int]), (x)).
     We unwrap the generic_function to expose the raw function node (identifier or
     field_expression) so that lower_call_impl can dispatch correctly.
+
+    Note: Scala arr(i) and f(x) are syntactically identical. Array indexing is
+    handled at VM level via CALL_FUNCTION on array values (Scala apply semantics).
     """
     func_node = node.child_by_field_name(ctx.constants.call_function_field)
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
@@ -75,6 +79,18 @@ def lower_scala_store_target(
                 operands=[obj_reg, ctx.node_text(field_node), val_reg],
                 node=parent_node,
             )
+    elif target.type == NT.CALL_EXPRESSION:
+        func_node = target.child_by_field_name(ctx.constants.call_function_field)
+        args_node = target.child_by_field_name(ctx.constants.call_arguments_field)
+        if func_node and args_node:
+            obj_reg = ctx.lower_expr(func_node)
+            arg_regs = extract_call_args(ctx, args_node)
+            if len(arg_regs) == 1:
+                ctx.emit(
+                    Opcode.STORE_INDEX,
+                    operands=[obj_reg, arg_regs[0], val_reg],
+                    node=parent_node,
+                )
     else:
         ctx.emit(
             Opcode.STORE_VAR,
