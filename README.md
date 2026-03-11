@@ -547,9 +547,9 @@ Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integrati
 
 ### Rosetta cross-language suite
 
-The **Rosetta suite** (`tests/unit/rosetta/`) implements 15 cross-language test sets and verifies they produce clean, structurally consistent IR:
+The **Rosetta suite** (`tests/unit/rosetta/`) implements 17 cross-language test sets and verifies they produce clean, structurally consistent IR:
 
-- **8 algorithms + closures + classes + exceptions + variable scoping** — all 15 languages
+- **10 algorithms + closures + classes + exceptions + variable scoping** — all 15 languages
 - **closures-lambda** — 5 languages with lambda/arrow syntax (Python, JS, TS, Kotlin, Scala)
 - **destructuring** — 6 languages (Python, JS, TS, Rust, Scala, Kotlin) in variable declarations; for-loop destructuring in JS/TS (`for (const [k, v] of arr)`), Kotlin (`for ((a, b) in pairs)`), and C++ (`for (auto [a, b] : pairs)`)
 - **nested functions** — 10 languages (Python, JS, TS, Rust, Lua, Ruby, Go, Kotlin, Scala, PHP)
@@ -576,6 +576,8 @@ Each problem tests:
 | destructured a+b | 15 |
 | nested outer(3) | 11 |
 | callee(99) with caller's x=42 | 198, x preserved |
+| ack(2, 3) | 9 |
+| isqrt(49) binary search | 7 |
 
 **Inner function scoping** is verified for 7 languages (Python, JavaScript, TypeScript, Rust, Go, Kotlin, Scala) — inner functions are inaccessible outside the enclosing scope (the VM produces a symbolic value instead of a concrete result).
 
