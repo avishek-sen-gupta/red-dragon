@@ -348,6 +348,8 @@ def lower_class_decl(ctx: TreeSitterEmitContext, node) -> None:
     )
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
     parents = _extract_kotlin_parents(ctx, node)
+    for parent in parents:
+        ctx.seed_interface_impl(class_name, parent)
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
