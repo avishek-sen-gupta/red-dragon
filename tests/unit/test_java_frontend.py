@@ -229,12 +229,16 @@ class TestJavaClasses:
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
 
-    def test_interface_emits_new_object(self):
+    def test_interface_emits_class_block(self):
+        """Interface lowered as CLASS block with method defs (not NEW_OBJECT)."""
         instructions = _parse_java("interface Runnable { void run(); }")
-        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
-        assert any("interface:Runnable" in str(inst.operands) for inst in new_objs)
-        store_indexes = _find_all(instructions, Opcode.STORE_INDEX)
-        assert len(store_indexes) >= 1
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            "<class:" in str(c.operands) and "Runnable" in str(c.operands)
+            for c in consts
+        )
+        labels = [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+        assert any("func_" in l and "run" in l for l in labels)
 
     def test_enum_declaration(self):
         instructions = _parse_java("enum Color { RED, GREEN, BLUE }")
@@ -331,8 +335,10 @@ class Circle implements Shape {
 }
 """
         instructions = _parse_java(source)
-        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
-        assert any("interface:Shape" in str(inst.operands) for inst in new_objs)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            "<class:" in str(c.operands) and "Shape" in str(c.operands) for c in consts
+        )
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("Circle" in inst.operands for inst in stores)
         store_fields = _find_all(instructions, Opcode.STORE_FIELD)
@@ -934,3 +940,54 @@ class TestJavaHexFloatingPointLiteral:
         ir = _parse_java("class T { void f() { double x = 0x1.0p10; } }")
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
+
+
+class TestJavaInterfaceLowering:
+    """Java interfaces should lower methods as function definitions, not just member enumeration."""
+
+    INTERFACE_SOURCE = """\
+interface Shape {
+    double area();
+    String name();
+}
+"""
+
+    def test_interface_methods_produce_func_labels(self):
+        """Interface method declarations should emit LABEL instructions for function defs."""
+        ir = _parse_java(self.INTERFACE_SOURCE)
+        labels = [inst.label for inst in ir if inst.opcode == Opcode.LABEL]
+        func_labels = [l for l in labels if "func_" in l]
+        assert any(
+            "area" in l for l in func_labels
+        ), f"Expected a function label for 'area', got labels: {func_labels}"
+        assert any(
+            "name" in l for l in func_labels
+        ), f"Expected a function label for 'name', got labels: {func_labels}"
+
+    def test_interface_methods_seed_return_types(self):
+        """Interface methods should seed return types into the type environment builder."""
+        ir, type_builder = _parse_java_with_types(self.INTERFACE_SOURCE)
+        func_return_types = type_builder.func_return_types
+        area_entries = {k: v for k, v in func_return_types.items() if "area" in k}
+        name_entries = {k: v for k, v in func_return_types.items() if "name" in k}
+        assert (
+            len(area_entries) >= 1
+        ), f"Expected return type seeded for 'area', got: {func_return_types}"
+        assert (
+            len(name_entries) >= 1
+        ), f"Expected return type seeded for 'name', got: {func_return_types}"
+
+    def test_interface_stored_as_class_ref(self):
+        """Interface should be stored as a class reference, not a NEW_OBJECT."""
+        ir = _parse_java(self.INTERFACE_SOURCE)
+        consts = _find_all(ir, Opcode.CONST)
+        class_refs = [c for c in consts if "<class:" in str(c.operands)]
+        assert any(
+            "Shape" in str(c.operands) for c in class_refs
+        ), f"Expected class ref for Shape, got consts: {[c.operands for c in consts]}"
+        # Should NOT use NEW_OBJECT for interfaces
+        new_objs = _find_all(ir, Opcode.NEW_OBJECT)
+        iface_objs = [n for n in new_objs if "interface:" in str(n.operands)]
+        assert (
+            len(iface_objs) == 0
+        ), "Interface should not use NEW_OBJECT enumeration pattern"

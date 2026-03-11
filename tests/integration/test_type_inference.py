@@ -2772,3 +2772,23 @@ class TestBoundedTypeVarIntegration:
         list_t = ParameterizedType("List", (t_num,))
         # List[Int] <: List[T: Number] because Int <: T: Number (bound=Number)
         assert graph.is_subtype_expr(inferred, list_t)
+
+
+class TestJavaInterfaceTypeInference:
+    """Java interface methods should have return types available in func_return_types."""
+
+    def test_interface_method_return_type_seeded(self):
+        """Interface method with declared return type seeds func_return_types."""
+        _instructions, env = _lower_and_infer(
+            """\
+interface Calculator {
+    int compute(int x);
+}
+""",
+            "java",
+        )
+        # Find func_signatures entries containing "compute"
+        compute_sigs = {k: v for k, v in env.func_signatures.items() if "compute" in k}
+        assert (
+            len(compute_sigs) >= 1
+        ), f"Expected signature for 'compute', got: {env.func_signatures}"
