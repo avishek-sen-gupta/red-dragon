@@ -164,6 +164,7 @@ class _InferenceContext:
         default_factory=dict
     )
     register_source_var: dict[str, str] = field(default_factory=dict)
+    interface_implementations: dict[str, tuple[str, ...]] = field(default_factory=dict)
     _seeded_var_names: frozenset[str] = field(default_factory=frozenset)
 
     def store_var_type(self, name: str, type_expr: TypeExpr) -> None:
@@ -330,6 +331,9 @@ def infer_types(
         func_param_types={
             k: [(pn, _resolve_alias(pt, aliases)) for pn, pt in v]
             for k, v in type_env_builder.func_param_types.items()
+        },
+        interface_implementations={
+            k: tuple(v) for k, v in type_env_builder.interface_implementations.items()
         },
         _seeded_var_names=frozenset(type_env_builder.var_types.keys()),
     )
@@ -680,6 +684,16 @@ def _infer_call_method(
         if ret_type:
             ctx.register_types[inst.result_reg] = ret_type
             return
+    # Interface chain walk: if class implements interfaces, check their method types
+    class_name_str = str(class_name) if class_name else ""
+    if class_name_str in ctx.interface_implementations:
+        for iface in ctx.interface_implementations[class_name_str]:
+            iface_type = scalar(iface)
+            if iface_type in ctx.class_method_types:
+                ret = ctx.class_method_types[iface_type].get(method_name, UNKNOWN)
+                if ret:
+                    ctx.register_types[inst.result_reg] = ret
+                    return
     # Fallback: try func_return_types for unique method names
     if method_name in ctx.func_return_types:
         ctx.register_types[inst.result_reg] = ctx.func_return_types[method_name]
