@@ -13,7 +13,7 @@
 |----------|-----------|----|----|-----|-------------|
 | Python | 76 | 0 | 9 | ~25 | Match statement sub-patterns |
 | JavaScript | 63 | 0 | 5 | ~30 | Anonymous `class`, `decorator` |
-| TypeScript | ~74 | 0 | 14 | ~35 | Inherits JS gaps + `decorator`, `type_assertion` |
+| TypeScript | ~74 | 0 | 11 | ~35 | Inherits JS gaps + `decorator`, `type_assertion` |
 | Java | 64 | 0 | 11 | 14 | All P0 gaps resolved |
 | C# | 84 | 0 | 27 | 16+ | All P0 gaps resolved |
 | Kotlin | 58 | 0 | 14 | 13+ | All P0 gaps resolved |
@@ -94,9 +94,9 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 |-----------|-------------|--------|
 | *(inherits 7 JS P1s above)* | | |
 | `type_assertion` | `<Type>expr` -- angle-bracket type assertion | DONE |
-| `instantiation_expression` | `fn<string>` -- instantiation without calling | TODO |
-| `ambient_declaration` | `declare module 'x' { ... }` | TODO |
-| `function_signature` | Overload signatures | TODO |
+| `instantiation_expression` | `fn<string>` -- instantiation without calling | DONE (lower function child, discard type_arguments — type erasure) |
+| `ambient_declaration` | `declare module 'x' { ... }` | DONE (no-op, purely type-level) |
+| `function_signature` | Overload signatures | DONE (no-op, implementation follows as function_declaration) |
 | `method_signature` | Interface method signatures | TODO (ADR-100) |
 | `property_signature` | Interface property signatures | DONE (ADR-101, emits CONST+STORE_VAR+seed) |
 | `call_signature` | `(x: number): void` in interfaces | DONE (handled by `_lower_ts_interface_method`, ADR-101) |

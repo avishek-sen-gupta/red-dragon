@@ -39,6 +39,12 @@ class TypeScriptNodeType:
     PUBLIC_FIELD_DEFINITION = "public_field_definition"
     ABSTRACT_METHOD_SIGNATURE = "abstract_method_signature"
     INTERNAL_MODULE = "internal_module"
+    FUNCTION_SIGNATURE = "function_signature"
+    AMBIENT_DECLARATION = "ambient_declaration"
+
+    # ── expression node types (TS-specific) ────────────────────────
+
+    INSTANTIATION_EXPRESSION = "instantiation_expression"
 
     # ── class body member node types ─────────────────────────────
 
