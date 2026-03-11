@@ -699,3 +699,119 @@ interface Config {
         ), f"Expected method 'compute', got: {store_names}"
         # name is a property_signature → lowered as STORE_VAR
         assert "name" in store_names, f"Expected property 'name', got: {store_names}"
+
+
+class TestFunctionSignature:
+    """function_signature (overload declarations) should emit no IR."""
+
+    def test_overload_signatures_no_symbolic(self):
+        ir = _parse_ts("""
+            function add(a: number, b: number): number;
+            function add(a: string, b: string): string;
+            function add(a: any, b: any): any { return a + b; }
+            """)
+        symbolics = [
+            s
+            for s in ir
+            if s.opcode == Opcode.SYMBOLIC and "function_signature" in str(s.operands)
+        ]
+        assert (
+            len(symbolics) == 0
+        ), f"function_signature should not produce SYMBOLIC: {symbolics}"
+
+    def test_overload_implementation_still_lowered(self):
+        ir = _parse_ts("""
+            function greet(name: string): string;
+            function greet(name: string, greeting: string): string;
+            function greet(name: any, greeting?: any): any { return name; }
+            """)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        store_names = [s.operands[0] for s in stores if s.operands]
+        assert (
+            "greet" in store_names
+        ), f"Expected implementation 'greet' lowered, got: {store_names}"
+
+
+class TestAmbientDeclaration:
+    """ambient_declaration (declare ...) should emit no IR."""
+
+    def test_declare_const_no_symbolic(self):
+        ir = _parse_ts("declare const DEBUG: boolean;")
+        symbolics = [
+            s
+            for s in ir
+            if s.opcode == Opcode.SYMBOLIC and "ambient_declaration" in str(s.operands)
+        ]
+        assert (
+            len(symbolics) == 0
+        ), f"ambient_declaration should not produce SYMBOLIC: {symbolics}"
+
+    def test_declare_function_no_symbolic(self):
+        ir = _parse_ts("declare function log(msg: string): void;")
+        symbolics = [
+            s
+            for s in ir
+            if s.opcode == Opcode.SYMBOLIC and "ambient_declaration" in str(s.operands)
+        ]
+        assert (
+            len(symbolics) == 0
+        ), f"ambient_declaration should not produce SYMBOLIC: {symbolics}"
+
+    def test_declare_module_no_symbolic(self):
+        ir = _parse_ts("declare module 'lodash' { export function foo(): void; }")
+        symbolics = [
+            s
+            for s in ir
+            if s.opcode == Opcode.SYMBOLIC and "ambient_declaration" in str(s.operands)
+        ]
+        assert (
+            len(symbolics) == 0
+        ), f"ambient_declaration should not produce SYMBOLIC: {symbolics}"
+
+
+class TestInstantiationExpression:
+    """instantiation_expression: fn<Type> should lower the function ref, discard type args."""
+
+    def test_simple_identifier(self):
+        ir = _parse_ts("""
+            function identity(x: any): any { return x; }
+            const strId = identity<string>;
+            """)
+        symbolics = [
+            s
+            for s in ir
+            if s.opcode == Opcode.SYMBOLIC
+            and "instantiation_expression" in str(s.operands)
+        ]
+        assert (
+            len(symbolics) == 0
+        ), f"instantiation_expression should not produce SYMBOLIC: {symbolics}"
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        store_names = [s.operands[0] for s in stores if s.operands]
+        assert "strId" in store_names, f"Expected 'strId' binding, got: {store_names}"
+
+    def test_loads_function_ref(self):
+        ir = _parse_ts("""
+            function identity(x: any): any { return x; }
+            const f = identity<number>;
+            """)
+        loads = _find_all(ir, Opcode.LOAD_VAR)
+        load_names = [l.operands[0] for l in loads if l.operands]
+        assert (
+            "identity" in load_names
+        ), f"Expected LOAD_VAR for 'identity', got: {load_names}"
+
+    def test_member_expression(self):
+        ir = _parse_ts("""
+            const obj = { method: function(x: any): any { return x; } };
+            const f = obj.method<string>;
+            """)
+        symbolics = [
+            s
+            for s in ir
+            if s.opcode == Opcode.SYMBOLIC
+            and "instantiation_expression" in str(s.operands)
+        ]
+        assert (
+            len(symbolics) == 0
+        ), f"instantiation_expression should not produce SYMBOLIC: {symbolics}"
