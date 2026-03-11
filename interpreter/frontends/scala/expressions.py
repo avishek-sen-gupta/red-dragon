@@ -13,6 +13,7 @@ from interpreter.frontends.common.expressions import (
     extract_call_args,
 )
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT
+from interpreter.type_expr import ScalarType
 
 
 def lower_scala_call(ctx: TreeSitterEmitContext, node) -> str:
@@ -407,7 +408,7 @@ def lower_new_expr(ctx: TreeSitterEmitContext, node) -> str:
         operands=[type_name],
         node=node,
     )
-    ctx.seed_register_type(reg, type_name)
+    ctx.seed_register_type(reg, ScalarType(type_name))
     return reg
 
 
