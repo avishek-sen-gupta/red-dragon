@@ -15,6 +15,7 @@ class TypeScriptNodeType:
     AS_EXPRESSION = "as_expression"
     NON_NULL_EXPRESSION = "non_null_expression"
     SATISFIES_EXPRESSION = "satisfies_expression"
+    TYPE_ASSERTION = "type_assertion"
 
     # ── function / arrow node types (shared with JS, overridden) ─
 

@@ -41,6 +41,7 @@ class GoNodeType:
     LITERAL_VALUE = "literal_value"
     KEYED_ELEMENT = "keyed_element"
     LITERAL_ELEMENT = "literal_element"
+    VARIADIC_ARGUMENT = "variadic_argument"
 
     # -- Declarations ---------------------------------------------------------
     FUNCTION_DECLARATION = "function_declaration"

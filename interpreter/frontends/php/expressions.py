@@ -785,3 +785,14 @@ def lower_php_error_suppression(ctx: TreeSitterEmitContext, node) -> str:
         if named_children
         else lower_const_literal(ctx, node)
     )
+
+
+def lower_php_sequence_expression(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower comma expression ($a = 1, $b = 2) -> evaluate all, return last."""
+    children = [c for c in node.children if c.is_named]
+    if not children:
+        return lower_const_literal(ctx, node)
+    last_reg = children[0]
+    for child in children:
+        last_reg = ctx.lower_expr(child)
+    return last_reg

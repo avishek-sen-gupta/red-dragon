@@ -115,6 +115,7 @@ class RustFrontend(BaseFrontend):
             RustNodeType.GENERIC_FUNCTION: rust_expr.lower_generic_function,
             RustNodeType.LET_CONDITION: rust_expr.lower_let_condition,
             RustNodeType.STRUCT_PATTERN: rust_expr.lower_struct_pattern_expr,
+            RustNodeType.MUT_PATTERN: common_expr.lower_paren,
         }
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:
@@ -144,4 +145,7 @@ class RustFrontend(BaseFrontend):
             RustNodeType.MOD_ITEM: rust_decl.lower_mod_item,
             RustNodeType.EXTERN_CRATE_DECLARATION: lambda ctx, node: None,
             RustNodeType.FUNCTION_SIGNATURE_ITEM: rust_decl.lower_function_signature,
+            RustNodeType.FOREIGN_MOD_ITEM: rust_decl.lower_foreign_mod_item,
+            RustNodeType.UNION_ITEM: rust_decl.lower_struct_def,
+            RustNodeType.MACRO_DEFINITION: lambda ctx, node: None,
         }
