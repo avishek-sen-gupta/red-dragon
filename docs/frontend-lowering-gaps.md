@@ -12,8 +12,8 @@
 | Language | Dispatched | P0 | P1 | P2 | Biggest Risk |
 |----------|-----------|----|----|-----|-------------|
 | Python | 76 | 0 | 9 | ~25 | Match statement sub-patterns |
-| JavaScript | 63 | 0 | 7 | ~30 | `optional_chain`, anonymous `class`, `decorator` |
-| TypeScript | ~74 | 0 | 18 | ~35 | Inherits JS gaps + `decorator`, `type_assertion` |
+| JavaScript | 63 | 0 | 5 | ~30 | Anonymous `class`, `decorator` |
+| TypeScript | ~74 | 0 | 14 | ~35 | Inherits JS gaps + `decorator`, `type_assertion` |
 | Java | 64 | 0 | 11 | 14 | All P0 gaps resolved |
 | C# | 84 | 0 | 27 | 16+ | All P0 gaps resolved |
 | Kotlin | 58 | 0 | 14 | 13+ | All P0 gaps resolved |
@@ -83,9 +83,9 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 |-----------|-------------|--------|
 | `class` | Anonymous class expression: `const Foo = class { ... }` | TODO |
 | `decorator` | `@logged class Foo {}` -- TC39 decorators | TODO |
-| `optional_chain` | `obj?.prop` -- optional chaining operator | TODO |
+| `optional_chain` | `obj?.prop` -- optional chaining operator | DONE (consumed by parent member/subscript handlers, ADR-101) |
 | `meta_property` | `new.target` or `import.meta` | DONE |
-| `computed_property_name` | `{ [expr]: value }` in object literals | TODO |
+| `computed_property_name` | `{ [expr]: value }` in object literals | DONE |
 | `using_declaration` | `using x = getResource()` -- explicit resource management | TODO |
 | `rest_pattern` | `const [first, ...rest] = arr` -- rest elements | TODO |
 
@@ -98,10 +98,10 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 | `ambient_declaration` | `declare module 'x' { ... }` | TODO |
 | `function_signature` | Overload signatures | TODO |
 | `method_signature` | Interface method signatures | TODO (ADR-100) |
-| `property_signature` | Interface property signatures | TODO (ADR-100) |
-| `call_signature` | `(x: number): void` in interfaces | TODO (ADR-100) |
-| `construct_signature` | `new (x: number): Foo` in interfaces | TODO (ADR-100) |
-| `index_signature` | `[key: string]: number` | TODO (ADR-100) |
+| `property_signature` | Interface property signatures | DONE (ADR-101, emits CONST+STORE_VAR+seed) |
+| `call_signature` | `(x: number): void` in interfaces | DONE (handled by `_lower_ts_interface_method`, ADR-101) |
+| `construct_signature` | `new (x: number): Foo` in interfaces | DONE (handled by `_lower_ts_interface_method`, ADR-101) |
+| `index_signature` | `[key: string]: number` | No-op (no IR representation, ADR-101) |
 | `import_alias` | `import Foo = Bar.Baz` | TODO |
 | `import_require_clause` | `import x = require('y')` | TODO |
 

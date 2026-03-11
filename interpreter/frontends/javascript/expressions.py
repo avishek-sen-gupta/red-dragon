@@ -155,7 +155,17 @@ def lower_js_object_literal(ctx: TreeSitterEmitContext, node) -> str:
             key_node = child.child_by_field_name("key")
             val_node = child.child_by_field_name("value")
             if key_node and val_node:
-                key_reg = lower_const_literal(ctx, key_node)
+                if key_node.type == JSN.COMPUTED_PROPERTY_NAME:
+                    inner_expr = next(
+                        (c for c in key_node.children if c.is_named), None
+                    )
+                    key_reg = (
+                        ctx.lower_expr(inner_expr)
+                        if inner_expr
+                        else lower_const_literal(ctx, key_node)
+                    )
+                else:
+                    key_reg = lower_const_literal(ctx, key_node)
                 val_reg = ctx.lower_expr(val_node)
                 ctx.emit(
                     Opcode.STORE_INDEX,
