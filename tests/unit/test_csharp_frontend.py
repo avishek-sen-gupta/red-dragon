@@ -521,21 +521,41 @@ class C {
 
 
 class TestCSharpInterfaceDeclaration:
-    def test_interface_emits_new_object(self):
+    def test_interface_emits_class_block(self):
+        """Interface lowered as CLASS block with method defs (not NEW_OBJECT)."""
         source = "interface IShape { void Draw(); }"
         ir = _parse_and_lower(source)
-        new_objs = _find_all(ir, Opcode.NEW_OBJECT)
-        assert any("interface:IShape" in str(inst.operands) for inst in new_objs)
+        consts = _find_all(ir, Opcode.CONST)
+        assert any(
+            "<class:" in str(c.operands) and "IShape" in str(c.operands) for c in consts
+        )
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("IShape" in inst.operands for inst in stores)
+        labels = [inst.label for inst in ir if inst.opcode == Opcode.LABEL]
+        assert any("func_" in l and "Draw" in l for l in labels)
 
-    def test_interface_with_multiple_members(self):
+    def test_interface_methods_produce_func_labels(self):
         source = "interface IAnimal { void Speak(); string Name(); }"
         ir = _parse_and_lower(source)
-        new_objs = _find_all(ir, Opcode.NEW_OBJECT)
-        assert any("interface:IAnimal" in str(inst.operands) for inst in new_objs)
-        store_indexes = _find_all(ir, Opcode.STORE_INDEX)
-        assert len(store_indexes) >= 2
+        labels = [inst.label for inst in ir if inst.opcode == Opcode.LABEL]
+        func_labels = [l for l in labels if "func_" in l]
+        assert any("Speak" in l for l in func_labels)
+        assert any("Name" in l for l in func_labels)
+
+    def test_interface_methods_seed_return_types(self):
+        source = "interface ICalc { int Compute(int x); string Describe(); }"
+        ir, type_builder = _parse_csharp_with_types(source)
+        func_return_types = type_builder.func_return_types
+        compute_entries = {k: v for k, v in func_return_types.items() if "Compute" in k}
+        describe_entries = {
+            k: v for k, v in func_return_types.items() if "Describe" in k
+        }
+        assert (
+            len(compute_entries) >= 1
+        ), f"Expected return type for 'Compute', got: {func_return_types}"
+        assert (
+            len(describe_entries) >= 1
+        ), f"Expected return type for 'Describe', got: {func_return_types}"
 
 
 class TestCSharpPropertyDeclaration:
