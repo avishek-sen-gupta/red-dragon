@@ -2794,6 +2794,27 @@ interface Calculator {
         ), f"Expected signature for 'compute', got: {env.func_signatures}"
 
 
+class TestGoInterfaceTypeInference:
+    """Go interface methods should have return types available in func_signatures."""
+
+    def test_interface_method_return_type_seeded(self):
+        """Interface method with declared return type seeds func_signatures."""
+        _instructions, env = _lower_and_infer(
+            """\
+package main
+
+type Shape interface {
+    Area() float64
+}
+""",
+            "go",
+        )
+        area_sigs = {k: v for k, v in env.func_signatures.items() if "Area" in k}
+        assert (
+            len(area_sigs) >= 1
+        ), f"Expected signature for 'Area', got: {env.func_signatures}"
+
+
 class TestKotlinInterfaceTypeInference:
     """Kotlin interface methods should have return types available in func_signatures."""
 
