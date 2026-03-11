@@ -1949,3 +1949,45 @@ This enables covariance checks like `Dog <: Comparable` in type narrowing.
 - **Alternative: Store interface method types in a new `interface_method_types` dict** — rejected in favour of reusing `class_method_types` keyed by interface name, since the TypeGraph already treats interfaces as types.
 
 **Status:** Phase 1 (5 frontends) and Phase 2 (chain walk + seeding) complete. Phase 3 (TypeGraph extension) deferred — `is_subtype_expr()` has no production consumer yet. Tracked as red-dragon-gsl.
+
+---
+
+### ADR-101: JS/TS frontend lowering — optional_chain, computed_property_name, interface signatures (2026-03-11)
+
+**Context:** The frontend lowering gap analysis identified 5 P1 gaps in JS/TS that affect common modern code patterns: `optional_chain` (`?.`), `computed_property_name` (`{ [expr]: value }`), and three TS interface signature types (`property_signature`, `call_signature`/`construct_signature`, `index_signature`). These gaps produce SYMBOLIC on frequently encountered code, and the interface signatures directly complement the ADR-100 chain walk.
+
+**Decision:**
+
+#### 1. `optional_chain` — already consumed by parent handlers
+
+Tree-sitter parses `obj?.prop` as a `member_expression` with an `optional_chain` child node between object and property. The existing `lower_js_attribute` and `lower_js_subscript` extract the `object` and `property`/`index` fields, which are present regardless of `?.`. The `optional_chain` node is an unnamed child that is naturally skipped.
+
+**No code changes needed.** Null-check IR (e.g., `BRANCH_IF` on null before `LOAD_FIELD`) was considered and rejected: the symbolic VM does not model null semantics, so the additional IR would add complexity with no analysis benefit. Close the gap, add tests to lock behaviour.
+
+#### 2. `computed_property_name` — evaluate expression, use STORE_INDEX
+
+In object literal `pair` handling, when the `key` field is a `computed_property_name` node (instead of `property_identifier`), evaluate the inner expression via `ctx.lower_expr()` and use the resulting register as the key for `STORE_INDEX`. The existing code path already uses `STORE_INDEX`; the only change is evaluating the key dynamically instead of as a const literal.
+
+**Files:** `javascript/expressions.py` (~5 lines in `lower_js_object_literal`)
+
+#### 3. `property_signature` — extract name + type, seed for inference
+
+Extract property name and type annotation from `property_signature` nodes inside interface bodies. Emit as `STORE_VAR` with type seeding inside the class label block, making the property type available for ADR-100 chain walk resolution.
+
+**Files:** `typescript.py` (~15 lines, new `_lower_ts_interface_property` function + dispatch in `lower_interface_decl`)
+
+#### 4. `call_signature` / `construct_signature` — already handled
+
+These are already dispatched to `_lower_ts_interface_method` in `lower_interface_decl` (lines 157-160). `call_signature` uses synthetic name `__call`, `construct_signature` uses `__new` (derived from `name` field fallback). No additional work needed.
+
+#### 5. `index_signature` — documented no-op
+
+`[key: string]: number` defines a type-level wildcard — "any subscript access returns type X." There is no IR representation for default-index-type semantics. The inference engine would need a new concept (default return type for `LOAD_INDEX` on a given class) which is not justified by the frequency of this pattern. Treat as a no-op; skip silently in `lower_interface_decl`.
+
+**Trade-offs considered:**
+
+- **Optional chain null-check IR:** Rejected. Would generate branches the VM can't evaluate meaningfully. The data flow (which variable flows where) is preserved without null checks.
+- **Index signature as default type:** Would require a new inference concept (`default_index_type` per class). Deferred until a concrete need arises.
+- **Property signature as STORE_FIELD:** Considered emitting `STORE_FIELD` on a class object, but `STORE_VAR` inside the class label block is consistent with how method signatures are lowered, and the inference engine walks `class_method_types` which is populated from function labels within class blocks.
+
+**Status:** Implementing. Tracked as red-dragon-gvu.2.

@@ -1005,3 +1005,75 @@ for (let i = 0; i < 3; i = i + 1) {
         assert (
             len(i_stores) >= 2
         ), f"Expected >= 2 STORE_VAR for 'i' (init + update), got {len(i_stores)}"
+
+
+class TestOptionalChain:
+    """optional_chain (?.) is consumed by parent member/subscript handlers (ADR-101)."""
+
+    def test_optional_chain_property(self):
+        """obj?.prop should emit LOAD_FIELD, not SYMBOLIC."""
+        ir = _parse_js("const x = obj?.prop;")
+        loads = _find_all(ir, Opcode.LOAD_FIELD)
+        assert any(
+            "prop" in inst.operands for inst in loads
+        ), f"Expected LOAD_FIELD for 'prop', got: {[i.operands for i in loads]}"
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "optional_chain" in str(s.operands) for s in symbolics
+        ), "optional_chain should not produce SYMBOLIC"
+
+    def test_optional_chain_method_call(self):
+        """obj?.method(1) should emit CALL_METHOD."""
+        ir = _parse_js("const y = obj?.method(1);")
+        calls = _find_all(ir, Opcode.CALL_METHOD)
+        assert any(
+            "method" in inst.operands for inst in calls
+        ), f"Expected CALL_METHOD for 'method', got: {[i.operands for i in calls]}"
+
+    def test_optional_chain_index(self):
+        """obj?.[0] should emit LOAD_INDEX."""
+        ir = _parse_js("const z = obj?.[0];")
+        loads = _find_all(ir, Opcode.LOAD_INDEX)
+        assert len(loads) >= 1, f"Expected LOAD_INDEX, got opcodes: {_opcodes(ir)}"
+
+    def test_optional_chain_nested(self):
+        """a?.b?.c should emit two LOAD_FIELDs."""
+        ir = _parse_js("const w = a?.b?.c;")
+        loads = _find_all(ir, Opcode.LOAD_FIELD)
+        field_names = [inst.operands[1] for inst in loads if len(inst.operands) >= 2]
+        assert "b" in field_names, f"Expected LOAD_FIELD for 'b', got: {field_names}"
+        assert "c" in field_names, f"Expected LOAD_FIELD for 'c', got: {field_names}"
+
+
+class TestComputedPropertyName:
+    """computed_property_name ({ [expr]: value }) evaluates expression as key (ADR-101)."""
+
+    def test_computed_property_identifier_key(self):
+        """{ [key]: 1 } should evaluate 'key' via LOAD_VAR, not as const literal."""
+        ir = _parse_js("const obj = { [key]: 1 };")
+        loads = _find_all(ir, Opcode.LOAD_VAR)
+        assert any(
+            "key" in inst.operands for inst in loads
+        ), f"Expected LOAD_VAR for 'key', got: {[i.operands for i in loads]}"
+        stores = _find_all(ir, Opcode.STORE_INDEX)
+        assert (
+            len(stores) >= 1
+        ), f"Expected STORE_INDEX for computed key, got: {_opcodes(ir)}"
+
+    def test_computed_property_expression_key(self):
+        """{ [1 + 2]: 'x' } should evaluate binary expression as key."""
+        ir = _parse_js("const obj = { [1 + 2]: 'x' };")
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any(
+            "+" in inst.operands for inst in binops
+        ), f"Expected BINOP with '+', got: {[i.operands for i in binops]}"
+        stores = _find_all(ir, Opcode.STORE_INDEX)
+        assert len(stores) >= 1, f"Expected STORE_INDEX for computed key"
+
+    def test_mixed_computed_and_static_keys(self):
+        """{ [key]: 1, normal: 2 } should handle both key types."""
+        ir = _parse_js("const obj = { [key]: 1, normal: 2 };")
+        stores = _find_all(ir, Opcode.STORE_INDEX)
+        assert (
+            len(stores) >= 2
+        ), f"Expected >= 2 STORE_INDEX (computed + static), got {len(stores)}"
