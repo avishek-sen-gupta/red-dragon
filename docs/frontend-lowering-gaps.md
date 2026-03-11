@@ -12,7 +12,7 @@
 | Language | Dispatched | P0 | P1 | P2 | Biggest Risk |
 |----------|-----------|----|----|-----|-------------|
 | Python | 76 | 0 | 9 | ~25 | Match statement sub-patterns |
-| JavaScript | 63 | 0 | 5 | ~30 | Anonymous `class`, `decorator` |
+| JavaScript | 63 | 0 | 4 | ~30 | `decorator` |
 | TypeScript | ~74 | 0 | 11 | ~35 | Inherits JS gaps + `decorator`, `type_assertion` |
 | Java | 64 | 0 | 11 | 14 | All P0 gaps resolved |
 | C# | 84 | 0 | 27 | 16+ | All P0 gaps resolved |
@@ -81,7 +81,7 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 ### JavaScript (7 P1)
 | Node Type | Description | Status |
 |-----------|-------------|--------|
-| `class` | Anonymous class expression: `const Foo = class { ... }` | TODO |
+| `class` | Anonymous class expression: `const Foo = class { ... }` | DONE (class expression handler + registry alias for anonymous names) |
 | `decorator` | `@logged class Foo {}` -- TC39 decorators | TODO |
 | `optional_chain` | `obj?.prop` -- optional chaining operator | DONE (consumed by parent member/subscript handlers, ADR-101) |
 | `meta_property` | `new.target` or `import.meta` | DONE |
