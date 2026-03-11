@@ -1152,3 +1152,90 @@ class C {
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
         assert any("y" in inst.operands for inst in stores)
+
+
+class TestCSharpDefaultExpression:
+    def test_default_no_symbolic(self):
+        """default should not produce SYMBOLIC fallthrough."""
+        ir = _parse_and_lower("int x = default;")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("default_expression" in str(inst.operands) for inst in symbolics)
+
+    def test_default_emits_const(self):
+        """default expression should emit a CONST."""
+        ir = _parse_and_lower("int x = default;")
+        consts = _find_all(ir, Opcode.CONST)
+        assert len(consts) >= 1
+
+    def test_default_stored(self):
+        """default expression should be stored to a variable."""
+        ir = _parse_and_lower("int x = default;")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+
+class TestCSharpSizeofExpression:
+    def test_sizeof_no_symbolic(self):
+        """sizeof(int) should not produce SYMBOLIC fallthrough."""
+        ir = _parse_and_lower("int x = sizeof(int);")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("sizeof_expression" in str(inst.operands) for inst in symbolics)
+
+    def test_sizeof_emits_const(self):
+        """sizeof(int) should emit a CONST."""
+        ir = _parse_and_lower("int x = sizeof(int);")
+        consts = _find_all(ir, Opcode.CONST)
+        assert len(consts) >= 1
+
+
+class TestCSharpCheckedExpression:
+    def test_checked_no_symbolic(self):
+        """checked(1 + 2) should not produce SYMBOLIC fallthrough."""
+        ir = _parse_and_lower("int x = checked(1 + 2);")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("checked_expression" in str(inst.operands) for inst in symbolics)
+
+    def test_checked_lowers_inner_expr(self):
+        """checked(1 + 2) should lower the inner expression (1 + 2)."""
+        ir = _parse_and_lower("int x = checked(1 + 2);")
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any("+" in inst.operands for inst in binops)
+
+
+class TestCSharpFileScopedNamespace:
+    def test_file_scoped_ns_no_symbolic(self):
+        """namespace Foo; should not produce SYMBOLIC."""
+        ir = _parse_and_lower("""\
+namespace Foo;
+class Bar {
+  int x = 42;
+}""")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "file_scoped_namespace_declaration" in str(inst.operands)
+            for inst in symbolics
+        )
+
+    def test_file_scoped_ns_body_lowered(self):
+        """Declarations inside file-scoped namespace should be lowered."""
+        ir = _parse_and_lower("""\
+namespace Foo;
+class Bar {
+  int x = 42;
+}""")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("Bar" in inst.operands for inst in stores)
+
+
+class TestCSharpRangeExpression:
+    def test_range_no_symbolic(self):
+        """0..5 should not produce SYMBOLIC."""
+        ir = _parse_and_lower("var r = 0..5;")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("range_expression" in str(inst.operands) for inst in symbolics)
+
+    def test_range_produces_call(self):
+        """0..5 should produce a CALL_FUNCTION for range."""
+        ir = _parse_and_lower("var r = 0..5;")
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("range" in inst.operands for inst in calls)

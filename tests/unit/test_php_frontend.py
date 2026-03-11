@@ -1258,3 +1258,85 @@ class TestPhpConstDeclaration:
         ir = _parse_and_lower("<?php const X = 42; ?>")
         consts = _find_all(ir, Opcode.CONST)
         assert any("42" in inst.operands for inst in consts)
+
+
+class TestPhpErrorSuppression:
+    def test_error_suppression_no_symbolic(self):
+        """@expr should not produce SYMBOLIC fallthrough."""
+        ir = _parse_and_lower("<?php $x = @strlen('hello'); ?>")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "error_suppression_expression" in str(inst.operands) for inst in symbolics
+        )
+
+    def test_error_suppression_lowers_inner_call(self):
+        """@strlen('hello') should still emit a CALL_FUNCTION for strlen."""
+        ir = _parse_and_lower("<?php $x = @strlen('hello'); ?>")
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("strlen" in str(inst.operands) for inst in calls)
+
+
+class TestPhpExitStatement:
+    def test_exit_no_symbolic(self):
+        """exit(0) should not produce SYMBOLIC fallthrough."""
+        ir = _parse_and_lower("<?php exit(0); ?>")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("exit_statement" in str(inst.operands) for inst in symbolics)
+
+
+class TestPhpDeclareStatement:
+    def test_declare_no_symbolic(self):
+        """declare(strict_types=1) should not produce SYMBOLIC fallthrough."""
+        ir = _parse_and_lower("<?php declare(strict_types=1); ?>")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("declare_statement" in str(inst.operands) for inst in symbolics)
+
+
+class TestPhpUnsetStatement:
+    def test_unset_no_symbolic(self):
+        """unset($x) should not produce SYMBOLIC fallthrough."""
+        ir = _parse_and_lower("<?php $x = 1; unset($x); ?>")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unset_statement" in str(inst.operands) for inst in symbolics)
+
+
+class TestPHPSequenceExpression:
+    def test_sequence_no_symbolic(self):
+        """$a = 1, $b = 2 in for should not produce SYMBOLIC."""
+        ir = _parse_and_lower(
+            "<?php for ($i = 0, $j = 10; $i < 5; $i++, $j--) { $x = $i; } ?>"
+        )
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "sequence_expression" in str(inst.operands) for inst in symbolics
+        )
+
+
+class TestPHPIncludeOnceExpression:
+    def test_include_once_no_symbolic(self):
+        """include_once should not produce SYMBOLIC fallthrough."""
+        ir = _parse_and_lower("<?php include_once 'file.php'; ?>")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "include_once_expression" in str(inst.operands) for inst in symbolics
+        )
+
+    def test_include_once_produces_call(self):
+        """include_once should emit a CALL_FUNCTION."""
+        ir = _parse_and_lower("<?php include_once 'file.php'; ?>")
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("include_once" in inst.operands for inst in calls)
+
+
+class TestPHPRequireExpression:
+    def test_require_no_symbolic(self):
+        """require should not produce SYMBOLIC fallthrough."""
+        ir = _parse_and_lower("<?php require 'file.php'; ?>")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("require_expression" in str(inst.operands) for inst in symbolics)
+
+    def test_require_produces_call(self):
+        """require should emit a CALL_FUNCTION."""
+        ir = _parse_and_lower("<?php require 'file.php'; ?>")
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("require" in inst.operands for inst in calls)

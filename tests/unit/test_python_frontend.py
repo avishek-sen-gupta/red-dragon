@@ -1256,3 +1256,19 @@ class TestPythonDottedName:
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
         loads = _find_all(instructions, Opcode.LOAD_FIELD)
         assert len(loads) >= 1
+
+
+class TestPythonFutureImportStatement:
+    def test_future_import_no_symbolic(self):
+        """from __future__ import annotations should not produce SYMBOLIC."""
+        ir = _parse_python("from __future__ import annotations\nx = 42")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "future_import_statement" in str(inst.operands) for inst in symbolics
+        )
+
+    def test_future_import_does_not_block(self):
+        """Code after future import should still execute."""
+        ir = _parse_python("from __future__ import annotations\nx = 42")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
