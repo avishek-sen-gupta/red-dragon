@@ -97,11 +97,11 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 | `instantiation_expression` | `fn<string>` -- instantiation without calling | TODO |
 | `ambient_declaration` | `declare module 'x' { ... }` | TODO |
 | `function_signature` | Overload signatures | TODO |
-| `method_signature` | Interface method signatures | TODO |
-| `property_signature` | Interface property signatures | TODO |
-| `call_signature` | `(x: number): void` in interfaces | TODO |
-| `construct_signature` | `new (x: number): Foo` in interfaces | TODO |
-| `index_signature` | `[key: string]: number` | TODO |
+| `method_signature` | Interface method signatures | TODO (ADR-100) |
+| `property_signature` | Interface property signatures | TODO (ADR-100) |
+| `call_signature` | `(x: number): void` in interfaces | TODO (ADR-100) |
+| `construct_signature` | `new (x: number): Foo` in interfaces | TODO (ADR-100) |
+| `index_signature` | `[key: string]: number` | TODO (ADR-100) |
 | `import_alias` | `import Foo = Bar.Baz` | TODO |
 | `import_require_clause` | `import x = require('y')` | TODO |
 
