@@ -1047,3 +1047,54 @@ x match {
         assert not any(
             "alternative_pattern" in str(inst.operands) for inst in symbolics
         )
+
+
+class TestScalaArrayIndexing:
+    """Scala arr(i) uses CALL_FUNCTION (syntactically ambiguous with function calls).
+
+    The VM resolves arr(i) to native indexing when the target is a list.
+    arr(i) = 5 on the LHS of assignment emits STORE_INDEX at the frontend level.
+    """
+
+    def test_arr_read_emits_call_function(self):
+        """arr(i) is syntactically identical to f(i) in Scala — emits CALL_FUNCTION."""
+        ir = _parse_scala("""\
+object M {
+    val arr = Array(1, 2, 3)
+    var i = 1
+    val x = arr(i)
+}""")
+        calls = [inst for inst in ir if inst.opcode == Opcode.CALL_FUNCTION]
+        arr_calls = [c for c in calls if c.operands and c.operands[0] == "arr"]
+        assert (
+            len(arr_calls) >= 1
+        ), "Expected CALL_FUNCTION for arr(i) — VM resolves to indexing at runtime"
+
+    def test_arr_write_emits_store_index(self):
+        ir = _parse_scala("""\
+object M {
+    var arr = Array(1, 2, 3)
+    arr(1) = 5
+}""")
+        store_indices = _find_all(ir, Opcode.STORE_INDEX)
+        assert len(store_indices) >= 1, "Expected STORE_INDEX for arr(1) = 5, got none"
+
+    def test_array_accumulate_execution(self):
+        """Scala array accumulation via CALL_FUNCTION resolved by VM to indexing."""
+        from tests.unit.rosetta.conftest import execute_for_language, extract_answer
+
+        vm, stats = execute_for_language(
+            "scala",
+            """\
+object M {
+    val arr = Array(1, 2, 3, 4, 5)
+    var answer = 0
+    var i = 0
+    while (i < 5) {
+        answer = answer + arr(i)
+        i = i + 1
+    }
+}""",
+        )
+        assert extract_answer(vm, "scala") == 15
+        assert stats.llm_calls == 0

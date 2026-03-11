@@ -1085,7 +1085,22 @@ def _handle_call_function(
         # Unknown function — resolve via configured strategy
         return call_resolver.resolve_call(func_name, args, inst, vm)
 
-    # 2b. Native string/list indexing — e.g. Scala s1(i) → s1[i]
+    # 2b. Scala-style apply: arr(i) on heap-backed arrays → index into fields.
+    if len(args) == 1 and isinstance(args[0], int):
+        addr = _heap_addr(func_val)
+        if addr and addr in vm.heap:
+            heap_obj = vm.heap[addr]
+            idx_key = str(args[0])
+            if idx_key in heap_obj.fields:
+                element = heap_obj.fields[idx_key]
+                return ExecutionResult.success(
+                    StateUpdate(
+                        register_writes={inst.result_reg: _serialize_value(element)},
+                        reasoning=f"heap call-index {func_name}({args[0]}) = {element!r}",
+                    )
+                )
+
+    # 2c. Native string/list indexing — e.g. Scala s1(i) → s1[i]
     # Exclude VM internal references (functions, classes, heap addresses).
     if (
         (
