@@ -1,7 +1,4 @@
-"""Integration tests for Java P1 lowering gap: hex_floating_point_literal.
-
-Verifies end-to-end execution through the full parse -> lower -> execute pipeline.
-"""
+"""Integration tests for Java frontend: hex_floating_point_literal."""
 
 from __future__ import annotations
 

@@ -1,7 +1,4 @@
-"""Integration tests for Rust P1 lowering gaps: raw_string_literal, negative_literal.
-
-Verifies end-to-end execution through the full parse -> lower -> execute pipeline.
-"""
+"""Integration tests for Rust frontend: raw_string_literal, negative_literal, foreign_mod_item, union_item, macro_definition, mut_pattern."""
 
 from __future__ import annotations
 
@@ -86,3 +83,36 @@ let r = match x {
             max_steps=300,
         )
         assert local_vars["r"] == 10
+
+
+class TestRustForeignModItemExecution:
+    def test_code_after_extern_block_executes(self):
+        """Code after extern block should execute normally."""
+        _, locals_ = _run_rust('extern "C" { fn foo(); }\nlet x = 10;')
+        assert locals_["x"] == 10
+
+
+class TestRustUnionItemExecution:
+    def test_code_after_union_executes(self):
+        """Code after union definition should execute normally."""
+        _, locals_ = _run_rust("union Foo { x: i32, y: f64 }\nlet a = 5;")
+        assert locals_["a"] == 5
+
+
+class TestRustMacroDefinitionExecution:
+    def test_code_after_macro_def_executes(self):
+        """Code after macro_rules! should execute normally."""
+        _, locals_ = _run_rust("macro_rules! my_macro { () => {} }\nlet y = 99;")
+        assert locals_["y"] == 99
+
+
+class TestRustMutPatternExecution:
+    def test_let_mut_stores_value(self):
+        """let mut x = 42 should store 42 in x."""
+        _, locals_ = _run_rust("let mut x = 42;")
+        assert locals_["x"] == 42
+
+    def test_let_mut_reassignment(self):
+        """let mut x should allow reassignment."""
+        _, locals_ = _run_rust("let mut x = 1;\nx = 2;")
+        assert locals_["x"] == 2

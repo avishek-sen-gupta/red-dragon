@@ -1218,3 +1218,55 @@ class TestRubyScopeResolution:
         assert any("TopLevel" in inst.operands for inst in loads)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+
+class TestRubySplatArgument:
+    def test_splat_argument_no_symbolic(self):
+        """*args in method call should not produce SYMBOLIC."""
+        ir = _parse_ruby("arr = [1, 2, 3]\nfoo(*arr)")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("splat_argument" in str(inst.operands) for inst in symbolics)
+
+
+class TestRubyHashSplatArgument:
+    def test_hash_splat_no_symbolic(self):
+        """**opts in method call should not produce SYMBOLIC."""
+        ir = _parse_ruby("opts = {}\nfoo(**opts)")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "hash_splat_argument" in str(inst.operands) for inst in symbolics
+        )
+
+
+class TestRubyBlockArgument:
+    def test_block_argument_no_symbolic(self):
+        """&block in method call should not produce SYMBOLIC."""
+        ir = _parse_ruby("blk = lambda { 1 }\nfoo(&blk)")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("block_argument" in str(inst.operands) for inst in symbolics)
+
+
+class TestRubyBeginEndBlock:
+    def test_begin_block_no_symbolic(self):
+        """BEGIN { ... } should not produce SYMBOLIC."""
+        ir = _parse_ruby("BEGIN { x = 1 }\ny = 42")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("begin_block" in str(inst.operands) for inst in symbolics)
+
+    def test_end_block_no_symbolic(self):
+        """END { ... } should not produce SYMBOLIC."""
+        ir = _parse_ruby("END { x = 1 }\ny = 42")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("end_block" in str(inst.operands) for inst in symbolics)
+
+    def test_begin_block_does_not_block(self):
+        """Code after BEGIN block should still be lowered."""
+        ir = _parse_ruby("BEGIN { x = 1 }\ny = 42")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("y" in inst.operands for inst in stores)
+
+    def test_end_block_does_not_block(self):
+        """Code after END block should still be lowered."""
+        ir = _parse_ruby("END { x = 1 }\ny = 42")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("y" in inst.operands for inst in stores)
