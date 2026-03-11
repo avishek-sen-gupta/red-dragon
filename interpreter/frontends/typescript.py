@@ -290,12 +290,32 @@ def _extract_ts_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
     ]
 
 
+def _extract_ts_interfaces(ctx: TreeSitterEmitContext, node) -> list[str]:
+    """Extract interface names from implements_clause in a TS class declaration."""
+    heritage = next(
+        (c for c in node.children if c.type == TypeScriptNodeType.CLASS_HERITAGE),
+        None,
+    )
+    if heritage is None:
+        return []
+    id_types = (TypeScriptNodeType.IDENTIFIER, TypeScriptNodeType.TYPE_IDENTIFIER)
+    return [
+        ctx.node_text(c)
+        for clause in heritage.children
+        if clause.type == "implements_clause"
+        for c in clause.children
+        if c.type in id_types
+    ]
+
+
 def lower_ts_class_def(ctx: TreeSitterEmitContext, node) -> None:
     """Lower class_declaration using TS-specific param handling for methods."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node)
     parents = _extract_ts_parents(ctx, node)
+    for iface in _extract_ts_interfaces(ctx, node):
+        ctx.seed_interface_impl(class_name, iface)
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
