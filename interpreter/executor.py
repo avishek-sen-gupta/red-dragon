@@ -1162,6 +1162,9 @@ def _handle_call_method(
     if addr and addr in vm.heap:
         type_hint = vm.heap[addr].type_hint or ""
 
+    # Resolve alias chain (e.g. Foo → __anon_class_0 for anonymous classes)
+    type_hint = registry.resolve_class_name(type_hint)
+
     if not type_hint or type_hint not in registry.class_methods:
         # Unknown object type — resolve via configured strategy
         obj_desc = _symbolic_name(obj_val)
