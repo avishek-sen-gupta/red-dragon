@@ -1077,3 +1077,61 @@ class TestComputedPropertyName:
         assert (
             len(stores) >= 2
         ), f"Expected >= 2 STORE_INDEX (computed + static), got {len(stores)}"
+
+
+class TestAnonymousClassExpression:
+    """Anonymous class expression: const Foo = class { ... }"""
+
+    def test_anonymous_class_no_symbolic(self):
+        ir = _parse_js("const Foo = class { constructor() {} };")
+        symbolics = [
+            s
+            for s in ir
+            if s.opcode == Opcode.SYMBOLIC and "unsupported:class" in str(s.operands)
+        ]
+        assert (
+            len(symbolics) == 0
+        ), f"class expression should not produce SYMBOLIC: {symbolics}"
+
+    def test_anonymous_class_emits_class_block(self):
+        ir = _parse_js("const Foo = class { constructor() {} };")
+        labels = [
+            inst.label for inst in ir if inst.opcode == Opcode.LABEL and inst.label
+        ]
+        class_labels = [l for l in labels if l.startswith("class_")]
+        assert len(class_labels) >= 1, f"Expected class_ label, got: {labels}"
+
+    def test_anonymous_class_methods_lowered(self):
+        ir = _parse_js("""
+            const Foo = class {
+                constructor(x) { this.x = x; }
+                greet() { return this.x; }
+            };
+            """)
+        labels = [
+            inst.label for inst in ir if inst.opcode == Opcode.LABEL and inst.label
+        ]
+        func_labels = [l for l in labels if l.startswith("func_")]
+        assert any(
+            "constructor" in l for l in func_labels
+        ), f"Expected 'constructor' method, got: {func_labels}"
+        assert any(
+            "greet" in l for l in func_labels
+        ), f"Expected 'greet' method, got: {func_labels}"
+
+    def test_named_class_expression(self):
+        """const Foo = class MyClass { ... } — class has explicit name."""
+        ir = _parse_js("const Foo = class MyClass { constructor() {} };")
+        labels = [
+            inst.label for inst in ir if inst.opcode == Opcode.LABEL and inst.label
+        ]
+        class_labels = [l for l in labels if l.startswith("class_")]
+        assert any(
+            "MyClass" in l for l in class_labels
+        ), f"Expected class label with 'MyClass', got: {class_labels}"
+
+    def test_anonymous_class_stored_in_variable(self):
+        ir = _parse_js("const Foo = class { constructor() {} };")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        store_names = [s.operands[0] for s in stores if s.operands]
+        assert "Foo" in store_names, f"Expected 'Foo' in STORE_VAR, got: {store_names}"

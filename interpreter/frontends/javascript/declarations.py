@@ -123,6 +123,51 @@ def _extract_js_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
     return [ctx.node_text(parent_id)] if parent_id else []
 
 
+def lower_js_class_expression(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower anonymous class expression: `class { ... }` or `class Name { ... }`.
+
+    Like lower_js_class_def but returns a register (expression position)
+    and handles missing name by generating a synthetic one.
+    """
+    name_node = node.child_by_field_name(ctx.constants.class_name_field)
+    body_node = node.child_by_field_name(ctx.constants.class_body_field)
+    class_name = (
+        ctx.node_text(name_node) if name_node else f"__anon_class_{ctx.label_counter}"
+    )
+    parents = _extract_js_parents(ctx, node)
+
+    class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
+    end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
+    ctx.emit(Opcode.LABEL, label=class_label)
+
+    if body_node:
+        for child in body_node.children:
+            if child.type == JSN.METHOD_DEFINITION:
+                _lower_method_def(ctx, child)
+            elif child.type == JSN.CLASS_STATIC_BLOCK:
+                lower_class_static_block(ctx, child)
+            elif child.type == JSN.FIELD_DEFINITION:
+                from interpreter.frontends.javascript.expressions import (
+                    lower_js_field_definition,
+                )
+
+                lower_js_field_definition(ctx, child)
+            elif child.is_named:
+                ctx.lower_stmt(child)
+
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    cls_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=cls_reg,
+        operands=[make_class_ref(class_name, class_label, parents)],
+    )
+    return cls_reg
+
+
 def lower_js_class_def(ctx: TreeSitterEmitContext, node) -> None:
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
