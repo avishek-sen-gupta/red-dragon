@@ -38,6 +38,7 @@ class TypeScriptFrontend(JavaScriptFrontend):
             comment_types=frozenset({TypeScriptNodeType.COMMENT}),
             noise_types=frozenset({TypeScriptNodeType.NEWLINE_CHAR}),
             block_node_types=js_constants.block_node_types,
+            for_update_field=js_constants.for_update_field,
         )
 
     def _build_type_map(self) -> dict[str, str]:
