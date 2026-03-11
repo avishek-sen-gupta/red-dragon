@@ -13,6 +13,7 @@ from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
 from interpreter.frontends.common.declarations import make_class_ref
+from interpreter.type_expr import ScalarType, metatype
 
 
 def lower_js_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
@@ -165,6 +166,7 @@ def lower_js_class_expression(ctx: TreeSitterEmitContext, node) -> str:
         result_reg=cls_reg,
         operands=[make_class_ref(class_name, class_label, parents)],
     )
+    ctx.seed_register_type(cls_reg, metatype(ScalarType(class_name)))
     return cls_reg
 
 
@@ -203,6 +205,7 @@ def lower_js_class_def(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=cls_reg,
         operands=[make_class_ref(class_name, class_label, parents)],
     )
+    ctx.seed_var_type(class_name, metatype(ScalarType(class_name)))
     ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
 
 
