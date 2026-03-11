@@ -312,33 +312,38 @@ def _find_property_initializer(ctx: TreeSitterEmitContext, node) -> object | Non
 
 
 def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower interface_declaration as NEW_OBJECT with STORE_INDEX per member."""
+    """Lower interface_declaration as CLASS block with method definitions.
+
+    Mirrors lower_class_def so that interface method return types are seeded
+    into func_return_types for type inference.
+    """
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     if not name_node:
         return
     iface_name = ctx.node_text(name_node)
-    obj_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.NEW_OBJECT,
-        result_reg=obj_reg,
-        operands=[f"interface:{iface_name}"],
-        node=node,
-    )
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
-    if body_node:
-        for i, child in enumerate(c for c in body_node.children if c.is_named):
-            member_name_node = child.child_by_field_name("name")
-            member_name = (
-                ctx.node_text(member_name_node)
-                if member_name_node
-                else ctx.node_text(child)[:40]
-            )
-            key_reg = ctx.fresh_reg()
-            ctx.emit(Opcode.CONST, result_reg=key_reg, operands=[member_name])
-            val_reg = ctx.fresh_reg()
-            ctx.emit(Opcode.CONST, result_reg=val_reg, operands=[str(i)])
-            ctx.emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
-    ctx.emit(Opcode.STORE_VAR, operands=[iface_name, obj_reg])
+
+    class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{iface_name}")
+    end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{iface_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
+    ctx.emit(Opcode.LABEL, label=class_label)
+    deferred = _lower_class_body(ctx, body_node) if body_node else []
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    cls_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=cls_reg,
+        operands=[make_class_ref(iface_name, class_label, [])],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[iface_name, cls_reg])
+
+    saved_class = ctx._current_class_name
+    ctx._current_class_name = iface_name
+    for child in deferred:
+        _lower_deferred_class_child(ctx, child)
+    ctx._current_class_name = saved_class
 
 
 def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
