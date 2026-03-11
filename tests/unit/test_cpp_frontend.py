@@ -319,7 +319,7 @@ int main() {
         # No catch_clause: SYMBOLIC placeholders
         symbolics = [i for i in instructions if i.opcode == Opcode.SYMBOLIC]
         assert not any("catch_clause:" in str(s.operands) for s in symbolics)
-        assert len(instructions) > 3
+        assert len(instructions) > 10
 
     def test_namespace_function_with_loop(self):
         source = """\

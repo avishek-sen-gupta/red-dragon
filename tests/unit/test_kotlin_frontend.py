@@ -346,7 +346,8 @@ fun Int.double(): Int {
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("*" in inst.operands for inst in binops)
 
-    def test_null_safety_navigation(self):
+    def test_safe_navigation_lowering(self):
+        """Kotlin ?. lowered as plain LOAD_FIELD/CALL_METHOD (null-check not in IR)."""
         source = """\
 fun main() {
     val name = user?.name
@@ -357,12 +358,12 @@ fun main() {
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("name" in inst.operands for inst in stores)
         assert any("upper" in inst.operands for inst in stores)
-        # Verify navigation expressions are lowered
+        # ?. lowered as field access + method call (no null-guard IR yet)
         loads = _find_all(instructions, Opcode.LOAD_FIELD)
         assert any("name" in inst.operands for inst in loads)
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("toUpperCase" in inst.operands for inst in calls)
-        assert len(instructions) > 3
+        assert len(instructions) > 5
 
 
 class TestKotlinNotNullAssertion:
