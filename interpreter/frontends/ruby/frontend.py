@@ -79,6 +79,9 @@ class RubyFrontend(BaseFrontend):
             RubyNodeType.SUPER: ruby_expr.lower_ruby_super,
             RubyNodeType.YIELD: ruby_expr.lower_ruby_yield,
             RubyNodeType.RESCUE_MODIFIER: ruby_cf.lower_ruby_rescue_modifier_expr,
+            RubyNodeType.SPLAT_ARGUMENT: common_expr.lower_paren,
+            RubyNodeType.HASH_SPLAT_ARGUMENT: common_expr.lower_paren,
+            RubyNodeType.BLOCK_ARGUMENT: common_expr.lower_paren,
         }
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:
@@ -118,4 +121,6 @@ class RubyFrontend(BaseFrontend):
             RubyNodeType.IN: ruby_cf.lower_ruby_in_clause,
             RubyNodeType.RETRY: ruby_cf.lower_ruby_retry,
             RubyNodeType.RESCUE_MODIFIER: ruby_cf.lower_ruby_rescue_modifier,
+            RubyNodeType.BEGIN_BLOCK: lambda ctx, node: None,
+            RubyNodeType.END_BLOCK: lambda ctx, node: None,
         }

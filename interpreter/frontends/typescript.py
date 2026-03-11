@@ -62,6 +62,7 @@ class TypeScriptFrontend(JavaScriptFrontend):
                 TypeScriptNodeType.AS_EXPRESSION: lower_as_expression,
                 TypeScriptNodeType.NON_NULL_EXPRESSION: lower_non_null_expr,
                 TypeScriptNodeType.SATISFIES_EXPRESSION: lower_satisfies_expr,
+                TypeScriptNodeType.TYPE_ASSERTION: lower_type_assertion,
                 TypeScriptNodeType.ARROW_FUNCTION: lower_ts_arrow_function,
                 TypeScriptNodeType.FUNCTION: lower_ts_function_expression,
                 TypeScriptNodeType.FUNCTION_EXPRESSION: lower_ts_function_expression,
@@ -112,6 +113,17 @@ def lower_non_null_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_satisfies_expr(ctx: TreeSitterEmitContext, node) -> str:
     children = [c for c in node.children if c.is_named]
+    if children:
+        return ctx.lower_expr(children[0])
+    return common_expr.lower_const_literal(ctx, node)
+
+
+def lower_type_assertion(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower `<Type>expr` -> just lower expr, ignore the type."""
+    children = [c for c in node.children if c.is_named]
+    # type_assertion: <Type>expr — type is first child, expression is last
+    if len(children) >= 2:
+        return ctx.lower_expr(children[-1])
     if children:
         return ctx.lower_expr(children[0])
     return common_expr.lower_const_literal(ctx, node)

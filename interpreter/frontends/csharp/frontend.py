@@ -110,6 +110,7 @@ class CSharpFrontend(BaseFrontend):
             NT.DEFAULT_EXPRESSION: common_expr.lower_const_literal,
             NT.SIZEOF_EXPRESSION: common_expr.lower_const_literal,
             NT.CHECKED_EXPRESSION: csharp_expr.lower_checked_expr,
+            NT.RANGE_EXPRESSION: csharp_expr.lower_range_expr,
         }
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:
@@ -127,6 +128,7 @@ class CSharpFrontend(BaseFrontend):
             NT.INTERFACE_DECLARATION: csharp_decl.lower_interface_decl,
             NT.ENUM_DECLARATION: csharp_decl.lower_enum_decl,
             NT.NAMESPACE_DECLARATION: csharp_decl.lower_namespace,
+            NT.FILE_SCOPED_NAMESPACE_DECLARATION: csharp_decl.lower_file_scoped_namespace,
             NT.THROW_STATEMENT: csharp_cf.lower_throw,
             NT.BLOCK: lambda ctx, node: ctx.lower_block(node),
             NT.GLOBAL_STATEMENT: csharp_cf.lower_global_statement,

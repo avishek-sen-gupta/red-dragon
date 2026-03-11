@@ -654,3 +654,11 @@ def lower_case_clause_expr(ctx: TreeSitterEmitContext, node) -> str:
     if body_node:
         return _lower_body_as_expr(ctx, body_node)
     return lower_const_literal(ctx, node)
+
+
+def lower_alternative_pattern(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower `A | B` pattern — lower first alternative as representative value."""
+    named_children = [c for c in node.children if c.is_named]
+    if named_children:
+        return ctx.lower_expr(named_children[0])
+    return lower_const_literal(ctx, node)

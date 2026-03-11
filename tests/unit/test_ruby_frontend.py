@@ -301,7 +301,8 @@ class TestRubySpecial:
         assert Opcode.STORE_INDEX in opcodes
 
     def test_fallback_symbolic_for_unsupported(self):
-        instructions = _parse_ruby("BEGIN { puts 'start' }")
+        # Use __END__ data section which is not handled by the frontend
+        instructions = _parse_ruby("x = 1\n__END__\nsome data")
         opcodes = _opcodes(instructions)
         assert Opcode.SYMBOLIC in opcodes
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)

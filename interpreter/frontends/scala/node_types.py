@@ -74,8 +74,12 @@ class ScalaNodeType:
     EXPRESSION_STATEMENT = "expression_statement"
     PARAMETER = "parameter"
 
+    # Abstract declarations
+    VAL_DECLARATION = "val_declaration"
+
     # Patterns
     WILDCARD = "wildcard"
+    ALTERNATIVE_PATTERN = "alternative_pattern"
     CASE_CLASS_PATTERN = "case_class_pattern"
     TYPED_PATTERN = "typed_pattern"
     TUPLE_PATTERN = "tuple_pattern"

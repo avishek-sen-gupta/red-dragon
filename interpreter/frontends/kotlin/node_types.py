@@ -95,6 +95,8 @@ class KotlinNodeType:
     COMPANION_OBJECT = "companion_object"
     ENUM_ENTRY = "enum_entry"
     DELEGATION_SPECIFIER = "delegation_specifier"
+    SETTER = "setter"
+    GETTER = "getter"
 
     # -- suffixes --------------------------------------------------------
     CALL_SUFFIX = "call_suffix"

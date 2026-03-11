@@ -84,7 +84,7 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 | `class` | Anonymous class expression: `const Foo = class { ... }` | TODO |
 | `decorator` | `@logged class Foo {}` -- TC39 decorators | TODO |
 | `optional_chain` | `obj?.prop` -- optional chaining operator | TODO |
-| `meta_property` | `new.target` or `import.meta` | TODO |
+| `meta_property` | `new.target` or `import.meta` | DONE |
 | `computed_property_name` | `{ [expr]: value }` in object literals | TODO |
 | `using_declaration` | `using x = getResource()` -- explicit resource management | TODO |
 | `rest_pattern` | `const [first, ...rest] = arr` -- rest elements | TODO |
@@ -93,7 +93,7 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 | Node Type | Description | Status |
 |-----------|-------------|--------|
 | *(inherits 7 JS P1s above)* | | |
-| `type_assertion` | `<Type>expr` -- angle-bracket type assertion | TODO |
+| `type_assertion` | `<Type>expr` -- angle-bracket type assertion | DONE |
 | `instantiation_expression` | `fn<string>` -- instantiation without calling | TODO |
 | `ambient_declaration` | `declare module 'x' { ... }` | TODO |
 | `function_signature` | Overload signatures | TODO |
@@ -123,7 +123,7 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 ### C# (27 P1)
 | Node Type | Description | Status |
 |-----------|-------------|--------|
-| `range_expression` | `x..y` range expressions (C# 8) | TODO |
+| `range_expression` | `x..y` range expressions (C# 8) | DONE |
 | `with_expression` | `record with { ... }` (C# 9) | TODO |
 | `checked_expression` | `checked(expr)` / `unchecked(expr)` | DONE |
 | `default_expression` | `default` / `default(T)` | DONE |
@@ -138,7 +138,7 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 | `indexer_declaration` | `this[int i]` indexer properties | TODO |
 | `operator_declaration` | Operator overloading | TODO |
 | `conversion_operator_declaration` | Implicit/explicit conversion operators | TODO |
-| `file_scoped_namespace_declaration` | `namespace Foo;` (C# 10) | TODO |
+| `file_scoped_namespace_declaration` | `namespace Foo;` (C# 10) | DONE |
 | `recursive_pattern` | Recursive/positional pattern matching | TODO |
 | `list_pattern` | `[1, 2, ..]` list patterns (C# 11) | TODO |
 | `var_pattern` | `var x` pattern | TODO |
@@ -160,8 +160,8 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 | `constructor_delegation_call` | `this(...)` or `super(...)` delegation | TODO |
 | `constructor_invocation` | Constructor call in supertype list | TODO |
 | `explicit_delegation` | `by delegate` delegation pattern | TODO |
-| `getter` | Custom property getter | TODO |
-| `setter` | Custom property setter | TODO |
+| `getter` | Custom property getter | DONE |
+| `setter` | Custom property setter | DONE |
 | `unsigned_literal` | `42u`, `42UL` unsigned literals | DONE |
 | `wildcard_import` | `import foo.*` | DONE |
 
@@ -169,7 +169,7 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 | Node Type | Description | Status |
 |-----------|-------------|--------|
 | `ascription_expression` | Type ascription `x: Type` | DONE (consumed by parent handlers) |
-| `val_declaration` | Abstract `val` in traits | TODO |
+| `val_declaration` | Abstract `val` in traits | DONE |
 | `var_declaration` | Abstract `var` in traits | TODO |
 | `enum_definition` | Scala 3 `enum` definitions | TODO |
 | `extension_definition` | Scala 3 `extension` methods | TODO |
@@ -180,7 +180,7 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 | `quote_expression` | Scala 3 macro quote `'{ ... }` | TODO |
 | `splice_expression` | Scala 3 macro splice `${ ... }` | TODO |
 | `macro_body` | Macro implementation body | TODO |
-| `alternative_pattern` | `case A \| B =>` OR patterns | TODO |
+| `alternative_pattern` | `case A \| B =>` OR patterns | DONE |
 | `capture_pattern` | `case x @ pattern =>` binding | TODO |
 | `named_tuple_pattern` | Named tuple destructuring | TODO |
 | `repeat_pattern` | `case Seq(xs @ _*) =>` varargs patterns | TODO |
@@ -197,18 +197,18 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 | `pointer_type` | `*T` type expressions | TODO |
 | `array_type` | `[N]T` fixed-size array types | TODO |
 | `interface_type` | `interface { ... }` type definitions | TODO |
-| `variadic_argument` | `args...` spread operator | TODO |
+| `variadic_argument` | `args...` spread operator | DONE |
 | `blank_identifier` | `_` blank/discard identifier | DONE |
 
 ### Rust (9 P1)
 | Node Type | Description | Status |
 |-----------|-------------|--------|
-| `foreign_mod_item` | `extern "C" { ... }` FFI blocks | TODO |
-| `union_item` | `union` type definitions | TODO |
-| `macro_definition` | `macro_rules!` definitions | TODO |
+| `foreign_mod_item` | `extern "C" { ... }` FFI blocks | DONE |
+| `union_item` | `union` type definitions | DONE |
+| `macro_definition` | `macro_rules!` definitions | DONE |
 | `raw_string_literal` | `r"..."` and `r#"..."#` raw strings | DONE |
 | `negative_literal` | Negative number patterns like `-1` | DONE |
-| `mut_pattern` | `mut x` mutable binding in patterns | TODO |
+| `mut_pattern` | `mut x` mutable binding in patterns | DONE |
 | `reference_pattern` | `&x` destructuring references | TODO |
 | `slice_pattern` | `[a, b, ..]` slice destructuring | TODO |
 | `let_chain` | `let x = ... && let y = ...` chained conditions | TODO |
@@ -241,11 +241,11 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 | Node Type | Description | Status |
 |-----------|-------------|--------|
 | `case_match` | Pattern matching `case/in` (Ruby 3.0+) | TODO |
-| `hash_splat_argument` | Double-splat `**hash` argument | TODO |
-| `splat_argument` | Splat `*array` argument unpacking | TODO |
-| `block_argument` | `&block` argument passing | TODO |
-| `begin_block` | `BEGIN { ... }` -- pre-main code | TODO |
-| `end_block` | `END { ... }` -- post-main code | TODO |
+| `hash_splat_argument` | Double-splat `**hash` argument | DONE |
+| `splat_argument` | Splat `*array` argument unpacking | DONE |
+| `block_argument` | `&block` argument passing | DONE |
+| `begin_block` | `BEGIN { ... }` -- pre-main code | DONE |
+| `end_block` | `END { ... }` -- post-main code | DONE |
 | `hash_pattern` | Hash destructuring in pattern matching | TODO |
 | `array_pattern` | Array destructuring in pattern matching | TODO |
 | `find_pattern` | `in [*, pattern, *]` find pattern | TODO |
@@ -257,11 +257,11 @@ These are core language constructs that would cause SYMBOLIC fallthrough on comm
 | Node Type | Description | Status |
 |-----------|-------------|--------|
 | `list_literal` | `list($a, $b) = $arr` destructuring | TODO |
-| `include_once_expression` | `include_once 'file.php'` | TODO |
-| `require_expression` | `require 'file.php'` | TODO |
+| `include_once_expression` | `include_once 'file.php'` | DONE |
+| `require_expression` | `require 'file.php'` | DONE |
 | `error_suppression_expression` | `@expr` error suppression | DONE |
 | `shell_command_expression` | `` `command` `` shell exec | TODO |
-| `sequence_expression` | Comma-separated expressions in `for` | TODO |
+| `sequence_expression` | Comma-separated expressions in `for` | DONE |
 | `anonymous_class` | `new class { ... }` | TODO |
 | `declare_statement` | `declare(strict_types=1)` | DONE |
 | `exit_statement` | `exit(0)` / `die()` | DONE |

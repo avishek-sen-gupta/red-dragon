@@ -98,6 +98,9 @@ class PhpFrontend(BaseFrontend):
             PHPNodeType.PRINT_INTRINSIC: php_expr.lower_php_print_intrinsic,
             PHPNodeType.CLONE_EXPRESSION: php_expr.lower_php_clone_expression,
             PHPNodeType.ERROR_SUPPRESSION_EXPRESSION: php_expr.lower_php_error_suppression,
+            PHPNodeType.SEQUENCE_EXPRESSION: php_expr.lower_php_sequence_expression,
+            PHPNodeType.INCLUDE_ONCE_EXPRESSION: php_expr.lower_php_include,
+            PHPNodeType.REQUIRE_EXPRESSION: php_expr.lower_php_include,
         }
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:

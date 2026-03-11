@@ -683,3 +683,28 @@ def lower_checked_expr(ctx: TreeSitterEmitContext, node) -> str:
         if named_children
         else lower_const_literal(ctx, node)
     )
+
+
+def lower_range_expr(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower `0..5` or `..5` or `0..` as CALL_FUNCTION("range", start, end)."""
+    named_children = [c for c in node.children if c.is_named]
+    if len(named_children) >= 2:
+        start_reg = ctx.lower_expr(named_children[0])
+        end_reg = ctx.lower_expr(named_children[1])
+    elif len(named_children) == 1:
+        start_reg = ctx.lower_expr(named_children[0])
+        end_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.CONST, result_reg=end_reg, operands=[""])
+    else:
+        start_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.CONST, result_reg=start_reg, operands=[""])
+        end_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.CONST, result_reg=end_reg, operands=[""])
+    reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_FUNCTION,
+        result_reg=reg,
+        operands=["range", start_reg, end_reg],
+        node=node,
+    )
+    return reg

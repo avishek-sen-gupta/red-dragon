@@ -73,6 +73,7 @@ class JavaScriptFrontend(BaseFrontend):
             JSN.FIELD_DEFINITION: js_expr.lower_js_field_definition,
             JSN.EXPORT_CLAUSE: js_expr.lower_export_clause,
             JSN.EXPORT_SPECIFIER: common_expr.lower_paren,
+            JSN.META_PROPERTY: common_expr.lower_const_literal,
         }
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:

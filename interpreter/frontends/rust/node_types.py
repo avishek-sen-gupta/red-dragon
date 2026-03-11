@@ -72,6 +72,9 @@ class RustNodeType:
     USE_DECLARATION = "use_declaration"
     EXTERN_CRATE_DECLARATION = "extern_crate_declaration"
     ATTRIBUTE_ITEM = "attribute_item"
+    FOREIGN_MOD_ITEM = "foreign_mod_item"
+    UNION_ITEM = "union_item"
+    MACRO_DEFINITION = "macro_definition"
 
     # ── Patterns ─────────────────────────────────────────────────────
     MATCH_ARM = "match_arm"
@@ -81,6 +84,7 @@ class RustNodeType:
     TUPLE_STRUCT_PATTERN = "tuple_struct_pattern"
     FIELD_PATTERN = "field_pattern"
     OR_PATTERN = "or_pattern"
+    MUT_PATTERN = "mut_pattern"
 
     # ── Parameters ───────────────────────────────────────────────────
     PARAMETER = "parameter"
