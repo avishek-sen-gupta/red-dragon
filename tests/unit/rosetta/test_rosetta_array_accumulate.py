@@ -3,9 +3,9 @@
 Sum elements of an array [1,2,3,4,5] using a while loop. Expected: answer = 15.
 Tests NEW_ARRAY, LOAD_INDEX, and loop-based accumulation.
 
-Scala uses ``arr(i)`` which tree-sitter parses as a call_expression — it emits
-CALL_FUNCTION instead of LOAD_INDEX (known P1 gap), so Scala is excluded from
-the LOAD_INDEX lowering check and execution verification.
+Scala arr(i) emits CALL_FUNCTION (syntax is ambiguous with function calls);
+the VM resolves it to native indexing at runtime. So Scala is excluded from
+the LOAD_INDEX IR check but included in execution verification.
 """
 
 import pytest
@@ -189,8 +189,8 @@ end.
 """,
 }
 
-# Scala arr(i) emits CALL_FUNCTION instead of LOAD_INDEX (known P1 gap)
-LANGUAGES_WITHOUT_LOAD_INDEX: set[str] = {"scala"}
+# Scala arr(i) emits CALL_FUNCTION (resolved to indexing by VM at runtime)
+LANGUAGES_WITHOUT_LOAD_INDEX: frozenset[str] = frozenset({"scala"})
 
 REQUIRED_OPCODES: set[Opcode] = {Opcode.BINOP, Opcode.BRANCH_IF}
 
@@ -221,7 +221,9 @@ class TestArrayAccumulateLowering:
     def test_load_index_present(self, language_ir):
         lang, ir = language_ir
         if lang in LANGUAGES_WITHOUT_LOAD_INDEX:
-            pytest.skip(f"{lang} uses CALL_FUNCTION for array access (known P1 gap)")
+            pytest.skip(
+                f"{lang} uses CALL_FUNCTION for array access (VM resolves at runtime)"
+            )
         load_indices = find_all(ir, Opcode.LOAD_INDEX)
         assert (
             len(load_indices) >= 1
@@ -251,8 +253,7 @@ class TestArrayAccumulateCrossLanguage:
 # VM execution tests (parametrized over executable languages)
 # ---------------------------------------------------------------------------
 
-# Scala excluded: arr(i) produces CALL_FUNCTION -> symbolic result
-ARRAY_EXECUTABLE_LANGUAGES: frozenset[str] = STANDARD_EXECUTABLE_LANGUAGES - {"scala"}
+ARRAY_EXECUTABLE_LANGUAGES: frozenset[str] = STANDARD_EXECUTABLE_LANGUAGES
 EXPECTED_ANSWER = 15  # 1 + 2 + 3 + 4 + 5 = 15
 
 
