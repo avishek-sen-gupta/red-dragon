@@ -14,6 +14,7 @@ from interpreter.frontends.common.expressions import (
 )
 from interpreter.frontends.c.expressions import lower_c_store_target
 from interpreter.frontends.cpp.node_types import CppNodeType
+from interpreter.type_expr import ScalarType
 
 
 def lower_new_expr(ctx: TreeSitterEmitContext, node) -> str:
@@ -29,7 +30,7 @@ def lower_new_expr(ctx: TreeSitterEmitContext, node) -> str:
         operands=[type_name] + arg_regs,
         node=node,
     )
-    ctx.seed_register_type(reg, type_name)
+    ctx.seed_register_type(reg, ScalarType(type_name))
     return reg
 
 
