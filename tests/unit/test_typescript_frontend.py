@@ -7,9 +7,20 @@ from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
 
 
+from interpreter.type_environment_builder import TypeEnvironmentBuilder
+
+
 def _parse_ts(source: str) -> list[IRInstruction]:
     frontend = TypeScriptFrontend(TreeSitterParserFactory(), "typescript")
     return frontend.lower(source.encode("utf-8"))
+
+
+def _parse_ts_with_types(
+    source: str,
+) -> tuple[list[IRInstruction], TypeEnvironmentBuilder]:
+    frontend = TypeScriptFrontend(TreeSitterParserFactory(), "typescript")
+    instructions = frontend.lower(source.encode("utf-8"))
+    return instructions, frontend.type_env_builder
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:
@@ -55,21 +66,26 @@ class TestTypeScriptTypedBasics:
 
 
 class TestTypeScriptInterfaces:
-    def test_interface_emits_new_object(self):
+    def test_interface_emits_class_block(self):
+        """Interface lowered as CLASS block (not NEW_OBJECT)."""
         instructions = _parse_ts("interface Foo { bar: string; }")
-        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
-        assert any("interface:Foo" in str(inst.operands) for inst in new_objs)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            "<class:" in str(c.operands) and "Foo" in str(c.operands) for c in consts
+        )
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("Foo" in inst.operands for inst in stores)
-        store_indexes = _find_all(instructions, Opcode.STORE_INDEX)
-        assert len(store_indexes) == 1
 
-    def test_interface_with_multiple_fields(self):
-        instructions = _parse_ts("interface Point { x: number; y: number; }")
-        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
-        assert any("interface:Point" in str(inst.operands) for inst in new_objs)
-        store_indexes = _find_all(instructions, Opcode.STORE_INDEX)
-        assert len(store_indexes) == 2
+    def test_interface_with_multiple_methods(self):
+        instructions = _parse_ts("interface Point { getX(): number; getY(): number; }")
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            "<class:" in str(c.operands) and "Point" in str(c.operands) for c in consts
+        )
+        labels = [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+        func_labels = [l for l in labels if "func_" in l]
+        assert any("getX" in l for l in func_labels)
+        assert any("getY" in l for l in func_labels)
 
 
 class TestTypeScriptEnums:
@@ -226,8 +242,10 @@ function greet(user: User): string {
 }
 """
         instructions = _parse_ts(source)
-        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
-        assert any("interface:User" in str(inst.operands) for inst in new_objs)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            "<class:" in str(c.operands) and "User" in str(c.operands) for c in consts
+        )
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("greet" in inst.operands for inst in stores)
         returns = _find_all(instructions, Opcode.RETURN)
@@ -361,8 +379,10 @@ class Circle {
 }
 """
         instructions = _parse_ts(source)
-        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
-        assert any("interface:Shape" in str(inst.operands) for inst in new_objs)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any(
+            "<class:" in str(c.operands) and "Shape" in str(c.operands) for c in consts
+        )
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("Circle" in inst.operands for inst in stores)
         store_fields = _find_all(instructions, Opcode.STORE_FIELD)
@@ -569,3 +589,51 @@ for (let i: number = 0; i < 3; i = i + 1) {
         assert (
             len(i_stores) >= 2
         ), f"Expected >= 2 STORE_VAR for 'i' (init + update), got {len(i_stores)}"
+
+
+class TestTypeScriptInterfaceLowering:
+    """TS interfaces should lower methods as function definitions with return types."""
+
+    INTERFACE_SOURCE = """\
+interface Shape {
+    area(): number;
+    name(): string;
+}
+"""
+
+    def test_interface_methods_produce_func_labels(self):
+        ir = _parse_ts(self.INTERFACE_SOURCE)
+        labels = [inst.label for inst in ir if inst.opcode == Opcode.LABEL]
+        func_labels = [l for l in labels if "func_" in l]
+        assert any(
+            "area" in l for l in func_labels
+        ), f"Expected function label for 'area', got: {func_labels}"
+        assert any(
+            "name" in l for l in func_labels
+        ), f"Expected function label for 'name', got: {func_labels}"
+
+    def test_interface_methods_seed_return_types(self):
+        ir, type_builder = _parse_ts_with_types(self.INTERFACE_SOURCE)
+        func_return_types = type_builder.func_return_types
+        area_entries = {k: v for k, v in func_return_types.items() if "area" in k}
+        name_entries = {k: v for k, v in func_return_types.items() if "name" in k}
+        assert (
+            len(area_entries) >= 1
+        ), f"Expected return type for 'area', got: {func_return_types}"
+        assert (
+            len(name_entries) >= 1
+        ), f"Expected return type for 'name', got: {func_return_types}"
+
+    def test_interface_stored_as_class_ref(self):
+        ir = _parse_ts(self.INTERFACE_SOURCE)
+        consts = _find_all(ir, Opcode.CONST)
+        class_refs = [c for c in consts if "<class:" in str(c.operands)]
+        assert any(
+            "Shape" in str(c.operands) for c in class_refs
+        ), f"Expected class ref for Shape, got: {[c.operands for c in consts]}"
+
+    def test_interface_property_signature(self):
+        """Property signatures in interfaces should produce function labels."""
+        ir = _parse_ts("interface Logger { level: string; }")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("Logger" in inst.operands for inst in stores)

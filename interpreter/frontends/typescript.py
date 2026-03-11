@@ -134,33 +134,78 @@ def lower_type_assertion(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower interface_declaration as NEW_OBJECT with STORE_INDEX per member."""
+    """Lower interface_declaration as CLASS block with method stubs.
+
+    Mirrors lower_ts_class_def so that interface method return types are seeded
+    into func_return_types for type inference.
+    """
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     if not name_node:
         return
     iface_name = ctx.node_text(name_node)
-    obj_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.NEW_OBJECT,
-        result_reg=obj_reg,
-        operands=[f"interface:{iface_name}"],
-        node=node,
-    )
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
+
+    class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{iface_name}")
+    end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{iface_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
+    ctx.emit(Opcode.LABEL, label=class_label)
+
     if body_node:
-        for i, child in enumerate(c for c in body_node.children if c.is_named):
-            member_name_node = child.child_by_field_name(ctx.constants.func_name_field)
-            member_name = (
-                ctx.node_text(member_name_node)
-                if member_name_node
-                else ctx.node_text(child).split(":")[0].strip()
-            )
-            key_reg = ctx.fresh_reg()
-            ctx.emit(Opcode.CONST, result_reg=key_reg, operands=[member_name])
-            val_reg = ctx.fresh_reg()
-            ctx.emit(Opcode.CONST, result_reg=val_reg, operands=[str(i)])
-            ctx.emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
-    ctx.emit(Opcode.STORE_VAR, operands=[iface_name, obj_reg])
+        for child in body_node.children:
+            if child.type in (
+                "method_signature",
+                "call_signature",
+                "construct_signature",
+            ):
+                _lower_ts_interface_method(ctx, child)
+            elif child.is_named and child.type not in (
+                "property_signature",
+                "index_signature",
+            ):
+                ctx.lower_stmt(child)
+
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    cls_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=cls_reg,
+        operands=[make_class_ref(iface_name, class_label, [])],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[iface_name, cls_reg])
+
+
+def _lower_ts_interface_method(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower a method_signature inside an interface as a function stub with return type."""
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    func_name = ctx.node_text(name_node) if name_node else "__iface_method"
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+    end_label = ctx.fresh_label(f"end_{func_name}")
+
+    raw_return = extract_type_from_field(ctx, node, "return_type")
+    return_hint = normalize_type_hint(raw_return.lstrip(": "), ctx.type_map)
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
+
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
+    )
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=func_reg,
+        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
 
 
 def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
