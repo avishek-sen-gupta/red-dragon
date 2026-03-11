@@ -17,7 +17,7 @@ from interpreter.frontend_observer import FrontendObserver
 from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.var_scope_info import VarScopeInfo
-from interpreter.type_expr import TypeExpr, parse_type
+from interpreter.type_expr import TypeExpr
 
 logger = logging.getLogger(__name__)
 
@@ -188,30 +188,20 @@ class TreeSitterEmitContext:
         else:
             self._current_func_label = ""
 
-    def seed_func_return_type(
-        self, func_label: str, return_type: str | TypeExpr
-    ) -> None:
+    def seed_func_return_type(self, func_label: str, return_type: TypeExpr) -> None:
         """Seed the return type for a function label."""
         if return_type:
-            self.type_env_builder.func_return_types[func_label] = (
-                return_type
-                if isinstance(return_type, TypeExpr)
-                else parse_type(return_type)
-            )
+            self.type_env_builder.func_return_types[func_label] = return_type
 
-    def seed_register_type(self, reg: str, type_name: str | TypeExpr) -> None:
+    def seed_register_type(self, reg: str, type_name: TypeExpr) -> None:
         """Seed the type for a register."""
         if reg and type_name:
-            self.type_env_builder.register_types[reg] = (
-                type_name if isinstance(type_name, TypeExpr) else parse_type(type_name)
-            )
+            self.type_env_builder.register_types[reg] = type_name
 
-    def seed_var_type(self, var_name: str, type_name: str | TypeExpr) -> None:
+    def seed_var_type(self, var_name: str, type_name: TypeExpr) -> None:
         """Seed the type for a variable."""
         if var_name and type_name:
-            self.type_env_builder.var_types[var_name] = (
-                type_name if isinstance(type_name, TypeExpr) else parse_type(type_name)
-            )
+            self.type_env_builder.var_types[var_name] = type_name
 
     def seed_interface_impl(self, class_name: str, interface_name: str) -> None:
         """Seed that a class implements an interface."""
@@ -220,25 +210,16 @@ class TreeSitterEmitContext:
                 class_name, []
             ).append(interface_name)
 
-    def seed_type_alias(self, alias_name: str, target_type: str | TypeExpr) -> None:
+    def seed_type_alias(self, alias_name: str, target_type: TypeExpr) -> None:
         """Seed a type alias (e.g., typedef int UserId → alias UserId = Int)."""
         if alias_name and target_type:
-            self.type_env_builder.type_aliases[alias_name] = (
-                target_type
-                if isinstance(target_type, TypeExpr)
-                else parse_type(target_type)
-            )
+            self.type_env_builder.type_aliases[alias_name] = target_type
 
-    def seed_param_type(self, param_name: str, type_hint: str | TypeExpr) -> None:
+    def seed_param_type(self, param_name: str, type_hint: TypeExpr) -> None:
         """Seed a parameter type for the current function."""
         if self._current_func_label:
-            resolved = (
-                type_hint
-                if isinstance(type_hint, TypeExpr)
-                else parse_type(type_hint or "")
-            )
             self.type_env_builder.func_param_types[self._current_func_label].append(
-                (param_name, resolved)
+                (param_name, type_hint)
             )
 
     def node_text(self, node) -> str:
