@@ -25,6 +25,13 @@ Do NOT use markdown TODO lists. All tasks live in Beads.
 - When editing Python, always run `black` formatting before committing. When test counts are mentioned (e.g., 'all 625 tests passing'), verify that count hasn't regressed.
 - When you are generating a new run, for every output directory, please attach time stamp and the technique used
 
+## Design Principles
+
+- **Use existing infrastructure before adding new abstractions.** Before introducing a new dict, registry, or tracking structure, ask: "does the system already have something that solves this?" The answer is usually yes.
+  - *Example:* When anonymous class expressions needed alias resolution (`const Foo = class { ... }; new Foo()`), three progressively simpler designs were attempted: (1) a `class_aliases` dict in the registry, (2) a pointer chain mechanism, (3) just reading the variable store at `new_object` time — because the variable store already *was* a pointer table mapping `Foo` → `<class:__anon_class_0@...>`. The final solution was a 5-line dereference in `_handle_new_object` with zero new infrastructure.
+- **Start from the simplest possible mechanism.** When solving a problem, begin with the minimal intervention. If that's insufficient, add complexity incrementally. Do not start with a rich abstraction and work backwards.
+- **Stay consistent with established patterns.** When the codebase has a way of doing something (e.g., `TypeExpr` ADT for types), use it — do not fall back to older patterns (e.g., format strings through `parse_type()`) out of habit.
+
 ## Implementation Guidelines
 - When implementing features for multiple languages, verify each language's actual capabilities against VM/frontend source code rather than assuming. Do not claim a language lacks a feature without checking.
 
