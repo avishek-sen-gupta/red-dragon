@@ -365,7 +365,7 @@ class M {
         # No catch_clause: or finally_clause: SYMBOLIC placeholders
         symbolics = [i for i in instructions if i.opcode == Opcode.SYMBOLIC]
         assert not any("catch_clause:" in str(s.operands) for s in symbolics)
-        assert len(instructions) > 3
+        assert len(instructions) > 10
 
     def test_constructor_with_field_init(self):
         source = """\
