@@ -27,3 +27,6 @@ proleap-bridge/.settings/
 # Dolt database files (added by bd init)
 .dolt/
 *.db
+
+# Beads: track JSONL backups, ignore Dolt database
+.beads/dolt/
