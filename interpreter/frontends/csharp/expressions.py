@@ -15,6 +15,7 @@ from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
 from interpreter.frontends.type_extraction import (
     extract_normalized_type,
 )
+from interpreter.type_expr import ScalarType
 
 
 def lower_invocation(ctx: TreeSitterEmitContext, node) -> str:
@@ -81,7 +82,7 @@ def lower_object_creation(ctx: TreeSitterEmitContext, node) -> str:
         operands=[type_name] + arg_regs,
         node=node,
     )
-    ctx.seed_register_type(reg, type_name)
+    ctx.seed_register_type(reg, ScalarType(type_name))
     return reg
 
 

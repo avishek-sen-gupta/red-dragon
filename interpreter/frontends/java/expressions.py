@@ -15,6 +15,7 @@ from interpreter.frontends.type_extraction import (
     extract_normalized_type,
 )
 from interpreter.frontends.java.node_types import JavaNodeType
+from interpreter.type_expr import ScalarType
 
 
 def lower_method_invocation(ctx: TreeSitterEmitContext, node) -> str:
@@ -58,7 +59,7 @@ def lower_object_creation(ctx: TreeSitterEmitContext, node) -> str:
         operands=[type_name] + arg_regs,
         node=node,
     )
-    ctx.seed_register_type(reg, type_name)
+    ctx.seed_register_type(reg, ScalarType(type_name))
     return reg
 
 
