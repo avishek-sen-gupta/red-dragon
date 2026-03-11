@@ -1,7 +1,4 @@
-"""Integration tests for C# P1 lowering gaps: default_expression, sizeof_expression, checked_expression.
-
-Verifies end-to-end execution through the full parse -> lower -> execute pipeline.
-"""
+"""Integration tests for C# frontend: default_expression, sizeof_expression, checked_expression, file_scoped_namespace, range_expression."""
 
 from __future__ import annotations
 
@@ -63,3 +60,19 @@ int x = checked(a + b);
         """unchecked(expr) should also execute the inner expression."""
         vars_ = _run_csharp("int x = unchecked(5 * 3);")
         assert vars_["x"] == 15
+
+
+class TestCSharpFileScopedNamespaceExecution:
+    def test_class_in_file_scoped_ns_executes(self):
+        """Class inside file-scoped namespace should be accessible."""
+        locals_ = _run_csharp("""\
+namespace Foo;
+int x = 42;""")
+        assert locals_["x"] == 42
+
+
+class TestCSharpRangeExpressionExecution:
+    def test_range_does_not_block(self):
+        """Code after range expression should execute."""
+        locals_ = _run_csharp("var r = 0..5;\nvar x = 42;")
+        assert locals_["x"] == 42

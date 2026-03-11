@@ -1,7 +1,4 @@
-"""Integration tests for PHP P1 lowering gaps: error_suppression, exit, declare, unset.
-
-Verifies end-to-end execution through the full parse -> lower -> execute pipeline.
-"""
+"""Integration tests for PHP frontend: error_suppression, exit_statement, declare_statement, unset_statement, sequence_expression, include_once, require."""
 
 from __future__ import annotations
 
@@ -50,3 +47,24 @@ class TestPhpUnsetStatementExecution:
         """Code after unset should execute normally."""
         vars_ = _run_php("<?php $a = 1; $b = 2; unset($a); $c = $b + 3; ?>")
         assert vars_["$c"] == 5
+
+
+class TestPHPSequenceExpressionExecution:
+    def test_sequence_does_not_block(self):
+        """Code after for with sequence_expression should execute."""
+        locals_ = _run_php("<?php for ($i = 0, $j = 10; $i < 1; $i++) { $x = 99; } ?>")
+        assert locals_["$x"] == 99
+
+
+class TestPHPIncludeOnceExecution:
+    def test_code_after_include_once_executes(self):
+        """Code after include_once should execute normally."""
+        locals_ = _run_php("<?php include_once 'file.php'; $x = 42; ?>")
+        assert locals_["$x"] == 42
+
+
+class TestPHPRequireExecution:
+    def test_code_after_require_executes(self):
+        """Code after require should execute normally."""
+        locals_ = _run_php("<?php require 'file.php'; $x = 99; ?>")
+        assert locals_["$x"] == 99

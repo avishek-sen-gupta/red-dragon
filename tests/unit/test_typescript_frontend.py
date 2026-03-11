@@ -519,3 +519,19 @@ namespace Utils {
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("PI" in inst.operands for inst in stores)
+
+
+class TestTSTypeAssertion:
+    def test_type_assertion_no_symbolic(self):
+        """<string>x should not produce SYMBOLIC fallthrough."""
+        frontend = TypeScriptFrontend(TreeSitterParserFactory(), "typescript")
+        ir = frontend.lower(b"let y = <string>x;")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("type_assertion" in str(inst.operands) for inst in symbolics)
+
+    def test_type_assertion_lowers_inner_expr(self):
+        """<string>x should produce a LOAD_VAR for x."""
+        frontend = TypeScriptFrontend(TreeSitterParserFactory(), "typescript")
+        ir = frontend.lower(b"let y = <string>x;")
+        loads = _find_all(ir, Opcode.LOAD_VAR)
+        assert any("x" in inst.operands for inst in loads)

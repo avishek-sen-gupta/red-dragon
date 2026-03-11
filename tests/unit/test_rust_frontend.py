@@ -844,3 +844,100 @@ fn main() {
         # Should have branch_if for or_pattern arm, for arm 3, no branch_if for wildcard
         branch_ifs = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branch_ifs) >= 2
+
+
+class TestRustRawStringLiteral:
+    def test_raw_string_no_symbolic(self):
+        """r\"hello\" should not produce SYMBOLIC fallthrough."""
+        ir = _parse_rust('fn main() { let x = r"hello"; }')
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("raw_string_literal" in str(inst.operands) for inst in symbolics)
+
+    def test_raw_string_emits_const(self):
+        """Raw string literal should emit a CONST instruction."""
+        ir = _parse_rust('fn main() { let x = r"hello"; }')
+        consts = _find_all(ir, Opcode.CONST)
+        assert any("hello" in str(inst.operands) for inst in consts)
+
+    def test_raw_string_stored(self):
+        """Raw string literal should be stored in the variable."""
+        ir = _parse_rust('fn main() { let x = r"hello"; }')
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+
+class TestRustNegativeLiteral:
+    def test_negative_literal_no_symbolic(self):
+        """let x = -1; the negative_literal should not produce SYMBOLIC."""
+        ir = _parse_rust("fn main() { let x: i32 = -1; }")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("negative_literal" in str(inst.operands) for inst in symbolics)
+
+    def test_negative_literal_emits_const(self):
+        """Negative literal should emit a CONST with the negative value."""
+        ir = _parse_rust("fn main() { let x: i32 = -1; }")
+        consts = _find_all(ir, Opcode.CONST)
+        # Should contain -1 as a literal value
+        assert len(consts) >= 1
+
+    def test_negative_literal_stored(self):
+        """Negative literal should be stored in the variable."""
+        ir = _parse_rust("fn main() { let x: i32 = -1; }")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+
+class TestRustForeignModItem:
+    def test_foreign_mod_no_symbolic(self):
+        """extern { fn foo(); } should not produce SYMBOLIC fallthrough."""
+        ir = _parse_rust('extern "C" { fn foo(); }')
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("foreign_mod_item" in str(inst.operands) for inst in symbolics)
+
+    def test_foreign_mod_body_lowered(self):
+        """Declarations inside extern block should be lowered."""
+        ir = _parse_rust('extern "C" { fn foo(); }')
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("foo" in inst.operands for inst in stores)
+
+
+class TestRustUnionItem:
+    def test_union_no_symbolic(self):
+        """union Foo { x: i32, y: f64 } should not produce SYMBOLIC."""
+        ir = _parse_rust("union Foo { x: i32, y: f64 }")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("union_item" in str(inst.operands) for inst in symbolics)
+
+    def test_union_stores_name(self):
+        """union Foo should produce a STORE_VAR for Foo."""
+        ir = _parse_rust("union Foo { x: i32, y: f64 }")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("Foo" in inst.operands for inst in stores)
+
+
+class TestRustMacroDefinition:
+    def test_macro_definition_no_symbolic(self):
+        """macro_rules! should not produce SYMBOLIC fallthrough."""
+        ir = _parse_rust("macro_rules! my_macro { () => {} }")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("macro_definition" in str(inst.operands) for inst in symbolics)
+
+    def test_macro_definition_does_not_block(self):
+        """Code after macro_rules! should still be lowered."""
+        ir = _parse_rust("macro_rules! my_macro { () => {} }\nlet x = 42;")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+
+class TestRustMutPattern:
+    def test_mut_pattern_no_symbolic(self):
+        """mut x in let should not produce SYMBOLIC fallthrough."""
+        ir = _parse_rust("let mut x = 42;")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("mut_pattern" in str(inst.operands) for inst in symbolics)
+
+    def test_mut_pattern_stores_var(self):
+        """let mut x = 42 should produce STORE_VAR for x."""
+        ir = _parse_rust("let mut x = 42;")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)

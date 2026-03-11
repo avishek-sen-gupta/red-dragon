@@ -807,3 +807,21 @@ class TestCFrontendPointerTypeSeed:
         """void *vp; — void maps to Any, so void* is Pointer[Any]."""
         _, builder = _parse_and_lower_with_types("void f() { void *vp; }")
         assert builder.var_types["vp"] == "Pointer[Any]"
+
+
+class TestCLinkageSpecification:
+    def test_linkage_spec_no_symbolic(self):
+        """extern 'C' { ... } should not produce SYMBOLIC fallthrough."""
+        frontend = CFrontend(TreeSitterParserFactory(), "c")
+        ir = frontend.lower(b'extern "C" { int foo(); }')
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "linkage_specification" in str(inst.operands) for inst in symbolics
+        )
+
+    def test_linkage_spec_body_lowered(self):
+        """Declarations inside extern 'C' should still be lowered."""
+        frontend = CFrontend(TreeSitterParserFactory(), "c")
+        ir = frontend.lower(b'extern "C" { int x = 42; }')
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)

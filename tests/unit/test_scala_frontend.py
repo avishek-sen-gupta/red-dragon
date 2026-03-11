@@ -1003,3 +1003,47 @@ class TestScalaGenericTypeSeeding:
         source = "object M { val x: Int = 42 }"
         _, builder = _parse_scala_with_types(source)
         assert builder.var_types["x"] == "Int"
+
+
+class TestScalaExportDeclaration:
+    def test_export_no_symbolic(self):
+        """export foo._ should not produce SYMBOLIC fallthrough."""
+        ir = _parse_scala("export foo._\nval x = 42")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("export_declaration" in str(inst.operands) for inst in symbolics)
+
+    def test_export_does_not_block(self):
+        """Code after export should still be lowered."""
+        ir = _parse_scala("export foo._\nval x = 42")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+
+class TestScalaValDeclaration:
+    def test_val_declaration_no_symbolic(self):
+        """val x: Int (no body) should not produce SYMBOLIC."""
+        ir = _parse_scala("trait Foo { val x: Int }")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("val_declaration" in str(inst.operands) for inst in symbolics)
+
+    def test_val_declaration_does_not_block(self):
+        """Code after val declaration should be lowered."""
+        ir = _parse_scala("trait Foo { val x: Int }\nval y = 42")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("y" in inst.operands for inst in stores)
+
+
+class TestScalaAlternativePattern:
+    def test_alternative_pattern_no_symbolic(self):
+        """case A | B => should not produce SYMBOLIC."""
+        code = """\
+val x = 1
+x match {
+  case 1 | 2 => val r = 10
+  case _ => val r = 0
+}"""
+        ir = _parse_scala(code)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "alternative_pattern" in str(inst.operands) for inst in symbolics
+        )

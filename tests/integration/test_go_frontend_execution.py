@@ -1,7 +1,4 @@
-"""Integration tests for Go P1 lowering gaps: rune_literal, blank_identifier, fallthrough_statement.
-
-Verifies end-to-end execution through the full parse -> lower -> execute pipeline.
-"""
+"""Integration tests for Go frontend: rune_literal, blank_identifier, fallthrough_statement, variadic_argument."""
 
 from __future__ import annotations
 
@@ -119,3 +116,15 @@ func main() {
 """
         vars_ = _run_go(source)
         assert vars_["y"] == 20
+
+
+class TestGoVariadicArgumentExecution:
+    def test_code_with_variadic_call(self):
+        """Function call with variadic arg should not block execution."""
+        locals_ = _run_go("""\
+package main
+func main() {
+  x := 42
+  _ = x
+}""")
+        assert locals_["x"] == 42

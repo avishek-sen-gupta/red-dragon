@@ -1067,3 +1067,80 @@ class TestKotlinAnonymousFunction:
         ]
         assert any("a" in p for p in param_names)
         assert any("b" in p for p in param_names)
+
+
+class TestKotlinUnsignedLiteral:
+    def test_unsigned_literal_no_symbolic(self):
+        """42u should not produce SYMBOLIC fallthrough."""
+        ir = _parse_kotlin("val x = 42u")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("unsigned_literal" in str(inst.operands) for inst in symbolics)
+
+    def test_unsigned_literal_emits_const(self):
+        """Unsigned literal should emit a CONST instruction."""
+        ir = _parse_kotlin("val x = 42u")
+        consts = _find_all(ir, Opcode.CONST)
+        assert len(consts) >= 1
+
+    def test_unsigned_literal_stored(self):
+        """Unsigned literal should be stored in a variable."""
+        ir = _parse_kotlin("val x = 42u")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
+
+
+class TestKotlinWildcardImport:
+    def test_wildcard_import_no_symbolic(self):
+        """import foo.* should not produce SYMBOLIC fallthrough."""
+        ir = _parse_kotlin("import kotlin.math.*\nval x = 1")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("wildcard_import" in str(inst.operands) for inst in symbolics)
+
+
+class TestKotlinCallableReference:
+    def test_callable_reference_no_symbolic(self):
+        """::println should not produce SYMBOLIC fallthrough."""
+        ir = _parse_kotlin("val f = ::println")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("callable_reference" in str(inst.operands) for inst in symbolics)
+
+    def test_callable_reference_emits_load(self):
+        """::functionName should emit a LOAD_VAR for the referenced function."""
+        ir = _parse_kotlin("val f = ::println")
+        loads = _find_all(ir, Opcode.LOAD_VAR)
+        assert any("println" in str(inst.operands) for inst in loads)
+
+
+class TestKotlinSpreadExpression:
+    def test_spread_no_symbolic(self):
+        """*array should not produce SYMBOLIC fallthrough."""
+        ir = _parse_kotlin("""\
+val arr = listOf(1, 2, 3)
+val x = listOf(*arr)
+""")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("spread_expression" in str(inst.operands) for inst in symbolics)
+
+
+class TestKotlinSetter:
+    def test_setter_no_symbolic(self):
+        """Property setter should not produce SYMBOLIC."""
+        ir = _parse_kotlin("""\
+class Foo {
+  var x: Int = 0
+    set(value) { field = value }
+}
+val y = 42""")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("setter" in str(inst.operands) for inst in symbolics)
+
+    def test_setter_does_not_block(self):
+        """Code after class with setter should be lowered."""
+        ir = _parse_kotlin("""\
+class Foo {
+  var x: Int = 0
+    set(value) { field = value }
+}
+val y = 42""")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("y" in inst.operands for inst in stores)

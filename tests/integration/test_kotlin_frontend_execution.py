@@ -1,7 +1,4 @@
-"""Integration tests for Kotlin P1 lowering gaps: unsigned_literal, callable_reference, spread_expression.
-
-Verifies end-to-end execution through the full parse -> lower -> execute pipeline.
-"""
+"""Integration tests for Kotlin frontend: unsigned_literal, callable_reference, spread_expression, setter."""
 
 from __future__ import annotations
 
@@ -62,3 +59,15 @@ val x = 42
 """)
         # Just verify the VM runs; spread is mainly about lowering
         assert vars_["x"] == 42
+
+
+class TestKotlinSetterExecution:
+    def test_code_after_class_with_setter_executes(self):
+        """Code after class with property setter should execute."""
+        locals_ = _run_kotlin("""\
+class Foo {
+  var x: Int = 0
+    set(value) { field = value }
+}
+val y = 42""")
+        assert locals_["y"] == 42

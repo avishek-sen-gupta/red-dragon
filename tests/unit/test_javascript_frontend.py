@@ -953,3 +953,19 @@ class TestJavaScriptWithStatement:
         instructions = _parse_js(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+
+class TestJSMetaProperty:
+    def test_meta_property_no_symbolic(self):
+        """new.target should not produce SYMBOLIC fallthrough."""
+        frontend = JavaScriptFrontend(TreeSitterParserFactory(), "javascript")
+        ir = frontend.lower(b"let x = new.target;")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("meta_property" in str(inst.operands) for inst in symbolics)
+
+    def test_meta_property_stores_value(self):
+        """new.target should be stored as a const."""
+        frontend = JavaScriptFrontend(TreeSitterParserFactory(), "javascript")
+        ir = frontend.lower(b"let x = new.target;")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
