@@ -73,17 +73,6 @@ class FunctionRegistry:
     classes: dict[str, str] = field(default_factory=dict)
     # class_name → linearized parent chain (MRO, excluding self)
     class_parents: dict[str, list[str]] = field(default_factory=dict)
-    # alias → canonical class name (e.g. Foo → __anon_class_0)
-    class_aliases: dict[str, str] = field(default_factory=dict)
-
-    def resolve_class_name(self, name: str) -> str:
-        """Follow alias chain until reaching a canonical class name."""
-        seen: set[str] = set()
-        current = name
-        while current in self.class_aliases and current not in seen:
-            seen.add(current)
-            current = self.class_aliases[current]
-        return current
 
 
 def _scan_func_params(cfg: CFG) -> dict[str, list[str]]:
@@ -105,45 +94,27 @@ def _scan_func_params(cfg: CFG) -> dict[str, list[str]]:
 
 def _scan_classes(
     instructions: list[IRInstruction],
-) -> tuple[
-    dict[str, str],
-    dict[str, dict[str, str]],
-    dict[str, list[str]],
-    dict[str, str],
-]:
-    """Scan IR to find classes, their methods, parent chains, and aliases.
+) -> tuple[dict[str, str], dict[str, dict[str, str]], dict[str, list[str]]]:
+    """Scan IR to find classes, their methods, and parent chains.
 
-    Returns (classes, class_methods, class_parents, class_aliases) where:
+    Returns (classes, class_methods, class_parents) where:
     - classes: class_name → class_body_label
     - class_methods: class_name → {method_name → func_label}
     - class_parents: class_name → linearized parent chain (MRO, excluding self)
-    - class_aliases: alias → canonical class name (for anonymous class expressions)
     """
     classes: dict[str, str] = {}
     class_methods: dict[str, dict[str, str]] = {}
     class_parents: dict[str, list[str]] = {}
-    class_aliases: dict[str, str] = {}
 
-    # First pass: find class constants and record aliases.
-    # Track which register holds which class ref so that a subsequent
-    # STORE_VAR with a different name can register a pointer alias
-    # (e.g. `const Foo = class { ... }` → Foo is alias for __anon_class_0).
-    reg_to_class: dict[str, str] = {}
+    # First pass: find class constants.
     for inst in instructions:
-        if inst.opcode == Opcode.CONST and inst.operands:
-            cr = _parse_class_ref(str(inst.operands[0]))
-            if cr.matched:
-                classes[cr.name] = cr.label
-                if cr.parents:
-                    class_parents[cr.name] = cr.parents
-                if inst.result_reg:
-                    reg_to_class[inst.result_reg] = cr.name
-        elif inst.opcode == Opcode.STORE_VAR and len(inst.operands) >= 2:
-            var_name = inst.operands[0]
-            reg = inst.operands[1]
-            canonical = reg_to_class.get(reg, "")
-            if canonical and var_name != canonical:
-                class_aliases[var_name] = canonical
+        if inst.opcode != Opcode.CONST or not inst.operands:
+            continue
+        cr = _parse_class_ref(str(inst.operands[0]))
+        if cr.matched:
+            classes[cr.name] = cr.label
+            if cr.parents:
+                class_parents[cr.name] = cr.parents
 
     # Second pass: identify class scopes and their methods.
     # Python emits methods inside the class scope (class_X ... end_class_X).
@@ -172,7 +143,7 @@ def _scan_classes(
             if fr.matched:
                 class_methods[in_class][fr.name] = fr.label
 
-    return classes, class_methods, class_parents, class_aliases
+    return classes, class_methods, class_parents
 
 
 def _expand_parent_chains(
@@ -203,8 +174,6 @@ def build_registry(instructions: list[IRInstruction], cfg: CFG) -> FunctionRegis
     """Scan IR and CFG to build a function/class registry."""
     reg = FunctionRegistry()
     reg.func_params = _scan_func_params(cfg)
-    reg.classes, reg.class_methods, direct_parents, reg.class_aliases = _scan_classes(
-        instructions
-    )
+    reg.classes, reg.class_methods, direct_parents = _scan_classes(instructions)
     reg.class_parents = _expand_parent_chains(direct_parents)
     return reg

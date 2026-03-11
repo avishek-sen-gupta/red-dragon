@@ -254,6 +254,14 @@ def _handle_new_object(
     inst: IRInstruction, vm: VMState, **kwargs: Any
 ) -> ExecutionResult:
     type_hint = inst.operands[0] if inst.operands else ""
+    # Dereference: if type_hint is a variable holding a class ref,
+    # extract the canonical class name (e.g. Foo → __anon_class_0).
+    for frame in reversed(vm.call_stack):
+        if type_hint in frame.local_vars:
+            cr = _parse_class_ref(str(frame.local_vars[type_hint]))
+            if cr.matched:
+                type_hint = cr.name
+            break
     addr = f"{constants.OBJ_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
     return ExecutionResult.success(
@@ -1161,9 +1169,6 @@ def _handle_call_method(
     type_hint = ""
     if addr and addr in vm.heap:
         type_hint = vm.heap[addr].type_hint or ""
-
-    # Resolve alias chain (e.g. Foo → __anon_class_0 for anonymous classes)
-    type_hint = registry.resolve_class_name(type_hint)
 
     if not type_hint or type_hint not in registry.class_methods:
         # Unknown object type — resolve via configured strategy
