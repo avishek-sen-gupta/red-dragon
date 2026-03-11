@@ -969,3 +969,39 @@ class TestJSMetaProperty:
         ir = frontend.lower(b"let x = new.target;")
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
+
+
+class TestJavaScriptForLoopUpdate:
+    """C-style for-loop update expression must be lowered correctly."""
+
+    def test_for_loop_update_produces_correct_result(self):
+        """for (let i = 0; i < 5; i = i + 1) should terminate and sum correctly."""
+        vm, stats = execute_for_language(
+            "javascript",
+            """\
+let answer = 0;
+for (let i = 0; i < 5; i = i + 1) {
+    answer = answer + i;
+}
+""",
+        )
+        assert extract_answer(vm, "javascript") == 10
+        assert stats.llm_calls == 0
+
+    def test_for_loop_update_emits_store(self):
+        """The update expression i = i + 1 must emit a STORE_VAR in the IR."""
+        ir = _parse_js("""\
+let x = 0;
+for (let i = 0; i < 3; i = i + 1) {
+    x = x + 1;
+}
+""")
+        # The update 'i = i + 1' should produce a second STORE_VAR for 'i'
+        # (first is from initializer 'let i = 0')
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        i_stores = [
+            inst for inst in stores if inst.operands and inst.operands[0] == "i"
+        ]
+        assert (
+            len(i_stores) >= 2
+        ), f"Expected >= 2 STORE_VAR for 'i' (init + update), got {len(i_stores)}"
