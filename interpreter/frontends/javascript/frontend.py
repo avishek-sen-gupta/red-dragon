@@ -29,6 +29,7 @@ class JavaScriptFrontend(BaseFrontend):
             comment_types=frozenset({JSN.COMMENT}),
             noise_types=frozenset({JSN.NEWLINE}),
             block_node_types=frozenset({JSN.STATEMENT_BLOCK, JSN.PROGRAM, JSN.MODULE}),
+            for_update_field="increment",
         )
 
     def _build_expr_dispatch(self) -> dict[str, Callable]:
