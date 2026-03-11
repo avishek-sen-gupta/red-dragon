@@ -11,6 +11,7 @@ from interpreter.frontends.type_extraction import (
     extract_normalized_type_from_child,
 )
 from interpreter.frontends.common.declarations import make_class_ref
+from interpreter.type_expr import ScalarType
 
 # -- property declaration ----------------------------------------------
 
@@ -123,19 +124,19 @@ def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
 def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     """Emit ``SYMBOLIC param:this`` + ``STORE_VAR this`` for instance methods."""
     param_reg = ctx.fresh_reg()
-    class_name = ctx._current_class_name
+    class_type = ScalarType(ctx._current_class_name)
     ctx.emit(
         Opcode.SYMBOLIC,
         result_reg=param_reg,
         operands=[f"{constants.PARAM_PREFIX}this"],
     )
-    ctx.seed_register_type(param_reg, class_name)
-    ctx.seed_param_type("this", class_name)
+    ctx.seed_register_type(param_reg, class_type)
+    ctx.seed_param_type("this", class_type)
     ctx.emit(
         Opcode.STORE_VAR,
         operands=["this", param_reg],
     )
-    ctx.seed_var_type("this", class_name)
+    ctx.seed_var_type("this", class_type)
 
 
 def _lower_kotlin_params(ctx: TreeSitterEmitContext, params_node) -> None:
