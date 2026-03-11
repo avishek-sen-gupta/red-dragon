@@ -535,3 +535,37 @@ class TestTSTypeAssertion:
         ir = frontend.lower(b"let y = <string>x;")
         loads = _find_all(ir, Opcode.LOAD_VAR)
         assert any("x" in inst.operands for inst in loads)
+
+
+class TestTypeScriptForLoopUpdate:
+    """C-style for-loop update expression must be lowered correctly."""
+
+    def test_for_loop_update_produces_correct_result(self):
+        from tests.unit.rosetta.conftest import execute_for_language, extract_answer
+
+        vm, stats = execute_for_language(
+            "typescript",
+            """\
+let answer: number = 0;
+for (let i: number = 0; i < 5; i = i + 1) {
+    answer = answer + i;
+}
+""",
+        )
+        assert extract_answer(vm, "typescript") == 10
+        assert stats.llm_calls == 0
+
+    def test_for_loop_update_emits_store(self):
+        ir = _parse_ts("""\
+let x: number = 0;
+for (let i: number = 0; i < 3; i = i + 1) {
+    x = x + 1;
+}
+""")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        i_stores = [
+            inst for inst in stores if inst.operands and inst.operands[0] == "i"
+        ]
+        assert (
+            len(i_stores) >= 2
+        ), f"Expected >= 2 STORE_VAR for 'i' (init + update), got {len(i_stores)}"
