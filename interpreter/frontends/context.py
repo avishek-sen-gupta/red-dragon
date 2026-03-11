@@ -17,7 +17,7 @@ from interpreter.frontend_observer import FrontendObserver
 from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.var_scope_info import VarScopeInfo
-from interpreter.type_expr import parse_type
+from interpreter.type_expr import TypeExpr, parse_type
 
 logger = logging.getLogger(__name__)
 
@@ -195,15 +195,19 @@ class TreeSitterEmitContext:
                 return_type
             )
 
-    def seed_register_type(self, reg: str, type_name: str) -> None:
+    def seed_register_type(self, reg: str, type_name: str | TypeExpr) -> None:
         """Seed the type for a register."""
         if reg and type_name:
-            self.type_env_builder.register_types[reg] = parse_type(type_name)
+            self.type_env_builder.register_types[reg] = (
+                type_name if isinstance(type_name, TypeExpr) else parse_type(type_name)
+            )
 
-    def seed_var_type(self, var_name: str, type_name: str) -> None:
+    def seed_var_type(self, var_name: str, type_name: str | TypeExpr) -> None:
         """Seed the type for a variable."""
         if var_name and type_name:
-            self.type_env_builder.var_types[var_name] = parse_type(type_name)
+            self.type_env_builder.var_types[var_name] = (
+                type_name if isinstance(type_name, TypeExpr) else parse_type(type_name)
+            )
 
     def seed_interface_impl(self, class_name: str, interface_name: str) -> None:
         """Seed that a class implements an interface."""

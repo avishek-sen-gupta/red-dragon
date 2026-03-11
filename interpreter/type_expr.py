@@ -241,6 +241,11 @@ def tuple_of(*elements: TypeExpr) -> ParameterizedType:
     return ParameterizedType("Tuple", tuple(elements))
 
 
+def metatype(class_type: TypeExpr) -> ParameterizedType:
+    """Create a ``Type[ClassName]`` metatype — the type of a class constructor."""
+    return ParameterizedType("Type", (class_type,))
+
+
 def union_of(*types: TypeExpr) -> TypeExpr:
     """Create a union type, with flattening, dedup, and singleton elimination.
 
