@@ -633,7 +633,69 @@ interface Shape {
         ), f"Expected class ref for Shape, got: {[c.operands for c in consts]}"
 
     def test_interface_property_signature(self):
-        """Property signatures in interfaces should produce function labels."""
+        """Property signatures in interfaces should produce STORE_VAR with type seeding."""
         ir = _parse_ts("interface Logger { level: string; }")
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("Logger" in inst.operands for inst in stores)
+        assert any(
+            "level" in inst.operands for inst in stores
+        ), f"Expected STORE_VAR for 'level', got: {[s.operands for s in stores]}"
+
+
+class TestTypeScriptInterfacePropertySignatures:
+    """TS interface property_signature lowering seeds type info (ADR-101)."""
+
+    INTERFACE_WITH_PROPS = """\
+interface Config {
+    name: string;
+    readonly id: number;
+    optional?: boolean;
+    compute(): number;
+}
+"""
+
+    def test_property_signature_emits_store_var(self):
+        """Each property_signature should emit STORE_VAR inside the class block."""
+        ir = _parse_ts(self.INTERFACE_WITH_PROPS)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        store_names = [s.operands[0] for s in stores if s.operands]
+        assert (
+            "name" in store_names
+        ), f"Expected STORE_VAR for 'name', got: {store_names}"
+        assert "id" in store_names, f"Expected STORE_VAR for 'id', got: {store_names}"
+        assert (
+            "optional" in store_names
+        ), f"Expected STORE_VAR for 'optional', got: {store_names}"
+
+    def test_property_signature_seeds_var_type(self):
+        """Property signatures should seed var types for inference chain walk."""
+        ir, type_builder = _parse_ts_with_types(self.INTERFACE_WITH_PROPS)
+        var_types = type_builder.var_types
+        name_types = {k: v for k, v in var_types.items() if k == "name"}
+        id_types = {k: v for k, v in var_types.items() if k == "id"}
+        assert len(name_types) >= 1, f"Expected var type for 'name', got: {var_types}"
+        assert len(id_types) >= 1, f"Expected var type for 'id', got: {var_types}"
+
+    def test_property_signature_no_symbolic(self):
+        """Property signatures should not produce SYMBOLIC unsupported markers."""
+        ir = _parse_ts(self.INTERFACE_WITH_PROPS)
+        symbolics = [
+            s
+            for s in ir
+            if s.opcode == Opcode.SYMBOLIC and "property_signature" in str(s.operands)
+        ]
+        assert (
+            len(symbolics) == 0
+        ), f"property_signature should not produce SYMBOLIC, got: {symbolics}"
+
+    def test_method_and_property_coexist(self):
+        """Interface with both methods and properties should lower both."""
+        ir = _parse_ts(self.INTERFACE_WITH_PROPS)
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        store_names = [s.operands[0] for s in stores if s.operands]
+        # compute() is a method_signature → lowered as function
+        assert (
+            "compute" in store_names
+        ), f"Expected method 'compute', got: {store_names}"
+        # name is a property_signature → lowered as STORE_VAR
+        assert "name" in store_names, f"Expected property 'name', got: {store_names}"
