@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "red_dragon",
+  "project_id": "7aa95a16-28b7-44df-94c0-f41f6d149dfd"
+}
