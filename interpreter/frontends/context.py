@@ -188,11 +188,15 @@ class TreeSitterEmitContext:
         else:
             self._current_func_label = ""
 
-    def seed_func_return_type(self, func_label: str, return_type: str) -> None:
+    def seed_func_return_type(
+        self, func_label: str, return_type: str | TypeExpr
+    ) -> None:
         """Seed the return type for a function label."""
         if return_type:
-            self.type_env_builder.func_return_types[func_label] = parse_type(
+            self.type_env_builder.func_return_types[func_label] = (
                 return_type
+                if isinstance(return_type, TypeExpr)
+                else parse_type(return_type)
             )
 
     def seed_register_type(self, reg: str, type_name: str | TypeExpr) -> None:
@@ -216,16 +220,25 @@ class TreeSitterEmitContext:
                 class_name, []
             ).append(interface_name)
 
-    def seed_type_alias(self, alias_name: str, target_type: str) -> None:
+    def seed_type_alias(self, alias_name: str, target_type: str | TypeExpr) -> None:
         """Seed a type alias (e.g., typedef int UserId → alias UserId = Int)."""
         if alias_name and target_type:
-            self.type_env_builder.type_aliases[alias_name] = parse_type(target_type)
+            self.type_env_builder.type_aliases[alias_name] = (
+                target_type
+                if isinstance(target_type, TypeExpr)
+                else parse_type(target_type)
+            )
 
-    def seed_param_type(self, param_name: str, type_hint: str) -> None:
+    def seed_param_type(self, param_name: str, type_hint: str | TypeExpr) -> None:
         """Seed a parameter type for the current function."""
         if self._current_func_label:
+            resolved = (
+                type_hint
+                if isinstance(type_hint, TypeExpr)
+                else parse_type(type_hint or "")
+            )
             self.type_env_builder.func_param_types[self._current_func_label].append(
-                (param_name, parse_type(type_hint or ""))
+                (param_name, resolved)
             )
 
     def node_text(self, node) -> str:

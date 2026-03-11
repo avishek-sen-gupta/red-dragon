@@ -20,7 +20,7 @@ from interpreter.frontends.type_extraction import (
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.typescript_node_types import TypeScriptNodeType
 from interpreter.frontends.common.declarations import make_class_ref
-from interpreter.type_expr import ScalarType, metatype
+from interpreter.type_expr import UNKNOWN, ScalarType, TypeExpr, metatype
 
 
 class TypeScriptFrontend(JavaScriptFrontend):
@@ -476,11 +476,11 @@ def lower_ts_internal_module(ctx: TreeSitterEmitContext, node) -> None:
 # ── TS-specific param handling ───────────────────────────────────
 
 
-def _extract_ts_type_hint(ctx: TreeSitterEmitContext, param_node) -> str:
+def _extract_ts_type_hint(ctx: TreeSitterEmitContext, param_node) -> TypeExpr:
     """Extract type hint from a TS parameter's type_annotation field."""
     type_ann = param_node.child_by_field_name("type")
     if type_ann is None:
-        return ""
+        return UNKNOWN
     # type_annotation contains `: <type>` — find the first named non-colon child
     type_child = next(
         (c for c in type_ann.children if c.is_named),
