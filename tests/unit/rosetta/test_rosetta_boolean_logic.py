@@ -105,7 +105,7 @@ REQUIRED_OPCODES: set[Opcode] = {Opcode.BINOP}
 
 MIN_INSTRUCTIONS = 5
 
-LOGICAL_OPERATORS: set[str] = {"and", "or", "&&", "||"}
+LOGICAL_OPERATORS: set[str] = {"and", "or", "&&", "||", "&", "|"}
 
 
 # ---------------------------------------------------------------------------

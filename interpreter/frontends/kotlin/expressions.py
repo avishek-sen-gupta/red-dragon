@@ -811,8 +811,21 @@ def _lower_elvis_with_throw(
 # -- infix expression --------------------------------------------------
 
 
+_KOTLIN_BITWISE_INFIX: dict[str, str] = {
+    "and": "&",
+    "or": "|",
+    "xor": "^",
+    "shl": "<<",
+    "shr": ">>",
+}
+
+
 def lower_infix_expr(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower `a to b`, `x until y` as CALL_FUNCTION(infix_name, left, right)."""
+    """Lower `a to b`, `x until y` as CALL_FUNCTION(infix_name, left, right).
+
+    Kotlin bitwise infix functions (and, or, xor, shl, shr) are lowered as
+    BINOP with the corresponding operator symbol.
+    """
     named_children = [c for c in node.children if c.is_named]
     if len(named_children) < 3:
         return lower_const_literal(ctx, node)
@@ -820,12 +833,21 @@ def lower_infix_expr(ctx: TreeSitterEmitContext, node) -> str:
     func_name = ctx.node_text(named_children[1])
     right_reg = ctx.lower_expr(named_children[2])
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=[func_name, left_reg, right_reg],
-        node=node,
-    )
+    bitwise_op = _KOTLIN_BITWISE_INFIX.get(func_name)
+    if bitwise_op:
+        ctx.emit(
+            Opcode.BINOP,
+            result_reg=reg,
+            operands=[bitwise_op, left_reg, right_reg],
+            node=node,
+        )
+    else:
+        ctx.emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=reg,
+            operands=[func_name, left_reg, right_reg],
+            node=node,
+        )
     return reg
 
 
