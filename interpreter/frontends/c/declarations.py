@@ -12,7 +12,7 @@ from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
 from interpreter.frontends.c.node_types import CNodeType
-from interpreter.type_expr import scalar, pointer
+from interpreter.type_expr import UNKNOWN, TypeExpr, scalar, pointer
 
 logger = logging.getLogger(__name__)
 
@@ -50,15 +50,14 @@ def _count_pointer_depth(decl_node) -> int:
     return depth
 
 
-def _wrap_pointer_type(base_type: str, depth: int) -> str:
+def _wrap_pointer_type(base_type: TypeExpr, depth: int) -> TypeExpr:
     """Wrap *base_type* in *depth* layers of ``Pointer[...]``.
 
-    Uses the TypeExpr ADT for formatting, then returns the string
-    representation (e.g. ``"Pointer[Int]"``, ``"Pointer[Pointer[Int]]"``).
+    Returns a ``TypeExpr`` (e.g. ``Pointer[Int]``, ``Pointer[Pointer[Int]]``).
     """
     from functools import reduce
 
-    return str(reduce(lambda inner, _: pointer(inner), range(depth), scalar(base_type)))
+    return reduce(lambda inner, _: pointer(inner), range(depth), base_type)
 
 
 def _extract_struct_type(ctx: TreeSitterEmitContext, node) -> str:
@@ -117,7 +116,10 @@ def lower_declaration(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def _lower_init_declarator(
-    ctx: TreeSitterEmitContext, node, struct_type: str = "", type_hint: str = ""
+    ctx: TreeSitterEmitContext,
+    node,
+    struct_type: str = "",
+    type_hint: TypeExpr = UNKNOWN,
 ) -> None:
     """Lower init_declarator (fields: declarator, value)."""
     decl_node = node.child_by_field_name("declarator")

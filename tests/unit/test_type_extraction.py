@@ -1,6 +1,7 @@
 """Unit tests for interpreter.frontends.type_extraction — normalize_type_hint."""
 
 from interpreter.frontends.type_extraction import normalize_type_hint
+from interpreter.type_expr import UNKNOWN, ScalarType
 
 JAVA_TYPE_MAP = {
     "int": "Int",
@@ -382,11 +383,35 @@ class TestNormalizeTypeHintPHP:
 
 
 class TestNormalizeTypeHintEdgeCases:
-    def test_empty_string_returns_empty(self):
-        assert normalize_type_hint("", JAVA_TYPE_MAP) == ""
+    def test_empty_string_returns_unknown(self):
+        result = normalize_type_hint("", JAVA_TYPE_MAP)
+        assert result == UNKNOWN
+        assert not result  # falsy like ""
 
-    def test_empty_map_returns_raw(self):
-        assert normalize_type_hint("int", {}) == "int"
+    def test_empty_map_returns_raw_as_scalar(self):
+        result = normalize_type_hint("int", {})
+        assert result == ScalarType("int")
+        assert isinstance(result, ScalarType)
 
-    def test_custom_class_passthrough(self):
-        assert normalize_type_hint("MyCustomType", GO_TYPE_MAP) == "MyCustomType"
+    def test_custom_class_passthrough_as_scalar(self):
+        result = normalize_type_hint("MyCustomType", GO_TYPE_MAP)
+        assert result == ScalarType("MyCustomType")
+        assert isinstance(result, ScalarType)
+
+
+class TestNormalizeTypeHintReturnsTypeExpr:
+    """normalize_type_hint should return TypeExpr, not str."""
+
+    def test_mapped_type_returns_scalar_type(self):
+        result = normalize_type_hint("int", JAVA_TYPE_MAP)
+        assert isinstance(result, ScalarType)
+        assert result == ScalarType("Int")
+
+    def test_unmapped_type_returns_scalar_type(self):
+        result = normalize_type_hint("Dog", JAVA_TYPE_MAP)
+        assert isinstance(result, ScalarType)
+        assert result == ScalarType("Dog")
+
+    def test_empty_returns_unknown(self):
+        result = normalize_type_hint("", JAVA_TYPE_MAP)
+        assert result is UNKNOWN

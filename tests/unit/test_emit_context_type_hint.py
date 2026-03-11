@@ -9,6 +9,7 @@ from interpreter.constants import Language
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.ir import Opcode
+from interpreter.type_expr import ScalarType, ParameterizedType
 
 
 def _make_ctx() -> TreeSitterEmitContext:
@@ -86,6 +87,27 @@ class TestSeedHelpers:
         ctx.seed_register_type("%0", "Dog")
         ctx.seed_param_type("self", "Dog")
         assert ctx.type_env_builder.func_param_types["func_add_0"] == []
+
+    def test_seed_func_return_type_accepts_type_expr(self):
+        ctx = _make_ctx()
+        ctx.emit(Opcode.LABEL, label="func_add_0")
+        ctx.seed_func_return_type("func_add_0", ScalarType("Int"))
+        assert ctx.type_env_builder.func_return_types["func_add_0"] == ScalarType("Int")
+
+    def test_seed_func_return_type_accepts_parameterized_type_expr(self):
+        ctx = _make_ctx()
+        ctx.emit(Opcode.LABEL, label="func_get_0")
+        ret_type = ParameterizedType("Array", (ScalarType("String"),))
+        ctx.seed_func_return_type("func_get_0", ret_type)
+        assert ctx.type_env_builder.func_return_types["func_get_0"] == ret_type
+
+    def test_seed_param_type_accepts_type_expr(self):
+        ctx = _make_ctx()
+        ctx.emit(Opcode.LABEL, label="func_add_0")
+        ctx.seed_param_type("x", ScalarType("Float"))
+        assert ctx.type_env_builder.func_param_types["func_add_0"] == [
+            ("x", ScalarType("Float"))
+        ]
 
     def test_ir_instruction_has_no_type_hint_field(self):
         ctx = _make_ctx()

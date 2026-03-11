@@ -26,7 +26,7 @@ def lower_function_def(ctx: TreeSitterEmitContext, node) -> None:
     end_label = ctx.fresh_label(f"end_{func_name}")
 
     raw_return = extract_type_from_field(ctx, node, "return_type")
-    return_hint = normalize_type_hint(raw_return, ctx.type_map) if raw_return else ""
+    return_hint = normalize_type_hint(raw_return, ctx.type_map)
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=func_label)
@@ -78,7 +78,7 @@ def lower_param(ctx: TreeSitterEmitContext, child) -> None:
     if pname is None:
         return
     raw_type = extract_type_from_field(ctx, child, "type")
-    type_hint = normalize_type_hint(raw_type, ctx.type_map) if raw_type else ""
+    type_hint = normalize_type_hint(raw_type, ctx.type_map)
     param_reg = ctx.fresh_reg()
     ctx.emit(
         Opcode.SYMBOLIC,
