@@ -1,14 +1,15 @@
-"""Rosetta test: genuine nested functions across 10 languages.
+"""Rosetta test: genuine nested functions across 12 languages.
 
 Verifies that languages whose frontends genuinely lower inner functions
 nested inside outer functions emit a ``func_inner`` (or ``func___anon``)
 label nested inside the ``func_outer`` body, with ``CALL_FUNCTION inner``
 inside the outer function.
 
-10 of the 15 deterministic frontends support nested function definitions:
-  Python, JavaScript, TypeScript, Rust, Lua, Ruby, Go, Kotlin, Scala, PHP
+12 of the 15 deterministic frontends support nested function definitions:
+  Python, JavaScript, TypeScript, Rust, Lua, Ruby, Go, Kotlin, Scala, PHP,
+  C# (local functions, C# 7+), Pascal (nested procedures)
 
-Excluded (5): C, C++, Java, C#, Pascal — no nested function syntax.
+Excluded (3): C, C++, Java — no nested function syntax.
 
 Program:
     def outer(x):
@@ -144,6 +145,34 @@ function outer($x) {
 $answer = outer(3);
 ?>
 """,
+    "csharp": """\
+class M {
+    static int outer(int a) {
+        int inner(int y) {
+            return y * 2;
+        }
+        return inner(a) + 5;
+    }
+    static int answer = outer(3);
+}
+""",
+    "pascal": """\
+program M;
+
+function outer(x: integer): integer;
+    function inner(y: integer): integer;
+    begin
+        inner := y * 2;
+    end;
+begin
+    outer := inner(x) + 5;
+end;
+
+var answer: integer;
+begin
+    answer := outer(3);
+end.
+""",
 }
 
 NESTED_FUNCTION_LANGUAGES: frozenset[str] = frozenset(PROGRAMS.keys())
@@ -222,6 +251,8 @@ class TestNestedFunctionsCrossLanguage:
             "kotlin",
             "scala",
             "php",
+            "csharp",
+            "pascal",
         }
         assert set(PROGRAMS.keys()) == expected
 
@@ -267,8 +298,9 @@ class TestNestedFunctionsExecution:
 # Inner function scoping tests: verify inner is inaccessible outside outer
 # ---------------------------------------------------------------------------
 #
-# 7 of 10 languages have genuine inner-function scoping (inner is local to
-# outer's scope): Python, JavaScript, TypeScript, Rust, Go, Kotlin, Scala.
+# 9 of 12 languages have genuine inner-function scoping (inner is local to
+# outer's scope): Python, JavaScript, TypeScript, Rust, Go, Kotlin, Scala,
+# C# (local functions), Pascal (nested procedures).
 #
 # Excluded (3): Ruby, PHP, Lua — in these languages inner functions leak to
 # enclosing/global scope, so testing inaccessibility would not reflect actual
@@ -336,7 +368,17 @@ leaked = inner(3)
 EXPECTED_LEAKED_VALUE = 6
 
 SCOPED_LANGUAGES: frozenset[str] = frozenset(
-    {"python", "javascript", "typescript", "rust", "go", "kotlin", "scala"}
+    {
+        "python",
+        "javascript",
+        "typescript",
+        "rust",
+        "go",
+        "kotlin",
+        "scala",
+        "csharp",
+        "pascal",
+    }
 )
 
 SCOPING_PROGRAMS: dict[str, str] = {
@@ -422,6 +464,37 @@ object M {
     val result = outer(3)
     val leaked = inner(3)
 }
+""",
+    "csharp": """\
+class M {
+    static int outer(int a) {
+        int inner(int y) {
+            return y * 2;
+        }
+        return inner(a) + 5;
+    }
+    static int result = outer(3);
+    static int leaked = inner(3);
+}
+""",
+    "pascal": """\
+program M;
+
+function outer(x: integer): integer;
+    function inner(y: integer): integer;
+    begin
+        inner := y * 2;
+    end;
+begin
+    outer := inner(x) + 5;
+end;
+
+var result: integer;
+var leaked: integer;
+begin
+    result := outer(3);
+    leaked := inner(3);
+end.
 """,
 }
 
