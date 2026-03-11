@@ -159,10 +159,9 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
                 "construct_signature",
             ):
                 _lower_ts_interface_method(ctx, child)
-            elif child.is_named and child.type not in (
-                "property_signature",
-                "index_signature",
-            ):
+            elif child.type == "property_signature":
+                _lower_ts_interface_property(ctx, child)
+            elif child.is_named and child.type not in ("index_signature",):
                 ctx.lower_stmt(child)
 
     ctx.emit(Opcode.LABEL, label=end_label)
@@ -206,6 +205,26 @@ def _lower_ts_interface_method(ctx: TreeSitterEmitContext, node) -> None:
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
     ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+
+def _lower_ts_interface_property(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower a property_signature inside an interface as STORE_VAR with type seeding.
+
+    Seeds type info so ADR-100 chain walk can resolve property types on
+    interface-typed variables.
+    """
+    name_node = node.child_by_field_name("name")
+    prop_name = ctx.node_text(name_node) if name_node else "__unknown_prop"
+    raw_type = extract_type_from_field(ctx, node, "type")
+    type_hint = normalize_type_hint(raw_type.lstrip(": "), ctx.type_map)
+    val_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=val_reg,
+        operands=[ctx.constants.none_literal],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[prop_name, val_reg], node=node)
+    ctx.seed_var_type(prop_name, type_hint)
 
 
 def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:

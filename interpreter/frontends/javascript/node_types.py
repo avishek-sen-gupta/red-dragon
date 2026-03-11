@@ -43,6 +43,8 @@ class JavaScriptNodeType:
     SEQUENCE_EXPRESSION = "sequence_expression"
     SPREAD_ELEMENT = "spread_element"
     META_PROPERTY = "meta_property"
+    OPTIONAL_CHAIN = "optional_chain"
+    COMPUTED_PROPERTY_NAME = "computed_property_name"
 
     # ── Collection literals ──────────────────────────────────────────
     ARRAY = "array"
