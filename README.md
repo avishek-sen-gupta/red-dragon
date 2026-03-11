@@ -547,9 +547,9 @@ Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integrati
 
 ### Rosetta cross-language suite
 
-The **Rosetta suite** (`tests/unit/rosetta/`) implements 21 cross-language test sets and verifies they produce clean, structurally consistent IR:
+The **Rosetta suite** (`tests/unit/rosetta/`) implements 25 cross-language test sets and verifies they produce clean, structurally consistent IR:
 
-- **17 algorithms + closures + classes + exceptions + variable scoping** — all 15 languages
+- **21 algorithms + closures + classes + exceptions + variable scoping** — all 15 languages
 - **closures-lambda** — 5 languages with lambda/arrow syntax (Python, JS, TS, Kotlin, Scala)
 - **destructuring** — 6 languages (Python, JS, TS, Rust, Scala, Kotlin) in variable declarations; for-loop destructuring in JS/TS (`for (const [k, v] of arr)`), Kotlin (`for ((a, b) in pairs)`), and C++ (`for (auto [a, b] : pairs)`)
 - **nested functions** — 12 languages (Python, JS, TS, Rust, Lua, Ruby, Go, Kotlin, Scala, PHP, C#, Pascal)
@@ -561,7 +561,7 @@ Each problem tests:
 - Required opcode presence and operator spot-checks
 - Aggregate cross-language variance
 
-**VM execution verification** runs 7 algorithms plus closures, classes, exceptions, destructuring, nested functions, and variable scoping through the VM with zero LLM calls, asserting correct computed results:
+**VM execution verification** runs algorithms, closures, classes, exceptions, destructuring, nested functions, and variable scoping through the VM with zero LLM calls, asserting correct computed results:
 
 | Test | Expected |
 |------|----------|
@@ -585,6 +585,10 @@ Each problem tests:
 | ternary abs(-5) | 5 |
 | boolean (a AND NOT b) OR false | True |
 | bitwise (12 & 10) ^ 5 | 13 |
+| unary -(-7) | 7 |
+| array accumulate sum([1..5]) | 15 |
+| method chaining counter.inc().inc().get() | 2 |
+| nested loops count pairs(1..4) | 6 |
 
 **Inner function scoping** is verified for 9 languages (Python, JavaScript, TypeScript, Rust, Go, Kotlin, Scala, C#, Pascal) — inner functions are inaccessible outside the enclosing scope (the VM produces a symbolic value instead of a concrete result).
 
