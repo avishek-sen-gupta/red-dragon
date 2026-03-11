@@ -69,6 +69,7 @@ class TypeScriptFrontend(JavaScriptFrontend):
                 TypeScriptNodeType.FUNCTION_EXPRESSION: lower_ts_function_expression,
                 TypeScriptNodeType.GENERATOR_FUNCTION: lower_ts_function_expression,
                 TypeScriptNodeType.GENERATOR_FUNCTION_DECLARATION: lower_ts_function_def,
+                TypeScriptNodeType.INSTANTIATION_EXPRESSION: lower_instantiation_expr,
             }
         )
         return dispatch
@@ -88,6 +89,8 @@ class TypeScriptFrontend(JavaScriptFrontend):
                 TypeScriptNodeType.PUBLIC_FIELD_DEFINITION: lower_ts_field_definition,
                 TypeScriptNodeType.ABSTRACT_METHOD_SIGNATURE: lower_ts_abstract_method,
                 TypeScriptNodeType.INTERNAL_MODULE: lower_ts_internal_module,
+                TypeScriptNodeType.FUNCTION_SIGNATURE: lambda ctx, node: None,
+                TypeScriptNodeType.AMBIENT_DECLARATION: lambda ctx, node: None,
             }
         )
         return dispatch
@@ -116,6 +119,17 @@ def lower_satisfies_expr(ctx: TreeSitterEmitContext, node) -> str:
     children = [c for c in node.children if c.is_named]
     if children:
         return ctx.lower_expr(children[0])
+    return common_expr.lower_const_literal(ctx, node)
+
+
+def lower_instantiation_expr(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower `fn<Type>` -> lower fn, discard type arguments (type erasure)."""
+    func_node = next(
+        (c for c in node.children if c.is_named and c.type != "type_arguments"),
+        None,
+    )
+    if func_node:
+        return ctx.lower_expr(func_node)
     return common_expr.lower_const_literal(ctx, node)
 
 
