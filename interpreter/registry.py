@@ -106,15 +106,29 @@ def _scan_classes(
     class_methods: dict[str, dict[str, str]] = {}
     class_parents: dict[str, list[str]] = {}
 
-    # First pass: find class constants
+    # First pass: find class constants and aliases.
+    # Track which register holds which class ref so that a subsequent
+    # STORE_VAR with a different name can register an alias
+    # (e.g. `const Foo = class { ... }` → class ref is __anon_class_0,
+    # variable is Foo).
+    reg_to_class: dict[str, str] = {}
     for inst in instructions:
-        if inst.opcode != Opcode.CONST or not inst.operands:
-            continue
-        cr = _parse_class_ref(str(inst.operands[0]))
-        if cr.matched:
-            classes[cr.name] = cr.label
-            if cr.parents:
-                class_parents[cr.name] = cr.parents
+        if inst.opcode == Opcode.CONST and inst.operands:
+            cr = _parse_class_ref(str(inst.operands[0]))
+            if cr.matched:
+                classes[cr.name] = cr.label
+                if cr.parents:
+                    class_parents[cr.name] = cr.parents
+                if inst.result_reg:
+                    reg_to_class[inst.result_reg] = cr.name
+        elif inst.opcode == Opcode.STORE_VAR and len(inst.operands) >= 2:
+            var_name = inst.operands[0]
+            reg = inst.operands[1]
+            class_name = reg_to_class.get(reg, "")
+            if class_name and var_name != class_name:
+                classes[var_name] = classes[class_name]
+                if class_name in class_parents:
+                    class_parents[var_name] = class_parents[class_name]
 
     # Second pass: identify class scopes and their methods.
     # Python emits methods inside the class scope (class_X ... end_class_X).
@@ -142,6 +156,16 @@ def _scan_classes(
             fr = _parse_func_ref(str(inst.operands[0]))
             if fr.matched:
                 class_methods[in_class][fr.name] = fr.label
+
+    # Propagate methods to aliases: if multiple class names share a label,
+    # ensure all of them have the same methods dict.
+    label_to_methods: dict[str, dict[str, str]] = {}
+    for cname, clabel in classes.items():
+        if cname in class_methods:
+            label_to_methods[clabel] = class_methods[cname]
+    for cname, clabel in classes.items():
+        if cname not in class_methods and clabel in label_to_methods:
+            class_methods[cname] = label_to_methods[clabel]
 
     return classes, class_methods, class_parents
 
