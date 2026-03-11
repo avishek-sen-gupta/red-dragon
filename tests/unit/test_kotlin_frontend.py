@@ -1226,3 +1226,48 @@ val answer = c xor 5
         )
         assert extract_answer(vm, "kotlin") == 13
         assert stats.llm_calls == 0
+
+
+class TestKotlinInterfaceLowering:
+    """Kotlin interface declarations should emit CLASS blocks with method stubs."""
+
+    def test_interface_emits_class_block(self):
+        """Interface produces BRANCH-LABEL...LABEL-CONST(<class:>)-STORE_VAR."""
+        instructions = _parse_kotlin("interface Drawable { fun draw(): String }")
+        consts = _find_all(instructions, Opcode.CONST)
+        class_refs = [i for i in consts if "<class:" in str(i.operands)]
+        assert len(class_refs) == 1
+        assert "Drawable" in str(class_refs[0].operands[0])
+        labels = _find_all(instructions, Opcode.LABEL)
+        assert any("class_Drawable" in (i.label or "") for i in labels)
+
+    def test_interface_methods_emit_function_labels(self):
+        """Each interface method should produce a FUNC_DEF label."""
+        instructions = _parse_kotlin(
+            "interface Shape { fun area(): Double\n fun perimeter(): Double }"
+        )
+        labels = _find_all(instructions, Opcode.LABEL)
+        func_labels = [i for i in labels if "func_" in (i.label or "")]
+        func_label_names = [i.label for i in func_labels]
+        assert any("area" in lbl for lbl in func_label_names)
+        assert any("perimeter" in lbl for lbl in func_label_names)
+
+    def test_interface_methods_seed_return_types(self):
+        """Interface method return types are seeded in type_env_builder."""
+        _instructions, builder = _parse_kotlin_with_types(
+            "interface Calculator { fun compute(x: Int): Int\n fun reset(): Boolean }"
+        )
+        rt = dict(builder.func_return_types)
+        compute_entries = {k: v for k, v in rt.items() if "compute" in k}
+        reset_entries = {k: v for k, v in rt.items() if "reset" in k}
+        assert (
+            len(compute_entries) >= 1
+        ), f"Expected return type for 'compute', got: {rt}"
+        assert len(reset_entries) >= 1, f"Expected return type for 'reset', got: {rt}"
+
+    def test_interface_methods_inject_this(self):
+        """Interface methods should have 'this' parameter injection."""
+        instructions = _parse_kotlin("interface Greeter { fun greet(): String }")
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        this_params = [i for i in symbolics if "param:this" in str(i.operands)]
+        assert len(this_params) >= 1, "Interface methods should inject 'this'"
