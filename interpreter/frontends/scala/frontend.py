@@ -101,6 +101,7 @@ class ScalaFrontend(BaseFrontend):
             NT.GENERIC_FUNCTION: scala_expr.lower_generic_function,
             NT.POSTFIX_EXPRESSION: scala_expr.lower_postfix_expression,
             NT.STABLE_TYPE_IDENTIFIER: scala_expr.lower_stable_type_identifier,
+            NT.ALTERNATIVE_PATTERN: scala_expr.lower_alternative_pattern,
         }
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:
@@ -130,4 +131,5 @@ class ScalaFrontend(BaseFrontend):
             NT.DO_WHILE_EXPRESSION: scala_cf.lower_do_while,
             NT.TYPE_DEFINITION: lambda ctx, node: None,
             NT.FUNCTION_DECLARATION: scala_decl.lower_function_declaration,
+            NT.VAL_DECLARATION: lambda ctx, node: None,
         }

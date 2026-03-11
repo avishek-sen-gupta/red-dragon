@@ -455,6 +455,18 @@ def lower_mod_item(ctx: TreeSitterEmitContext, node) -> None:
         ctx.lower_block(body_node)
 
 
+# ── foreign mod item (extern block) ──────────────────────────────────
+
+
+def lower_foreign_mod_item(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower `extern "C" { fn foo(); ... }` by lowering body declarations."""
+    body_node = node.child_by_field_name("body")
+    if body_node:
+        for child in body_node.children:
+            if child.is_named and child.type != RustNodeType.STRING_LITERAL:
+                ctx.lower_stmt(child)
+
+
 # ── function signature item (trait method stub) ──────────────────────
 
 

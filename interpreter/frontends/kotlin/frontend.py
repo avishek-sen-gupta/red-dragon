@@ -113,4 +113,6 @@ class KotlinFrontend(BaseFrontend):
             KNT.OBJECT_DECLARATION: kotlin_decl.lower_object_decl,
             KNT.TRY_EXPRESSION: kotlin_cf.lower_try_stmt,
             KNT.TYPE_ALIAS: lambda ctx, node: None,
+            KNT.SETTER: lambda ctx, node: None,
+            KNT.GETTER: lambda ctx, node: None,
         }

@@ -382,6 +382,17 @@ def lower_namespace(ctx: TreeSitterEmitContext, node) -> None:
         ctx.lower_block(body_node)
 
 
+def lower_file_scoped_namespace(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower `namespace Foo;` — lower all child declarations (no body block)."""
+    for child in node.children:
+        if (
+            child.is_named
+            and child.type != NT.IDENTIFIER
+            and child.type != NT.QUALIFIED_NAME
+        ):
+            ctx.lower_stmt(child)
+
+
 def lower_local_function_stmt(ctx: TreeSitterEmitContext, node) -> None:
     """Lower local functions inside method bodies -- like method_declaration."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)

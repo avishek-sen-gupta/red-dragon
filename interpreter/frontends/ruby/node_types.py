@@ -62,6 +62,9 @@ class RubyNodeType:
     DO_BLOCK = "do_block"
     BLOCK_PARAMETERS = "block_parameters"
     BLOCK_BODY = "block_body"
+    SPLAT_ARGUMENT = "splat_argument"
+    HASH_SPLAT_ARGUMENT = "hash_splat_argument"
+    BLOCK_ARGUMENT = "block_argument"
 
     # ── Pattern matching ─────────────────────────────────────────────
     PATTERN = "pattern"
@@ -110,6 +113,10 @@ class RubyNodeType:
     SUPERCLASS = "superclass"
     SINGLETON_CLASS = "singleton_class"
     MODULE = "module"
+
+    # ── BEGIN/END blocks ─────────────────────────────────────────────
+    BEGIN_BLOCK = "begin_block"
+    END_BLOCK = "end_block"
 
     # ── Structural ───────────────────────────────────────────────────
     PROGRAM = "program"

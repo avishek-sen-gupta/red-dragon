@@ -42,6 +42,7 @@ class JavaScriptNodeType:
     YIELD_EXPRESSION = "yield_expression"
     SEQUENCE_EXPRESSION = "sequence_expression"
     SPREAD_ELEMENT = "spread_element"
+    META_PROPERTY = "meta_property"
 
     # ── Collection literals ──────────────────────────────────────────
     ARRAY = "array"
