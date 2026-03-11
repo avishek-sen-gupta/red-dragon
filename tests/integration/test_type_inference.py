@@ -2845,6 +2845,52 @@ type Shape interface {
         ), f"Expected signature for 'Area', got: {env.func_signatures}"
 
 
+class TestCSharpInterfaceChainWalk:
+    """C# classes implementing interfaces should seed interface_implementations."""
+
+    def test_csharp_implements_seeds_interface(self):
+        _instructions, env = _lower_and_infer(
+            """\
+interface ICalculator {
+    int Compute(int x);
+}
+
+class SimpleCalc : ICalculator {
+    public int Compute(int x) {
+        return x * 2;
+    }
+}
+""",
+            "csharp",
+        )
+        assert "ICalculator" in [
+            iface for impls in env.interface_implementations.values() for iface in impls
+        ], f"Expected ICalculator in interface_implementations, got: {env.interface_implementations}"
+
+
+class TestTypeScriptInterfaceChainWalk:
+    """TS classes implementing interfaces should seed interface_implementations."""
+
+    def test_ts_implements_seeds_interface(self):
+        _instructions, env = _lower_and_infer(
+            """\
+interface Calculator {
+    compute(x: number): number;
+}
+
+class SimpleCalc implements Calculator {
+    compute(x: number): number {
+        return x * 2;
+    }
+}
+""",
+            "typescript",
+        )
+        assert env.interface_implementations.get("SimpleCalc") == (
+            "Calculator",
+        ), f"Expected SimpleCalc implements Calculator, got: {env.interface_implementations}"
+
+
 class TestKotlinInterfaceTypeInference:
     """Kotlin interface methods should have return types available in func_signatures."""
 
@@ -2862,3 +2908,22 @@ interface Calculator {
         assert (
             len(compute_sigs) >= 1
         ), f"Expected signature for 'compute', got: {env.func_signatures}"
+
+    def test_kotlin_implements_seeds_interface(self):
+        _instructions, env = _lower_and_infer(
+            """\
+interface Calculator {
+    fun compute(x: Int): Int
+}
+
+class SimpleCalc : Calculator {
+    override fun compute(x: Int): Int {
+        return x * 2
+    }
+}
+""",
+            "kotlin",
+        )
+        assert "Calculator" in [
+            iface for impls in env.interface_implementations.values() for iface in impls
+        ], f"Expected Calculator in interface_implementations, got: {env.interface_implementations}"
