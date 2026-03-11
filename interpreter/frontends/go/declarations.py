@@ -17,6 +17,7 @@ from interpreter.frontends.go.expressions import (
     lower_expression_list,
     lower_go_store_target,
 )
+from interpreter.frontends.common.declarations import make_class_ref
 from interpreter.frontends.go.node_types import GoNodeType
 
 logger = logging.getLogger(__name__)
@@ -206,6 +207,8 @@ def lower_go_type_decl(ctx: TreeSitterEmitContext, node) -> None:
                 type_name = ctx.node_text(name_node)
                 if type_node and type_node.type == GoNodeType.STRUCT_TYPE:
                     _lower_go_struct_type(ctx, type_name, type_node, node)
+                elif type_node and type_node.type == GoNodeType.INTERFACE_TYPE:
+                    _lower_go_interface_type(ctx, type_name, type_node, node)
                 else:
                     reg = ctx.fresh_reg()
                     ctx.emit(
@@ -238,6 +241,87 @@ def _lower_go_struct_type(
         ],
     )
     ctx.emit(Opcode.STORE_VAR, operands=[type_name, cls_reg])
+
+
+def _lower_go_interface_type(
+    ctx: TreeSitterEmitContext, type_name: str, type_node, parent_node
+) -> None:
+    """Emit a CLASS block for a Go interface type, with method stubs seeding return types."""
+    class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{type_name}")
+    end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{type_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=parent_node)
+    ctx.emit(Opcode.LABEL, label=class_label)
+
+    method_elems = [c for c in type_node.children if c.type == GoNodeType.METHOD_ELEM]
+    for method in method_elems:
+        _lower_go_interface_method(ctx, method)
+
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    cls_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=cls_reg,
+        operands=[make_class_ref(type_name, class_label, [])],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[type_name, cls_reg])
+
+
+def _lower_go_interface_method(ctx: TreeSitterEmitContext, method_node) -> None:
+    """Emit a function stub for a single Go interface method_elem."""
+    name_node = next(
+        (c for c in method_node.children if c.type == GoNodeType.FIELD_IDENTIFIER),
+        None,
+    )
+    method_name = ctx.node_text(name_node) if name_node else "__anon"
+
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{method_name}")
+    end_label = ctx.fresh_label(f"end_{method_name}")
+
+    # Return type: look for type_identifier or other type node after parameter_list(s)
+    raw_return = _extract_go_method_elem_return_type(ctx, method_node)
+    return_hint = normalize_type_hint(raw_return, ctx.type_map)
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=method_node)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
+
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
+    )
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=func_reg,
+        operands=[
+            constants.FUNC_REF_TEMPLATE.format(name=method_name, label=func_label)
+        ],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[method_name, func_reg])
+
+
+def _extract_go_method_elem_return_type(ctx: TreeSitterEmitContext, method_node) -> str:
+    """Extract return type from a Go interface method_elem.
+
+    In Go's tree-sitter grammar, the return type appears as a sibling of
+    parameter_list nodes — it can be a type_identifier, pointer_type,
+    slice_type, etc., or a second parameter_list for multiple returns.
+    """
+    param_list_seen = False
+    for child in method_node.children:
+        if child.type == "parameter_list":
+            param_list_seen = True
+            continue
+        if param_list_seen and child.is_named:
+            return ctx.node_text(child)
+    return ""
 
 
 # -- Go: var declaration ---------------------------------------------------

@@ -5,11 +5,20 @@ from __future__ import annotations
 from interpreter.frontends.go import GoFrontend
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.type_environment_builder import TypeEnvironmentBuilder
 
 
 def _parse_and_lower(source: str) -> list[IRInstruction]:
     frontend = GoFrontend(TreeSitterParserFactory(), "go")
     return frontend.lower(source.encode("utf-8"))
+
+
+def _parse_go_with_types(
+    source: str,
+) -> tuple[list[IRInstruction], TypeEnvironmentBuilder]:
+    frontend = GoFrontend(TreeSitterParserFactory(), "go")
+    instructions = frontend.lower(source.encode("utf-8"))
+    return instructions, frontend.type_env_builder
 
 
 def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:
@@ -1065,3 +1074,54 @@ class TestGoVariadicArgument:
         ir = _parse_and_lower("func main() { fmt.Println(args...) }")
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("variadic_argument" in str(inst.operands) for inst in symbolics)
+
+
+class TestGoInterfaceLowering:
+    """Go interface type declarations should emit CLASS blocks with method stubs."""
+
+    def test_interface_emits_class_block(self):
+        """Interface produces BRANCH-LABEL...LABEL-CONST(<class:>)-STORE_VAR."""
+        ir = _parse_and_lower("""\
+package main
+
+type Shape interface {
+    Area() float64
+}
+""")
+        consts = _find_all(ir, Opcode.CONST)
+        class_refs = [i for i in consts if "<class:" in str(i.operands)]
+        assert len(class_refs) == 1
+        assert "Shape" in str(class_refs[0].operands[0])
+
+    def test_interface_methods_emit_function_labels(self):
+        """Each interface method should produce a function label."""
+        ir = _parse_and_lower("""\
+package main
+
+type Shape interface {
+    Area() float64
+    Perimeter() float64
+}
+""")
+        labels = _find_all(ir, Opcode.LABEL)
+        func_labels = [i.label for i in labels if "func_" in (i.label or "")]
+        assert any("Area" in lbl for lbl in func_labels)
+        assert any("Perimeter" in lbl for lbl in func_labels)
+
+    def test_interface_methods_seed_return_types(self):
+        """Interface method return types are seeded in type_env_builder."""
+        _ir, builder = _parse_go_with_types("""\
+package main
+
+type Calculator interface {
+    Compute(x int) int
+    Reset() bool
+}
+""")
+        rt = dict(builder.func_return_types)
+        compute_entries = {k: v for k, v in rt.items() if "Compute" in k}
+        reset_entries = {k: v for k, v in rt.items() if "Reset" in k}
+        assert (
+            len(compute_entries) >= 1
+        ), f"Expected return type for 'Compute', got: {rt}"
+        assert len(reset_entries) >= 1, f"Expected return type for 'Reset', got: {rt}"
