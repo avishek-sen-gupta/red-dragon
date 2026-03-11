@@ -2793,6 +2793,36 @@ interface Calculator {
             len(compute_sigs) >= 1
         ), f"Expected signature for 'compute', got: {env.func_signatures}"
 
+    def test_interface_chain_walk_resolves_method(self):
+        """When class implements interface, method type resolves via chain walk."""
+        _instructions, env = _lower_and_infer(
+            """\
+interface Greeter {
+    String greet();
+}
+
+class HelloGreeter implements Greeter {
+    public String greet() {
+        return "hello";
+    }
+}
+
+class Main {
+    public static void main(String[] args) {
+        HelloGreeter g = new HelloGreeter();
+        String msg = g.greet();
+    }
+}
+""",
+            "java",
+        )
+        assert env.var_types.get("msg") == scalar(
+            "String"
+        ), f"Expected 'msg' typed as String, got: {env.var_types.get('msg')}"
+        assert env.interface_implementations.get("HelloGreeter") == (
+            "Greeter",
+        ), f"Expected HelloGreeter implements Greeter, got: {env.interface_implementations}"
+
 
 class TestGoInterfaceTypeInference:
     """Go interface methods should have return types available in func_signatures."""
