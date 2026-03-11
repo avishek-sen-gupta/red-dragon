@@ -1870,3 +1870,82 @@ Each `TypeExpr` has a canonical string representation via `__str__` that round-t
 - `interpreter/frontends/rust/expressions.py`: `lower_reference_expr` emits `ADDRESS_OF` for `&identifier`
 
 **Status:** In progress.
+
+### ADR-100: Interface-aware type inference (2026-03-11)
+
+**Context:** The type inference engine resolves method return types via `class_method_types[ClassName][method]`, falling back to `func_return_types[method]` and then `_BUILTIN_METHOD_RETURN_TYPES`. When a variable is typed as an interface (e.g., `Comparable`, `Shape`), calls on it produce UNKNOWN because the interface's method signatures are never linked to the type inference pipeline.
+
+The infrastructure is half-built: `TypeEnvironment.interface_implementations` maps classes to their interfaces, and `TypeGraph.extend_with_interfaces()` can add interface subtype edges — but neither is used in production. The root cause is that Java, C#, TypeScript, and Kotlin lower interfaces as `NEW_OBJECT` with member name enumeration, discarding method return types. PHP, Scala, and Rust already lower interface/trait bodies as CLASS blocks, so their method types flow into inference naturally.
+
+**Decision:** Three-phase enhancement to make type inference interface-aware.
+
+#### Phase 1: Align interface lowering across frontends
+
+Change Java, C#, TypeScript, and Kotlin frontends to lower interface/trait method declarations as function definitions (like PHP/Scala/Rust already do), so that `seed_func_return_type()` captures method return types.
+
+| Frontend | Current | Target |
+|----------|---------|--------|
+| Java `lower_interface_decl` | NEW_OBJECT + STORE_INDEX per member | CLASS block + lower_method_decl per method |
+| C# `lower_interface_decl` | NEW_OBJECT + STORE_INDEX per member | CLASS block + lower_method_decl per method |
+| TypeScript `lower_interface_decl` | NEW_OBJECT + STORE_INDEX per member | CLASS block + lower method signatures |
+| Kotlin | No dedicated handler | Add interface handler mirroring class lowering |
+| Go | No dedicated handler | Add interface handler extracting method set |
+
+**Files:** `java/declarations.py`, `csharp/declarations.py`, `typescript.py`, `kotlin/declarations.py`, `go/declarations.py`
+
+**Tests:** Unit tests per frontend verifying interface methods produce FUNC_DEF labels with seeded return types. Integration tests verifying `func_return_types` contains interface method entries after lowering.
+
+#### Phase 2: Wire interface chain into inference dispatcher
+
+Extend `_infer_call_method()` in `type_inference.py` to walk `interface_implementations` when direct class lookup fails:
+
+```python
+# After class_method_types lookup fails:
+if class_name_str in ctx.interface_implementations:
+    for iface in ctx.interface_implementations[class_name_str]:
+        iface_type = ScalarType(iface)
+        if iface_type in ctx.class_method_types:
+            ret = ctx.class_method_types[iface_type].get(method_name, UNKNOWN)
+            if ret:
+                ctx.register_types[inst.result_reg] = ret
+                return
+```
+
+Also thread `interface_implementations` from `TypeEnvironment` into `_InferenceContext` (currently not passed).
+
+**Files:** `type_inference.py` (~15 lines), `type_environment.py` (no change needed — field exists)
+
+**Tests:** Unit tests: class implements interface → method call on class-typed var resolves via interface. Integration tests: TS/Java/C# programs with interface-typed variables get correct return types.
+
+#### Phase 3: Wire TypeGraph extension into production
+
+Call `extend_with_interfaces()` in `infer_types()` so that `is_subtype_expr()` and `common_supertype_expr()` respect interface hierarchies:
+
+```python
+# In infer_types(), after building TypeGraph:
+if env.interface_implementations:
+    type_graph = type_graph.extend_with_interfaces(env.interface_implementations)
+```
+
+This enables covariance checks like `Dog <: Comparable` in type narrowing.
+
+**Files:** `type_inference.py` (~3 lines)
+
+**Tests:** Integration test: variable typed as interface, assigned from implementing class, method call return type resolved.
+
+#### Estimated scope
+
+| Phase | Prod LOC | Test LOC | Commits |
+|-------|----------|----------|---------|
+| 1 — Frontend alignment | ~120 | ~100 | 5 (one per language) |
+| 2 — Inference dispatcher | ~15 | ~40 | 1 |
+| 3 — TypeGraph wiring | ~3 | ~20 | 1 |
+| **Total** | **~138** | **~160** | **7** |
+
+#### Trade-offs considered
+
+- **Alternative: Synthesise interface method types from implementing classes** — infer `Comparable.compareTo` return type by looking at all classes that implement `Comparable`. Rejected: requires whole-program analysis, fragile with partial lowering, and the interface declaration already has the type info.
+- **Alternative: Only fix the inference dispatcher (Phase 2) without frontend changes** — would work for Scala/Rust/PHP where types already flow, but leaves Java/C#/TS/Kotlin broken. Rejected: incomplete fix.
+- **Alternative: Store interface method types in a new `interface_method_types` dict** — rejected in favour of reusing `class_method_types` keyed by interface name, since the TypeGraph already treats interfaces as types.
+
+**Status:** Planned. Tracked as red-dragon-gsl.
