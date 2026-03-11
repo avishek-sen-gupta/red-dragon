@@ -56,3 +56,38 @@ class TestJSOptionalChainExecution:
             let result = obj?.name;
             """)
         assert locals_["result"] == "Alice"
+
+
+class TestJSAnonymousClassExpressionExecution:
+    """Anonymous class expression should be instantiable and methods callable."""
+
+    def test_anonymous_class_instantiation(self):
+        locals_ = _run_js("""
+            const Foo = class {
+                constructor(x) { this.x = x; }
+            };
+            let obj = new Foo(42);
+            let result = obj.x;
+            """)
+        assert locals_["result"] == 42
+
+    def test_anonymous_class_method_call(self):
+        locals_ = _run_js("""
+            const Adder = class {
+                constructor(a) { this.a = a; }
+                add(b) { return this.a + b; }
+            };
+            let obj = new Adder(10);
+            let result = obj.add(5);
+            """)
+        assert locals_["result"] == 15
+
+    def test_named_class_expression_execution(self):
+        locals_ = _run_js("""
+            const Foo = class MyClass {
+                constructor(v) { this.v = v; }
+            };
+            let obj = new Foo(99);
+            let result = obj.v;
+            """)
+        assert locals_["result"] == 99
