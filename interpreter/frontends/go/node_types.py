@@ -53,6 +53,8 @@ class GoNodeType:
     PARAMETER_DECLARATION = "parameter_declaration"
     TYPE_SPEC = "type_spec"
     STRUCT_TYPE = "struct_type"
+    INTERFACE_TYPE = "interface_type"
+    METHOD_ELEM = "method_elem"
     VAR_SPEC = "var_spec"
     VAR_SPEC_LIST = "var_spec_list"
     CONST_SPEC = "const_spec"
