@@ -1948,4 +1948,4 @@ This enables covariance checks like `Dog <: Comparable` in type narrowing.
 - **Alternative: Only fix the inference dispatcher (Phase 2) without frontend changes** — would work for Scala/Rust/PHP where types already flow, but leaves Java/C#/TS/Kotlin broken. Rejected: incomplete fix.
 - **Alternative: Store interface method types in a new `interface_method_types` dict** — rejected in favour of reusing `class_method_types` keyed by interface name, since the TypeGraph already treats interfaces as types.
 
-**Status:** Planned. Tracked as red-dragon-gsl.
+**Status:** Phase 1 (5 frontends) and Phase 2 (chain walk + seeding) complete. Phase 3 (TypeGraph extension) deferred — `is_subtype_expr()` has no production consumer yet. Tracked as red-dragon-gsl.
