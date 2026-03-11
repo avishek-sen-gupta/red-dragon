@@ -34,8 +34,8 @@ dolt-server.port
 dolt-server.activity
 dolt-monitor.pid
 
-# Backup data (auto-exported JSONL, local-only)
-backup/
+# Backup data (auto-exported JSONL — tracked in git for portability)
+# backup/
 
 # Legacy files (from pre-Dolt versions)
 *.db
