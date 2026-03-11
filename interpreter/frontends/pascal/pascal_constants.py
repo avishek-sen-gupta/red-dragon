@@ -13,8 +13,9 @@ K_OPERATOR_MAP: dict[str, str] = {
     "kNeq": "!=",
     "kGte": ">=",
     "kLte": "<=",
-    "kAnd": "and",
-    "kOr": "or",
+    "kAnd": "&",
+    "kOr": "|",
+    "kXor": "^",
     "kMod": "mod",
 }
 

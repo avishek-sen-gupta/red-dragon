@@ -280,6 +280,7 @@ class Operators:
         "&": lambda a, b: a & b,
         "|": lambda a, b: a | b,
         "^": lambda a, b: a ^ b,
+        "~": lambda a, b: a ^ b,  # Lua bitwise XOR
         "<<": lambda a, b: a << b,
         ">>": lambda a, b: a >> b,
         "..": lambda a, b: str(a) + str(b),

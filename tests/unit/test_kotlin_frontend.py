@@ -1144,3 +1144,84 @@ class Foo {
 val y = 42""")
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("y" in inst.operands for inst in stores)
+
+
+class TestKotlinBitwiseInfix:
+    """Kotlin bitwise infix functions (and, or, xor, shl, shr) emit BINOP."""
+
+    def test_and_emits_binop(self):
+        ir = _parse_kotlin("""\
+val a = 12
+val b = 10
+val c = a and b
+""")
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any(
+            "&" in inst.operands for inst in binops
+        ), "Expected BINOP with '&' for Kotlin 'and' infix"
+
+    def test_xor_emits_binop(self):
+        ir = _parse_kotlin("""\
+val a = 8
+val b = 5
+val c = a xor b
+""")
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any(
+            "^" in inst.operands for inst in binops
+        ), "Expected BINOP with '^' for Kotlin 'xor' infix"
+
+    def test_or_emits_binop(self):
+        ir = _parse_kotlin("""\
+val a = 12
+val b = 10
+val c = a or b
+""")
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any(
+            "|" in inst.operands for inst in binops
+        ), "Expected BINOP with '|' for Kotlin 'or' infix"
+
+    def test_shl_emits_binop(self):
+        ir = _parse_kotlin("""\
+val a = 1
+val c = a shl 3
+""")
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any(
+            "<<" in inst.operands for inst in binops
+        ), "Expected BINOP with '<<' for Kotlin 'shl' infix"
+
+    def test_shr_emits_binop(self):
+        ir = _parse_kotlin("""\
+val a = 16
+val c = a shr 2
+""")
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any(
+            ">>" in inst.operands for inst in binops
+        ), "Expected BINOP with '>>' for Kotlin 'shr' infix"
+
+    def test_non_bitwise_infix_emits_call(self):
+        """Non-bitwise infix like 'to' should still emit CALL_FUNCTION."""
+        ir = _parse_kotlin("""\
+val p = 1 to 2
+""")
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any(
+            "to" in str(inst.operands) for inst in calls
+        ), "Expected CALL_FUNCTION for non-bitwise 'to' infix"
+
+    def test_bitwise_execution(self):
+        """Kotlin bitwise infix produces correct result through VM."""
+        vm, stats = execute_for_language(
+            "kotlin",
+            """\
+val a = 12
+val b = 10
+val c = a and b
+val answer = c xor 5
+""",
+        )
+        assert extract_answer(vm, "kotlin") == 13
+        assert stats.llm_calls == 0

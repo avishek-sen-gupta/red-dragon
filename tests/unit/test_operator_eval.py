@@ -70,6 +70,19 @@ class TestEvalBinopHappyPath:
     def test_string_addition(self):
         assert Operators.eval_binop("+", "hello ", "world") == "hello world"
 
+    def test_tilde_xor(self):
+        """Lua-style ~ XOR operator."""
+        assert Operators.eval_binop("~", 8, 5) == 13
+
+    def test_bitwise_and(self):
+        assert Operators.eval_binop("&", 12, 10) == 8
+
+    def test_bitwise_or(self):
+        assert Operators.eval_binop("|", 8, 5) == 13
+
+    def test_bitwise_xor_caret(self):
+        assert Operators.eval_binop("^", 8, 5) == 13
+
 
 class TestEvalUnopTypeErrors:
     """eval_unop returns UNCOMPUTABLE when operand type is incompatible."""
