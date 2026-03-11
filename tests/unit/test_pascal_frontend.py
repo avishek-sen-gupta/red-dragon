@@ -990,3 +990,66 @@ end."""
         instructions = _parse_pascal(source)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
+
+
+class TestPascalBitwiseOperators:
+    """Pascal 'and', 'or', 'xor' keywords emit bitwise BINOP operators."""
+
+    def test_and_emits_bitwise_binop(self):
+        instructions = _parse_pascal("""\
+program M;
+var a, b, c: integer;
+begin
+    a := 12;
+    b := 10;
+    c := a and b;
+end.""")
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any(
+            "&" in inst.operands for inst in binops
+        ), "Expected BINOP with '&' for Pascal 'and'"
+
+    def test_xor_emits_bitwise_binop(self):
+        instructions = _parse_pascal("""\
+program M;
+var a, b: integer;
+begin
+    a := 8;
+    b := a xor 5;
+end.""")
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any(
+            "^" in inst.operands for inst in binops
+        ), "Expected BINOP with '^' for Pascal 'xor'"
+
+    def test_or_emits_bitwise_binop(self):
+        instructions = _parse_pascal("""\
+program M;
+var a, b: integer;
+begin
+    a := 12;
+    b := a or 3;
+end.""")
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any(
+            "|" in inst.operands for inst in binops
+        ), "Expected BINOP with '|' for Pascal 'or'"
+
+    def test_bitwise_execution(self):
+        """Pascal bitwise operators produce correct result through VM."""
+        from tests.unit.rosetta.conftest import execute_for_language, extract_answer
+
+        vm, stats = execute_for_language(
+            "pascal",
+            """\
+program M;
+var a, b, c, answer: integer;
+begin
+    a := 12;
+    b := 10;
+    c := a and b;
+    answer := c xor 5;
+end.""",
+        )
+        assert extract_answer(vm, "pascal") == 13
+        assert stats.llm_calls == 0

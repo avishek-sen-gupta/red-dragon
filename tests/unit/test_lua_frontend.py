@@ -648,3 +648,31 @@ answer = countdown(7)
         vm, stats = execute_for_language("lua", source)
         assert extract_answer(vm, "lua") == 7
         assert stats.llm_calls == 0
+
+
+class TestLuaBitwiseXor:
+    """Lua uses ~ for bitwise XOR; VM BINOP_TABLE must handle it."""
+
+    def test_tilde_xor_emits_binop(self):
+        ir = _parse_lua("""\
+a = 8
+b = a ~ 5
+""")
+        binops = _find_all(ir, Opcode.BINOP)
+        assert any(
+            "~" in inst.operands for inst in binops
+        ), "Expected BINOP with '~' for Lua XOR operator"
+
+    def test_tilde_xor_execution(self):
+        """Lua ~ XOR produces correct result through VM."""
+        vm, stats = execute_for_language(
+            "lua",
+            """\
+a = 12
+b = 10
+c = a & b
+answer = c ~ 5
+""",
+        )
+        assert extract_answer(vm, "lua") == 13
+        assert stats.llm_calls == 0

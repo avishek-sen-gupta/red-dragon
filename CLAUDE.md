@@ -1,8 +1,18 @@
 # RedDragon - Claude Code Instructions
 
+## Task Tracking
+
+Use `bd` (Beads) for all task tracking. Before starting work:
+1. Run `bd ready` to see unblocked tasks
+2. Claim your task: `bd update <id> --claim`
+3. When done: `bd update <id> --status closed`
+
+Do NOT use markdown TODO lists. All tasks live in Beads.
+
 ## Workflow Rules
 
-- For each feature, treat it as an independent commit / push, with its own unit/integration/e2e testing.
+- For each feature, treat it as an independent commit / push, with its own unit/integration/e2e testing. Always implement changes incrementally, one at a time. Do not batch mass feature implementations across multiple languages/files without explicit approval. Commit and verify tests pass after each individual change.
+- When asked to audit or show issues, only report findings — do not start fixing them unless explicitly asked to fix.
 - The workflow is Brainstorm -> Discuss Trade-offs of different designs -> Plan -> Write unit tests -> Implement -> Fix Tests -> Commit -> Refactor.
 - When brainstorming / planning, consider the follow parameters:
   - Whether there are any open source projects which perform similar functionality, so that you don't have to write new code for the task
@@ -14,6 +24,9 @@
 - Primary languages: Python (main codebase), TypeScript/JavaScript (tooling/web), Markdown (docs).
 - When editing Python, always run `black` formatting before committing. When test counts are mentioned (e.g., 'all 625 tests passing'), verify that count hasn't regressed.
 - When you are generating a new run, for every output directory, please attach time stamp and the technique used
+
+## Implementation Guidelines
+- When implementing features for multiple languages, verify each language's actual capabilities against VM/frontend source code rather than assuming. Do not claim a language lacks a feature without checking.
 
 ## Common Mistakes to Avoid
 - When the user asks to run detection/analysis on a specific subdirectory or module (e.g., 'smojol-api'), scope the operation precisely to that directory. Do not run on the parent repo or broader scope unless explicitly asked.
@@ -40,6 +53,7 @@
 - Always start from writing unit tests for the smallest feasible units of code. True unit tests (which do not exercise true I/O) should be in a `unit` directory under the test directory. Tests which exercise I/O (call LLMs, touch databases) should be in the `integration` directory under the test directory.
 - Make sure you are not creating any special implementation behaviour just to get the tests to pass. It's far better to document hard-to-implement behaviour than to try to fix the test for the test's sake. Alternatively, pause and ask me for guidance.
 - Write both unit and integration tests for every new feature.
+
 
 ## Programming Patterns
 
