@@ -1,8 +1,7 @@
 """Rosetta test: bitwise operations across all 15 deterministic frontends.
 
-12 of 15 languages use native bitwise &/^ operators. Lua uses & and | with
-arithmetic XOR workaround. Kotlin and Pascal use arithmetic equivalents as
-their bitwise keywords (and/xor) are not supported as VM BINOP operators.
+All 15 languages use native bitwise operators: &/^ (most), and/xor (Kotlin,
+Pascal), ~ for XOR (Lua).
 """
 
 import pytest
@@ -105,8 +104,8 @@ let answer = c ^ 5;
     "kotlin": """\
 val a = 12
 val b = 10
-val c = a - 4
-val answer = c + 5
+val c = a and b
+val answer = c xor 5
 """,
     "scala": """\
 object M {
@@ -120,9 +119,7 @@ object M {
 a = 12
 b = 10
 c = a & b
-d = c | 5
-e = c & 5
-answer = d - e
+answer = c ~ 5
 """,
     "pascal": """\
 program M;
@@ -130,8 +127,8 @@ var a, b, c, answer: integer;
 begin
     a := 12;
     b := 10;
-    c := a - 4;
-    answer := c + 5;
+    c := a and b;
+    answer := c xor 5;
 end.
 """,
 }
