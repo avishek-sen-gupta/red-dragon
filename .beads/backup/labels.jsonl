@@ -5,6 +5,8 @@
 {"issue_id":"red-dragon-4yz","label":"scala"}
 {"issue_id":"red-dragon-8jh","label":"execution"}
 {"issue_id":"red-dragon-8jh","label":"vm"}
+{"issue_id":"red-dragon-8og","label":"type-system"}
+{"issue_id":"red-dragon-988","label":"type-system"}
 {"issue_id":"red-dragon-9go","label":"audit"}
 {"issue_id":"red-dragon-9go","label":"testing"}
 {"issue_id":"red-dragon-bfv","label":"code-quality"}
