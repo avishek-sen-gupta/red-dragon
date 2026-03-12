@@ -32,6 +32,7 @@ from interpreter.registry import FunctionRegistry, _parse_func_ref, _parse_class
 from interpreter.builtins import Builtins, _builtin_array_of
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.type_environment import TypeEnvironment
+from interpreter.type_expr import scalar
 from interpreter.unresolved_call import UnresolvedCallResolver, SymbolicResolver
 from interpreter import constants
 
@@ -1214,13 +1215,36 @@ def _handle_call_method(
 
     methods = registry.class_methods[type_hint]
     func_labels = methods.get(method_name, [])
-    func_label = func_labels[0] if func_labels else ""
+    if func_labels:
+        sigs = type_env.method_signatures.get(scalar(type_hint), {}).get(
+            method_name, []
+        )
+        if len(sigs) != len(func_labels):
+            logger.warning("sig/label count mismatch for %s.%s", type_hint, method_name)
+            func_label = func_labels[0]
+        else:
+            winner = overload_resolver.resolve(sigs, args)
+            func_label = func_labels[winner]
+    else:
+        func_label = ""
     # Walk parent chain for inherited methods
     if not func_label or func_label not in cfg.blocks:
         for parent in registry.class_parents.get(type_hint, []):
             parent_methods = registry.class_methods.get(parent, {})
             parent_labels = parent_methods.get(method_name, [])
-            candidate = parent_labels[0] if parent_labels else ""
+            if not parent_labels:
+                continue
+            parent_sigs = type_env.method_signatures.get(scalar(parent), {}).get(
+                method_name, []
+            )
+            if len(parent_sigs) != len(parent_labels):
+                logger.warning(
+                    "sig/label count mismatch for %s.%s", parent, method_name
+                )
+                candidate = parent_labels[0]
+            else:
+                winner = overload_resolver.resolve(parent_sigs, args)
+                candidate = parent_labels[winner]
             if candidate and candidate in cfg.blocks:
                 func_label = candidate
                 break
