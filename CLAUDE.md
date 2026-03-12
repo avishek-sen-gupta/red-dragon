@@ -30,10 +30,13 @@ Do NOT use markdown TODO lists. All tasks live in Beads.
 - **Use existing infrastructure before adding new abstractions.** Before introducing a new dict, registry, or tracking structure, ask: "does the system already have something that solves this?" The answer is usually yes.
   - *Example:* When anonymous class expressions needed alias resolution (`const Foo = class { ... }; new Foo()`), three progressively simpler designs were attempted: (1) a `class_aliases` dict in the registry, (2) a pointer chain mechanism, (3) just reading the variable store at `new_object` time — because the variable store already *was* a pointer table mapping `Foo` → `<class:__anon_class_0@...>`. The final solution was a 5-line dereference in `_handle_new_object` with zero new infrastructure.
 - **Start from the simplest possible mechanism.** When solving a problem, begin with the minimal intervention. If that's insufficient, add complexity incrementally. Do not start with a rich abstraction and work backwards.
+- **Prefer emitting equivalent IR over threading new conventions through multiple layers.** When a feature can be expressed as IR using existing opcodes and builtins, do that — don't introduce new prefixes, registry fields, or VM conventions. Example: rest parameters (`...args`) were implemented by emitting `slice(arguments, N)` in the function body IR, reusing the existing `slice` builtin, instead of threading a `param_rest:` prefix through frontend → registry → VM.
+- **Don't add speculative code without tests proving it works.** Every code path must have a test that exercises it. Untested "nice to have" branches hide bugs — e.g., a string slice branch that accidentally sliced heap address strings (`'arr_0'[2:]` → `'r_0'`).
 - **Stay consistent with established patterns.** When the codebase has a way of doing something (e.g., `TypeExpr` ADT for types), use it — do not fall back to older patterns (e.g., format strings through `parse_type()`) out of habit.
 
 ## Implementation Guidelines
 - When implementing features for multiple languages, verify each language's actual capabilities against VM/frontend source code rather than assuming. Do not claim a language lacks a feature without checking.
+- When adding a new language feature, consult the existing language frontend/VM documentation / implementation (if it exists) to see how it does this. Use that as a reference, then decide how much deviation is needed to adapt it to our VM.
 
 ## Common Mistakes to Avoid
 - When the user asks to run detection/analysis on a specific subdirectory or module (e.g., 'smojol-api'), scope the operation precisely to that directory. Do not run on the parent repo or broader scope unless explicitly asked.
