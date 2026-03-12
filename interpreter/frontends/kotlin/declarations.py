@@ -10,7 +10,11 @@ from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
 from interpreter.frontends.type_extraction import (
     extract_normalized_type_from_child,
 )
-from interpreter.frontends.common.declarations import make_class_ref
+from interpreter.frontends.common.declarations import (
+    FieldInit,
+    emit_synthetic_init,
+    make_class_ref,
+)
 from interpreter.type_expr import ScalarType
 
 # -- property declaration ----------------------------------------------
@@ -251,17 +255,56 @@ def lower_function_decl(
 # -- class declaration -------------------------------------------------
 
 
+def _collect_kotlin_field_init(ctx: TreeSitterEmitContext, node) -> FieldInit | None:
+    """Extract (field_name, value_node) from a property_declaration, or None.
+
+    Only collects properties with initializers (``var x: Int = 0``).
+    """
+    var_decl = next(
+        (c for c in node.children if c.type == KNT.VARIABLE_DECLARATION),
+        None,
+    )
+    if var_decl is None:
+        return None
+    name = _extract_property_name(ctx, var_decl)
+    value_node = _find_property_value(ctx, node)
+    if value_node is None:
+        return None
+    return (name, value_node)
+
+
 def _lower_class_body_with_companions(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower class_body, handling companion_object children specially."""
-    for child in node.children:
-        if not child.is_named:
-            continue
+    """Lower class_body, handling companion_object children specially.
+
+    Collects field initializers from property declarations and emits
+    a synthetic ``__init__`` constructor when field inits are present.
+    """
+    named_children = [c for c in node.children if c.is_named]
+
+    # Collect field initializers from property declarations
+    field_inits: list[FieldInit] = [
+        init
+        for c in named_children
+        if c.type == KNT.PROPERTY_DECLARATION
+        for init in [_collect_kotlin_field_init(ctx, c)]
+        if init is not None
+    ]
+
+    for child in named_children:
         if child.type == KNT.COMPANION_OBJECT:
             _lower_companion_object(ctx, child)
         elif child.type == KNT.FUNCTION_DECLARATION:
             lower_function_decl(ctx, child, inject_this=True)
+        elif (
+            child.type == KNT.PROPERTY_DECLARATION
+            and _collect_kotlin_field_init(ctx, child) is not None
+        ):
+            continue  # Skip — will be emitted via synthetic __init__
         else:
             ctx.lower_stmt(child)
+
+    if field_inits:
+        emit_synthetic_init(ctx, field_inits)
 
 
 def _lower_companion_object(ctx: TreeSitterEmitContext, node) -> None:

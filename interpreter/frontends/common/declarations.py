@@ -126,6 +126,63 @@ def make_class_ref(class_name: str, class_label: str, parents: list[str]) -> str
     return constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
 
 
+FieldInit = tuple  # (field_name: str, value_node)
+
+
+def emit_field_initializers(
+    ctx: TreeSitterEmitContext, field_inits: list[FieldInit]
+) -> None:
+    """Emit STORE_FIELD this <name> <value> for each collected field initializer.
+
+    Call at the start of a constructor body (after this is available via var_writes)
+    to properly initialize instance fields on the heap object.  This mirrors how
+    real compilers (javac, Roslyn, kotlinc) prepend field initializers to every
+    constructor body.
+    """
+    for field_name, value_node in field_inits:
+        val_reg = ctx.lower_expr(value_node)
+        this_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+        ctx.emit(Opcode.STORE_FIELD, operands=[this_reg, field_name, val_reg])
+
+
+def emit_synthetic_init(
+    ctx: TreeSitterEmitContext, field_inits: list[FieldInit]
+) -> None:
+    """Generate a synthetic __init__ constructor that initializes fields.
+
+    Used when a class has field initializers but no explicit constructor.
+    The generated __init__ emits STORE_FIELD for each field initializer,
+    then returns None.  The ``this`` variable is set by the VM's
+    constructor call mechanism via var_writes.
+    """
+    func_name = "__init__"
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+    end_label = ctx.fresh_label(f"end_{func_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit(Opcode.LABEL, label=func_label)
+
+    emit_field_initializers(ctx, field_inits)
+
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
+    )
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=func_reg,
+        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+
 def lower_class_def(ctx: TreeSitterEmitContext, node, parents: list[str] = []) -> None:
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
