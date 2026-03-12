@@ -57,8 +57,8 @@ def greet():
 """
         _instructions, env = _lower_and_infer(source, "python")
 
-        assert env.func_signatures["double"].return_type == "Int"
-        assert env.func_signatures["greet"].return_type == "String"
+        assert env.get_func_signature("double").return_type == "Int"
+        assert env.get_func_signature("greet").return_type == "String"
 
     def test_return_backfill_javascript(self):
         source = """\
@@ -72,8 +72,8 @@ function greet() {
 """
         _instructions, env = _lower_and_infer(source, "javascript")
 
-        assert env.func_signatures["double"].return_type == "Int"
-        assert env.func_signatures["greet"].return_type == "String"
+        assert env.get_func_signature("double").return_type == "Int"
+        assert env.get_func_signature("greet").return_type == "String"
 
     def test_return_backfill_ruby(self):
         source = """\
@@ -87,8 +87,8 @@ end
 """
         _instructions, env = _lower_and_infer(source, "ruby")
 
-        assert env.func_signatures["double"].return_type == "Int"
-        assert env.func_signatures["greet"].return_type == "String"
+        assert env.get_func_signature("double").return_type == "Int"
+        assert env.get_func_signature("greet").return_type == "String"
 
 
 class TestUnopRefinement:
