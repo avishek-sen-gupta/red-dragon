@@ -213,3 +213,40 @@ answer = result[0] + result[1]
     def test_zero_llm_calls(self):
         _vm, stats = execute_for_language("ruby", self.PROGRAM)
         assert stats.llm_calls == 0
+
+
+# ── Rust ──────────────────────────────────────────────────────
+
+
+class TestRustSliceExclusive:
+    """arr[1..3] (exclusive) should return elements at indices 1, 2."""
+
+    PROGRAM = """\
+let arr = [10, 20, 30, 40, 50];
+let result = arr[1..3];
+let answer = result[0] + result[1];
+"""
+
+    def test_exclusive_range_slice(self):
+        vm, _stats = execute_for_language("rust", self.PROGRAM)
+        answer = extract_answer(vm, "rust")
+        assert answer == 50, f"expected 50 (20+30), got {answer}"
+
+    def test_zero_llm_calls(self):
+        _vm, stats = execute_for_language("rust", self.PROGRAM)
+        assert stats.llm_calls == 0
+
+
+class TestRustSliceInclusive:
+    """arr[1..=3] (inclusive) should return elements at indices 1, 2, 3."""
+
+    PROGRAM = """\
+let arr = [10, 20, 30, 40, 50];
+let result = arr[1..=3];
+let answer = result[0] + result[1] + result[2];
+"""
+
+    def test_inclusive_range_slice(self):
+        vm, _stats = execute_for_language("rust", self.PROGRAM)
+        answer = extract_answer(vm, "rust")
+        assert answer == 90, f"expected 90 (20+30+40), got {answer}"
