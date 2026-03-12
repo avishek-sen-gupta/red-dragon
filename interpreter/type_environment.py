@@ -6,8 +6,10 @@ from dataclasses import dataclass
 from types import MappingProxyType
 
 from interpreter.function_signature import FunctionSignature
-from interpreter.type_expr import TypeExpr
+from interpreter.type_expr import TypeExpr, UNKNOWN
 from interpreter.var_scope_info import VarScopeInfo
+
+_NULL_SIGNATURE = FunctionSignature(params=(), return_type=UNKNOWN)
 
 
 @dataclass(frozen=True)
@@ -23,12 +25,12 @@ class TypeEnvironment:
 
     register_types: "%0" → ScalarType("Int"), "%4" → ScalarType("Float"), etc.
     var_types:      "x"  → ScalarType("Int"), "ptr" → ParameterizedType("Pointer", ...), etc.
-    func_signatures: "add" → FunctionSignature(params=..., return_type=ScalarType("Int"))
+    func_signatures: "add" → [FunctionSignature(...), ...] (list supports overloads)
     """
 
     register_types: MappingProxyType[str, TypeExpr]
     var_types: MappingProxyType[str, TypeExpr]
-    func_signatures: MappingProxyType[str, FunctionSignature]
+    func_signatures: MappingProxyType[str, list[FunctionSignature]]
     type_aliases: MappingProxyType[str, TypeExpr] = MappingProxyType({})
     interface_implementations: MappingProxyType[str, tuple[str, ...]] = (
         MappingProxyType({})
@@ -37,3 +39,13 @@ class TypeEnvironment:
         MappingProxyType({})
     )
     var_scope_metadata: MappingProxyType[str, VarScopeInfo] = MappingProxyType({})
+
+    def get_func_signature(self, name: str, index: int = 0) -> FunctionSignature:
+        """Return the function signature for *name* at overload *index*.
+
+        Defaults to the first (or only) overload.  Returns a null signature
+        with ``UNKNOWN`` return type if *name* is absent or *index* is out
+        of range.
+        """
+        sigs = self.func_signatures.get(name, [])
+        return sigs[index] if index < len(sigs) else _NULL_SIGNATURE

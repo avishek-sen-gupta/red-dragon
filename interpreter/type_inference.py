@@ -253,11 +253,16 @@ def _promote_tuple_element_types(ctx: _InferenceContext) -> None:
 def _build_func_signatures(
     func_return_types: dict[str, TypeExpr],
     func_param_types: dict[str, list[tuple[str, TypeExpr]]],
-) -> dict[str, FunctionSignature]:
+) -> dict[str, list[FunctionSignature]]:
     """Build signatures keyed only by user-facing function names.
 
     Internal labels (func_add_0) are excluded — only names that came
     through a <function:name@label> CONST mapping are included.
+
+    Each name maps to a list of signatures to support overloads.
+    Currently the upstream dicts are name-keyed (last-write-wins),
+    so each list has at most one entry until class-scoped accumulation
+    is added.
     """
     user_facing_names = {
         name
@@ -266,10 +271,12 @@ def _build_func_signatures(
     }
 
     return {
-        name: FunctionSignature(
-            params=tuple(func_param_types.get(name, [])),
-            return_type=func_return_types.get(name, UNKNOWN),
-        )
+        name: [
+            FunctionSignature(
+                params=tuple(func_param_types.get(name, [])),
+                return_type=func_return_types.get(name, UNKNOWN),
+            )
+        ]
         for name in user_facing_names
     }
 
