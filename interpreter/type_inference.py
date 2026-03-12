@@ -20,6 +20,7 @@ from types import MappingProxyType
 
 from interpreter import constants
 from interpreter.constants import CanonicalLiteral, TypeName
+from interpreter.function_kind import FunctionKind
 from interpreter.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.type_environment import TypeEnvironment
@@ -498,9 +499,12 @@ def _infer_const(
             ] = ret_type
             # Build class-scoped method signature (supports overloads)
             param_pairs = ctx.func_param_types.get(func_label, [])
+            has_this = any(n in ("this", "$this") for n, _ in param_pairs)
+            method_kind = FunctionKind.INSTANCE if has_this else FunctionKind.STATIC
             sig = FunctionSignature(
                 params=tuple(param_pairs),
                 return_type=ret_type,
+                kind=method_kind,
             )
             method_sigs = ctx.class_method_signatures.setdefault(
                 ctx.current_class_name, {}
