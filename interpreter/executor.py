@@ -658,7 +658,9 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
             diff = lhs_ptr.offset - rhs_ptr.offset
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: diff},
+                    register_writes={
+                        inst.result_reg: typed(diff, scalar(constants.TypeName.INT))
+                    },
                     reasoning=f"pointer diff {lhs!r} - {rhs!r} = {diff}",
                 )
             )
@@ -666,7 +668,9 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
             result = Operators.eval_binop(oper, lhs_ptr.offset, rhs_ptr.offset)
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: result},
+                    register_writes={
+                        inst.result_reg: typed(result, scalar(constants.TypeName.BOOL))
+                    },
                     reasoning=f"pointer cmp {lhs!r} {oper} {rhs!r} = {result!r}",
                 )
             )
@@ -682,7 +686,11 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
             result_ptr = Pointer(base=ptr.base, offset=new_offset)
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: result_ptr},
+                    register_writes={
+                        inst.result_reg: typed(
+                            result_ptr, scalar(constants.TypeName.POINTER)
+                        )
+                    },
                     reasoning=f"pointer arith {lhs!r} {oper} {rhs!r} = {result_ptr!r}",
                 )
             )
@@ -695,7 +703,7 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
         sym.constraints = [f"{lhs_desc} {oper} {rhs_desc}"]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: sym},
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"binop {lhs_desc} {oper} {rhs_desc} → symbolic {sym.name}",
             )
         )
@@ -709,13 +717,17 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
         sym.constraints = [f"{lhs_raw!r} {oper} {rhs_raw!r}"]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: sym},
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"binop {lhs_raw!r} {oper} {rhs_raw!r} → uncomputable, symbolic {sym.name}",
             )
         )
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: result},
+            register_writes={
+                inst.result_reg: typed(
+                    result, binop_coercion.result_type(oper, lhs_typed, rhs_typed)
+                )
+            },
             reasoning=f"binop {lhs_raw!r} {oper} {rhs_raw!r} = {result!r}",
         )
     )

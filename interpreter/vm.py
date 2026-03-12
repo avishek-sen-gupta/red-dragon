@@ -9,7 +9,7 @@ from interpreter.constants import CanonicalLiteral, TypeName
 from interpreter.conversion_rules import TypeConversionRules
 from interpreter.identity_conversion_rules import IdentityConversionRules
 from interpreter.type_environment import TypeEnvironment
-from interpreter.type_expr import UNKNOWN, scalar
+from interpreter.type_expr import UNKNOWN, ScalarType, scalar
 from interpreter.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.vm_types import (  # noqa: F401 — re-exported for backwards compatibility
     SymbolicValue,
@@ -87,6 +87,31 @@ def _materialize_single_var(
     return typed(deserialized, inferred_type)
 
 
+def _coerce_typed_register(
+    tv: TypedValue,
+    reg: str,
+    type_env: TypeEnvironment,
+    conversion_rules: TypeConversionRules,
+) -> TypedValue:
+    """Coerce a handler-produced TypedValue's raw value to match its declared type.
+
+    Handles the case where Python produces a float (e.g. 4/2 → 2.0) but the
+    inferred type is Int — the raw value must be coerced so downstream consumers
+    (STORE_INDEX, etc.) see the correct Python type.
+    """
+    target_type = type_env.register_types.get(reg, tv.type)
+    if not target_type:
+        return tv
+    rt_type_name = runtime_type_name(tv.value)
+    if not rt_type_name or rt_type_name == (
+        target_type.name if isinstance(target_type, ScalarType) else ""
+    ):
+        return tv
+    coercer = conversion_rules.coerce_assignment(scalar(rt_type_name), target_type)
+    coerced = coercer(tv.value)
+    return typed(coerced, target_type) if coerced is not tv.value else tv
+
+
 def materialize_raw_update(
     raw_update: StateUpdate,
     vm: VMState,
@@ -95,13 +120,13 @@ def materialize_raw_update(
 ) -> StateUpdate:
     """Transform a raw StateUpdate (from LLM) into one with TypedValue values.
 
-    Already-wrapped TypedValue entries pass through unchanged.
+    Already-wrapped TypedValue entries are coerced to match declared types.
     Register values get deserialized, coerced, and wrapped.
     Variable values get deserialized and wrapped (no register coercion).
     """
     typed_reg_writes = {
         reg: (
-            val
+            _coerce_typed_register(val, reg, type_env, conversion_rules)
             if isinstance(val, TypedValue)
             else _materialize_single_register(val, vm, reg, type_env, conversion_rules)
         )
