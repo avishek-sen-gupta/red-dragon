@@ -50,11 +50,13 @@ class TypeEnvironmentBuilder:
 
 def _build_func_signatures(
     builder: TypeEnvironmentBuilder,
-) -> dict[str, FunctionSignature]:
+) -> dict[str, list[FunctionSignature]]:
     """Build signatures keyed only by user-facing function names.
 
     Internal labels (func_add_0) are excluded — only names that came
     through a <function:name@label> CONST mapping are included.
+
+    Each name maps to a list of signatures to support overloads.
     """
     user_facing_names = {
         name
@@ -63,9 +65,11 @@ def _build_func_signatures(
     }
 
     return {
-        name: FunctionSignature(
-            params=tuple(builder.func_param_types.get(name, [])),
-            return_type=builder.func_return_types.get(name, UNKNOWN),
-        )
+        name: [
+            FunctionSignature(
+                params=tuple(builder.func_param_types.get(name, [])),
+                return_type=builder.func_return_types.get(name, UNKNOWN),
+            )
+        ]
         for name in user_facing_names
     }
