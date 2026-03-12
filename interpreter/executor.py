@@ -940,7 +940,18 @@ def _try_class_constructor_call(
     class_name, class_label = cr.name, cr.label
     methods = registry.class_methods.get(class_name, {})
     init_labels = methods.get("__init__", [])
-    init_label = init_labels[0] if init_labels else ""
+    if init_labels:
+        init_sigs = type_env.method_signatures.get(scalar(class_name), {}).get(
+            "__init__", []
+        )
+        if len(init_sigs) != len(init_labels):
+            logger.warning("sig/label count mismatch for %s.__init__", class_name)
+            init_label = init_labels[0]
+        else:
+            winner = overload_resolver.resolve(init_sigs, args)
+            init_label = init_labels[winner]
+    else:
+        init_label = ""
 
     # Allocate heap object
     addr = f"{constants.OBJ_ADDR_PREFIX}{vm.symbolic_counter}"
