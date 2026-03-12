@@ -744,7 +744,7 @@ def _handle_unop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionRe
         if addr and (_parse_func_ref(operand).matched or addr in vm.heap):
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: operand},
+                    register_writes={inst.result_reg: typed_from_runtime(operand)},
                     reasoning=f"unop &{operand} → {operand} (address-of reference is identity)",
                 )
             )
@@ -754,7 +754,7 @@ def _handle_unop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionRe
         sym.constraints = [f"{oper}{op_desc}"]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: sym.to_dict()},
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"unop {oper}{op_desc} → symbolic {sym.name}",
             )
         )
@@ -764,13 +764,13 @@ def _handle_unop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionRe
         sym.constraints = [f"{oper}{operand!r}"]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: sym.to_dict()},
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"unop {oper}{operand!r} → uncomputable, symbolic {sym.name}",
             )
         )
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: result},
+            register_writes={inst.result_reg: typed_from_runtime(result)},
             reasoning=f"unop {oper}{operand!r} = {result!r}",
         )
     )
