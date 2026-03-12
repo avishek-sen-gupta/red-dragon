@@ -156,6 +156,10 @@ def lower_pointer_expr(ctx: TreeSitterEmitContext, node) -> str:
         )
         return reg
 
+    # Dereference *this → just load this (our VM references aren't real pointers)
+    if operand_node is not None and ctx.node_text(operand_node) == "this":
+        return ctx.lower_expr(operand_node)
+
     # Dereference: *ptr -> LOAD_FIELD ptr, "*"
     inner_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
     reg = ctx.fresh_reg()
