@@ -315,7 +315,7 @@ int add(int a, int b) {
             "c",
         )
         assert "f" in env.func_signatures
-        param_types = dict(env.func_signatures["f"].params)
+        param_types = dict(env.get_func_signature("f").params)
         assert param_types["arr"] == "Pointer[Int]"
 
     def test_pointer_return_type_propagated(self):
@@ -403,7 +403,7 @@ class M {
             "java",
         )
         assert "add" in env.func_signatures
-        assert env.func_signatures["add"].return_type == "Int"
+        assert env.get_func_signature("add").return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -432,7 +432,7 @@ class M {
             "csharp",
         )
         assert "Add" in env.func_signatures
-        assert env.func_signatures["Add"].return_type == "Int"
+        assert env.get_func_signature("Add").return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -457,7 +457,7 @@ class TestCReturnType:
             "c",
         )
         assert "add" in env.func_signatures
-        assert env.func_signatures["add"].return_type == "Int"
+        assert env.get_func_signature("add").return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -481,7 +481,7 @@ class TestCppReturnType:
             "cpp",
         )
         assert "add" in env.func_signatures
-        assert env.func_signatures["add"].return_type == "Int"
+        assert env.get_func_signature("add").return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -511,7 +511,7 @@ func add(a int, b int) int {
             "go",
         )
         assert "add" in env.func_signatures
-        assert env.func_signatures["add"].return_type == "Int"
+        assert env.get_func_signature("add").return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -539,7 +539,7 @@ class TestRustReturnType:
             "rust",
         )
         assert "add" in env.func_signatures
-        assert env.func_signatures["add"].return_type == "Int"
+        assert env.get_func_signature("add").return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -562,7 +562,7 @@ class TestKotlinReturnType:
             "kotlin",
         )
         assert "add" in env.func_signatures
-        assert env.func_signatures["add"].return_type == "Int"
+        assert env.get_func_signature("add").return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -585,7 +585,7 @@ class TestScalaReturnType:
             "scala",
         )
         assert "add" in env.func_signatures
-        assert env.func_signatures["add"].return_type == "Int"
+        assert env.get_func_signature("add").return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -606,7 +606,7 @@ class TestTypeScriptReturnType:
             "typescript",
         )
         assert "add" in env.func_signatures
-        assert env.func_signatures["add"].return_type == "Float"
+        assert env.get_func_signature("add").return_type == "Float"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -627,7 +627,7 @@ class TestPythonReturnType:
             "python",
         )
         assert "add" in env.func_signatures
-        assert env.func_signatures["add"].return_type == "Int"
+        assert env.get_func_signature("add").return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -650,7 +650,7 @@ class TestPHPReturnType:
             "php",
         )
         assert "add" in env.func_signatures
-        assert env.func_signatures["add"].return_type == "Int"
+        assert env.get_func_signature("add").return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -672,7 +672,7 @@ class TestPascalReturnType:
             "pascal",
         )
         assert "add" in env.func_signatures
-        assert env.func_signatures["add"].return_type == "Int"
+        assert env.get_func_signature("add").return_type == "Int"
 
     def test_procedure_has_no_return_type(self):
         """Pascal procedures (no return type) should have empty return_type."""
@@ -681,7 +681,7 @@ class TestPascalReturnType:
             "pascal",
         )
         assert "greet" in env.func_signatures
-        assert env.func_signatures["greet"].return_type == ""
+        assert env.get_func_signature("greet").return_type == ""
 
 
 # ---------------------------------------------------------------------------
@@ -697,7 +697,7 @@ class TestJavaScriptNoReturnType:
             "javascript",
         )
         assert "add" in env.func_signatures
-        sig = env.func_signatures["add"]
+        sig = env.get_func_signature("add")
         assert (
             sig.return_type == ""
         ), f"JS function should have no return type, got {sig.return_type!r}"
@@ -723,7 +723,7 @@ class TestRubyNoReturnType:
             "ruby",
         )
         assert "add" in env.func_signatures
-        sig = env.func_signatures["add"]
+        sig = env.get_func_signature("add")
         assert (
             sig.return_type == ""
         ), f"Ruby function should have no return type, got {sig.return_type!r}"
@@ -737,7 +737,7 @@ class TestLuaNoReturnType:
             "lua",
         )
         assert "add" in env.func_signatures
-        sig = env.func_signatures["add"]
+        sig = env.get_func_signature("add")
         assert (
             sig.return_type == ""
         ), f"Lua function should have no return type, got {sig.return_type!r}"
@@ -760,7 +760,7 @@ class M {
             "java",
         )
         assert "add" in env.func_signatures
-        sig = env.func_signatures["add"]
+        sig = env.get_func_signature("add")
         assert sig.return_type == "Int"
         assert sig.params == (("a", "Int"), ("b", "Int"))
 
@@ -777,7 +777,7 @@ class M {
             "csharp",
         )
         assert "Add" in env.func_signatures
-        sig = env.func_signatures["Add"]
+        sig = env.get_func_signature("Add")
         assert sig.return_type == "Int"
         assert sig.params == (("a", "Int"), ("b", "Int"))
 
@@ -790,7 +790,7 @@ class TestCFuncSignatures:
             "c",
         )
         assert "add" in env.func_signatures
-        sig = env.func_signatures["add"]
+        sig = env.get_func_signature("add")
         assert sig.return_type == "Int"
         assert sig.params == (("a", "Int"), ("b", "Int"))
 
@@ -803,7 +803,7 @@ class TestCppFuncSignatures:
             "cpp",
         )
         assert "add" in env.func_signatures
-        sig = env.func_signatures["add"]
+        sig = env.get_func_signature("add")
         assert sig.return_type == "Int"
         assert sig.params == (("a", "Int"), ("b", "Int"))
 
@@ -822,7 +822,7 @@ func add(a int, b int) int {
             "go",
         )
         assert "add" in env.func_signatures
-        sig = env.func_signatures["add"]
+        sig = env.get_func_signature("add")
         assert sig.return_type == "Int"
         assert sig.params == (("a", "Int"), ("b", "Int"))
 
@@ -835,7 +835,7 @@ class TestRustFuncSignatures:
             "rust",
         )
         assert "add" in env.func_signatures
-        sig = env.func_signatures["add"]
+        sig = env.get_func_signature("add")
         assert sig.return_type == "Int"
         assert sig.params == (("a", "Int"), ("b", "Int"))
 
@@ -848,7 +848,7 @@ class TestKotlinFuncSignatures:
             "kotlin",
         )
         assert "add" in env.func_signatures
-        sig = env.func_signatures["add"]
+        sig = env.get_func_signature("add")
         assert sig.return_type == "Int"
         assert sig.params == (("a", "Int"), ("b", "Int"))
 
@@ -861,7 +861,7 @@ class TestScalaFuncSignatures:
             "scala",
         )
         assert "add" in env.func_signatures
-        sig = env.func_signatures["add"]
+        sig = env.get_func_signature("add")
         assert sig.return_type == "Int"
         assert sig.params == (("a", "Int"), ("b", "Int"))
 
@@ -874,7 +874,7 @@ class TestTypeScriptFuncSignatures:
             "typescript",
         )
         assert "add" in env.func_signatures
-        sig = env.func_signatures["add"]
+        sig = env.get_func_signature("add")
         assert sig.return_type == "Float"
         assert sig.params == (("a", "Float"), ("b", "Float"))
 
@@ -887,7 +887,7 @@ class TestPythonFuncSignatures:
             "python",
         )
         assert "add" in env.func_signatures
-        sig = env.func_signatures["add"]
+        sig = env.get_func_signature("add")
         assert sig.return_type == "Int"
         assert sig.params == (("a", "Int"), ("b", "Int"))
 
@@ -900,7 +900,7 @@ class TestPHPFuncSignatures:
             "php",
         )
         assert "add" in env.func_signatures
-        sig = env.func_signatures["add"]
+        sig = env.get_func_signature("add")
         assert sig.return_type == "Int"
         assert sig.params == (("$a", "Int"), ("$b", "Int"))
 
@@ -913,7 +913,7 @@ class TestJavaScriptFuncSignatures:
             "javascript",
         )
         assert "add" in env.func_signatures
-        sig = env.func_signatures["add"]
+        sig = env.get_func_signature("add")
         assert sig.return_type == ""
         assert sig.params == (("a", ""), ("b", ""))
 
@@ -926,7 +926,7 @@ class TestRubyFuncSignatures:
             "ruby",
         )
         assert "add" in env.func_signatures
-        sig = env.func_signatures["add"]
+        sig = env.get_func_signature("add")
         assert sig.return_type == ""
         assert sig.params == (("a", ""), ("b", ""))
 
@@ -949,7 +949,7 @@ class TestPythonReturnBackfill:
             "python",
         )
         assert "double" in env.func_signatures
-        assert env.func_signatures["double"].return_type == TypeName.INT
+        assert env.get_func_signature("double").return_type == TypeName.INT
 
     def test_unannotated_function_returning_string_literal(self):
         """Python `def greet(): return "hi"` → return_type == String."""
@@ -958,7 +958,7 @@ class TestPythonReturnBackfill:
             "python",
         )
         assert "greet" in env.func_signatures
-        assert env.func_signatures["greet"].return_type == TypeName.STRING
+        assert env.get_func_signature("greet").return_type == TypeName.STRING
 
 
 class TestJavaScriptReturnBackfill:
@@ -969,7 +969,7 @@ class TestJavaScriptReturnBackfill:
             "javascript",
         )
         assert "f" in env.func_signatures
-        assert env.func_signatures["f"].return_type == TypeName.INT
+        assert env.get_func_signature("f").return_type == TypeName.INT
 
 
 class TestRubyReturnBackfill:
@@ -980,7 +980,7 @@ class TestRubyReturnBackfill:
             "ruby",
         )
         assert "f" in env.func_signatures
-        assert env.func_signatures["f"].return_type == TypeName.INT
+        assert env.get_func_signature("f").return_type == TypeName.INT
 
 
 # ---------------------------------------------------------------------------
@@ -1224,7 +1224,7 @@ class Dog {
 """,
             "java",
         )
-        sig = env.func_signatures["getAge"]
+        sig = env.get_func_signature("getAge")
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Dog"
@@ -1234,7 +1234,7 @@ class Dog {
             "class Vec3 { double length() { return 0; } };",
             "cpp",
         )
-        sig = env.func_signatures["length"]
+        sig = env.get_func_signature("length")
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Vec3"
@@ -1244,7 +1244,7 @@ class Dog {
             "class Cat { int GetLives() { return 9; } }",
             "csharp",
         )
-        sig = env.func_signatures["GetLives"]
+        sig = env.get_func_signature("GetLives")
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Cat"
@@ -1254,7 +1254,7 @@ class Dog {
             "class Box { getSize() { return 1; } }",
             "javascript",
         )
-        sig = env.func_signatures["getSize"]
+        sig = env.get_func_signature("getSize")
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Box"
@@ -1264,7 +1264,7 @@ class Dog {
             "class Box { getSize(): number { return 1; } }",
             "typescript",
         )
-        sig = env.func_signatures["getSize"]
+        sig = env.get_func_signature("getSize")
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Box"
@@ -1274,7 +1274,7 @@ class Dog {
             "class Circle { fun area(): Double { return 3.14 } }",
             "kotlin",
         )
-        sig = env.func_signatures["area"]
+        sig = env.get_func_signature("area")
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Circle"
@@ -1284,7 +1284,7 @@ class Dog {
             "class Circle { def area(): Double = 3.14 }",
             "scala",
         )
-        sig = env.func_signatures["area"]
+        sig = env.get_func_signature("area")
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Circle"
@@ -1294,7 +1294,7 @@ class Dog {
             '<?php class User { function greet(): string { return "hi"; } }',
             "php",
         )
-        sig = env.func_signatures["greet"]
+        sig = env.get_func_signature("greet")
         this_params = [p for p in sig.params if p[0] == "$this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "User"
@@ -1308,7 +1308,7 @@ class TestLuaFuncSignatures:
             "lua",
         )
         assert "add" in env.func_signatures
-        sig = env.func_signatures["add"]
+        sig = env.get_func_signature("add")
         assert sig.return_type == ""
         assert sig.params == (("a", ""), ("b", ""))
 
@@ -1525,8 +1525,8 @@ class TestReturnBackfillAllLanguages:
         lang, env = lang_env
         assert "f" in env.func_signatures, f"[{lang}] expected 'f' in func_signatures"
         assert (
-            env.func_signatures["f"].return_type == TypeName.INT
-        ), f"[{lang}] expected return_type Int, got {env.func_signatures['f'].return_type!r}"
+            env.get_func_signature("f").return_type == TypeName.INT
+        ), f"[{lang}] expected return_type Int, got {env.get_func_signature('f').return_type!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -1986,8 +1986,8 @@ def helper():
     return 42
 """
         _instructions, env = _lower_and_infer(source, "python")
-        assert env.func_signatures["helper"].return_type == TypeName.INT
-        assert env.func_signatures["main"].return_type == TypeName.INT
+        assert env.get_func_signature("helper").return_type == TypeName.INT
+        assert env.get_func_signature("main").return_type == TypeName.INT
 
     def test_forward_ref_var_assignment(self):
         """Python: x = helper() where helper is defined later → x typed."""
@@ -2000,7 +2000,7 @@ def make_value():
     return 3.14
 """
         _instructions, env = _lower_and_infer(source, "python")
-        assert env.func_signatures["make_value"].return_type == TypeName.FLOAT
+        assert env.get_func_signature("make_value").return_type == TypeName.FLOAT
 
 
 class TestForwardReferenceJavaScript:
@@ -2016,8 +2016,8 @@ function helper() {
 }
 """
         _instructions, env = _lower_and_infer(source, "javascript")
-        assert env.func_signatures["helper"].return_type == TypeName.INT
-        assert env.func_signatures["main"].return_type == TypeName.INT
+        assert env.get_func_signature("helper").return_type == TypeName.INT
+        assert env.get_func_signature("main").return_type == TypeName.INT
 
 
 class TestForwardReferenceRuby:
@@ -2033,8 +2033,8 @@ def helper()
 end
 """
         _instructions, env = _lower_and_infer(source, "ruby")
-        assert env.func_signatures["helper"].return_type == TypeName.INT
-        assert env.func_signatures["main"].return_type == TypeName.INT
+        assert env.get_func_signature("helper").return_type == TypeName.INT
+        assert env.get_func_signature("main").return_type == TypeName.INT
 
 
 # ---------------------------------------------------------------------------
@@ -2239,12 +2239,12 @@ class TestVarTypeScopingCrossLanguage:
         expected_int = _EXPECTED_INT_TYPE.get(scoping_lang, TypeName.INT)
         expected_str = _EXPECTED_STR_TYPE.get(scoping_lang, TypeName.STRING)
         # Both functions should have their return types correctly inferred
-        assert env.func_signatures["make_int"].return_type == expected_int
-        assert env.func_signatures["make_str"].return_type == expected_str
+        assert env.get_func_signature("make_int").return_type == expected_int
+        assert env.get_func_signature("make_str").return_type == expected_str
         # Key: the two return types must be DIFFERENT (scoping works)
         assert (
-            env.func_signatures["make_int"].return_type
-            != env.func_signatures["make_str"].return_type
+            env.get_func_signature("make_int").return_type
+            != env.get_func_signature("make_str").return_type
         )
 
 
@@ -2276,7 +2276,9 @@ class TestJavaGenericTypeInference:
             "java",
         )
         assert any(
-            sig.return_type == "List[String]" for sig in env.func_signatures.values()
+            sig.return_type == "List[String]"
+            for sigs in env.func_signatures.values()
+            for sig in sigs
         )
 
 
