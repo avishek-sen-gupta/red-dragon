@@ -1251,7 +1251,7 @@ def _handle_call_method(
         if result is not Operators.UNCOMPUTABLE:
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: _serialize_value(result)},
+                    register_writes={inst.result_reg: typed_from_runtime(result)},
                     reasoning=f"method builtin {method_name}({obj_val!r}, {args}) = {result!r}",
                 )
             )
@@ -1308,12 +1308,12 @@ def _handle_call_method(
     params = registry.func_params.get(func_label, [])
     new_vars: dict[str, Any] = {}
     if params:
-        new_vars[params[0]] = _serialize_value(obj_val)
+        new_vars[params[0]] = typed_from_runtime(obj_val)
     for i, arg in enumerate(args):
         if i + 1 < len(params):
-            new_vars[params[i + 1]] = _serialize_value(arg)
+            new_vars[params[i + 1]] = typed_from_runtime(arg)
     # Inject 'arguments' array (explicit args only, not 'this')
-    new_vars["arguments"] = _builtin_array_of([_serialize_value(a) for a in args], vm)
+    new_vars["arguments"] = typed(_builtin_array_of(list(args), vm), UNKNOWN)
 
     return ExecutionResult.success(
         StateUpdate(
