@@ -63,6 +63,24 @@ val counter = Counter()
 val result = counter.increment().increment()
 val answer = result.get_value()
 """,
+    "php": """\
+<?php
+class Counter {
+    public $count = 0;
+    function increment() {
+        $this->count = $this->count + 1;
+        return $this;
+    }
+    function get_value() {
+        return $this->count;
+    }
+}
+
+$counter = new Counter();
+$result = $counter->increment()->increment();
+$answer = $result->get_value();
+?>
+""",
     "scala": """\
 class Counter {
     var count: Int = 0

@@ -12,7 +12,11 @@ from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
 from interpreter.frontends.php.node_types import PHPNodeType
-from interpreter.frontends.common.declarations import make_class_ref
+from interpreter.frontends.common.declarations import (
+    FieldInit,
+    emit_field_initializers,
+    make_class_ref,
+)
 from interpreter.type_expr import ScalarType
 
 
@@ -217,6 +221,50 @@ def _extract_php_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
     ]
 
 
+def _is_php_constructor(ctx: TreeSitterEmitContext, child) -> bool:
+    """Return True if *child* is a method named __construct."""
+    if child.type != PHPNodeType.METHOD_DECLARATION:
+        return False
+    name_node = child.child_by_field_name(ctx.constants.func_name_field)
+    return name_node is not None and ctx.node_text(name_node) == "__construct"
+
+
+def _emit_php_synthetic_constructor(
+    ctx: TreeSitterEmitContext, field_inits: list[FieldInit]
+) -> None:
+    """Generate a synthetic __construct that sets up $this and initializes fields.
+
+    Unlike the generic ``emit_synthetic_init``, this emits ``_emit_this_param``
+    so that ``$this`` is available when ``emit_field_initializers`` runs.
+    """
+    func_name = "__construct"
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+    end_label = ctx.fresh_label(f"end_{func_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit(Opcode.LABEL, label=func_label)
+
+    _emit_this_param(ctx)
+    emit_field_initializers(ctx, field_inits, this_var=constants.PARAM_PHP_THIS)
+
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
+    )
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=func_reg,
+        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+
 def lower_php_class(ctx: TreeSitterEmitContext, node) -> None:
     """Lower class declaration."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
@@ -230,8 +278,51 @@ def lower_php_class(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=class_label)
 
+    # Collect field initializers from non-static property declarations
+    field_inits: list[FieldInit] = []
     if body_node:
-        _lower_php_class_body(ctx, body_node)
+        field_inits = [
+            init
+            for child in body_node.children
+            if child.type == PHPNodeType.PROPERTY_DECLARATION
+            and not _has_static_modifier(child)
+            for init in _collect_php_field_inits(ctx, child)
+        ]
+
+    has_constructor = body_node is not None and any(
+        _is_php_constructor(ctx, child) for child in body_node.children
+    )
+
+    if body_node:
+        saved_class = ctx._current_class_name
+        ctx._current_class_name = class_name
+        for child in body_node.children:
+            if child.type == PHPNodeType.METHOD_DECLARATION:
+                if _is_php_constructor(ctx, child):
+                    _lower_php_constructor_with_field_inits(ctx, child, field_inits)
+                else:
+                    lower_php_method_decl(ctx, child)
+            elif (
+                child.type == PHPNodeType.PROPERTY_DECLARATION
+                and not _has_static_modifier(child)
+                and _collect_php_field_inits(ctx, child)
+            ):
+                continue  # Instance field with init — handled via constructor
+            elif child.type == PHPNodeType.PROPERTY_DECLARATION:
+                lower_php_property_declaration(ctx, child)
+            elif child.is_named and child.type not in (
+                PHPNodeType.VISIBILITY_MODIFIER,
+                PHPNodeType.STATIC_MODIFIER,
+                PHPNodeType.ABSTRACT_MODIFIER,
+                PHPNodeType.FINAL_MODIFIER,
+                PHPNodeType.OPEN_BRACE,
+                PHPNodeType.CLOSE_BRACE,
+            ):
+                ctx.lower_stmt(child)
+        ctx._current_class_name = saved_class
+
+    if not has_constructor and field_inits:
+        _emit_php_synthetic_constructor(ctx, field_inits)
 
     ctx.emit(Opcode.LABEL, label=end_label)
 
@@ -355,8 +446,85 @@ def lower_php_enum(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.STORE_VAR, operands=[enum_name, cls_reg])
 
 
+def _lower_php_constructor_with_field_inits(
+    ctx: TreeSitterEmitContext, node, field_inits: list[FieldInit] = []
+) -> None:
+    """Lower __construct method, prepending field initializers before body."""
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
+
+    func_name = "__construct"
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+    end_label = ctx.fresh_label(f"end_{func_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit(Opcode.LABEL, label=func_label)
+
+    if not _has_static_modifier(node):
+        _emit_this_param(ctx)
+
+    if params_node:
+        lower_php_params(ctx, params_node)
+
+    # Prepend field initializers before the constructor body
+    emit_field_initializers(ctx, field_inits, this_var=constants.PARAM_PHP_THIS)
+
+    if body_node:
+        lower_php_compound(ctx, body_node)
+
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
+    )
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=func_reg,
+        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+
+def _collect_php_field_inits(ctx: TreeSitterEmitContext, node) -> list[FieldInit]:
+    """Collect (field_name, value_node) pairs from a PHP property_declaration.
+
+    Does NOT emit any IR — callers pass the result to
+    ``emit_field_initializers`` or ``emit_synthetic_init``.
+    """
+    inits: list[FieldInit] = []
+    for child in node.children:
+        if child.type == PHPNodeType.PROPERTY_ELEMENT:
+            name_node = next(
+                (c for c in child.children if c.type == PHPNodeType.VARIABLE_NAME),
+                None,
+            )
+            value_node = next(
+                (
+                    c
+                    for c in child.children
+                    if c.is_named and c.type != PHPNodeType.VARIABLE_NAME
+                ),
+                None,
+            )
+            if name_node and value_node:
+                # Strip leading $ from PHP variable names to match field access syntax
+                field_name = ctx.node_text(name_node).lstrip("$")
+                inits.append((field_name, value_node))
+    return inits
+
+
 def lower_php_property_declaration(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower property declarations inside classes, e.g. public $x = 10;"""
+    """Lower property declarations inside classes, e.g. public $x = 10;
+
+    Emits LOAD_VAR $this + STORE_FIELD for each property element.
+    Used for properties lowered inline (e.g. static properties).
+    Instance properties with initializers should use _collect_php_field_inits instead.
+    """
     for child in node.children:
         if child.type == PHPNodeType.PROPERTY_ELEMENT:
             name_node = next(
@@ -370,23 +538,26 @@ def lower_php_property_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 ),
                 None,
             )
-            if name_node and value_node:
-                val_reg = ctx.lower_expr(value_node)
+            if name_node:
+                this_reg = ctx.fresh_reg()
+                ctx.emit(
+                    Opcode.LOAD_VAR,
+                    result_reg=this_reg,
+                    operands=[constants.PARAM_PHP_THIS],
+                )
+                if value_node:
+                    val_reg = ctx.lower_expr(value_node)
+                else:
+                    val_reg = ctx.fresh_reg()
+                    ctx.emit(
+                        Opcode.CONST,
+                        result_reg=val_reg,
+                        operands=[ctx.constants.none_literal],
+                    )
+                field_name = ctx.node_text(name_node).lstrip("$")
                 ctx.emit(
                     Opcode.STORE_FIELD,
-                    operands=[constants.PARAM_SELF, ctx.node_text(name_node), val_reg],
-                    node=node,
-                )
-            elif name_node:
-                val_reg = ctx.fresh_reg()
-                ctx.emit(
-                    Opcode.CONST,
-                    result_reg=val_reg,
-                    operands=[ctx.constants.none_literal],
-                )
-                ctx.emit(
-                    Opcode.STORE_FIELD,
-                    operands=[constants.PARAM_SELF, ctx.node_text(name_node), val_reg],
+                    operands=[this_reg, field_name, val_reg],
                     node=node,
                 )
 

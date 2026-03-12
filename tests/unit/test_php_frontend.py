@@ -895,7 +895,7 @@ class Foo {
 ?>"""
         ir = _parse_and_lower(source)
         store_fields = _find_all(ir, Opcode.STORE_FIELD)
-        assert any("$x" in inst.operands for inst in store_fields)
+        assert any("x" in inst.operands for inst in store_fields)
 
     def test_property_declaration_without_value(self):
         source = """<?php
@@ -905,7 +905,7 @@ class Bar {
 ?>"""
         ir = _parse_and_lower(source)
         store_fields = _find_all(ir, Opcode.STORE_FIELD)
-        assert any("$name" in inst.operands for inst in store_fields)
+        assert any("name" in inst.operands for inst in store_fields)
 
 
 class TestPhpYieldExpression:
@@ -1340,3 +1340,46 @@ class TestPHPRequireExpression:
         ir = _parse_and_lower("<?php require 'file.php'; ?>")
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("require" in inst.operands for inst in calls)
+
+
+class TestPHPPropertyFieldInit:
+    """PHP property declarations should use LOAD_VAR $this, not bare 'self'."""
+
+    def test_property_uses_load_var_this(self):
+        """public $count = 0 should emit LOAD_VAR '$this' for STORE_FIELD."""
+        ir = _parse_and_lower("""\
+<?php
+class Counter {
+    public $count = 0;
+}
+?>
+""")
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        assert len(store_fields) >= 1, "Expected at least one STORE_FIELD"
+        # The first operand should be a register (from LOAD_VAR), not bare 'self'
+        for sf in store_fields:
+            if "$count" in sf.operands:
+                assert sf.operands[0] != "self", (
+                    f"STORE_FIELD should use a register from LOAD_VAR '$this', "
+                    f"not bare 'self'. Got operands: {sf.operands}"
+                )
+                assert sf.operands[0].startswith("%"), (
+                    f"STORE_FIELD first operand should be a register, "
+                    f"got: {sf.operands[0]}"
+                )
+
+    def test_property_no_bare_self_in_store_field(self):
+        """No STORE_FIELD should reference bare 'self' string."""
+        ir = _parse_and_lower("""\
+<?php
+class Counter {
+    public $count = 0;
+    public $name = "default";
+}
+?>
+""")
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        for sf in store_fields:
+            assert (
+                "self" not in sf.operands
+            ), f"STORE_FIELD should not use bare 'self', got: {sf.operands}"
