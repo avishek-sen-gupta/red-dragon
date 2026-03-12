@@ -165,8 +165,19 @@ def materialize_raw_update(
         )
         for var, val in raw_update.var_writes.items()
     }
+    materialized_rv = raw_update.return_value
+    if raw_update.return_value is not None and not isinstance(
+        raw_update.return_value, TypedValue
+    ):
+        deserialized = _deserialize_value(raw_update.return_value, vm)
+        materialized_rv = typed_from_runtime(deserialized)
+
     return raw_update.model_copy(
-        update={"register_writes": typed_reg_writes, "var_writes": typed_var_writes}
+        update={
+            "register_writes": typed_reg_writes,
+            "var_writes": typed_var_writes,
+            "return_value": materialized_rv,
+        }
     )
 
 
