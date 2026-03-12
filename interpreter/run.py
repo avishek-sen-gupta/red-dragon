@@ -46,10 +46,8 @@ from interpreter.vm import (
     apply_update,
     coerce_local_update,
     materialize_raw_update,
-    _deserialize_value,
     _serialize_value,
 )
-from interpreter.typed_value import typed_from_runtime
 from interpreter.run_types import (
     VMConfig,
     ExecutionStats,
@@ -196,9 +194,6 @@ def _handle_return_flow(
         if isinstance(update.return_value, TypedValue):
             if update.return_value.value is not None:
                 caller_frame.registers[return_frame.result_reg] = update.return_value
-        else:
-            raw = _deserialize_value(update.return_value, vm)
-            caller_frame.registers[return_frame.result_reg] = typed_from_runtime(raw)
 
     if return_frame.return_label and return_frame.return_label in cfg.blocks:
         new_ip = return_frame.return_ip if return_frame.return_ip is not None else 0
