@@ -481,3 +481,54 @@ concept Addable = requires(T a, T b) {
         instructions = _parse_cpp(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
+
+
+class TestCppDerefThis:
+    """*this should resolve to this, not LOAD_FIELD [this, '*']."""
+
+    def test_deref_this_no_load_field_star(self):
+        """return *this; should NOT produce LOAD_FIELD with field='*'."""
+        ir = _parse_cpp("""\
+class Counter {
+public:
+    Counter increment() {
+        return *this;
+    }
+};
+""")
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        star_fields = [inst for inst in load_fields if "*" in inst.operands]
+        assert (
+            len(star_fields) == 0
+        ), f"Expected no LOAD_FIELD with '*', got {star_fields}"
+
+    def test_deref_this_returns_this_via_load_var(self):
+        """return *this; should produce LOAD_VAR this + RETURN."""
+        ir = _parse_cpp("""\
+class Counter {
+public:
+    Counter increment() {
+        return *this;
+    }
+};
+""")
+        # Find the RETURN inside the increment function
+        returns = _find_all(ir, Opcode.RETURN)
+        # There should be a LOAD_VAR for 'this' that feeds into the return
+        load_vars = _find_all(ir, Opcode.LOAD_VAR)
+        this_loads = [inst for inst in load_vars if "this" in inst.operands]
+        assert len(this_loads) >= 1, "Expected at least one LOAD_VAR 'this'"
+
+    def test_deref_non_this_still_uses_load_field(self):
+        """*ptr (not *this) should still produce LOAD_FIELD."""
+        ir = _parse_cpp("""\
+int main() {
+    int* p;
+    int x = *p;
+}
+""")
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        star_fields = [inst for inst in load_fields if "*" in inst.operands]
+        assert (
+            len(star_fields) >= 1
+        ), "Expected LOAD_FIELD with '*' for non-this dereference"
