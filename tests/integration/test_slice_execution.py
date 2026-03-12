@@ -157,3 +157,40 @@ func main() {
         frame = vm.call_stack[0]
         t_val = frame.local_vars.get("t")
         assert t_val == "he", f"expected 'he', got {t_val}"
+
+
+# ── Ruby ──────────────────────────────────────────────────────
+
+
+class TestRubySliceInclusive:
+    """arr[1..3] (inclusive) should return elements at indices 1, 2, 3."""
+
+    PROGRAM = """\
+arr = [10, 20, 30, 40, 50]
+result = arr[1..3]
+answer = result[0] + result[1] + result[2]
+"""
+
+    def test_inclusive_range_slice(self):
+        vm, _stats = execute_for_language("ruby", self.PROGRAM)
+        answer = extract_answer(vm, "ruby")
+        assert answer == 90, f"expected 90 (20+30+40), got {answer}"
+
+    def test_zero_llm_calls(self):
+        _vm, stats = execute_for_language("ruby", self.PROGRAM)
+        assert stats.llm_calls == 0
+
+
+class TestRubySliceExclusive:
+    """arr[1...3] (exclusive) should return elements at indices 1, 2."""
+
+    PROGRAM = """\
+arr = [10, 20, 30, 40, 50]
+result = arr[1...3]
+answer = result[0] + result[1]
+"""
+
+    def test_exclusive_range_slice(self):
+        vm, _stats = execute_for_language("ruby", self.PROGRAM)
+        answer = extract_answer(vm, "ruby")
+        assert answer == 50, f"expected 50 (20+30), got {answer}"
