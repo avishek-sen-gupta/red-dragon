@@ -351,11 +351,13 @@ def lower_ruby_word_array(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_element_reference(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower `arr[idx]` (element_reference) as LOAD_INDEX."""
+    """Lower `arr[idx]` as LOAD_INDEX, `arr[1..3]` as CALL_FUNCTION('slice')."""
     named_children = [c for c in node.children if c.is_named]
     if not named_children:
         return lower_const_literal(ctx, node)
     obj_reg = ctx.lower_expr(named_children[0])
+    if len(named_children) > 1 and named_children[1].type == RubyNodeType.RANGE:
+        return _lower_range_slice(ctx, named_children[1], obj_reg)
     idx_reg = (
         ctx.lower_expr(named_children[1])
         if len(named_children) > 1
@@ -368,6 +370,51 @@ def lower_element_reference(ctx: TreeSitterEmitContext, node) -> str:
         operands=[obj_reg, idx_reg],
         node=node,
     )
+    return reg
+
+
+def _lower_range_slice(
+    ctx: TreeSitterEmitContext, range_node, collection_reg: str
+) -> str:
+    """Lower arr[start..end] as CALL_FUNCTION('slice', collection, start, end+1).
+
+    Ruby's inclusive range (1..3) maps to Python's slice(1, 4).
+    Exclusive range (1...3) maps to slice(1, 3).
+    """
+    named = [c for c in range_node.children if c.is_named]
+    start_reg = ctx.lower_expr(named[0]) if len(named) > 0 else _make_const(ctx, "0")
+    end_reg = (
+        ctx.lower_expr(named[1])
+        if len(named) > 1
+        else _make_const(ctx, ctx.constants.none_literal)
+    )
+    # Inclusive range (..) needs end+1; exclusive (...) uses end directly
+    is_exclusive = any(c.type == "..." for c in range_node.children)
+    if not is_exclusive and len(named) > 1:
+        one_reg = _make_const(ctx, "1")
+        adjusted_end = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.BINOP,
+            result_reg=adjusted_end,
+            operands=["+", end_reg, one_reg],
+            node=range_node,
+        )
+        end_reg = adjusted_end
+    none_reg = _make_const(ctx, ctx.constants.none_literal)
+    reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_FUNCTION,
+        result_reg=reg,
+        operands=["slice", collection_reg, start_reg, end_reg, none_reg],
+        node=range_node,
+    )
+    return reg
+
+
+def _make_const(ctx: TreeSitterEmitContext, value: str) -> str:
+    """Emit a CONST and return the register."""
+    reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=reg, operands=[value])
     return reg
 
 
