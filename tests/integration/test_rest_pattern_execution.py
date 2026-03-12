@@ -132,22 +132,22 @@ let answer = 1;
         assert stats.llm_calls == 0
 
 
-class TestFunctionRestParameterOnly:
-    """function foo(...args) called with foo(10, 20) => args = [10, 20]."""
+class TestFunctionRestParameterComputation:
+    """function sum(first, ...rest) computes first + rest[0] + rest[1]."""
 
     PROGRAM = """\
-function sum(...args) {
-    return args;
+function sum(first, ...rest) {
+    let total = first + rest[0] + rest[1];
+    return total;
 }
-let result = sum(10, 20);
-let answer = 10;
+let answer = sum(10, 20, 30);
 """
 
-    def test_all_args_collected(self):
+    def test_sum_result(self):
         vm, _stats = execute_for_language("javascript", self.PROGRAM)
-        result = vm.call_stack[0].local_vars.get("result")
-        assert result in vm.heap, f"expected heap address, got {result}"
-        heap_obj = vm.heap[result]
-        assert heap_obj.fields["0"] == 10
-        assert heap_obj.fields["1"] == 20
-        assert heap_obj.fields["length"] == 2
+        answer = extract_answer(vm, "javascript")
+        assert answer == 60, f"expected 60, got {answer}"
+
+    def test_zero_llm_calls(self):
+        _vm, stats = execute_for_language("javascript", self.PROGRAM)
+        assert stats.llm_calls == 0
