@@ -207,6 +207,11 @@ def _builtin_object_rest(args: list[Any], vm: VMState) -> Any:
     return rest_addr
 
 
+def _method_slice(obj: Any, args: list[Any], vm: VMState) -> Any:
+    """Method builtin: obj.subList(start, stop) / obj.substring(start, stop) → slice."""
+    return _builtin_slice([obj, *args], vm)
+
+
 class Builtins:
     """Table of built-in function implementations."""
 
@@ -224,8 +229,18 @@ class Builtins:
         "keys": _builtin_keys,
         "arrayOf": _builtin_array_of,
         "intArrayOf": _builtin_array_of,
+        "listOf": _builtin_array_of,
+        "mutableListOf": _builtin_array_of,
         "Array": _builtin_array_of,
         "slice": _builtin_slice,
         "object_rest": _builtin_object_rest,
         **BYTE_BUILTINS,
+    }
+
+    # Method builtins: obj.method(args) → builtin(obj, *args)
+    # Signature: (obj, args: list, vm) -> Any
+    METHOD_TABLE: dict[str, Any] = {
+        "subList": _method_slice,
+        "substring": _method_slice,
+        "slice": _method_slice,
     }
