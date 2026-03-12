@@ -141,10 +141,7 @@ def _builtin_slice(args: list[Any], vm: VMState) -> Any:
     # Native list/tuple
     if isinstance(collection, (list, tuple)):
         return _builtin_array_of(list(collection[start:]), vm)
-    # Native string
-    if isinstance(collection, str) and not collection.startswith("<"):
-        return collection[start:]
-    # Heap-backed array
+    # Heap-backed array (check before string — heap addresses are strings too)
     addr = _heap_addr(collection)
     if addr and addr in vm.heap:
         heap_obj = vm.heap[addr]
