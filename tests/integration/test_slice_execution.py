@@ -95,3 +95,65 @@ answer = result[0] + result[1]
         vm, _stats = execute_for_language("python", self.PROGRAM)
         answer = extract_answer(vm, "python")
         assert answer == 70, f"expected 70, got {answer}"
+
+
+# ── Go ────────────────────────────────────────────────────────
+
+
+class TestGoSliceBasic:
+    """arr[1:3] should return [20, 30]."""
+
+    PROGRAM = """\
+package main
+func main() {
+    arr := []int{10, 20, 30, 40, 50}
+    result := arr[1:3]
+    answer := result[0] + result[1]
+}
+"""
+
+    def test_slice_produces_correct_sum(self):
+        vm, _stats = execute_for_language("go", self.PROGRAM)
+        answer = extract_answer(vm, "go")
+        assert answer == 50, f"expected 50, got {answer}"
+
+    def test_zero_llm_calls(self):
+        _vm, stats = execute_for_language("go", self.PROGRAM)
+        assert stats.llm_calls == 0
+
+
+class TestGoSliceNoEnd:
+    """arr[2:] should return from index 2 onward."""
+
+    PROGRAM = """\
+package main
+func main() {
+    arr := []int{10, 20, 30, 40}
+    result := arr[2:]
+    answer := result[0] + result[1]
+}
+"""
+
+    def test_slice_to_end(self):
+        vm, _stats = execute_for_language("go", self.PROGRAM)
+        answer = extract_answer(vm, "go")
+        assert answer == 70, f"expected 70, got {answer}"
+
+
+class TestGoStringSlice:
+    """s[0:2] on a string should return substring."""
+
+    PROGRAM = """\
+package main
+func main() {
+    s := "hello"
+    t := s[0:2]
+    answer := 1
+}
+"""
+
+    def test_string_slice(self):
+        vm, _stats = execute_for_language("go", self.PROGRAM)
+        frame = vm.call_stack[0]
+        t_val = frame.local_vars.get("t")
+        assert t_val == "he", f"expected 'he', got {t_val}"
