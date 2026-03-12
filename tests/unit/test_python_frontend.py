@@ -916,21 +916,24 @@ class TestPythonTypeAlias:
 
 class TestPythonSlice:
     def test_slice_basic(self):
-        """a[1:3] should lower slice with start=1, stop=3."""
+        """a[1:3] should emit CALL_FUNCTION('slice', collection, start, stop, step)."""
         instructions = _parse_python("a[1:3]")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         slice_calls = [c for c in calls if "slice" in c.operands]
         assert len(slice_calls) == 1
-        assert Opcode.LOAD_INDEX in _opcodes(instructions)
+        # Should have 5 operands: 'slice', collection_reg, start, stop, step
+        assert len(slice_calls[0].operands) == 5
+        # Should NOT have LOAD_INDEX — slice is handled directly
+        assert Opcode.LOAD_INDEX not in _opcodes(instructions)
 
     def test_slice_with_step(self):
-        """a[1:3:2] should lower slice with start=1, stop=3, step=2."""
+        """a[1:3:2] should lower slice with collection, start=1, stop=3, step=2."""
         instructions = _parse_python("a[1:3:2]")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         slice_calls = [c for c in calls if "slice" in c.operands]
         assert len(slice_calls) == 1
-        # Should have 4 operands: 'slice', start_reg, stop_reg, step_reg
-        assert len(slice_calls[0].operands) == 4
+        # Should have 5 operands: 'slice', collection_reg, start, stop, step
+        assert len(slice_calls[0].operands) == 5
 
     def test_slice_no_start(self):
         """a[:3] should lower slice with start=None, stop=3."""
@@ -960,6 +963,14 @@ class TestPythonSlice:
         assert len(slice_calls) == 1
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("result" in inst.operands for inst in stores)
+
+    def test_simple_index_still_uses_load_index(self):
+        """a[0] should still use LOAD_INDEX, not slice."""
+        instructions = _parse_python("a[0]")
+        assert Opcode.LOAD_INDEX in _opcodes(instructions)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        slice_calls = [c for c in calls if "slice" in c.operands]
+        assert len(slice_calls) == 0
 
 
 class TestPythonParamSeparators:
