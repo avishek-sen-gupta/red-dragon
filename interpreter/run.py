@@ -43,6 +43,7 @@ from interpreter.vm import (
     StateUpdate,
     ExecutionResult,
     apply_update,
+    coerce_local_update,
     materialize_raw_update,
     _deserialize_value,
     _serialize_value,
@@ -281,9 +282,7 @@ def execute_cfg(
         )
         used_llm = False
         if result.handled:
-            update = materialize_raw_update(
-                result.update, vm, type_env, conversion_rules
-            )
+            update = coerce_local_update(result.update, type_env, conversion_rules)
         else:
             if llm is None:
                 llm = get_backend(config.backend)
@@ -428,9 +427,7 @@ def execute_cfg_traced(
         )
         used_llm = False
         if result.handled:
-            update = materialize_raw_update(
-                result.update, vm, type_env, conversion_rules
-            )
+            update = coerce_local_update(result.update, type_env, conversion_rules)
         else:
             if llm is None:
                 llm = get_backend(config.backend)
