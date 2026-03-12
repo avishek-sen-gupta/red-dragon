@@ -86,10 +86,10 @@ class Counter {
     var count: Int = 0
     def increment(): Counter = {
         this.count = this.count + 1
-        return this
+        this
     }
     def get_value(): Int = {
-        return this.count
+        this.count
     }
 }
 
