@@ -10,6 +10,7 @@ from interpreter.conversion_rules import TypeConversionRules
 from interpreter.identity_conversion_rules import IdentityConversionRules
 from interpreter.type_environment import TypeEnvironment
 from interpreter.type_expr import UNKNOWN, scalar
+from interpreter.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.vm_types import (  # noqa: F401 — re-exported for backwards compatibility
     SymbolicValue,
     HeapObject,
@@ -93,9 +94,11 @@ def apply_update(
     # Coerce values at write time based on the type environment.
     for reg, val in update.register_writes.items():
         deserialized = _deserialize_value(val, vm)
-        frame.registers[reg] = _coerce_value(
-            deserialized, reg, type_env, conversion_rules
-        )
+        coerced = _coerce_value(deserialized, reg, type_env, conversion_rules)
+        # UNKNOWN is falsy — falls through to runtime inference when type_env has no entry
+        declared_type = type_env.register_types.get(reg, UNKNOWN)
+        inferred_type = declared_type or typed_from_runtime(coerced).type
+        frame.registers[reg] = typed(coerced, inferred_type)
 
     # Heap writes
     for hw in update.heap_writes:
@@ -127,12 +130,16 @@ def apply_update(
         # Alias-aware: if variable is backed by a heap object, write there
         alias_ptr = target_frame.var_heap_aliases.get(var)
         if alias_ptr and alias_ptr.base in vm.heap:
+            # Heap stays raw
             vm.heap[alias_ptr.base].fields[str(alias_ptr.offset)] = deserialized
         else:
-            target_frame.local_vars[var] = deserialized
+            declared_type = type_env.var_types.get(var, UNKNOWN)
+            inferred_type = declared_type or typed_from_runtime(deserialized).type
+            target_frame.local_vars[var] = typed(deserialized, inferred_type)
         if target_frame.closure_env_id and var in target_frame.captured_var_names:
             env = vm.closures.get(target_frame.closure_env_id)
             if env:
+                # Closure bindings stay raw
                 env.bindings[var] = deserialized
 
     # Call pop
@@ -182,11 +189,32 @@ def _heap_addr(val: Any) -> str:
 
 
 def _resolve_reg(vm: VMState, operand: str) -> Any:
-    """Resolve a register name to its value, or return the operand as-is."""
+    """Resolve a register name to its raw value, or return the operand as-is.
+
+    Unwraps TypedValue automatically so existing handlers work unchanged.
+    """
     if isinstance(operand, str) and operand.startswith("%"):
         frame = vm.current_frame
-        return frame.registers.get(operand, operand)
+        val = frame.registers.get(operand, operand)
+        if isinstance(val, TypedValue):
+            return val.value
+        return val
     return operand
+
+
+def _resolve_binop_operand(vm: VMState, operand: str) -> TypedValue:
+    """Resolve a register name to its TypedValue.
+
+    Used by type-aware handlers (BINOP). Falls back to typed_from_runtime
+    if the operand is not a register or not wrapped.
+    """
+    if isinstance(operand, str) and operand.startswith("%"):
+        frame = vm.current_frame
+        val = frame.registers.get(operand, operand)
+        if isinstance(val, TypedValue):
+            return val
+        return typed_from_runtime(val)
+    return typed_from_runtime(operand)
 
 
 def _parse_const(raw: str) -> Any:

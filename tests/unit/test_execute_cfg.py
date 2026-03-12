@@ -8,6 +8,7 @@ from interpreter.ir import IRInstruction, Opcode
 from interpreter.cfg import CFG, BasicBlock, build_cfg
 from interpreter.registry import FunctionRegistry, build_registry
 from interpreter.run import execute_cfg, VMConfig, ExecutionStats
+from interpreter.typed_value import unwrap
 
 
 def _make_instructions(*specs):
@@ -34,7 +35,7 @@ class TestExecuteCfgBasic:
 
         vm, stats = execute_cfg(cfg, "entry", registry)
 
-        assert vm.current_frame.local_vars["x"] == 42
+        assert unwrap(vm.current_frame.local_vars["x"]) == 42
 
     def test_returns_execution_stats(self):
         instructions = _make_instructions(
@@ -90,7 +91,7 @@ class TestExecuteCfgBasic:
 
         vm, stats = execute_cfg(cfg, "entry", registry)
 
-        assert vm.current_frame.local_vars["result"] == 99
+        assert unwrap(vm.current_frame.local_vars["result"]) == 99
         assert stats.steps > 0, "execution must have taken at least one step"
         assert cfg.entry == "entry", f"CFG entry should be 'entry', got {cfg.entry}"
 
@@ -116,7 +117,7 @@ class TestExecuteCfgBasic:
 
         vm, stats = execute_cfg(cfg, "entry", empty_registry)
 
-        assert vm.current_frame.local_vars["v"] == 7
+        assert unwrap(vm.current_frame.local_vars["v"]) == 7
 
     def test_unconditional_branch_jumps_to_target(self):
         instructions = _make_instructions(
@@ -131,7 +132,7 @@ class TestExecuteCfgBasic:
 
         vm, stats = execute_cfg(cfg, "entry", registry)
 
-        assert vm.current_frame.local_vars["result"] == 42
+        assert unwrap(vm.current_frame.local_vars["result"]) == 42
 
     def test_conditional_branch_takes_true_path(self):
         instructions = _make_instructions(
@@ -151,7 +152,7 @@ class TestExecuteCfgBasic:
 
         vm, stats = execute_cfg(cfg, "entry", registry)
 
-        assert vm.current_frame.local_vars["result"] == 10
+        assert unwrap(vm.current_frame.local_vars["result"]) == 10
 
     def test_stats_reports_zero_llm_calls_for_local_execution(self):
         instructions = _make_instructions(
@@ -167,7 +168,7 @@ class TestExecuteCfgBasic:
         vm, stats = execute_cfg(cfg, "entry", registry)
 
         assert stats.llm_calls == 0
-        assert vm.current_frame.local_vars["sum"] == 8
+        assert unwrap(vm.current_frame.local_vars["sum"]) == 8
 
     def test_verbose_mode_produces_step_log(self, caplog):
         instructions = _make_instructions(

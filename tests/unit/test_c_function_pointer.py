@@ -16,6 +16,7 @@ from interpreter.frontends.c import CFrontend
 from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.run import run
+from interpreter.typed_value import unwrap_locals
 
 
 def _parse_and_lower(source: str):
@@ -30,7 +31,7 @@ def _find_all(instructions, opcode):
 def _run_c(source: str, max_steps: int = 300) -> dict:
     """Run a C program and return the top-level frame's local_vars."""
     vm = run(source, language=Language.C, max_steps=max_steps)
-    return dict(vm.call_stack[0].local_vars)
+    return unwrap_locals(vm.call_stack[0].local_vars)
 
 
 # ── Frontend: declarator name extraction ─────────────────────────
