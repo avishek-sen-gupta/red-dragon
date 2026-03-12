@@ -17,6 +17,7 @@ from interpreter.type_expr import (
     UnionType,
     UnknownType,
     FunctionType,
+    UNBOUND,
     UNKNOWN,
     parse_type,
     scalar,
@@ -891,7 +892,7 @@ class TestReturnBackfill:
             _make_inst(Opcode.STORE_VAR, operands=["double", "%1"]),
         ]
         env = infer_types(instructions, _default_resolver())
-        assert "double" in env.func_signatures
+        assert "double" in env.method_signatures.get(UNBOUND, {})
         assert env.get_func_signature("double").return_type == TypeName.INT
 
     def test_call_function_picks_up_backfilled_return_type(self):
@@ -1307,7 +1308,7 @@ class TestFunctionSignatures:
             },
         )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
-        assert "add" in env.func_signatures
+        assert "add" in env.method_signatures.get(UNBOUND, {})
         sig = env.get_func_signature("add")
         assert sig == FunctionSignature(
             params=(("a", "Int"), ("b", "Int")), return_type="Int"
@@ -1330,7 +1331,7 @@ class TestFunctionSignatures:
             _make_inst(Opcode.STORE_VAR, operands=["greet", "%2"]),
         ]
         env = infer_types(instructions, _default_resolver())
-        assert "greet" in env.func_signatures
+        assert "greet" in env.method_signatures.get(UNBOUND, {})
         sig = env.get_func_signature("greet")
         assert sig == FunctionSignature(params=(("name", ""),), return_type="")
 
@@ -1356,8 +1357,8 @@ class TestFunctionSignatures:
             func_param_types={"func_add_0": [("a", scalar("Int"))]},
         )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
-        assert "func_add_0" not in env.func_signatures
-        assert "add" in env.func_signatures
+        assert "func_add_0" not in env.method_signatures.get(UNBOUND, {})
+        assert "add" in env.method_signatures.get(UNBOUND, {})
 
     def test_function_with_no_params(self):
         """Function with no parameters → empty params tuple."""
@@ -1453,7 +1454,9 @@ class TestFunctionSignatures:
         builder = TypeEnvironmentBuilder(func_return_types={"func_f_0": scalar("Int")})
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         with pytest.raises(TypeError):
-            env.func_signatures["bogus"] = FunctionSignature(params=(), return_type="")
+            env.method_signatures["bogus"] = FunctionSignature(
+                params=(), return_type=""
+            )
 
 
 # ---------------------------------------------------------------------------

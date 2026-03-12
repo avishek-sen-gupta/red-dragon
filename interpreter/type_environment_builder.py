@@ -13,7 +13,7 @@ from types import MappingProxyType
 
 from interpreter.function_signature import FunctionSignature
 from interpreter.type_environment import TypeEnvironment
-from interpreter.type_expr import TypeExpr, UNKNOWN
+from interpreter.type_expr import TypeExpr, UNBOUND, UNKNOWN
 from interpreter.var_scope_info import VarScopeInfo
 
 logger = logging.getLogger(__name__)
@@ -40,11 +40,14 @@ class TypeEnvironmentBuilder:
 
     def build(self) -> TypeEnvironment:
         """Freeze accumulated type info into an immutable TypeEnvironment."""
-        func_signatures = _build_func_signatures(self)
+        standalone_sigs = _build_func_signatures(self)
+        unified: dict[TypeExpr, MappingProxyType[str, list[FunctionSignature]]] = {}
+        if standalone_sigs:
+            unified[UNBOUND] = MappingProxyType(standalone_sigs)
         return TypeEnvironment(
             register_types=MappingProxyType(dict(self.register_types)),
             var_types=MappingProxyType(dict(self.var_types)),
-            func_signatures=MappingProxyType(func_signatures),
+            method_signatures=MappingProxyType(unified),
         )
 
 
