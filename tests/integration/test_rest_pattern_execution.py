@@ -7,7 +7,11 @@ the VM's slice and object_rest builtins.
 
 from __future__ import annotations
 
-from tests.unit.rosetta.conftest import execute_for_language, extract_answer
+from tests.unit.rosetta.conftest import (
+    execute_for_language,
+    extract_answer,
+    extract_array,
+)
 
 
 class TestArrayRestPattern:
@@ -23,6 +27,11 @@ let answer = first;
         vm, stats = execute_for_language("javascript", self.PROGRAM)
         answer = extract_answer(vm, "javascript")
         assert answer == 1, f"expected first=1, got {answer}"
+
+    def test_rest_contains_remaining(self):
+        vm, _stats = execute_for_language("javascript", self.PROGRAM)
+        rest = extract_array(vm, "rest", 2, "javascript")
+        assert rest == [2, 3], f"expected rest=[2, 3], got {rest}"
 
     def test_zero_llm_calls(self):
         _vm, stats = execute_for_language("javascript", self.PROGRAM)
@@ -42,6 +51,11 @@ let answer = a + b;
         vm, stats = execute_for_language("javascript", self.PROGRAM)
         answer = extract_answer(vm, "javascript")
         assert answer == 30, f"expected 30, got {answer}"
+
+    def test_rest_contains_remaining(self):
+        vm, _stats = execute_for_language("javascript", self.PROGRAM)
+        rest = extract_array(vm, "rest", 2, "javascript")
+        assert rest == [30, 40], f"expected rest=[30, 40], got {rest}"
 
 
 class TestArrayRestPatternTS:
@@ -72,6 +86,19 @@ let answer = a;
         vm, stats = execute_for_language("javascript", self.PROGRAM)
         answer = extract_answer(vm, "javascript")
         assert answer == 1, f"expected a=1, got {answer}"
+
+    def test_rest_contains_remaining_fields(self):
+        vm, _stats = execute_for_language("javascript", self.PROGRAM)
+        frame = vm.call_stack[0]
+        rest_addr = frame.local_vars["rest"]
+        rest_obj = vm.heap[rest_addr]
+        assert (
+            rest_obj.fields["b"] == 2
+        ), f"expected b=2, got {rest_obj.fields.get('b')}"
+        assert (
+            rest_obj.fields["c"] == 3
+        ), f"expected c=3, got {rest_obj.fields.get('c')}"
+        assert "a" not in rest_obj.fields, "rest should not contain excluded key 'a'"
 
     def test_zero_llm_calls(self):
         _vm, stats = execute_for_language("javascript", self.PROGRAM)
