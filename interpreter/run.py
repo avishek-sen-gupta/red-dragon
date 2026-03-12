@@ -43,9 +43,11 @@ from interpreter.vm import (
     StateUpdate,
     ExecutionResult,
     apply_update,
+    materialize_raw_update,
     _deserialize_value,
     _serialize_value,
 )
+from interpreter.typed_value import typed_from_runtime
 from interpreter.run_types import (
     VMConfig,
     ExecutionStats,
@@ -189,9 +191,8 @@ def _handle_return_flow(
     # Return to caller — write return value to caller's result register
     caller_frame = vm.current_frame
     if return_frame.result_reg and update.return_value is not None:
-        caller_frame.registers[return_frame.result_reg] = _deserialize_value(
-            update.return_value, vm
-        )
+        raw = _deserialize_value(update.return_value, vm)
+        caller_frame.registers[return_frame.result_reg] = typed_from_runtime(raw)
 
     if return_frame.return_label and return_frame.return_label in cfg.blocks:
         new_ip = return_frame.return_ip if return_frame.return_ip is not None else 0
@@ -280,11 +281,14 @@ def execute_cfg(
         )
         used_llm = False
         if result.handled:
-            update = result.update
+            update = materialize_raw_update(
+                result.update, vm, type_env, conversion_rules
+            )
         else:
             if llm is None:
                 llm = get_backend(config.backend)
-            update = llm.interpret_instruction(instruction, vm)
+            raw_update = llm.interpret_instruction(instruction, vm)
+            update = materialize_raw_update(raw_update, vm, type_env, conversion_rules)
             used_llm = True
             llm_calls += 1
 
@@ -424,11 +428,14 @@ def execute_cfg_traced(
         )
         used_llm = False
         if result.handled:
-            update = result.update
+            update = materialize_raw_update(
+                result.update, vm, type_env, conversion_rules
+            )
         else:
             if llm is None:
                 llm = get_backend(config.backend)
-            update = llm.interpret_instruction(instruction, vm)
+            raw_update = llm.interpret_instruction(instruction, vm)
+            update = materialize_raw_update(raw_update, vm, type_env, conversion_rules)
             used_llm = True
             llm_calls += 1
 
@@ -647,6 +654,12 @@ def run(
 
 def _format_val(v: Any) -> str:
     """Format a value for verbose display."""
+    if isinstance(v, TypedValue):
+        return _format_val(v.value)
+    if isinstance(v, SymbolicValue):
+        if v.constraints:
+            return f"{v.name} [{', '.join(v.constraints)}]"
+        return f"{v.name}" + (f" ({v.type_hint})" if v.type_hint else "")
     if isinstance(v, dict) and v.get("__symbolic__"):
         name = v.get("name", "?")
         constraints = v.get("constraints", [])
@@ -654,8 +667,4 @@ def _format_val(v: Any) -> str:
             return f"{name} [{', '.join(str(c) for c in constraints)}]"
         hint = v.get("type_hint", "")
         return f"{name}" + (f" ({hint})" if hint else "")
-    if isinstance(v, SymbolicValue):
-        if v.constraints:
-            return f"{v.name} [{', '.join(v.constraints)}]"
-        return f"{v.name}" + (f" ({v.type_hint})" if v.type_hint else "")
     return repr(v)

@@ -1,0 +1,219 @@
+"""Unit tests for materialize_raw_update."""
+
+from types import MappingProxyType
+
+from interpreter.type_environment import TypeEnvironment
+from interpreter.type_expr import UNKNOWN, scalar
+from interpreter.typed_value import TypedValue, typed, typed_from_runtime
+from interpreter.identity_conversion_rules import IdentityConversionRules
+from interpreter.vm import materialize_raw_update, apply_update
+from interpreter.vm_types import (
+    StateUpdate,
+    VMState,
+    StackFrame,
+    SymbolicValue,
+    Pointer,
+)
+
+_EMPTY_TYPE_ENV = TypeEnvironment(
+    register_types=MappingProxyType({}), var_types=MappingProxyType({})
+)
+_IDENTITY_RULES = IdentityConversionRules()
+
+
+class TestMaterializeRawUpdate:
+    def test_int_register_write(self):
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        raw = StateUpdate(register_writes={"%0": 42}, reasoning="test")
+        result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
+        tv = result.register_writes["%0"]
+        assert isinstance(tv, TypedValue)
+        assert tv.value == 42
+        assert tv.type == scalar("Int")
+
+    def test_string_register_write(self):
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        raw = StateUpdate(register_writes={"%0": "hello"}, reasoning="test")
+        result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
+        tv = result.register_writes["%0"]
+        assert isinstance(tv, TypedValue)
+        assert tv.value == "hello"
+        assert tv.type == scalar("String")
+
+    def test_symbolic_dict_deserialized(self):
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        sym_dict = {
+            "__symbolic__": True,
+            "name": "sym_0",
+            "type_hint": "Int",
+            "constraints": [],
+        }
+        raw = StateUpdate(register_writes={"%0": sym_dict}, reasoning="test")
+        result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
+        tv = result.register_writes["%0"]
+        assert isinstance(tv, TypedValue)
+        assert isinstance(tv.value, SymbolicValue)
+        assert tv.value.name == "sym_0"
+
+    def test_pointer_dict_deserialized(self):
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        ptr_dict = {"__pointer__": True, "base": "mem_0", "offset": 4}
+        raw = StateUpdate(register_writes={"%0": ptr_dict}, reasoning="test")
+        result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
+        tv = result.register_writes["%0"]
+        assert isinstance(tv, TypedValue)
+        assert isinstance(tv.value, Pointer)
+        assert tv.value.base == "mem_0"
+        assert tv.value.offset == 4
+
+    def test_var_write_materialized(self):
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        raw = StateUpdate(var_writes={"x": 10}, reasoning="test")
+        result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
+        tv = result.var_writes["x"]
+        assert isinstance(tv, TypedValue)
+        assert tv.value == 10
+        assert tv.type == scalar("Int")
+
+    def test_non_register_var_fields_unchanged(self):
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        raw = StateUpdate(
+            register_writes={"%0": 42},
+            reasoning="test",
+            next_label="block_1",
+            path_condition="x > 0",
+        )
+        result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
+        assert result.next_label == "block_1"
+        assert result.path_condition == "x > 0"
+        assert result.reasoning == "test"
+
+    def test_already_typed_value_passes_through(self):
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        tv = typed(42, scalar("Int"))
+        raw = StateUpdate(register_writes={"%0": tv}, reasoning="test")
+        result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
+        assert result.register_writes["%0"] is tv
+
+    def test_register_coercion_applied(self):
+        """Register values get coerced via _coerce_value during materialization."""
+        from interpreter.default_conversion_rules import DefaultTypeConversionRules
+
+        type_env = TypeEnvironment(
+            register_types=MappingProxyType({"%0": scalar("Float")}),
+            var_types=MappingProxyType({}),
+        )
+        rules = DefaultTypeConversionRules()
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        raw = StateUpdate(register_writes={"%0": 42}, reasoning="test")
+        result = materialize_raw_update(raw, vm, type_env, rules)
+        tv = result.register_writes["%0"]
+        assert isinstance(tv, TypedValue)
+        assert isinstance(tv.value, float)
+        assert tv.type == scalar("Float")
+
+    def test_var_write_no_coercion(self):
+        """Var writes do NOT get register coercion (matching current behavior)."""
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        raw = StateUpdate(var_writes={"x": 42}, reasoning="test")
+        result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
+        tv = result.var_writes["x"]
+        assert tv.value == 42
+        assert tv.type == scalar("Int")
+
+
+class TestApplyUpdateTypedPath:
+    def test_stores_typed_value_directly(self):
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        tv = typed(42, scalar("Int"))
+        update = StateUpdate(register_writes={"%0": tv}, reasoning="test")
+        apply_update(
+            vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
+        )
+        assert vm.current_frame.registers["%0"] is tv
+
+    def test_stores_typed_var_directly(self):
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        tv = typed(10, scalar("Int"))
+        update = StateUpdate(var_writes={"x": tv}, reasoning="test")
+        apply_update(
+            vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
+        )
+        assert vm.current_frame.local_vars["x"] is tv
+
+    def test_heap_alias_unwraps_value(self):
+        from interpreter.vm_types import HeapObject
+
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        vm.heap["mem_0"] = HeapObject(fields={"0": None})
+        vm.current_frame.var_heap_aliases["x"] = Pointer(base="mem_0", offset=0)
+        tv = typed(42, scalar("Int"))
+        update = StateUpdate(var_writes={"x": tv}, reasoning="test")
+        apply_update(
+            vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
+        )
+        assert vm.heap["mem_0"].fields["0"] == 42
+
+    def test_closure_binding_unwraps_value(self):
+        from interpreter.vm_types import ClosureEnvironment
+
+        vm = VMState()
+        env = ClosureEnvironment(bindings={})
+        vm.closures["env_0"] = env
+        vm.call_stack.append(
+            StackFrame(
+                function_name="inner",
+                closure_env_id="env_0",
+                captured_var_names=frozenset({"x"}),
+            )
+        )
+        tv = typed(42, scalar("Int"))
+        update = StateUpdate(var_writes={"x": tv}, reasoning="test")
+        apply_update(
+            vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
+        )
+        assert env.bindings["x"] == 42
+        assert vm.current_frame.local_vars["x"] is tv
+
+    def test_register_coercion_when_declared_type_differs(self):
+        from interpreter.default_conversion_rules import DefaultTypeConversionRules
+
+        type_env = TypeEnvironment(
+            register_types=MappingProxyType({"%0": scalar("Float")}),
+            var_types=MappingProxyType({}),
+        )
+        rules = DefaultTypeConversionRules()
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        tv = typed(42, scalar("Int"))
+        update = StateUpdate(register_writes={"%0": tv}, reasoning="test")
+        apply_update(vm, update, type_env=type_env, conversion_rules=rules)
+        result = vm.current_frame.registers["%0"]
+        assert isinstance(result, TypedValue)
+        assert isinstance(result.value, float)
+        assert result.type == scalar("Float")
+
+
+class TestFormatVal:
+    def test_format_typed_int(self):
+        from interpreter.run import _format_val
+
+        assert _format_val(typed(42, scalar("Int"))) == "42"
+
+    def test_format_typed_symbolic(self):
+        from interpreter.run import _format_val
+
+        sym = SymbolicValue(name="sym_0", type_hint="Int")
+        assert "sym_0" in _format_val(typed(sym, UNKNOWN))
