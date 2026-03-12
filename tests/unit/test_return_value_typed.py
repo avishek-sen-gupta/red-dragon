@@ -90,12 +90,14 @@ class TestMaterializeReturnValue:
         assert rv.value == 42
         assert rv.type == scalar(TypeName.INT)
 
-    def test_null_return_value_stays_none(self):
+    def test_default_return_value_is_void(self):
+        """StateUpdate without explicit return_value defaults to Void."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
-        raw = StateUpdate(return_value=None, reasoning="test")
+        raw = StateUpdate(reasoning="test")
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
-        assert result.return_value is None
+        assert isinstance(result.return_value, TypedValue)
+        assert result.return_value.type == scalar(TypeName.VOID)
 
     def test_symbolic_dict_return_value_materialized(self):
         vm = VMState()
