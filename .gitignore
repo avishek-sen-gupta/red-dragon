@@ -30,3 +30,4 @@ proleap-bridge/.settings/
 
 # Beads: track JSONL backups, ignore Dolt database
 .beads/dolt/
+.serena/
