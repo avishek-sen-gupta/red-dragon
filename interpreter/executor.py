@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from types import MappingProxyType
 from typing import Any
 
 from interpreter.ir import IRInstruction, Opcode
@@ -29,10 +30,17 @@ from interpreter.vm import (
 )
 from interpreter.registry import FunctionRegistry, _parse_func_ref, _parse_class_ref
 from interpreter.builtins import Builtins, _builtin_array_of
+from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
+from interpreter.type_environment import TypeEnvironment
 from interpreter.unresolved_call import UnresolvedCallResolver, SymbolicResolver
 from interpreter import constants
 
 _DEFAULT_RESOLVER = SymbolicResolver()
+_DEFAULT_OVERLOAD_RESOLVER = NullOverloadResolver()
+_EMPTY_TYPE_ENV = TypeEnvironment(
+    register_types=MappingProxyType({}),
+    var_types=MappingProxyType({}),
+)
 
 logger = logging.getLogger(__name__)
 
@@ -920,6 +928,8 @@ def _try_class_constructor_call(
     cfg: CFG,
     registry: FunctionRegistry,
     current_label: str,
+    overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
+    type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
 ) -> ExecutionResult:
     """Attempt to handle a call as a class constructor."""
     cr = _parse_class_ref(func_val)
@@ -1052,6 +1062,8 @@ def _handle_call_function(
     registry: FunctionRegistry,
     current_label: str,
     call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
+    overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
+    type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
     **kwargs: Any,
 ) -> ExecutionResult:
     func_name = inst.operands[0]
@@ -1131,7 +1143,15 @@ def _handle_call_function(
 
     # 3. Class constructor
     ctor_result = _try_class_constructor_call(
-        func_val, args, inst, vm, cfg, registry, current_label
+        func_val,
+        args,
+        inst,
+        vm,
+        cfg,
+        registry,
+        current_label,
+        overload_resolver=overload_resolver,
+        type_env=type_env,
     )
     if ctor_result.handled:
         return ctor_result
@@ -1154,6 +1174,8 @@ def _handle_call_method(
     registry: FunctionRegistry,
     current_label: str,
     call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
+    overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
+    type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
     **kwargs: Any,
 ) -> ExecutionResult:
     obj_val = _resolve_reg(vm, inst.operands[0])
@@ -1304,6 +1326,8 @@ class LocalExecutor:
         current_label: str = "",
         ip: int = 0,
         call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
+        overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
+        type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
     ) -> ExecutionResult:
         handler = cls.DISPATCH.get(inst.opcode)
         if not handler:
@@ -1316,6 +1340,8 @@ class LocalExecutor:
             current_label=current_label,
             ip=ip,
             call_resolver=call_resolver,
+            overload_resolver=overload_resolver,
+            type_env=type_env,
         )
 
 
@@ -1327,6 +1353,8 @@ def _try_execute_locally(
     current_label: str = "",
     ip: int = 0,
     call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
+    overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
+    type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
 ) -> ExecutionResult:
     """Try to execute an instruction without the LLM.
 
@@ -1341,4 +1369,6 @@ def _try_execute_locally(
         current_label,
         ip,
         call_resolver,
+        overload_resolver=overload_resolver,
+        type_env=type_env,
     )
