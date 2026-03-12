@@ -92,6 +92,10 @@ class ScalarType(TypeExpr):
         return hash(self.name)
 
 
+UNBOUND = ScalarType("__unbound__")
+"""Sentinel key for standalone/top-level function signatures in method_signatures."""
+
+
 @dataclass(frozen=True, eq=False)
 class ParameterizedType(TypeExpr):
     """A type constructor applied to one or more type arguments.

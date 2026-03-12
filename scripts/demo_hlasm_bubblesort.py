@@ -172,11 +172,15 @@ def main():
     for var, typ in sorted(env.var_types.items()):
         print(f"    {var:8s} : {typ}")
 
-    if env.func_signatures:
+    from interpreter.type_expr import UNBOUND
+
+    unbound_sigs = env.method_signatures.get(UNBOUND, {})
+    if unbound_sigs:
         print("\n  Function signatures:")
-        for name, sig in sorted(env.func_signatures.items()):
-            params = ", ".join(f"{p}: {t}" for p, t in sig.param_types)
-            print(f"    {name}({params}) -> {sig.return_type}")
+        for name, sigs in sorted(unbound_sigs.items()):
+            for sig in sigs:
+                params = ", ".join(f"{p}: {t}" for p, t in sig.params)
+                print(f"    {name}({params}) -> {sig.return_type}")
 
     # ── Phase 2: Build CFG ──
     _print_header("Phase 2: Build CFG (deterministic)")

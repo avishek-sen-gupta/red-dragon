@@ -254,7 +254,6 @@ class TestTypeEnvironmentScopedVarTypes:
         env = TypeEnvironment(
             register_types=MappingProxyType({}),
             var_types=MappingProxyType({}),
-            func_signatures=MappingProxyType({}),
             scoped_var_types=scoped,
         )
         assert env.scoped_var_types["func_f_0"]["x"] == "Int"
@@ -272,7 +271,6 @@ class TestTypeEnvironmentScopedVarTypes:
         env = TypeEnvironment(
             register_types=MappingProxyType({}),
             var_types=MappingProxyType({}),
-            func_signatures=MappingProxyType({}),
             var_scope_metadata=metadata,
         )
         assert env.var_scope_metadata["x$1"].original_name == "x"

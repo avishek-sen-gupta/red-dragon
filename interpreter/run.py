@@ -52,7 +52,6 @@ logger = logging.getLogger(__name__)
 _EMPTY_TYPE_ENV = TypeEnvironment(
     register_types=MappingProxyType({}),
     var_types=MappingProxyType({}),
-    func_signatures=MappingProxyType({}),
 )
 _IDENTITY_RULES = IdentityConversionRules()
 

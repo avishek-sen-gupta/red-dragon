@@ -30,7 +30,6 @@ from interpreter.vm_types import (  # noqa: F401 — re-exported for backwards c
 _EMPTY_TYPE_ENV = TypeEnvironment(
     register_types=MappingProxyType({}),
     var_types=MappingProxyType({}),
-    func_signatures=MappingProxyType({}),
 )
 
 _IDENTITY_RULES = IdentityConversionRules()

@@ -8,6 +8,7 @@ from interpreter.type_expr import (
     TypeExpr,
     ScalarType,
     ParameterizedType,
+    UNBOUND,
     UNKNOWN,
     parse_type,
     scalar,
@@ -20,7 +21,7 @@ class TestTypeEnvironmentBuilder:
         env = builder.build()
         assert dict(env.register_types) == {}
         assert dict(env.var_types) == {}
-        assert dict(env.func_signatures) == {}
+        assert dict(env.method_signatures) == {}
 
     def test_build_preserves_register_types(self):
         builder = TypeEnvironmentBuilder(
@@ -44,7 +45,8 @@ class TestTypeEnvironmentBuilder:
             func_param_types={"add": [("a", scalar("Int")), ("b", scalar("Int"))]},
         )
         env = builder.build()
-        assert "add" in env.func_signatures
+        unbound_sigs = env.method_signatures.get(UNBOUND, {})
+        assert "add" in unbound_sigs
         sig = env.get_func_signature("add")
         assert sig.return_type == "Int"
         assert sig.params == (("a", scalar("Int")), ("b", scalar("Int")))
@@ -61,8 +63,9 @@ class TestTypeEnvironmentBuilder:
             },
         )
         env = builder.build()
-        assert "add" in env.func_signatures
-        assert "func_add_0" not in env.func_signatures
+        unbound_sigs = env.method_signatures.get(UNBOUND, {})
+        assert "add" in unbound_sigs
+        assert "func_add_0" not in unbound_sigs
 
     def test_build_returns_frozen_mappings(self):
         builder = TypeEnvironmentBuilder(
@@ -72,7 +75,7 @@ class TestTypeEnvironmentBuilder:
         env = builder.build()
         assert isinstance(env.register_types, MappingProxyType)
         assert isinstance(env.var_types, MappingProxyType)
-        assert isinstance(env.func_signatures, MappingProxyType)
+        assert isinstance(env.method_signatures, MappingProxyType)
 
     def test_build_does_not_mutate_builder(self):
         builder = TypeEnvironmentBuilder(
