@@ -117,3 +117,4 @@ class TypeName(StrEnum):
     MAP = "Map"
     TUPLE = "Tuple"
     REGION = "Region"
+    VOID = "Void"

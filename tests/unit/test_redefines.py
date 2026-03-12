@@ -8,6 +8,7 @@ and decodes — validating COBOL REDEFINES byte-overlay semantics.
 from typing import Any
 
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.typed_value import unwrap
 from interpreter.vm import VMState, apply_update
 from interpreter.vm_types import StackFrame
 from interpreter.executor import LocalExecutor
@@ -50,7 +51,7 @@ def _execute_ir_sequence(vm: VMState, instructions: list[IRInstruction]) -> Any:
         assert result.handled, f"Instruction not handled: {inst}"
         apply_update(vm, result.update)
         if inst.opcode == Opcode.RETURN:
-            return result.update.return_value
+            return unwrap(result.update.return_value)
     return None
 
 
