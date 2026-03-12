@@ -211,22 +211,7 @@ def _parse_const(raw: str) -> Any:
     return raw
 
 
-_PYTHON_TYPE_TO_TYPE_NAME: dict[type, str] = {
-    bool: TypeName.BOOL,
-    int: TypeName.INT,
-    float: TypeName.FLOAT,
-    str: TypeName.STRING,
-}
-
-
-def runtime_type_name(val: Any) -> str:
-    """Map a Python runtime value to its canonical TypeName.
-
-    bool must be checked before int because ``isinstance(True, int)`` is True.
-    Returns empty string for unrecognised types (no coercion will be applied).
-    """
-    # Exact type lookup avoids isinstance chains and the bool/int subclass trap.
-    return _PYTHON_TYPE_TO_TYPE_NAME.get(type(val), "")
+from interpreter.typed_value import runtime_type_name  # noqa: F401 — re-exported
 
 
 def _resolve_typed_reg(
