@@ -7,7 +7,7 @@ from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.function_signature import FunctionSignature
 from interpreter.identity_conversion_rules import IdentityConversionRules
 from interpreter.type_environment import TypeEnvironment
-from interpreter.vm import VMState, _resolve_typed_reg, _runtime_type_name
+from interpreter.vm import VMState, _resolve_typed_reg, runtime_type_name
 from interpreter.vm_types import StackFrame
 
 
@@ -31,22 +31,22 @@ _IDENTITY_RULES = IdentityConversionRules()
 
 class TestRuntimeTypeName:
     def test_int(self):
-        assert _runtime_type_name(42) == TypeName.INT
+        assert runtime_type_name(42) == TypeName.INT
 
     def test_float(self):
-        assert _runtime_type_name(3.14) == TypeName.FLOAT
+        assert runtime_type_name(3.14) == TypeName.FLOAT
 
     def test_bool(self):
-        assert _runtime_type_name(True) == TypeName.BOOL
+        assert runtime_type_name(True) == TypeName.BOOL
 
     def test_str(self):
-        assert _runtime_type_name("hello") == TypeName.STRING
+        assert runtime_type_name("hello") == TypeName.STRING
 
     def test_unknown_returns_empty(self):
-        assert _runtime_type_name([1, 2, 3]) == ""
+        assert runtime_type_name([1, 2, 3]) == ""
 
     def test_none_returns_empty(self):
-        assert _runtime_type_name(None) == ""
+        assert runtime_type_name(None) == ""
 
 
 class TestResolveTypedReg:
