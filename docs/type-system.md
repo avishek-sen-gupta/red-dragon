@@ -613,7 +613,7 @@ class TypeEnvironmentBuilder:
 
 All fields default to empty dicts/lists. The `var_scope_metadata` is populated by block-scope tracking (see [Block-Scope Tracking](#block-scope-tracking-llvm-style)).
 
-Its `.build()` method freezes the accumulated state into an immutable `TypeEnvironment`. Internally, it calls `_build_func_signatures()` which filters to user-facing function names only (excludes internal labels starting with `func_`). Each name maps to a `list[FunctionSignature]` to support method overloads.
+Its `.build()` method freezes the accumulated state into an immutable `TypeEnvironment`. Internally, it calls `_build_func_signatures()` which filters to user-facing function names only (excludes internal labels starting with `func_`). Each name maps to a `list[FunctionSignature]` to support method overloads. Standalone function signatures are stored under the `UNBOUND` sentinel key in the unified `method_signatures` container.
 
 ---
 
@@ -887,14 +887,14 @@ After the fixpoint loop converges, two promotion passes upgrade bare container t
 
 ### Function Signature Assembly
 
-`_build_func_signatures(func_return_types, func_param_types)` builds the public-facing function signature map for **standalone functions only** (class methods are in `method_signatures`):
+`_build_func_signatures(func_return_types, func_param_types)` builds the public-facing function signature map for standalone (top-level) functions:
 
 1. Collect all names from both `func_return_types` and `func_param_types`
 2. **Filter**: Exclude names starting with `func_` (internal labels like `func_add_0`)
 3. Only user-facing names that came through a `<function:name@label>` CONST mapping are included
-4. Build `FunctionSignature(params=tuple(...), return_type=...)` for each, wrapped in a `list` to support overloads
+4. Build `FunctionSignature(params=tuple(...), return_type=..., kind=FunctionKind.UNBOUND)` for each, wrapped in a `list` to support overloads
 
-Class methods are assembled separately from `class_method_signatures`, keyed by class `TypeExpr` (e.g. `ScalarType("Dog")`). This prevents cross-class name collisions (e.g. `Dog.speak` vs `Cat.speak`).
+These standalone signatures are then unified with class-scoped signatures into a **single `method_signatures` container**. Standalone functions are stored under the `UNBOUND` sentinel key (`ScalarType("__unbound__")`), while class methods are keyed by their class `TypeExpr` (e.g. `ScalarType("Dog")`). This prevents cross-class name collisions (e.g. `Dog.speak` vs `Cat.speak`) while eliminating the need for separate containers.
 
 ### Type Alias Resolution
 
