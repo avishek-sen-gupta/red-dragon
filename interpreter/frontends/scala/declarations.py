@@ -137,6 +137,38 @@ def lower_scala_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 ctx.seed_var_type(pname, type_hint)
 
 
+def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> str:
+    """Lower a Scala function body, returning the last expression's register.
+
+    In Scala, the last expression in a block is the implicit return value.
+    Lower all children except the last as statements, then lower the last
+    child as an expression.  Returns the register holding the result, or
+    empty string if the body has no named children or ends with a statement.
+    """
+    children = [
+        c
+        for c in body_node.children
+        if c.is_named
+        and c.type not in (NT.LBRACE, NT.RBRACE, NT.SEMICOLON)
+        and c.type not in ctx.constants.comment_types
+        and c.type not in ctx.constants.noise_types
+    ]
+    if not children:
+        return ""
+    *init, last = children
+    for child in init:
+        ctx.lower_stmt(child)
+    is_stmt = (
+        ctx.stmt_dispatch.get(last.type) is not None
+        or last.type in ctx.constants.block_node_types
+    )
+    # Explicit return already emits its own RETURN opcode
+    if is_stmt or last.type == NT.RETURN_EXPRESSION:
+        ctx.lower_stmt(last)
+        return ""
+    return ctx.lower_expr(last)
+
+
 def lower_function_def(
     ctx: TreeSitterEmitContext, node, inject_this: bool = False
 ) -> None:
@@ -162,13 +194,14 @@ def lower_function_def(
 
     expr_returned = False
     if body_node:
-        is_block = (
-            body_node.type in ctx.constants.block_node_types
-            or ctx.stmt_dispatch.get(body_node.type) is not None
-        )
-        if is_block:
-            ctx.lower_block(body_node)
+        if body_node.type in ctx.constants.block_node_types:
+            # Block body: implicit return of last expression
+            expr_reg = _lower_body_with_implicit_return(ctx, body_node)
+            if expr_reg:
+                ctx.emit(Opcode.RETURN, operands=[expr_reg])
+                expr_returned = True
         else:
+            # Expression body (literal, match, if, etc.)
             val_reg = ctx.lower_expr(body_node)
             ctx.emit(Opcode.RETURN, operands=[val_reg])
             expr_returned = True
