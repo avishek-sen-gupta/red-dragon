@@ -1991,3 +1991,17 @@ These are already dispatched to `_lower_ts_interface_method` in `lower_interface
 - **Property signature as STORE_FIELD:** Considered emitting `STORE_FIELD` on a class object, but `STORE_VAR` inside the class label block is consistent with how method signatures are lowered, and the inference engine walks `class_method_types` which is populated from function labels within class blocks.
 
 **Status:** Implementing. Tracked as red-dragon-gvu.2.
+
+---
+
+### ADR-102: `using` declaration lowered as `const` without `Symbol.dispose()` semantics (2026-03-12)
+
+**Context:** JavaScript's TC39 Explicit Resource Management proposal introduces `using x = expr` and `await using x = expr`. When the variable goes out of scope, the runtime calls `x[Symbol.dispose()]` (or `Symbol.asyncDispose` for `await using`). Our tree-sitter parser recognises `using_declaration` nodes, but they were unhandled — falling through to SYMBOLIC.
+
+**Decision:** Lower `using_declaration` identically to `lexical_declaration` (`const`/`let`). The `variable_declarator` child structure is the same, so the existing `lower_js_var_declaration` handler is reused. **`Symbol.dispose()` semantics are not implemented** — no scope-exit hook or implicit disposal call is emitted.
+
+**Rationale:** The assignment semantics (`using x = expr` binds `x` to `expr`'s value) are the only part that affects data flow and execution. The disposal semantics would require scope-exit hooks in the VM — infrastructure that does not exist and is not justified by the current use cases. Without this lowering, `using` declarations produce SYMBOLIC, losing all downstream data flow.
+
+**Consequences:** Variables declared with `using` are fully usable in subsequent expressions, method calls, and computations. The VM will not call `Symbol.dispose()` at scope exit, so resource cleanup behaviour is not modelled. If scope-exit semantics are needed in the future, the VM would need a scope-exit callback mechanism — this is a separate, larger effort.
+
+**Files:** `node_types.py` (+1 line), `frontend.py` (+1 line dispatch entry). TypeScript inherits via `super()._build_stmt_dispatch()`.

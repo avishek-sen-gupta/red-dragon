@@ -585,6 +585,42 @@ class TestJavaScriptRestParameter:
         ), f"expected LOAD_VAR arguments, got {load_names}"
 
 
+class TestJavaScriptUsingDeclaration:
+    """using x = expr should lower identically to const x = expr."""
+
+    def test_using_simple_assignment(self):
+        """using file = openFile() should emit CALL_FUNCTION + STORE_VAR."""
+        source = "using file = openFile();"
+        instructions = _parse_js(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any(
+            "openFile" in inst.operands for inst in calls
+        ), f"expected openFile call, got {[inst.operands for inst in calls]}"
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "file" in store_names, f"expected STORE_VAR file, got {store_names}"
+
+    def test_using_produces_same_ir_as_const(self):
+        """using x = expr and const x = expr should produce equivalent IR."""
+        using_ir = _parse_js("using res = getResource();")
+        const_ir = _parse_js("const res = getResource();")
+        using_ops = _opcodes(using_ir)
+        const_ops = _opcodes(const_ir)
+        assert using_ops == const_ops, (
+            f"using and const should produce same opcodes:\n"
+            f"  using: {using_ops}\n  const: {const_ops}"
+        )
+
+    def test_using_with_destructuring(self):
+        """using with object destructuring should work like const."""
+        source = "using {conn, pool} = createPool();"
+        instructions = _parse_js(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "conn" in store_names
+        assert "pool" in store_names
+
+
 class TestJavaScriptNewExpression:
     def test_new_expression_basic(self):
         instructions = _parse_js("const obj = new Foo();")
