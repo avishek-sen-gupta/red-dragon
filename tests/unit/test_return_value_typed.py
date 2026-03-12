@@ -1,11 +1,22 @@
 """Unit tests for return_value TypedValue migration."""
 
+from types import MappingProxyType
+
 from interpreter.constants import TypeName
+from interpreter.identity_conversion_rules import IdentityConversionRules
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.executor import _handle_return
+from interpreter.type_environment import TypeEnvironment
 from interpreter.type_expr import UNKNOWN, scalar
 from interpreter.typed_value import TypedValue, typed, typed_from_runtime
-from interpreter.vm_types import VMState, StackFrame
+from interpreter.vm import materialize_raw_update
+from interpreter.vm_types import StateUpdate, SymbolicValue, VMState, StackFrame
+
+_EMPTY_TYPE_ENV = TypeEnvironment(
+    register_types=MappingProxyType({}),
+    var_types=MappingProxyType({}),
+)
+_IDENTITY_RULES = IdentityConversionRules()
 
 
 class TestHandleReturnTypedValue:
@@ -64,3 +75,43 @@ class TestHandleReturnTypedValue:
         assert void_rv.type == scalar(TypeName.VOID)
         assert none_rv.type != scalar(TypeName.VOID)
         assert void_rv.type != none_rv.type
+
+
+class TestMaterializeReturnValue:
+    """Tests for materialize_raw_update handling return_value."""
+
+    def test_raw_int_return_value_materialized(self):
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        raw = StateUpdate(return_value=42, call_pop=True, reasoning="test")
+        result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
+        rv = result.return_value
+        assert isinstance(rv, TypedValue)
+        assert rv.value == 42
+        assert rv.type == scalar(TypeName.INT)
+
+    def test_null_return_value_stays_none(self):
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        raw = StateUpdate(return_value=None, reasoning="test")
+        result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
+        assert result.return_value is None
+
+    def test_symbolic_dict_return_value_materialized(self):
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        sym_dict = {"__symbolic__": True, "name": "sym_0", "type_hint": "Int"}
+        raw = StateUpdate(return_value=sym_dict, call_pop=True, reasoning="test")
+        result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
+        rv = result.return_value
+        assert isinstance(rv, TypedValue)
+        assert isinstance(rv.value, SymbolicValue)
+        assert rv.value.name == "sym_0"
+
+    def test_already_typed_return_value_passes_through(self):
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        tv = typed(42, scalar(TypeName.INT))
+        raw = StateUpdate(return_value=tv, call_pop=True, reasoning="test")
+        result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
+        assert result.return_value is tv
