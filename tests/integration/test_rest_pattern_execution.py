@@ -7,8 +7,6 @@ the VM's slice and object_rest builtins.
 
 from __future__ import annotations
 
-import pytest
-
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
@@ -59,3 +57,22 @@ let answer = head;
         vm, stats = execute_for_language("typescript", self.PROGRAM)
         answer = extract_answer(vm, "typescript")
         assert answer == 5, f"expected head=5, got {answer}"
+
+
+class TestObjectRestPattern:
+    """const {a, ...rest} = {a: 1, b: 2, c: 3}; answer = a => 1."""
+
+    PROGRAM = """\
+let obj = {a: 1, b: 2, c: 3};
+let {a, ...rest} = obj;
+let answer = a;
+"""
+
+    def test_extracted_field(self):
+        vm, stats = execute_for_language("javascript", self.PROGRAM)
+        answer = extract_answer(vm, "javascript")
+        assert answer == 1, f"expected a=1, got {answer}"
+
+    def test_zero_llm_calls(self):
+        _vm, stats = execute_for_language("javascript", self.PROGRAM)
+        assert stats.llm_calls == 0
