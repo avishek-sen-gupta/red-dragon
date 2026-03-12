@@ -30,6 +30,7 @@ from interpreter.type_expr import (
     ScalarType,
     ParameterizedType,
     FunctionType,
+    UNBOUND,
     UNKNOWN,
     array_of,
     scalar,
@@ -367,7 +368,7 @@ def infer_types(
 
     # Build TypeEnvironment directly — no roundtrip through builder
     flat_vars = ctx.flat_var_types()
-    func_signatures = _build_func_signatures(
+    standalone_sigs = _build_func_signatures(
         ctx.func_return_types, ctx.func_param_types
     )
 
@@ -382,23 +383,23 @@ def infer_types(
             for scope, var_dict in ctx.scoped_var_types.items()
         }
     )
-    frozen_method_sigs = MappingProxyType(
-        {
-            class_type: MappingProxyType(dict(methods))
-            for class_type, methods in ctx.class_method_signatures.items()
-        }
-    )
+    # Unify standalone and class-scoped signatures under one container
+    unified_sigs: dict[TypeExpr, MappingProxyType[str, list[FunctionSignature]]] = {
+        class_type: MappingProxyType(dict(methods))
+        for class_type, methods in ctx.class_method_signatures.items()
+    }
+    if standalone_sigs:
+        unified_sigs[UNBOUND] = MappingProxyType(standalone_sigs)
     return TypeEnvironment(
         register_types=MappingProxyType(ctx.register_types),
         var_types=MappingProxyType(flat_vars),
-        func_signatures=MappingProxyType(func_signatures),
+        method_signatures=MappingProxyType(unified_sigs),
         type_aliases=MappingProxyType(dict(aliases)),
         interface_implementations=MappingProxyType(
             {k: tuple(v) for k, v in type_env_builder.interface_implementations.items()}
         ),
         scoped_var_types=frozen_scoped,
         var_scope_metadata=MappingProxyType(dict(type_env_builder.var_scope_metadata)),
-        method_signatures=frozen_method_sigs,
     )
 
 

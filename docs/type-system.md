@@ -720,8 +720,8 @@ while current_size > prev_size:
 
 **Step 4 — Assembly:**
 1. `flat_vars = ctx.flat_var_types()` — flatten with union merge
-2. `func_signatures = _build_func_signatures(...)` — filter to user-facing standalone function names (class methods excluded)
-3. Freeze `class_method_signatures` into nested `MappingProxyType` keyed by class `TypeExpr`
+2. Build standalone signatures via `_build_func_signatures(...)` — filter to user-facing names
+3. Unify standalone signatures (under `UNBOUND` key) and class-scoped signatures into a single `method_signatures` container
 4. Freeze `scoped_var_types` into nested `MappingProxyType`
 5. Construct and return `TypeEnvironment` with all fields wrapped in `MappingProxyType`
 
@@ -943,26 +943,24 @@ The inference pass produces a frozen `TypeEnvironment` (`interpreter/type_enviro
 class TypeEnvironment:
     register_types:            MappingProxyType[str, TypeExpr]
     var_types:                 MappingProxyType[str, TypeExpr]
-    func_signatures:           MappingProxyType[str, list[FunctionSignature]]
+    method_signatures:         MappingProxyType[TypeExpr, MappingProxyType[str, list[FunctionSignature]]] = MappingProxyType({})
     type_aliases:              MappingProxyType[str, TypeExpr]               = MappingProxyType({})
     interface_implementations: MappingProxyType[str, tuple[str, ...]]        = MappingProxyType({})
     scoped_var_types:          MappingProxyType[str, MappingProxyType[str, TypeExpr]] = MappingProxyType({})
     var_scope_metadata:        MappingProxyType[str, VarScopeInfo]           = MappingProxyType({})
-    method_signatures:         MappingProxyType[TypeExpr, MappingProxyType[str, list[FunctionSignature]]] = MappingProxyType({})
 ```
 
 | Field | Contents |
 |---|---|
 | `register_types` | `"%0" → ScalarType("Int")`, `"%4" → ParameterizedType("Array", (ScalarType("Int"),))` |
 | `var_types` | `"x" → ScalarType("Int")`, `"items" → ParameterizedType("Array", ...)` — flattened across scopes with union merge |
-| `func_signatures` | `"add" → [FunctionSignature(params=..., return_type=...)]` — standalone functions only, list supports overloads |
-| `method_signatures` | `ScalarType("Dog") → {"getAge" → [FunctionSignature(...)]}` — class-scoped, keyed by TypeExpr |
+| `method_signatures` | Unified container. `UNBOUND → {"add" → [FunctionSignature(...)]}` for standalone functions; `ScalarType("Dog") → {"getAge" → [...]}` for class methods |
 | `type_aliases` | `"UserId" → ScalarType("Int")` — full alias registry |
 | `interface_implementations` | `"Dog" → ("Comparable", "Serializable")` — frozen tuples |
 | `scoped_var_types` | `"func_add_0" → {"x": ScalarType("Int")}` — per-function scoped types (not flattened) |
 | `var_scope_metadata` | `"x$1" → VarScopeInfo(original_name="x", scope_depth=1)` — mangled name metadata |
 
-**Accessor:** `env.get_func_signature(name, index=0, class_name=UNKNOWN)` returns the signature at overload `index` for a standalone function (when `class_name` is `UNKNOWN`) or a class method (when `class_name` is provided). Returns `_NULL_SIGNATURE` (with `UNKNOWN` return type) if not found.
+**Accessor:** `env.get_func_signature(name, index=0, class_name=UNBOUND)` returns the signature at overload `index`. For standalone functions, `class_name` defaults to `UNBOUND`. For class methods, pass `class_name=scalar("ClassName")`. Returns `_NULL_SIGNATURE` (with `UNKNOWN` return type) if not found.
 
 `FunctionSignature` (`interpreter/function_signature.py`) is a frozen dataclass:
 ```python
@@ -970,6 +968,7 @@ class TypeEnvironment:
 class FunctionSignature:
     params: tuple[tuple[str, TypeExpr], ...]    # ordered (name, type) pairs
     return_type: TypeExpr                        # return type (UNKNOWN if not known)
+    kind: FunctionKind = FunctionKind.UNBOUND   # UNBOUND, INSTANCE, or STATIC
 ```
 
 All fields use `MappingProxyType` for true deep immutability — fields cannot be reassigned (frozen dataclass) and the dicts they point to cannot be mutated (`MappingProxyType` raises `TypeError` on `__setitem__`, `.pop()`, etc.).
