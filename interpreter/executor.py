@@ -538,7 +538,9 @@ def _handle_load_index(
 
 
 def _handle_return(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
-    if inst.operands:
+    if vm.current_frame.is_ctor:
+        tv = typed(None, scalar(constants.TypeName.VOID))
+    elif inst.operands:
         val = _resolve_reg(vm, inst.operands[0])
         tv = typed_from_runtime(val)
     else:
@@ -1033,6 +1035,7 @@ def _try_class_constructor_call(
             call_push=StackFramePush(
                 function_name=f"{class_name}.__init__",
                 return_label=current_label,
+                is_ctor=True,
             ),
             next_label=init_label,
             reasoning=(
