@@ -2,7 +2,12 @@
 
 import logging
 
-from interpreter.builtins import _builtin_print, _builtin_slice, _builtin_object_rest
+from interpreter.builtins import (
+    _builtin_print,
+    _builtin_slice,
+    _builtin_object_rest,
+    Builtins,
+)
 from interpreter.vm import Operators
 from interpreter.vm_types import HeapObject, VMState
 
@@ -167,3 +172,34 @@ class TestBuiltinObjectRest:
     def test_object_rest_non_heap(self):
         vm = VMState()
         assert _builtin_object_rest(["not_a_heap_addr"], vm) is Operators.UNCOMPUTABLE
+
+
+class TestMethodBuiltins:
+    """Method builtins: obj.method(args) dispatched via METHOD_TABLE."""
+
+    def test_sublist_delegates_to_slice(self):
+        """subList should call slice(obj, start, stop)."""
+        vm = VMState()
+        addr = "<arr:0>"
+        vm.heap[addr] = HeapObject(
+            type_hint="array",
+            fields={"0": 10, "1": 20, "2": 30, "3": 40, "length": 4},
+        )
+        fn = Builtins.METHOD_TABLE["subList"]
+        result = fn(addr, [1, 3], vm)
+        heap_obj = vm.heap[result]
+        assert heap_obj.fields["0"] == 20
+        assert heap_obj.fields["1"] == 30
+        assert heap_obj.fields["length"] == 2
+
+    def test_substring_delegates_to_slice(self):
+        """substring should call slice(obj, start, stop) on strings."""
+        vm = VMState()
+        fn = Builtins.METHOD_TABLE["substring"]
+        result = fn("hello", [1, 3], vm)
+        assert result == "el"
+
+    def test_method_table_has_expected_entries(self):
+        assert "subList" in Builtins.METHOD_TABLE
+        assert "substring" in Builtins.METHOD_TABLE
+        assert "slice" in Builtins.METHOD_TABLE
