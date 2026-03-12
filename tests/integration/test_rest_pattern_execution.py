@@ -7,6 +7,8 @@ the VM's slice and object_rest builtins.
 
 from __future__ import annotations
 
+import pytest
+
 from tests.unit.rosetta.conftest import (
     execute_for_language,
     extract_answer,
@@ -100,6 +102,52 @@ let answer = a;
         ), f"expected c=3, got {rest_obj.fields.get('c')}"
         assert "a" not in rest_obj.fields, "rest should not contain excluded key 'a'"
 
+    def test_zero_llm_calls_obj_rest(self):
+        _vm, stats = execute_for_language("javascript", self.PROGRAM)
+        assert stats.llm_calls == 0
+
+
+class TestFunctionRestParameter:
+    """function foo(a, ...rest) called with foo(1, 2, 3) => rest = [2, 3]."""
+
+    PROGRAM = """\
+function foo(a, ...rest) {
+    return rest;
+}
+let result = foo(1, 2, 3);
+let answer = 1;
+"""
+
+    def test_rest_is_array(self):
+        vm, _stats = execute_for_language("javascript", self.PROGRAM)
+        result = vm.call_stack[0].local_vars.get("result")
+        assert result in vm.heap, f"expected heap address, got {result}"
+        heap_obj = vm.heap[result]
+        assert heap_obj.fields["0"] == 2, f"expected rest[0]=2, got {heap_obj.fields}"
+        assert heap_obj.fields["1"] == 3, f"expected rest[1]=3, got {heap_obj.fields}"
+        assert heap_obj.fields["length"] == 2
+
     def test_zero_llm_calls(self):
         _vm, stats = execute_for_language("javascript", self.PROGRAM)
         assert stats.llm_calls == 0
+
+
+class TestFunctionRestParameterOnly:
+    """function foo(...args) called with foo(10, 20) => args = [10, 20]."""
+
+    PROGRAM = """\
+function sum(...args) {
+    return args;
+}
+let result = sum(10, 20);
+let answer = 10;
+"""
+
+    def test_all_args_collected(self):
+        vm, _stats = execute_for_language("javascript", self.PROGRAM)
+        result = vm.call_stack[0].local_vars.get("result")
+        assert result in vm.heap, f"expected heap address, got {result}"
+        heap_obj = vm.heap[result]
+        assert heap_obj.fields["0"] == 10
+        assert heap_obj.fields["1"] == 20
+        assert heap_obj.fields["length"] == 2
