@@ -402,8 +402,8 @@ class M {
 """,
             "java",
         )
-        assert "add" in env.func_signatures
-        assert env.get_func_signature("add").return_type == "Int"
+        sig = env.get_func_signature("add", class_name=scalar("M"))
+        assert sig.return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -431,8 +431,8 @@ class M {
 """,
             "csharp",
         )
-        assert "Add" in env.func_signatures
-        assert env.get_func_signature("Add").return_type == "Int"
+        sig = env.get_func_signature("Add", class_name=scalar("M"))
+        assert sig.return_type == "Int"
 
     def test_call_function_result_typed(self):
         instructions, env = _lower_and_infer(
@@ -759,8 +759,7 @@ class M {
 """,
             "java",
         )
-        assert "add" in env.func_signatures
-        sig = env.get_func_signature("add")
+        sig = env.get_func_signature("add", class_name=scalar("M"))
         assert sig.return_type == "Int"
         assert sig.params == (("a", "Int"), ("b", "Int"))
 
@@ -776,8 +775,7 @@ class M {
 """,
             "csharp",
         )
-        assert "Add" in env.func_signatures
-        sig = env.get_func_signature("Add")
+        sig = env.get_func_signature("Add", class_name=scalar("M"))
         assert sig.return_type == "Int"
         assert sig.params == (("a", "Int"), ("b", "Int"))
 
@@ -1224,7 +1222,7 @@ class Dog {
 """,
             "java",
         )
-        sig = env.get_func_signature("getAge")
+        sig = env.get_func_signature("getAge", class_name=scalar("Dog"))
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Dog"
@@ -1234,7 +1232,7 @@ class Dog {
             "class Vec3 { double length() { return 0; } };",
             "cpp",
         )
-        sig = env.get_func_signature("length")
+        sig = env.get_func_signature("length", class_name=scalar("Vec3"))
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Vec3"
@@ -1244,7 +1242,7 @@ class Dog {
             "class Cat { int GetLives() { return 9; } }",
             "csharp",
         )
-        sig = env.get_func_signature("GetLives")
+        sig = env.get_func_signature("GetLives", class_name=scalar("Cat"))
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Cat"
@@ -1254,7 +1252,7 @@ class Dog {
             "class Box { getSize() { return 1; } }",
             "javascript",
         )
-        sig = env.get_func_signature("getSize")
+        sig = env.get_func_signature("getSize", class_name=scalar("Box"))
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Box"
@@ -1264,7 +1262,7 @@ class Dog {
             "class Box { getSize(): number { return 1; } }",
             "typescript",
         )
-        sig = env.get_func_signature("getSize")
+        sig = env.get_func_signature("getSize", class_name=scalar("Box"))
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Box"
@@ -1274,7 +1272,7 @@ class Dog {
             "class Circle { fun area(): Double { return 3.14 } }",
             "kotlin",
         )
-        sig = env.get_func_signature("area")
+        sig = env.get_func_signature("area", class_name=scalar("Circle"))
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Circle"
@@ -1284,7 +1282,7 @@ class Dog {
             "class Circle { def area(): Double = 3.14 }",
             "scala",
         )
-        sig = env.get_func_signature("area")
+        sig = env.get_func_signature("area", class_name=scalar("Circle"))
         this_params = [p for p in sig.params if p[0] == "this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "Circle"
@@ -1294,7 +1292,7 @@ class Dog {
             '<?php class User { function greet(): string { return "hi"; } }',
             "php",
         )
-        sig = env.get_func_signature("greet")
+        sig = env.get_func_signature("greet", class_name=scalar("User"))
         this_params = [p for p in sig.params if p[0] == "$this"]
         assert len(this_params) == 1
         assert this_params[0][1] == "User"
@@ -1521,12 +1519,22 @@ class TestReturnBackfillAllLanguages:
         _instructions, env = _lower_and_infer(self.SOURCES[lang], lang)
         return lang, env
 
+    # Scala wraps in object M, so f is class-scoped
+    CLASS_NAMES = {"scala": "M"}
+
     def test_return_type_backfilled_to_int(self, lang_env):
         lang, env = lang_env
-        assert "f" in env.func_signatures, f"[{lang}] expected 'f' in func_signatures"
+        class_name = self.CLASS_NAMES.get(lang)
+        if class_name:
+            sig = env.get_func_signature("f", class_name=scalar(class_name))
+        else:
+            assert (
+                "f" in env.func_signatures
+            ), f"[{lang}] expected 'f' in func_signatures"
+            sig = env.get_func_signature("f")
         assert (
-            env.get_func_signature("f").return_type == TypeName.INT
-        ), f"[{lang}] expected return_type Int, got {env.get_func_signature('f').return_type!r}"
+            sig.return_type == TypeName.INT
+        ), f"[{lang}] expected return_type Int, got {sig.return_type!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -2232,19 +2240,28 @@ _EXPECTED_STR_TYPE: dict[str, str] = {
 
 
 class TestVarTypeScopingCrossLanguage:
+    # Languages that wrap functions in a class
+    _CLASS_WRAPPED = {"java": "Main", "csharp": "Main"}
+
     def test_same_var_name_different_types_scoped(self, scoping_lang):
         """Variable 'x' in make_int is Int, 'x' in make_str is String — no collision."""
         source = _SCOPING_SOURCES[scoping_lang]
         instructions, env = _lower_and_infer(source, scoping_lang)
         expected_int = _EXPECTED_INT_TYPE.get(scoping_lang, TypeName.INT)
         expected_str = _EXPECTED_STR_TYPE.get(scoping_lang, TypeName.STRING)
+        cls = self._CLASS_WRAPPED.get(scoping_lang)
+        class_kw = {"class_name": scalar(cls)} if cls else {}
         # Both functions should have their return types correctly inferred
-        assert env.get_func_signature("make_int").return_type == expected_int
-        assert env.get_func_signature("make_str").return_type == expected_str
+        assert (
+            env.get_func_signature("make_int", **class_kw).return_type == expected_int
+        )
+        assert (
+            env.get_func_signature("make_str", **class_kw).return_type == expected_str
+        )
         # Key: the two return types must be DIFFERENT (scoping works)
         assert (
-            env.get_func_signature("make_int").return_type
-            != env.get_func_signature("make_str").return_type
+            env.get_func_signature("make_int", **class_kw).return_type
+            != env.get_func_signature("make_str", **class_kw).return_type
         )
 
 
@@ -2275,11 +2292,8 @@ class TestJavaGenericTypeInference:
             "class M { List<String> getNames() { return null; } }",
             "java",
         )
-        assert any(
-            sig.return_type == "List[String]"
-            for sigs in env.func_signatures.values()
-            for sig in sigs
-        )
+        sig = env.get_func_signature("getNames", class_name=scalar("M"))
+        assert sig.return_type == "List[String]"
 
 
 class TestCSharpGenericTypeInference:
@@ -2780,7 +2794,7 @@ class TestJavaInterfaceTypeInference:
     """Java interface methods should have return types available in func_return_types."""
 
     def test_interface_method_return_type_seeded(self):
-        """Interface method with declared return type seeds func_return_types."""
+        """Interface method with declared return type seeds method_signatures."""
         _instructions, env = _lower_and_infer(
             """\
 interface Calculator {
@@ -2789,11 +2803,10 @@ interface Calculator {
 """,
             "java",
         )
-        # Find func_signatures entries containing "compute"
-        compute_sigs = {k: v for k, v in env.func_signatures.items() if "compute" in k}
+        sig = env.get_func_signature("compute", class_name=scalar("Calculator"))
         assert (
-            len(compute_sigs) >= 1
-        ), f"Expected signature for 'compute', got: {env.func_signatures}"
+            sig.return_type == "Int"
+        ), f"Expected 'compute' in method_signatures[Calculator], got: {env.method_signatures}"
 
     def test_interface_chain_walk_resolves_method(self):
         """When class implements interface, method type resolves via chain walk."""
@@ -2830,7 +2843,7 @@ class TestGoInterfaceTypeInference:
     """Go interface methods should have return types available in func_signatures."""
 
     def test_interface_method_return_type_seeded(self):
-        """Interface method with declared return type seeds func_signatures."""
+        """Interface method with declared return type seeds method_signatures."""
         _instructions, env = _lower_and_infer(
             """\
 package main
@@ -2841,10 +2854,10 @@ type Shape interface {
 """,
             "go",
         )
-        area_sigs = {k: v for k, v in env.func_signatures.items() if "Area" in k}
+        sig = env.get_func_signature("Area", class_name=scalar("Shape"))
         assert (
-            len(area_sigs) >= 1
-        ), f"Expected signature for 'Area', got: {env.func_signatures}"
+            sig.return_type == "Float"
+        ), f"Expected 'Area' in method_signatures[Shape], got: {env.method_signatures}"
 
 
 class TestCSharpInterfaceChainWalk:
@@ -2897,7 +2910,7 @@ class TestKotlinInterfaceTypeInference:
     """Kotlin interface methods should have return types available in func_signatures."""
 
     def test_interface_method_return_type_seeded(self):
-        """Interface method with declared return type seeds func_signatures."""
+        """Interface method with declared return type seeds method_signatures."""
         _instructions, env = _lower_and_infer(
             """\
 interface Calculator {
@@ -2906,10 +2919,10 @@ interface Calculator {
 """,
             "kotlin",
         )
-        compute_sigs = {k: v for k, v in env.func_signatures.items() if "compute" in k}
+        sig = env.get_func_signature("compute", class_name=scalar("Calculator"))
         assert (
-            len(compute_sigs) >= 1
-        ), f"Expected signature for 'compute', got: {env.func_signatures}"
+            sig.return_type == "Int"
+        ), f"Expected 'compute' in method_signatures[Calculator], got: {env.method_signatures}"
 
     def test_kotlin_implements_seeds_interface(self):
         _instructions, env = _lower_and_infer(
