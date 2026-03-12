@@ -542,6 +542,49 @@ class TestJavaScriptDestructuring:
         assert "rest" in store_names
 
 
+class TestJavaScriptRestParameter:
+    def test_rest_param_emits_slice(self):
+        """function foo(a, ...rest) {} should emit slice(arguments, 1) for rest."""
+        source = "function foo(a, ...rest) { return rest; }"
+        instructions = _parse_js(source)
+        # Should have SYMBOLIC param:a but NOT param:rest
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        sym_names = [inst.operands[0] for inst in symbolics]
+        assert "param:a" in sym_names
+        assert "param:rest" not in sym_names, "rest should not be a regular param"
+        # Should have slice call for rest
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any(
+            "slice" in inst.operands for inst in calls
+        ), f"expected slice call, got {[inst.operands for inst in calls]}"
+        # Should store as 'rest'
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "rest" in store_names
+
+    def test_rest_param_only(self):
+        """function foo(...args) {} should slice from index 0."""
+        source = "function foo(...args) { return args; }"
+        instructions = _parse_js(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        slice_calls = [inst for inst in calls if "slice" in inst.operands]
+        assert len(slice_calls) == 1
+        # The start index should be 0 (no preceding params)
+        consts = _find_all(instructions, Opcode.CONST)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("args" in inst.operands for inst in stores)
+
+    def test_rest_param_loads_arguments(self):
+        """Rest param should emit LOAD_VAR arguments."""
+        source = "function foo(x, y, ...rest) {}"
+        instructions = _parse_js(source)
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        load_names = [inst.operands[0] for inst in loads]
+        assert (
+            "arguments" in load_names
+        ), f"expected LOAD_VAR arguments, got {load_names}"
+
+
 class TestJavaScriptNewExpression:
     def test_new_expression_basic(self):
         instructions = _parse_js("const obj = new Foo();")
