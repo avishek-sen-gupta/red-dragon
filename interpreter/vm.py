@@ -129,8 +129,9 @@ def apply_update(
     """Mechanically apply a StateUpdate to the VM.
 
     Expects register_writes and var_writes to contain TypedValue entries
-    (via materialize_raw_update). Falls back to runtime wrapping for
-    raw values during the transition period.
+    (via materialize_raw_update). Raw values are auto-materialized as a
+    transition measure — tests and other direct callers may pass raw values
+    until all handlers produce TypedValue (tracked in red-dragon-rrb).
     """
     frame = vm.current_frame
 
@@ -156,7 +157,7 @@ def apply_update(
     for obj in update.new_objects:
         vm.heap[obj.addr] = HeapObject(type_hint=obj.type_hint)
 
-    # Register writes — lightweight coercion check for pre-materialized TypedValues
+    # Register writes — auto-materialize raw values (transition), then coerce
     for reg, val in update.register_writes.items():
         tv = (
             val
