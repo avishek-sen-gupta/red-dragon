@@ -827,7 +827,7 @@ def _handle_alloc_region(
         sym = vm.fresh_symbolic(hint="region_addr")
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: sym.to_dict()},
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"alloc_region(symbolic size) → {sym.name}",
             )
         )
@@ -836,7 +836,7 @@ def _handle_alloc_region(
     return ExecutionResult.success(
         StateUpdate(
             new_regions={addr: int(size)},
-            register_writes={inst.result_reg: addr},
+            register_writes={inst.result_reg: typed(addr, UNKNOWN)},
             reasoning=f"alloc_region({size}) → {addr}",
         )
     )
@@ -899,7 +899,7 @@ def _handle_load_region(
         sym = vm.fresh_symbolic(hint=f"region_load")
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: sym.to_dict()},
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"load_region(symbolic) → {sym.name}",
             )
         )
@@ -909,7 +909,7 @@ def _handle_load_region(
         sym = vm.fresh_symbolic(hint=f"region_load({addr_str})")
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: sym.to_dict()},
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"load_region({addr_str}) — unknown region → {sym.name}",
             )
         )
@@ -919,7 +919,7 @@ def _handle_load_region(
     data = list(vm.regions[addr_str][start:end])
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: data},
+            register_writes={inst.result_reg: typed(data, UNKNOWN)},
             reasoning=f"load_region({addr_str}, offset={start}, len={length}) = {data}",
         )
     )
