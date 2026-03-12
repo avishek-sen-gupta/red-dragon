@@ -1061,12 +1061,12 @@ def _try_user_function_call(
 
     params = registry.func_params.get(flabel, [])
     param_vars = {
-        params[i]: _serialize_value(arg)
+        params[i]: typed_from_runtime(arg)
         for i, arg in enumerate(args)
         if i < len(params)
     }
     # Inject 'arguments' array so rest params can slice it
-    param_vars["arguments"] = _builtin_array_of([_serialize_value(a) for a in args], vm)
+    param_vars["arguments"] = typed(_builtin_array_of(list(args), vm), UNKNOWN)
 
     # Inject captured closure variables; parameter bindings take priority
     closure_env: ClosureEnvironment | None = None
@@ -1076,7 +1076,9 @@ def _try_user_function_call(
         if closure_env:
             captured = closure_env.bindings
 
-    new_vars = {k: _serialize_value(v) for k, v in captured.items()} if captured else {}
+    new_vars = (
+        {k: typed_from_runtime(v) for k, v in captured.items()} if captured else {}
+    )
     new_vars.update(param_vars)
     if captured:
         logger.debug("Injecting closure vars for %s: %s", fname, list(captured.keys()))
