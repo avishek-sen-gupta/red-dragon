@@ -1000,7 +1000,7 @@ def _try_class_constructor_call(
     if not init_label or init_label not in cfg.blocks:
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: addr},
+                register_writes={inst.result_reg: typed(addr, UNKNOWN)},
                 new_objects=[NewObject(addr=addr, type_hint=class_name)],
                 reasoning=f"new {class_name}() → {addr} (no __init__)",
             )
@@ -1012,20 +1012,20 @@ def _try_class_constructor_call(
     has_explicit_self = bool(params) and params[0] == constants.PARAM_SELF
     if has_explicit_self:
         # Python-style: first param is self/this, rest are constructor args
-        new_vars[params[0]] = addr
+        new_vars[params[0]] = typed(addr, UNKNOWN)
         for i, arg in enumerate(args):
             if i + 1 < len(params):
-                new_vars[params[i + 1]] = _serialize_value(arg)
+                new_vars[params[i + 1]] = typed_from_runtime(arg)
     else:
         # Java/C++/C#-style: this is implicit, all params are constructor args
-        new_vars[constants.PARAM_THIS] = addr
+        new_vars[constants.PARAM_THIS] = typed(addr, UNKNOWN)
         for i, arg in enumerate(args):
             if i < len(params):
-                new_vars[params[i]] = _serialize_value(arg)
+                new_vars[params[i]] = typed_from_runtime(arg)
 
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: addr},
+            register_writes={inst.result_reg: typed(addr, UNKNOWN)},
             call_push=StackFramePush(
                 function_name=f"{class_name}.__init__",
                 return_label=current_label,
