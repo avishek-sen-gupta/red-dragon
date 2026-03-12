@@ -2929,3 +2929,67 @@ class SimpleCalc : Calculator {
         assert "Calculator" in [
             iface for impls in env.interface_implementations.values() for iface in impls
         ], f"Expected Calculator in interface_implementations, got: {env.interface_implementations}"
+
+
+# ---------------------------------------------------------------------------
+# Class-scoped method signatures
+# ---------------------------------------------------------------------------
+
+
+class TestClassScopedMethodSignatures:
+    """method_signatures should separate methods by class."""
+
+    def test_java_overloaded_methods_in_method_signatures(self):
+        """Java class with overloaded add() should have both in method_signatures."""
+        from interpreter.type_expr import scalar
+
+        _instructions, env = _lower_and_infer(
+            """\
+class Calc {
+    int add(int a, int b) { return a + b; }
+    int add(int a, int b, int c) { return a + b + c; }
+}
+""",
+            "java",
+        )
+        calc_type = scalar("Calc")
+        assert calc_type in env.method_signatures
+        sigs = env.method_signatures[calc_type].get("add", [])
+        assert len(sigs) == 2
+        # First overload: this + 2 params
+        assert len(sigs[0].params) == 3
+        # Second overload: this + 3 params
+        assert len(sigs[1].params) == 4
+
+    def test_different_classes_dont_collide(self):
+        """Dog.speak and Animal.speak should be in separate class scopes."""
+        from interpreter.type_expr import scalar
+
+        _instructions, env = _lower_and_infer(
+            """\
+class Animal {
+    void speak() {}
+}
+class Dog extends Animal {
+    void speak() {}
+    void fetch(String toy) {}
+}
+""",
+            "java",
+        )
+        animal_speak = env.get_func_signature("speak", class_name=scalar("Animal"))
+        dog_speak = env.get_func_signature("speak", class_name=scalar("Dog"))
+        dog_fetch = env.get_func_signature("fetch", class_name=scalar("Dog"))
+        # Animal.speak has 1 param (this)
+        assert len(animal_speak.params) == 1
+        # Dog.speak has 1 param (this)
+        assert len(dog_speak.params) == 1
+        # Dog.fetch has 2 params (this, toy)
+        assert len(dog_fetch.params) == 2
+        # Animal should NOT have fetch
+        from interpreter.type_environment import _NULL_SIGNATURE
+
+        assert (
+            env.get_func_signature("fetch", class_name=scalar("Animal"))
+            is _NULL_SIGNATURE
+        )
