@@ -699,9 +699,31 @@ def lower_named_expression(ctx: TreeSitterEmitContext, node) -> str:
 # ── slice ─────────────────────────────────────────────────────
 
 
-def lower_slice(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower a[1:3] or a[1:3:2] as CALL_FUNCTION('slice', start, stop, step)."""
-    all_children = list(node.children)
+def lower_python_subscript(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower subscript: a[idx] as LOAD_INDEX, a[1:3] as CALL_FUNCTION('slice', ...)."""
+    obj_node = node.child_by_field_name(ctx.constants.subscript_value_field)
+    idx_node = node.child_by_field_name(ctx.constants.subscript_index_field)
+    if obj_node is None or idx_node is None:
+        return lower_const_literal(ctx, node)
+    obj_reg = ctx.lower_expr(obj_node)
+    if idx_node.type == PythonNodeType.SLICE:
+        return _lower_slice_with_collection(ctx, idx_node, obj_reg)
+    idx_reg = ctx.lower_expr(idx_node)
+    reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.LOAD_INDEX,
+        result_reg=reg,
+        operands=[obj_reg, idx_reg],
+        node=node,
+    )
+    return reg
+
+
+def _lower_slice_with_collection(
+    ctx: TreeSitterEmitContext, slice_node, collection_reg: str
+) -> str:
+    """Lower a[1:3] or a[1:3:2] as CALL_FUNCTION('slice', collection, start, stop, step)."""
+    all_children = list(slice_node.children)
     colons = [i for i, c in enumerate(all_children) if c.type == PythonNodeType.COLON]
 
     start_reg = _lower_slice_none(ctx)
@@ -755,8 +777,8 @@ def lower_slice(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(
         Opcode.CALL_FUNCTION,
         result_reg=reg,
-        operands=["slice", start_reg, stop_reg, step_reg],
-        node=node,
+        operands=["slice", collection_reg, start_reg, stop_reg, step_reg],
+        node=slice_node,
     )
     return reg
 

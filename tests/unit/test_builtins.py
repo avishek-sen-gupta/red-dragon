@@ -62,6 +62,78 @@ class TestBuiltinSlice:
         vm = VMState()
         assert _builtin_slice([42], vm) is Operators.UNCOMPUTABLE
 
+    def test_slice_with_stop_native_list(self):
+        """slice(collection, start, stop) should return elements [start:stop]."""
+        vm = VMState()
+        result = _builtin_slice([[10, 20, 30, 40, 50], 1, 3], vm)
+        heap_obj = vm.heap[result]
+        assert heap_obj.fields["0"] == 20
+        assert heap_obj.fields["1"] == 30
+        assert heap_obj.fields["length"] == 2
+
+    def test_slice_with_stop_heap_array(self):
+        """slice(heap_arr, 1, 3) should return elements at indices 1 and 2."""
+        vm = VMState()
+        addr = "<arr:0>"
+        vm.heap[addr] = HeapObject(
+            type_hint="array",
+            fields={"0": "a", "1": "b", "2": "c", "3": "d", "length": 4},
+        )
+        result = _builtin_slice([addr, 1, 3], vm)
+        heap_obj = vm.heap[result]
+        assert heap_obj.fields["0"] == "b"
+        assert heap_obj.fields["1"] == "c"
+        assert heap_obj.fields["length"] == 2
+
+    def test_slice_with_step(self):
+        """slice(collection, start, stop, step) with step=2."""
+        vm = VMState()
+        result = _builtin_slice([[0, 1, 2, 3, 4, 5], 0, 5, 2], vm)
+        heap_obj = vm.heap[result]
+        assert heap_obj.fields["0"] == 0
+        assert heap_obj.fields["1"] == 2
+        assert heap_obj.fields["2"] == 4
+        assert heap_obj.fields["length"] == 3
+
+    def test_slice_with_none_stop(self):
+        """slice(collection, 2, 'None') should slice from index 2 to end."""
+        vm = VMState()
+        result = _builtin_slice([[10, 20, 30, 40], 2, "None"], vm)
+        heap_obj = vm.heap[result]
+        assert heap_obj.fields["0"] == 30
+        assert heap_obj.fields["1"] == 40
+        assert heap_obj.fields["length"] == 2
+
+    def test_slice_with_none_start(self):
+        """slice(collection, 'None', 2) should slice from beginning to index 2."""
+        vm = VMState()
+        result = _builtin_slice([[10, 20, 30, 40], "None", 2], vm)
+        heap_obj = vm.heap[result]
+        assert heap_obj.fields["0"] == 10
+        assert heap_obj.fields["1"] == 20
+        assert heap_obj.fields["length"] == 2
+
+    def test_slice_negative_start(self):
+        """slice(collection, -2) should slice last 2 elements."""
+        vm = VMState()
+        result = _builtin_slice([[10, 20, 30, 40], -2], vm)
+        heap_obj = vm.heap[result]
+        assert heap_obj.fields["0"] == 30
+        assert heap_obj.fields["1"] == 40
+        assert heap_obj.fields["length"] == 2
+
+    def test_slice_string(self):
+        """slice(string, start, stop) should return substring."""
+        vm = VMState()
+        result = _builtin_slice(["hello", 1, 3], vm)
+        assert result == "el"
+
+    def test_slice_string_no_stop(self):
+        """slice(string, 2) should return from index 2 onward."""
+        vm = VMState()
+        result = _builtin_slice(["hello", 2], vm)
+        assert result == "llo"
+
 
 class TestBuiltinObjectRest:
     def test_object_rest_excludes_keys(self):

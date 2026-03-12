@@ -131,26 +131,56 @@ def _builtin_array_of(args: list[Any], vm: VMState) -> Any:
 
 
 def _builtin_slice(args: list[Any], vm: VMState) -> Any:
-    """slice(collection, start) — return elements from start index onward.
+    """slice(collection, start[, stop[, step]]) — return a sub-sequence.
 
-    Handles native lists, strings, and heap-backed arrays.
+    Supports native lists/tuples, strings, and heap-backed arrays.
+    Missing stop/step represented as 'None' string (from IR CONST).
     """
     if len(args) < 2 or any(_is_symbolic(a) for a in args):
         return _UNCOMPUTABLE
-    collection, start = args[0], int(args[1])
+    collection = args[0]
+    raw_start, raw_stop, raw_step = (
+        args[1],
+        _arg_or_none(args, 2),
+        _arg_or_none(args, 3),
+    )
+    start = _parse_slice_int(raw_start)
+    stop = _parse_slice_int(raw_stop)
+    step = _parse_slice_int(raw_step)
+    py_slice = slice(start, stop, step)
     # Native list/tuple
     if isinstance(collection, (list, tuple)):
-        return _builtin_array_of(list(collection[start:]), vm)
+        return _builtin_array_of(list(collection[py_slice]), vm)
     # Heap-backed array (check before string — heap addresses are strings too)
     addr = _heap_addr(collection)
     if addr and addr in vm.heap:
-        heap_obj = vm.heap[addr]
-        length = heap_obj.fields.get("length", len(heap_obj.fields))
-        if not isinstance(length, int):
-            return _UNCOMPUTABLE
-        elements = [heap_obj.fields.get(str(i)) for i in range(start, length)]
-        return _builtin_array_of(elements, vm)
+        return _slice_heap_array(vm.heap[addr], py_slice, vm)
+    # Native string
+    if isinstance(collection, str):
+        return collection[py_slice]
     return _UNCOMPUTABLE
+
+
+def _arg_or_none(args: list[Any], index: int) -> Any:
+    """Return args[index] if it exists, else None."""
+    return args[index] if index < len(args) else None
+
+
+def _parse_slice_int(value: Any) -> int | None:
+    """Convert a slice argument to int or None ('None' string → None)."""
+    if value is None or value == "None":
+        return None
+    return int(value)
+
+
+def _slice_heap_array(heap_obj: HeapObject, py_slice: slice, vm: VMState) -> Any:
+    """Apply a Python slice to a heap-backed array and return a new heap array."""
+    length = heap_obj.fields.get("length", len(heap_obj.fields))
+    if not isinstance(length, int):
+        return _UNCOMPUTABLE
+    indices = range(length)[py_slice]
+    elements = [heap_obj.fields.get(str(i)) for i in indices]
+    return _builtin_array_of(elements, vm)
 
 
 def _builtin_object_rest(args: list[Any], vm: VMState) -> Any:
