@@ -18,6 +18,7 @@ from interpreter.run_types import VMConfig
 from interpreter.type_environment import TypeEnvironment
 from interpreter.type_inference import infer_types
 from interpreter.type_resolver import TypeResolver
+from interpreter.typed_value import unwrap
 
 
 def _build_division_index_program() -> list[IRInstruction]:
@@ -74,7 +75,7 @@ class TestTypeCoecionEndToEnd:
         )
 
         # The stored value should be retrievable via the integer key
-        assert vm.current_frame.local_vars.get("result") == 99
+        assert unwrap(vm.current_frame.local_vars.get("result")) == 99
 
     def test_division_index_without_type_env_mismatches(self):
         """Without type coercion, float division index produces key '2.0' not '2'."""
@@ -92,5 +93,5 @@ class TestTypeCoecionEndToEnd:
 
         # Without coercion, 4/2 = 2.0 (float), stored at key "2.0"
         # Load with int 2 looks for key "2" — won't find it, gets symbolic
-        result = vm.current_frame.local_vars.get("result")
+        result = unwrap(vm.current_frame.local_vars.get("result"))
         assert result != 99, "Without type coercion, the round-trip should fail"

@@ -34,6 +34,7 @@ from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.type_environment import TypeEnvironment
 from interpreter.type_expr import scalar
 from interpreter.unresolved_call import UnresolvedCallResolver, SymbolicResolver
+from interpreter.typed_value import TypedValue
 from interpreter import constants
 
 _DEFAULT_RESOLVER = SymbolicResolver()
@@ -88,11 +89,16 @@ def _handle_const(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
                 env = vm.closures[env_id]
                 for k, v in enclosing.local_vars.items():
                     if k not in env.bindings:
-                        env.bindings[k] = v
+                        env.bindings[k] = v.value if isinstance(v, TypedValue) else v
             else:
                 env_id = f"{constants.ENV_ID_PREFIX}{vm.symbolic_counter}"
                 vm.symbolic_counter += 1
-                env = ClosureEnvironment(bindings=dict(enclosing.local_vars))
+                env = ClosureEnvironment(
+                    bindings={
+                        k: v.value if isinstance(v, TypedValue) else v
+                        for k, v in enclosing.local_vars.items()
+                    }
+                )
                 vm.closures[env_id] = env
                 enclosing.closure_env_id = env_id
                 enclosing.captured_var_names = frozenset(enclosing.local_vars.keys())
@@ -132,7 +138,8 @@ def _handle_load_var(
                 )
             )
         if name in f.local_vars:
-            val = f.local_vars[name]
+            stored = f.local_vars[name]
+            val = stored.value if isinstance(stored, TypedValue) else stored
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={inst.result_reg: _serialize_value(val)},
@@ -183,7 +190,8 @@ def _handle_address_of(
     current_val = None
     for f in reversed(vm.call_stack):
         if name in f.local_vars:
-            current_val = f.local_vars[name]
+            stored = f.local_vars[name]
+            current_val = stored.value if isinstance(stored, TypedValue) else stored
             break
 
     # Function reference: &func_name returns the reference unchanged
@@ -243,7 +251,8 @@ def _handle_symbolic(
     if isinstance(hint, str) and hint.startswith(constants.PARAM_PREFIX):
         param_name = hint[len(constants.PARAM_PREFIX) :]
         if param_name in frame.local_vars:
-            val = frame.local_vars[param_name]
+            stored = frame.local_vars[param_name]
+            val = stored.value if isinstance(stored, TypedValue) else stored
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={inst.result_reg: _serialize_value(val)},
@@ -267,7 +276,9 @@ def _handle_new_object(
     # extract the canonical class name (e.g. Foo → __anon_class_0).
     for frame in reversed(vm.call_stack):
         if type_hint in frame.local_vars:
-            cr = _parse_class_ref(str(frame.local_vars[type_hint]))
+            stored = frame.local_vars[type_hint]
+            raw = stored.value if isinstance(stored, TypedValue) else stored
+            cr = _parse_class_ref(str(raw))
             if cr.matched:
                 type_hint = cr.name
             break
@@ -1114,7 +1125,8 @@ def _handle_call_function(
     func_val = ""
     for f in reversed(vm.call_stack):
         if func_name in f.local_vars:
-            func_val = f.local_vars[func_name]
+            stored = f.local_vars[func_name]
+            func_val = stored.value if isinstance(stored, TypedValue) else stored
             break
     if not func_val:
         # Unknown function — resolve via configured strategy

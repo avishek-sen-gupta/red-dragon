@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from interpreter.run import run
+from interpreter.typed_value import unwrap, unwrap_locals
 
 
 def _run_program(source: str, max_steps: int = 200) -> dict:
     """Run a program and return the main frame's local_vars."""
     vm = run(source, max_steps=max_steps)
-    return dict(vm.call_stack[0].local_vars)
+    return unwrap_locals(vm.call_stack[0].local_vars)
 
 
 class TestSimpleClosure:
@@ -205,7 +206,7 @@ def add(a, b):
 result = add(3, 4)
 """
         vm = run(source, max_steps=100)
-        assert vm.call_stack[0].local_vars["result"] == 7
+        assert unwrap(vm.call_stack[0].local_vars["result"]) == 7
         assert len(vm.closures) == 0
 
     def test_factorial_unchanged(self):
@@ -219,5 +220,5 @@ def factorial(n):
 result = factorial(5)
 """
         vm = run(source, max_steps=200)
-        assert vm.call_stack[0].local_vars["result"] == 120
+        assert unwrap(vm.call_stack[0].local_vars["result"]) == 120
         assert len(vm.closures) == 0
