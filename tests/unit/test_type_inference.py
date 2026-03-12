@@ -568,7 +568,7 @@ class TestForwardReferenceResolution:
             ),
         ]
         env = infer_types(instructions, _default_resolver())
-        assert env.func_signatures["main"].return_type == TypeName.INT
+        assert env.get_func_signature("main").return_type == TypeName.INT
 
     def test_forward_ref_store_var_propagates(self):
         """result = helper() where helper is defined later → var_types["result"] typed."""
@@ -631,9 +631,9 @@ class TestForwardReferenceResolution:
             ),
         ]
         env = infer_types(instructions, _default_resolver())
-        assert env.func_signatures["c"].return_type == TypeName.FLOAT
-        assert env.func_signatures["b"].return_type == TypeName.FLOAT
-        assert env.func_signatures["a"].return_type == TypeName.FLOAT
+        assert env.get_func_signature("c").return_type == TypeName.FLOAT
+        assert env.get_func_signature("b").return_type == TypeName.FLOAT
+        assert env.get_func_signature("a").return_type == TypeName.FLOAT
 
     def test_no_forward_ref_converges_in_one_pass(self):
         """When all definitions precede calls, inference still works (no regression)."""
@@ -891,7 +891,7 @@ class TestReturnBackfill:
         ]
         env = infer_types(instructions, _default_resolver())
         assert "double" in env.func_signatures
-        assert env.func_signatures["double"].return_type == TypeName.INT
+        assert env.get_func_signature("double").return_type == TypeName.INT
 
     def test_call_function_picks_up_backfilled_return_type(self):
         """CALL_FUNCTION picks up the backfilled return type from RETURN."""
@@ -938,7 +938,7 @@ class TestReturnBackfill:
         )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         # Float (from annotation) should NOT be overwritten by Int (from CONST 42)
-        assert env.func_signatures["add"].return_type == "Float"
+        assert env.get_func_signature("add").return_type == "Float"
 
     def test_return_with_untyped_register_does_not_backfill(self):
         """RETURN with an untyped register does not backfill."""
@@ -956,7 +956,7 @@ class TestReturnBackfill:
             _make_inst(Opcode.STORE_VAR, operands=["f", "%1"]),
         ]
         env = infer_types(instructions, _default_resolver())
-        assert env.func_signatures["f"].return_type == ""
+        assert env.get_func_signature("f").return_type == ""
 
 
 # ---------------------------------------------------------------------------
@@ -1307,7 +1307,7 @@ class TestFunctionSignatures:
         )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert "add" in env.func_signatures
-        sig = env.func_signatures["add"]
+        sig = env.get_func_signature("add")
         assert sig == FunctionSignature(
             params=(("a", "Int"), ("b", "Int")), return_type="Int"
         )
@@ -1330,7 +1330,7 @@ class TestFunctionSignatures:
         ]
         env = infer_types(instructions, _default_resolver())
         assert "greet" in env.func_signatures
-        sig = env.func_signatures["greet"]
+        sig = env.get_func_signature("greet")
         assert sig == FunctionSignature(params=(("name", ""),), return_type="")
 
     def test_no_internal_labels_in_signatures(self):
@@ -1377,7 +1377,7 @@ class TestFunctionSignatures:
             func_return_types={"func_main_0": scalar("void")}
         )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
-        assert env.func_signatures["main"] == FunctionSignature(
+        assert env.get_func_signature("main") == FunctionSignature(
             params=(), return_type="void"
         )
 
@@ -1427,10 +1427,10 @@ class TestFunctionSignatures:
             },
         )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
-        assert env.func_signatures["add"] == FunctionSignature(
+        assert env.get_func_signature("add") == FunctionSignature(
             params=(("a", "Int"), ("b", "Int")), return_type="Int"
         )
-        assert env.func_signatures["greet"] == FunctionSignature(
+        assert env.get_func_signature("greet") == FunctionSignature(
             params=(("name", "String"),), return_type="String"
         )
 
