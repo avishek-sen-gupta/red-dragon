@@ -58,10 +58,14 @@ def lower_js_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
 def _lower_object_destructure(
     ctx: TreeSitterEmitContext, pattern_node, val_reg: str, parent_node
 ) -> None:
-    """Lower { a, b } = obj or { x: localX } = obj."""
+    """Lower { a, b } = obj or { x: localX } = obj, including ...rest."""
+    extracted_keys: list[str] = []
+    rest_child = None
+
     for child in pattern_node.children:
         if child.type == JSN.SHORTHAND_PROPERTY_IDENTIFIER_PATTERN:
             prop_name = ctx.node_text(child)
+            extracted_keys.append(prop_name)
             field_reg = ctx.fresh_reg()
             ctx.emit(
                 Opcode.LOAD_FIELD,
@@ -80,6 +84,7 @@ def _lower_object_destructure(
             if key_node and value_child:
                 key_name = ctx.node_text(key_node)
                 local_name = ctx.node_text(value_child)
+                extracted_keys.append(key_name)
                 field_reg = ctx.fresh_reg()
                 ctx.emit(
                     Opcode.LOAD_FIELD,
@@ -92,27 +97,80 @@ def _lower_object_destructure(
                     operands=[local_name, field_reg],
                     node=parent_node,
                 )
+        elif child.type == JSN.REST_PATTERN:
+            rest_child = child
+
+    if rest_child is not None:
+        rest_name = _extract_rest_name(rest_child)
+        if rest_name:
+            key_regs = [_const_reg(ctx, key) for key in extracted_keys]
+            rest_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.CALL_FUNCTION,
+                result_reg=rest_reg,
+                operands=["object_rest", val_reg, *key_regs],
+                node=rest_child,
+            )
+            ctx.emit(
+                Opcode.STORE_VAR,
+                operands=[rest_name, rest_reg],
+                node=parent_node,
+            )
+
+
+def _const_reg(ctx: TreeSitterEmitContext, value: str) -> str:
+    """Emit a CONST and return the register holding the value."""
+    reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=reg, operands=[value])
+    return reg
+
+
+def _extract_rest_name(child) -> str | None:
+    """Extract the identifier name from a rest_pattern node, or None if not rest."""
+    if child.type != JSN.REST_PATTERN:
+        return None
+    id_child = next((c for c in child.children if c.type == JSN.IDENTIFIER), None)
+    return id_child.text.decode("utf-8") if id_child else None
 
 
 def _lower_array_destructure(
     ctx: TreeSitterEmitContext, pattern_node, val_reg: str, parent_node
 ) -> None:
-    """Lower [a, b] = arr."""
-    for i, child in enumerate(c for c in pattern_node.children if c.is_named):
-        idx_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
-        elem_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.LOAD_INDEX,
-            result_reg=elem_reg,
-            operands=[val_reg, idx_reg],
-            node=child,
-        )
-        ctx.emit(
-            Opcode.STORE_VAR,
-            operands=[ctx.node_text(child), elem_reg],
-            node=parent_node,
-        )
+    """Lower [a, b] = arr, including rest patterns like [a, ...rest] = arr."""
+    named_children = [c for c in pattern_node.children if c.is_named]
+    for i, child in enumerate(named_children):
+        rest_name = _extract_rest_name(child)
+        if rest_name is not None:
+            # ...rest — slice from index i onward
+            start_reg = ctx.fresh_reg()
+            ctx.emit(Opcode.CONST, result_reg=start_reg, operands=[str(i)])
+            rest_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.CALL_FUNCTION,
+                result_reg=rest_reg,
+                operands=["slice", val_reg, start_reg],
+                node=child,
+            )
+            ctx.emit(
+                Opcode.STORE_VAR,
+                operands=[rest_name, rest_reg],
+                node=parent_node,
+            )
+        else:
+            idx_reg = ctx.fresh_reg()
+            ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            elem_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.LOAD_INDEX,
+                result_reg=elem_reg,
+                operands=[val_reg, idx_reg],
+                node=child,
+            )
+            ctx.emit(
+                Opcode.STORE_VAR,
+                operands=[ctx.node_text(child), elem_reg],
+                node=parent_node,
+            )
 
 
 def _extract_js_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
