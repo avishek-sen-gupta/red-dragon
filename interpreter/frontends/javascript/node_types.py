@@ -68,6 +68,7 @@ class JavaScriptNodeType:
     EXPRESSION_STATEMENT = "expression_statement"
     LEXICAL_DECLARATION = "lexical_declaration"
     VARIABLE_DECLARATION = "variable_declaration"
+    USING_DECLARATION = "using_declaration"
     VARIABLE_DECLARATOR = "variable_declarator"
     RETURN_STATEMENT = "return_statement"
     IF_STATEMENT = "if_statement"
