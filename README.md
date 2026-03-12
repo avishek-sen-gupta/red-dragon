@@ -43,6 +43,7 @@ The VM executes programs deterministically, tracking data flow through incomplet
 
 - **Write-time type coercion** — coerces register values to their statically-inferred types at the point of write (e.g. Float→Int via `math.trunc` for array indices), so all downstream reads get correctly-typed values
 - **Class inheritance and method resolution** — all 10 OOP frontends (Java, Python, C#, Kotlin, Ruby, JavaScript, TypeScript, Scala, PHP, C++) extract parent class information into extended class references (`<class:Dog@label:Animal>`). The registry pre-linearizes parent chains via BFS, and the executor walks the parent chain on method miss — enabling inherited method dispatch, method overrides, and multi-level inheritance across all supported languages
+- **Field initializer lowering** — instance field initializers (e.g. `int count = 0` in Java, `var count: Int = 0` in Kotlin) are lowered as `STORE_FIELD` instructions prepended to every constructor body, matching how real compilers (javac, Roslyn, kotlinc, scalac) handle them. Classes without explicit constructors get a synthetic `__init__`. This ensures heap object fields are properly populated at construction time, enabling correct method chaining (`obj.method().method()`) across Java, C#, Kotlin, and Scala
 - **LLM plausible-value resolver** — optionally replaces symbolic placeholders with concrete values for unresolved function/method calls
 
 ## How it works

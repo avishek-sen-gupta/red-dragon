@@ -10,7 +10,11 @@ from interpreter.frontends.type_extraction import (
     extract_normalized_type,
 )
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT
-from interpreter.frontends.common.declarations import make_class_ref
+from interpreter.frontends.common.declarations import (
+    FieldInit,
+    emit_synthetic_init,
+    make_class_ref,
+)
 from interpreter.type_expr import ScalarType
 
 
@@ -189,15 +193,31 @@ def lower_function_def(
 
 
 _CLASS_BODY_FUNC_TYPES = frozenset({NT.FUNCTION_DEFINITION})
+_SCALA_FIELD_TYPES = frozenset({NT.VAL_DEFINITION, NT.VAR_DEFINITION})
+
+
+def _collect_scala_field_init(ctx: TreeSitterEmitContext, node) -> FieldInit | None:
+    """Extract (field_name, value_node) from a val/var definition, or None."""
+    pattern_node = node.child_by_field_name("pattern")
+    value_node = node.child_by_field_name("value")
+    if pattern_node is None or value_node is None:
+        return None
+    name = _extract_pattern_name(ctx, pattern_node)
+    return (name, value_node)
 
 
 def _lower_class_body_hoisted(
-    ctx: TreeSitterEmitContext, node, inject_this: bool = False
+    ctx: TreeSitterEmitContext,
+    node,
+    inject_this: bool = False,
+    collect_field_inits: bool = False,
 ) -> None:
     """Hoist all class-body children to top level.
 
     Emits function definitions first (so their refs are registered),
-    then field initializers and other statements.
+    then field initializers and other statements.  When *collect_field_inits*
+    is True, val/var definitions with initializers are collected and emitted
+    as a synthetic ``__init__`` instead of top-level ``STORE_VAR``.
     """
     children = [
         c
@@ -208,10 +228,33 @@ def _lower_class_body_hoisted(
     ]
     functions = [c for c in children if c.type in _CLASS_BODY_FUNC_TYPES]
     rest = [c for c in children if c.type not in _CLASS_BODY_FUNC_TYPES]
+
+    # Collect field initializers from val/var definitions (only for real classes)
+    field_inits: list[FieldInit] = (
+        [
+            init
+            for c in rest
+            if c.type in _SCALA_FIELD_TYPES
+            for init in [_collect_scala_field_init(ctx, c)]
+            if init is not None
+        ]
+        if collect_field_inits
+        else []
+    )
+
     for child in functions:
         lower_function_def(ctx, child, inject_this=inject_this)
     for child in rest:
+        if (
+            collect_field_inits
+            and child.type in _SCALA_FIELD_TYPES
+            and _collect_scala_field_init(ctx, child) is not None
+        ):
+            continue  # Skip — will be emitted via synthetic __init__
         ctx.lower_stmt(child)
+
+    if field_inits:
+        emit_synthetic_init(ctx, field_inits)
 
 
 def _extract_scala_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
@@ -252,7 +295,9 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     if body_node:
         saved_class = ctx._current_class_name
         ctx._current_class_name = class_name
-        _lower_class_body_hoisted(ctx, body_node, inject_this=True)
+        _lower_class_body_hoisted(
+            ctx, body_node, inject_this=True, collect_field_inits=True
+        )
         ctx._current_class_name = saved_class
 
 
