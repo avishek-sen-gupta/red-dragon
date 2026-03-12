@@ -394,7 +394,7 @@ Final state: result = 120  (67 steps, 0 LLM calls)
 
 The VM also handles — all deterministically:
 
-- **Classes** — heap allocation, method dispatch, field access
+- **Classes** — heap allocation, method dispatch with overload resolution (arity + type-based), field access
 - **Closures** — shared mutable environments (capture-by-reference); mutations persist across calls and are visible to sibling closures
 - **Byte-addressed memory regions** — `ALLOC_REGION`/`WRITE_REGION`/`LOAD_REGION` for COBOL-style REDEFINES overlays
 - **Named continuations** — `SET_CONTINUATION`/`RESUME_CONTINUATION` for COBOL PERFORM return semantics
@@ -540,7 +540,7 @@ Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integrati
 
 - **Language frontends** — all 15 tree-sitter frontends, LLM frontend, chunked LLM frontend
 - **CFG and dataflow** — CFG building, reaching definitions, def-use chains, dependency graphs
-- **Cross-language semantics** — closures (mutation persistence, accumulator semantics, nested-function and lambda forms), classes with method dispatch (12 languages), field access, exception handling, destructuring, variable scoping
+- **Cross-language semantics** — closures (mutation persistence, accumulator semantics, nested-function and lambda forms), classes with method dispatch and overload resolution (12 languages), field access, exception handling, destructuring, variable scoping
 - **Frontend type extraction** — 13 statically-typed frontends verified to populate `TypeEnvironmentBuilder` with register types, variable types, function return types, parameter types, and this/self class typing from source-level annotations
 - **Static type inference** — type propagation through 15 opcode chains, builtin return types, RETURN backfill, UNOP refinement, class method/field tracking, region tagging, CALL_UNKNOWN resolution, array element tracking, function signatures across 13 languages; comprehensive cross-language integration tests covering BINOP (int+int, int+float, comparison→Bool), UNOP (not/!→Bool, Lua #→Int), return backfill, typed param seeding, field tracking, CALL_METHOD return types, and NEW_OBJECT typing across all 15 languages
 - **VM execution** — deterministic execution, write-time type coercion, factory routing
