@@ -51,10 +51,10 @@ def _coerce_value(
     target_type = type_env.register_types.get(reg, UNKNOWN)
     if not target_type:
         return val
-    runtime_type_name = _runtime_type_name(val)
-    if not runtime_type_name or runtime_type_name == target_type:
+    rt_type_name = runtime_type_name(val)
+    if not rt_type_name or rt_type_name == target_type:
         return val
-    coercer = conversion_rules.coerce_assignment(scalar(runtime_type_name), target_type)
+    coercer = conversion_rules.coerce_assignment(scalar(rt_type_name), target_type)
     return coercer(val)
 
 
@@ -219,7 +219,7 @@ _PYTHON_TYPE_TO_TYPE_NAME: dict[type, str] = {
 }
 
 
-def _runtime_type_name(val: Any) -> str:
+def runtime_type_name(val: Any) -> str:
     """Map a Python runtime value to its canonical TypeName.
 
     bool must be checked before int because ``isinstance(True, int)`` is True.
