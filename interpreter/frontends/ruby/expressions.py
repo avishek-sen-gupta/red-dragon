@@ -358,6 +358,9 @@ def lower_element_reference(ctx: TreeSitterEmitContext, node) -> str:
     obj_reg = ctx.lower_expr(named_children[0])
     if len(named_children) > 1 and named_children[1].type == RubyNodeType.RANGE:
         return _lower_range_slice(ctx, named_children[1], obj_reg)
+    # arr[start, length] — Ruby's two-arg slice: start at index, take N elements
+    if len(named_children) == 3:
+        return _lower_positional_slice(ctx, named_children, obj_reg, node)
     idx_reg = (
         ctx.lower_expr(named_children[1])
         if len(named_children) > 1
@@ -407,6 +410,30 @@ def _lower_range_slice(
         result_reg=reg,
         operands=["slice", collection_reg, start_reg, end_reg, none_reg],
         node=range_node,
+    )
+    return reg
+
+
+def _lower_positional_slice(
+    ctx: TreeSitterEmitContext, named_children: list, collection_reg: str, node
+) -> str:
+    """Lower arr[start, length] as CALL_FUNCTION('slice', arr, start, start+length)."""
+    start_reg = ctx.lower_expr(named_children[1])
+    length_reg = ctx.lower_expr(named_children[2])
+    stop_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.BINOP,
+        result_reg=stop_reg,
+        operands=["+", start_reg, length_reg],
+        node=node,
+    )
+    none_reg = _make_const(ctx, ctx.constants.none_literal)
+    reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_FUNCTION,
+        result_reg=reg,
+        operands=["slice", collection_reg, start_reg, stop_reg, none_reg],
+        node=node,
     )
     return reg
 
