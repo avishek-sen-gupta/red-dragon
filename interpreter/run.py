@@ -29,6 +29,7 @@ from interpreter.binop_coercion import (
 )
 from interpreter.type_environment import TypeEnvironment
 from interpreter.typed_value import TypedValue
+from interpreter.type_expr import scalar
 from interpreter.type_inference import infer_types
 from interpreter.type_resolver import TypeResolver
 from interpreter.unresolved_call import (
@@ -192,8 +193,12 @@ def _handle_return_flow(
     # Return to caller — write return value to caller's result register
     caller_frame = vm.current_frame
     if return_frame.result_reg and update.return_value is not None:
-        raw = _deserialize_value(update.return_value, vm)
-        caller_frame.registers[return_frame.result_reg] = typed_from_runtime(raw)
+        if isinstance(update.return_value, TypedValue):
+            if update.return_value.value is not None:
+                caller_frame.registers[return_frame.result_reg] = update.return_value
+        else:
+            raw = _deserialize_value(update.return_value, vm)
+            caller_frame.registers[return_frame.result_reg] = typed_from_runtime(raw)
 
     if return_frame.return_label and return_frame.return_label in cfg.blocks:
         new_ip = return_frame.return_ip if return_frame.return_ip is not None else 0

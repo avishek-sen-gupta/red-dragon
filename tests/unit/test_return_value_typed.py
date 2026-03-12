@@ -1,0 +1,66 @@
+"""Unit tests for return_value TypedValue migration."""
+
+from interpreter.constants import TypeName
+from interpreter.ir import IRInstruction, Opcode
+from interpreter.executor import _handle_return
+from interpreter.type_expr import UNKNOWN, scalar
+from interpreter.typed_value import TypedValue, typed, typed_from_runtime
+from interpreter.vm_types import VMState, StackFrame
+
+
+class TestHandleReturnTypedValue:
+    """Tests for _handle_return producing TypedValue in return_value."""
+
+    def test_return_with_int_operand(self):
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        vm.current_frame.registers["%0"] = typed(42, scalar(TypeName.INT))
+        inst = IRInstruction(opcode=Opcode.RETURN, operands=["%0"])
+        result = _handle_return(inst, vm)
+        rv = result.update.return_value
+        assert isinstance(rv, TypedValue)
+        assert rv.value == 42
+
+    def test_return_with_none_operand(self):
+        """return None -> typed(None, UNKNOWN), distinguishable from Void."""
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        vm.current_frame.registers["%0"] = typed(None, UNKNOWN)
+        inst = IRInstruction(opcode=Opcode.RETURN, operands=["%0"])
+        result = _handle_return(inst, vm)
+        rv = result.update.return_value
+        assert isinstance(rv, TypedValue)
+        assert rv.value is None
+        assert rv.type == UNKNOWN
+        assert rv.type != scalar(TypeName.VOID)
+
+    def test_return_without_operands_is_void(self):
+        """RETURN with no operands -> typed(None, scalar('Void'))."""
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        inst = IRInstruction(opcode=Opcode.RETURN, operands=[])
+        result = _handle_return(inst, vm)
+        rv = result.update.return_value
+        assert isinstance(rv, TypedValue)
+        assert rv.value is None
+        assert rv.type == scalar(TypeName.VOID)
+
+    def test_void_and_none_are_distinguishable(self):
+        """Void and None return values have different types."""
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+
+        # Void (no operands)
+        void_inst = IRInstruction(opcode=Opcode.RETURN, operands=[])
+        void_result = _handle_return(void_inst, vm)
+        void_rv = void_result.update.return_value
+
+        # None (explicit return None)
+        vm.current_frame.registers["%0"] = typed(None, UNKNOWN)
+        none_inst = IRInstruction(opcode=Opcode.RETURN, operands=["%0"])
+        none_result = _handle_return(none_inst, vm)
+        none_rv = none_result.update.return_value
+
+        assert void_rv.type == scalar(TypeName.VOID)
+        assert none_rv.type != scalar(TypeName.VOID)
+        assert void_rv.type != none_rv.type
