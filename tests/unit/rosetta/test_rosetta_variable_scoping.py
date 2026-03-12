@@ -19,6 +19,7 @@ Two variables checked:
 import pytest
 
 from interpreter.ir import Opcode
+from interpreter.typed_value import unwrap
 from tests.unit.rosetta.conftest import (
     parse_for_language,
     assert_clean_lowering,
@@ -230,7 +231,8 @@ def _extract_var(vm, var_name, language):
         f"[{language}] expected '{name}' in frame 0 locals, "
         f"got: {sorted(frame.local_vars.keys())}"
     )
-    return frame.local_vars[name]
+    stored = frame.local_vars[name]
+    return unwrap(stored)
 
 
 class TestVariableScopingExecution:

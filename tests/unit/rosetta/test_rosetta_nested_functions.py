@@ -22,6 +22,7 @@ Program:
 import pytest
 
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.typed_value import unwrap
 from interpreter.vm_types import SymbolicValue, VMState
 
 from tests.unit.rosetta.conftest import (
@@ -509,7 +510,7 @@ def _extract_var(vm: VMState, var_name: str, language: str = "") -> object:
         f"[{language}] expected '{name}' in frame 0 locals, "
         f"got: {sorted(frame.local_vars.keys())}"
     )
-    return frame.local_vars[name]
+    return unwrap(frame.local_vars[name])
 
 
 class TestNestedFunctionScoping:

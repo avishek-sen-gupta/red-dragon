@@ -23,6 +23,7 @@ from interpreter.vm_types import (
     StateUpdate,
 )
 from interpreter.vm import apply_update
+from interpreter.typed_value import TypedValue, unwrap
 from interpreter.executor import (
     _handle_address_of,
     _handle_load_var,
@@ -93,7 +94,7 @@ class TestAddressOfHandler:
         _apply(vm, result)
 
         # Result register should hold a Pointer
-        ptr = vm.current_frame.registers["%0"]
+        ptr = unwrap(vm.current_frame.registers["%0"])
         assert isinstance(ptr, Pointer)
         assert ptr.offset == 0
 
@@ -115,8 +116,8 @@ class TestAddressOfHandler:
         result2 = _handle_address_of(inst2, vm)
         _apply(vm, result2)
 
-        ptr1 = vm.current_frame.registers["%0"]
-        ptr2 = vm.current_frame.registers["%1"]
+        ptr1 = unwrap(vm.current_frame.registers["%0"])
+        ptr2 = unwrap(vm.current_frame.registers["%1"])
         assert ptr1 == ptr2
 
     def test_address_of_struct_returns_pointer_to_existing_heap(self):
@@ -127,7 +128,7 @@ class TestAddressOfHandler:
         result = _handle_address_of(inst, vm)
         _apply(vm, result)
 
-        ptr = vm.current_frame.registers["%0"]
+        ptr = unwrap(vm.current_frame.registers["%0"])
         assert isinstance(ptr, Pointer)
         assert ptr.base == "obj_0"
         assert ptr.offset == 0
@@ -142,7 +143,7 @@ class TestAliasAwareLoadStore:
         inst = _make_inst(Opcode.ADDRESS_OF, result_reg="%ptr", operands=[var_name])
         result = _handle_address_of(inst, vm)
         _apply(vm, result)
-        return vm.current_frame.registers["%ptr"]
+        return unwrap(vm.current_frame.registers["%ptr"])
 
     def test_load_var_reads_from_heap_when_aliased(self):
         """After &x, LOAD_VAR 'x' should read from the heap object."""
@@ -157,7 +158,7 @@ class TestAliasAwareLoadStore:
         result = _handle_load_var(inst, vm)
         _apply(vm, result)
 
-        assert vm.current_frame.registers["%val"] == 99
+        assert unwrap(vm.current_frame.registers["%val"]) == 99
 
     def test_store_var_writes_to_heap_when_aliased(self):
         """After &x, STORE_VAR 'x' should write to the heap object."""
@@ -190,7 +191,7 @@ class TestAliasAwareLoadStore:
         load_result = _handle_load_var(load_inst, vm)
         _apply(vm, load_result)
 
-        assert vm.current_frame.registers["%val"] == 99
+        assert unwrap(vm.current_frame.registers["%val"]) == 99
 
 
 # ── Dereference via LOAD_FIELD / STORE_FIELD with "*" ─────────────
@@ -201,7 +202,7 @@ class TestPointerDereference:
         inst = _make_inst(Opcode.ADDRESS_OF, result_reg="%ptr", operands=[var_name])
         result = _handle_address_of(inst, vm)
         _apply(vm, result)
-        return vm.current_frame.registers["%ptr"]
+        return unwrap(vm.current_frame.registers["%ptr"])
 
     def test_load_field_star_reads_through_pointer(self):
         """LOAD_FIELD ptr, '*' should read from heap[ptr.base].fields[str(ptr.offset)]."""
@@ -213,7 +214,7 @@ class TestPointerDereference:
         result = _handle_load_field(inst, vm)
         _apply(vm, result)
 
-        assert vm.current_frame.registers["%val"] == 42
+        assert unwrap(vm.current_frame.registers["%val"]) == 42
 
     def test_store_field_star_writes_through_pointer(self):
         """STORE_FIELD ptr, '*', 99 should write to heap."""
@@ -246,7 +247,7 @@ class TestPointerArithmetic:
         result = _handle_binop(inst, vm)
         _apply(vm, result)
 
-        new_ptr = vm.current_frame.registers["%result"]
+        new_ptr = unwrap(vm.current_frame.registers["%result"])
         assert isinstance(new_ptr, Pointer)
         assert new_ptr.base == "mem_0"
         assert new_ptr.offset == 3
@@ -264,7 +265,7 @@ class TestPointerArithmetic:
         result = _handle_binop(inst, vm)
         _apply(vm, result)
 
-        new_ptr = vm.current_frame.registers["%result"]
+        new_ptr = unwrap(vm.current_frame.registers["%result"])
         assert isinstance(new_ptr, Pointer)
         assert new_ptr.base == "mem_0"
         assert new_ptr.offset == 4
@@ -282,7 +283,7 @@ class TestPointerArithmetic:
         result = _handle_binop(inst, vm)
         _apply(vm, result)
 
-        new_ptr = vm.current_frame.registers["%result"]
+        new_ptr = unwrap(vm.current_frame.registers["%result"])
         assert isinstance(new_ptr, Pointer)
         assert new_ptr.base == "mem_0"
         assert new_ptr.offset == 3
@@ -310,7 +311,7 @@ class TestPointerArithmetic:
         deref_result = _handle_load_field(deref_inst, vm)
         _apply(vm, deref_result)
 
-        assert vm.current_frame.registers["%val"] == 20
+        assert unwrap(vm.current_frame.registers["%val"]) == 20
 
 
 # ── Pointer subtraction and comparison ────────────────────────────
@@ -329,7 +330,7 @@ class TestPointerSubtraction:
         result = _handle_binop(inst, vm)
         _apply(vm, result)
 
-        assert vm.current_frame.registers["%diff"] == 3
+        assert unwrap(vm.current_frame.registers["%diff"]) == 3
 
     def test_pointer_minus_pointer_negative(self):
         """Lower pointer minus higher pointer should give negative difference."""
@@ -343,7 +344,7 @@ class TestPointerSubtraction:
         result = _handle_binop(inst, vm)
         _apply(vm, result)
 
-        assert vm.current_frame.registers["%diff"] == -3
+        assert unwrap(vm.current_frame.registers["%diff"]) == -3
 
 
 class TestPointerComparison:
@@ -357,7 +358,7 @@ class TestPointerComparison:
         result = _handle_binop(inst, vm)
         _apply(vm, result)
 
-        assert vm.current_frame.registers["%r"] is True
+        assert unwrap(vm.current_frame.registers["%r"]) is True
 
     def test_greater_than(self):
         """Pointer > Pointer should compare offsets."""
@@ -369,7 +370,7 @@ class TestPointerComparison:
         result = _handle_binop(inst, vm)
         _apply(vm, result)
 
-        assert vm.current_frame.registers["%r"] is True
+        assert unwrap(vm.current_frame.registers["%r"]) is True
 
     def test_less_than_or_equal(self):
         """Pointer <= Pointer with equal offsets should be True."""
@@ -381,7 +382,7 @@ class TestPointerComparison:
         result = _handle_binop(inst, vm)
         _apply(vm, result)
 
-        assert vm.current_frame.registers["%r"] is True
+        assert unwrap(vm.current_frame.registers["%r"]) is True
 
     def test_not_equal(self):
         """Pointer != Pointer with different offsets should be True."""
@@ -393,7 +394,7 @@ class TestPointerComparison:
         result = _handle_binop(inst, vm)
         _apply(vm, result)
 
-        assert vm.current_frame.registers["%r"] is True
+        assert unwrap(vm.current_frame.registers["%r"]) is True
 
 
 # ── Nested pointers ──────────────────────────────────────────────
@@ -408,19 +409,19 @@ class TestNestedPointers:
         inst1 = _make_inst(Opcode.ADDRESS_OF, result_reg="%ptr", operands=["x"])
         _apply(vm, _handle_address_of(inst1, vm))
         # Store ptr as a local variable
-        vm.current_frame.local_vars["ptr"] = vm.current_frame.registers["%ptr"]
+        vm.current_frame.local_vars["ptr"] = unwrap(vm.current_frame.registers["%ptr"])
 
         # pp = &ptr
         inst2 = _make_inst(Opcode.ADDRESS_OF, result_reg="%pp", operands=["ptr"])
         _apply(vm, _handle_address_of(inst2, vm))
-        pp = vm.current_frame.registers["%pp"]
+        pp = unwrap(vm.current_frame.registers["%pp"])
 
         # *pp should give us the Pointer to x
         deref1 = _make_inst(
             Opcode.LOAD_FIELD, result_reg="%inner", operands=["%pp", "*"]
         )
         _apply(vm, _handle_load_field(deref1, vm))
-        inner = vm.current_frame.registers["%inner"]
+        inner = unwrap(vm.current_frame.registers["%inner"])
         assert isinstance(inner, Pointer)
 
         # **pp should give us 42
@@ -428,4 +429,4 @@ class TestNestedPointers:
             Opcode.LOAD_FIELD, result_reg="%val", operands=["%inner", "*"]
         )
         _apply(vm, _handle_load_field(deref2, vm))
-        assert vm.current_frame.registers["%val"] == 42
+        assert unwrap(vm.current_frame.registers["%val"]) == 42

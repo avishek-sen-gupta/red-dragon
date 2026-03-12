@@ -14,11 +14,12 @@ import pytest
 
 from interpreter.constants import Language
 from interpreter.run import run
+from interpreter.typed_value import unwrap
 
 
 def _child_class_ref(vm, var_name: str) -> str:
     """Return the class-ref string stored in *var_name* after execution."""
-    return str(vm.call_stack[0].local_vars.get(var_name, ""))
+    return str(unwrap(vm.call_stack[0].local_vars.get(var_name, "")))
 
 
 class TestPythonParentExtraction:

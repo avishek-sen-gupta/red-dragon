@@ -4,6 +4,7 @@ import logging
 import statistics
 
 from interpreter.cfg import build_cfg
+from interpreter.typed_value import TypedValue
 from interpreter.frontends import (
     get_deterministic_frontend,
     SUPPORTED_DETERMINISTIC_LANGUAGES,
@@ -168,7 +169,8 @@ def extract_answer(vm: VMState, language: str) -> object:
         f"[{language}] expected '{name}' in frame 0 locals, "
         f"got: {sorted(frame.local_vars.keys())}"
     )
-    return frame.local_vars[name]
+    stored = frame.local_vars[name]
+    return stored.value if isinstance(stored, TypedValue) else stored
 
 
 def extract_array(
@@ -184,7 +186,8 @@ def extract_array(
         f"[{language}] expected '{name}' in frame 0 locals, "
         f"got: {sorted(frame.local_vars.keys())}"
     )
-    heap_addr = frame.local_vars[name]
+    stored = frame.local_vars[name]
+    heap_addr = stored.value if isinstance(stored, TypedValue) else stored
     assert heap_addr in vm.heap, (
         f"[{language}] expected heap address '{heap_addr}' in heap, "
         f"got: {sorted(vm.heap.keys())}"

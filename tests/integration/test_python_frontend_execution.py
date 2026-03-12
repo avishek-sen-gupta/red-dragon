@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from interpreter.constants import Language
 from interpreter.run import run
+from interpreter.typed_value import unwrap_locals
 
 
 class TestPythonFutureImportExecution:
@@ -14,7 +15,7 @@ class TestPythonFutureImportExecution:
             language=Language.PYTHON,
             max_steps=200,
         )
-        local_vars = dict(vm.call_stack[0].local_vars)
+        local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars["answer"] == 42
 
     def test_future_import_with_class(self):
@@ -26,5 +27,5 @@ y = x + 5
 answer = y
 """
         vm = run(source, language=Language.PYTHON, max_steps=200)
-        local_vars = dict(vm.call_stack[0].local_vars)
+        local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars["answer"] == 15

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from interpreter.constants import Language
 from interpreter.run import run
+from interpreter.typed_value import unwrap_locals
 
 
 def _run_scala(source: str, max_steps: int = 200):
     vm = run(source, language=Language.SCALA, max_steps=max_steps)
-    return dict(vm.call_stack[0].local_vars)
+    return unwrap_locals(vm.call_stack[0].local_vars)
 
 
 class TestScalaExportDeclarationExecution:
