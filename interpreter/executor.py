@@ -35,7 +35,7 @@ from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.type_environment import TypeEnvironment
 from interpreter.type_expr import scalar
 from interpreter.unresolved_call import UnresolvedCallResolver, SymbolicResolver
-from interpreter.typed_value import TypedValue
+from interpreter.typed_value import TypedValue, typed_from_runtime
 from interpreter.binop_coercion import BinopCoercionStrategy, DefaultBinopCoercion
 from interpreter import constants
 
@@ -119,7 +119,7 @@ def _handle_const(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
 
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: val},
+            register_writes={inst.result_reg: typed_from_runtime(val)},
             reasoning=f"const {raw!r} → {inst.result_reg}",
         )
     )
@@ -166,7 +166,7 @@ def _handle_store_var(
     val = _resolve_reg(vm, inst.operands[1])
     return ExecutionResult.success(
         StateUpdate(
-            var_writes={name: _serialize_value(val)},
+            var_writes={name: typed_from_runtime(val)},
             reasoning=f"store {name} = {val!r}",
         )
     )
