@@ -6,12 +6,13 @@ import pytest
 
 from interpreter.ir import Opcode
 from interpreter.run import run
+from interpreter.typed_value import unwrap, unwrap_locals
 
 
 def _run_program(source: str, language: str = "python", max_steps: int = 300) -> dict:
     """Run a program and return the main frame's local_vars."""
     vm = run(source, language=language, max_steps=max_steps)
-    return dict(vm.call_stack[0].local_vars)
+    return unwrap_locals(vm.call_stack[0].local_vars)
 
 
 class TestPythonClassInstantiation:
@@ -26,7 +27,7 @@ d = Dog("Rex")
 answer = 42
 """
         vm = run(source, language="python", max_steps=300)
-        vars_ = dict(vm.call_stack[0].local_vars)
+        vars_ = unwrap_locals(vm.call_stack[0].local_vars)
         assert vars_["answer"] == 42
         assert "d" in vars_
         obj_addr = vars_["d"]
@@ -88,7 +89,7 @@ Dog d = new Dog("Rex");
 int answer = 42;
 """
         vm = run(source, language="java", max_steps=300)
-        vars_ = dict(vm.call_stack[0].local_vars)
+        vars_ = unwrap_locals(vm.call_stack[0].local_vars)
         assert vars_["answer"] == 42
         # d should be a heap address, not symbolic
         assert isinstance(vars_["d"], str)
@@ -110,7 +111,7 @@ int answer = 42;
 """
         vm = run(source, language="java", max_steps=300)
         heap = vm.heap
-        obj_addr = vm.call_stack[0].local_vars["d"]
+        obj_addr = unwrap(vm.call_stack[0].local_vars["d"])
         assert obj_addr in heap
         assert heap[obj_addr].fields.get("name") == "Rex"
 
@@ -169,7 +170,7 @@ let d = new Dog("Rex");
 let answer = 42;
 """
         vm = run(source, language="javascript", max_steps=300)
-        vars_ = dict(vm.call_stack[0].local_vars)
+        vars_ = unwrap_locals(vm.call_stack[0].local_vars)
         assert vars_["answer"] == 42
         assert isinstance(vars_["d"], str)
         assert vars_["d"].startswith("obj_")

@@ -94,6 +94,10 @@ class StackFrame:
 
 
 def _serialize_value(v: Any) -> Any:
+    from interpreter.typed_value import TypedValue
+
+    if isinstance(v, TypedValue):
+        return _serialize_value(v.value)
     if isinstance(v, SymbolicValue):
         return v.to_dict()
     if isinstance(v, HeapObject):

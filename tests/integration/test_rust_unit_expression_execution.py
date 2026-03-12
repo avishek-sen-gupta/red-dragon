@@ -7,12 +7,13 @@ from __future__ import annotations
 
 from interpreter.constants import Language
 from interpreter.run import run
+from interpreter.typed_value import unwrap_locals
 
 
 def _run_rust(source: str, max_steps: int = 200):
     """Run a Rust program and return (vm, frame.local_vars)."""
     vm = run(source, language=Language.RUST, max_steps=max_steps)
-    return vm, dict(vm.call_stack[0].local_vars)
+    return vm, unwrap_locals(vm.call_stack[0].local_vars)
 
 
 class TestRustUnitExpressionExecution:

@@ -5,6 +5,7 @@ from interpreter.cfg import build_cfg
 from interpreter.registry import FunctionRegistry, build_registry
 from interpreter.run import execute_cfg_traced, VMConfig
 from interpreter.trace_types import TraceStep, ExecutionTrace
+from interpreter.typed_value import unwrap
 
 
 def _make_instructions(*specs):
@@ -142,7 +143,7 @@ class TestExecuteCfgTracedBasic:
         vm, trace = execute_cfg_traced(cfg, "entry", registry)
 
         last_step_vars = trace.steps[-1].vm_state.call_stack[0].local_vars
-        assert last_step_vars["x"] == 42
+        assert unwrap(last_step_vars["x"]) == 42
 
     def test_used_llm_is_false_for_local_execution(self):
         instructions = _make_instructions(

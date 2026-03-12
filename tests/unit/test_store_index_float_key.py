@@ -7,6 +7,8 @@ write time — so str(2) == "2" matches on both store and load.
 
 from types import MappingProxyType
 
+from interpreter.typed_value import unwrap
+
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
@@ -112,7 +114,7 @@ class TestFloatIndexHeapKeyMismatch:
             conversion_rules=rules,
         )
 
-        assert vm.current_frame.registers["%out"] == 42
+        assert unwrap(vm.current_frame.registers["%out"]) == 42
 
     def test_int_store_float_load_reads_back_stored_value(self):
         """STORE_INDEX with int 2, then LOAD_INDEX with float 2.0 — value should round-trip."""
@@ -146,7 +148,7 @@ class TestFloatIndexHeapKeyMismatch:
             conversion_rules=rules,
         )
 
-        assert vm.current_frame.registers["%out"] == 99
+        assert unwrap(vm.current_frame.registers["%out"]) == 99
 
     def test_heap_key_written_by_float_index_with_type_coercion(self):
         """After STORE_INDEX with float 2.0 and type env saying Int, heap key is '2' not '2.0'."""
@@ -166,7 +168,7 @@ class TestFloatIndexHeapKeyMismatch:
             conversion_rules=rules,
         )
 
-        arr_addr = vm.current_frame.registers["%arr"]
+        arr_addr = unwrap(vm.current_frame.registers["%arr"])
         heap_obj = vm.heap[arr_addr]
         assert "2" in heap_obj.fields, "Expected int key '2' in heap fields"
         assert (

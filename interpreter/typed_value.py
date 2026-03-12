@@ -39,6 +39,18 @@ def typed(value: Any, type_expr: TypeExpr = UNKNOWN) -> TypedValue:
     return TypedValue(value=value, type=type_expr)
 
 
+def unwrap(val: Any) -> Any:
+    """Unwrap a TypedValue to its raw value; pass-through for non-TypedValue."""
+    if isinstance(val, TypedValue):
+        return val.value
+    return val
+
+
+def unwrap_locals(local_vars: dict[str, Any]) -> dict[str, Any]:
+    """Unwrap all TypedValue entries in a local_vars dict to raw values."""
+    return {k: unwrap(v) for k, v in local_vars.items()}
+
+
 def typed_from_runtime(value: Any) -> TypedValue:
     """Wrap a raw value, inferring type from Python runtime type.
 
