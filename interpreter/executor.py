@@ -24,6 +24,7 @@ from interpreter.vm import (
     Operators,
     _serialize_value,
     _resolve_reg,
+    _resolve_binop_operand,
     _is_symbolic,
     _heap_addr,
     _parse_const,
@@ -35,10 +36,12 @@ from interpreter.type_environment import TypeEnvironment
 from interpreter.type_expr import scalar
 from interpreter.unresolved_call import UnresolvedCallResolver, SymbolicResolver
 from interpreter.typed_value import TypedValue
+from interpreter.binop_coercion import BinopCoercionStrategy, DefaultBinopCoercion
 from interpreter import constants
 
 _DEFAULT_RESOLVER = SymbolicResolver()
 _DEFAULT_OVERLOAD_RESOLVER = NullOverloadResolver()
+_DEFAULT_BINOP_COERCION = DefaultBinopCoercion()
 _EMPTY_TYPE_ENV = TypeEnvironment(
     register_types=MappingProxyType({}),
     var_types=MappingProxyType({}),
@@ -615,9 +618,14 @@ def _handle_branch_if(
 
 
 def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
+    binop_coercion = kwargs.get("binop_coercion", _DEFAULT_BINOP_COERCION)
     oper = inst.operands[0]
-    lhs = _resolve_reg(vm, inst.operands[1])
-    rhs = _resolve_reg(vm, inst.operands[2])
+    lhs_typed = _resolve_binop_operand(vm, inst.operands[1])
+    rhs_typed = _resolve_binop_operand(vm, inst.operands[2])
+
+    # Unwrap for special-case checks
+    lhs = lhs_typed.value
+    rhs = rhs_typed.value
 
     # Pointer arithmetic: Pointer +/- int or int + Pointer
     # Also handles heap address strings (array decay to pointer in C)
@@ -640,7 +648,6 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
         )
     )
     if lhs_ptr and rhs_ptr:
-        # Pointer - Pointer: offset difference (must share same base)
         if oper == "-" and lhs_ptr.base == rhs_ptr.base:
             diff = lhs_ptr.offset - rhs_ptr.offset
             return ExecutionResult.success(
@@ -649,7 +656,6 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
                     reasoning=f"pointer diff {lhs!r} - {rhs!r} = {diff}",
                 )
             )
-        # Pointer relational comparison (same base)
         if oper in ("<", ">", "<=", ">=", "==", "!=") and lhs_ptr.base == rhs_ptr.base:
             result = Operators.eval_binop(oper, lhs_ptr.offset, rhs_ptr.offset)
             return ExecutionResult.success(
@@ -675,6 +681,7 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
                 )
             )
 
+    # Symbolic short-circuit — before coercion
     if _is_symbolic(lhs) or _is_symbolic(rhs):
         lhs_desc = _symbolic_name(lhs)
         rhs_desc = _symbolic_name(rhs)
@@ -682,25 +689,28 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
         sym.constraints = [f"{lhs_desc} {oper} {rhs_desc}"]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: sym.to_dict()},
+                register_writes={inst.result_reg: sym},
                 reasoning=f"binop {lhs_desc} {oper} {rhs_desc} → symbolic {sym.name}",
             )
         )
 
-    result = Operators.eval_binop(oper, lhs, rhs)
+    # Coerce and compute
+    lhs_raw, rhs_raw = binop_coercion.coerce(oper, lhs_typed, rhs_typed)
+    result = Operators.eval_binop(oper, lhs_raw, rhs_raw)
+
     if result is Operators.UNCOMPUTABLE:
-        sym = vm.fresh_symbolic(hint=f"{lhs!r} {oper} {rhs!r}")
-        sym.constraints = [f"{lhs!r} {oper} {rhs!r}"]
+        sym = vm.fresh_symbolic(hint=f"{lhs_raw!r} {oper} {rhs_raw!r}")
+        sym.constraints = [f"{lhs_raw!r} {oper} {rhs_raw!r}"]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: sym.to_dict()},
-                reasoning=f"binop {lhs!r} {oper} {rhs!r} → uncomputable, symbolic {sym.name}",
+                register_writes={inst.result_reg: sym},
+                reasoning=f"binop {lhs_raw!r} {oper} {rhs_raw!r} → uncomputable, symbolic {sym.name}",
             )
         )
     return ExecutionResult.success(
         StateUpdate(
             register_writes={inst.result_reg: result},
-            reasoning=f"binop {lhs!r} {oper} {rhs!r} = {result!r}",
+            reasoning=f"binop {lhs_raw!r} {oper} {rhs_raw!r} = {result!r}",
         )
     )
 
@@ -1375,6 +1385,7 @@ class LocalExecutor:
         call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
         overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
         type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
+        binop_coercion: BinopCoercionStrategy = _DEFAULT_BINOP_COERCION,
     ) -> ExecutionResult:
         handler = cls.DISPATCH.get(inst.opcode)
         if not handler:
@@ -1389,6 +1400,7 @@ class LocalExecutor:
             call_resolver=call_resolver,
             overload_resolver=overload_resolver,
             type_env=type_env,
+            binop_coercion=binop_coercion,
         )
 
 
@@ -1402,6 +1414,7 @@ def _try_execute_locally(
     call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
     overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
     type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
+    binop_coercion: BinopCoercionStrategy = _DEFAULT_BINOP_COERCION,
 ) -> ExecutionResult:
     """Try to execute an instruction without the LLM.
 
@@ -1418,4 +1431,5 @@ def _try_execute_locally(
         call_resolver,
         overload_resolver=overload_resolver,
         type_env=type_env,
+        binop_coercion=binop_coercion,
     )
