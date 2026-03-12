@@ -194,3 +194,22 @@ answer = result[0] + result[1]
         vm, _stats = execute_for_language("ruby", self.PROGRAM)
         answer = extract_answer(vm, "ruby")
         assert answer == 50, f"expected 50 (20+30), got {answer}"
+
+
+class TestRubyPositionalSlice:
+    """arr[1, 2] means 'start at index 1, take 2 elements'."""
+
+    PROGRAM = """\
+arr = [10, 20, 30, 40, 50]
+result = arr[1, 2]
+answer = result[0] + result[1]
+"""
+
+    def test_positional_slice(self):
+        vm, _stats = execute_for_language("ruby", self.PROGRAM)
+        answer = extract_answer(vm, "ruby")
+        assert answer == 50, f"expected 50 (20+30), got {answer}"
+
+    def test_zero_llm_calls(self):
+        _vm, stats = execute_for_language("ruby", self.PROGRAM)
+        assert stats.llm_calls == 0
