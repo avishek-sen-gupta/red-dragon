@@ -67,8 +67,8 @@ def _parse_class_ref(val: Any) -> RefParseResult:
 class FunctionRegistry:
     # func_label → ordered list of parameter names
     func_params: dict[str, list[str]] = field(default_factory=dict)
-    # class_name → {method_name → func_label}
-    class_methods: dict[str, dict[str, str]] = field(default_factory=dict)
+    # class_name → {method_name → [func_label, ...]}  (supports overloads)
+    class_methods: dict[str, dict[str, list[str]]] = field(default_factory=dict)
     # class_name → class_body_label
     classes: dict[str, str] = field(default_factory=dict)
     # class_name → linearized parent chain (MRO, excluding self)
@@ -94,16 +94,16 @@ def _scan_func_params(cfg: CFG) -> dict[str, list[str]]:
 
 def _scan_classes(
     instructions: list[IRInstruction],
-) -> tuple[dict[str, str], dict[str, dict[str, str]], dict[str, list[str]]]:
+) -> tuple[dict[str, str], dict[str, dict[str, list[str]]], dict[str, list[str]]]:
     """Scan IR to find classes, their methods, and parent chains.
 
     Returns (classes, class_methods, class_parents) where:
     - classes: class_name → class_body_label
-    - class_methods: class_name → {method_name → func_label}
+    - class_methods: class_name → {method_name → [func_label, ...]}
     - class_parents: class_name → linearized parent chain (MRO, excluding self)
     """
     classes: dict[str, str] = {}
-    class_methods: dict[str, dict[str, str]] = {}
+    class_methods: dict[str, dict[str, list[str]]] = {}
     class_parents: dict[str, list[str]] = {}
 
     # First pass: find class constants.
@@ -141,7 +141,7 @@ def _scan_classes(
         if in_class and inst.opcode == Opcode.CONST and inst.operands:
             fr = _parse_func_ref(str(inst.operands[0]))
             if fr.matched:
-                class_methods[in_class][fr.name] = fr.label
+                class_methods[in_class].setdefault(fr.name, []).append(fr.label)
 
     return classes, class_methods, class_parents
 
