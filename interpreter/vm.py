@@ -59,13 +59,79 @@ def _coerce_value(
     return coercer(val)
 
 
+def _materialize_single_register(
+    val: Any,
+    vm: VMState,
+    reg: str,
+    type_env: TypeEnvironment,
+    conversion_rules: TypeConversionRules,
+) -> TypedValue:
+    """Deserialize, coerce, and wrap a single register value as TypedValue."""
+    deserialized = _deserialize_value(val, vm)
+    coerced = _coerce_value(deserialized, reg, type_env, conversion_rules)
+    declared_type = type_env.register_types.get(reg, UNKNOWN)
+    inferred_type = declared_type or typed_from_runtime(coerced).type
+    return typed(coerced, inferred_type)
+
+
+def _materialize_single_var(
+    val: Any,
+    vm: VMState,
+    var: str,
+    type_env: TypeEnvironment,
+) -> TypedValue:
+    """Deserialize and wrap a single variable value as TypedValue (no register coercion)."""
+    deserialized = _deserialize_value(val, vm)
+    declared_type = type_env.var_types.get(var, UNKNOWN)
+    inferred_type = declared_type or typed_from_runtime(deserialized).type
+    return typed(deserialized, inferred_type)
+
+
+def materialize_raw_update(
+    raw_update: StateUpdate,
+    vm: VMState,
+    type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
+    conversion_rules: TypeConversionRules = _IDENTITY_RULES,
+) -> StateUpdate:
+    """Transform a raw StateUpdate (from LLM) into one with TypedValue values.
+
+    Already-wrapped TypedValue entries pass through unchanged.
+    Register values get deserialized, coerced, and wrapped.
+    Variable values get deserialized and wrapped (no register coercion).
+    """
+    typed_reg_writes = {
+        reg: (
+            val
+            if isinstance(val, TypedValue)
+            else _materialize_single_register(val, vm, reg, type_env, conversion_rules)
+        )
+        for reg, val in raw_update.register_writes.items()
+    }
+    typed_var_writes = {
+        var: (
+            val
+            if isinstance(val, TypedValue)
+            else _materialize_single_var(val, vm, var, type_env)
+        )
+        for var, val in raw_update.var_writes.items()
+    }
+    return raw_update.model_copy(
+        update={"register_writes": typed_reg_writes, "var_writes": typed_var_writes}
+    )
+
+
 def apply_update(
     vm: VMState,
     update: StateUpdate,
     type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
     conversion_rules: TypeConversionRules = _IDENTITY_RULES,
 ):
-    """Mechanically apply a StateUpdate to the VM."""
+    """Mechanically apply a StateUpdate to the VM.
+
+    Expects register_writes and var_writes to contain TypedValue entries
+    (via materialize_raw_update). Falls back to runtime wrapping for
+    raw values during the transition period.
+    """
     frame = vm.current_frame
 
     # New regions
@@ -90,17 +156,21 @@ def apply_update(
     for obj in update.new_objects:
         vm.heap[obj.addr] = HeapObject(type_hint=obj.type_hint)
 
-    # Register writes — always to the CURRENT (caller's) frame
-    # Coerce values at write time based on the type environment.
+    # Register writes — lightweight coercion check for pre-materialized TypedValues
     for reg, val in update.register_writes.items():
-        deserialized = _deserialize_value(val, vm)
-        coerced = _coerce_value(deserialized, reg, type_env, conversion_rules)
-        # UNKNOWN is falsy — falls through to runtime inference when type_env has no entry
-        declared_type = type_env.register_types.get(reg, UNKNOWN)
-        inferred_type = declared_type or typed_from_runtime(coerced).type
-        frame.registers[reg] = typed(coerced, inferred_type)
+        tv = (
+            val
+            if isinstance(val, TypedValue)
+            else _materialize_single_register(val, vm, reg, type_env, conversion_rules)
+        )
+        declared = type_env.register_types.get(reg, UNKNOWN)
+        if declared and tv.type != declared:
+            coerced = _coerce_value(tv.value, reg, type_env, conversion_rules)
+            frame.registers[reg] = typed(coerced, declared)
+        else:
+            frame.registers[reg] = tv
 
-    # Heap writes
+    # Heap writes — stay raw (unchanged)
     for hw in update.heap_writes:
         if hw.obj_addr not in vm.heap:
             vm.heap[hw.obj_addr] = HeapObject()
@@ -126,21 +196,24 @@ def apply_update(
     # if call_push just fired, i.e. parameter bindings)
     target_frame = vm.current_frame
     for var, val in update.var_writes.items():
-        deserialized = _deserialize_value(val, vm)
+        tv = (
+            val
+            if isinstance(val, TypedValue)
+            else _materialize_single_var(val, vm, var, type_env)
+        )
+        raw_val = tv.value
         # Alias-aware: if variable is backed by a heap object, write there
         alias_ptr = target_frame.var_heap_aliases.get(var)
         if alias_ptr and alias_ptr.base in vm.heap:
             # Heap stays raw
-            vm.heap[alias_ptr.base].fields[str(alias_ptr.offset)] = deserialized
+            vm.heap[alias_ptr.base].fields[str(alias_ptr.offset)] = raw_val
         else:
-            declared_type = type_env.var_types.get(var, UNKNOWN)
-            inferred_type = declared_type or typed_from_runtime(deserialized).type
-            target_frame.local_vars[var] = typed(deserialized, inferred_type)
+            target_frame.local_vars[var] = tv
         if target_frame.closure_env_id and var in target_frame.captured_var_names:
             env = vm.closures.get(target_frame.closure_env_id)
             if env:
                 # Closure bindings stay raw
-                env.bindings[var] = deserialized
+                env.bindings[var] = raw_val
 
     # Call pop
     if update.call_pop and len(vm.call_stack) > 1:
