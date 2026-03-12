@@ -159,10 +159,16 @@ def _handle_call_dispatch_setup(
     new_frame.result_reg = call_result_reg
 
     # For class constructors, the result_reg was already written
-    # (the object address), so we mark it to not overwrite on return
+    # (the object address), so we mark it to not overwrite on return.
+    # Walk the full scope chain (not just call_stack[-2]) to match how
+    # _handle_call_function resolves the function name.
     if instruction.opcode == Opcode.CALL_FUNCTION:
-        stored = vm.call_stack[-2].local_vars.get(instruction.operands[0])
-        func_val = stored.value if isinstance(stored, TypedValue) else stored
+        func_val = ""
+        for f in reversed(vm.call_stack):
+            stored = f.local_vars.get(instruction.operands[0])
+            if stored is not None:
+                func_val = stored.value if isinstance(stored, TypedValue) else stored
+                break
         if func_val and _parse_class_ref(func_val).matched:
             new_frame.result_reg = None  # don't overwrite on return
 
@@ -189,9 +195,7 @@ def _handle_return_flow(
     # Return to caller — write return value to caller's result register
     caller_frame = vm.current_frame
     if return_frame.result_reg and update.return_value is not None:
-        if isinstance(update.return_value, TypedValue):
-            if update.return_value.value is not None:
-                caller_frame.registers[return_frame.result_reg] = update.return_value
+        caller_frame.registers[return_frame.result_reg] = update.return_value
 
     if return_frame.return_label and return_frame.return_label in cfg.blocks:
         new_ip = return_frame.return_ip if return_frame.return_ip is not None else 0
