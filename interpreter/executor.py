@@ -258,14 +258,14 @@ def _handle_symbolic(
             val = stored.value if isinstance(stored, TypedValue) else stored
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: _serialize_value(val)},
+                    register_writes={inst.result_reg: typed_from_runtime(val)},
                     reasoning=f"param {param_name} = {val!r} (bound by caller)",
                 )
             )
     sym = vm.fresh_symbolic(hint=hint)
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: sym.to_dict()},
+            register_writes={inst.result_reg: typed(sym, UNKNOWN)},
             reasoning=f"symbolic {sym.name} (hint={hint})",
         )
     )
