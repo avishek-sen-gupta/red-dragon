@@ -484,10 +484,13 @@ def _infer_const(
     match = _FUNC_REF_EXTRACT.search(raw)
     if match:
         func_name, func_label = match.group(1), match.group(2)
-        if func_label in ctx.func_return_types:
-            ctx.func_return_types[func_name] = ctx.func_return_types[func_label]
-        if func_label in ctx.func_param_types:
-            ctx.func_param_types[func_name] = ctx.func_param_types[func_label]
+        # Only populate flat (name-keyed) dicts for standalone functions.
+        # Class methods go into class_method_signatures instead.
+        if not ctx.current_class_name:
+            if func_label in ctx.func_return_types:
+                ctx.func_return_types[func_name] = ctx.func_return_types[func_label]
+            if func_label in ctx.func_param_types:
+                ctx.func_param_types[func_name] = ctx.func_param_types[func_label]
         if ctx.current_class_name:
             ret_type = ctx.func_return_types.get(func_label, UNKNOWN)
             ctx.class_method_types.setdefault(ctx.current_class_name, {})[
@@ -643,8 +646,17 @@ def _infer_call_function(
         func_name = str(inst.operands[0])
         if func_name in ctx.func_return_types:
             ctx.register_types[inst.result_reg] = ctx.func_return_types[func_name]
-        elif func_name in _BUILTIN_RETURN_TYPES:
-            ctx.register_types[inst.result_reg] = _BUILTIN_RETURN_TYPES[func_name]
+        else:
+            # Search class-scoped method types for static methods called by name
+            matching = [
+                methods[func_name]
+                for methods in ctx.class_method_types.values()
+                if func_name in methods
+            ]
+            if len(matching) == 1:
+                ctx.register_types[inst.result_reg] = matching[0]
+            elif func_name in _BUILTIN_RETURN_TYPES:
+                ctx.register_types[inst.result_reg] = _BUILTIN_RETURN_TYPES[func_name]
 
 
 def _infer_alloc_region(
@@ -722,7 +734,15 @@ def _infer_call_method(
                 if ret:
                     ctx.register_types[inst.result_reg] = ret
                     return
-    # Fallback: try func_return_types for unique method names
+    # Fallback: search class method types across all classes, then flat func_return_types
+    matching_types = [
+        methods[method_name]
+        for methods in ctx.class_method_types.values()
+        if method_name in methods
+    ]
+    if len(matching_types) == 1:
+        ctx.register_types[inst.result_reg] = matching_types[0]
+        return
     if method_name in ctx.func_return_types:
         ctx.register_types[inst.result_reg] = ctx.func_return_types[method_name]
         return
