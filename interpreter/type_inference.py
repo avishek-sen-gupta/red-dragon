@@ -165,6 +165,9 @@ class _InferenceContext:
     )
     register_source_var: dict[str, str] = field(default_factory=dict)
     interface_implementations: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    class_method_signatures: dict[TypeExpr, dict[str, list[FunctionSignature]]] = field(
+        default_factory=dict
+    )
     _seeded_var_names: frozenset[str] = field(default_factory=frozenset)
 
     def store_var_type(self, name: str, type_expr: TypeExpr) -> None:
@@ -378,6 +381,12 @@ def infer_types(
             for scope, var_dict in ctx.scoped_var_types.items()
         }
     )
+    frozen_method_sigs = MappingProxyType(
+        {
+            class_type: MappingProxyType(dict(methods))
+            for class_type, methods in ctx.class_method_signatures.items()
+        }
+    )
     return TypeEnvironment(
         register_types=MappingProxyType(ctx.register_types),
         var_types=MappingProxyType(flat_vars),
@@ -388,6 +397,7 @@ def infer_types(
         ),
         scoped_var_types=frozen_scoped,
         var_scope_metadata=MappingProxyType(dict(type_env_builder.var_scope_metadata)),
+        method_signatures=frozen_method_sigs,
     )
 
 
@@ -483,6 +493,17 @@ def _infer_const(
             ctx.class_method_types.setdefault(ctx.current_class_name, {})[
                 func_name
             ] = ret_type
+            # Build class-scoped method signature (supports overloads)
+            param_pairs = ctx.func_param_types.get(func_label, [])
+            sig = FunctionSignature(
+                params=tuple(param_pairs),
+                return_type=ret_type,
+            )
+            method_sigs = ctx.class_method_signatures.setdefault(
+                ctx.current_class_name, {}
+            ).setdefault(func_name, [])
+            if sig not in method_sigs:
+                method_sigs.append(sig)
         # Infer FunctionType for the register holding the function reference
         ret_type = ctx.func_return_types.get(func_label, UNKNOWN)
         if ret_type:
