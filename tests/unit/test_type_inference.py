@@ -7,6 +7,7 @@ from interpreter.conversion_result import IDENTITY_CONVERSION
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.null_type_resolver import NullTypeResolver
+from interpreter.function_kind import FunctionKind
 from interpreter.function_signature import FunctionSignature
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.type_expr import (
@@ -2494,6 +2495,8 @@ class TestMethodSignatures:
         sig = env.get_func_signature("add", class_name=calc_type)
         assert sig.return_type == "Int"
         assert len(sig.params) == 3
+        assert sig.kind is FunctionKind.INSTANCE
+        assert len(sig.callable_params) == 2  # a, b (this excluded)
 
     def test_overloaded_methods_accumulate(self):
         """Two methods with the same name should produce two signatures."""
@@ -2606,3 +2609,85 @@ class TestMethodSignatures:
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         sig = env.get_func_signature("f")
         assert sig.return_type == "Int"
+        assert sig.kind is FunctionKind.UNBOUND
+
+
+class TestFunctionKindInference:
+    """Inference should set FunctionKind based on this param and class context."""
+
+    def test_static_method_has_static_kind(self):
+        """Class method without this param → STATIC."""
+        instructions = [
+            _make_inst(Opcode.CONST, "%0", ["<class:M@class_M_0>"]),
+            _make_inst(Opcode.STORE_VAR, operands=["M", "%0"]),
+            _make_inst(Opcode.LABEL, label="class_M_0"),
+            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.SYMBOLIC, "%1", ["param:a"]),
+            _make_inst(Opcode.SYMBOLIC, "%2", ["param:b"]),
+            _make_inst(Opcode.LABEL, label="end_func_add_0"),
+            _make_inst(Opcode.CONST, "%3", ["<function:add@func_add_0>"]),
+            _make_inst(Opcode.STORE_VAR, operands=["add", "%3"]),
+            _make_inst(Opcode.LABEL, label="end_class_M_0"),
+        ]
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_add_0": scalar("Int")},
+            func_param_types={
+                "func_add_0": [("a", scalar("Int")), ("b", scalar("Int"))],
+            },
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        sig = env.get_func_signature("add", class_name=scalar("M"))
+        assert sig.kind is FunctionKind.STATIC
+        assert sig.callable_params == sig.params  # no this to exclude
+
+    def test_instance_method_has_instance_kind(self):
+        """Class method with this param → INSTANCE."""
+        instructions = [
+            _make_inst(Opcode.CONST, "%0", ["<class:Dog@class_Dog_0>"]),
+            _make_inst(Opcode.STORE_VAR, operands=["Dog", "%0"]),
+            _make_inst(Opcode.LABEL, label="class_Dog_0"),
+            _make_inst(Opcode.LABEL, label="func_bark_0"),
+            _make_inst(Opcode.SYMBOLIC, "%1", ["param:this"]),
+            _make_inst(Opcode.LABEL, label="end_func_bark_0"),
+            _make_inst(Opcode.CONST, "%2", ["<function:bark@func_bark_0>"]),
+            _make_inst(Opcode.STORE_VAR, operands=["bark", "%2"]),
+            _make_inst(Opcode.LABEL, label="end_class_Dog_0"),
+        ]
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_bark_0": scalar("String")},
+            func_param_types={
+                "func_bark_0": [("this", scalar("Dog"))],
+            },
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        sig = env.get_func_signature("bark", class_name=scalar("Dog"))
+        assert sig.kind is FunctionKind.INSTANCE
+        assert sig.callable_params == ()  # this excluded, no other params
+
+    def test_php_dollar_this_is_instance(self):
+        """PHP $this param → INSTANCE kind."""
+        instructions = [
+            _make_inst(Opcode.CONST, "%0", ["<class:User@class_User_0>"]),
+            _make_inst(Opcode.STORE_VAR, operands=["User", "%0"]),
+            _make_inst(Opcode.LABEL, label="class_User_0"),
+            _make_inst(Opcode.LABEL, label="func_greet_0"),
+            _make_inst(Opcode.SYMBOLIC, "%1", ["param:$this"]),
+            _make_inst(Opcode.SYMBOLIC, "%2", ["param:msg"]),
+            _make_inst(Opcode.LABEL, label="end_func_greet_0"),
+            _make_inst(Opcode.CONST, "%3", ["<function:greet@func_greet_0>"]),
+            _make_inst(Opcode.STORE_VAR, operands=["greet", "%3"]),
+            _make_inst(Opcode.LABEL, label="end_class_User_0"),
+        ]
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_greet_0": scalar("String")},
+            func_param_types={
+                "func_greet_0": [
+                    ("$this", scalar("User")),
+                    ("msg", scalar("String")),
+                ],
+            },
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        sig = env.get_func_signature("greet", class_name=scalar("User"))
+        assert sig.kind is FunctionKind.INSTANCE
+        assert sig.callable_params == (("msg", scalar("String")),)
