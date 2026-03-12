@@ -250,3 +250,41 @@ let answer = result[0] + result[1] + result[2];
         vm, _stats = execute_for_language("rust", self.PROGRAM)
         answer = extract_answer(vm, "rust")
         assert answer == 90, f"expected 90 (20+30+40), got {answer}"
+
+
+# ── Kotlin ────────────────────────────────────────────────────
+
+
+class TestKotlinSubList:
+    """arr.subList(1, 3) should return elements at indices 1, 2."""
+
+    PROGRAM = """\
+val arr = listOf(10, 20, 30, 40, 50)
+val result = arr.subList(1, 3)
+val answer = result[0] + result[1]
+"""
+
+    def test_sublist_produces_correct_sum(self):
+        vm, _stats = execute_for_language("kotlin", self.PROGRAM)
+        answer = extract_answer(vm, "kotlin")
+        assert answer == 50, f"expected 50 (20+30), got {answer}"
+
+    def test_zero_llm_calls(self):
+        _vm, stats = execute_for_language("kotlin", self.PROGRAM)
+        assert stats.llm_calls == 0
+
+
+class TestKotlinSubstring:
+    """str.substring(1, 3) should return substring."""
+
+    PROGRAM = """\
+val s = "hello"
+val t = s.substring(1, 3)
+val answer = 1
+"""
+
+    def test_substring(self):
+        vm, _stats = execute_for_language("kotlin", self.PROGRAM)
+        frame = vm.call_stack[0]
+        t_val = frame.local_vars.get("t")
+        assert t_val == "el", f"expected 'el', got {t_val}"
