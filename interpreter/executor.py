@@ -28,7 +28,7 @@ from interpreter.vm import (
     _parse_const,
 )
 from interpreter.registry import FunctionRegistry, _parse_func_ref, _parse_class_ref
-from interpreter.builtins import Builtins
+from interpreter.builtins import Builtins, _builtin_array_of
 from interpreter.unresolved_call import UnresolvedCallResolver, SymbolicResolver
 from interpreter import constants
 
@@ -1003,6 +1003,8 @@ def _try_user_function_call(
         for i, arg in enumerate(args)
         if i < len(params)
     }
+    # Inject 'arguments' array so rest params can slice it
+    param_vars["arguments"] = _builtin_array_of([_serialize_value(a) for a in args], vm)
 
     # Inject captured closure variables; parameter bindings take priority
     closure_env: ClosureEnvironment | None = None
@@ -1196,6 +1198,8 @@ def _handle_call_method(
     for i, arg in enumerate(args):
         if i + 1 < len(params):
             new_vars[params[i + 1]] = _serialize_value(arg)
+    # Inject 'arguments' array (explicit args only, not 'this')
+    new_vars["arguments"] = _builtin_array_of([_serialize_value(a) for a in args], vm)
 
     return ExecutionResult.success(
         StateUpdate(
