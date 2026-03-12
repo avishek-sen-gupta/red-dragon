@@ -1167,6 +1167,18 @@ def _handle_call_method(
             obj_val, args, inst, vm, cfg, registry, current_label
         )
 
+    # Method builtins: subList, substring, slice, etc.
+    method_fn = Builtins.METHOD_TABLE.get(method_name)
+    if method_fn is not None:
+        result = method_fn(obj_val, args, vm)
+        if result is not Operators.UNCOMPUTABLE:
+            return ExecutionResult.success(
+                StateUpdate(
+                    register_writes={inst.result_reg: _serialize_value(result)},
+                    reasoning=f"method builtin {method_name}({obj_val!r}, {args}) = {result!r}",
+                )
+            )
+
     addr = _heap_addr(obj_val)
     type_hint = ""
     if addr and addr in vm.heap:
