@@ -613,7 +613,7 @@ class TypeEnvironmentBuilder:
 
 All fields default to empty dicts/lists. The `var_scope_metadata` is populated by block-scope tracking (see [Block-Scope Tracking](#block-scope-tracking-llvm-style)).
 
-Its `.build()` method freezes the accumulated state into an immutable `TypeEnvironment`. Internally, it calls `_build_func_signatures()` which filters to user-facing function names only (excludes internal labels starting with `func_`).
+Its `.build()` method freezes the accumulated state into an immutable `TypeEnvironment`. Internally, it calls `_build_func_signatures()` which filters to user-facing function names only (excludes internal labels starting with `func_`). Each name maps to a `list[FunctionSignature]` to support method overloads.
 
 ---
 
@@ -640,6 +640,7 @@ class _InferenceContext:
     # Class metadata
     current_class_name:   TypeExpr                               # active class (ScalarType or UNKNOWN)
     class_method_types:   dict[TypeExpr, dict[str, TypeExpr]]    # class → {method_name → return_type}
+    class_method_signatures: dict[TypeExpr, dict[str, list[FunctionSignature]]]  # class → {method → [sigs]}
     field_types:          dict[TypeExpr, dict[str, TypeExpr]]    # class → {field_name → field_type}
 
     # Array/Tuple element tracking
@@ -719,9 +720,10 @@ while current_size > prev_size:
 
 **Step 4 — Assembly:**
 1. `flat_vars = ctx.flat_var_types()` — flatten with union merge
-2. `func_signatures = _build_func_signatures(...)` — filter to user-facing names
-3. Freeze `scoped_var_types` into nested `MappingProxyType`
-4. Construct and return `TypeEnvironment` with all fields wrapped in `MappingProxyType`
+2. `func_signatures = _build_func_signatures(...)` — filter to user-facing standalone function names (class methods excluded)
+3. Freeze `class_method_signatures` into nested `MappingProxyType` keyed by class `TypeExpr`
+4. Freeze `scoped_var_types` into nested `MappingProxyType`
+5. Construct and return `TypeEnvironment` with all fields wrapped in `MappingProxyType`
 
 ### Fixpoint Algorithm
 
@@ -885,12 +887,14 @@ After the fixpoint loop converges, two promotion passes upgrade bare container t
 
 ### Function Signature Assembly
 
-`_build_func_signatures(func_return_types, func_param_types)` builds the public-facing function signature map:
+`_build_func_signatures(func_return_types, func_param_types)` builds the public-facing function signature map for **standalone functions only** (class methods are in `method_signatures`):
 
 1. Collect all names from both `func_return_types` and `func_param_types`
 2. **Filter**: Exclude names starting with `func_` (internal labels like `func_add_0`)
 3. Only user-facing names that came through a `<function:name@label>` CONST mapping are included
-4. Build `FunctionSignature(params=tuple(...), return_type=...)` for each
+4. Build `FunctionSignature(params=tuple(...), return_type=...)` for each, wrapped in a `list` to support overloads
+
+Class methods are assembled separately from `class_method_signatures`, keyed by class `TypeExpr` (e.g. `ScalarType("Dog")`). This prevents cross-class name collisions (e.g. `Dog.speak` vs `Cat.speak`).
 
 ### Type Alias Resolution
 
@@ -939,22 +943,26 @@ The inference pass produces a frozen `TypeEnvironment` (`interpreter/type_enviro
 class TypeEnvironment:
     register_types:            MappingProxyType[str, TypeExpr]
     var_types:                 MappingProxyType[str, TypeExpr]
-    func_signatures:           MappingProxyType[str, FunctionSignature]
+    func_signatures:           MappingProxyType[str, list[FunctionSignature]]
     type_aliases:              MappingProxyType[str, TypeExpr]               = MappingProxyType({})
     interface_implementations: MappingProxyType[str, tuple[str, ...]]        = MappingProxyType({})
     scoped_var_types:          MappingProxyType[str, MappingProxyType[str, TypeExpr]] = MappingProxyType({})
     var_scope_metadata:        MappingProxyType[str, VarScopeInfo]           = MappingProxyType({})
+    method_signatures:         MappingProxyType[TypeExpr, MappingProxyType[str, list[FunctionSignature]]] = MappingProxyType({})
 ```
 
 | Field | Contents |
 |---|---|
 | `register_types` | `"%0" → ScalarType("Int")`, `"%4" → ParameterizedType("Array", (ScalarType("Int"),))` |
 | `var_types` | `"x" → ScalarType("Int")`, `"items" → ParameterizedType("Array", ...)` — flattened across scopes with union merge |
-| `func_signatures` | `"add" → FunctionSignature(params=(("a", ScalarType("Int")), ...), return_type=ScalarType("Int"))` — user-facing names only |
+| `func_signatures` | `"add" → [FunctionSignature(params=..., return_type=...)]` — standalone functions only, list supports overloads |
+| `method_signatures` | `ScalarType("Dog") → {"getAge" → [FunctionSignature(...)]}` — class-scoped, keyed by TypeExpr |
 | `type_aliases` | `"UserId" → ScalarType("Int")` — full alias registry |
 | `interface_implementations` | `"Dog" → ("Comparable", "Serializable")` — frozen tuples |
 | `scoped_var_types` | `"func_add_0" → {"x": ScalarType("Int")}` — per-function scoped types (not flattened) |
 | `var_scope_metadata` | `"x$1" → VarScopeInfo(original_name="x", scope_depth=1)` — mangled name metadata |
+
+**Accessor:** `env.get_func_signature(name, index=0, class_name=UNKNOWN)` returns the signature at overload `index` for a standalone function (when `class_name` is `UNKNOWN`) or a class method (when `class_name` is provided). Returns `_NULL_SIGNATURE` (with `UNKNOWN` return type) if not found.
 
 `FunctionSignature` (`interpreter/function_signature.py`) is a frozen dataclass:
 ```python
