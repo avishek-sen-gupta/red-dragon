@@ -532,3 +532,102 @@ int main() {
         assert (
             len(star_fields) >= 1
         ), "Expected LOAD_FIELD with '*' for non-this dereference"
+
+
+class TestCppFieldInitB2:
+    """B2 field initializer pattern: STORE_FIELD in __init__, not CLASS block."""
+
+    def test_synthetic_init_generated(self):
+        """Class with field initializer but no constructor gets synthetic __init__."""
+        ir = _parse_cpp("""\
+class Foo {
+public:
+    int x = 42;
+};
+""")
+        func_consts = [
+            inst
+            for inst in _find_all(ir, Opcode.CONST)
+            if inst.operands
+            and isinstance(inst.operands[0], str)
+            and "__init__" in inst.operands[0]
+        ]
+        assert len(func_consts) == 1, f"Expected synthetic __init__, got {func_consts}"
+
+    def test_field_init_in_constructor_not_class_block(self):
+        """Field init STORE_FIELD should be inside __init__, not before it."""
+        ir = _parse_cpp("""\
+class Foo {
+public:
+    int x = 42;
+};
+""")
+        # Find the __init__ label
+        labels = _find_all(ir, Opcode.LABEL)
+        init_labels = [l for l in labels if "init" in (l.label or "")]
+        assert len(init_labels) >= 1, "Expected __init__ label"
+
+        # STORE_FIELD for 'x' should exist inside the __init__ function
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        x_stores = [sf for sf in store_fields if "x" in sf.operands]
+        assert len(x_stores) >= 1, "Expected STORE_FIELD for 'x'"
+
+    def test_no_store_field_in_class_block(self):
+        """Field inits with values should NOT emit STORE_FIELD in the CLASS block."""
+        ir = _parse_cpp("""\
+class Foo {
+public:
+    int x = 42;
+};
+""")
+        # Find class label and __init__ label positions
+        init_start = next(
+            (
+                i
+                for i, inst in enumerate(ir)
+                if inst.opcode == Opcode.LABEL and "init" in (inst.label or "")
+            ),
+            None,
+        )
+        assert init_start is not None
+        # All STORE_FIELD for 'x' should be after __init__ label
+        for i, inst in enumerate(ir):
+            if inst.opcode == Opcode.STORE_FIELD and "x" in inst.operands:
+                assert (
+                    i > init_start
+                ), f"STORE_FIELD for 'x' at position {i} is before __init__ at {init_start}"
+
+    def test_explicit_constructor_gets_field_inits(self):
+        """Explicit constructor should have field inits prepended and be named __init__."""
+        ir = _parse_cpp("""\
+class Bar {
+public:
+    int y = 10;
+    Bar() {}
+};
+""")
+        func_consts = [
+            inst
+            for inst in _find_all(ir, Opcode.CONST)
+            if inst.operands
+            and isinstance(inst.operands[0], str)
+            and "__init__" in inst.operands[0]
+        ]
+        assert (
+            len(func_consts) == 1
+        ), f"Expected __init__ from explicit constructor, got {func_consts}"
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        y_stores = [sf for sf in store_fields if "y" in sf.operands]
+        assert len(y_stores) >= 1, "Expected STORE_FIELD for 'y' in constructor"
+
+    def test_fields_without_init_still_lowered(self):
+        """Fields without initializers should still emit STORE_FIELD (with default 0)."""
+        ir = _parse_cpp("""\
+class Baz {
+public:
+    int a;
+};
+""")
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        a_stores = [sf for sf in store_fields if "a" in sf.operands]
+        assert len(a_stores) >= 1, "Expected STORE_FIELD for field 'a' with default"

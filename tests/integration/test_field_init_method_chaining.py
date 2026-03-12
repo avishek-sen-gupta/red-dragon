@@ -97,6 +97,23 @@ val counter = new Counter()
 val result = counter.increment().increment()
 val answer = result.get_value()
 """,
+    "cpp": """\
+class Counter {
+public:
+    int count = 0;
+    Counter increment() {
+        this->count = this->count + 1;
+        return *this;
+    }
+    int get_value() {
+        return this->count;
+    }
+};
+
+Counter counter;
+Counter result = counter.increment().increment();
+int answer = result.get_value();
+""",
 }
 
 EXPECTED_ANSWER = 2

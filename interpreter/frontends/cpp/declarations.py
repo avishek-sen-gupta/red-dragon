@@ -19,7 +19,12 @@ from interpreter.frontends.type_extraction import (
 )
 from interpreter.frontends.cpp.node_types import CppNodeType
 from interpreter.type_expr import ScalarType
-from interpreter.frontends.common.declarations import make_class_ref
+from interpreter.frontends.common.declarations import (
+    FieldInit,
+    emit_field_initializers,
+    emit_synthetic_init,
+    make_class_ref,
+)
 
 
 def lower_cpp_declaration(ctx: TreeSitterEmitContext, node) -> None:
@@ -108,6 +113,103 @@ def _extract_cpp_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
     ]
 
 
+def _collect_cpp_field_init(ctx: TreeSitterEmitContext, node) -> list[FieldInit]:
+    """Collect (field_name, value_node) from a C++ field_declaration.
+
+    Returns a list with at most one element.  The value_node is the
+    ``default_value`` field (e.g. the ``0`` in ``int count = 0;``).
+    Field declarations without a default_value are skipped.
+    """
+    name_node = node.child_by_field_name("declarator")
+    value_node = node.child_by_field_name("default_value")
+    if name_node and value_node:
+        return [(ctx.node_text(name_node), value_node)]
+    return []
+
+
+def _is_cpp_constructor(ctx: TreeSitterEmitContext, child, class_name: str) -> bool:
+    """Return True if *child* is a constructor (method named same as class)."""
+    if child.type != CppNodeType.FUNCTION_DEFINITION:
+        return False
+    decl = child.child_by_field_name("declarator")
+    if decl is None:
+        return False
+    if decl.type == CppNodeType.FUNCTION_DECLARATOR:
+        name_node = decl.child_by_field_name("declarator")
+        return name_node is not None and ctx.node_text(name_node) == class_name
+    func_decl = _find_function_declarator(decl)
+    if func_decl:
+        name_node = func_decl.child_by_field_name("declarator")
+        return name_node is not None and ctx.node_text(name_node) == class_name
+    return False
+
+
+def _lower_cpp_constructor_with_field_inits(
+    ctx: TreeSitterEmitContext, node, field_inits: list[FieldInit] = []
+) -> None:
+    """Lower an explicit C++ constructor, prepending field initializers.
+
+    Emits as ``__init__`` so the VM constructor mechanism can find it.
+    """
+    declarator_node = node.child_by_field_name("declarator")
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
+    init_list_node = next(
+        (c for c in node.children if c.type == CppNodeType.FIELD_INITIALIZER_LIST),
+        None,
+    )
+
+    params_node = None
+    if declarator_node:
+        if declarator_node.type == CppNodeType.FUNCTION_DECLARATOR:
+            params_node = declarator_node.child_by_field_name(
+                ctx.constants.func_params_field
+            )
+        else:
+            func_decl = _find_function_declarator(declarator_node)
+            if func_decl:
+                params_node = func_decl.child_by_field_name(
+                    ctx.constants.func_params_field
+                )
+
+    func_name = "__init__"
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+    end_label = ctx.fresh_label(f"end_{func_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
+    ctx.emit(Opcode.LABEL, label=func_label)
+
+    _emit_this_param(ctx)
+
+    if params_node:
+        lower_c_params(ctx, params_node)
+
+    # Prepend field initializers before body
+    emit_field_initializers(ctx, field_inits)
+
+    if init_list_node:
+        lower_field_initializer_list(ctx, init_list_node)
+
+    if body_node:
+        ctx.lower_block(body_node)
+
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
+    )
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=func_reg,
+        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+
 def lower_class_specifier(ctx: TreeSitterEmitContext, node) -> None:
     """Lower class_specifier (C++ class with field_declaration_list body)."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
@@ -120,8 +222,27 @@ def lower_class_specifier(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=class_label)
+
+    # Collect field initializers from field_declaration nodes
+    field_inits: list[FieldInit] = []
     if body_node:
-        lower_cpp_class_body(ctx, body_node)
+        field_inits = [
+            init
+            for child in body_node.children
+            if child.type == CppNodeType.FIELD_DECLARATION
+            for init in _collect_cpp_field_init(ctx, child)
+        ]
+
+    has_constructor = body_node is not None and any(
+        _is_cpp_constructor(ctx, child, class_name) for child in body_node.children
+    )
+
+    if body_node:
+        _lower_cpp_class_body_b2(ctx, body_node, class_name, field_inits)
+
+    if not has_constructor and field_inits:
+        emit_synthetic_init(ctx, field_inits)
+
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
@@ -131,6 +252,49 @@ def lower_class_specifier(ctx: TreeSitterEmitContext, node) -> None:
         operands=[make_class_ref(class_name, class_label, parents)],
     )
     ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+
+
+def _lower_cpp_class_body_b2(
+    ctx: TreeSitterEmitContext,
+    node,
+    class_name: str,
+    field_inits: list[FieldInit],
+) -> None:
+    """Lower class body with B2 field-init routing.
+
+    Field declarations with initializers are skipped (handled via
+    constructor prepending or synthetic ``__init__``).  Constructors
+    are routed through ``_lower_cpp_constructor_with_field_inits``.
+    """
+    from interpreter.frontends.cpp.control_flow import lower_template_decl
+
+    saved_class = ctx._current_class_name
+    ctx._current_class_name = class_name
+
+    for child in node.children:
+        if child.type == CppNodeType.FUNCTION_DEFINITION:
+            if _is_cpp_constructor(ctx, child, class_name):
+                _lower_cpp_constructor_with_field_inits(ctx, child, field_inits)
+            else:
+                lower_cpp_method(ctx, child)
+        elif child.type == CppNodeType.DECLARATION:
+            lower_declaration(ctx, child)
+        elif child.type == CppNodeType.FIELD_DECLARATION:
+            if _collect_cpp_field_init(ctx, child):
+                continue  # Instance field with init — handled via constructor
+            lower_struct_field(ctx, child)
+        elif child.type == CppNodeType.TEMPLATE_DECLARATION:
+            lower_template_decl(ctx, child)
+        elif child.type == CppNodeType.FRIEND_DECLARATION:
+            continue
+        elif child.type == CppNodeType.ACCESS_SPECIFIER:
+            continue
+        elif child.type == CppNodeType.FIELD_INITIALIZER_LIST:
+            lower_field_initializer_list(ctx, child)
+        elif child.is_named and child.type not in ("{", "}"):
+            ctx.lower_stmt(child)
+
+    ctx._current_class_name = saved_class
 
 
 def lower_cpp_class_body(ctx: TreeSitterEmitContext, node) -> None:
@@ -366,8 +530,27 @@ def lower_cpp_struct_def(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=class_label)
+
+    # Collect field initializers
+    field_inits: list[FieldInit] = []
     if body_node:
-        lower_cpp_class_body(ctx, body_node)
+        field_inits = [
+            init
+            for child in body_node.children
+            if child.type == CppNodeType.FIELD_DECLARATION
+            for init in _collect_cpp_field_init(ctx, child)
+        ]
+
+    has_constructor = body_node is not None and any(
+        _is_cpp_constructor(ctx, child, struct_name) for child in body_node.children
+    )
+
+    if body_node:
+        _lower_cpp_class_body_b2(ctx, body_node, struct_name, field_inits)
+
+    if not has_constructor and field_inits:
+        emit_synthetic_init(ctx, field_inits)
+
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
