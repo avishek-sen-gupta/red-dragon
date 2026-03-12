@@ -495,11 +495,13 @@ def lower_macro_invocation(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_index_expr(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower index_expression: arr[idx] -> LOAD_INDEX."""
+    """Lower index_expression: arr[idx] -> LOAD_INDEX, arr[1..3] -> slice."""
     children = [c for c in node.children if c.is_named]
     if len(children) < 2:
         return lower_const_literal(ctx, node)
     obj_reg = ctx.lower_expr(children[0])
+    if children[1].type == RustNodeType.RANGE_EXPRESSION:
+        return _lower_range_slice(ctx, children[1], obj_reg)
     idx_reg = ctx.lower_expr(children[1])
     reg = ctx.fresh_reg()
     ctx.emit(
@@ -508,6 +510,52 @@ def lower_index_expr(ctx: TreeSitterEmitContext, node) -> str:
         operands=[obj_reg, idx_reg],
         node=node,
     )
+    return reg
+
+
+def _lower_range_slice(
+    ctx: TreeSitterEmitContext, range_node, collection_reg: str
+) -> str:
+    """Lower arr[start..end] as CALL_FUNCTION('slice', collection, start, end).
+
+    Rust's `..` is exclusive (like Python's slice), `..=` is inclusive.
+    """
+    named = [c for c in range_node.children if c.is_named]
+    start_reg = (
+        ctx.lower_expr(named[0]) if len(named) > 0 else _make_rust_const(ctx, "0")
+    )
+    end_reg = (
+        ctx.lower_expr(named[1])
+        if len(named) > 1
+        else _make_rust_const(ctx, ctx.constants.none_literal)
+    )
+    # ..= is inclusive → need end+1
+    is_inclusive = any(c.type == "..=" for c in range_node.children)
+    if is_inclusive and len(named) > 1:
+        one_reg = _make_rust_const(ctx, "1")
+        adjusted = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.BINOP,
+            result_reg=adjusted,
+            operands=["+", end_reg, one_reg],
+            node=range_node,
+        )
+        end_reg = adjusted
+    none_reg = _make_rust_const(ctx, ctx.constants.none_literal)
+    reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_FUNCTION,
+        result_reg=reg,
+        operands=["slice", collection_reg, start_reg, end_reg, none_reg],
+        node=range_node,
+    )
+    return reg
+
+
+def _make_rust_const(ctx: TreeSitterEmitContext, value: str) -> str:
+    """Emit a CONST and return the register."""
+    reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=reg, operands=[value])
     return reg
 
 

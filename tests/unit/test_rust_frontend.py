@@ -941,3 +941,20 @@ class TestRustMutPattern:
         ir = _parse_rust("let mut x = 42;")
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
+
+
+class TestRustRangeSlice:
+    def test_range_slice_emits_call_function(self):
+        """arr[1..3] should emit CALL_FUNCTION('slice')."""
+        ir = _parse_rust("fn main() { let arr = [10, 20, 30, 40]; let r = arr[1..3]; }")
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        slice_calls = [c for c in calls if "slice" in c.operands]
+        assert (
+            len(slice_calls) == 1
+        ), f"expected 1 slice call, got {[c.operands for c in calls]}"
+
+    def test_simple_index_still_uses_load_index(self):
+        """arr[0] should still use LOAD_INDEX."""
+        ir = _parse_rust("fn main() { let arr = [1, 2]; let x = arr[0]; }")
+        opcodes = _opcodes(ir)
+        assert Opcode.LOAD_INDEX in opcodes
