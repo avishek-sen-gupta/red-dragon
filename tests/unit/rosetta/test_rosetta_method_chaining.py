@@ -332,7 +332,7 @@ class TestMethodChainingCrossLanguage:
 # ---------------------------------------------------------------------------
 
 # Languages where return-this chaining produces symbolic results (known P1 gaps)
-_CHAINING_SYMBOLIC_LANGUAGES: frozenset[str] = frozenset({"cpp", "lua", "scala"})
+_CHAINING_SYMBOLIC_LANGUAGES: frozenset[str] = frozenset({"lua", "scala"})
 METHOD_CHAINING_EXECUTABLE_LANGUAGES: frozenset[str] = (
     STANDARD_EXECUTABLE_LANGUAGES - _CHAINING_SYMBOLIC_LANGUAGES
 )
