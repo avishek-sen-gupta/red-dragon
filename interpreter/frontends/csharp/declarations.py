@@ -11,7 +11,12 @@ from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
 from interpreter.frontends.type_extraction import (
     extract_normalized_type,
 )
-from interpreter.frontends.common.declarations import make_class_ref
+from interpreter.frontends.common.declarations import (
+    FieldInit,
+    emit_field_initializers,
+    emit_synthetic_init,
+    make_class_ref,
+)
 from interpreter.type_expr import ScalarType
 
 
@@ -139,7 +144,9 @@ def lower_method_decl(
     ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
 
 
-def lower_constructor_decl(ctx: TreeSitterEmitContext, node) -> None:
+def lower_constructor_decl(
+    ctx: TreeSitterEmitContext, node, field_inits: list[FieldInit] = []
+) -> None:
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
@@ -152,6 +159,9 @@ def lower_constructor_decl(ctx: TreeSitterEmitContext, node) -> None:
 
     if params_node:
         lower_csharp_params(ctx, params_node)
+
+    # Prepend field initializers before the constructor body
+    emit_field_initializers(ctx, field_inits)
 
     if body_node:
         ctx.lower_block(body_node)
@@ -248,9 +258,56 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
 
     saved_class = ctx._current_class_name
     ctx._current_class_name = class_name
+
+    # Collect field initializers from non-static field declarations
+    field_inits: list[FieldInit] = [
+        init
+        for child in deferred
+        if child.type == NT.FIELD_DECLARATION and not _has_static_modifier(ctx, child)
+        for init in _collect_csharp_field_inits(ctx, child)
+    ]
+    has_constructor = any(
+        child.type == NT.CONSTRUCTOR_DECLARATION for child in deferred
+    )
+
     for child in deferred:
-        _lower_deferred_class_child(ctx, child)
+        if child.type == NT.FIELD_DECLARATION and not _has_static_modifier(ctx, child):
+            continue  # Instance field — already collected for __init__
+        elif child.type == NT.CONSTRUCTOR_DECLARATION:
+            lower_constructor_decl(ctx, child, field_inits=field_inits)
+        else:
+            _lower_deferred_class_child(ctx, child)
+
+    if not has_constructor and field_inits:
+        emit_synthetic_init(ctx, field_inits)
+
     ctx._current_class_name = saved_class
+
+
+def _collect_csharp_field_inits(ctx: TreeSitterEmitContext, node) -> list[FieldInit]:
+    """Collect (field_name, value_node) pairs from a C# field_declaration.
+
+    Does NOT emit any IR — callers pass the result to
+    ``emit_field_initializers`` or ``emit_synthetic_init``.
+    """
+    inits: list[FieldInit] = []
+    for child in node.children:
+        if child.type == NT.VARIABLE_DECLARATION:
+            for decl in child.children:
+                if decl.type == NT.VARIABLE_DECLARATOR:
+                    name_node = None
+                    value_node = None
+                    found_equals = False
+                    for sub in decl.children:
+                        if sub.type == NT.IDENTIFIER and name_node is None:
+                            name_node = sub
+                        elif sub.type == NT.EQUALS_SIGN or ctx.node_text(sub) == "=":
+                            found_equals = True
+                        elif found_equals and sub.is_named and value_node is None:
+                            value_node = sub
+                    if name_node and value_node:
+                        inits.append((ctx.node_text(name_node), value_node))
+    return inits
 
 
 def lower_field_decl(ctx: TreeSitterEmitContext, node) -> None:

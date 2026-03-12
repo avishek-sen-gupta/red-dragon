@@ -11,7 +11,12 @@ from interpreter.frontends.type_extraction import (
     extract_normalized_type,
 )
 from interpreter.frontends.java.node_types import JavaNodeType
-from interpreter.frontends.common.declarations import make_class_ref
+from interpreter.frontends.common.declarations import (
+    FieldInit,
+    emit_field_initializers,
+    emit_synthetic_init,
+    make_class_ref,
+)
 from interpreter.type_expr import ScalarType
 
 
@@ -241,8 +246,32 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
 
     saved_class = ctx._current_class_name
     ctx._current_class_name = class_name
+
+    # Collect field initializers from non-static field declarations
+    field_inits: list[FieldInit] = [
+        init
+        for child in deferred
+        if child.type == JavaNodeType.FIELD_DECLARATION
+        and not _has_static_modifier(child)
+        for init in _collect_field_inits(ctx, child)
+    ]
+    has_constructor = any(
+        child.type == JavaNodeType.CONSTRUCTOR_DECLARATION for child in deferred
+    )
+
     for child in deferred:
-        _lower_deferred_class_child(ctx, child)
+        if child.type == JavaNodeType.FIELD_DECLARATION and not _has_static_modifier(
+            child
+        ):
+            continue  # Instance field — already collected for __init__
+        elif child.type == JavaNodeType.CONSTRUCTOR_DECLARATION:
+            _lower_constructor_decl(ctx, child, field_inits=field_inits)
+        else:
+            _lower_deferred_class_child(ctx, child)
+
+    if not has_constructor and field_inits:
+        emit_synthetic_init(ctx, field_inits)
+
     ctx._current_class_name = saved_class
 
 
@@ -272,12 +301,37 @@ def lower_record_decl(ctx: TreeSitterEmitContext, node) -> None:
 
     saved_class = ctx._current_class_name
     ctx._current_class_name = record_name
+
+    field_inits_rec: list[FieldInit] = [
+        init
+        for child in deferred
+        if child.type == JavaNodeType.FIELD_DECLARATION
+        and not _has_static_modifier(child)
+        for init in _collect_field_inits(ctx, child)
+    ]
+    has_constructor = any(
+        child.type == JavaNodeType.CONSTRUCTOR_DECLARATION for child in deferred
+    )
+
     for child in deferred:
-        _lower_deferred_class_child(ctx, child)
+        if child.type == JavaNodeType.FIELD_DECLARATION and not _has_static_modifier(
+            child
+        ):
+            continue
+        elif child.type == JavaNodeType.CONSTRUCTOR_DECLARATION:
+            _lower_constructor_decl(ctx, child, field_inits=field_inits_rec)
+        else:
+            _lower_deferred_class_child(ctx, child)
+
+    if not has_constructor and field_inits_rec:
+        emit_synthetic_init(ctx, field_inits_rec)
+
     ctx._current_class_name = saved_class
 
 
-def _lower_constructor_decl(ctx: TreeSitterEmitContext, node) -> None:
+def _lower_constructor_decl(
+    ctx: TreeSitterEmitContext, node, field_inits: list[FieldInit] = []
+) -> None:
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
@@ -290,6 +344,9 @@ def _lower_constructor_decl(ctx: TreeSitterEmitContext, node) -> None:
 
     if params_node:
         lower_java_params(ctx, params_node)
+
+    # Prepend field initializers before the constructor body
+    emit_field_initializers(ctx, field_inits)
 
     if body_node:
         ctx.lower_block(body_node)
@@ -313,19 +370,28 @@ def _lower_constructor_decl(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def _lower_field_decl(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower a (static) field declaration as STORE_VAR — used for static fields."""
+    lower_local_var_decl(ctx, node)
+
+
+def _collect_field_inits(ctx: TreeSitterEmitContext, node) -> list[FieldInit]:
+    """Collect (field_name, value_node) pairs from a field_declaration.
+
+    Does NOT emit any IR — callers must pass the result to
+    ``emit_field_initializers`` or ``emit_synthetic_init``.
+    Also seeds var types for type inference.
+    """
     type_hint = extract_normalized_type(ctx, node, "type", ctx.type_map)
+    inits: list[FieldInit] = []
     for child in node.children:
         if child.type == JavaNodeType.VARIABLE_DECLARATOR:
             name_node = child.child_by_field_name("name")
             value_node = child.child_by_field_name("value")
             if name_node and value_node:
-                val_reg = ctx.lower_expr(value_node)
-                ctx.emit(
-                    Opcode.STORE_VAR,
-                    operands=[ctx.node_text(name_node), val_reg],
-                    node=node,
-                )
-                ctx.seed_var_type(ctx.node_text(name_node), type_hint)
+                field_name = ctx.node_text(name_node)
+                ctx.seed_var_type(field_name, type_hint)
+                inits.append((field_name, value_node))
+    return inits
 
 
 def _lower_static_initializer(ctx: TreeSitterEmitContext, node) -> None:
