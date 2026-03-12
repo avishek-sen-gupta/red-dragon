@@ -5,6 +5,7 @@ Hand-crafted IR that allocates a region, writes bytes, reads them back.
 
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.vm import VMState, apply_update
+from interpreter.typed_value import unwrap
 from interpreter.vm_types import StackFrame, SymbolicValue
 from interpreter.executor import LocalExecutor
 from interpreter.cfg import CFG
@@ -47,7 +48,7 @@ class TestAllocRegion:
         )
         _execute(vm, inst)
 
-        addr = vm.current_frame.registers["%r0"]
+        addr = unwrap(vm.current_frame.registers["%r0"])
         assert addr.startswith("rgn_")
         assert addr in vm.regions
         assert len(vm.regions[addr]) == 16
@@ -63,7 +64,7 @@ class TestAllocRegion:
         )
         _execute(vm, inst)
 
-        val = vm.current_frame.registers["%r0"]
+        val = unwrap(vm.current_frame.registers["%r0"])
         assert isinstance(val, SymbolicValue)
 
 
@@ -102,7 +103,7 @@ class TestWriteAndLoadRegion:
             ),
         )
 
-        assert vm.current_frame.registers["%result"] == [0xDE, 0xAD, 0xBE, 0xEF]
+        assert unwrap(vm.current_frame.registers["%result"]) == [0xDE, 0xAD, 0xBE, 0xEF]
 
     def test_read_partial_region(self):
         vm = _make_vm()
@@ -136,7 +137,7 @@ class TestWriteAndLoadRegion:
                 operands=["%rgn", "%off0", 4],
             ),
         )
-        assert vm.current_frame.registers["%first4"] == [1, 2, 3, 4]
+        assert unwrap(vm.current_frame.registers["%first4"]) == [1, 2, 3, 4]
 
         # Read last 4 bytes
         vm.current_frame.registers["%off4"] = 4
@@ -148,7 +149,7 @@ class TestWriteAndLoadRegion:
                 operands=["%rgn", "%off4", 4],
             ),
         )
-        assert vm.current_frame.registers["%last4"] == [5, 6, 7, 8]
+        assert unwrap(vm.current_frame.registers["%last4"]) == [5, 6, 7, 8]
 
     def test_load_unknown_region_returns_symbolic(self):
         vm = _make_vm()
@@ -164,7 +165,7 @@ class TestWriteAndLoadRegion:
             ),
         )
 
-        val = vm.current_frame.registers["%result"]
+        val = unwrap(vm.current_frame.registers["%result"])
         assert isinstance(val, SymbolicValue)
 
     def test_correct_bytearray_size(self):
@@ -178,7 +179,7 @@ class TestWriteAndLoadRegion:
             ),
         )
 
-        addr = vm.current_frame.registers["%rgn"]
+        addr = unwrap(vm.current_frame.registers["%rgn"])
         assert len(vm.regions[addr]) == 100
 
     def test_overwrite_partial(self):
@@ -227,4 +228,4 @@ class TestWriteAndLoadRegion:
         )
 
         expected = [0xAA, 0xAA, 0xBB, 0xCC, 0xAA, 0xAA, 0xAA, 0xAA]
-        assert vm.current_frame.registers["%result"] == expected
+        assert unwrap(vm.current_frame.registers["%result"]) == expected

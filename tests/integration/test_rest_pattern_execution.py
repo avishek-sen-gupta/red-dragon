@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.typed_value import unwrap
 from tests.unit.rosetta.conftest import (
     execute_for_language,
     extract_answer,
@@ -92,7 +93,7 @@ let answer = a;
     def test_rest_contains_remaining_fields(self):
         vm, _stats = execute_for_language("javascript", self.PROGRAM)
         frame = vm.call_stack[0]
-        rest_addr = frame.local_vars["rest"]
+        rest_addr = unwrap(frame.local_vars["rest"])
         rest_obj = vm.heap[rest_addr]
         assert (
             rest_obj.fields["b"] == 2
@@ -120,7 +121,7 @@ let answer = 1;
 
     def test_rest_is_array(self):
         vm, _stats = execute_for_language("javascript", self.PROGRAM)
-        result = vm.call_stack[0].local_vars.get("result")
+        result = unwrap(vm.call_stack[0].local_vars.get("result"))
         assert result in vm.heap, f"expected heap address, got {result}"
         heap_obj = vm.heap[result]
         assert heap_obj.fields["0"] == 2, f"expected rest[0]=2, got {heap_obj.fields}"

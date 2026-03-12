@@ -23,6 +23,7 @@ from interpreter.resolution_strategy import ArityThenTypeStrategy
 from interpreter.type_compatibility import DefaultTypeCompatibility
 from interpreter.ambiguity_handler import FallbackFirstWithWarning
 from interpreter.type_environment import TypeEnvironment
+from interpreter.typed_value import TypedValue
 from interpreter.type_inference import infer_types
 from interpreter.type_resolver import TypeResolver
 from interpreter.unresolved_call import (
@@ -147,7 +148,8 @@ def _handle_call_dispatch_setup(
     # For class constructors, the result_reg was already written
     # (the object address), so we mark it to not overwrite on return
     if instruction.opcode == Opcode.CALL_FUNCTION:
-        func_val = vm.call_stack[-2].local_vars.get(instruction.operands[0])
+        stored = vm.call_stack[-2].local_vars.get(instruction.operands[0])
+        func_val = stored.value if isinstance(stored, TypedValue) else stored
         if func_val and _parse_class_ref(func_val).matched:
             new_frame.result_reg = None  # don't overwrite on return
 

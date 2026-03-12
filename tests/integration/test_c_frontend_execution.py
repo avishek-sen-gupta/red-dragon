@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from interpreter.constants import Language
 from interpreter.run import run
+from interpreter.typed_value import unwrap_locals
 
 
 class TestCLinkageSpecificationExecution:
@@ -14,7 +15,7 @@ class TestCLinkageSpecificationExecution:
             language=Language.C,
             max_steps=200,
         )
-        local_vars = dict(vm.call_stack[0].local_vars)
+        local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert "y" in local_vars
 
     def test_linkage_spec_function_decl(self):
@@ -28,5 +29,5 @@ extern "C" {
 int result = add(3, 4);
 """
         vm = run(source, language=Language.C, max_steps=300)
-        local_vars = dict(vm.call_stack[0].local_vars)
+        local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars["result"] == 7

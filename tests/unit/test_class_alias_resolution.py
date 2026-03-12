@@ -8,6 +8,7 @@ from interpreter.frontends.typescript import TypeScriptFrontend
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.run import run
 from interpreter.type_expr import ParameterizedType, ScalarType, metatype
+from interpreter.typed_value import unwrap_locals
 
 
 def _run_js(source: str, max_steps: int = 200):
@@ -37,7 +38,7 @@ class TestNewObjectDereference:
             const Foo = class { constructor() {} };
             let obj = new Foo();
             """)
-        locals_ = dict(vm.call_stack[0].local_vars)
+        locals_ = unwrap_locals(vm.call_stack[0].local_vars)
         addr = locals_["obj"]
         assert (
             vm.heap[addr].type_hint != "Foo"
@@ -49,7 +50,7 @@ class TestNewObjectDereference:
             class Bar { constructor() {} }
             let obj = new Bar();
             """)
-        locals_ = dict(vm.call_stack[0].local_vars)
+        locals_ = unwrap_locals(vm.call_stack[0].local_vars)
         addr = locals_["obj"]
         assert vm.heap[addr].type_hint == "Bar"
 
@@ -61,7 +62,7 @@ class TestNewObjectDereference:
             let obj = new Alias(42);
             let result = obj.x;
             """)
-        locals_ = dict(vm.call_stack[0].local_vars)
+        locals_ = unwrap_locals(vm.call_stack[0].local_vars)
         assert locals_["result"] == 42
 
 
