@@ -29,7 +29,6 @@ from interpreter.binop_coercion import (
 )
 from interpreter.type_environment import TypeEnvironment
 from interpreter.typed_value import TypedValue
-from interpreter.type_expr import scalar
 from interpreter.type_inference import infer_types
 from interpreter.type_resolver import TypeResolver
 from interpreter.unresolved_call import (
@@ -46,7 +45,6 @@ from interpreter.vm import (
     apply_update,
     coerce_local_update,
     materialize_raw_update,
-    _serialize_value,
 )
 from interpreter.run_types import (
     VMConfig,
