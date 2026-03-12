@@ -33,9 +33,9 @@ from interpreter.registry import FunctionRegistry, _parse_func_ref, _parse_class
 from interpreter.builtins import Builtins, _builtin_array_of
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.type_environment import TypeEnvironment
-from interpreter.type_expr import scalar
+from interpreter.type_expr import UNKNOWN, scalar
 from interpreter.unresolved_call import UnresolvedCallResolver, SymbolicResolver
-from interpreter.typed_value import TypedValue, typed_from_runtime
+from interpreter.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.binop_coercion import BinopCoercionStrategy, DefaultBinopCoercion
 from interpreter import constants
 
@@ -136,7 +136,7 @@ def _handle_load_var(
             val = vm.heap[alias_ptr.base].fields.get(str(alias_ptr.offset))
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: _serialize_value(val)},
+                    register_writes={inst.result_reg: typed_from_runtime(val)},
                     reasoning=f"load {name} = {val!r} (via heap alias {alias_ptr.base})",
                 )
             )
@@ -145,7 +145,7 @@ def _handle_load_var(
             val = stored.value if isinstance(stored, TypedValue) else stored
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: _serialize_value(val)},
+                    register_writes={inst.result_reg: typed_from_runtime(val)},
                     reasoning=f"load {name} = {val!r} → {inst.result_reg}",
                 )
             )
@@ -153,7 +153,7 @@ def _handle_load_var(
     sym = vm.fresh_symbolic(hint=name)
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: sym.to_dict()},
+            register_writes={inst.result_reg: typed(sym, UNKNOWN)},
             reasoning=f"load {name} (not found) → symbolic {sym.name}",
         )
     )
