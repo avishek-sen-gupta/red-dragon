@@ -2453,3 +2453,156 @@ class TestTypeAliasInference:
         )
         env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
         assert env.register_types["%2"] == scalar("Int")
+
+
+# ---------------------------------------------------------------------------
+# Class-scoped method signatures
+# ---------------------------------------------------------------------------
+
+
+class TestMethodSignatures:
+    """method_signatures should be scoped by class TypeExpr."""
+
+    def test_single_class_single_method(self):
+        """A class with one method should appear in method_signatures."""
+        instructions = [
+            _make_inst(Opcode.CONST, "%0", ["<class:Calc@class_Calc_0>"]),
+            _make_inst(Opcode.STORE_VAR, operands=["Calc", "%0"]),
+            _make_inst(Opcode.LABEL, label="class_Calc_0"),
+            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.SYMBOLIC, "%1", ["param:this"]),
+            _make_inst(Opcode.SYMBOLIC, "%2", ["param:a"]),
+            _make_inst(Opcode.SYMBOLIC, "%3", ["param:b"]),
+            _make_inst(Opcode.LABEL, label="end_func_add_0"),
+            _make_inst(Opcode.CONST, "%4", ["<function:add@func_add_0>"]),
+            _make_inst(Opcode.STORE_VAR, operands=["add", "%4"]),
+            _make_inst(Opcode.LABEL, label="end_class_Calc_0"),
+        ]
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_add_0": scalar("Int")},
+            func_param_types={
+                "func_add_0": [
+                    ("this", scalar("Calc")),
+                    ("a", scalar("Int")),
+                    ("b", scalar("Int")),
+                ],
+            },
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        calc_type = scalar("Calc")
+        assert calc_type in env.method_signatures
+        sig = env.get_func_signature("add", class_name=calc_type)
+        assert sig.return_type == "Int"
+        assert len(sig.params) == 3
+
+    def test_overloaded_methods_accumulate(self):
+        """Two methods with the same name should produce two signatures."""
+        instructions = [
+            _make_inst(Opcode.CONST, "%0", ["<class:Calc@class_Calc_0>"]),
+            _make_inst(Opcode.STORE_VAR, operands=["Calc", "%0"]),
+            _make_inst(Opcode.LABEL, label="class_Calc_0"),
+            # First overload: add(this, a, b) -> Int
+            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.SYMBOLIC, "%1", ["param:this"]),
+            _make_inst(Opcode.SYMBOLIC, "%2", ["param:a"]),
+            _make_inst(Opcode.SYMBOLIC, "%3", ["param:b"]),
+            _make_inst(Opcode.LABEL, label="end_func_add_0"),
+            _make_inst(Opcode.CONST, "%4", ["<function:add@func_add_0>"]),
+            _make_inst(Opcode.STORE_VAR, operands=["add", "%4"]),
+            # Second overload: add(this, a, b, c) -> Int
+            _make_inst(Opcode.LABEL, label="func_add_1"),
+            _make_inst(Opcode.SYMBOLIC, "%5", ["param:this"]),
+            _make_inst(Opcode.SYMBOLIC, "%6", ["param:a"]),
+            _make_inst(Opcode.SYMBOLIC, "%7", ["param:b"]),
+            _make_inst(Opcode.SYMBOLIC, "%8", ["param:c"]),
+            _make_inst(Opcode.LABEL, label="end_func_add_1"),
+            _make_inst(Opcode.CONST, "%9", ["<function:add@func_add_1>"]),
+            _make_inst(Opcode.STORE_VAR, operands=["add", "%9"]),
+            _make_inst(Opcode.LABEL, label="end_class_Calc_0"),
+        ]
+        builder = TypeEnvironmentBuilder(
+            func_return_types={
+                "func_add_0": scalar("Int"),
+                "func_add_1": scalar("Int"),
+            },
+            func_param_types={
+                "func_add_0": [
+                    ("this", scalar("Calc")),
+                    ("a", scalar("Int")),
+                    ("b", scalar("Int")),
+                ],
+                "func_add_1": [
+                    ("this", scalar("Calc")),
+                    ("a", scalar("Int")),
+                    ("b", scalar("Int")),
+                    ("c", scalar("Int")),
+                ],
+            },
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        calc_type = scalar("Calc")
+        sigs = env.method_signatures.get(calc_type, {}).get("add", [])
+        assert len(sigs) == 2
+        assert len(sigs[0].params) == 3  # this, a, b
+        assert len(sigs[1].params) == 4  # this, a, b, c
+
+    def test_different_classes_separate(self):
+        """Methods from different classes should be in separate scopes."""
+        instructions = [
+            # Class Foo
+            _make_inst(Opcode.CONST, "%0", ["<class:Foo@class_Foo_0>"]),
+            _make_inst(Opcode.STORE_VAR, operands=["Foo", "%0"]),
+            _make_inst(Opcode.LABEL, label="class_Foo_0"),
+            _make_inst(Opcode.LABEL, label="func_greet_0"),
+            _make_inst(Opcode.SYMBOLIC, "%1", ["param:this"]),
+            _make_inst(Opcode.LABEL, label="end_func_greet_0"),
+            _make_inst(Opcode.CONST, "%2", ["<function:greet@func_greet_0>"]),
+            _make_inst(Opcode.STORE_VAR, operands=["greet", "%2"]),
+            _make_inst(Opcode.LABEL, label="end_class_Foo_0"),
+            # Class Bar
+            _make_inst(Opcode.CONST, "%3", ["<class:Bar@class_Bar_0>"]),
+            _make_inst(Opcode.STORE_VAR, operands=["Bar", "%3"]),
+            _make_inst(Opcode.LABEL, label="class_Bar_0"),
+            _make_inst(Opcode.LABEL, label="func_greet_1"),
+            _make_inst(Opcode.SYMBOLIC, "%4", ["param:this"]),
+            _make_inst(Opcode.SYMBOLIC, "%5", ["param:name"]),
+            _make_inst(Opcode.LABEL, label="end_func_greet_1"),
+            _make_inst(Opcode.CONST, "%6", ["<function:greet@func_greet_1>"]),
+            _make_inst(Opcode.STORE_VAR, operands=["greet", "%6"]),
+            _make_inst(Opcode.LABEL, label="end_class_Bar_0"),
+        ]
+        builder = TypeEnvironmentBuilder(
+            func_return_types={
+                "func_greet_0": scalar("String"),
+                "func_greet_1": scalar("String"),
+            },
+            func_param_types={
+                "func_greet_0": [("this", scalar("Foo"))],
+                "func_greet_1": [
+                    ("this", scalar("Bar")),
+                    ("name", scalar("String")),
+                ],
+            },
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        foo_sig = env.get_func_signature("greet", class_name=scalar("Foo"))
+        bar_sig = env.get_func_signature("greet", class_name=scalar("Bar"))
+        assert len(foo_sig.params) == 1  # just this
+        assert len(bar_sig.params) == 2  # this, name
+
+    def test_get_func_signature_without_class_uses_flat(self):
+        """get_func_signature without class_name still uses flat func_signatures."""
+        instructions = [
+            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(Opcode.SYMBOLIC, "%0", ["param:x"]),
+            _make_inst(Opcode.LABEL, label="end_func_f_0"),
+            _make_inst(Opcode.CONST, "%1", ["<function:f@func_f_0>"]),
+            _make_inst(Opcode.STORE_VAR, operands=["f", "%1"]),
+        ]
+        builder = TypeEnvironmentBuilder(
+            func_return_types={"func_f_0": scalar("Int")},
+            func_param_types={"func_f_0": [("x", scalar("Int"))]},
+        )
+        env = infer_types(instructions, _default_resolver(), type_env_builder=builder)
+        sig = env.get_func_signature("f")
+        assert sig.return_type == "Int"
