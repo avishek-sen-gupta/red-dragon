@@ -22,7 +22,7 @@ from interpreter.vm import (
     RegionWrite,
     ExecutionResult,
     Operators,
-    _serialize_value,
+    _serialize_value,  # heap_writes + return_value only (raw until red-dragon-gny/n9m)
     _resolve_reg,
     _resolve_binop_operand,
     _is_symbolic,

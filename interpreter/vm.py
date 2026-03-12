@@ -112,6 +112,31 @@ def _coerce_typed_register(
     return typed(coerced, target_type) if coerced is not tv.value else tv
 
 
+def coerce_local_update(
+    update: StateUpdate,
+    type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
+    conversion_rules: TypeConversionRules = _IDENTITY_RULES,
+) -> StateUpdate:
+    """Coerce register writes in a handler-produced StateUpdate to declared types.
+
+    Unlike materialize_raw_update, this assumes all values are already TypedValue
+    (produced by local handlers) and only applies type coercion — no deserialization.
+    """
+    coerced_reg_writes = {
+        reg: _coerce_typed_register(val, reg, type_env, conversion_rules)
+        for reg, val in update.register_writes.items()
+        if isinstance(val, TypedValue)
+    }
+    uncoerced_reg_writes = {
+        reg: val
+        for reg, val in update.register_writes.items()
+        if not isinstance(val, TypedValue)
+    }
+    return update.model_copy(
+        update={"register_writes": {**uncoerced_reg_writes, **coerced_reg_writes}}
+    )
+
+
 def materialize_raw_update(
     raw_update: StateUpdate,
     vm: VMState,
