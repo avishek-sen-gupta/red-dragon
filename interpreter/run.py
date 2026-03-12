@@ -8,7 +8,7 @@ import time
 from types import MappingProxyType
 from typing import Any
 
-from interpreter.constants import Language
+from interpreter.constants import Language, TypeName
 from interpreter.conversion_rules import TypeConversionRules
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.identity_conversion_rules import IdentityConversionRules
@@ -16,7 +16,7 @@ from interpreter.ir import IRInstruction, Opcode
 from interpreter.frontend import get_frontend
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.cfg import CFG, build_cfg
-from interpreter.registry import build_registry, _parse_class_ref, FunctionRegistry
+from interpreter.registry import build_registry, FunctionRegistry
 from interpreter.executor import _try_execute_locally
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.resolution_strategy import ArityThenTypeStrategy
@@ -28,6 +28,7 @@ from interpreter.binop_coercion import (
     JavaBinopCoercion,
 )
 from interpreter.type_environment import TypeEnvironment
+from interpreter.type_expr import scalar
 from interpreter.typed_value import TypedValue
 from interpreter.type_inference import infer_types
 from interpreter.type_resolver import TypeResolver
@@ -158,20 +159,6 @@ def _handle_call_dispatch_setup(
     new_frame.return_ip = call_return_ip
     new_frame.result_reg = call_result_reg
 
-    # For class constructors, the result_reg was already written
-    # (the object address), so we mark it to not overwrite on return.
-    # Walk the full scope chain (not just call_stack[-2]) to match how
-    # _handle_call_function resolves the function name.
-    if instruction.opcode == Opcode.CALL_FUNCTION:
-        func_val = ""
-        for f in reversed(vm.call_stack):
-            stored = f.local_vars.get(instruction.operands[0])
-            if stored is not None:
-                func_val = stored.value if isinstance(stored, TypedValue) else stored
-                break
-        if func_val and _parse_class_ref(func_val).matched:
-            new_frame.result_reg = None  # don't overwrite on return
-
 
 def _handle_return_flow(
     vm: VMState,
@@ -192,9 +179,15 @@ def _handle_return_flow(
             logger.info("[step %d] Top-level return/throw. Stopping.", step)
         return _StopExecution()
 
-    # Return to caller — write return value to caller's result register
+    # Return to caller — write return value to caller's result register.
+    # result_reg is None when the call site had no assignment (e.g. standalone
+    # call_function with no %reg =), so there is no register to write to.
+    # Skip Void returns (constructors, bare RETURN with no operands).
     caller_frame = vm.current_frame
-    if return_frame.result_reg and update.return_value is not None:
+    if return_frame.result_reg and not (
+        isinstance(update.return_value, TypedValue)
+        and update.return_value.type == scalar(TypeName.VOID)
+    ):
         caller_frame.registers[return_frame.result_reg] = update.return_value
 
     if return_frame.return_label and return_frame.return_label in cfg.blocks:

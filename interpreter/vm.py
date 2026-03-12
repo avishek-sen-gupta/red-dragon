@@ -26,6 +26,7 @@ from interpreter.vm_types import (  # noqa: F401 — re-exported for backwards c
     StateUpdate,
     ExecutionResult,
     _serialize_value,
+    VOID_RETURN,
 )
 
 _EMPTY_TYPE_ENV = TypeEnvironment(
@@ -166,9 +167,11 @@ def materialize_raw_update(
         for var, val in raw_update.var_writes.items()
     }
     materialized_rv = raw_update.return_value
-    if raw_update.return_value is not None and not isinstance(
-        raw_update.return_value, TypedValue
-    ):
+    if isinstance(raw_update.return_value, TypedValue):
+        materialized_rv = raw_update.return_value
+    elif raw_update.return_value is None:
+        materialized_rv = VOID_RETURN
+    else:
         deserialized = _deserialize_value(raw_update.return_value, vm)
         materialized_rv = typed_from_runtime(deserialized)
 
@@ -251,6 +254,7 @@ def apply_update(
                 return_label=update.call_push.return_label,
                 closure_env_id=update.call_push.closure_env_id,
                 captured_var_names=frozenset(update.call_push.captured_var_names),
+                is_ctor=update.call_push.is_ctor,
             )
         )
 

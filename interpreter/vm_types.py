@@ -7,6 +7,10 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from interpreter.constants import TypeName
+from interpreter.type_expr import scalar
+from interpreter.typed_value import TypedValue, typed
+
 # ── Data types ───────────────────────────────────────────────────
 
 
@@ -80,6 +84,7 @@ class StackFrame:
     closure_env_id: str = ""
     captured_var_names: frozenset[str] = field(default_factory=frozenset)
     var_heap_aliases: dict[str, Pointer] = field(default_factory=dict)
+    is_ctor: bool = False
 
     def to_dict(self) -> dict:
         d: dict[str, Any] = {
@@ -178,6 +183,10 @@ class StackFramePush(BaseModel):
     return_label: str | None = None
     closure_env_id: str = ""
     captured_var_names: list[str] = []
+    is_ctor: bool = False
+
+
+VOID_RETURN: TypedValue = typed(None, scalar(TypeName.VOID))
 
 
 class StateUpdate(BaseModel):
@@ -192,7 +201,7 @@ class StateUpdate(BaseModel):
     next_label: str | None = None
     call_push: StackFramePush | None = None
     call_pop: bool = False
-    return_value: Any | None = None
+    return_value: Any = VOID_RETURN
     path_condition: str | None = None
     reasoning: str = ""
 
