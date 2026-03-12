@@ -83,6 +83,7 @@ class JavaScriptFrontend(BaseFrontend):
             JSN.EXPRESSION_STATEMENT: common_assign.lower_expression_statement,
             JSN.LEXICAL_DECLARATION: js_decl.lower_js_var_declaration,
             JSN.VARIABLE_DECLARATION: js_decl.lower_js_var_declaration,
+            JSN.USING_DECLARATION: js_decl.lower_js_var_declaration,
             JSN.RETURN_STATEMENT: common_assign.lower_return,
             JSN.IF_STATEMENT: js_cf.lower_js_if,
             JSN.WHILE_STATEMENT: common_cf.lower_while,
