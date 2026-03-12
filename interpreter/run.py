@@ -18,6 +18,10 @@ from interpreter.frontend_observer import FrontendObserver
 from interpreter.cfg import CFG, build_cfg
 from interpreter.registry import build_registry, _parse_class_ref, FunctionRegistry
 from interpreter.executor import _try_execute_locally
+from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
+from interpreter.resolution_strategy import ArityThenTypeStrategy
+from interpreter.type_compatibility import DefaultTypeCompatibility
+from interpreter.ambiguity_handler import FallbackFirstWithWarning
 from interpreter.type_environment import TypeEnvironment
 from interpreter.type_inference import infer_types
 from interpreter.type_resolver import TypeResolver
@@ -54,6 +58,7 @@ _EMPTY_TYPE_ENV = TypeEnvironment(
     var_types=MappingProxyType({}),
 )
 _IDENTITY_RULES = IdentityConversionRules()
+_DEFAULT_OVERLOAD_RESOLVER = NullOverloadResolver()
 
 
 def _create_resolver(config: VMConfig) -> UnresolvedCallResolver:
@@ -189,6 +194,7 @@ def execute_cfg(
     config: VMConfig = VMConfig(),
     type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
     conversion_rules: TypeConversionRules = _IDENTITY_RULES,
+    overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
 ) -> tuple[VMState, ExecutionStats]:
     """Execute a pre-built CFG from the given entry point.
 
@@ -252,6 +258,8 @@ def execute_cfg(
             current_label=current_label,
             ip=ip,
             call_resolver=call_resolver,
+            overload_resolver=overload_resolver,
+            type_env=type_env,
         )
         used_llm = False
         if result.handled:
@@ -328,6 +336,7 @@ def execute_cfg_traced(
     config: VMConfig = VMConfig(),
     type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
     conversion_rules: TypeConversionRules = _IDENTITY_RULES,
+    overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
 ) -> tuple[VMState, ExecutionTrace]:
     """Execute a pre-built CFG and record a trace of every step.
 
@@ -391,6 +400,8 @@ def execute_cfg_traced(
             current_label=current_label,
             ip=ip,
             call_resolver=call_resolver,
+            overload_resolver=overload_resolver,
+            type_env=type_env,
         )
         used_llm = False
         if result.handled:
@@ -582,6 +593,10 @@ def run(
         source_language=lang,
         unresolved_call_strategy=unresolved_call_strategy,
     )
+    overload_resolver = OverloadResolver(
+        ArityThenTypeStrategy(DefaultTypeCompatibility()),
+        FallbackFirstWithWarning(),
+    )
     exec_start = time.perf_counter()
     vm, exec_stats = execute_cfg(
         cfg,
@@ -590,6 +605,7 @@ def run(
         vm_config,
         type_env=type_env,
         conversion_rules=conversion_rules,
+        overload_resolver=overload_resolver,
     )
     vm.data_layout = frontend.data_layout
     stats.execution_time = time.perf_counter() - exec_start
