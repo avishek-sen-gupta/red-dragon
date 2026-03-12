@@ -928,7 +928,8 @@ def _try_class_constructor_call(
 
     class_name, class_label = cr.name, cr.label
     methods = registry.class_methods.get(class_name, {})
-    init_label = methods.get("__init__")
+    init_labels = methods.get("__init__", [])
+    init_label = init_labels[0] if init_labels else ""
 
     # Allocate heap object
     addr = f"{constants.OBJ_ADDR_PREFIX}{vm.symbolic_counter}"
@@ -1190,12 +1191,14 @@ def _handle_call_method(
         return call_resolver.resolve_method(obj_desc, method_name, args, inst, vm)
 
     methods = registry.class_methods[type_hint]
-    func_label = methods.get(method_name, "")
+    func_labels = methods.get(method_name, [])
+    func_label = func_labels[0] if func_labels else ""
     # Walk parent chain for inherited methods
     if not func_label or func_label not in cfg.blocks:
         for parent in registry.class_parents.get(type_hint, []):
             parent_methods = registry.class_methods.get(parent, {})
-            candidate = parent_methods.get(method_name, "")
+            parent_labels = parent_methods.get(method_name, [])
+            candidate = parent_labels[0] if parent_labels else ""
             if candidate and candidate in cfg.blocks:
                 func_label = candidate
                 break
