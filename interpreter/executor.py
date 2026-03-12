@@ -373,7 +373,7 @@ def _handle_load_field(
             val = heap_obj.fields.get(str(obj_val.offset))
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: _serialize_value(val)},
+                    register_writes={inst.result_reg: typed_from_runtime(val)},
                     reasoning=f"load *{obj_val} = {val!r}",
                 )
             )
@@ -382,7 +382,7 @@ def _handle_load_field(
             val = heap_obj.fields[field_name]
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: _serialize_value(val)},
+                    register_writes={inst.result_reg: typed_from_runtime(val)},
                     reasoning=f"load {obj_val.base}.{field_name} = {val!r} (via Pointer)",
                 )
             )
@@ -390,7 +390,7 @@ def _handle_load_field(
         sym = vm.fresh_symbolic(hint=f"*{obj_val}")
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: sym.to_dict()},
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"load *{obj_val} (not on heap) → {sym.name}",
             )
         )
@@ -402,7 +402,7 @@ def _handle_load_field(
     ):
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: obj_val},
+                register_writes={inst.result_reg: typed_from_runtime(obj_val)},
                 reasoning=f"deref {obj_val} → {obj_val} (dereference of function pointer is identity)",
             )
         )
@@ -416,7 +416,7 @@ def _handle_load_field(
         sym = vm.fresh_symbolic(hint=f"{obj_desc}.{field_name}")
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: sym.to_dict()},
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"load {obj_desc}.{field_name} (not on heap) → {sym.name}",
             )
         )
@@ -425,7 +425,7 @@ def _handle_load_field(
         val = heap_obj.fields[field_name]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: _serialize_value(val)},
+                register_writes={inst.result_reg: typed_from_runtime(val)},
                 reasoning=f"load {addr}.{field_name} = {val!r}",
             )
         )
@@ -434,7 +434,7 @@ def _handle_load_field(
     heap_obj.fields[field_name] = sym
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: sym.to_dict()},
+            register_writes={inst.result_reg: typed(sym, UNKNOWN)},
             reasoning=f"load {addr}.{field_name} (unknown) → {sym.name}",
         )
     )
