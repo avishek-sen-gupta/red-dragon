@@ -100,6 +100,7 @@ class JavaScriptNodeType:
     ASSIGNMENT_PATTERN = "assignment_pattern"
     SHORTHAND_PROPERTY_IDENTIFIER_PATTERN = "shorthand_property_identifier_pattern"
     PAIR_PATTERN = "pair_pattern"
+    REST_PATTERN = "rest_pattern"
 
     # ── Export nodes ─────────────────────────────────────────────────
     EXPORT_CLAUSE = "export_clause"
