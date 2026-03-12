@@ -487,7 +487,7 @@ def _handle_load_index(
             element = arr_val[idx_val]
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: _serialize_value(element)},
+                    register_writes={inst.result_reg: typed_from_runtime(element)},
                     reasoning=f"native index {arr_val!r}[{idx_val}] = {element!r}",
                 )
             )
@@ -495,7 +495,7 @@ def _handle_load_index(
             element = arr_val[idx_val]
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: _serialize_value(element)},
+                    register_writes={inst.result_reg: typed_from_runtime(element)},
                     reasoning=f"native index {arr_val!r}[{idx_val}] = {element!r}",
                 )
             )
@@ -508,7 +508,7 @@ def _handle_load_index(
         sym = vm.fresh_symbolic(hint=f"{arr_desc}[{idx_val}]")
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: sym.to_dict()},
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"load {arr_desc}[{idx_val}] (not on heap) → {sym.name}",
             )
         )
@@ -518,14 +518,14 @@ def _handle_load_index(
         val = heap_obj.fields[key]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: _serialize_value(val)},
+                register_writes={inst.result_reg: typed_from_runtime(val)},
                 reasoning=f"load {addr}[{idx_val}] = {val!r}",
             )
         )
     sym = vm.fresh_symbolic(hint=f"{addr}[{idx_val}]")
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: sym.to_dict()},
+            register_writes={inst.result_reg: typed(sym, UNKNOWN)},
             reasoning=f"load {addr}[{idx_val}] (unknown) → {sym.name}",
         )
     )
