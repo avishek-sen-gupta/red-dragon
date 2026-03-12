@@ -501,5 +501,33 @@ def lower_js_param(ctx: TreeSitterEmitContext, child) -> None:
 
 
 def lower_js_params(ctx: TreeSitterEmitContext, params_node) -> None:
+    param_index = 0
     for child in params_node.children:
-        lower_js_param(ctx, child)
+        if child.type in (JSN.OPEN_PAREN, JSN.CLOSE_PAREN, JSN.COMMA):
+            continue
+        if child.type == JSN.REST_PATTERN:
+            _lower_rest_param(ctx, child, param_index)
+        else:
+            lower_js_param(ctx, child)
+        param_index += 1
+
+
+def _lower_rest_param(ctx: TreeSitterEmitContext, child, start_index: int) -> None:
+    """Lower ...rest param as slice(arguments, start_index)."""
+    from interpreter.frontends.javascript.declarations import _extract_rest_name
+
+    rest_name = _extract_rest_name(child)
+    if rest_name is None:
+        return
+    args_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=args_reg, operands=["arguments"])
+    idx_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(start_index)])
+    rest_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_FUNCTION,
+        result_reg=rest_reg,
+        operands=["slice", args_reg, idx_reg],
+        node=child,
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[rest_name, rest_reg])
