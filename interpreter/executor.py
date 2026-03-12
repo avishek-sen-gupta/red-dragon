@@ -945,13 +945,13 @@ def _try_builtin_call(
         sym.constraints = [f"{func_name}({args_desc})"]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: sym.to_dict()},
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"builtin {func_name}({args_desc}) → symbolic {sym.name} (uncomputable)",
             )
         )
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: _serialize_value(result)},
+            register_writes={inst.result_reg: typed_from_runtime(result)},
             reasoning=(
                 f"builtin {func_name}"
                 f"({', '.join(repr(a) for a in args)}) = {result!r}"
@@ -1131,7 +1131,7 @@ def _handle_call_function(
         if result is not Operators.UNCOMPUTABLE:
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: _serialize_value(result)},
+                    register_writes={inst.result_reg: typed_from_runtime(result)},
                     reasoning=f"io_provider {func_name}({args!r}) = {result!r}",
                 )
             )
@@ -1139,7 +1139,7 @@ def _handle_call_function(
         sym = vm.fresh_symbolic(hint=f"{func_name}(…)")
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: sym.to_dict()},
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"io_provider {func_name} → symbolic (uncomputable)",
             )
         )
@@ -1170,7 +1170,7 @@ def _handle_call_function(
                 element = heap_obj.fields[idx_key]
                 return ExecutionResult.success(
                     StateUpdate(
-                        register_writes={inst.result_reg: _serialize_value(element)},
+                        register_writes={inst.result_reg: typed_from_runtime(element)},
                         reasoning=f"heap call-index {func_name}({args[0]}) = {element!r}",
                     )
                 )
@@ -1188,7 +1188,7 @@ def _handle_call_function(
         element = func_val[args[0]]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: _serialize_value(element)},
+                register_writes={inst.result_reg: typed_from_runtime(element)},
                 reasoning=f"native call-index {func_name}({args[0]}) = {element!r}",
             )
         )
