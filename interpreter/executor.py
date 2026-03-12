@@ -184,7 +184,9 @@ def _handle_address_of(
         ptr = frame.var_heap_aliases[name]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: ptr},
+                register_writes={
+                    inst.result_reg: typed(ptr, scalar(constants.TypeName.POINTER))
+                },
                 reasoning=f"address_of {name} → {ptr} (already aliased)",
             )
         )
@@ -202,7 +204,7 @@ def _handle_address_of(
     if isinstance(current_val, str) and _parse_func_ref(current_val).matched:
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: current_val},
+                register_writes={inst.result_reg: typed_from_runtime(current_val)},
                 reasoning=f"address_of {name} → {current_val} (function ref, identity)",
             )
         )
@@ -215,7 +217,9 @@ def _handle_address_of(
         ptr = Pointer(base=addr, offset=0)
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: ptr},
+                register_writes={
+                    inst.result_reg: typed(ptr, scalar(constants.TypeName.POINTER))
+                },
                 reasoning=f"address_of {name} → {ptr} (existing heap object)",
             )
         )
@@ -229,7 +233,9 @@ def _handle_address_of(
     logger.debug("address_of: promoted %s=%r to heap %s", name, current_val, mem_addr)
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: ptr},
+            register_writes={
+                inst.result_reg: typed(ptr, scalar(constants.TypeName.POINTER))
+            },
             reasoning=f"address_of {name} → {ptr} (promoted to heap {mem_addr})",
         )
     )
@@ -290,7 +296,7 @@ def _handle_new_object(
     return ExecutionResult.success(
         StateUpdate(
             new_objects=[NewObject(addr=addr, type_hint=type_hint or None)],
-            register_writes={inst.result_reg: addr},
+            register_writes={inst.result_reg: typed(addr, UNKNOWN)},
             reasoning=f"new {type_hint} → {addr}",
         )
     )
@@ -305,7 +311,7 @@ def _handle_new_array(
     return ExecutionResult.success(
         StateUpdate(
             new_objects=[NewObject(addr=addr, type_hint=type_hint or None)],
-            register_writes={inst.result_reg: addr},
+            register_writes={inst.result_reg: typed(addr, UNKNOWN)},
             reasoning=f"new {type_hint}[] → {addr}",
         )
     )
