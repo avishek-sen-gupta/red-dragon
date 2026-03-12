@@ -538,12 +538,16 @@ def _handle_load_index(
 
 
 def _handle_return(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
-    val = _resolve_reg(vm, inst.operands[0]) if inst.operands else None
+    if inst.operands:
+        val = _resolve_reg(vm, inst.operands[0])
+        tv = typed_from_runtime(val)
+    else:
+        tv = typed(None, scalar(constants.TypeName.VOID))
     return ExecutionResult.success(
         StateUpdate(
-            return_value=_serialize_value(val),
+            return_value=tv,
             call_pop=True,
-            reasoning=f"return {val!r}",
+            reasoning=f"return {tv.value!r}",
         )
     )
 
