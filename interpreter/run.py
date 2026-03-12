@@ -22,6 +22,11 @@ from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.resolution_strategy import ArityThenTypeStrategy
 from interpreter.type_compatibility import DefaultTypeCompatibility
 from interpreter.ambiguity_handler import FallbackFirstWithWarning
+from interpreter.binop_coercion import (
+    BinopCoercionStrategy,
+    DefaultBinopCoercion,
+    JavaBinopCoercion,
+)
 from interpreter.type_environment import TypeEnvironment
 from interpreter.typed_value import TypedValue
 from interpreter.type_inference import infer_types
@@ -79,6 +84,14 @@ class _StopExecution:
     """Sentinel indicating the interpreter should halt."""
 
     pass
+
+
+def _binop_coercion_for_language(lang: Language) -> BinopCoercionStrategy:
+    """Select BinopCoercionStrategy based on source language."""
+    _JAVA_LIKE = frozenset({Language.JAVA})
+    if lang in _JAVA_LIKE:
+        return JavaBinopCoercion()
+    return DefaultBinopCoercion()
 
 
 def _find_entry_point(cfg: CFG, entry_point: str) -> str:
@@ -197,6 +210,7 @@ def execute_cfg(
     type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
     conversion_rules: TypeConversionRules = _IDENTITY_RULES,
     overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
+    binop_coercion: BinopCoercionStrategy = DefaultBinopCoercion(),
 ) -> tuple[VMState, ExecutionStats]:
     """Execute a pre-built CFG from the given entry point.
 
@@ -262,6 +276,7 @@ def execute_cfg(
             call_resolver=call_resolver,
             overload_resolver=overload_resolver,
             type_env=type_env,
+            binop_coercion=binop_coercion,
         )
         used_llm = False
         if result.handled:
@@ -339,6 +354,7 @@ def execute_cfg_traced(
     type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
     conversion_rules: TypeConversionRules = _IDENTITY_RULES,
     overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
+    binop_coercion: BinopCoercionStrategy = DefaultBinopCoercion(),
 ) -> tuple[VMState, ExecutionTrace]:
     """Execute a pre-built CFG and record a trace of every step.
 
@@ -404,6 +420,7 @@ def execute_cfg_traced(
             call_resolver=call_resolver,
             overload_resolver=overload_resolver,
             type_env=type_env,
+            binop_coercion=binop_coercion,
         )
         used_llm = False
         if result.handled:
@@ -599,6 +616,7 @@ def run(
         ArityThenTypeStrategy(DefaultTypeCompatibility()),
         FallbackFirstWithWarning(),
     )
+    binop_coercion = _binop_coercion_for_language(lang)
     exec_start = time.perf_counter()
     vm, exec_stats = execute_cfg(
         cfg,
@@ -608,6 +626,7 @@ def run(
         type_env=type_env,
         conversion_rules=conversion_rules,
         overload_resolver=overload_resolver,
+        binop_coercion=binop_coercion,
     )
     vm.data_layout = frontend.data_layout
     stats.execution_time = time.perf_counter() - exec_start
