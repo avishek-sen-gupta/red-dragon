@@ -130,6 +130,56 @@ def _builtin_array_of(args: list[Any], vm: VMState) -> Any:
     return addr
 
 
+def _builtin_slice(args: list[Any], vm: VMState) -> Any:
+    """slice(collection, start) — return elements from start index onward.
+
+    Handles native lists, strings, and heap-backed arrays.
+    """
+    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+        return _UNCOMPUTABLE
+    collection, start = args[0], int(args[1])
+    # Native list/tuple
+    if isinstance(collection, (list, tuple)):
+        return _builtin_array_of(list(collection[start:]), vm)
+    # Native string
+    if isinstance(collection, str) and not collection.startswith("<"):
+        return collection[start:]
+    # Heap-backed array
+    addr = _heap_addr(collection)
+    if addr and addr in vm.heap:
+        heap_obj = vm.heap[addr]
+        length = heap_obj.fields.get("length", len(heap_obj.fields))
+        if not isinstance(length, int):
+            return _UNCOMPUTABLE
+        elements = [heap_obj.fields.get(str(i)) for i in range(start, length)]
+        return _builtin_array_of(elements, vm)
+    return _UNCOMPUTABLE
+
+
+def _builtin_object_rest(args: list[Any], vm: VMState) -> Any:
+    """object_rest(obj, key1, key2, ...) — return new object without excluded keys.
+
+    Creates a new heap object with all fields from obj except the listed keys.
+    """
+    if not args:
+        return _UNCOMPUTABLE
+    obj_val = args[0]
+    excluded_keys = set(args[1:])
+    addr = _heap_addr(obj_val)
+    if not addr or addr not in vm.heap:
+        return _UNCOMPUTABLE
+    source_fields = vm.heap[addr].fields
+    rest_fields = {
+        k: v
+        for k, v in source_fields.items()
+        if k not in excluded_keys and k != "length"
+    }
+    rest_addr = f"{ARR_ADDR_PREFIX}{vm.symbolic_counter}"
+    vm.symbolic_counter += 1
+    vm.heap[rest_addr] = HeapObject(type_hint="object", fields=rest_fields)
+    return rest_addr
+
+
 class Builtins:
     """Table of built-in function implementations."""
 
@@ -148,5 +198,7 @@ class Builtins:
         "arrayOf": _builtin_array_of,
         "intArrayOf": _builtin_array_of,
         "Array": _builtin_array_of,
+        "slice": _builtin_slice,
+        "object_rest": _builtin_object_rest,
         **BYTE_BUILTINS,
     }

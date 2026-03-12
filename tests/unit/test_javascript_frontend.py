@@ -481,6 +481,66 @@ class TestJavaScriptDestructuring:
         assert any("y" in inst.operands for inst in stores)
         assert any("z" in inst.operands for inst in stores)
 
+    def test_arr_destructure_rest(self):
+        """const [first, ...rest] = arr; should LOAD_INDEX first, then slice for rest."""
+        source = "const [first, ...rest] = arr;"
+        instructions = _parse_js(source)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "first" in store_names, f"expected 'first' in stores, got {store_names}"
+        assert "rest" in store_names, f"expected 'rest' in stores, got {store_names}"
+        # 'rest' should NOT have '...' prefix
+        assert "...rest" not in store_names, "rest var should not include '...' prefix"
+        # Should have a slice call for the rest
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any(
+            "slice" in inst.operands for inst in calls
+        ), f"expected slice call, got {[inst.operands for inst in calls]}"
+
+    def test_arr_destructure_rest_middle_elements(self):
+        """const [a, b, ...rest] = arr; — rest starts at index 2."""
+        source = "const [a, b, ...rest] = arr;"
+        instructions = _parse_js(source)
+        loads = _find_all(instructions, Opcode.LOAD_INDEX)
+        assert len(loads) >= 2, "should LOAD_INDEX for a and b"
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        slice_calls = [inst for inst in calls if "slice" in inst.operands]
+        assert len(slice_calls) == 1, f"expected 1 slice call, got {len(slice_calls)}"
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "a" in store_names
+        assert "b" in store_names
+        assert "rest" in store_names
+
+    def test_obj_destructure_rest(self):
+        """const {a, ...rest} = obj; should LOAD_FIELD a, then object_rest for rest."""
+        source = "const {a, ...rest} = obj;"
+        instructions = _parse_js(source)
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        field_names = [inst.operands[1] for inst in loads if len(inst.operands) > 1]
+        assert "a" in field_names
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "rest" in store_names
+        assert "...rest" not in store_names
+        # Should have an object_rest call
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any(
+            "object_rest" in inst.operands for inst in calls
+        ), f"expected object_rest call, got {[inst.operands for inst in calls]}"
+
+    def test_obj_destructure_rest_with_rename(self):
+        """const {x: localX, ...rest} = obj; — renamed + rest."""
+        source = "const {x: localX, ...rest} = obj;"
+        instructions = _parse_js(source)
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        field_names = [inst.operands[1] for inst in loads if len(inst.operands) > 1]
+        assert "x" in field_names
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "localX" in store_names
+        assert "rest" in store_names
+
 
 class TestJavaScriptNewExpression:
     def test_new_expression_basic(self):
