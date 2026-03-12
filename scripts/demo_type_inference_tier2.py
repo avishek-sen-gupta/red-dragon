@@ -17,6 +17,7 @@ from interpreter.api import lower_and_infer
 from interpreter.constants import Language
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.ir import Opcode
+from interpreter.type_expr import UNBOUND
 from interpreter.type_inference import infer_types
 from interpreter.type_resolver import TypeResolver
 
@@ -87,7 +88,8 @@ def greet():
 
     _instructions, env = _lower_and_infer(py_source, "python")
     print(f"\n  Inferred function signatures:\n")
-    for name, sig in sorted(env.func_signatures.items()):
+    for name, sigs in sorted(env.method_signatures.get(UNBOUND, {}).items()):
+        sig = sigs[0]
         print(
             f"    {name}({', '.join(f'{p}: {t or "?"}' for p, t in sig.params)}) -> {sig.return_type or '?'}"
         )
@@ -104,7 +106,8 @@ function factorial(n) {
 
     _instructions, env = _lower_and_infer(js_source, "javascript")
     print(f"\n  Inferred function signatures:\n")
-    for name, sig in sorted(env.func_signatures.items()):
+    for name, sigs in sorted(env.method_signatures.get(UNBOUND, {}).items()):
+        sig = sigs[0]
         print(
             f"    {name}({', '.join(f'{p}: {t or "?"}' for p, t in sig.params)}) -> {sig.return_type or '?'}"
         )
@@ -120,7 +123,8 @@ end
 
     _instructions, env = _lower_and_infer(rb_source, "ruby")
     print(f"\n  Inferred function signatures:\n")
-    for name, sig in sorted(env.func_signatures.items()):
+    for name, sigs in sorted(env.method_signatures.get(UNBOUND, {}).items()):
+        sig = sigs[0]
         print(
             f"    {name}({', '.join(f'{p}: {t or "?"}' for p, t in sig.params)}) -> {sig.return_type or '?'}"
         )
@@ -203,7 +207,8 @@ class Dog {
         print(f"    {inst.result_reg} = call_method {method_name}  =>  {reg_type}")
 
     print(f"\n  Function signatures:\n")
-    for name, sig in sorted(env.func_signatures.items()):
+    for name, sigs in sorted(env.method_signatures.get(UNBOUND, {}).items()):
+        sig = sigs[0]
         print(f"    {name}() -> {sig.return_type or '?'}")
 
 

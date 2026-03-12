@@ -36,7 +36,6 @@ def _type_env_with(register_types: dict[str, str]) -> TypeEnvironment:
     return TypeEnvironment(
         register_types=MappingProxyType(register_types),
         var_types=MappingProxyType({}),
-        func_signatures=MappingProxyType({}),
     )
 
 
