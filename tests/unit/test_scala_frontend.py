@@ -1079,6 +1079,91 @@ object M {
         store_indices = _find_all(ir, Opcode.STORE_INDEX)
         assert len(store_indices) >= 1, "Expected STORE_INDEX for arr(1) = 5, got none"
 
+
+class TestScalaImplicitReturn:
+    """Scala functions return the last expression in a block body."""
+
+    def test_block_body_returns_last_expr(self):
+        """def f(): Int = { val x = 5; x } should RETURN x, not ()."""
+        ir = _parse_scala("""\
+object M {
+    def f(): Int = {
+        val x = 5
+        x
+    }
+}""")
+        returns = _find_all(ir, Opcode.RETURN)
+        # First RETURN should use a register from LOAD_VAR (not CONST "()")
+        # Find the RETURN inside the function (before the implicit default return)
+        func_label_idx = next(
+            i
+            for i, inst in enumerate(ir)
+            if inst.opcode == Opcode.LABEL and "func_f" in (inst.label or "")
+        )
+        end_label_idx = next(
+            i
+            for i, inst in enumerate(ir)
+            if inst.opcode == Opcode.LABEL and "end_f" in (inst.label or "")
+        )
+        func_returns = [
+            inst
+            for i, inst in enumerate(ir)
+            if inst.opcode == Opcode.RETURN and func_label_idx < i < end_label_idx
+        ]
+        assert len(func_returns) >= 1, "Expected at least one RETURN in function body"
+        first_return = func_returns[0]
+        # The return should reference a register from LOAD_VAR x, not CONST "()"
+        ret_reg = first_return.operands[0]
+        load_vars = [
+            inst
+            for inst in ir
+            if inst.opcode == Opcode.LOAD_VAR and inst.result_reg == ret_reg
+        ]
+        assert (
+            len(load_vars) >= 1
+        ), f"Expected RETURN to use LOAD_VAR result, got reg {ret_reg}"
+
+    def test_expression_body_returns_value(self):
+        """def f(): Int = 42 should still work (no block)."""
+        ir = _parse_scala("""\
+object M {
+    def f(): Int = 42
+}""")
+        returns = _find_all(ir, Opcode.RETURN)
+        assert len(returns) >= 1
+
+    def test_block_body_with_assignment_then_expr(self):
+        """def f(): Int = { val a = 1; val b = 2; a + b } returns binop result."""
+        ir = _parse_scala("""\
+object M {
+    def f(): Int = {
+        val a = 1
+        val b = 2
+        a + b
+    }
+}""")
+        # Should have BINOP followed by RETURN using that register
+        binops = _find_all(ir, Opcode.BINOP)
+        assert len(binops) >= 1, "Expected BINOP for a + b"
+        binop_reg = binops[-1].result_reg
+        returns = _find_all(ir, Opcode.RETURN)
+        binop_returned = any(r.operands[0] == binop_reg for r in returns)
+        assert binop_returned, f"Expected RETURN of BINOP result {binop_reg}"
+
+    def test_method_implicit_return_this(self):
+        """Method body ending with `this` should return this."""
+        ir = _parse_scala("""\
+object M {
+    class Foo {
+        def self_ref(): Foo = {
+            this
+        }
+    }
+}""")
+        load_vars = _find_all(ir, Opcode.LOAD_VAR)
+        this_loads = [inst for inst in load_vars if "this" in inst.operands]
+        assert len(this_loads) >= 1, "Expected LOAD_VAR this"
+
     def test_array_accumulate_execution(self):
         """Scala array accumulation via CALL_FUNCTION resolved by VM to indexing."""
         from tests.unit.rosetta.conftest import execute_for_language, extract_answer
