@@ -104,3 +104,22 @@ int py = p.y;
         vm = run(source, language="java", max_steps=2000)
         assert unwrap(vm.call_stack[0].local_vars.get("px")) == 3
         assert unwrap(vm.call_stack[0].local_vars.get("py")) == 4
+
+
+class TestJavaOverloadResolutionByHierarchy:
+    """Java methods overloaded with class hierarchy resolve to most specific."""
+
+    def test_overload_picks_subclass_over_parent(self):
+        source = """\
+class Animal {}
+class Dog extends Animal {}
+class Kennel {
+    String accept(Animal a) { return "animal"; }
+    String accept(Dog d) { return "dog"; }
+}
+Dog d = new Dog();
+Kennel k = new Kennel();
+String result = k.accept(d);
+"""
+        vm = run(source, language="java", max_steps=2000)
+        assert unwrap(vm.call_stack[0].local_vars.get("result")) == "dog"
