@@ -28,9 +28,7 @@ class TestBuiltinResult:
 
         obj = NewObject(addr="arr_0", type_hint="array")
         hw = HeapWrite(obj_addr="arr_0", field="length", value=typed_from_runtime(1))
-        result = BuiltinResult(
-            value="arr_0", new_objects=[obj], heap_writes=[hw]
-        )
+        result = BuiltinResult(value="arr_0", new_objects=[obj], heap_writes=[hw])
         assert result.value == "arr_0"
         assert len(result.new_objects) == 1
         assert len(result.heap_writes) == 1
