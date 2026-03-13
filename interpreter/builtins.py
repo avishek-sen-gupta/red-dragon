@@ -25,8 +25,7 @@ def _builtin_len(args: list[Any], vm: VMState) -> Any:
     if addr and addr in vm.heap:
         fields = vm.heap[addr].fields
         if "length" in fields:
-            length = fields["length"]
-            return length.value if isinstance(length, TypedValue) else length
+            return fields["length"].value
         return len(fields)
     if isinstance(val, (list, tuple, str)):
         return len(val)

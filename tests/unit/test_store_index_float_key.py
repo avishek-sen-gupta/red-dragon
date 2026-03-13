@@ -7,7 +7,7 @@ write time — so str(2) == "2" matches on both store and load.
 
 from types import MappingProxyType
 
-from interpreter.typed_value import unwrap
+from interpreter.typed_value import TypedValue, typed_from_runtime, unwrap
 
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.function_signature import FunctionSignature
@@ -48,7 +48,8 @@ def _set_reg(vm, reg, val, type_env=None, conversion_rules=None):
         kwargs["type_env"] = type_env
     if conversion_rules is not None:
         kwargs["conversion_rules"] = conversion_rules
-    apply_update(vm, StateUpdate(register_writes={reg: val}), **kwargs)
+    tv = val if isinstance(val, TypedValue) else typed_from_runtime(val)
+    apply_update(vm, StateUpdate(register_writes={reg: tv}), **kwargs)
 
 
 def _execute(vm, inst, type_env=None, conversion_rules=None):
