@@ -37,12 +37,21 @@ RedDragon's type system provides **static type inference** over the universal IR
   - [Builtin Type Knowledge](#builtin-type-knowledge)
   - [TypeEnvironment (Output)](#typeenvironment-output)
   - [Block-Scope Tracking (LLVM-style)](#block-scope-tracking-llvm-style)
+- [TypedValue — Runtime Value+Type Wrapper](#typedvalue--runtime-valuetype-wrapper)
+  - [Core API](#core-api)
+  - [Where TypedValue Lives](#where-typedvalue-lives)
 - [Phase 3: Runtime Type Coercion](#phase-3-runtime-type-coercion)
-  - [Coercion Flow](#coercion-flow)
-  - [TypeConversionRules (ABC)](#typeconversionrules-abc)
-  - [ConversionResult](#conversionresult)
-  - [DefaultTypeConversionRules](#defaulttypeconversionrules)
-  - [TypeResolver](#typeresolver)
+  - [Two-Layer Coercion Architecture](#two-layer-coercion-architecture)
+  - [Layer 1: Pre-Operation Coercion](#layer-1-pre-operation-coercion)
+    - [BinopCoercionStrategy](#binopcoercionstrategy)
+    - [UnopCoercionStrategy](#unopcoercionstrategy)
+    - [Language-Specific Coercion](#language-specific-coercion)
+  - [Layer 2: Write-Time Coercion](#layer-2-write-time-coercion)
+    - [Coercion Flow](#coercion-flow)
+    - [TypeConversionRules (ABC)](#typeconversionrules-abc)
+    - [ConversionResult](#conversionresult)
+    - [DefaultTypeConversionRules](#defaulttypeconversionrules)
+    - [TypeResolver](#typeresolver)
   - [How Coercion Composes End-to-End](#how-coercion-composes-end-to-end)
 - [End-to-End Example](#end-to-end-example)
 - [Extensibility](#extensibility)
@@ -66,8 +75,10 @@ flowchart LR
 
     subgraph Runtime["VM Execution"]
         VM[Executor]
+        TV[TypedValue]
+        BC[BinopCoercionStrategy]
+        UC[UnopCoercionStrategy]
         CR[TypeConversionRules]
-        TR[TypeResolver]
     end
 
     TS -->|type annotations| CTX
@@ -76,15 +87,17 @@ flowchart LR
     INF -->|fixpoint walk| IC
     IC -->|.build| TE[TypeEnvironment]
     TE --> VM
-    CR --> TR
-    TR --> VM
+    BC -->|pre-op coercion| VM
+    UC -->|pre-op coercion| VM
+    CR -->|write-time coercion| VM
+    VM -->|all values| TV
 ```
 
 The type system operates in three phases:
 
 1. **Frontend extraction** — During IR lowering, frontends extract type annotations from source ASTs and seed them into a `TypeEnvironmentBuilder`. All seeding methods call `parse_type()` at the boundary, converting raw language-specific type strings into `TypeExpr` ADT objects.
 2. **Static inference** — `infer_types()` walks the IR to fixpoint, propagating types through registers, variables, and function signatures. Pre-seeded types take precedence and are never widened.
-3. **Runtime coercion** — During VM execution, `_coerce_value()` applies write-time coercion when storing values into typed registers, using pluggable `TypeConversionRules`.
+3. **Runtime coercion** — During VM execution, type coercion happens at two layers: (a) **pre-operation coercion** via injectable `BinopCoercionStrategy` / `UnopCoercionStrategy` protocols, which coerce operands before operator evaluation and infer result types; and (b) **write-time coercion** via `TypeConversionRules`, which coerces values when storing into typed registers. All runtime values are wrapped in `TypedValue(value, type)` to carry type information through the VM pipeline.
 
 ---
 
@@ -1066,11 +1079,170 @@ The scope enter/exit is applied in `lower_try_catch()` (`interpreter/frontends/c
 
 ---
 
+## TypedValue — Runtime Value+Type Wrapper
+
+All runtime values in the VM are wrapped in `TypedValue` (`interpreter/typed_value.py`), a frozen dataclass pairing a raw Python value with its `TypeExpr` type:
+
+```python
+@dataclass(frozen=True)
+class TypedValue:
+    value: Any       # The raw Python value (int, str, float, SymbolicValue, etc.)
+    type: TypeExpr   # The inferred or declared type
+```
+
+### Core API
+
+| Function | Purpose |
+|---|---|
+| `typed(value, type_expr)` | Construct a `TypedValue` with an explicit type |
+| `typed_from_runtime(value)` | Construct a `TypedValue` by inferring type from the Python value (`int` → `Int`, `float` → `Float`, `bool` → `Bool`, `str` → `String`, otherwise `UNKNOWN`) |
+| `unwrap_locals(local_vars)` | Extract `{name: raw_value}` dict from `{name: TypedValue}` — used by tests and display code |
+
+### Where TypedValue Lives
+
+`TypedValue` is the canonical value representation throughout the VM:
+
+| Storage | Type | Notes |
+|---|---|---|
+| `VMState.registers` | `dict[str, TypedValue]` | All register writes produce `TypedValue` |
+| `StackFrame.local_vars` | `dict[str, TypedValue]` | All `STORE_VAR` writes produce `TypedValue` |
+| `HeapObject.fields` | `dict[str, TypedValue]` | All `STORE_FIELD` writes produce `TypedValue` |
+| `StateUpdate.register_writes` | `dict[str, TypedValue]` | Handler outputs are always `TypedValue` |
+| `StateUpdate.var_writes` | `dict[str, TypedValue]` | Handler outputs are always `TypedValue` |
+| `StateUpdate.return_value` | `TypedValue \| None` | Return values carry type |
+| `HeapWrite.value` | `TypedValue` | Heap writes carry type |
+| `ClosureEnvironment.bindings` | `dict[str, TypedValue]` | Captured closure values carry type |
+| Builtin function args | `list[TypedValue]` | Builtins receive typed arguments |
+| `BuiltinResult.value` | `TypedValue` | Builtin return values carry type |
+
+Opcode handlers resolve register operands via `_resolve_binop_operand()` which returns `TypedValue`, preserving the type through the computation pipeline. The raw value is extracted with `.value` only at the point of computation (e.g. before calling `Operators.eval_binop()`).
+
+---
+
 ## Phase 3: Runtime Type Coercion
 
-During VM execution, type coercion is applied at **write time** — every register store passes through `_coerce_value()`. Heap writes bypass coercion.
+Runtime type coercion operates in two layers: **pre-operation coercion** (before computing an operator's result) and **write-time coercion** (when storing a result into a typed register).
 
-### Coercion Flow
+### Two-Layer Coercion Architecture
+
+```mermaid
+flowchart TD
+    subgraph PreOp["Layer 1: Pre-Operation Coercion"]
+        BC[BinopCoercionStrategy]
+        UC[UnopCoercionStrategy]
+        COERCE_OP["coerce() operands before eval"]
+        RESULT_TYPE["result_type() infers output TypeExpr"]
+    end
+
+    subgraph WriteTime["Layer 2: Write-Time Coercion"]
+        CLU[coerce_local_update]
+        CTR[_coerce_typed_register]
+        TCR[TypeConversionRules]
+    end
+
+    BC --> COERCE_OP
+    UC --> COERCE_OP
+    BC --> RESULT_TYPE
+    UC --> RESULT_TYPE
+    COERCE_OP --> EVAL["Operators.eval_binop / eval_unop"]
+    EVAL --> TYPED["typed(result, result_type)"]
+    TYPED --> CLU
+    CLU --> CTR
+    CTR --> TCR
+    TCR --> STORE["Store TypedValue in register"]
+```
+
+**Layer 1** is injectable per-language (e.g. Java auto-stringifies `String + int`). **Layer 2** is driven by the static type environment and applies regardless of language.
+
+### Layer 1: Pre-Operation Coercion
+
+Pre-operation coercion transforms operands *before* the operator is evaluated and infers the result type. Both protocols follow the same pattern: `coerce()` to transform operands, `result_type()` to infer the output `TypeExpr`.
+
+#### BinopCoercionStrategy
+
+`BinopCoercionStrategy` (`interpreter/binop_coercion.py`) is a `Protocol` for binary operator coercion:
+
+```python
+class BinopCoercionStrategy(Protocol):
+    def coerce(self, op: str, lhs: TypedValue, rhs: TypedValue) -> tuple[TypedValue, TypedValue]:
+        """Pre-coerce operands before operator application.
+        Contract: never called with SymbolicValue operands."""
+        ...
+
+    def result_type(self, op: str, lhs: TypedValue, rhs: TypedValue) -> TypeExpr:
+        """Infer result type from operator and operand types."""
+        ...
+```
+
+**`DefaultBinopCoercion`** — no-op coercion with basic result type inference:
+
+| Operator Category | Result Type |
+|---|---|
+| Comparison (`==`, `!=`, `<`, `>`, `<=`, `>=`, `===`, `~=`) | `Bool` |
+| C-family logical (`&&`, `\|\|`) | `Bool` |
+| Concatenation (`..`, `.`) | `String` |
+| Arithmetic (`+`, `-`, `*`, `/`, `//`, `%`, `**`, `mod`) | `Float` if either operand is Float, `Int` if both Int, `String` for String+String with `+` |
+| Bitwise (`&`, `\|`, `^`, `~`, `<<`, `>>`) | Same as arithmetic |
+| Other (`and`, `or`, `?:`, `in`, etc.) | `UNKNOWN` |
+
+**`JavaBinopCoercion`** — auto-stringifies for `String + non-String`:
+
+```python
+class JavaBinopCoercion:
+    def coerce(self, op, lhs, rhs):
+        if op == "+":
+            if lhs is String and rhs is not String:
+                return lhs, typed(str(rhs.value), scalar("String"))
+            if rhs is String and lhs is not String:
+                return typed(str(lhs.value), scalar("String")), rhs
+        return lhs, rhs
+```
+
+#### UnopCoercionStrategy
+
+`UnopCoercionStrategy` (`interpreter/unop_coercion.py`) is a `Protocol` for unary operator coercion:
+
+```python
+class UnopCoercionStrategy(Protocol):
+    def coerce(self, op: str, operand: TypedValue) -> TypedValue:
+        """Pre-coerce operand before operator application.
+        Contract: never called with SymbolicValue operands."""
+        ...
+
+    def result_type(self, op: str, operand: TypedValue) -> TypeExpr:
+        """Infer result type from operator and operand type."""
+        ...
+```
+
+**`DefaultUnopCoercion`** — no-op coercion with basic result type inference:
+
+| Operator Category | Result Type |
+|---|---|
+| Logical not (`not`, `!`) | `Bool` |
+| Length (`#`) | `Int` |
+| Identity (`!!`) | Preserves operand type |
+| Negation (`-`, `+`) | Preserves type if Int or Float, else `UNKNOWN` |
+| Bitwise not (`~`) | `Int` if operand is Int, else `UNKNOWN` |
+| Other | `UNKNOWN` |
+
+#### Language-Specific Coercion
+
+Both strategies are threaded through `LocalExecutor.execute()` → `_try_execute_locally()` → `execute_cfg()` via kwargs. The `run()` function selects the appropriate strategy per language:
+
+```python
+def _binop_coercion_for_language(lang: Language) -> BinopCoercionStrategy:
+    if lang in {Language.JAVA}:
+        return JavaBinopCoercion()
+    return DefaultBinopCoercion()
+```
+
+New language-specific coercion strategies can be added by implementing the protocol and wiring into `_binop_coercion_for_language()` or an equivalent `_unop_coercion_for_language()`.
+
+### Layer 2: Write-Time Coercion
+
+After pre-operation coercion produces a `TypedValue` result, write-time coercion may further adjust the raw value to match the declared register type from the static type environment. This handles cases like Python producing `float` from division when the target register is typed `Int`.
+
+#### Coercion Flow
 
 ```mermaid
 flowchart TD
@@ -1267,21 +1439,45 @@ flowchart TD
 ```mermaid
 flowchart TD
     subgraph BinaryOp["BINOP Execution"]
-        B1["Executor reads operand registers"]
-        B2["TypeResolver.resolve_binop(<br/>op, left_hint, right_hint)"]
-        B3["Apply left_coercer to left operand"]
-        B4["Apply right_coercer to right operand"]
-        B5["Execute operator<br/>(possibly overridden)"]
-        B6["apply_update writes result to register"]
-        B7["_coerce_value checks register type<br/>vs runtime type"]
+        B1["_resolve_binop_operand → TypedValue"]
+        B2["Symbolic check (short-circuit)"]
+        B3["binop_coercion.coerce(op, lhs, rhs)"]
+        B4["Extract .value from coerced operands"]
+        B5["Operators.eval_binop(op, lhs_raw, rhs_raw)"]
+        B6["typed(result, binop_coercion.result_type(...))"]
+        B7["coerce_local_update → _coerce_typed_register"]
+        B8["apply_update stores TypedValue in register"]
     end
 
     B1 --> B2
-    B2 --> B3
+    B2 -->|not symbolic| B3
     B3 --> B4
     B4 --> B5
     B5 --> B6
     B6 --> B7
+    B7 --> B8
+```
+
+```mermaid
+flowchart TD
+    subgraph UnaryOp["UNOP Execution"]
+        U1["_resolve_binop_operand → TypedValue"]
+        U2["Symbolic check (short-circuit)"]
+        U3["unop_coercion.coerce(op, operand)"]
+        U4["Extract .value from coerced operand"]
+        U5["Operators.eval_unop(op, raw)"]
+        U6["typed(result, unop_coercion.result_type(...))"]
+        U7["coerce_local_update → _coerce_typed_register"]
+        U8["apply_update stores TypedValue in register"]
+    end
+
+    U1 --> U2
+    U2 -->|not symbolic| U3
+    U3 --> U4
+    U4 --> U5
+    U5 --> U6
+    U6 --> U7
+    U7 --> U8
 ```
 
 ---
@@ -1295,6 +1491,7 @@ int a = 10;
 double b = 3.0;
 double c = a + b;
 int d = 7 / 2;
+String msg = "val:" + a;
 ```
 
 ### Phase 1: Frontend Seeds
@@ -1304,6 +1501,7 @@ The Java frontend extracts type annotations from AST nodes and seeds:
 - `seed_var_type("b", "double")` → `builder.var_types["b"] = ScalarType("Float")`
 - `seed_var_type("c", "double")` → `builder.var_types["c"] = ScalarType("Float")`
 - `seed_var_type("d", "int")` → `builder.var_types["d"] = ScalarType("Int")`
+- `seed_var_type("msg", "String")` → `builder.var_types["msg"] = ScalarType("String")`
 
 ### Phase 2: Inference Walk
 
@@ -1334,14 +1532,24 @@ STORE_VAR d %7            → var_types["d"] already seeded — skip
 ### Phase 3: Runtime Coercion
 
 When `%4` (the `a + b` result) is evaluated:
-1. The `+` BINOP handler sees `ConversionResult(result_type=Float, left_coercer=_to_float)`
-2. Left operand `10` is coerced to `10.0` before addition: `10.0 + 3.0 = 13.0`
-3. `_coerce_value(13.0, "%4", ...)`: runtime type Float matches target type Float → no assignment coercion
+1. **Layer 1 (pre-op):** `DefaultBinopCoercion.coerce("+", TypedValue(10, Int), TypedValue(3.0, Float))` → no-op (default coercion passes through)
+2. **Layer 1 (result type):** `result_type("+", ...)` → `ScalarType("Float")` (Float promotion)
+3. `Operators.eval_binop("+", 10, 3.0)` → `13.0`
+4. Result: `typed(13.0, ScalarType("Float"))`
+5. **Layer 2 (write-time):** `_coerce_typed_register(TypedValue(13.0, Float), "%4", ...)`: runtime Float matches target Float → no further coercion
 
 When `%7` (the `7 / 2` result) is evaluated:
-1. The `/` BINOP handler sees `ConversionResult(result_type=Int, operator_override="//")`
-2. The operator is rewritten: `7 // 2 = 3` (floor division, not `3.5`)
-3. `_coerce_value(3, "%7", ...)`: runtime type Int matches target type Int → no assignment coercion
+1. **Layer 1 (pre-op):** `DefaultBinopCoercion.coerce("/", TypedValue(7, Int), TypedValue(2, Int))` → no-op
+2. **Layer 1 (result type):** `result_type("/", ...)` → `ScalarType("Int")`
+3. `Operators.eval_binop("/", 7, 2)` → `3` (Python `//` floor division applied by operator)
+4. Result: `typed(3, ScalarType("Int"))`
+5. **Layer 2 (write-time):** runtime Int matches target Int → no further coercion
+
+When `msg = "val:" + a` is evaluated (Java with `JavaBinopCoercion`):
+1. **Layer 1 (pre-op):** `JavaBinopCoercion.coerce("+", TypedValue("val:", String), TypedValue(10, Int))` → `(TypedValue("val:", String), typed("10", String))` — auto-stringifies the `int`
+2. **Layer 1 (result type):** `result_type("+", ...)` → `ScalarType("String")`
+3. `Operators.eval_binop("+", "val:", "10")` → `"val:10"`
+4. Result: `typed("val:10", ScalarType("String"))`
 
 ---
 
@@ -1354,7 +1562,9 @@ The type system is designed for extension via dependency injection:
 | **Custom type hierarchies** | `TypeGraph.extend(additional_nodes)` | `graph.extend((TypeNode("Dog", ("Animal",)),))` |
 | **Interface hierarchies** | `TypeGraph.extend_with_interfaces(impls)` | Add `Dog ⊆ Comparable` edges |
 | **Variance annotations** | `TypeGraph.with_variance(registry)` | `{"MutableList": (Variance.INVARIANT,)}` |
-| **Custom coercion rules** | Implement `TypeConversionRules` ABC | COBOL fixed-point arithmetic, a language where `/` always produces Float |
+| **Custom write-time coercion** | Implement `TypeConversionRules` ABC | COBOL fixed-point arithmetic, a language where `/` always produces Float |
+| **Custom binop coercion** | Implement `BinopCoercionStrategy` protocol | Java auto-stringify, C# string interpolation via `+` |
+| **Custom unop coercion** | Implement `UnopCoercionStrategy` protocol | Language-specific negation or logical-not semantics |
 | **Frontend type seeding** | `TreeSitterEmitContext.seed_*()` methods | Any frontend can seed register, var, alias, interface, and param types |
 | **Type aliases** | `seed_type_alias()` → transitive resolution | `typedef int UserId;` → `UserId = Int` |
 | **Block-scope tracking** | `enter_block_scope()` / `declare_block_var()` | Frontend-level name mangling for block-scoped languages |
