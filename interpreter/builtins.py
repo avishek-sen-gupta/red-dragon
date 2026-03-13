@@ -7,7 +7,7 @@ from typing import Any
 
 from interpreter.constants import ARR_ADDR_PREFIX, TypeName
 from interpreter.vm import VMState, Operators, _is_symbolic, _heap_addr
-from interpreter.vm_types import HeapObject, BuiltinResult
+from interpreter.vm_types import HeapObject, BuiltinResult, NewObject, HeapWrite
 from interpreter.cobol.byte_builtins import BYTE_BUILTINS
 from interpreter.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.type_expr import scalar
@@ -122,7 +122,7 @@ def _builtin_keys(args: list[Any], vm: VMState) -> Any:
     return _builtin_array_of(field_names, vm)
 
 
-def _builtin_array_of(args: list[Any], vm: VMState) -> Any:
+def _builtin_array_of(args: list[Any], vm: VMState) -> BuiltinResult:
     """Create a heap-allocated array from arguments (arrayOf, intArrayOf, Array, etc.)."""
     addr = f"{ARR_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
@@ -131,8 +131,13 @@ def _builtin_array_of(args: list[Any], vm: VMState) -> Any:
         for i, val in enumerate(args)
     }
     fields["length"] = typed(len(args), scalar(TypeName.INT))
-    vm.heap[addr] = HeapObject(type_hint="array", fields=fields)
-    return addr
+    return BuiltinResult(
+        value=addr,
+        new_objects=[NewObject(addr=addr, type_hint="array")],
+        heap_writes=[
+            HeapWrite(obj_addr=addr, field=k, value=v) for k, v in fields.items()
+        ],
+    )
 
 
 def _builtin_slice(args: list[Any], vm: VMState) -> Any:
