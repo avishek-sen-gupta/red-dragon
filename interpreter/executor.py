@@ -127,21 +127,19 @@ def _handle_load_var(
     for f in reversed(vm.call_stack):
         alias_ptr = f.var_heap_aliases.get(name)
         if alias_ptr and alias_ptr.base in vm.heap:
-            val = vm.heap[alias_ptr.base].fields.get(str(alias_ptr.offset))
-            tv = val if isinstance(val, TypedValue) else typed_from_runtime(val)
+            tv = vm.heap[alias_ptr.base].fields.get(str(alias_ptr.offset))
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={inst.result_reg: tv},
-                    reasoning=f"load {name} = {val!r} (via heap alias {alias_ptr.base})",
+                    reasoning=f"load {name} = {tv!r} (via heap alias {alias_ptr.base})",
                 )
             )
         if name in f.local_vars:
             stored = f.local_vars[name]
-            val = stored.value if isinstance(stored, TypedValue) else stored
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: typed_from_runtime(val)},
-                    reasoning=f"load {name} = {val!r} → {inst.result_reg}",
+                    register_writes={inst.result_reg: stored},
+                    reasoning=f"load {name} = {stored.value!r} → {inst.result_reg}",
                 )
             )
     # Variable not found — create symbolic
@@ -190,8 +188,7 @@ def _handle_address_of(
     current_val = None
     for f in reversed(vm.call_stack):
         if name in f.local_vars:
-            stored = f.local_vars[name]
-            current_val = stored.value if isinstance(stored, TypedValue) else stored
+            current_val = f.local_vars[name].value
             break
 
     # Function reference: &func_name returns the reference unchanged
@@ -258,11 +255,10 @@ def _handle_symbolic(
         param_name = hint[len(constants.PARAM_PREFIX) :]
         if param_name in frame.local_vars:
             stored = frame.local_vars[param_name]
-            val = stored.value if isinstance(stored, TypedValue) else stored
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: typed_from_runtime(val)},
-                    reasoning=f"param {param_name} = {val!r} (bound by caller)",
+                    register_writes={inst.result_reg: stored},
+                    reasoning=f"param {param_name} = {stored.value!r} (bound by caller)",
                 )
             )
     sym = vm.fresh_symbolic(hint=hint)
@@ -282,8 +278,7 @@ def _handle_new_object(
     # extract the canonical class name (e.g. Foo → __anon_class_0).
     for frame in reversed(vm.call_stack):
         if type_hint in frame.local_vars:
-            stored = frame.local_vars[type_hint]
-            raw = stored.value if isinstance(stored, TypedValue) else stored
+            raw = frame.local_vars[type_hint].value
             cr = _parse_class_ref(str(raw))
             if cr.matched:
                 type_hint = cr.name
@@ -373,22 +368,20 @@ def _handle_load_field(
         heap_obj = vm.heap[obj_val.base]
         # *ptr — dereference reads from the offset field
         if field_name == "*":
-            val = heap_obj.fields.get(str(obj_val.offset))
-            tv = val if isinstance(val, TypedValue) else typed_from_runtime(val)
+            tv = heap_obj.fields.get(str(obj_val.offset))
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={inst.result_reg: tv},
-                    reasoning=f"load *{obj_val} = {val!r}",
+                    reasoning=f"load *{obj_val} = {tv!r}",
                 )
             )
         # ptr->field — struct pointer field access (reads field from the object)
         if field_name in heap_obj.fields:
-            val = heap_obj.fields[field_name]
-            tv = val if isinstance(val, TypedValue) else typed_from_runtime(val)
+            tv = heap_obj.fields[field_name]
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={inst.result_reg: tv},
-                    reasoning=f"load {obj_val.base}.{field_name} = {val!r} (via Pointer)",
+                    reasoning=f"load {obj_val.base}.{field_name} = {tv!r} (via Pointer)",
                 )
             )
     if isinstance(obj_val, Pointer) and obj_val.base not in vm.heap:
@@ -427,12 +420,11 @@ def _handle_load_field(
         )
     heap_obj = vm.heap[addr]
     if field_name in heap_obj.fields:
-        val = heap_obj.fields[field_name]
-        tv = val if isinstance(val, TypedValue) else typed_from_runtime(val)
+        tv = heap_obj.fields[field_name]
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={inst.result_reg: tv},
-                reasoning=f"load {addr}.{field_name} = {val!r}",
+                reasoning=f"load {addr}.{field_name} = {tv!r}",
             )
         )
     # Field not found — create symbolic and cache it
@@ -521,12 +513,11 @@ def _handle_load_index(
     heap_obj = vm.heap[addr]
     key = str(idx_val)
     if key in heap_obj.fields:
-        val = heap_obj.fields[key]
-        tv = val if isinstance(val, TypedValue) else typed_from_runtime(val)
+        tv = heap_obj.fields[key]
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={inst.result_reg: tv},
-                reasoning=f"load {addr}[{idx_val}] = {val!r}",
+                reasoning=f"load {addr}[{idx_val}] = {tv!r}",
             )
         )
     sym = vm.fresh_symbolic(hint=f"{addr}[{idx_val}]")
@@ -1161,8 +1152,7 @@ def _handle_call_function(
     func_val = ""
     for f in reversed(vm.call_stack):
         if func_name in f.local_vars:
-            stored = f.local_vars[func_name]
-            func_val = stored.value if isinstance(stored, TypedValue) else stored
+            func_val = f.local_vars[func_name].value
             break
     if not func_val:
         # Unknown function — resolve via configured strategy
@@ -1175,16 +1165,11 @@ def _handle_call_function(
             heap_obj = vm.heap[addr]
             idx_key = str(args[0])
             if idx_key in heap_obj.fields:
-                element = heap_obj.fields[idx_key]
-                tv = (
-                    element
-                    if isinstance(element, TypedValue)
-                    else typed_from_runtime(element)
-                )
+                tv = heap_obj.fields[idx_key]
                 return ExecutionResult.success(
                     StateUpdate(
                         register_writes={inst.result_reg: tv},
-                        reasoning=f"heap call-index {func_name}({args[0]}) = {element!r}",
+                        reasoning=f"heap call-index {func_name}({args[0]}) = {tv!r}",
                     )
                 )
 

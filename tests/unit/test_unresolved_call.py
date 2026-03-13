@@ -11,10 +11,12 @@ from interpreter.unresolved_call import (
     SymbolicResolver,
     UnresolvedCallResolver,
 )
+from interpreter.typed_value import TypedValue
 from interpreter.vm_types import (
     ExecutionResult,
     StackFrame,
     HeapObject,
+    SymbolicValue,
     VMState,
 )
 
@@ -76,9 +78,11 @@ class TestSymbolicResolver:
         result = resolver.resolve_call("math.sqrt", [16], inst, vm)
 
         assert result.handled
-        reg_val = result.update.register_writes["%0"]
-        assert reg_val["__symbolic__"] is True
-        assert "math.sqrt(16)" in reg_val.get("type_hint", "")
+        tv = result.update.register_writes["%0"]
+        assert isinstance(tv, TypedValue)
+        sym = tv.value
+        assert isinstance(sym, SymbolicValue)
+        assert "math.sqrt(16)" in (sym.type_hint or "")
 
     def test_resolve_call_includes_constraint(self):
         resolver = SymbolicResolver()
@@ -87,8 +91,8 @@ class TestSymbolicResolver:
 
         result = resolver.resolve_call("foo", [1, 2], inst, vm)
 
-        reg_val = result.update.register_writes["%0"]
-        assert "foo(1, 2)" in reg_val["constraints"]
+        tv = result.update.register_writes["%0"]
+        assert "foo(1, 2)" in tv.value.constraints
 
     def test_resolve_method_produces_symbolic_value(self):
         resolver = SymbolicResolver()
@@ -98,9 +102,11 @@ class TestSymbolicResolver:
         result = resolver.resolve_method("myobj", "do_thing", [42], inst, vm)
 
         assert result.handled
-        reg_val = result.update.register_writes["%0"]
-        assert reg_val["__symbolic__"] is True
-        assert "myobj.do_thing(42)" in reg_val.get("type_hint", "")
+        tv = result.update.register_writes["%0"]
+        assert isinstance(tv, TypedValue)
+        sym = tv.value
+        assert isinstance(sym, SymbolicValue)
+        assert "myobj.do_thing(42)" in (sym.type_hint or "")
 
     def test_resolve_method_includes_constraint(self):
         resolver = SymbolicResolver()
@@ -109,8 +115,8 @@ class TestSymbolicResolver:
 
         result = resolver.resolve_method("obj", "method", [], inst, vm)
 
-        reg_val = result.update.register_writes["%0"]
-        assert "obj.method()" in reg_val["constraints"]
+        tv = result.update.register_writes["%0"]
+        assert "obj.method()" in tv.value.constraints
 
     def test_increments_symbolic_counter(self):
         resolver = SymbolicResolver()
@@ -201,9 +207,11 @@ class TestLLMPlausibleResolver:
         result = resolver.resolve_call("broken_func", [1], inst, vm)
 
         assert result.handled
-        reg_val = result.update.register_writes["%0"]
-        assert reg_val["__symbolic__"] is True
-        assert "broken_func(1)" in reg_val.get("type_hint", "")
+        tv = result.update.register_writes["%0"]
+        assert isinstance(tv, TypedValue)
+        sym = tv.value
+        assert isinstance(sym, SymbolicValue)
+        assert "broken_func(1)" in (sym.type_hint or "")
 
     def test_fallback_to_symbolic_on_invalid_json(self):
         resolver = LLMPlausibleResolver(
@@ -215,8 +223,9 @@ class TestLLMPlausibleResolver:
         result = resolver.resolve_call("bad_json_func", [], inst, vm)
 
         assert result.handled
-        reg_val = result.update.register_writes["%0"]
-        assert reg_val["__symbolic__"] is True
+        tv = result.update.register_writes["%0"]
+        assert isinstance(tv, TypedValue)
+        assert isinstance(tv.value, SymbolicValue)
 
     def test_method_fallback_to_symbolic_on_failure(self):
         resolver = LLMPlausibleResolver(llm_client=FailingLLMClient())
@@ -226,8 +235,9 @@ class TestLLMPlausibleResolver:
         result = resolver.resolve_method("obj", "broken", [], inst, vm)
 
         assert result.handled
-        reg_val = result.update.register_writes["%0"]
-        assert reg_val["__symbolic__"] is True
+        tv = result.update.register_writes["%0"]
+        assert isinstance(tv, TypedValue)
+        assert isinstance(tv.value, SymbolicValue)
 
     def test_source_language_included_in_prompt(self):
         calls: list[str] = []
