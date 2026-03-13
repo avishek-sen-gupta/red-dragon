@@ -10,6 +10,7 @@ from __future__ import annotations
 from interpreter.builtins import Builtins, _builtin_len
 from interpreter.vm import VMState
 from interpreter.vm_types import HeapObject
+from interpreter.typed_value import typed_from_runtime
 
 
 class TestBuiltinKeysRegistered:
@@ -20,15 +21,18 @@ class TestBuiltinKeysRegistered:
 class TestBuiltinKeysProducesConcreteArray:
     def test_keys_of_two_field_object(self):
         vm = VMState()
-        vm.heap["obj_0"] = HeapObject(type_hint="object", fields={"a": 10, "b": 5})
+        vm.heap["obj_0"] = HeapObject(
+            type_hint="object",
+            fields={k: typed_from_runtime(v) for k, v in {"a": 10, "b": 5}.items()},
+        )
         result = Builtins.TABLE["keys"](["obj_0"], vm)
         # Should return a heap address
         assert isinstance(result, str)
         assert result in vm.heap
         keys_obj = vm.heap[result]
         # Should be an array with 2 elements
-        assert keys_obj.fields["length"] == 2
-        key_values = {keys_obj.fields["0"], keys_obj.fields["1"]}
+        assert keys_obj.fields["length"].value == 2
+        key_values = {keys_obj.fields["0"].value, keys_obj.fields["1"].value}
         assert key_values == {"a", "b"}
 
     def test_keys_of_empty_object(self):
@@ -36,26 +40,32 @@ class TestBuiltinKeysProducesConcreteArray:
         vm.heap["obj_0"] = HeapObject(type_hint="object", fields={})
         result = Builtins.TABLE["keys"](["obj_0"], vm)
         assert result in vm.heap
-        assert vm.heap[result].fields["length"] == 0
+        assert vm.heap[result].fields["length"].value == 0
 
     def test_keys_excludes_length_field(self):
         """Arrays have a 'length' field — keys() should exclude it."""
         vm = VMState()
         vm.heap["arr_0"] = HeapObject(
             type_hint="array",
-            fields={"0": 10, "1": 20, "length": 2},
+            fields={
+                k: typed_from_runtime(v)
+                for k, v in {"0": 10, "1": 20, "length": 2}.items()
+            },
         )
         result = Builtins.TABLE["keys"](["arr_0"], vm)
         keys_obj = vm.heap[result]
-        assert keys_obj.fields["length"] == 2
-        key_values = {keys_obj.fields["0"], keys_obj.fields["1"]}
+        assert keys_obj.fields["length"].value == 2
+        key_values = {keys_obj.fields["0"].value, keys_obj.fields["1"].value}
         assert key_values == {"0", "1"}
 
     def test_len_of_keys_result(self):
         """len() on the keys array should return correct count."""
         vm = VMState()
         vm.heap["obj_0"] = HeapObject(
-            type_hint="object", fields={"x": 1, "y": 2, "z": 3}
+            type_hint="object",
+            fields={
+                k: typed_from_runtime(v) for k, v in {"x": 1, "y": 2, "z": 3}.items()
+            },
         )
         keys_addr = Builtins.TABLE["keys"](["obj_0"], vm)
         length = _builtin_len([keys_addr], vm)

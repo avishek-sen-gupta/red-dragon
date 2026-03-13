@@ -32,7 +32,7 @@ answer = 42
         assert "d" in vars_
         obj_addr = vars_["d"]
         assert obj_addr in vm.heap
-        assert vm.heap[obj_addr].fields.get("name") == "Rex"
+        assert vm.heap[obj_addr].fields.get("name").value == "Rex"
 
     def test_method_call_on_instance(self):
         """Method calls on instances should work."""
@@ -113,7 +113,7 @@ int answer = 42;
         heap = vm.heap
         obj_addr = unwrap(vm.call_stack[0].local_vars["d"])
         assert obj_addr in heap
-        assert heap[obj_addr].fields.get("name") == "Rex"
+        assert heap[obj_addr].fields.get("name").value == "Rex"
 
 
 class TestCSharpClassInstantiation:
@@ -176,4 +176,4 @@ let answer = 42;
         assert vars_["d"].startswith("obj_")
         # Constructor body must have run: this.name = "Rex"
         heap_obj = vm.heap[vars_["d"]]
-        assert heap_obj.fields["name"] == "Rex"
+        assert heap_obj.fields["name"].value == "Rex"

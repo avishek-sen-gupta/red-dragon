@@ -1,15 +1,22 @@
-"""Unit tests for heap_writes TypedValue migration (red-dragon-gny)."""
+"""Unit tests for heap_writes TypedValue migration (red-dragon-gny + red-dragon-x2t)."""
 
 from types import MappingProxyType
 
 from interpreter.constants import TypeName
 from interpreter.identity_conversion_rules import IdentityConversionRules
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.executor import _handle_store_field, _handle_store_index
+from interpreter.executor import (
+    _handle_store_field,
+    _handle_store_index,
+    _handle_load_field,
+    _handle_load_index,
+    _handle_load_var,
+    _handle_address_of,
+)
 from interpreter.type_environment import TypeEnvironment
 from interpreter.type_expr import UNKNOWN, scalar
 from interpreter.typed_value import TypedValue, typed, typed_from_runtime
-from interpreter.vm import materialize_raw_update
+from interpreter.vm import apply_update, materialize_raw_update
 from interpreter.vm_types import (
     HeapObject,
     HeapWrite,
@@ -136,3 +143,117 @@ class TestMaterializeHeapWrites:
         raw = StateUpdate(reasoning="test")
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
         assert result.heap_writes == []
+
+
+class TestApplyUpdateStoresTypedValue:
+    """Phase 2: apply_update stores TypedValue directly in HeapObject.fields."""
+
+    def test_apply_update_stores_typed_value_in_heap(self):
+        """apply_update should store TypedValue directly in HeapObject.fields."""
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        vm.heap["obj_0"] = HeapObject(type_hint="Point")
+        tv = typed(42, scalar(TypeName.INT))
+        update = StateUpdate(
+            heap_writes=[HeapWrite(obj_addr="obj_0", field="x", value=tv)],
+            reasoning="test",
+        )
+        apply_update(vm, update, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
+        field_val = vm.heap["obj_0"].fields["x"]
+        assert isinstance(field_val, TypedValue)
+        assert field_val.value == 42
+        assert field_val.type == scalar(TypeName.INT)
+
+    def test_alias_var_write_stores_typed_value_in_heap(self):
+        """Alias var_write should store TypedValue in HeapObject.fields."""
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        vm.heap["mem_0"] = HeapObject(
+            type_hint=None, fields={"0": typed_from_runtime(0)}
+        )
+        ptr = Pointer(base="mem_0", offset=0)
+        vm.current_frame.var_heap_aliases["x"] = ptr
+        tv = typed(99, scalar(TypeName.INT))
+        update = StateUpdate(var_writes={"x": tv}, reasoning="test")
+        apply_update(vm, update, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
+        field_val = vm.heap["mem_0"].fields["0"]
+        assert isinstance(field_val, TypedValue)
+        assert field_val.value == 99
+
+
+class TestHeapFieldsStoreTypedValue:
+    """Phase 2: HeapObject.fields stores TypedValue; readers pass through."""
+
+    def test_symbolic_cache_stores_typed_value(self):
+        """_handle_load_field symbolic cache stores typed(sym, UNKNOWN) in fields."""
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        vm.heap["obj_0"] = HeapObject(type_hint="Foo")
+        vm.current_frame.registers["%0"] = typed("obj_0", UNKNOWN)
+        inst = IRInstruction(
+            opcode=Opcode.LOAD_FIELD, operands=["%0", "bar"], result_reg="%1"
+        )
+        _handle_load_field(inst, vm)
+        field_val = vm.heap["obj_0"].fields["bar"]
+        assert isinstance(field_val, TypedValue)
+
+    def test_address_of_stores_typed_value(self):
+        """_handle_address_of stores TypedValue in promoted heap object."""
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        vm.current_frame.local_vars["x"] = typed(42, scalar(TypeName.INT))
+        inst = IRInstruction(opcode=Opcode.ADDRESS_OF, operands=["x"], result_reg="%0")
+        _handle_address_of(inst, vm)
+        heap_objs = [obj for obj in vm.heap.values() if obj.fields.get("0") is not None]
+        assert len(heap_objs) == 1
+        field_val = heap_objs[0].fields["0"]
+        assert isinstance(field_val, TypedValue)
+        assert field_val.value == 42
+
+    def test_load_field_passes_through_typed_value(self):
+        """_handle_load_field passes through TypedValue from heap without re-wrapping."""
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        original_tv = typed(42, scalar(TypeName.INT))
+        vm.heap["obj_0"] = HeapObject(type_hint="Point", fields={"x": original_tv})
+        vm.current_frame.registers["%0"] = typed("obj_0", UNKNOWN)
+        inst = IRInstruction(
+            opcode=Opcode.LOAD_FIELD, operands=["%0", "x"], result_reg="%1"
+        )
+        result = _handle_load_field(inst, vm)
+        loaded_tv = result.update.register_writes["%1"]
+        assert loaded_tv is original_tv
+
+    def test_load_index_passes_through_typed_value(self):
+        """_handle_load_index passes through TypedValue from heap."""
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        original_tv = typed(99, scalar(TypeName.INT))
+        vm.heap["arr_0"] = HeapObject(
+            type_hint="array",
+            fields={
+                "0": original_tv,
+                "length": typed(1, scalar(TypeName.INT)),
+            },
+        )
+        vm.current_frame.registers["%0"] = typed("arr_0", UNKNOWN)
+        vm.current_frame.registers["%1"] = typed(0, scalar(TypeName.INT))
+        inst = IRInstruction(
+            opcode=Opcode.LOAD_INDEX, operands=["%0", "%1"], result_reg="%2"
+        )
+        result = _handle_load_index(inst, vm)
+        loaded_tv = result.update.register_writes["%2"]
+        assert loaded_tv is original_tv
+
+    def test_load_var_alias_passes_through_typed_value(self):
+        """_handle_load_var alias path passes through TypedValue from heap."""
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="main"))
+        original_tv = typed(77, scalar(TypeName.INT))
+        vm.heap["mem_0"] = HeapObject(type_hint=None, fields={"0": original_tv})
+        ptr = Pointer(base="mem_0", offset=0)
+        vm.current_frame.var_heap_aliases["x"] = ptr
+        inst = IRInstruction(opcode=Opcode.LOAD_VAR, operands=["x"], result_reg="%0")
+        result = _handle_load_var(inst, vm)
+        loaded_tv = result.update.register_writes["%0"]
+        assert loaded_tv is original_tv

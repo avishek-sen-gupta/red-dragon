@@ -133,9 +133,10 @@ def _handle_load_var(
         alias_ptr = f.var_heap_aliases.get(name)
         if alias_ptr and alias_ptr.base in vm.heap:
             val = vm.heap[alias_ptr.base].fields.get(str(alias_ptr.offset))
+            tv = val if isinstance(val, TypedValue) else typed_from_runtime(val)
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: typed_from_runtime(val)},
+                    register_writes={inst.result_reg: tv},
                     reasoning=f"load {name} = {val!r} (via heap alias {alias_ptr.base})",
                 )
             )
@@ -226,7 +227,9 @@ def _handle_address_of(
     # Promote primitive to heap: allocate a HeapObject with field "0"
     mem_addr = f"mem_{vm.symbolic_counter}"
     vm.symbolic_counter += 1
-    vm.heap[mem_addr] = HeapObject(type_hint=None, fields={"0": current_val})
+    vm.heap[mem_addr] = HeapObject(
+        type_hint=None, fields={"0": typed_from_runtime(current_val)}
+    )
     ptr = Pointer(base=mem_addr, offset=0)
     frame.var_heap_aliases[name] = ptr
     logger.debug("address_of: promoted %s=%r to heap %s", name, current_val, mem_addr)
@@ -376,18 +379,20 @@ def _handle_load_field(
         # *ptr — dereference reads from the offset field
         if field_name == "*":
             val = heap_obj.fields.get(str(obj_val.offset))
+            tv = val if isinstance(val, TypedValue) else typed_from_runtime(val)
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: typed_from_runtime(val)},
+                    register_writes={inst.result_reg: tv},
                     reasoning=f"load *{obj_val} = {val!r}",
                 )
             )
         # ptr->field — struct pointer field access (reads field from the object)
         if field_name in heap_obj.fields:
             val = heap_obj.fields[field_name]
+            tv = val if isinstance(val, TypedValue) else typed_from_runtime(val)
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: typed_from_runtime(val)},
+                    register_writes={inst.result_reg: tv},
                     reasoning=f"load {obj_val.base}.{field_name} = {val!r} (via Pointer)",
                 )
             )
@@ -428,15 +433,16 @@ def _handle_load_field(
     heap_obj = vm.heap[addr]
     if field_name in heap_obj.fields:
         val = heap_obj.fields[field_name]
+        tv = val if isinstance(val, TypedValue) else typed_from_runtime(val)
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed_from_runtime(val)},
+                register_writes={inst.result_reg: tv},
                 reasoning=f"load {addr}.{field_name} = {val!r}",
             )
         )
     # Field not found — create symbolic and cache it
     sym = vm.fresh_symbolic(hint=f"{addr}.{field_name}")
-    heap_obj.fields[field_name] = sym
+    heap_obj.fields[field_name] = typed(sym, UNKNOWN)
     return ExecutionResult.success(
         StateUpdate(
             register_writes={inst.result_reg: typed(sym, UNKNOWN)},
@@ -521,9 +527,10 @@ def _handle_load_index(
     key = str(idx_val)
     if key in heap_obj.fields:
         val = heap_obj.fields[key]
+        tv = val if isinstance(val, TypedValue) else typed_from_runtime(val)
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed_from_runtime(val)},
+                register_writes={inst.result_reg: tv},
                 reasoning=f"load {addr}[{idx_val}] = {val!r}",
             )
         )
@@ -1176,9 +1183,14 @@ def _handle_call_function(
             idx_key = str(args[0])
             if idx_key in heap_obj.fields:
                 element = heap_obj.fields[idx_key]
+                tv = (
+                    element
+                    if isinstance(element, TypedValue)
+                    else typed_from_runtime(element)
+                )
                 return ExecutionResult.success(
                     StateUpdate(
-                        register_writes={inst.result_reg: typed_from_runtime(element)},
+                        register_writes={inst.result_reg: tv},
                         reasoning=f"heap call-index {func_name}({args[0]}) = {element!r}",
                     )
                 )
