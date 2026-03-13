@@ -399,7 +399,7 @@ The VM also handles — all deterministically:
 - **Byte-addressed memory regions** — `ALLOC_REGION`/`WRITE_REGION`/`LOAD_REGION` for COBOL-style REDEFINES overlays
 - **Named continuations** — `SET_CONTINUATION`/`RESUME_CONTINUATION` for COBOL PERFORM return semantics
 - **Data layout preservation** — COBOL field names, offsets, lengths, and type metadata attached to `VMState.data_layout` after execution
-- **Builtins** — `len`, `range`, `print`, `int`, `str`, `slice`, `arrayOf`/`listOf`, byte-manipulation primitives, etc. Method builtins (`subList`, `substring`, `slice`) dispatch through `METHOD_TABLE` for Kotlin/Java-style collection operations.
+- **Builtins** — `len`, `range`, `print`, `int`, `str`, `slice`, `arrayOf`/`listOf`, byte-manipulation primitives, etc. Method builtins (`subList`, `substring`, `slice`) dispatch through `METHOD_TABLE` for Kotlin/Java-style collection operations. All builtins return a `BuiltinResult(value, new_objects, heap_writes)` (defined in `vm_types.py`) instead of raw values — no builtin directly mutates `vm.heap`. Heap mutations are expressed as data in the result and applied uniformly via `StateUpdate`, keeping builtins pure and side-effect-free.
 
 The execution engine is split into focused modules: `vm_types.py`, `cfg_types.py`, `run_types.py`, `registry.py`, `builtins.py`, `executor.py` (opcode handlers), and `cobol/` (COBOL type system, EBCDIC tables, IR encoder/decoder builders).
 
