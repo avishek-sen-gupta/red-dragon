@@ -470,6 +470,8 @@
 {"issue_id":"red-dragon-uvn","label":"rosetta"}
 {"issue_id":"red-dragon-uvn","label":"testing"}
 {"issue_id":"red-dragon-uws","label":"typed-value-migration"}
+{"issue_id":"red-dragon-vva","label":"typed-value-migration"}
+{"issue_id":"red-dragon-x2t","label":"typed-value-migration"}
 {"issue_id":"red-dragon-x9r","label":"typed-value"}
 {"issue_id":"red-dragon-ymq","label":"typed-value"}
 {"issue_id":"red-dragon-z9o","label":"typed-value"}
