@@ -178,6 +178,19 @@ class RegionWrite(BaseModel):
     data: list[int]
 
 
+@dataclass
+class BuiltinResult:
+    """Uniform return type for all builtins.
+
+    Pure builtins return BuiltinResult(value=...) with empty side-effect lists.
+    Heap-mutating builtins express mutations as new_objects + heap_writes.
+    """
+
+    value: Any
+    new_objects: list[NewObject] = field(default_factory=list)
+    heap_writes: list[HeapWrite] = field(default_factory=list)
+
+
 class StackFramePush(BaseModel):
     function_name: str
     return_label: str | None = None
