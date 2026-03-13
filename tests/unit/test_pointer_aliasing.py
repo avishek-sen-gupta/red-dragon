@@ -23,7 +23,7 @@ from interpreter.vm_types import (
     StateUpdate,
 )
 from interpreter.vm import apply_update
-from interpreter.typed_value import TypedValue, unwrap
+from interpreter.typed_value import TypedValue, typed_from_runtime, unwrap
 from interpreter.executor import (
     _handle_address_of,
     _handle_load_var,
@@ -103,7 +103,7 @@ class TestAddressOfHandler:
 
         # The heap object should hold the original value
         alias_ptr = vm.current_frame.var_heap_aliases["x"]
-        assert vm.heap[alias_ptr.base].fields["0"] == 42
+        assert vm.heap[alias_ptr.base].fields["0"].value == 42
 
     def test_second_address_of_returns_same_pointer(self):
         """Taking &x twice should return the same Pointer (same heap object)."""
@@ -123,7 +123,10 @@ class TestAddressOfHandler:
     def test_address_of_struct_returns_pointer_to_existing_heap(self):
         """ADDRESS_OF on a variable holding a heap address should wrap it in a Pointer."""
         vm = _make_vm(s="obj_0")
-        vm.heap["obj_0"] = HeapObject(type_hint="Point", fields={"x": 10, "y": 20})
+        vm.heap["obj_0"] = HeapObject(
+            type_hint="Point",
+            fields={k: typed_from_runtime(v) for k, v in {"x": 10, "y": 20}.items()},
+        )
         inst = _make_inst(Opcode.ADDRESS_OF, result_reg="%0", operands=["s"])
         result = _handle_address_of(inst, vm)
         _apply(vm, result)
@@ -152,7 +155,7 @@ class TestAliasAwareLoadStore:
 
         # Directly modify the heap to simulate *ptr = 99
         alias = vm.current_frame.var_heap_aliases["x"]
-        vm.heap[alias.base].fields["0"] = 99
+        vm.heap[alias.base].fields["0"] = typed_from_runtime(99)
 
         inst = _make_inst(Opcode.LOAD_VAR, result_reg="%val", operands=["x"])
         result = _handle_load_var(inst, vm)
@@ -172,7 +175,7 @@ class TestAliasAwareLoadStore:
         _apply(vm, result)
 
         # The heap should reflect the new value
-        assert vm.heap[ptr.base].fields["0"] == 77
+        assert vm.heap[ptr.base].fields["0"].value == 77
 
     def test_store_via_pointer_then_load_var(self):
         """*ptr = 99 then read x should see 99."""
@@ -227,7 +230,7 @@ class TestPointerDereference:
         result = _handle_store_field(inst, vm)
         _apply(vm, result)
 
-        assert vm.heap[ptr.base].fields["0"] == 99
+        assert vm.heap[ptr.base].fields["0"].value == 99
 
 
 # ── Pointer arithmetic ───────────────────────────────────────────
@@ -292,7 +295,12 @@ class TestPointerArithmetic:
         """(ptr + 1) then LOAD_FIELD '*' should read offset 1 from the heap."""
         vm = _make_vm()
         # Set up a heap array with 3 elements
-        vm.heap["arr_0"] = HeapObject(fields={"0": 10, "1": 20, "2": 30, "length": 3})
+        vm.heap["arr_0"] = HeapObject(
+            fields={
+                k: typed_from_runtime(v)
+                for k, v in {"0": 10, "1": 20, "2": 30, "length": 3}.items()
+            }
+        )
         ptr = Pointer("arr_0", 0)
         vm.current_frame.registers["%ptr"] = ptr
         vm.current_frame.registers["%1"] = 1

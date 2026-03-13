@@ -195,4 +195,7 @@ def extract_array(
     obj = vm.heap[heap_addr]
     # Lua uses 1-based indexing; detect by checking for key "0"
     start_index = 0 if "0" in obj.fields else 1
-    return [obj.fields[str(start_index + i)] for i in range(length)]
+    return [
+        field.value if isinstance(field, TypedValue) else field
+        for field in (obj.fields[str(start_index + i)] for i in range(length))
+    ]
