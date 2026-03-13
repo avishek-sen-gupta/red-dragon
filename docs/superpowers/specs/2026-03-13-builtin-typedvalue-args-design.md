@@ -467,9 +467,9 @@ user_result = _try_user_function_call(target_val.value, args, ...)
 
 ### 15. BYTE_BUILTINS
 
-All 22 byte builtins in `interpreter/cobol/byte_builtins.py` follow the same three-pattern migration:
+All 25 byte builtins in `interpreter/cobol/byte_builtins.py` follow the same three-pattern migration:
 
-**Pattern A — symbolic guard** (all 22 builtins):
+**Pattern A — symbolic guard** (all 25 builtins):
 ```python
 # Before:
 if any(_is_symbolic(a) for a in args):
