@@ -249,14 +249,14 @@ def apply_update(
         else:
             frame.registers[reg] = tv
 
-    # Heap writes — unwrap TypedValue, heap storage stays raw (Phase 2)
+    # Heap writes — store TypedValue directly (Phase 2)
     for hw in update.heap_writes:
         if hw.obj_addr not in vm.heap:
             vm.heap[hw.obj_addr] = HeapObject()
         val = (
-            hw.value.value
+            hw.value
             if isinstance(hw.value, TypedValue)
-            else _deserialize_value(hw.value, vm)
+            else typed_from_runtime(_deserialize_value(hw.value, vm))
         )
         vm.heap[hw.obj_addr].fields[hw.field] = val
 
@@ -287,11 +287,10 @@ def apply_update(
             else _materialize_single_var(val, vm, var, type_env)
         )
         raw_val = tv.value
-        # Alias-aware: if variable is backed by a heap object, write there
+        # Alias-aware: if variable is backed by a heap object, write TypedValue
         alias_ptr = target_frame.var_heap_aliases.get(var)
         if alias_ptr and alias_ptr.base in vm.heap:
-            # Heap stays raw
-            vm.heap[alias_ptr.base].fields[str(alias_ptr.offset)] = raw_val
+            vm.heap[alias_ptr.base].fields[str(alias_ptr.offset)] = tv
         else:
             target_frame.local_vars[var] = tv
         if target_frame.closure_env_id and var in target_frame.captured_var_names:

@@ -157,14 +157,16 @@ class TestApplyUpdateTypedPath:
 
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
-        vm.heap["mem_0"] = HeapObject(fields={"0": None})
+        vm.heap["mem_0"] = HeapObject(fields={"0": typed_from_runtime(None)})
         vm.current_frame.var_heap_aliases["x"] = Pointer(base="mem_0", offset=0)
         tv = typed(42, scalar("Int"))
         update = StateUpdate(var_writes={"x": tv}, reasoning="test")
         apply_update(
             vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
         )
-        assert vm.heap["mem_0"].fields["0"] == 42
+        field_val = vm.heap["mem_0"].fields["0"]
+        assert isinstance(field_val, TypedValue)
+        assert field_val.value == 42
 
     def test_closure_binding_unwraps_value(self):
         from interpreter.vm_types import ClosureEnvironment

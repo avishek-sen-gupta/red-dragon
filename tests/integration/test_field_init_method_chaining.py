@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.typed_value import TypedValue
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 PROGRAMS: dict[str, str] = {
@@ -153,10 +154,13 @@ class TestFieldInitMethodChaining:
             f"[{lang}] expected 'count' field on Counter heap object, "
             f"got fields: {list(counter_obj.fields.keys())}"
         )
-        count_val = counter_obj.fields["count"]
+        count_tv = counter_obj.fields["count"]
         assert isinstance(
-            count_val, int
-        ), f"[{lang}] expected count to be int, got {type(count_val).__name__}: {count_val}"
+            count_tv, TypedValue
+        ), f"[{lang}] expected count to be TypedValue, got {type(count_tv).__name__}: {count_tv}"
+        assert isinstance(
+            count_tv.value, int
+        ), f"[{lang}] expected count.value to be int, got {type(count_tv.value).__name__}: {count_tv.value}"
         assert (
-            count_val == EXPECTED_ANSWER
-        ), f"[{lang}] expected count={EXPECTED_ANSWER}, got {count_val}"
+            count_tv.value == EXPECTED_ANSWER
+        ), f"[{lang}] expected count={EXPECTED_ANSWER}, got {count_tv.value}"
