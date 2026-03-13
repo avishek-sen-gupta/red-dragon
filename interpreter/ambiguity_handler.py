@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Protocol
+from typing import Protocol
 
 from interpreter.function_signature import FunctionSignature
-from interpreter.vm import runtime_type_name
+from interpreter.typed_value import TypedValue
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class AmbiguityHandler(Protocol):
     def handle(
         self,
         candidates: list[FunctionSignature],
-        args: list[Any],
+        args: list[TypedValue],
         ranked: list[int],
     ) -> int:
         """Return index into candidates for the winning overload."""
@@ -34,10 +34,10 @@ class FallbackFirstWithWarning:
     def handle(
         self,
         candidates: list[FunctionSignature],
-        args: list[Any],
+        args: list[TypedValue],
         ranked: list[int],
     ) -> int:
-        arg_types = [runtime_type_name(a) or type(a).__name__ for a in args]
+        arg_types = [str(a.type) for a in args]
         logger.warning(
             "Ambiguous overload resolution: %d candidates for args %s, picking index %d",
             len(candidates),
@@ -53,10 +53,10 @@ class StrictAmbiguityHandler:
     def handle(
         self,
         candidates: list[FunctionSignature],
-        args: list[Any],
+        args: list[TypedValue],
         ranked: list[int],
     ) -> int:
-        arg_types = [runtime_type_name(a) or type(a).__name__ for a in args]
+        arg_types = [str(a.type) for a in args]
         raise AmbiguousOverloadError(
             f"Ambiguous overload: {len(candidates)} candidates for args {arg_types}"
         )

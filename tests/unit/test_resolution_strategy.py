@@ -6,6 +6,8 @@ from interpreter.function_signature import FunctionSignature
 from interpreter.resolution_strategy import ArityThenTypeStrategy
 from interpreter.type_compatibility import DefaultTypeCompatibility
 from interpreter.type_expr import scalar, UNKNOWN
+from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+from interpreter.typed_value import typed
 
 
 def _sig(
@@ -35,25 +37,29 @@ def _instance_sig(*param_types: str) -> FunctionSignature:
 
 class TestArityThenTypeStrategy:
     def setup_method(self):
-        self.strategy = ArityThenTypeStrategy(DefaultTypeCompatibility())
+        type_graph = TypeGraph(DEFAULT_TYPE_NODES)
+        self.strategy = ArityThenTypeStrategy(DefaultTypeCompatibility(type_graph))
 
     # -- Arity-based resolution --
 
     def test_single_candidate_returns_it(self):
         candidates = [_sig(TypeName.INT)]
-        assert self.strategy.rank(candidates, [42]) == [0]
+        assert self.strategy.rank(candidates, [typed(42, scalar(TypeName.INT))]) == [0]
 
     def test_empty_candidates_returns_empty(self):
-        assert self.strategy.rank([], [42]) == []
+        assert self.strategy.rank([], [typed(42, scalar(TypeName.INT))]) == []
 
     def test_arity_match_preferred(self):
         candidates = [_sig(TypeName.INT, TypeName.INT), _sig(TypeName.INT)]
-        ranked = self.strategy.rank(candidates, [42])
+        ranked = self.strategy.rank(candidates, [typed(42, scalar(TypeName.INT))])
         assert ranked[0] == 1
 
     def test_two_args_picks_two_param_overload(self):
         candidates = [_sig(TypeName.INT), _sig(TypeName.INT, TypeName.STRING)]
-        ranked = self.strategy.rank(candidates, [42, "hello"])
+        ranked = self.strategy.rank(
+            candidates,
+            [typed(42, scalar(TypeName.INT)), typed("hello", scalar(TypeName.STRING))],
+        )
         assert ranked[0] == 1
 
     def test_zero_args_picks_nullary(self):
@@ -67,24 +73,27 @@ class TestArityThenTypeStrategy:
             _sig(TypeName.INT, TypeName.STRING, TypeName.FLOAT),
             _sig(TypeName.INT, TypeName.STRING),
         ]
-        ranked = self.strategy.rank(candidates, [42, "hello"])
+        ranked = self.strategy.rank(
+            candidates,
+            [typed(42, scalar(TypeName.INT)), typed("hello", scalar(TypeName.STRING))],
+        )
         assert ranked[0] == 1  # exact arity match wins
 
     # -- Type-based tiebreaking --
 
     def test_same_arity_exact_type_wins(self):
         candidates = [_sig(TypeName.STRING), _sig(TypeName.INT)]
-        ranked = self.strategy.rank(candidates, [42])
+        ranked = self.strategy.rank(candidates, [typed(42, scalar(TypeName.INT))])
         assert ranked[0] == 1
 
     def test_same_arity_compatible_vs_mismatch(self):
         candidates = [_sig(TypeName.STRING), _sig(TypeName.FLOAT)]
-        ranked = self.strategy.rank(candidates, [42])
+        ranked = self.strategy.rank(candidates, [typed(42, scalar(TypeName.INT))])
         assert ranked[0] == 1
 
     def test_same_arity_both_exact_preserves_order(self):
         candidates = [_sig(TypeName.INT), _sig(TypeName.INT)]
-        ranked = self.strategy.rank(candidates, [42])
+        ranked = self.strategy.rank(candidates, [typed(42, scalar(TypeName.INT))])
         assert ranked[0] == 0
 
     # -- Instance methods use callable_params (excludes this) --
@@ -94,7 +103,7 @@ class TestArityThenTypeStrategy:
             _instance_sig(TypeName.INT, TypeName.INT),
             _instance_sig(TypeName.INT),
         ]
-        ranked = self.strategy.rank(candidates, [42])
+        ranked = self.strategy.rank(candidates, [typed(42, scalar(TypeName.INT))])
         assert ranked[0] == 1
 
     # -- Multi-argument type scoring --
@@ -104,12 +113,15 @@ class TestArityThenTypeStrategy:
             _sig(TypeName.STRING, TypeName.INT),
             _sig(TypeName.INT, TypeName.STRING),
         ]
-        ranked = self.strategy.rank(candidates, [42, "hello"])
+        ranked = self.strategy.rank(
+            candidates,
+            [typed(42, scalar(TypeName.INT)), typed("hello", scalar(TypeName.STRING))],
+        )
         assert ranked[0] == 1
 
     # -- Unknown types are neutral --
 
     def test_unknown_args_dont_penalize(self):
         candidates = [_sig(TypeName.INT), _sig(TypeName.STRING)]
-        ranked = self.strategy.rank(candidates, ["obj_Dog_0"])
+        ranked = self.strategy.rank(candidates, [typed("obj_Dog_0", UNKNOWN)])
         assert ranked[0] == 0
