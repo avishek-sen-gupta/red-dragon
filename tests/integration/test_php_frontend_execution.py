@@ -69,3 +69,11 @@ class TestPHPRequireExecution:
         """Code after require should execute normally."""
         locals_ = _run_php("<?php require 'file.php'; $x = 99; ?>")
         assert locals_["$x"] == 99
+
+
+class TestPHPEnumCaseExecution:
+    def test_enum_declaration_stores_class_ref(self):
+        """Enum declaration should store a class reference in local vars."""
+        vars_ = _run_php("<?php enum Color { case Red; case Green; } ?>")
+        assert "Color" in vars_
+        assert "class:Color@" in str(vars_["Color"])
