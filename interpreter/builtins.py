@@ -41,7 +41,9 @@ def _builtin_range(args: list[Any], vm: VMState) -> BuiltinResult:
     if len(concrete) == 2:
         return BuiltinResult(value=list(range(int(concrete[0]), int(concrete[1]))))
     if len(concrete) == 3:
-        return BuiltinResult(value=list(range(int(concrete[0]), int(concrete[1]), int(concrete[2]))))
+        return BuiltinResult(
+            value=list(range(int(concrete[0]), int(concrete[1]), int(concrete[2])))
+        )
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
@@ -183,7 +185,9 @@ def _parse_slice_int(value: Any) -> int | None:
     return int(value)
 
 
-def _slice_heap_array(heap_obj: HeapObject, py_slice: slice, vm: VMState) -> BuiltinResult:
+def _slice_heap_array(
+    heap_obj: HeapObject, py_slice: slice, vm: VMState
+) -> BuiltinResult:
     """Apply a Python slice to a heap-backed array and return a new heap array."""
     length_raw = heap_obj.fields.get("length", len(heap_obj.fields))
     length = length_raw.value if isinstance(length_raw, TypedValue) else length_raw

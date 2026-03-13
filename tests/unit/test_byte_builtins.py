@@ -611,8 +611,7 @@ class TestStringReplace:
 
     def test_first_mode(self):
         assert (
-            _builtin_string_replace(["aXaXa", "X", "Y", "first"], None).value
-            == "aYaXa"
+            _builtin_string_replace(["aXaXa", "X", "Y", "first"], None).value == "aYaXa"
         )
 
     def test_leading_mode(self):
@@ -624,14 +623,11 @@ class TestStringReplace:
     def test_leading_mode_repeating(self):
         # "XXXb" with from="XX" -> "YXb" (one leading match consumed)
         assert (
-            _builtin_string_replace(["XXXb", "XX", "Y", "leading"], None).value
-            == "YXb"
+            _builtin_string_replace(["XXXb", "XX", "Y", "leading"], None).value == "YXb"
         )
 
     def test_empty_from_pat_returns_source(self):
-        assert (
-            _builtin_string_replace(["hello", "", "Y", "all"], None).value == "hello"
-        )
+        assert _builtin_string_replace(["hello", "", "Y", "all"], None).value == "hello"
 
     def test_unknown_mode_returns_uncomputable(self):
         assert (
@@ -642,8 +638,7 @@ class TestStringReplace:
     def test_symbolic_returns_uncomputable(self):
         sym = SymbolicValue(name="x")
         assert (
-            _builtin_string_replace([sym, "a", "b", "all"], None).value
-            is _UNCOMPUTABLE
+            _builtin_string_replace([sym, "a", "b", "all"], None).value is _UNCOMPUTABLE
         )
 
 

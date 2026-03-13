@@ -9,7 +9,13 @@ from interpreter.builtins import (
     Builtins,
 )
 from interpreter.vm import Operators, apply_update
-from interpreter.vm_types import BuiltinResult, HeapObject, StackFrame, StateUpdate, VMState
+from interpreter.vm_types import (
+    BuiltinResult,
+    HeapObject,
+    StackFrame,
+    StateUpdate,
+    VMState,
+)
 from interpreter.typed_value import typed_from_runtime
 
 
