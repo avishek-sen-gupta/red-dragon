@@ -1000,6 +1000,27 @@ enum Suit: string {
         assert "Hearts" in field_names
         assert "Diamonds" in field_names
 
+    def test_enum_case_store_field_uses_register_not_bare_string(self):
+        """STORE_FIELD object operand must be a register from LOAD_VAR, not bare 'self'."""
+        source = """<?php
+enum Color {
+    case Red;
+}
+?>"""
+        ir = _parse_and_lower(source)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        enum_stores = [sf for sf in store_fields if sf.operands[1] == "Red"]
+        assert len(enum_stores) == 1
+        obj_operand = enum_stores[0].operands[0]
+        # Must be a register (e.g. %0), not the bare string "self"
+        assert obj_operand.startswith(
+            "%"
+        ), f"Expected register for STORE_FIELD object operand, got {obj_operand!r}"
+        # Corresponding LOAD_VAR self must exist
+        load_vars = _find_all(ir, Opcode.LOAD_VAR)
+        self_loads = [lv for lv in load_vars if "self" in lv.operands]
+        assert len(self_loads) >= 1
+
 
 class TestPhpStringInterpolation:
     def test_interpolation_basic(self):

@@ -589,6 +589,12 @@ def lower_php_enum_case(ctx: TreeSitterEmitContext, node) -> None:
     )
     if name_node:
         case_name = ctx.node_text(name_node)
+        self_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.LOAD_VAR,
+            result_reg=self_reg,
+            operands=[constants.PARAM_SELF],
+        )
         if value_node:
             val_reg = ctx.lower_expr(value_node)
         else:
@@ -600,7 +606,7 @@ def lower_php_enum_case(ctx: TreeSitterEmitContext, node) -> None:
             )
         ctx.emit(
             Opcode.STORE_FIELD,
-            operands=[constants.PARAM_SELF, case_name, val_reg],
+            operands=[self_reg, case_name, val_reg],
             node=node,
         )
 
