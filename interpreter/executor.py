@@ -91,16 +91,11 @@ def _handle_const(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
                 env = vm.closures[env_id]
                 for k, v in enclosing.local_vars.items():
                     if k not in env.bindings:
-                        env.bindings[k] = v.value if isinstance(v, TypedValue) else v
+                        env.bindings[k] = v
             else:
                 env_id = f"{constants.ENV_ID_PREFIX}{vm.symbolic_counter}"
                 vm.symbolic_counter += 1
-                env = ClosureEnvironment(
-                    bindings={
-                        k: v.value if isinstance(v, TypedValue) else v
-                        for k, v in enclosing.local_vars.items()
-                    }
-                )
+                env = ClosureEnvironment(bindings=dict(enclosing.local_vars))
                 vm.closures[env_id] = env
                 enclosing.closure_env_id = env_id
                 enclosing.captured_var_names = frozenset(enclosing.local_vars.keys())
@@ -1089,9 +1084,7 @@ def _try_user_function_call(
         if closure_env:
             captured = closure_env.bindings
 
-    new_vars = (
-        {k: typed_from_runtime(v) for k, v in captured.items()} if captured else {}
-    )
+    new_vars = dict(captured) if captured else {}
     new_vars.update(param_vars)
     if captured:
         logger.debug("Injecting closure vars for %s: %s", fname, list(captured.keys()))

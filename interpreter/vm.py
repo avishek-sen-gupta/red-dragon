@@ -286,7 +286,6 @@ def apply_update(
             if isinstance(val, TypedValue)
             else _materialize_single_var(val, vm, var, type_env)
         )
-        raw_val = tv.value
         # Alias-aware: if variable is backed by a heap object, write TypedValue
         alias_ptr = target_frame.var_heap_aliases.get(var)
         if alias_ptr and alias_ptr.base in vm.heap:
@@ -296,8 +295,7 @@ def apply_update(
         if target_frame.closure_env_id and var in target_frame.captured_var_names:
             env = vm.closures.get(target_frame.closure_env_id)
             if env:
-                # Closure bindings stay raw
-                env.bindings[var] = raw_val
+                env.bindings[var] = tv
 
     # Call pop
     if update.call_pop and len(vm.call_stack) > 1:
