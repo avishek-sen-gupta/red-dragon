@@ -13,6 +13,9 @@ from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.resolution_strategy import ArityThenTypeStrategy
 from interpreter.type_compatibility import DefaultTypeCompatibility
 from interpreter.type_expr import scalar, UNKNOWN
+from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+from interpreter.type_node import TypeNode
+from interpreter.typed_value import typed
 
 
 def _sig(*param_types: str) -> FunctionSignature:
@@ -25,7 +28,8 @@ def _sig(*param_types: str) -> FunctionSignature:
 
 
 def _make_resolver(strict: bool = False) -> OverloadResolver:
-    compat = DefaultTypeCompatibility()
+    type_graph = TypeGraph(DEFAULT_TYPE_NODES)
+    compat = DefaultTypeCompatibility(type_graph)
     strategy = ArityThenTypeStrategy(compat)
     handler = StrictAmbiguityHandler() if strict else FallbackFirstWithWarning()
     return OverloadResolver(strategy, handler)
@@ -36,25 +40,28 @@ class TestOverloadResolver:
 
     def test_empty_candidates_returns_zero(self):
         resolver = _make_resolver()
-        assert resolver.resolve([], [42]) == 0
+        assert resolver.resolve([], [typed(42, scalar(TypeName.INT))]) == 0
 
     def test_single_candidate_returns_zero(self):
         resolver = _make_resolver()
-        assert resolver.resolve([_sig(TypeName.INT)], [42]) == 0
+        assert (
+            resolver.resolve([_sig(TypeName.INT)], [typed(42, scalar(TypeName.INT))])
+            == 0
+        )
 
     # -- Arity resolution --
 
     def test_picks_matching_arity(self):
         resolver = _make_resolver()
         candidates = [_sig(TypeName.INT, TypeName.INT), _sig(TypeName.INT)]
-        assert resolver.resolve(candidates, [42]) == 1
+        assert resolver.resolve(candidates, [typed(42, scalar(TypeName.INT))]) == 1
 
     # -- Type resolution --
 
     def test_picks_matching_type(self):
         resolver = _make_resolver()
         candidates = [_sig(TypeName.STRING), _sig(TypeName.INT)]
-        assert resolver.resolve(candidates, [42]) == 1
+        assert resolver.resolve(candidates, [typed(42, scalar(TypeName.INT))]) == 1
 
     # -- Strict handler raises on genuine ambiguity --
 
@@ -62,14 +69,14 @@ class TestOverloadResolver:
         resolver = _make_resolver(strict=True)
         candidates = [_sig(TypeName.INT), _sig(TypeName.INT)]
         with pytest.raises(AmbiguousOverloadError):
-            resolver.resolve(candidates, [42])
+            resolver.resolve(candidates, [typed(42, scalar(TypeName.INT))])
 
     # -- Fallback handler resolves ambiguity silently --
 
     def test_fallback_resolves_identical_signatures(self):
         resolver = _make_resolver(strict=False)
         candidates = [_sig(TypeName.INT), _sig(TypeName.INT)]
-        result = resolver.resolve(candidates, [42])
+        result = resolver.resolve(candidates, [typed(42, scalar(TypeName.INT))])
         assert result in (0, 1)
 
     # -- End-to-end: multi-arg disambiguation --
@@ -80,14 +87,62 @@ class TestOverloadResolver:
             _sig(TypeName.STRING, TypeName.INT),
             _sig(TypeName.INT, TypeName.STRING),
         ]
-        assert resolver.resolve(candidates, [42, "hello"]) == 1
+        assert (
+            resolver.resolve(
+                candidates,
+                [
+                    typed(42, scalar(TypeName.INT)),
+                    typed("hello", scalar(TypeName.STRING)),
+                ],
+            )
+            == 1
+        )
 
 
 class TestNullOverloadResolver:
     def test_always_returns_zero(self):
         resolver = NullOverloadResolver()
-        assert resolver.resolve([_sig(TypeName.INT), _sig(TypeName.STRING)], [42]) == 0
+        assert (
+            resolver.resolve(
+                [_sig(TypeName.INT), _sig(TypeName.STRING)],
+                [typed(42, scalar(TypeName.INT))],
+            )
+            == 0
+        )
 
     def test_empty_candidates_returns_zero(self):
         resolver = NullOverloadResolver()
         assert resolver.resolve([], []) == 0
+
+
+def _make_resolver_with_classes(strict: bool = False) -> OverloadResolver:
+    class_nodes = (
+        TypeNode(name="Animal", parents=("Any",)),
+        TypeNode(name="Dog", parents=("Animal",)),
+        TypeNode(name="Cat", parents=("Animal",)),
+    )
+    type_graph = TypeGraph(DEFAULT_TYPE_NODES + class_nodes)
+    compat = DefaultTypeCompatibility(type_graph)
+    strategy = ArityThenTypeStrategy(compat)
+    handler = StrictAmbiguityHandler() if strict else FallbackFirstWithWarning()
+    return OverloadResolver(strategy, handler)
+
+
+class TestSubtypeOverloadResolution:
+    def test_picks_exact_class_over_parent(self):
+        """foo(Dog) should beat foo(Animal) when passing a Dog."""
+        resolver = _make_resolver_with_classes()
+        candidates = [_sig("Animal"), _sig("Dog")]
+        assert resolver.resolve(candidates, [typed("obj_0", scalar("Dog"))]) == 1
+
+    def test_picks_parent_when_no_exact(self):
+        """foo(Animal) should match when passing a Dog and no foo(Dog) exists."""
+        resolver = _make_resolver_with_classes()
+        candidates = [_sig(TypeName.STRING), _sig("Animal")]
+        assert resolver.resolve(candidates, [typed("obj_0", scalar("Dog"))]) == 1
+
+    def test_sibling_classes_are_ambiguous_with_fallback(self):
+        """foo(Dog) and foo(Cat) with a Dog arg — Dog matches exactly, Cat mismatches."""
+        resolver = _make_resolver_with_classes()
+        candidates = [_sig("Cat"), _sig("Dog")]
+        assert resolver.resolve(candidates, [typed("obj_0", scalar("Dog"))]) == 1
