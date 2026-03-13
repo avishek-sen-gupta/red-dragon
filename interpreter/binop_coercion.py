@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Protocol
 
 from interpreter.type_expr import UNKNOWN, ScalarType, TypeExpr, scalar
-from interpreter.typed_value import TypedValue
+from interpreter.typed_value import TypedValue, typed
 
 _COMPARISON_OPS = frozenset({"==", "!=", "<", ">", "<=", ">=", "===", "~="})
 _C_FAMILY_LOGICAL_OPS = frozenset({"&&", "||"})
@@ -17,8 +17,10 @@ _BITWISE_OPS = frozenset({"&", "|", "^", "~", "<<", ">>"})
 class BinopCoercionStrategy(Protocol):
     """Pre-coerce operands and infer result type for binary operations."""
 
-    def coerce(self, op: str, lhs: TypedValue, rhs: TypedValue) -> tuple[Any, Any]:
-        """Pre-coerce operands before operator application. Returns raw values.
+    def coerce(
+        self, op: str, lhs: TypedValue, rhs: TypedValue
+    ) -> tuple[TypedValue, TypedValue]:
+        """Pre-coerce operands before operator application. Returns TypedValue.
 
         Contract: will never be called with SymbolicValue operands — the BINOP
         handler short-circuits symbolic operands before calling coerce().
@@ -49,8 +51,10 @@ def _arithmetic_result(lhs_name: str, rhs_name: str) -> TypeExpr:
 class DefaultBinopCoercion:
     """No-op coercion with basic result type inference."""
 
-    def coerce(self, op: str, lhs: TypedValue, rhs: TypedValue) -> tuple[Any, Any]:
-        return lhs.value, rhs.value
+    def coerce(
+        self, op: str, lhs: TypedValue, rhs: TypedValue
+    ) -> tuple[TypedValue, TypedValue]:
+        return lhs, rhs
 
     def result_type(self, op: str, lhs: TypedValue, rhs: TypedValue) -> TypeExpr:
         if op in _COMPARISON_OPS:
@@ -80,15 +84,18 @@ class JavaBinopCoercion:
     def __init__(self) -> None:
         self._default = DefaultBinopCoercion()
 
-    def coerce(self, op: str, lhs: TypedValue, rhs: TypedValue) -> tuple[Any, Any]:
+    def coerce(
+        self, op: str, lhs: TypedValue, rhs: TypedValue
+    ) -> tuple[TypedValue, TypedValue]:
         if op == "+":
+            string_type = scalar("String")
             lhs_str = _scalar_name(lhs.type) == "String"
             rhs_str = _scalar_name(rhs.type) == "String"
             if lhs_str and not rhs_str:
-                return lhs.value, str(rhs.value)
+                return lhs, typed(str(rhs.value), string_type)
             if rhs_str and not lhs_str:
-                return str(lhs.value), rhs.value
-        return lhs.value, rhs.value
+                return typed(str(lhs.value), string_type), rhs
+        return lhs, rhs
 
     def result_type(self, op: str, lhs: TypedValue, rhs: TypedValue) -> TypeExpr:
         if op == "+":
