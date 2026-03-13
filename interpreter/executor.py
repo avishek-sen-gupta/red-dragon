@@ -708,7 +708,8 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
         )
 
     # Coerce and compute
-    lhs_raw, rhs_raw = binop_coercion.coerce(oper, lhs_typed, rhs_typed)
+    lhs_coerced, rhs_coerced = binop_coercion.coerce(oper, lhs_typed, rhs_typed)
+    lhs_raw, rhs_raw = lhs_coerced.value, rhs_coerced.value
     result = Operators.eval_binop(oper, lhs_raw, rhs_raw)
 
     if result is Operators.UNCOMPUTABLE:
