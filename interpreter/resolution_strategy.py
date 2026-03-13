@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Protocol
+from typing import Protocol
 
 from interpreter.function_signature import FunctionSignature
 from interpreter.type_compatibility import TypeCompatibility
+from interpreter.typed_value import TypedValue
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ class ResolutionStrategy(Protocol):
     def rank(
         self,
         candidates: list[FunctionSignature],
-        args: list[Any],
+        args: list[TypedValue],
     ) -> list[int]:
         """Return candidate indices sorted best-to-worst."""
         ...
@@ -32,7 +33,7 @@ class ArityThenTypeStrategy:
     def rank(
         self,
         candidates: list[FunctionSignature],
-        args: list[Any],
+        args: list[TypedValue],
     ) -> list[int]:
         if not candidates:
             return []
@@ -45,10 +46,10 @@ class ArityThenTypeStrategy:
         scored.sort()
         return [i for _, _, i in scored]
 
-    def _arity_distance(self, sig: FunctionSignature, args: list[Any]) -> int:
+    def _arity_distance(self, sig: FunctionSignature, args: list[TypedValue]) -> int:
         return abs(len(sig.callable_params) - len(args))
 
-    def _type_score(self, sig: FunctionSignature, args: list[Any]) -> int:
+    def _type_score(self, sig: FunctionSignature, args: list[TypedValue]) -> int:
         params = sig.callable_params
         return sum(
             self._type_compatibility.score(arg, param_type)
