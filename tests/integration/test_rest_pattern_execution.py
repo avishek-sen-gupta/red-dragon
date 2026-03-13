@@ -96,10 +96,10 @@ let answer = a;
         rest_addr = unwrap(frame.local_vars["rest"])
         rest_obj = vm.heap[rest_addr]
         assert (
-            rest_obj.fields["b"] == 2
+            rest_obj.fields["b"].value == 2
         ), f"expected b=2, got {rest_obj.fields.get('b')}"
         assert (
-            rest_obj.fields["c"] == 3
+            rest_obj.fields["c"].value == 3
         ), f"expected c=3, got {rest_obj.fields.get('c')}"
         assert "a" not in rest_obj.fields, "rest should not contain excluded key 'a'"
 
@@ -124,9 +124,13 @@ let answer = 1;
         result = unwrap(vm.call_stack[0].local_vars.get("result"))
         assert result in vm.heap, f"expected heap address, got {result}"
         heap_obj = vm.heap[result]
-        assert heap_obj.fields["0"] == 2, f"expected rest[0]=2, got {heap_obj.fields}"
-        assert heap_obj.fields["1"] == 3, f"expected rest[1]=3, got {heap_obj.fields}"
-        assert heap_obj.fields["length"] == 2
+        assert (
+            heap_obj.fields["0"].value == 2
+        ), f"expected rest[0]=2, got {heap_obj.fields}"
+        assert (
+            heap_obj.fields["1"].value == 3
+        ), f"expected rest[1]=3, got {heap_obj.fields}"
+        assert heap_obj.fields["length"].value == 2
 
     def test_zero_llm_calls(self):
         _vm, stats = execute_for_language("javascript", self.PROGRAM)

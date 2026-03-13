@@ -5,10 +5,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from interpreter.constants import ARR_ADDR_PREFIX
+from interpreter.constants import ARR_ADDR_PREFIX, TypeName
 from interpreter.vm import VMState, Operators, _is_symbolic, _heap_addr
 from interpreter.vm_types import HeapObject
 from interpreter.cobol.byte_builtins import BYTE_BUILTINS
+from interpreter.typed_value import TypedValue, typed, typed_from_runtime
+from interpreter.type_expr import scalar
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 
@@ -23,7 +25,8 @@ def _builtin_len(args: list[Any], vm: VMState) -> Any:
     if addr and addr in vm.heap:
         fields = vm.heap[addr].fields
         if "length" in fields:
-            return fields["length"]
+            length = fields["length"]
+            return length.value if isinstance(length, TypedValue) else length
         return len(fields)
     if isinstance(val, (list, tuple, str)):
         return len(val)
@@ -124,8 +127,11 @@ def _builtin_array_of(args: list[Any], vm: VMState) -> Any:
     """Create a heap-allocated array from arguments (arrayOf, intArrayOf, Array, etc.)."""
     addr = f"{ARR_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
-    fields = {str(i): val for i, val in enumerate(args)}
-    fields["length"] = len(args)
+    fields = {
+        str(i): val if isinstance(val, TypedValue) else typed_from_runtime(val)
+        for i, val in enumerate(args)
+    }
+    fields["length"] = typed(len(args), scalar(TypeName.INT))
     vm.heap[addr] = HeapObject(type_hint="array", fields=fields)
     return addr
 
@@ -175,7 +181,8 @@ def _parse_slice_int(value: Any) -> int | None:
 
 def _slice_heap_array(heap_obj: HeapObject, py_slice: slice, vm: VMState) -> Any:
     """Apply a Python slice to a heap-backed array and return a new heap array."""
-    length = heap_obj.fields.get("length", len(heap_obj.fields))
+    length_raw = heap_obj.fields.get("length", len(heap_obj.fields))
+    length = length_raw.value if isinstance(length_raw, TypedValue) else length_raw
     if not isinstance(length, int):
         return _UNCOMPUTABLE
     indices = range(length)[py_slice]
