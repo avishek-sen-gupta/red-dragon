@@ -45,7 +45,7 @@ class Pointer:
 @dataclass
 class HeapObject:
     type_hint: str | None = None
-    fields: dict[str, Any] = field(default_factory=dict)
+    fields: dict[str, TypedValue] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -58,7 +58,7 @@ class HeapObject:
 class ClosureEnvironment:
     """Shared mutable environment for closure capture-by-reference."""
 
-    bindings: dict[str, Any] = field(default_factory=dict)
+    bindings: dict[str, TypedValue] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {k: _serialize_value(v) for k, v in self.bindings.items()}
@@ -76,8 +76,8 @@ class ExceptionHandler:
 @dataclass
 class StackFrame:
     function_name: str
-    registers: dict[str, Any] = field(default_factory=dict)
-    local_vars: dict[str, Any] = field(default_factory=dict)
+    registers: dict[str, TypedValue] = field(default_factory=dict)
+    local_vars: dict[str, TypedValue] = field(default_factory=dict)
     return_label: str | None = None
     return_ip: int | None = None  # ip to resume at in caller block
     result_reg: str | None = None  # caller's register for return value
