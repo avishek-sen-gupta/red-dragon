@@ -25,7 +25,10 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-n auto"
+addopts = "-n auto -m 'not external'"
+markers = [
+    "external: tests requiring external services (LLM APIs); run with -m external",
+]
 
 [tool.poetry.group.dev.dependencies]
 black = "^26.1.0"
