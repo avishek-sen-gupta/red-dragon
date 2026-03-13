@@ -183,6 +183,7 @@ class TestBuiltinSlice:
 class TestBuiltinObjectRest:
     def test_object_rest_excludes_keys(self):
         vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="test"))
         addr = "<obj:0>"
         vm.heap[addr] = HeapObject(
             type_hint="object",
@@ -191,13 +192,15 @@ class TestBuiltinObjectRest:
             },
         )
         result = _builtin_object_rest([addr, "a"], vm)
-        heap_obj = vm.heap[result]
+        _apply_builtin_result(vm, result)
+        heap_obj = vm.heap[result.value]
         assert "a" not in heap_obj.fields
         assert heap_obj.fields["b"].value == 2
         assert heap_obj.fields["c"].value == 3
 
     def test_object_rest_excludes_multiple_keys(self):
         vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="test"))
         addr = "<obj:0>"
         vm.heap[addr] = HeapObject(
             type_hint="object",
@@ -206,17 +209,20 @@ class TestBuiltinObjectRest:
             },
         )
         result = _builtin_object_rest([addr, "x", "y"], vm)
-        heap_obj = vm.heap[result]
+        _apply_builtin_result(vm, result)
+        heap_obj = vm.heap[result.value]
         assert heap_obj.fields["z"].value == 30
         assert set(heap_obj.fields.keys()) == {"z"}
 
     def test_object_rest_no_args(self):
         vm = VMState()
-        assert _builtin_object_rest([], vm) is Operators.UNCOMPUTABLE
+        result = _builtin_object_rest([], vm)
+        assert result.value is Operators.UNCOMPUTABLE
 
     def test_object_rest_non_heap(self):
         vm = VMState()
-        assert _builtin_object_rest(["not_a_heap_addr"], vm) is Operators.UNCOMPUTABLE
+        result = _builtin_object_rest(["not_a_heap_addr"], vm)
+        assert result.value is Operators.UNCOMPUTABLE
 
 
 class TestMethodBuiltins:
