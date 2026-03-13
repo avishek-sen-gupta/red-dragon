@@ -1001,7 +1001,7 @@ def _try_class_constructor_call(
             logger.warning("sig/label count mismatch for %s.__init__", class_name)
             init_label = init_labels[0]
         else:
-            winner = overload_resolver.resolve(init_sigs, [a.value for a in args])
+            winner = overload_resolver.resolve(init_sigs, args)
             init_label = init_labels[winner]
     else:
         init_label = ""
@@ -1291,7 +1291,7 @@ def _handle_call_method(
             logger.warning("sig/label count mismatch for %s.%s", type_hint, method_name)
             func_label = func_labels[0]
         else:
-            winner = overload_resolver.resolve(sigs, [a.value for a in args])
+            winner = overload_resolver.resolve(sigs, args)
             func_label = func_labels[winner]
     else:
         func_label = ""
@@ -1311,7 +1311,7 @@ def _handle_call_method(
                 )
                 candidate = parent_labels[0]
             else:
-                winner = overload_resolver.resolve(parent_sigs, [a.value for a in args])
+                winner = overload_resolver.resolve(parent_sigs, args)
                 candidate = parent_labels[winner]
             if candidate and candidate in cfg.blocks:
                 func_label = candidate
