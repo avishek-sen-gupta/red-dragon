@@ -1090,7 +1090,8 @@ def _try_user_function_call(
         if i < len(params)
     }
     # Inject 'arguments' array so rest params can slice it
-    param_vars["arguments"] = typed(_builtin_array_of(list(args), vm), UNKNOWN)
+    args_result = _builtin_array_of(list(args), vm)
+    param_vars["arguments"] = typed(args_result.value, UNKNOWN)
 
     # Inject captured closure variables; parameter bindings take priority
     closure_env: ClosureEnvironment | None = None
@@ -1123,6 +1124,8 @@ def _try_user_function_call(
                 f" dispatch to {flabel}"
             ),
             var_writes=new_vars,
+            new_objects=args_result.new_objects,
+            heap_writes=args_result.heap_writes,
         )
     )
 
@@ -1344,7 +1347,8 @@ def _handle_call_method(
         if i + 1 < len(params):
             new_vars[params[i + 1]] = typed_from_runtime(arg)
     # Inject 'arguments' array (explicit args only, not 'this')
-    new_vars["arguments"] = typed(_builtin_array_of(list(args), vm), UNKNOWN)
+    args_result = _builtin_array_of(list(args), vm)
+    new_vars["arguments"] = typed(args_result.value, UNKNOWN)
 
     return ExecutionResult.success(
         StateUpdate(
@@ -1359,6 +1363,8 @@ def _handle_call_method(
                 f" dispatch to {func_label}"
             ),
             var_writes=new_vars,
+            new_objects=args_result.new_objects,
+            heap_writes=args_result.heap_writes,
         )
     )
 
