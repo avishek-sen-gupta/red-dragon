@@ -37,7 +37,7 @@ class TestBuiltinKeysProducesConcreteArray:
             type_hint="object",
             fields={k: typed_from_runtime(v) for k, v in {"a": 10, "b": 5}.items()},
         )
-        result = Builtins.TABLE["keys"](["obj_0"], vm)
+        result = Builtins.TABLE["keys"]([typed_from_runtime("obj_0")], vm)
         _apply_builtin_result(vm, result)
         assert isinstance(result.value, str)
         assert result.value in vm.heap
@@ -50,7 +50,7 @@ class TestBuiltinKeysProducesConcreteArray:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="test"))
         vm.heap["obj_0"] = HeapObject(type_hint="object", fields={})
-        result = Builtins.TABLE["keys"](["obj_0"], vm)
+        result = Builtins.TABLE["keys"]([typed_from_runtime("obj_0")], vm)
         _apply_builtin_result(vm, result)
         assert result.value in vm.heap
         assert vm.heap[result.value].fields["length"].value == 0
@@ -66,7 +66,7 @@ class TestBuiltinKeysProducesConcreteArray:
                 for k, v in {"0": 10, "1": 20, "length": 2}.items()
             },
         )
-        result = Builtins.TABLE["keys"](["arr_0"], vm)
+        result = Builtins.TABLE["keys"]([typed_from_runtime("arr_0")], vm)
         _apply_builtin_result(vm, result)
         keys_obj = vm.heap[result.value]
         assert keys_obj.fields["length"].value == 2
@@ -83,7 +83,7 @@ class TestBuiltinKeysProducesConcreteArray:
                 k: typed_from_runtime(v) for k, v in {"x": 1, "y": 2, "z": 3}.items()
             },
         )
-        keys_result = Builtins.TABLE["keys"](["obj_0"], vm)
+        keys_result = Builtins.TABLE["keys"]([typed_from_runtime("obj_0")], vm)
         _apply_builtin_result(vm, keys_result)
-        length = _builtin_len([keys_result.value], vm)
+        length = _builtin_len([typed_from_runtime(keys_result.value)], vm)
         assert length.value == 3

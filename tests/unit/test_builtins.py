@@ -33,13 +33,15 @@ def _apply_builtin_result(vm: VMState, result: BuiltinResult) -> None:
 class TestBuiltinPrint:
     def test_returns_none(self):
         vm = VMState()
-        result = _builtin_print(["hello", 42], vm)
+        result = _builtin_print(
+            [typed_from_runtime("hello"), typed_from_runtime(42)], vm
+        )
         assert result.value is None
 
     def test_logs_arguments(self, caplog):
         vm = VMState()
         with caplog.at_level(logging.INFO, logger="interpreter.builtins"):
-            _builtin_print(["hello", 42], vm)
+            _builtin_print([typed_from_runtime("hello"), typed_from_runtime(42)], vm)
         assert "[VM print] hello 42" in caplog.text
 
     def test_logs_empty_args(self, caplog):
@@ -53,7 +55,9 @@ class TestBuiltinSlice:
     def test_slice_native_list(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="test"))
-        result = _builtin_slice([[10, 20, 30, 40], 1], vm)
+        result = _builtin_slice(
+            [typed_from_runtime([10, 20, 30, 40]), typed_from_runtime(1)], vm
+        )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[result.value]
         assert heap_obj.fields["0"].value == 20
@@ -64,7 +68,9 @@ class TestBuiltinSlice:
     def test_slice_native_list_from_index_2(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="test"))
-        result = _builtin_slice([[1, 2, 3, 4, 5], 2], vm)
+        result = _builtin_slice(
+            [typed_from_runtime([1, 2, 3, 4, 5]), typed_from_runtime(2)], vm
+        )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[result.value]
         assert heap_obj.fields["length"].value == 3
@@ -81,7 +87,7 @@ class TestBuiltinSlice:
                 for k, v in {"0": "a", "1": "b", "2": "c", "length": 3}.items()
             },
         )
-        result = _builtin_slice([addr, 1], vm)
+        result = _builtin_slice([typed_from_runtime(addr), typed_from_runtime(1)], vm)
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[result.value]
         assert heap_obj.fields["0"].value == "b"
@@ -90,13 +96,22 @@ class TestBuiltinSlice:
 
     def test_slice_insufficient_args(self):
         vm = VMState()
-        assert _builtin_slice([42], vm).value is Operators.UNCOMPUTABLE
+        assert (
+            _builtin_slice([typed_from_runtime(42)], vm).value is Operators.UNCOMPUTABLE
+        )
 
     def test_slice_with_stop_native_list(self):
         """slice(collection, start, stop) should return elements [start:stop]."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="test"))
-        result = _builtin_slice([[10, 20, 30, 40, 50], 1, 3], vm)
+        result = _builtin_slice(
+            [
+                typed_from_runtime([10, 20, 30, 40, 50]),
+                typed_from_runtime(1),
+                typed_from_runtime(3),
+            ],
+            vm,
+        )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[result.value]
         assert heap_obj.fields["0"].value == 20
@@ -121,7 +136,9 @@ class TestBuiltinSlice:
                 }.items()
             },
         )
-        result = _builtin_slice([addr, 1, 3], vm)
+        result = _builtin_slice(
+            [typed_from_runtime(addr), typed_from_runtime(1), typed_from_runtime(3)], vm
+        )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[result.value]
         assert heap_obj.fields["0"].value == "b"
@@ -132,7 +149,15 @@ class TestBuiltinSlice:
         """slice(collection, start, stop, step) with step=2."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="test"))
-        result = _builtin_slice([[0, 1, 2, 3, 4, 5], 0, 5, 2], vm)
+        result = _builtin_slice(
+            [
+                typed_from_runtime([0, 1, 2, 3, 4, 5]),
+                typed_from_runtime(0),
+                typed_from_runtime(5),
+                typed_from_runtime(2),
+            ],
+            vm,
+        )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[result.value]
         assert heap_obj.fields["0"].value == 0
@@ -144,7 +169,14 @@ class TestBuiltinSlice:
         """slice(collection, 2, 'None') should slice from index 2 to end."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="test"))
-        result = _builtin_slice([[10, 20, 30, 40], 2, "None"], vm)
+        result = _builtin_slice(
+            [
+                typed_from_runtime([10, 20, 30, 40]),
+                typed_from_runtime(2),
+                typed_from_runtime("None"),
+            ],
+            vm,
+        )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[result.value]
         assert heap_obj.fields["0"].value == 30
@@ -155,7 +187,14 @@ class TestBuiltinSlice:
         """slice(collection, 'None', 2) should slice from beginning to index 2."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="test"))
-        result = _builtin_slice([[10, 20, 30, 40], "None", 2], vm)
+        result = _builtin_slice(
+            [
+                typed_from_runtime([10, 20, 30, 40]),
+                typed_from_runtime("None"),
+                typed_from_runtime(2),
+            ],
+            vm,
+        )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[result.value]
         assert heap_obj.fields["0"].value == 10
@@ -166,7 +205,9 @@ class TestBuiltinSlice:
         """slice(collection, -2) should slice last 2 elements."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="test"))
-        result = _builtin_slice([[10, 20, 30, 40], -2], vm)
+        result = _builtin_slice(
+            [typed_from_runtime([10, 20, 30, 40]), typed_from_runtime(-2)], vm
+        )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[result.value]
         assert heap_obj.fields["0"].value == 30
@@ -176,13 +217,18 @@ class TestBuiltinSlice:
     def test_slice_string(self):
         """slice(string, start, stop) should return substring."""
         vm = VMState()
-        result = _builtin_slice(["hello", 1, 3], vm)
+        result = _builtin_slice(
+            [typed_from_runtime("hello"), typed_from_runtime(1), typed_from_runtime(3)],
+            vm,
+        )
         assert result.value == "el"
 
     def test_slice_string_no_stop(self):
         """slice(string, 2) should return from index 2 onward."""
         vm = VMState()
-        result = _builtin_slice(["hello", 2], vm)
+        result = _builtin_slice(
+            [typed_from_runtime("hello"), typed_from_runtime(2)], vm
+        )
         assert result.value == "llo"
 
 
@@ -197,7 +243,9 @@ class TestBuiltinObjectRest:
                 k: typed_from_runtime(v) for k, v in {"a": 1, "b": 2, "c": 3}.items()
             },
         )
-        result = _builtin_object_rest([addr, "a"], vm)
+        result = _builtin_object_rest(
+            [typed_from_runtime(addr), typed_from_runtime("a")], vm
+        )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[result.value]
         assert "a" not in heap_obj.fields
@@ -214,7 +262,14 @@ class TestBuiltinObjectRest:
                 k: typed_from_runtime(v) for k, v in {"x": 10, "y": 20, "z": 30}.items()
             },
         )
-        result = _builtin_object_rest([addr, "x", "y"], vm)
+        result = _builtin_object_rest(
+            [
+                typed_from_runtime(addr),
+                typed_from_runtime("x"),
+                typed_from_runtime("y"),
+            ],
+            vm,
+        )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[result.value]
         assert heap_obj.fields["z"].value == 30
@@ -227,7 +282,7 @@ class TestBuiltinObjectRest:
 
     def test_object_rest_non_heap(self):
         vm = VMState()
-        result = _builtin_object_rest(["not_a_heap_addr"], vm)
+        result = _builtin_object_rest([typed_from_runtime("not_a_heap_addr")], vm)
         assert result.value is Operators.UNCOMPUTABLE
 
 
@@ -247,7 +302,9 @@ class TestMethodBuiltins:
             },
         )
         fn = Builtins.METHOD_TABLE["subList"]
-        result = fn(addr, [1, 3], vm)
+        result = fn(
+            typed_from_runtime(addr), [typed_from_runtime(1), typed_from_runtime(3)], vm
+        )
         _apply_builtin_result(vm, result)
         heap_obj = vm.heap[result.value]
         assert heap_obj.fields["0"].value == 20
@@ -258,7 +315,11 @@ class TestMethodBuiltins:
         """substring should call slice(obj, start, stop) on strings."""
         vm = VMState()
         fn = Builtins.METHOD_TABLE["substring"]
-        result = fn("hello", [1, 3], vm)
+        result = fn(
+            typed_from_runtime("hello"),
+            [typed_from_runtime(1), typed_from_runtime(3)],
+            vm,
+        )
         assert result.value == "el"
 
     def test_method_table_has_expected_entries(self):
