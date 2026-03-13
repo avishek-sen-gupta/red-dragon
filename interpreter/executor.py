@@ -929,7 +929,7 @@ def _handle_load_region(
 
 def _try_builtin_call(
     func_name: str,
-    args: list[Any],
+    args: list[TypedValue],
     inst: IRInstruction,
     vm: VMState,
 ) -> ExecutionResult:
@@ -938,7 +938,7 @@ def _try_builtin_call(
         return ExecutionResult.not_handled()
     result = Builtins.TABLE[func_name](args, vm)
     if result.value is Operators.UNCOMPUTABLE:
-        args_desc = ", ".join(_symbolic_name(a) for a in args)
+        args_desc = ", ".join(_symbolic_name(a.value) for a in args)
         sym = vm.fresh_symbolic(hint=f"{func_name}({args_desc})")
         sym.constraints = [f"{func_name}({args_desc})"]
         return ExecutionResult.success(
@@ -954,7 +954,7 @@ def _try_builtin_call(
             heap_writes=result.heap_writes,
             reasoning=(
                 f"builtin {func_name}"
-                f"({', '.join(repr(a) for a in args)}) = {result.value!r}"
+                f"({', '.join(repr(a.value) for a in args)}) = {result.value!r}"
             ),
         )
     )
@@ -962,7 +962,7 @@ def _try_builtin_call(
 
 def _try_class_constructor_call(
     func_val: Any,
-    args: list[Any],
+    args: list[TypedValue],
     inst: IRInstruction,
     vm: VMState,
     cfg: CFG,
@@ -987,7 +987,7 @@ def _try_class_constructor_call(
             logger.warning("sig/label count mismatch for %s.__init__", class_name)
             init_label = init_labels[0]
         else:
-            winner = overload_resolver.resolve(init_sigs, args)
+            winner = overload_resolver.resolve(init_sigs, [a.value for a in args])
             init_label = init_labels[winner]
     else:
         init_label = ""
@@ -1015,13 +1015,13 @@ def _try_class_constructor_call(
         new_vars[params[0]] = typed(addr, UNKNOWN)
         for i, arg in enumerate(args):
             if i + 1 < len(params):
-                new_vars[params[i + 1]] = typed_from_runtime(arg)
+                new_vars[params[i + 1]] = arg
     else:
         # Java/C++/C#-style: this is implicit, all params are constructor args
         new_vars[constants.PARAM_THIS] = typed(addr, UNKNOWN)
         for i, arg in enumerate(args):
             if i < len(params):
-                new_vars[params[i]] = typed_from_runtime(arg)
+                new_vars[params[i]] = arg
 
     return ExecutionResult.success(
         StateUpdate(
@@ -1034,7 +1034,7 @@ def _try_class_constructor_call(
             next_label=init_label,
             reasoning=(
                 f"new {class_name}"
-                f"({', '.join(repr(a) for a in args)}) → {addr},"
+                f"({', '.join(repr(a.value) for a in args)}) → {addr},"
                 " dispatch __init__"
             ),
             var_writes=new_vars,
@@ -1044,7 +1044,7 @@ def _try_class_constructor_call(
 
 def _try_user_function_call(
     func_val: Any,
-    args: list[Any],
+    args: list[TypedValue],
     inst: IRInstruction,
     vm: VMState,
     cfg: CFG,
@@ -1061,11 +1061,7 @@ def _try_user_function_call(
         return ExecutionResult.not_handled()
 
     params = registry.func_params.get(flabel, [])
-    param_vars = {
-        params[i]: typed_from_runtime(arg)
-        for i, arg in enumerate(args)
-        if i < len(params)
-    }
+    param_vars = {params[i]: arg for i, arg in enumerate(args) if i < len(params)}
     # Inject 'arguments' array so rest params can slice it
     args_result = _builtin_array_of(list(args), vm)
     param_vars["arguments"] = typed(args_result.value, UNKNOWN)
@@ -1097,7 +1093,7 @@ def _try_user_function_call(
             next_label=flabel,
             reasoning=(
                 f"call {fname}"
-                f"({', '.join(repr(a) for a in args)}),"
+                f"({', '.join(repr(a.value) for a in args)}),"
                 f" dispatch to {flabel}"
             ),
             var_writes=new_vars,
@@ -1123,7 +1119,7 @@ def _handle_call_function(
 ) -> ExecutionResult:
     func_name = inst.operands[0]
     arg_regs = inst.operands[1:]
-    args = [_resolve_reg(vm, a) for a in arg_regs]
+    args = [_resolve_binop_operand(vm, a) for a in arg_regs]
 
     # 0. Try I/O provider (for __cobol_* calls)
     if (
@@ -1136,7 +1132,7 @@ def _handle_call_function(
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={inst.result_reg: typed_from_runtime(result)},
-                    reasoning=f"io_provider {func_name}({args!r}) = {result!r}",
+                    reasoning=f"io_provider {func_name}({[a.value for a in args]!r}) = {result!r}",
                 )
             )
         # UNCOMPUTABLE — fall through to symbolic wrapping
@@ -1161,20 +1157,20 @@ def _handle_call_function(
             break
     if not func_val:
         # Unknown function — resolve via configured strategy
-        return call_resolver.resolve_call(func_name, args, inst, vm)
+        return call_resolver.resolve_call(func_name, [a.value for a in args], inst, vm)
 
     # 2b. Scala-style apply: arr(i) on heap-backed arrays → index into fields.
-    if len(args) == 1 and isinstance(args[0], int):
+    if len(args) == 1 and isinstance(args[0].value, int):
         addr = _heap_addr(func_val)
         if addr and addr in vm.heap:
             heap_obj = vm.heap[addr]
-            idx_key = str(args[0])
+            idx_key = str(args[0].value)
             if idx_key in heap_obj.fields:
                 tv = heap_obj.fields[idx_key]
                 return ExecutionResult.success(
                     StateUpdate(
                         register_writes={inst.result_reg: tv},
-                        reasoning=f"heap call-index {func_name}({args[0]}) = {tv!r}",
+                        reasoning=f"heap call-index {func_name}({args[0].value}) = {tv!r}",
                     )
                 )
 
@@ -1186,13 +1182,13 @@ def _handle_call_function(
             or (isinstance(func_val, str) and not func_val.startswith("<"))
         )
         and len(args) == 1
-        and isinstance(args[0], int)
+        and isinstance(args[0].value, int)
     ):
-        element = func_val[args[0]]
+        element = func_val[args[0].value]
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={inst.result_reg: typed_from_runtime(element)},
-                reasoning=f"native call-index {func_name}({args[0]}) = {element!r}",
+                reasoning=f"native call-index {func_name}({args[0].value}) = {element!r}",
             )
         )
 
@@ -1219,7 +1215,7 @@ def _handle_call_function(
         return user_result
 
     # 5. Not a recognized function ref — resolve via configured strategy
-    return call_resolver.resolve_call(func_name, args, inst, vm)
+    return call_resolver.resolve_call(func_name, [a.value for a in args], inst, vm)
 
 
 def _handle_call_method(
@@ -1233,16 +1229,16 @@ def _handle_call_method(
     type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
     **kwargs: Any,
 ) -> ExecutionResult:
-    obj_val = _resolve_reg(vm, inst.operands[0])
+    obj_val = _resolve_binop_operand(vm, inst.operands[0])
     method_name = inst.operands[1]
     arg_regs = inst.operands[2:]
-    args = [_resolve_reg(vm, a) for a in arg_regs]
+    args = [_resolve_binop_operand(vm, a) for a in arg_regs]
 
     # If the object is a FUNC_REF, invoke it directly (e.g. .call(), .apply())
-    func_ref = _parse_func_ref(obj_val)
+    func_ref = _parse_func_ref(obj_val.value)
     if func_ref.matched:
         return _try_user_function_call(
-            obj_val, args, inst, vm, cfg, registry, current_label
+            obj_val.value, args, inst, vm, cfg, registry, current_label
         )
 
     # Method builtins: subList, substring, slice, etc.
@@ -1255,19 +1251,21 @@ def _handle_call_method(
                     register_writes={inst.result_reg: typed_from_runtime(result.value)},
                     new_objects=result.new_objects,
                     heap_writes=result.heap_writes,
-                    reasoning=f"method builtin {method_name}({obj_val!r}, {args}) = {result.value!r}",
+                    reasoning=f"method builtin {method_name}({obj_val.value!r}, {[a.value for a in args]}) = {result.value!r}",
                 )
             )
 
-    addr = _heap_addr(obj_val)
+    addr = _heap_addr(obj_val.value)
     type_hint = ""
     if addr and addr in vm.heap:
         type_hint = vm.heap[addr].type_hint or ""
 
     if not type_hint or type_hint not in registry.class_methods:
         # Unknown object type — resolve via configured strategy
-        obj_desc = _symbolic_name(obj_val)
-        return call_resolver.resolve_method(obj_desc, method_name, args, inst, vm)
+        obj_desc = _symbolic_name(obj_val.value)
+        return call_resolver.resolve_method(
+            obj_desc, method_name, [a.value for a in args], inst, vm
+        )
 
     methods = registry.class_methods[type_hint]
     func_labels = methods.get(method_name, [])
@@ -1279,7 +1277,7 @@ def _handle_call_method(
             logger.warning("sig/label count mismatch for %s.%s", type_hint, method_name)
             func_label = func_labels[0]
         else:
-            winner = overload_resolver.resolve(sigs, args)
+            winner = overload_resolver.resolve(sigs, [a.value for a in args])
             func_label = func_labels[winner]
     else:
         func_label = ""
@@ -1299,22 +1297,24 @@ def _handle_call_method(
                 )
                 candidate = parent_labels[0]
             else:
-                winner = overload_resolver.resolve(parent_sigs, args)
+                winner = overload_resolver.resolve(parent_sigs, [a.value for a in args])
                 candidate = parent_labels[winner]
             if candidate and candidate in cfg.blocks:
                 func_label = candidate
                 break
     if not func_label or func_label not in cfg.blocks:
         # Known type but unknown method — resolve via configured strategy
-        return call_resolver.resolve_method(type_hint, method_name, args, inst, vm)
+        return call_resolver.resolve_method(
+            type_hint, method_name, [a.value for a in args], inst, vm
+        )
 
     params = registry.func_params.get(func_label, [])
     new_vars: dict[str, Any] = {}
     if params:
-        new_vars[params[0]] = typed_from_runtime(obj_val)
+        new_vars[params[0]] = obj_val
     for i, arg in enumerate(args):
         if i + 1 < len(params):
-            new_vars[params[i + 1]] = typed_from_runtime(arg)
+            new_vars[params[i + 1]] = arg
     # Inject 'arguments' array (explicit args only, not 'this')
     args_result = _builtin_array_of(list(args), vm)
     new_vars["arguments"] = typed(args_result.value, UNKNOWN)
@@ -1328,7 +1328,7 @@ def _handle_call_method(
             next_label=func_label,
             reasoning=(
                 f"call {type_hint}.{method_name}"
-                f"({', '.join(repr(a) for a in args)}),"
+                f"({', '.join(repr(a.value) for a in args)}),"
                 f" dispatch to {func_label}"
             ),
             var_writes=new_vars,
@@ -1348,19 +1348,19 @@ def _handle_call_unknown(
     **kwargs: Any,
 ) -> ExecutionResult:
     """Handle CALL_UNKNOWN — dynamic call target, resolve via configured strategy."""
-    target_val = _resolve_reg(vm, inst.operands[0])
+    target_val = _resolve_binop_operand(vm, inst.operands[0])
     arg_regs = inst.operands[1:]
-    args = [_resolve_reg(vm, a) for a in arg_regs]
+    args = [_resolve_binop_operand(vm, a) for a in arg_regs]
 
     # If the target resolves to a FUNC_REF, invoke it directly
     user_result = _try_user_function_call(
-        target_val, args, inst, vm, cfg, registry, current_label
+        target_val.value, args, inst, vm, cfg, registry, current_label
     )
     if user_result.handled:
         return user_result
 
-    target_desc = _symbolic_name(target_val)
-    return call_resolver.resolve_call(target_desc, args, inst, vm)
+    target_desc = _symbolic_name(target_val.value)
+    return call_resolver.resolve_call(target_desc, [a.value for a in args], inst, vm)
 
 
 # ── Dispatch table and entry point ──────────────────────────────
