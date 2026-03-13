@@ -37,7 +37,8 @@ from interpreter.executor import (
 
 def _make_vm(**local_vars: object) -> VMState:
     """Create a VMState with a single frame containing the given local vars."""
-    frame = StackFrame(function_name="test", local_vars=dict(local_vars))
+    typed_vars = {k: typed_from_runtime(v) for k, v in local_vars.items()}
+    frame = StackFrame(function_name="test", local_vars=typed_vars)
     return VMState(call_stack=[frame])
 
 
@@ -169,7 +170,7 @@ class TestAliasAwareLoadStore:
         ptr = self._promote(vm, "x")
 
         # Store a new value into x
-        vm.current_frame.registers["%newval"] = 77
+        vm.current_frame.registers["%newval"] = typed_from_runtime(77)
         inst = _make_inst(Opcode.STORE_VAR, operands=["x", "%newval"])
         result = _handle_store_var(inst, vm)
         _apply(vm, result)
@@ -183,8 +184,8 @@ class TestAliasAwareLoadStore:
         ptr = self._promote(vm, "x")
 
         # Write through pointer: STORE_FIELD ptr, "*", 99
-        vm.current_frame.registers["%ptr"] = ptr
-        vm.current_frame.registers["%99"] = 99
+        vm.current_frame.registers["%ptr"] = typed_from_runtime(ptr)
+        vm.current_frame.registers["%99"] = typed_from_runtime(99)
         store_inst = _make_inst(Opcode.STORE_FIELD, operands=["%ptr", "*", "%99"])
         store_result = _handle_store_field(store_inst, vm)
         _apply(vm, store_result)
@@ -211,7 +212,7 @@ class TestPointerDereference:
         """LOAD_FIELD ptr, '*' should read from heap[ptr.base].fields[str(ptr.offset)]."""
         vm = _make_vm(x=42)
         ptr = self._promote(vm, "x")
-        vm.current_frame.registers["%ptr"] = ptr
+        vm.current_frame.registers["%ptr"] = typed_from_runtime(ptr)
 
         inst = _make_inst(Opcode.LOAD_FIELD, result_reg="%val", operands=["%ptr", "*"])
         result = _handle_load_field(inst, vm)
@@ -223,8 +224,8 @@ class TestPointerDereference:
         """STORE_FIELD ptr, '*', 99 should write to heap."""
         vm = _make_vm(x=42)
         ptr = self._promote(vm, "x")
-        vm.current_frame.registers["%ptr"] = ptr
-        vm.current_frame.registers["%99"] = 99
+        vm.current_frame.registers["%ptr"] = typed_from_runtime(ptr)
+        vm.current_frame.registers["%99"] = typed_from_runtime(99)
 
         inst = _make_inst(Opcode.STORE_FIELD, operands=["%ptr", "*", "%99"])
         result = _handle_store_field(inst, vm)
@@ -241,8 +242,8 @@ class TestPointerArithmetic:
         """Pointer + int should produce Pointer with adjusted offset."""
         vm = _make_vm()
         ptr = Pointer("mem_0", 0)
-        vm.current_frame.registers["%ptr"] = ptr
-        vm.current_frame.registers["%3"] = 3
+        vm.current_frame.registers["%ptr"] = typed_from_runtime(ptr)
+        vm.current_frame.registers["%3"] = typed_from_runtime(3)
 
         inst = _make_inst(
             Opcode.BINOP, result_reg="%result", operands=["+", "%ptr", "%3"]
@@ -259,8 +260,8 @@ class TestPointerArithmetic:
         """int + Pointer should also produce Pointer (commutative)."""
         vm = _make_vm()
         ptr = Pointer("mem_0", 2)
-        vm.current_frame.registers["%2"] = 2
-        vm.current_frame.registers["%ptr"] = ptr
+        vm.current_frame.registers["%2"] = typed_from_runtime(2)
+        vm.current_frame.registers["%ptr"] = typed_from_runtime(ptr)
 
         inst = _make_inst(
             Opcode.BINOP, result_reg="%result", operands=["+", "%2", "%ptr"]
@@ -277,8 +278,8 @@ class TestPointerArithmetic:
         """Pointer - int should produce Pointer with decreased offset."""
         vm = _make_vm()
         ptr = Pointer("mem_0", 5)
-        vm.current_frame.registers["%ptr"] = ptr
-        vm.current_frame.registers["%2"] = 2
+        vm.current_frame.registers["%ptr"] = typed_from_runtime(ptr)
+        vm.current_frame.registers["%2"] = typed_from_runtime(2)
 
         inst = _make_inst(
             Opcode.BINOP, result_reg="%result", operands=["-", "%ptr", "%2"]
@@ -302,8 +303,8 @@ class TestPointerArithmetic:
             }
         )
         ptr = Pointer("arr_0", 0)
-        vm.current_frame.registers["%ptr"] = ptr
-        vm.current_frame.registers["%1"] = 1
+        vm.current_frame.registers["%ptr"] = typed_from_runtime(ptr)
+        vm.current_frame.registers["%1"] = typed_from_runtime(1)
 
         # ptr + 1
         add_inst = _make_inst(
@@ -416,8 +417,8 @@ class TestNestedPointers:
         # ptr = &x
         inst1 = _make_inst(Opcode.ADDRESS_OF, result_reg="%ptr", operands=["x"])
         _apply(vm, _handle_address_of(inst1, vm))
-        # Store ptr as a local variable
-        vm.current_frame.local_vars["ptr"] = unwrap(vm.current_frame.registers["%ptr"])
+        # Store ptr as a local variable (keep as TypedValue)
+        vm.current_frame.local_vars["ptr"] = vm.current_frame.registers["%ptr"]
 
         # pp = &ptr
         inst2 = _make_inst(Opcode.ADDRESS_OF, result_reg="%pp", operands=["ptr"])

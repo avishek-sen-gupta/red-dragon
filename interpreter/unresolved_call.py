@@ -11,6 +11,8 @@ from litellm.exceptions import OpenAIError
 
 from interpreter.ir import IRInstruction
 from interpreter.llm_client import LLMClient
+from interpreter.type_expr import UNKNOWN
+from interpreter.typed_value import typed
 from interpreter.vm_types import (
     ExecutionResult,
     HeapWrite,
@@ -75,7 +77,7 @@ class SymbolicResolver(UnresolvedCallResolver):
         logger.debug("Unknown function %s — creating symbolic %s", func_name, sym.name)
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: sym.to_dict()},
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"unknown function {func_name}({args_desc}) → symbolic {sym.name}",
             )
         )
@@ -100,7 +102,7 @@ class SymbolicResolver(UnresolvedCallResolver):
         )
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: sym.to_dict()},
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"unknown method {call_desc} → symbolic {sym.name}",
             )
         )
