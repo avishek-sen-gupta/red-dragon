@@ -37,11 +37,13 @@ from interpreter.type_expr import UNKNOWN, scalar
 from interpreter.unresolved_call import UnresolvedCallResolver, SymbolicResolver
 from interpreter.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.binop_coercion import BinopCoercionStrategy, DefaultBinopCoercion
+from interpreter.unop_coercion import UnopCoercionStrategy, DefaultUnopCoercion
 from interpreter import constants
 
 _DEFAULT_RESOLVER = SymbolicResolver()
 _DEFAULT_OVERLOAD_RESOLVER = NullOverloadResolver()
 _DEFAULT_BINOP_COERCION = DefaultBinopCoercion()
+_DEFAULT_UNOP_COERCION = DefaultUnopCoercion()
 _EMPTY_TYPE_ENV = TypeEnvironment(
     register_types=MappingProxyType({}),
     var_types=MappingProxyType({}),
@@ -734,8 +736,10 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
 
 
 def _handle_unop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
+    unop_coercion = kwargs.get("unop_coercion", _DEFAULT_UNOP_COERCION)
     oper = inst.operands[0]
-    operand = _resolve_reg(vm, inst.operands[1])
+    operand_typed = _resolve_binop_operand(vm, inst.operands[1])
+    operand = operand_typed.value
     # Address-of (&) on a value that is already a reference (function ref or
     # heap object) returns the reference unchanged — our model already uses
     # references rather than inline values for these.
@@ -748,6 +752,7 @@ def _handle_unop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionRe
                     reasoning=f"unop &{operand} → {operand} (address-of reference is identity)",
                 )
             )
+    # Symbolic short-circuit — before coercion
     if _is_symbolic(operand):
         op_desc = _symbolic_name(operand)
         sym = vm.fresh_symbolic(hint=f"{oper}{op_desc}")
@@ -758,20 +763,28 @@ def _handle_unop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionRe
                 reasoning=f"unop {oper}{op_desc} → symbolic {sym.name}",
             )
         )
-    result = Operators.eval_unop(oper, operand)
+
+    # Coerce and compute
+    coerced = unop_coercion.coerce(oper, operand_typed)
+    raw = coerced.value
+    result = Operators.eval_unop(oper, raw)
     if result is Operators.UNCOMPUTABLE:
-        sym = vm.fresh_symbolic(hint=f"{oper}{operand!r}")
-        sym.constraints = [f"{oper}{operand!r}"]
+        sym = vm.fresh_symbolic(hint=f"{oper}{raw!r}")
+        sym.constraints = [f"{oper}{raw!r}"]
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={inst.result_reg: typed(sym, UNKNOWN)},
-                reasoning=f"unop {oper}{operand!r} → uncomputable, symbolic {sym.name}",
+                reasoning=f"unop {oper}{raw!r} → uncomputable, symbolic {sym.name}",
             )
         )
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: typed_from_runtime(result)},
-            reasoning=f"unop {oper}{operand!r} = {result!r}",
+            register_writes={
+                inst.result_reg: typed(
+                    result, unop_coercion.result_type(oper, operand_typed)
+                )
+            },
+            reasoning=f"unop {oper}{raw!r} = {result!r}",
         )
     )
 
@@ -1413,6 +1426,7 @@ class LocalExecutor:
         overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
         type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
         binop_coercion: BinopCoercionStrategy = _DEFAULT_BINOP_COERCION,
+        unop_coercion: UnopCoercionStrategy = _DEFAULT_UNOP_COERCION,
     ) -> ExecutionResult:
         handler = cls.DISPATCH.get(inst.opcode)
         if not handler:
@@ -1428,6 +1442,7 @@ class LocalExecutor:
             overload_resolver=overload_resolver,
             type_env=type_env,
             binop_coercion=binop_coercion,
+            unop_coercion=unop_coercion,
         )
 
 
@@ -1442,6 +1457,7 @@ def _try_execute_locally(
     overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
     type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
     binop_coercion: BinopCoercionStrategy = _DEFAULT_BINOP_COERCION,
+    unop_coercion: UnopCoercionStrategy = _DEFAULT_UNOP_COERCION,
 ) -> ExecutionResult:
     """Try to execute an instruction without the LLM.
 
@@ -1459,4 +1475,5 @@ def _try_execute_locally(
         overload_resolver=overload_resolver,
         type_env=type_env,
         binop_coercion=binop_coercion,
+        unop_coercion=unop_coercion,
     )
