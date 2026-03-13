@@ -22,7 +22,7 @@ class TestBuiltinKeysResult:
 
     def test_uncomputable_not_on_heap_returns_builtin_result(self):
         vm = VMState()
-        result = _builtin_keys(["nonexistent"], vm)
+        result = _builtin_keys([typed_from_runtime("nonexistent")], vm)
         assert isinstance(result, BuiltinResult)
         assert result.value is Operators.UNCOMPUTABLE
 
@@ -32,7 +32,7 @@ class TestBuiltinKeysResult:
             type_hint="object",
             fields={"a": typed_from_runtime(1)},
         )
-        result = _builtin_keys(["obj_0"], vm)
+        result = _builtin_keys([typed_from_runtime("obj_0")], vm)
         assert isinstance(result, BuiltinResult)
         assert isinstance(result.value, str)
         assert len(result.new_objects) == 1
@@ -41,19 +41,29 @@ class TestBuiltinKeysResult:
 class TestBuiltinSliceResult:
     def test_uncomputable_bad_args_returns_builtin_result(self):
         vm = VMState()
-        result = _builtin_slice([1], vm)
+        result = _builtin_slice([typed_from_runtime(1)], vm)
         assert isinstance(result, BuiltinResult)
         assert result.value is Operators.UNCOMPUTABLE
 
     def test_native_list_returns_builtin_result(self):
         vm = VMState()
-        result = _builtin_slice([[10, 20, 30], 0, 2], vm)
+        result = _builtin_slice(
+            [
+                typed_from_runtime([10, 20, 30]),
+                typed_from_runtime(0),
+                typed_from_runtime(2),
+            ],
+            vm,
+        )
         assert isinstance(result, BuiltinResult)
         assert isinstance(result.value, str)
 
     def test_native_string_returns_builtin_result(self):
         vm = VMState()
-        result = _builtin_slice(["hello", 1, 3], vm)
+        result = _builtin_slice(
+            [typed_from_runtime("hello"), typed_from_runtime(1), typed_from_runtime(3)],
+            vm,
+        )
         assert isinstance(result, BuiltinResult)
         assert result.value == "el"
         assert result.new_objects == []
@@ -69,7 +79,10 @@ class TestBuiltinSliceResult:
                 "length": typed(3, scalar(TypeName.INT)),
             },
         )
-        result = _builtin_slice(["arr_0", 0, 2], vm)
+        result = _builtin_slice(
+            [typed_from_runtime("arr_0"), typed_from_runtime(0), typed_from_runtime(2)],
+            vm,
+        )
         assert isinstance(result, BuiltinResult)
         assert isinstance(result.value, str)
         assert len(result.new_objects) == 1
@@ -105,5 +118,9 @@ class TestSliceHeapArrayResult:
 class TestMethodSliceResult:
     def test_returns_builtin_result(self):
         vm = VMState()
-        result = _method_slice([10, 20, 30], [0, 2], vm)
+        result = _method_slice(
+            typed_from_runtime([10, 20, 30]),
+            [typed_from_runtime(0), typed_from_runtime(2)],
+            vm,
+        )
         assert isinstance(result, BuiltinResult)

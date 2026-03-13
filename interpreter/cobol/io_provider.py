@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+from interpreter.typed_value import TypedValue
 from interpreter.vm import Operators
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ class CobolIOProvider(ABC):
     concrete data or UNCOMPUTABLE (which the executor wraps as symbolic).
     """
 
-    def handle_call(self, func_name: str, args: list[Any]) -> Any:
+    def handle_call(self, func_name: str, args: list[TypedValue]) -> Any:
         """Route a __cobol_* call to the appropriate method.
 
         Returns a concrete value or UNCOMPUTABLE if unhandled.
@@ -54,7 +55,7 @@ class CobolIOProvider(ABC):
             logger.debug("CobolIOProvider: unknown func %s", func_name)
             return _UNCOMPUTABLE
         method = getattr(self, method_name)
-        return method(*args)
+        return method(*[a.value for a in args])
 
     @abstractmethod
     def _accept(self, from_device: str) -> Any:
