@@ -175,11 +175,25 @@ def materialize_raw_update(
         deserialized = _deserialize_value(raw_update.return_value, vm)
         materialized_rv = typed_from_runtime(deserialized)
 
+    typed_heap_writes = [
+        HeapWrite(
+            obj_addr=hw.obj_addr,
+            field=hw.field,
+            value=(
+                hw.value
+                if isinstance(hw.value, TypedValue)
+                else typed_from_runtime(_deserialize_value(hw.value, vm))
+            ),
+        )
+        for hw in raw_update.heap_writes
+    ]
+
     return raw_update.model_copy(
         update={
             "register_writes": typed_reg_writes,
             "var_writes": typed_var_writes,
             "return_value": materialized_rv,
+            "heap_writes": typed_heap_writes,
         }
     )
 
@@ -235,11 +249,16 @@ def apply_update(
         else:
             frame.registers[reg] = tv
 
-    # Heap writes — stay raw (unchanged)
+    # Heap writes — unwrap TypedValue, heap storage stays raw (Phase 2)
     for hw in update.heap_writes:
         if hw.obj_addr not in vm.heap:
             vm.heap[hw.obj_addr] = HeapObject()
-        vm.heap[hw.obj_addr].fields[hw.field] = _deserialize_value(hw.value, vm)
+        val = (
+            hw.value.value
+            if isinstance(hw.value, TypedValue)
+            else _deserialize_value(hw.value, vm)
+        )
+        vm.heap[hw.obj_addr].fields[hw.field] = val
 
     # Path condition
     if update.path_condition:
