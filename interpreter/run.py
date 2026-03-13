@@ -21,6 +21,8 @@ from interpreter.executor import _try_execute_locally
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.resolution_strategy import ArityThenTypeStrategy
 from interpreter.type_compatibility import DefaultTypeCompatibility
+from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+from interpreter.type_node import TypeNode
 from interpreter.ambiguity_handler import FallbackFirstWithWarning
 from interpreter.binop_coercion import (
     BinopCoercionStrategy,
@@ -619,8 +621,13 @@ def run(
         source_language=lang,
         unresolved_call_strategy=unresolved_call_strategy,
     )
+    class_nodes = tuple(
+        TypeNode(name=cls, parents=tuple(parents))
+        for cls, parents in registry.class_parents.items()
+    )
+    type_graph = TypeGraph(DEFAULT_TYPE_NODES + class_nodes)
     overload_resolver = OverloadResolver(
-        ArityThenTypeStrategy(DefaultTypeCompatibility()),
+        ArityThenTypeStrategy(DefaultTypeCompatibility(type_graph)),
         FallbackFirstWithWarning(),
     )
     binop_coercion = _binop_coercion_for_language(lang)
