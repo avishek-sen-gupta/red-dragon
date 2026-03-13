@@ -936,33 +936,8 @@ def _try_builtin_call(
     """Attempt to handle a call via the builtin table."""
     if func_name not in Builtins.TABLE:
         return ExecutionResult.not_handled()
-    raw = Builtins.TABLE[func_name](args, vm)
-    # Bridge: handle both BuiltinResult (migrated) and raw values (not yet migrated)
-    if isinstance(raw, BuiltinResult):
-        if raw.value is Operators.UNCOMPUTABLE:
-            args_desc = ", ".join(_symbolic_name(a) for a in args)
-            sym = vm.fresh_symbolic(hint=f"{func_name}({args_desc})")
-            sym.constraints = [f"{func_name}({args_desc})"]
-            return ExecutionResult.success(
-                StateUpdate(
-                    register_writes={inst.result_reg: typed(sym, UNKNOWN)},
-                    reasoning=f"builtin {func_name}({args_desc}) → symbolic {sym.name} (uncomputable)",
-                )
-            )
-        return ExecutionResult.success(
-            StateUpdate(
-                register_writes={inst.result_reg: typed_from_runtime(raw.value)},
-                new_objects=raw.new_objects,
-                heap_writes=raw.heap_writes,
-                reasoning=(
-                    f"builtin {func_name}"
-                    f"({', '.join(repr(a) for a in args)}) = {raw.value!r}"
-                ),
-            )
-        )
-    # Legacy path: raw return value (pre-migration builtins)
-    result = raw
-    if result is Operators.UNCOMPUTABLE:
+    result = Builtins.TABLE[func_name](args, vm)
+    if result.value is Operators.UNCOMPUTABLE:
         args_desc = ", ".join(_symbolic_name(a) for a in args)
         sym = vm.fresh_symbolic(hint=f"{func_name}({args_desc})")
         sym.constraints = [f"{func_name}({args_desc})"]
@@ -974,10 +949,12 @@ def _try_builtin_call(
         )
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: typed_from_runtime(result)},
+            register_writes={inst.result_reg: typed_from_runtime(result.value)},
+            new_objects=result.new_objects,
+            heap_writes=result.heap_writes,
             reasoning=(
                 f"builtin {func_name}"
-                f"({', '.join(repr(a) for a in args)}) = {result!r}"
+                f"({', '.join(repr(a) for a in args)}) = {result.value!r}"
             ),
         )
     )
@@ -1271,22 +1248,14 @@ def _handle_call_method(
     # Method builtins: subList, substring, slice, etc.
     method_fn = Builtins.METHOD_TABLE.get(method_name)
     if method_fn is not None:
-        raw = method_fn(obj_val, args, vm)
-        if isinstance(raw, BuiltinResult):
-            if raw.value is not Operators.UNCOMPUTABLE:
-                return ExecutionResult.success(
-                    StateUpdate(
-                        register_writes={inst.result_reg: typed_from_runtime(raw.value)},
-                        new_objects=raw.new_objects,
-                        heap_writes=raw.heap_writes,
-                        reasoning=f"method builtin {method_name}({obj_val!r}, {args}) = {raw.value!r}",
-                    )
-                )
-        elif raw is not Operators.UNCOMPUTABLE:
+        result = method_fn(obj_val, args, vm)
+        if result.value is not Operators.UNCOMPUTABLE:
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: typed_from_runtime(raw)},
-                    reasoning=f"method builtin {method_name}({obj_val!r}, {args}) = {raw!r}",
+                    register_writes={inst.result_reg: typed_from_runtime(result.value)},
+                    new_objects=result.new_objects,
+                    heap_writes=result.heap_writes,
+                    reasoning=f"method builtin {method_name}({obj_val!r}, {args}) = {result.value!r}",
                 )
             )
 
