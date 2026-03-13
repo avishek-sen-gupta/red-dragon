@@ -27,6 +27,7 @@ from interpreter.llm_frontend import LLMFrontend
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg
 from interpreter.run_types import VMConfig
+from interpreter.typed_value import TypedValue
 from interpreter.vm_types import SymbolicValue
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,8 @@ def _print_header(title: str):
 
 
 def _format_val(v):
+    if isinstance(v, TypedValue):
+        return _format_val(v.value)
     if isinstance(v, SymbolicValue):
         return (
             f"SymbolicValue({v.name}, hint={v.type_hint}, "
@@ -169,8 +172,9 @@ def main():
     ]
     print(f"  Looking for sum result in: {sum_candidates}")
     for name in sum_candidates:
-        val = frame.local_vars[name]
-        print(f"    {name} = {_format_val(val)}")
+        tv = frame.local_vars[name]
+        val = tv.value
+        print(f"    {name} = {_format_val(tv)}")
         if isinstance(val, (int, float)) and val == 55:
             print(f"    ✓ CORRECT: {name} = 55 (expected sum of 1..10)")
         elif isinstance(val, (int, float)):
@@ -178,9 +182,11 @@ def main():
 
     # Check all numeric vars for 55
     found_55 = [
-        (n, v)
-        for n, v in frame.local_vars.items()
-        if isinstance(v, (int, float)) and v == 55 and not n.startswith("__")
+        (n, tv.value)
+        for n, tv in frame.local_vars.items()
+        if isinstance(tv.value, (int, float))
+        and tv.value == 55
+        and not n.startswith("__")
     ]
     if found_55:
         print(f"\n  ✓ Found expected value 55 in: {[n for n, _ in found_55]}")

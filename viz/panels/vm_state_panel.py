@@ -7,11 +7,14 @@ from textual.reactive import reactive
 from textual.widgets import Static
 
 from interpreter.trace_types import TraceStep
+from interpreter.typed_value import TypedValue
 from interpreter.vm_types import HeapObject, Pointer, SymbolicValue
 
 
 def _format_value(val: object) -> str:
     """Format a VM value for display."""
+    if isinstance(val, TypedValue):
+        return _format_value(val.value)
     if isinstance(val, SymbolicValue):
         return f"sym:{val.name}"
     if isinstance(val, Pointer):
