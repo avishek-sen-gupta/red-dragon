@@ -18,21 +18,22 @@ from interpreter.cobol.cobol_constants import (
     TallyMode,
 )
 from interpreter.cobol.ebcdic_table import EbcdicTable
+from interpreter.typed_value import TypedValue
 from interpreter.vm import Operators, _is_symbolic
 from interpreter.vm_types import BuiltinResult
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 
 
-def _builtin_nibble_get(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_nibble_get(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Extract high or low nibble from a byte value.
 
     Args: [byte_val: int, position: str ("high" or "low")]
     Returns: int (0-15)
     """
-    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    byte_val, position = args[0], args[1]
+    byte_val, position = args[0].value, args[1].value
     if not isinstance(byte_val, int) or not isinstance(position, str):
         return BuiltinResult(value=_UNCOMPUTABLE)
     if position == NibblePosition.HIGH:
@@ -42,15 +43,15 @@ def _builtin_nibble_get(args: list[Any], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_nibble_set(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_nibble_set(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Set high or low nibble of a byte value.
 
     Args: [byte_val: int, position: str ("high" or "low"), nibble: int]
     Returns: int (0-255)
     """
-    if len(args) < 3 or any(_is_symbolic(a) for a in args):
+    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    byte_val, position, nibble = args[0], args[1], args[2]
+    byte_val, position, nibble = args[0].value, args[1].value, args[2].value
     if (
         not isinstance(byte_val, int)
         or not isinstance(position, str)
@@ -69,41 +70,41 @@ def _builtin_nibble_set(args: list[Any], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_byte_from_int(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_byte_from_int(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Clamp/mask integer to 0-255.
 
     Args: [value: int]
     Returns: int (0-255)
     """
-    if len(args) < 1 or _is_symbolic(args[0]):
+    if len(args) < 1 or _is_symbolic(args[0].value):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    if not isinstance(args[0], int):
+    if not isinstance(args[0].value, int):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(value=args[0] & ByteConstants.BYTE_MASK)
+    return BuiltinResult(value=args[0].value & ByteConstants.BYTE_MASK)
 
 
-def _builtin_int_from_byte(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_int_from_byte(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Identity — for semantic clarity in IR.
 
     Args: [byte_val: int]
     Returns: int
     """
-    if len(args) < 1 or _is_symbolic(args[0]):
+    if len(args) < 1 or _is_symbolic(args[0].value):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    if not isinstance(args[0], int):
+    if not isinstance(args[0].value, int):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(value=args[0])
+    return BuiltinResult(value=args[0].value)
 
 
-def _builtin_bytes_to_string(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_bytes_to_string(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Decode byte list to string.
 
     Args: [byte_list: list[int], encoding: str ("ascii" or "ebcdic")]
     Returns: str
     """
-    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    byte_list, encoding = args[0], args[1]
+    byte_list, encoding = args[0].value, args[1].value
     if not isinstance(byte_list, list) or not isinstance(encoding, str):
         return BuiltinResult(value=_UNCOMPUTABLE)
     raw = bytes(byte_list)
@@ -115,15 +116,15 @@ def _builtin_bytes_to_string(args: list[Any], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_string_to_bytes(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_string_to_bytes(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Encode string to byte list.
 
     Args: [string: str, encoding: str ("ascii" or "ebcdic")]
     Returns: list[int]
     """
-    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    string, encoding = args[0], args[1]
+    string, encoding = args[0].value, args[1].value
     if not isinstance(string, str) or not isinstance(encoding, str):
         return BuiltinResult(value=_UNCOMPUTABLE)
     if encoding == CobolEncoding.EBCDIC:
@@ -135,15 +136,15 @@ def _builtin_string_to_bytes(args: list[Any], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_list_get(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_list_get(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Get element at index from a list.
 
     Args: [lst: list, index: int]
     Returns: Any
     """
-    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    lst, index = args[0], args[1]
+    lst, index = args[0].value, args[1].value
     if not isinstance(lst, list) or not isinstance(index, int):
         return BuiltinResult(value=_UNCOMPUTABLE)
     if 0 <= index < len(lst):
@@ -151,15 +152,15 @@ def _builtin_list_get(args: list[Any], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_list_set(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_list_set(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Return new list with element replaced at index.
 
     Args: [lst: list, index: int, value: Any]
     Returns: list
     """
-    if len(args) < 3 or _is_symbolic(args[0]) or _is_symbolic(args[1]):
+    if len(args) < 3 or _is_symbolic(args[0].value) or _is_symbolic(args[1].value):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    lst, index, value = args[0], args[1], args[2]
+    lst, index, value = args[0].value, args[1].value, args[2].value
     if not isinstance(lst, list) or not isinstance(index, int):
         return BuiltinResult(value=_UNCOMPUTABLE)
     if 0 <= index < len(lst):
@@ -169,28 +170,28 @@ def _builtin_list_set(args: list[Any], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_list_len(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_list_len(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Return list length.
 
     Args: [lst: list]
     Returns: int
     """
-    if len(args) < 1 or _is_symbolic(args[0]):
+    if len(args) < 1 or _is_symbolic(args[0].value):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    if not isinstance(args[0], list):
+    if not isinstance(args[0].value, list):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    return BuiltinResult(value=len(args[0]))
+    return BuiltinResult(value=len(args[0].value))
 
 
-def _builtin_list_slice(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_list_slice(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Return sublist [start:end].
 
     Args: [lst: list, start: int, end: int]
     Returns: list
     """
-    if len(args) < 3 or any(_is_symbolic(a) for a in args):
+    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    lst, start, end = args[0], args[1], args[2]
+    lst, start, end = args[0].value, args[1].value, args[2].value
     if (
         not isinstance(lst, list)
         or not isinstance(start, int)
@@ -200,47 +201,47 @@ def _builtin_list_slice(args: list[Any], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=lst[start:end])
 
 
-def _builtin_list_concat(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_list_concat(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Concatenate two lists.
 
     Args: [lst1: list, lst2: list]
     Returns: list
     """
-    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    lst1, lst2 = args[0], args[1]
+    lst1, lst2 = args[0].value, args[1].value
     if not isinstance(lst1, list) or not isinstance(lst2, list):
         return BuiltinResult(value=_UNCOMPUTABLE)
     return BuiltinResult(value=lst1 + lst2)
 
 
-def _builtin_make_list(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_make_list(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Create list of `size` elements, all set to `fill`.
 
     Args: [size: int, fill: int]
     Returns: list[int]
     """
-    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    size, fill = args[0], args[1]
+    size, fill = args[0].value, args[1].value
     if not isinstance(size, int) or not isinstance(fill, int):
         return BuiltinResult(value=_UNCOMPUTABLE)
     return BuiltinResult(value=[fill] * size)
 
 
-def _builtin_cobol_prepare_digits(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_cobol_prepare_digits(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Prepare digit list from a string value for COBOL numeric encoding.
 
     Args: [value_str: str, total_digits: int, decimal_digits: int, signed: bool]
     Returns: list[int] of digit values (0-9)
     """
-    if len(args) < 4 or any(_is_symbolic(a) for a in args):
+    if len(args) < 4 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
     value_str, total_digits, decimal_digits, signed = (
-        args[0],
-        args[1],
-        args[2],
-        args[3],
+        args[0].value,
+        args[1].value,
+        args[2].value,
+        args[3].value,
     )
     if not isinstance(total_digits, int):
         return BuiltinResult(value=_UNCOMPUTABLE)
@@ -262,15 +263,15 @@ def _builtin_cobol_prepare_digits(args: list[Any], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=[int(ch) if ch.isdigit() else 0 for ch in digit_str])
 
 
-def _builtin_cobol_prepare_sign(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_cobol_prepare_sign(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Compute sign nibble from a string value for COBOL numeric encoding.
 
     Args: [value_str: str, signed: bool]
     Returns: int (sign nibble: 0x0F unsigned, 0x0C positive, 0x0D negative)
     """
-    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    value_str, signed = args[0], args[1]
+    value_str, signed = args[0].value, args[1].value
     if isinstance(value_str, (int, float)):
         value_str = str(value_str)
     if not isinstance(value_str, str):
@@ -285,29 +286,29 @@ def _builtin_cobol_prepare_sign(args: list[Any], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=ByteConstants.SIGN_NIBBLE_POSITIVE)
 
 
-def _builtin_string_find(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_string_find(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Find first occurrence of needle in source string.
 
     Args: [source: str, needle: str]
     Returns: int index (-1 if not found)
     """
-    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    source, needle = args[0], args[1]
+    source, needle = args[0].value, args[1].value
     if not isinstance(source, str) or not isinstance(needle, str):
         return BuiltinResult(value=_UNCOMPUTABLE)
     return BuiltinResult(value=source.find(needle))
 
 
-def _builtin_string_split(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_string_split(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Split source string by delimiter.
 
     Args: [source: str, delimiter: str]
     Returns: list[str]
     """
-    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    source, delimiter = args[0], args[1]
+    source, delimiter = args[0].value, args[1].value
     if not isinstance(source, str) or not isinstance(delimiter, str):
         return BuiltinResult(value=_UNCOMPUTABLE)
     if not delimiter:
@@ -315,15 +316,15 @@ def _builtin_string_split(args: list[Any], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=source.split(delimiter))
 
 
-def _builtin_string_count(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_string_count(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Count occurrences of pattern in source string.
 
     Args: [source: str, pattern: str, mode: str ("all"/"leading"/"characters")]
     Returns: int
     """
-    if len(args) < 3 or any(_is_symbolic(a) for a in args):
+    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    source, pattern, mode = args[0], args[1], args[2]
+    source, pattern, mode = args[0].value, args[1].value, args[2].value
     if (
         not isinstance(source, str)
         or not isinstance(pattern, str)
@@ -347,15 +348,20 @@ def _builtin_string_count(args: list[Any], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_string_replace(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_string_replace(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Replace occurrences of pattern in source string.
 
     Args: [source: str, from_pat: str, to_pat: str, mode: str ("all"/"leading"/"first")]
     Returns: str
     """
-    if len(args) < 4 or any(_is_symbolic(a) for a in args):
+    if len(args) < 4 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    source, from_pat, to_pat, mode = args[0], args[1], args[2], args[3]
+    source, from_pat, to_pat, mode = (
+        args[0].value,
+        args[1].value,
+        args[2].value,
+        args[3].value,
+    )
     if (
         not isinstance(source, str)
         or not isinstance(from_pat, str)
@@ -377,15 +383,15 @@ def _builtin_string_replace(args: list[Any], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_string_concat(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_string_concat(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Concatenate a list of strings.
 
     Args: [parts: list[str]]
     Returns: str
     """
-    if len(args) < 1 or _is_symbolic(args[0]):
+    if len(args) < 1 or _is_symbolic(args[0].value):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    parts = args[0]
+    parts = args[0].value
     if not isinstance(parts, list):
         return BuiltinResult(value=_UNCOMPUTABLE)
     if any(_is_symbolic(p) for p in parts):
@@ -393,27 +399,27 @@ def _builtin_string_concat(args: list[Any], vm: Any) -> BuiltinResult:
     return BuiltinResult(value="".join(str(p) for p in parts))
 
 
-def _builtin_string_concat_pair(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_string_concat_pair(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Concatenate two strings.
 
     Args: [left: str, right: str]
     Returns: str
     """
-    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    left, right = args[0], args[1]
+    left, right = args[0].value, args[1].value
     return BuiltinResult(value=str(left) + str(right))
 
 
-def _builtin_int_to_binary_bytes(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_int_to_binary_bytes(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Pack signed/unsigned integer as big-endian binary bytes.
 
     Args: [value: int, byte_count: int, signed: bool]
     Returns: list[int]
     """
-    if len(args) < 3 or any(_is_symbolic(a) for a in args):
+    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    value, byte_count, signed = args[0], args[1], args[2]
+    value, byte_count, signed = args[0].value, args[1].value, args[2].value
     if not isinstance(value, int) or not isinstance(byte_count, int):
         return BuiltinResult(value=_UNCOMPUTABLE)
     return BuiltinResult(
@@ -421,15 +427,15 @@ def _builtin_int_to_binary_bytes(args: list[Any], vm: Any) -> BuiltinResult:
     )
 
 
-def _builtin_binary_bytes_to_int(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_binary_bytes_to_int(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Unpack big-endian binary bytes as signed/unsigned integer.
 
     Args: [byte_list: list[int], signed: bool]
     Returns: int
     """
-    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    byte_list, signed = args[0], args[1]
+    byte_list, signed = args[0].value, args[1].value
     if not isinstance(byte_list, list):
         return BuiltinResult(value=_UNCOMPUTABLE)
     return BuiltinResult(
@@ -437,30 +443,30 @@ def _builtin_binary_bytes_to_int(args: list[Any], vm: Any) -> BuiltinResult:
     )
 
 
-def _builtin_float_to_bytes(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_float_to_bytes(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Pack IEEE 754 float to big-endian bytes.
 
     Args: [value: float|int, byte_count: int (4 or 8)]
     Returns: list[int]
     """
-    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    value, byte_count = args[0], args[1]
+    value, byte_count = args[0].value, args[1].value
     if not isinstance(value, (int, float)) or not isinstance(byte_count, int):
         return BuiltinResult(value=_UNCOMPUTABLE)
     fmt = ">f" if byte_count == 4 else ">d"
     return BuiltinResult(value=list(struct.pack(fmt, float(value))))
 
 
-def _builtin_bytes_to_float(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_bytes_to_float(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Unpack big-endian IEEE 754 bytes to float.
 
     Args: [byte_list: list[int], byte_count: int (4 or 8)]
     Returns: float
     """
-    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    byte_list, byte_count = args[0], args[1]
+    byte_list, byte_count = args[0].value, args[1].value
     if not isinstance(byte_list, list) or not isinstance(byte_count, int):
         return BuiltinResult(value=_UNCOMPUTABLE)
     fmt = ">f" if byte_count == 4 else ">d"
@@ -468,15 +474,15 @@ def _builtin_bytes_to_float(args: list[Any], vm: Any) -> BuiltinResult:
     return BuiltinResult(value=float(result))
 
 
-def _builtin_cobol_blank_when_zero(args: list[Any], vm: Any) -> BuiltinResult:
+def _builtin_cobol_blank_when_zero(args: list[TypedValue], vm: Any) -> BuiltinResult:
     """Apply BLANK WHEN ZERO: if numeric value is zero, return EBCDIC spaces.
 
     Args: [encoded_bytes: list[int], value_str: str, byte_length: int]
     Returns: list[int] — encoded_bytes unchanged, or all-spaces if value is zero.
     """
-    if len(args) < 3 or any(_is_symbolic(a) for a in args):
+    if len(args) < 3 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    encoded_bytes, value_str, byte_length = args[0], args[1], args[2]
+    encoded_bytes, value_str, byte_length = args[0].value, args[1].value, args[2].value
     if not isinstance(encoded_bytes, list) or not isinstance(byte_length, int):
         return BuiltinResult(value=_UNCOMPUTABLE)
     try:
