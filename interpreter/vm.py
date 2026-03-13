@@ -126,16 +126,8 @@ def coerce_local_update(
     coerced_reg_writes = {
         reg: _coerce_typed_register(val, reg, type_env, conversion_rules)
         for reg, val in update.register_writes.items()
-        if isinstance(val, TypedValue)
     }
-    uncoerced_reg_writes = {
-        reg: val
-        for reg, val in update.register_writes.items()
-        if not isinstance(val, TypedValue)
-    }
-    return update.model_copy(
-        update={"register_writes": {**uncoerced_reg_writes, **coerced_reg_writes}}
-    )
+    return update.model_copy(update={"register_writes": coerced_reg_writes})
 
 
 def materialize_raw_update(
@@ -235,13 +227,9 @@ def apply_update(
     for obj in update.new_objects:
         vm.heap[obj.addr] = HeapObject(type_hint=obj.type_hint)
 
-    # Register writes — auto-materialize raw values (transition), then coerce
+    # Register writes — coerce to declared type if needed
     for reg, val in update.register_writes.items():
-        tv = (
-            val
-            if isinstance(val, TypedValue)
-            else _materialize_single_register(val, vm, reg, type_env, conversion_rules)
-        )
+        tv = val
         declared = type_env.register_types.get(reg, UNKNOWN)
         if declared and tv.type != declared:
             coerced = _coerce_value(tv.value, reg, type_env, conversion_rules)
@@ -249,16 +237,11 @@ def apply_update(
         else:
             frame.registers[reg] = tv
 
-    # Heap writes — store TypedValue directly (Phase 2)
+    # Heap writes — store TypedValue directly in fields
     for hw in update.heap_writes:
         if hw.obj_addr not in vm.heap:
             vm.heap[hw.obj_addr] = HeapObject()
-        val = (
-            hw.value
-            if isinstance(hw.value, TypedValue)
-            else typed_from_runtime(_deserialize_value(hw.value, vm))
-        )
-        vm.heap[hw.obj_addr].fields[hw.field] = val
+        vm.heap[hw.obj_addr].fields[hw.field] = hw.value
 
     # Path condition
     if update.path_condition:
@@ -281,11 +264,7 @@ def apply_update(
     # if call_push just fired, i.e. parameter bindings)
     target_frame = vm.current_frame
     for var, val in update.var_writes.items():
-        tv = (
-            val
-            if isinstance(val, TypedValue)
-            else _materialize_single_var(val, vm, var, type_env)
-        )
+        tv = val
         # Alias-aware: if variable is backed by a heap object, write TypedValue
         alias_ptr = target_frame.var_heap_aliases.get(var)
         if alias_ptr and alias_ptr.base in vm.heap:

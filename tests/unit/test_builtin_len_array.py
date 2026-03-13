@@ -8,6 +8,9 @@ includes the 'length' key itself and produces an off-by-one.
 from __future__ import annotations
 
 from interpreter.builtins import _builtin_len, _builtin_array_of
+from interpreter.constants import TypeName
+from interpreter.type_expr import scalar
+from interpreter.typed_value import typed
 from interpreter.vm import VMState
 from interpreter.vm_types import HeapObject
 
@@ -34,7 +37,13 @@ class TestBuiltinLenRespectsLengthField:
     def test_len_of_heap_object_without_length_field(self):
         """Plain objects (no 'length' field) should use len(fields)."""
         vm = VMState()
-        vm.heap["obj_0"] = HeapObject(type_hint="object", fields={"a": 1, "b": 2})
+        vm.heap["obj_0"] = HeapObject(
+            type_hint="object",
+            fields={
+                "a": typed(1, scalar(TypeName.INT)),
+                "b": typed(2, scalar(TypeName.INT)),
+            },
+        )
         result = _builtin_len(["obj_0"], vm)
         assert result == 2
 
@@ -43,7 +52,12 @@ class TestBuiltinLenRespectsLengthField:
         vm = VMState()
         vm.heap["arr_0"] = HeapObject(
             type_hint="array",
-            fields={"0": 10, "1": 20, "2": 30, "length": 3},
+            fields={
+                "0": typed(10, scalar(TypeName.INT)),
+                "1": typed(20, scalar(TypeName.INT)),
+                "2": typed(30, scalar(TypeName.INT)),
+                "length": typed(3, scalar(TypeName.INT)),
+            },
         )
         result = _builtin_len(["arr_0"], vm)
         assert result == 3
