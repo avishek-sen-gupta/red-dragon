@@ -17,7 +17,9 @@ class TestObjectRestBuiltinResult:
                 "c": typed_from_runtime(3),
             },
         )
-        result = _builtin_object_rest(["obj_0", "a"], vm)
+        result = _builtin_object_rest(
+            [typed_from_runtime("obj_0"), typed_from_runtime("a")], vm
+        )
         assert isinstance(result, BuiltinResult)
 
     def test_new_objects_contains_rest_object(self):
@@ -29,7 +31,9 @@ class TestObjectRestBuiltinResult:
                 "b": typed_from_runtime(2),
             },
         )
-        result = _builtin_object_rest(["obj_0", "a"], vm)
+        result = _builtin_object_rest(
+            [typed_from_runtime("obj_0"), typed_from_runtime("a")], vm
+        )
         assert len(result.new_objects) == 1
         assert result.new_objects[0].addr == result.value
         assert result.new_objects[0].type_hint == "object"
@@ -44,7 +48,9 @@ class TestObjectRestBuiltinResult:
                 "c": typed_from_runtime(3),
             },
         )
-        result = _builtin_object_rest(["obj_0", "a"], vm)
+        result = _builtin_object_rest(
+            [typed_from_runtime("obj_0"), typed_from_runtime("a")], vm
+        )
         fields = {hw.field: hw.value for hw in result.heap_writes}
         assert "a" not in fields
         assert "b" in fields
@@ -56,7 +62,9 @@ class TestObjectRestBuiltinResult:
             type_hint="object",
             fields={"a": typed_from_runtime(1), "b": typed_from_runtime(2)},
         )
-        result = _builtin_object_rest(["obj_0", "a"], vm)
+        result = _builtin_object_rest(
+            [typed_from_runtime("obj_0"), typed_from_runtime("a")], vm
+        )
         assert result.value not in vm.heap
 
     def test_uncomputable_no_args_returns_builtin_result(self):
@@ -67,7 +75,9 @@ class TestObjectRestBuiltinResult:
 
     def test_uncomputable_source_not_on_heap(self):
         vm = VMState()
-        result = _builtin_object_rest(["nonexistent_addr", "a"], vm)
+        result = _builtin_object_rest(
+            [typed_from_runtime("nonexistent_addr"), typed_from_runtime("a")], vm
+        )
         assert isinstance(result, BuiltinResult)
         assert result.value is Operators.UNCOMPUTABLE
         assert result.new_objects == []

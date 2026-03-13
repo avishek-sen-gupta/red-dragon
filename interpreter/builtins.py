@@ -17,10 +17,10 @@ _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 logger = logging.getLogger(__name__)
 
 
-def _builtin_len(args: list[Any], vm: VMState) -> BuiltinResult:
+def _builtin_len(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     if not args:
         return BuiltinResult(value=_UNCOMPUTABLE)
-    val = args[0]
+    val = args[0].value
     addr = _heap_addr(val)
     if addr and addr in vm.heap:
         fields = vm.heap[addr].fields
@@ -32,10 +32,10 @@ def _builtin_len(args: list[Any], vm: VMState) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_range(args: list[Any], vm: VMState) -> BuiltinResult:
-    if any(_is_symbolic(a) for a in args):
+def _builtin_range(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    if any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    concrete = list(args)
+    concrete = [a.value for a in args]
     if len(concrete) == 1:
         return BuiltinResult(value=list(range(int(concrete[0]))))
     if len(concrete) == 2:
@@ -47,76 +47,76 @@ def _builtin_range(args: list[Any], vm: VMState) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_print(args: list[Any], vm: VMState) -> BuiltinResult:
-    logger.info("[VM print] %s", " ".join(str(a) for a in args))
+def _builtin_print(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    logger.info("[VM print] %s", " ".join(str(a.value) for a in args))
     return BuiltinResult(value=None)
 
 
-def _builtin_int(args: list[Any], vm: VMState) -> BuiltinResult:
-    if args and not _is_symbolic(args[0]):
+def _builtin_int(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    if args and not _is_symbolic(args[0].value):
         try:
-            return BuiltinResult(value=int(args[0]))
+            return BuiltinResult(value=int(args[0].value))
         except (ValueError, TypeError):
             pass
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_float(args: list[Any], vm: VMState) -> BuiltinResult:
-    if args and not _is_symbolic(args[0]):
+def _builtin_float(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    if args and not _is_symbolic(args[0].value):
         try:
-            return BuiltinResult(value=float(args[0]))
+            return BuiltinResult(value=float(args[0].value))
         except (ValueError, TypeError):
             pass
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_str(args: list[Any], vm: VMState) -> BuiltinResult:
-    if args and not _is_symbolic(args[0]):
-        return BuiltinResult(value=str(args[0]))
+def _builtin_str(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    if args and not _is_symbolic(args[0].value):
+        return BuiltinResult(value=str(args[0].value))
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_bool(args: list[Any], vm: VMState) -> BuiltinResult:
-    if args and not _is_symbolic(args[0]):
-        return BuiltinResult(value=bool(args[0]))
+def _builtin_bool(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    if args and not _is_symbolic(args[0].value):
+        return BuiltinResult(value=bool(args[0].value))
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_abs(args: list[Any], vm: VMState) -> BuiltinResult:
-    if args and not _is_symbolic(args[0]):
+def _builtin_abs(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    if args and not _is_symbolic(args[0].value):
         try:
-            return BuiltinResult(value=abs(args[0]))
+            return BuiltinResult(value=abs(args[0].value))
         except TypeError:
             pass
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_max(args: list[Any], vm: VMState) -> BuiltinResult:
-    if all(not _is_symbolic(a) for a in args):
+def _builtin_max(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    if all(not _is_symbolic(a.value) for a in args):
         try:
-            return BuiltinResult(value=max(args))
+            return BuiltinResult(value=max(a.value for a in args))
         except (ValueError, TypeError):
             pass
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_min(args: list[Any], vm: VMState) -> BuiltinResult:
-    if all(not _is_symbolic(a) for a in args):
+def _builtin_min(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    if all(not _is_symbolic(a.value) for a in args):
         try:
-            return BuiltinResult(value=min(args))
+            return BuiltinResult(value=min(a.value for a in args))
         except (ValueError, TypeError):
             pass
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_keys(args: list[Any], vm: VMState) -> BuiltinResult:
+def _builtin_keys(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Return a heap-allocated array of the object's field names.
 
     Excludes metadata fields like 'length' to match JS Object.keys() semantics.
     """
     if not args:
         return BuiltinResult(value=_UNCOMPUTABLE)
-    val = args[0]
+    val = args[0].value
     addr = _heap_addr(val)
     if not addr or addr not in vm.heap:
         return BuiltinResult(value=_UNCOMPUTABLE)
@@ -124,7 +124,7 @@ def _builtin_keys(args: list[Any], vm: VMState) -> BuiltinResult:
     return _builtin_array_of(field_names, vm)
 
 
-def _builtin_array_of(args: list[Any], vm: VMState) -> BuiltinResult:
+def _builtin_array_of(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """Create a heap-allocated array from arguments (arrayOf, intArrayOf, Array, etc.)."""
     addr = f"{ARR_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
@@ -142,19 +142,19 @@ def _builtin_array_of(args: list[Any], vm: VMState) -> BuiltinResult:
     )
 
 
-def _builtin_slice(args: list[Any], vm: VMState) -> BuiltinResult:
+def _builtin_slice(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """slice(collection, start[, stop[, step]]) — return a sub-sequence.
 
     Supports native lists/tuples, strings, and heap-backed arrays.
     Missing stop/step represented as 'None' string (from IR CONST).
     """
-    if len(args) < 2 or any(_is_symbolic(a) for a in args):
+    if len(args) < 2 or any(_is_symbolic(a.value) for a in args):
         return BuiltinResult(value=_UNCOMPUTABLE)
-    collection = args[0]
+    collection = args[0].value
     raw_start, raw_stop, raw_step = (
-        args[1],
-        _arg_or_none(args, 2),
-        _arg_or_none(args, 3),
+        args[1].value,
+        _arg_or_none_value(args, 2),
+        _arg_or_none_value(args, 3),
     )
     start = _parse_slice_int(raw_start)
     stop = _parse_slice_int(raw_stop)
@@ -173,9 +173,9 @@ def _builtin_slice(args: list[Any], vm: VMState) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _arg_or_none(args: list[Any], index: int) -> Any:
-    """Return args[index] if it exists, else None."""
-    return args[index] if index < len(args) else None
+def _arg_or_none_value(args: list[TypedValue], index: int) -> Any:
+    """Return args[index].value if it exists, else None."""
+    return args[index].value if index < len(args) else None
 
 
 def _parse_slice_int(value: Any) -> int | None:
@@ -198,12 +198,12 @@ def _slice_heap_array(
     return _builtin_array_of(elements, vm)
 
 
-def _builtin_object_rest(args: list[Any], vm: VMState) -> BuiltinResult:
+def _builtin_object_rest(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """object_rest(obj, key1, key2, ...) — return new object without excluded keys."""
     if not args:
         return BuiltinResult(value=_UNCOMPUTABLE)
-    obj_val = args[0]
-    excluded_keys = set(args[1:])
+    obj_val = args[0].value
+    excluded_keys = set(a.value for a in args[1:])
     addr = _heap_addr(obj_val)
     if not addr or addr not in vm.heap:
         return BuiltinResult(value=_UNCOMPUTABLE)
@@ -225,7 +225,9 @@ def _builtin_object_rest(args: list[Any], vm: VMState) -> BuiltinResult:
     )
 
 
-def _method_slice(obj: Any, args: list[Any], vm: VMState) -> BuiltinResult:
+def _method_slice(
+    obj: TypedValue, args: list[TypedValue], vm: VMState
+) -> BuiltinResult:
     """Method builtin: obj.subList(start, stop) / obj.substring(start, stop) → slice."""
     return _builtin_slice([obj, *args], vm)
 

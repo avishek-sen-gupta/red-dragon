@@ -10,7 +10,7 @@ from __future__ import annotations
 from interpreter.builtins import _builtin_len, _builtin_array_of
 from interpreter.constants import TypeName
 from interpreter.type_expr import scalar
-from interpreter.typed_value import typed
+from interpreter.typed_value import typed, typed_from_runtime
 from interpreter.vm import VMState, apply_update
 from interpreter.vm_types import BuiltinResult, HeapObject, StackFrame, StateUpdate
 
@@ -30,9 +30,11 @@ class TestBuiltinLenRespectsLengthField:
     def test_len_of_arrayOf_three_elements(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="test"))
-        result = _builtin_array_of([10, 5, 3], vm)
+        result = _builtin_array_of(
+            [typed_from_runtime(10), typed_from_runtime(5), typed_from_runtime(3)], vm
+        )
         _apply_builtin_result(vm, result)
-        length = _builtin_len([result.value], vm)
+        length = _builtin_len([typed_from_runtime(result.value)], vm)
         assert length.value == 3
 
     def test_len_of_arrayOf_empty(self):
@@ -40,15 +42,15 @@ class TestBuiltinLenRespectsLengthField:
         vm.call_stack.append(StackFrame(function_name="test"))
         result = _builtin_array_of([], vm)
         _apply_builtin_result(vm, result)
-        length = _builtin_len([result.value], vm)
+        length = _builtin_len([typed_from_runtime(result.value)], vm)
         assert length.value == 0
 
     def test_len_of_arrayOf_single_element(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="test"))
-        result = _builtin_array_of([42], vm)
+        result = _builtin_array_of([typed_from_runtime(42)], vm)
         _apply_builtin_result(vm, result)
-        length = _builtin_len([result.value], vm)
+        length = _builtin_len([typed_from_runtime(result.value)], vm)
         assert length.value == 1
 
     def test_len_of_heap_object_without_length_field(self):
@@ -61,7 +63,7 @@ class TestBuiltinLenRespectsLengthField:
                 "b": typed(2, scalar(TypeName.INT)),
             },
         )
-        result = _builtin_len(["obj_0"], vm)
+        result = _builtin_len([typed_from_runtime("obj_0")], vm)
         assert result.value == 2
 
     def test_len_of_heap_object_with_length_field(self):
@@ -76,5 +78,5 @@ class TestBuiltinLenRespectsLengthField:
                 "length": typed(3, scalar(TypeName.INT)),
             },
         )
-        result = _builtin_len(["arr_0"], vm)
+        result = _builtin_len([typed_from_runtime("arr_0")], vm)
         assert result.value == 3
