@@ -247,7 +247,8 @@ def main():
     if vm.heap:
         print(f"\n  Heap objects ({len(vm.heap)}):")
         for addr, obj in vm.heap.items():
-            print(f"    [{addr}] type={obj.type_hint} fields={dict(obj.fields)}")
+            unwrapped = {k: v.value for k, v in obj.fields.items()}
+            print(f"    [{addr}] type={obj.type_hint} fields={unwrapped}")
 
     # Try to extract the sorted array
     sorted_result = []
@@ -296,7 +297,8 @@ def main():
         _show_vars(vm)
         print(f"\n  Heap:")
         for addr, obj in vm.heap.items():
-            print(f"    [{addr}] type={obj.type_hint} fields={dict(obj.fields)}")
+            unwrapped = {k: v.value for k, v in obj.fields.items()}
+            print(f"    [{addr}] type={obj.type_hint} fields={unwrapped}")
 
     # ── Summary ──
     _print_header("Summary")
