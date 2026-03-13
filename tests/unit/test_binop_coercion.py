@@ -2,7 +2,7 @@
 
 from interpreter.binop_coercion import DefaultBinopCoercion, JavaBinopCoercion
 from interpreter.type_expr import UNKNOWN, scalar
-from interpreter.typed_value import typed
+from interpreter.typed_value import TypedValue, typed
 
 
 class TestDefaultBinopCoercion:
@@ -13,19 +13,23 @@ class TestDefaultBinopCoercion:
 
     # --- coerce: no-op ---
 
-    def test_coerce_returns_raw_values(self):
+    def test_coerce_returns_typed_values(self):
         lhs = typed(42, scalar("Int"))
         rhs = typed(3, scalar("Int"))
         a, b = self.coercion.coerce("+", lhs, rhs)
-        assert a == 42
-        assert b == 3
+        assert isinstance(a, TypedValue)
+        assert isinstance(b, TypedValue)
+        assert a.value == 42
+        assert b.value == 3
+        assert a.type == scalar("Int")
+        assert b.type == scalar("Int")
 
     def test_coerce_string_plus_int_no_coercion(self):
         lhs = typed("hello", scalar("String"))
         rhs = typed(42, scalar("Int"))
         a, b = self.coercion.coerce("+", lhs, rhs)
-        assert a == "hello"
-        assert b == 42
+        assert a.value == "hello"
+        assert b.value == 42
 
     # --- result_type ---
 
@@ -106,50 +110,54 @@ class TestJavaBinopCoercion:
         lhs = typed("int:", scalar("String"))
         rhs = typed(42, scalar("Int"))
         a, b = self.coercion.coerce("+", lhs, rhs)
-        assert a == "int:"
-        assert b == "42"
+        assert a.value == "int:"
+        assert b.value == "42"
+        assert b.type == scalar("String")
 
     def test_coerce_int_plus_string_stringifies_int(self):
         lhs = typed(42, scalar("Int"))
         rhs = typed(" items", scalar("String"))
         a, b = self.coercion.coerce("+", lhs, rhs)
-        assert a == "42"
-        assert b == " items"
+        assert a.value == "42"
+        assert a.type == scalar("String")
+        assert b.value == " items"
 
     def test_coerce_string_plus_float_stringifies_float(self):
         lhs = typed("val:", scalar("String"))
         rhs = typed(3.14, scalar("Float"))
         a, b = self.coercion.coerce("+", lhs, rhs)
-        assert a == "val:"
-        assert b == "3.14"
+        assert a.value == "val:"
+        assert b.value == "3.14"
+        assert b.type == scalar("String")
 
     def test_coerce_string_plus_bool_stringifies_bool(self):
         lhs = typed("flag:", scalar("String"))
         rhs = typed(True, scalar("Bool"))
         a, b = self.coercion.coerce("+", lhs, rhs)
-        assert a == "flag:"
-        assert b == "True"
+        assert a.value == "flag:"
+        assert b.value == "True"
+        assert b.type == scalar("String")
 
     def test_coerce_string_plus_string_no_change(self):
         lhs = typed("hello", scalar("String"))
         rhs = typed(" world", scalar("String"))
         a, b = self.coercion.coerce("+", lhs, rhs)
-        assert a == "hello"
-        assert b == " world"
+        assert a.value == "hello"
+        assert b.value == " world"
 
     def test_coerce_non_plus_op_no_change(self):
         lhs = typed("hello", scalar("String"))
         rhs = typed(42, scalar("Int"))
         a, b = self.coercion.coerce("-", lhs, rhs)
-        assert a == "hello"
-        assert b == 42
+        assert a.value == "hello"
+        assert b.value == 42
 
     def test_coerce_int_plus_int_no_change(self):
         lhs = typed(1, scalar("Int"))
         rhs = typed(2, scalar("Int"))
         a, b = self.coercion.coerce("+", lhs, rhs)
-        assert a == 1
-        assert b == 2
+        assert a.value == 1
+        assert b.value == 2
 
     # --- result_type: string concat ---
 
