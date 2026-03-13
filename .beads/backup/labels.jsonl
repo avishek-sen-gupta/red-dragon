@@ -6,6 +6,9 @@
 {"issue_id":"red-dragon-2vi","label":"frontend"}
 {"issue_id":"red-dragon-2vi","label":"javascript"}
 {"issue_id":"red-dragon-2vi","label":"typescript"}
+{"issue_id":"red-dragon-4hz","label":"edge-case"}
+{"issue_id":"red-dragon-4hz","label":"javascript"}
+{"issue_id":"red-dragon-4hz","label":"low-priority"}
 {"issue_id":"red-dragon-4yz","label":"frontend"}
 {"issue_id":"red-dragon-4yz","label":"scala"}
 {"issue_id":"red-dragon-5lu","label":"typed-value"}
@@ -24,6 +27,7 @@
 {"issue_id":"red-dragon-g5u","label":"builtin"}
 {"issue_id":"red-dragon-g5u","label":"vm"}
 {"issue_id":"red-dragon-ggb","label":"typed-value"}
+{"issue_id":"red-dragon-gny","label":"typed-value-migration"}
 {"issue_id":"red-dragon-gsl","label":"cross-language"}
 {"issue_id":"red-dragon-gsl","label":"interfaces"}
 {"issue_id":"red-dragon-gsl","label":"type-inference"}
@@ -457,10 +461,15 @@
 {"issue_id":"red-dragon-kw8","label":"vm"}
 {"issue_id":"red-dragon-lag","label":"builtin"}
 {"issue_id":"red-dragon-lag","label":"vm"}
+{"issue_id":"red-dragon-n9m","label":"typed-value-migration"}
 {"issue_id":"red-dragon-nbu","label":"typed-value"}
+{"issue_id":"red-dragon-oej","label":"refactor"}
+{"issue_id":"red-dragon-oej","label":"vm"}
+{"issue_id":"red-dragon-rrb","label":"typed-value-migration"}
 {"issue_id":"red-dragon-tpz","label":"typed-value"}
 {"issue_id":"red-dragon-uvn","label":"rosetta"}
 {"issue_id":"red-dragon-uvn","label":"testing"}
+{"issue_id":"red-dragon-uws","label":"typed-value-migration"}
 {"issue_id":"red-dragon-x9r","label":"typed-value"}
 {"issue_id":"red-dragon-ymq","label":"typed-value"}
 {"issue_id":"red-dragon-z9o","label":"typed-value"}
