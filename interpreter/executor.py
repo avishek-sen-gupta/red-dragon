@@ -22,7 +22,6 @@ from interpreter.vm import (
     RegionWrite,
     ExecutionResult,
     Operators,
-    _serialize_value,  # heap_writes + return_value only (raw until red-dragon-gny/n9m)
     _resolve_reg,
     _resolve_binop_operand,
     _is_symbolic,
@@ -333,7 +332,7 @@ def _handle_store_field(
                     HeapWrite(
                         obj_addr=obj_val.base,
                         field=target_field,
-                        value=_serialize_value(val),
+                        value=typed_from_runtime(val),
                     )
                 ],
                 reasoning=f"store {obj_val.base}.{target_field} = {val!r} (via Pointer)",
@@ -358,7 +357,7 @@ def _handle_store_field(
                 HeapWrite(
                     obj_addr=addr,
                     field=field_name,
-                    value=_serialize_value(val),
+                    value=typed_from_runtime(val),
                 )
             ],
             reasoning=f"store {addr}.{field_name} = {val!r}",
@@ -471,7 +470,7 @@ def _handle_store_index(
                 HeapWrite(
                     obj_addr=addr,
                     field=str(idx_val),
-                    value=_serialize_value(val),
+                    value=typed_from_runtime(val),
                 )
             ],
             reasoning=f"store {addr}[{idx_val}] = {val!r}",
