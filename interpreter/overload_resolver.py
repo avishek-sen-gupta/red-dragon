@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from interpreter.typed_value import TypedValue
 
 from interpreter.ambiguity_handler import AmbiguityHandler
 from interpreter.function_signature import FunctionSignature
@@ -28,7 +28,7 @@ class OverloadResolver:
     def resolve(
         self,
         candidates: list[FunctionSignature],
-        args: list[Any],
+        args: list[TypedValue],
     ) -> int:
         """Return index of winning candidate."""
         if len(candidates) <= 1:
@@ -51,6 +51,6 @@ class NullOverloadResolver(OverloadResolver):
     def resolve(
         self,
         candidates: list[FunctionSignature],
-        args: list[Any],
+        args: list[TypedValue],
     ) -> int:
         return 0
