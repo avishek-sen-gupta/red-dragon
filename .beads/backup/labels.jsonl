@@ -12,6 +12,7 @@
 {"issue_id":"red-dragon-4yz","label":"frontend"}
 {"issue_id":"red-dragon-4yz","label":"scala"}
 {"issue_id":"red-dragon-5lu","label":"typed-value"}
+{"issue_id":"red-dragon-70n","label":"typed-value-migration"}
 {"issue_id":"red-dragon-8jh","label":"execution"}
 {"issue_id":"red-dragon-8jh","label":"vm"}
 {"issue_id":"red-dragon-8og","label":"type-system"}
@@ -23,6 +24,7 @@
 {"issue_id":"red-dragon-bfv","label":"code-quality"}
 {"issue_id":"red-dragon-bfv","label":"refactoring"}
 {"issue_id":"red-dragon-cj0","label":"typed-value"}
+{"issue_id":"red-dragon-d5c","label":"typed-value-migration"}
 {"issue_id":"red-dragon-f6i","label":"typed-value"}
 {"issue_id":"red-dragon-g5u","label":"builtin"}
 {"issue_id":"red-dragon-g5u","label":"vm"}
