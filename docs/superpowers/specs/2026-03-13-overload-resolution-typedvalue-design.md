@@ -56,7 +56,11 @@ def score(self, arg: TypedValue, declared_type: TypeExpr) -> int:
     if isinstance(arg_type, ScalarType) and arg_type.name == declared_type.name:
         return 2
 
-    # Subtype match (includes primitive compatible pairs via TypeGraph)
+    # Coercion match (Int↔Float, Bool→Int, Bool→Float)
+    if isinstance(arg_type, ScalarType) and (arg_type.name, declared_type.name) in _COMPATIBLE_PAIRS:
+        return 1
+
+    # Subtype match (Dog → Animal, etc.)
     if self._type_graph.is_subtype_expr(arg_type, declared_type):
         return 1
 
@@ -65,13 +69,14 @@ def score(self, arg: TypedValue, declared_type: TypeExpr) -> int:
 
 Scoring hierarchy:
 - Exact type match = 2
-- Subtype match = 1 (Dog → Animal, Int → Number, etc.)
+- Coercion match = 1 (Int↔Float, Bool→Int — from `_COMPATIBLE_PAIRS`)
+- Subtype match = 1 (Dog → Animal, Int → Number, etc. — from `TypeGraph`)
 - Unknown type on either side = 0 (neutral)
 - Unrelated types = -1
 
 The heap address string check (`arg.startswith("obj_")`) is removed — type information comes from `arg.type` directly.
 
-The `_COMPATIBLE_PAIRS` table is removed — primitive compatibility (Int↔Float, Bool↔Int, etc.) is already encoded in `DEFAULT_TYPE_NODES` in the `TypeGraph` (Int → Number, Float → Number, Bool → Any).
+The `_COMPATIBLE_PAIRS` table is **retained** — it encodes coercion relationships (e.g., an Int can be passed where a Float is expected), not subtype relationships. Int and Float are siblings under Number in the type graph, not subtypes of each other. `is_subtype_expr(scalar("Int"), scalar("Float"))` returns `False`. The coercion table and the subtype graph serve different purposes and both score at 1.
 
 ### 3. TypeGraph Construction in run()
 
@@ -116,10 +121,10 @@ winner = overload_resolver.resolve(sigs, args)
 
 | File | Change |
 |------|--------|
-| `interpreter/type_compatibility.py` | `score()` takes `TypedValue`, inject `TypeGraph`, remove `_COMPATIBLE_PAIRS`, remove heap address string check |
+| `interpreter/type_compatibility.py` | `score()` takes `TypedValue`, inject `TypeGraph`, retain `_COMPATIBLE_PAIRS` for coercion, remove heap address string check, read `arg.type` instead of `runtime_type_name(arg)` |
 | `interpreter/resolution_strategy.py` | `rank()` takes `list[TypedValue]` |
-| `interpreter/overload_resolver.py` | `resolve()` takes `list[TypedValue]` |
-| `interpreter/ambiguity_handler.py` | `handle()` takes `list[TypedValue]` |
+| `interpreter/overload_resolver.py` | `resolve()` takes `list[TypedValue]`; `NullOverloadResolver.resolve()` signature updated for consistency |
+| `interpreter/ambiguity_handler.py` | `handle()` takes `list[TypedValue]`, replace `runtime_type_name(a)` with `str(a.type)` in diagnostic messages |
 | `interpreter/executor.py` | Call sites pass `args` directly instead of `[a.value for a in args]` |
 | `interpreter/run.py` | Build `TypeGraph` from registry, inject into `DefaultTypeCompatibility` |
 
@@ -134,10 +139,14 @@ winner = overload_resolver.resolve(sigs, args)
 
 - Java program with overloaded methods taking different class types, verifying correct overload dispatch via `run()`.
 
+## Not Changed / Out of Scope
+
+- **`UnresolvedCallResolver`** — `call_resolver.resolve_method()` (executor.py lines ~1281, ~1322) still receives `[a.value for a in args]`. This interface does not perform type-based resolution and remains on raw values.
+
 ## Design Decisions
 
 - **TypedValue end-to-end:** Same pattern as the TypedValue migration — pass `TypedValue` through the full resolution chain instead of stripping types at the boundary.
 - **Exact = 2, subtype = 1:** Same scoring scale as current primitives. Most-specific overload wins naturally via sum scoring in `ArityThenTypeStrategy`.
 - **TypeGraph built from registry:** Class hierarchy is static and known after registry scanning. No need for type inference.
-- **Remove _COMPATIBLE_PAIRS:** Primitive compatibility is already encoded in `DEFAULT_TYPE_NODES` (Int → Number, Float → Number). The `TypeGraph` handles it uniformly.
+- **Retain _COMPATIBLE_PAIRS:** Coercion (Int↔Float, Bool→Int) and subtyping (Dog→Animal) are different relationships. Int and Float are siblings under Number, not subtypes of each other. The coercion table handles the former, the TypeGraph handles the latter. Both score at 1.
 - **Remove heap address check:** Type comes from `arg.type`, not from inspecting the raw value string.
