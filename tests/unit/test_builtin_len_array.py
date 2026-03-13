@@ -20,19 +20,19 @@ class TestBuiltinLenRespectsLengthField:
         vm = VMState()
         addr = _builtin_array_of([10, 5, 3], vm)
         result = _builtin_len([addr], vm)
-        assert result == 3
+        assert result.value == 3
 
     def test_len_of_arrayOf_empty(self):
         vm = VMState()
         addr = _builtin_array_of([], vm)
         result = _builtin_len([addr], vm)
-        assert result == 0
+        assert result.value == 0
 
     def test_len_of_arrayOf_single_element(self):
         vm = VMState()
         addr = _builtin_array_of([42], vm)
         result = _builtin_len([addr], vm)
-        assert result == 1
+        assert result.value == 1
 
     def test_len_of_heap_object_without_length_field(self):
         """Plain objects (no 'length' field) should use len(fields)."""
@@ -45,7 +45,7 @@ class TestBuiltinLenRespectsLengthField:
             },
         )
         result = _builtin_len(["obj_0"], vm)
-        assert result == 2
+        assert result.value == 2
 
     def test_len_of_heap_object_with_length_field(self):
         """JS-style arrays with explicit 'length' field should return that value."""
@@ -60,4 +60,4 @@ class TestBuiltinLenRespectsLengthField:
             },
         )
         result = _builtin_len(["arr_0"], vm)
-        assert result == 3
+        assert result.value == 3

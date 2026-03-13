@@ -17,7 +17,7 @@ class TestBuiltinPrint:
     def test_returns_none(self):
         vm = VMState()
         result = _builtin_print(["hello", 42], vm)
-        assert result is None
+        assert result.value is None
 
     def test_logs_arguments(self, caplog):
         vm = VMState()
