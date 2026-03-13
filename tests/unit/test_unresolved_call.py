@@ -143,7 +143,9 @@ class TestLLMPlausibleResolver:
         result = resolver.resolve_call("math.sqrt", [16], inst, vm)
 
         assert result.handled
-        assert result.update.register_writes["%0"] == 4.0
+        tv = result.update.register_writes["%0"]
+        assert isinstance(tv, TypedValue)
+        assert tv.value == 4.0
         assert "LLM plausible" in result.update.reasoning
 
     def test_resolve_call_with_side_effects(self):
@@ -167,9 +169,11 @@ class TestLLMPlausibleResolver:
         assert len(result.update.heap_writes) == 2
         assert result.update.heap_writes[0].obj_addr == "arr_5"
         assert result.update.heap_writes[0].field == "3"
-        assert result.update.heap_writes[0].value == "new_element"
+        assert isinstance(result.update.heap_writes[0].value, TypedValue)
+        assert result.update.heap_writes[0].value.value == "new_element"
         assert result.update.heap_writes[1].field == "length"
-        assert result.update.heap_writes[1].value == 4
+        assert isinstance(result.update.heap_writes[1].value, TypedValue)
+        assert result.update.heap_writes[1].value.value == 4
 
     def test_resolve_call_with_var_writes(self):
         response = json.dumps(
@@ -185,8 +189,9 @@ class TestLLMPlausibleResolver:
 
         result = resolver.resolve_call("set_status", [], inst, vm)
 
-        assert result.update.var_writes == {"status": "done"}
-        assert result.update.register_writes["%0"] == "ok"
+        assert result.update.var_writes["status"].value == "done"
+        assert isinstance(result.update.var_writes["status"], TypedValue)
+        assert result.update.register_writes["%0"].value == "ok"
 
     def test_resolve_method_returns_concrete_value(self):
         response = json.dumps({"value": "HELLO", "reasoning": "upper()"})
@@ -197,7 +202,7 @@ class TestLLMPlausibleResolver:
         result = resolver.resolve_method("s", "upper", [], inst, vm)
 
         assert result.handled
-        assert result.update.register_writes["%0"] == "HELLO"
+        assert result.update.register_writes["%0"].value == "HELLO"
 
     def test_fallback_to_symbolic_on_llm_failure(self):
         resolver = LLMPlausibleResolver(llm_client=FailingLLMClient())
@@ -269,7 +274,7 @@ class TestLLMPlausibleResolver:
 
         result = resolver.resolve_call("fenced_func", [], inst, vm)
 
-        assert result.update.register_writes["%0"] == 99
+        assert result.update.register_writes["%0"].value == 99
 
     def test_is_instance_of_abc(self):
         response = json.dumps({"value": 1, "reasoning": "test"})
