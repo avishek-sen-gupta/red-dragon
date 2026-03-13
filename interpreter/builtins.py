@@ -194,18 +194,15 @@ def _slice_heap_array(heap_obj: HeapObject, py_slice: slice, vm: VMState) -> Any
     return _builtin_array_of(elements, vm)
 
 
-def _builtin_object_rest(args: list[Any], vm: VMState) -> Any:
-    """object_rest(obj, key1, key2, ...) — return new object without excluded keys.
-
-    Creates a new heap object with all fields from obj except the listed keys.
-    """
+def _builtin_object_rest(args: list[Any], vm: VMState) -> BuiltinResult:
+    """object_rest(obj, key1, key2, ...) — return new object without excluded keys."""
     if not args:
-        return _UNCOMPUTABLE
+        return BuiltinResult(value=_UNCOMPUTABLE)
     obj_val = args[0]
     excluded_keys = set(args[1:])
     addr = _heap_addr(obj_val)
     if not addr or addr not in vm.heap:
-        return _UNCOMPUTABLE
+        return BuiltinResult(value=_UNCOMPUTABLE)
     source_fields = vm.heap[addr].fields
     rest_fields = {
         k: v
@@ -214,8 +211,14 @@ def _builtin_object_rest(args: list[Any], vm: VMState) -> Any:
     }
     rest_addr = f"{ARR_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
-    vm.heap[rest_addr] = HeapObject(type_hint="object", fields=rest_fields)
-    return rest_addr
+    return BuiltinResult(
+        value=rest_addr,
+        new_objects=[NewObject(addr=rest_addr, type_hint="object")],
+        heap_writes=[
+            HeapWrite(obj_addr=rest_addr, field=k, value=v)
+            for k, v in rest_fields.items()
+        ],
+    )
 
 
 def _method_slice(obj: Any, args: list[Any], vm: VMState) -> Any:
