@@ -27,6 +27,10 @@ from interpreter.binop_coercion import (
     DefaultBinopCoercion,
     JavaBinopCoercion,
 )
+from interpreter.unop_coercion import (
+    UnopCoercionStrategy,
+    DefaultUnopCoercion,
+)
 from interpreter.type_environment import TypeEnvironment
 from interpreter.type_expr import scalar
 from interpreter.typed_value import TypedValue
@@ -208,6 +212,7 @@ def execute_cfg(
     conversion_rules: TypeConversionRules = _IDENTITY_RULES,
     overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
     binop_coercion: BinopCoercionStrategy = DefaultBinopCoercion(),
+    unop_coercion: UnopCoercionStrategy = DefaultUnopCoercion(),
 ) -> tuple[VMState, ExecutionStats]:
     """Execute a pre-built CFG from the given entry point.
 
@@ -274,6 +279,7 @@ def execute_cfg(
             overload_resolver=overload_resolver,
             type_env=type_env,
             binop_coercion=binop_coercion,
+            unop_coercion=unop_coercion,
         )
         used_llm = False
         if result.handled:
@@ -353,6 +359,7 @@ def execute_cfg_traced(
     conversion_rules: TypeConversionRules = _IDENTITY_RULES,
     overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
     binop_coercion: BinopCoercionStrategy = DefaultBinopCoercion(),
+    unop_coercion: UnopCoercionStrategy = DefaultUnopCoercion(),
 ) -> tuple[VMState, ExecutionTrace]:
     """Execute a pre-built CFG and record a trace of every step.
 
@@ -419,6 +426,7 @@ def execute_cfg_traced(
             overload_resolver=overload_resolver,
             type_env=type_env,
             binop_coercion=binop_coercion,
+            unop_coercion=unop_coercion,
         )
         used_llm = False
         if result.handled:
