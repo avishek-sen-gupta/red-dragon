@@ -69,4 +69,4 @@ class TestBuiltinKeysProducesConcreteArray:
         )
         keys_addr = Builtins.TABLE["keys"](["obj_0"], vm)
         length = _builtin_len([keys_addr], vm)
-        assert length == 3
+        assert length.value == 3

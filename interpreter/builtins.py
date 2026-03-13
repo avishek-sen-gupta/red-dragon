@@ -7,7 +7,7 @@ from typing import Any
 
 from interpreter.constants import ARR_ADDR_PREFIX, TypeName
 from interpreter.vm import VMState, Operators, _is_symbolic, _heap_addr
-from interpreter.vm_types import HeapObject
+from interpreter.vm_types import HeapObject, BuiltinResult
 from interpreter.cobol.byte_builtins import BYTE_BUILTINS
 from interpreter.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.type_expr import scalar
@@ -17,94 +17,94 @@ _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 logger = logging.getLogger(__name__)
 
 
-def _builtin_len(args: list[Any], vm: VMState) -> Any:
+def _builtin_len(args: list[Any], vm: VMState) -> BuiltinResult:
     if not args:
-        return _UNCOMPUTABLE
+        return BuiltinResult(value=_UNCOMPUTABLE)
     val = args[0]
     addr = _heap_addr(val)
     if addr and addr in vm.heap:
         fields = vm.heap[addr].fields
         if "length" in fields:
-            return fields["length"].value
-        return len(fields)
+            return BuiltinResult(value=fields["length"].value)
+        return BuiltinResult(value=len(fields))
     if isinstance(val, (list, tuple, str)):
-        return len(val)
-    return _UNCOMPUTABLE
+        return BuiltinResult(value=len(val))
+    return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_range(args: list[Any], vm: VMState) -> Any:
+def _builtin_range(args: list[Any], vm: VMState) -> BuiltinResult:
     if any(_is_symbolic(a) for a in args):
-        return _UNCOMPUTABLE
+        return BuiltinResult(value=_UNCOMPUTABLE)
     concrete = list(args)
     if len(concrete) == 1:
-        return list(range(int(concrete[0])))
+        return BuiltinResult(value=list(range(int(concrete[0]))))
     if len(concrete) == 2:
-        return list(range(int(concrete[0]), int(concrete[1])))
+        return BuiltinResult(value=list(range(int(concrete[0]), int(concrete[1]))))
     if len(concrete) == 3:
-        return list(range(int(concrete[0]), int(concrete[1]), int(concrete[2])))
-    return _UNCOMPUTABLE
+        return BuiltinResult(value=list(range(int(concrete[0]), int(concrete[1]), int(concrete[2]))))
+    return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_print(args: list[Any], vm: VMState) -> Any:
+def _builtin_print(args: list[Any], vm: VMState) -> BuiltinResult:
     logger.info("[VM print] %s", " ".join(str(a) for a in args))
-    return None
+    return BuiltinResult(value=None)
 
 
-def _builtin_int(args: list[Any], vm: VMState) -> Any:
+def _builtin_int(args: list[Any], vm: VMState) -> BuiltinResult:
     if args and not _is_symbolic(args[0]):
         try:
-            return int(args[0])
+            return BuiltinResult(value=int(args[0]))
         except (ValueError, TypeError):
             pass
-    return _UNCOMPUTABLE
+    return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_float(args: list[Any], vm: VMState) -> Any:
+def _builtin_float(args: list[Any], vm: VMState) -> BuiltinResult:
     if args and not _is_symbolic(args[0]):
         try:
-            return float(args[0])
+            return BuiltinResult(value=float(args[0]))
         except (ValueError, TypeError):
             pass
-    return _UNCOMPUTABLE
+    return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_str(args: list[Any], vm: VMState) -> Any:
+def _builtin_str(args: list[Any], vm: VMState) -> BuiltinResult:
     if args and not _is_symbolic(args[0]):
-        return str(args[0])
-    return _UNCOMPUTABLE
+        return BuiltinResult(value=str(args[0]))
+    return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_bool(args: list[Any], vm: VMState) -> Any:
+def _builtin_bool(args: list[Any], vm: VMState) -> BuiltinResult:
     if args and not _is_symbolic(args[0]):
-        return bool(args[0])
-    return _UNCOMPUTABLE
+        return BuiltinResult(value=bool(args[0]))
+    return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_abs(args: list[Any], vm: VMState) -> Any:
+def _builtin_abs(args: list[Any], vm: VMState) -> BuiltinResult:
     if args and not _is_symbolic(args[0]):
         try:
-            return abs(args[0])
+            return BuiltinResult(value=abs(args[0]))
         except TypeError:
             pass
-    return _UNCOMPUTABLE
+    return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_max(args: list[Any], vm: VMState) -> Any:
+def _builtin_max(args: list[Any], vm: VMState) -> BuiltinResult:
     if all(not _is_symbolic(a) for a in args):
         try:
-            return max(args)
+            return BuiltinResult(value=max(args))
         except (ValueError, TypeError):
             pass
-    return _UNCOMPUTABLE
+    return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_min(args: list[Any], vm: VMState) -> Any:
+def _builtin_min(args: list[Any], vm: VMState) -> BuiltinResult:
     if all(not _is_symbolic(a) for a in args):
         try:
-            return min(args)
+            return BuiltinResult(value=min(args))
         except (ValueError, TypeError):
             pass
-    return _UNCOMPUTABLE
+    return BuiltinResult(value=_UNCOMPUTABLE)
 
 
 def _builtin_keys(args: list[Any], vm: VMState) -> Any:
