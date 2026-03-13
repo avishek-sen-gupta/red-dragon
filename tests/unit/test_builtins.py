@@ -84,7 +84,7 @@ class TestBuiltinSlice:
 
     def test_slice_insufficient_args(self):
         vm = VMState()
-        assert _builtin_slice([42], vm) is Operators.UNCOMPUTABLE
+        assert _builtin_slice([42], vm).value is Operators.UNCOMPUTABLE
 
     def test_slice_with_stop_native_list(self):
         """slice(collection, start, stop) should return elements [start:stop]."""
@@ -171,13 +171,13 @@ class TestBuiltinSlice:
         """slice(string, start, stop) should return substring."""
         vm = VMState()
         result = _builtin_slice(["hello", 1, 3], vm)
-        assert result == "el"
+        assert result.value == "el"
 
     def test_slice_string_no_stop(self):
         """slice(string, 2) should return from index 2 onward."""
         vm = VMState()
         result = _builtin_slice(["hello", 2], vm)
-        assert result == "llo"
+        assert result.value == "llo"
 
 
 class TestBuiltinObjectRest:
@@ -253,7 +253,7 @@ class TestMethodBuiltins:
         vm = VMState()
         fn = Builtins.METHOD_TABLE["substring"]
         result = fn("hello", [1, 3], vm)
-        assert result == "el"
+        assert result.value == "el"
 
     def test_method_table_has_expected_entries(self):
         assert "subList" in Builtins.METHOD_TABLE
