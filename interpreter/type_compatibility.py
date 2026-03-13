@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Protocol
+from typing import Protocol
 
 from interpreter.constants import TypeName
 from interpreter.type_expr import ScalarType, TypeExpr, UnknownType
-from interpreter.vm import runtime_type_name
+from interpreter.type_graph import TypeGraph
+from interpreter.typed_value import TypedValue
 
 logger = logging.getLogger(__name__)
 
@@ -25,41 +26,45 @@ _COMPATIBLE_PAIRS: frozenset[tuple[str, str]] = frozenset(
 class TypeCompatibility(Protocol):
     """Scores how well a runtime argument matches a declared parameter type."""
 
-    def score(self, arg: Any, declared_type: TypeExpr) -> int:
+    def score(self, arg: TypedValue, declared_type: TypeExpr) -> int:
         """Return compatibility score: 2=exact, 1=compatible, 0=neutral, -1=mismatch."""
         ...
 
 
 class DefaultTypeCompatibility:
-    """Default scoring: exact=2, compatible=1, neutral=0, mismatch=-1.
+    """Default scoring: exact=2, coercion/subtype=1, neutral=0, mismatch=-1.
 
-    Heap addresses (strings starting with "obj_") are scored as neutral
-    to avoid false matches with String-typed overloads.
+    Uses _COMPATIBLE_PAIRS for primitive coercion (Int↔Float, Bool→Int)
+    and TypeGraph.is_subtype_expr() for class hierarchy subtyping (Dog→Animal).
     """
 
-    def score(self, arg: Any, declared_type: TypeExpr) -> int:
+    def __init__(self, type_graph: TypeGraph) -> None:
+        self._type_graph = type_graph
+
+    def score(self, arg: TypedValue, declared_type: TypeExpr) -> int:
         if isinstance(declared_type, UnknownType):
             return 0
 
-        rt = runtime_type_name(arg)
-
-        # Unknown runtime type (symbolic, list, dict, None, etc.)
-        if not rt:
-            return 0
-
-        # Heap addresses are strings but should not match String params
-        if rt == TypeName.STRING and isinstance(arg, str) and arg.startswith("obj_"):
+        arg_type = arg.type
+        if isinstance(arg_type, UnknownType):
             return 0
 
         if not isinstance(declared_type, ScalarType):
             return 0
 
-        declared_name = declared_type.name
-
-        if rt == declared_name:
+        # Exact match
+        if isinstance(arg_type, ScalarType) and arg_type.name == declared_type.name:
             return 2
 
-        if (rt, declared_name) in _COMPATIBLE_PAIRS:
+        # Coercion match (Int↔Float, Bool→Int, Bool→Float)
+        if (
+            isinstance(arg_type, ScalarType)
+            and (arg_type.name, declared_type.name) in _COMPATIBLE_PAIRS
+        ):
+            return 1
+
+        # Subtype match (Dog → Animal, etc.)
+        if self._type_graph.is_subtype_expr(arg_type, declared_type):
             return 1
 
         return -1
