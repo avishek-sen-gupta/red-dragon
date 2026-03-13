@@ -107,17 +107,17 @@ def _builtin_min(args: list[Any], vm: VMState) -> BuiltinResult:
     return BuiltinResult(value=_UNCOMPUTABLE)
 
 
-def _builtin_keys(args: list[Any], vm: VMState) -> Any:
+def _builtin_keys(args: list[Any], vm: VMState) -> BuiltinResult:
     """Return a heap-allocated array of the object's field names.
 
     Excludes metadata fields like 'length' to match JS Object.keys() semantics.
     """
     if not args:
-        return _UNCOMPUTABLE
+        return BuiltinResult(value=_UNCOMPUTABLE)
     val = args[0]
     addr = _heap_addr(val)
     if not addr or addr not in vm.heap:
-        return _UNCOMPUTABLE
+        return BuiltinResult(value=_UNCOMPUTABLE)
     field_names = [k for k in vm.heap[addr].fields if k != "length"]
     return _builtin_array_of(field_names, vm)
 
@@ -140,14 +140,14 @@ def _builtin_array_of(args: list[Any], vm: VMState) -> BuiltinResult:
     )
 
 
-def _builtin_slice(args: list[Any], vm: VMState) -> Any:
+def _builtin_slice(args: list[Any], vm: VMState) -> BuiltinResult:
     """slice(collection, start[, stop[, step]]) — return a sub-sequence.
 
     Supports native lists/tuples, strings, and heap-backed arrays.
     Missing stop/step represented as 'None' string (from IR CONST).
     """
     if len(args) < 2 or any(_is_symbolic(a) for a in args):
-        return _UNCOMPUTABLE
+        return BuiltinResult(value=_UNCOMPUTABLE)
     collection = args[0]
     raw_start, raw_stop, raw_step = (
         args[1],
@@ -167,8 +167,8 @@ def _builtin_slice(args: list[Any], vm: VMState) -> Any:
         return _slice_heap_array(vm.heap[addr], py_slice, vm)
     # Native string
     if isinstance(collection, str):
-        return collection[py_slice]
-    return _UNCOMPUTABLE
+        return BuiltinResult(value=collection[py_slice])
+    return BuiltinResult(value=_UNCOMPUTABLE)
 
 
 def _arg_or_none(args: list[Any], index: int) -> Any:
@@ -183,12 +183,12 @@ def _parse_slice_int(value: Any) -> int | None:
     return int(value)
 
 
-def _slice_heap_array(heap_obj: HeapObject, py_slice: slice, vm: VMState) -> Any:
+def _slice_heap_array(heap_obj: HeapObject, py_slice: slice, vm: VMState) -> BuiltinResult:
     """Apply a Python slice to a heap-backed array and return a new heap array."""
     length_raw = heap_obj.fields.get("length", len(heap_obj.fields))
     length = length_raw.value if isinstance(length_raw, TypedValue) else length_raw
     if not isinstance(length, int):
-        return _UNCOMPUTABLE
+        return BuiltinResult(value=_UNCOMPUTABLE)
     indices = range(length)[py_slice]
     elements = [heap_obj.fields.get(str(i)) for i in indices]
     return _builtin_array_of(elements, vm)
@@ -221,7 +221,7 @@ def _builtin_object_rest(args: list[Any], vm: VMState) -> BuiltinResult:
     )
 
 
-def _method_slice(obj: Any, args: list[Any], vm: VMState) -> Any:
+def _method_slice(obj: Any, args: list[Any], vm: VMState) -> BuiltinResult:
     """Method builtin: obj.subList(start, stop) / obj.substring(start, stop) → slice."""
     return _builtin_slice([obj, *args], vm)
 
