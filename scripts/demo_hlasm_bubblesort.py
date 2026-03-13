@@ -25,6 +25,7 @@ from interpreter.run import execute_cfg
 from interpreter.run_types import VMConfig
 from interpreter.type_inference import infer_types
 from interpreter.type_resolver import TypeResolver
+from interpreter.typed_value import TypedValue
 from interpreter.vm_types import SymbolicValue
 
 logger = logging.getLogger(__name__)
@@ -106,6 +107,8 @@ def _print_header(title: str):
 
 
 def _format_val(v):
+    if isinstance(v, TypedValue):
+        return _format_val(v.value)
     if isinstance(v, SymbolicValue):
         return (
             f"SymbolicValue({v.name}, hint={v.type_hint}, "
@@ -226,7 +229,7 @@ def main():
     # 3. As a list in a single variable
     # Let's check all possibilities.
 
-    all_vars = frame.local_vars
+    all_vars = {k: v.value for k, v in frame.local_vars.items()}
 
     # Try to find array-like variables
     arr_candidates = sorted(
@@ -253,7 +256,7 @@ def main():
     for addr, obj in vm.heap.items():
         fields = obj.fields
         if any(str(i) in fields for i in range(5)):
-            sorted_result = [fields.get(str(i)) for i in range(5)]
+            sorted_result = [fields.get(str(i)).value for i in range(5)]
             print(f"\n  Found array in heap object [{addr}]: {sorted_result}")
             break
 
