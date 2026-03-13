@@ -186,7 +186,7 @@ class TestApplyUpdateTypedPath:
         apply_update(
             vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
         )
-        assert env.bindings["x"] == 42
+        assert env.bindings["x"] is tv
         assert vm.current_frame.local_vars["x"] is tv
 
     def test_register_coercion_when_declared_type_differs(self):
