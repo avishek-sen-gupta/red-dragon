@@ -12,7 +12,7 @@ from litellm.exceptions import OpenAIError
 from interpreter.ir import IRInstruction
 from interpreter.llm_client import LLMClient
 from interpreter.type_expr import UNKNOWN
-from interpreter.typed_value import typed
+from interpreter.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.vm_types import (
     ExecutionResult,
     HeapWrite,
@@ -175,20 +175,23 @@ class LLMPlausibleResolver(UnresolvedCallResolver):
         value = data.get("value")
         reasoning = data.get("reasoning", "LLM plausible value")
 
-        register_writes: dict[str, Any] = {}
+        register_writes: dict[str, TypedValue] = {}
         if inst.result_reg:
-            register_writes[inst.result_reg] = value
+            register_writes[inst.result_reg] = typed_from_runtime(value)
 
         heap_writes = [
             HeapWrite(
                 obj_addr=hw["obj_addr"],
                 field=hw["field"],
-                value=hw["value"],
+                value=typed_from_runtime(hw["value"]),
             )
             for hw in data.get("heap_writes", [])
         ]
 
-        var_writes: dict[str, Any] = data.get("var_writes", {})
+        var_writes: dict[str, TypedValue] = {
+            var: typed_from_runtime(val)
+            for var, val in data.get("var_writes", {}).items()
+        }
 
         return ExecutionResult.success(
             StateUpdate(
