@@ -343,13 +343,17 @@ reasoning=f"native call-index {func_name}({args[0].value}) = {element!r}",
 
 ### 10. Overload resolver call sites
 
-**Superseded:** The overload resolver now accepts `list[TypedValue]` directly (see `2026-03-13-overload-resolution-typedvalue-design.md`). Call sites pass `args` without unwrapping:
+The overload resolver's `TypeCompatibility.score(arg, param_type)` calls `runtime_type_name(arg)` which expects raw values. Unwrap at the call sites — the overload resolver is a general-purpose component that doesn't know about TypedValue:
 
 ```python
+# Lines 990, 1282, 1302 — all three:
+# Before:
 winner = overload_resolver.resolve(sigs, args)
+# After:
+winner = overload_resolver.resolve(sigs, [a.value for a in args])
 ```
 
-`DefaultTypeCompatibility` reads `arg.type` (a `TypeExpr`) instead of calling `runtime_type_name()`, and uses `TypeGraph.is_subtype_expr()` for subtype-aware scoring.
+The `OverloadResolver`, `ResolutionStrategy`, and `TypeCompatibility` interfaces remain `list[Any]` — unchanged.
 
 ### 11. Unresolved call resolver
 
@@ -501,7 +505,7 @@ No byte builtin needs type information — the change is purely for interface co
 - `Builtins.TABLE` and `METHOD_TABLE` structure — unchanged.
 - Return value wrapping in `_try_builtin_call` (`typed_from_runtime(result.value)`) — unchanged.
 - `BuiltinResult.value` remains `Any` — type-preserving returns are a follow-up.
-- `OverloadResolver`, `ResolutionStrategy`, `TypeCompatibility` interfaces — **updated to `list[TypedValue]`** (see `2026-03-13-overload-resolution-typedvalue-design.md`).
+- `OverloadResolver`, `ResolutionStrategy`, `TypeCompatibility` interfaces — unchanged (`list[Any]`).
 - `UnresolvedCallResolver` interface — unchanged (`list[Any]`).
 - `_slice_heap_array` — internal, receives `HeapObject`, not args. Unaffected.
 
