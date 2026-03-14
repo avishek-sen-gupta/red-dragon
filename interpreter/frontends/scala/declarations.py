@@ -304,17 +304,77 @@ def _extract_scala_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
     ]
 
 
+def _extract_class_parameter_names(ctx: TreeSitterEmitContext, node) -> list[str]:
+    """Extract field names from a Scala class_parameters node."""
+    params_node = next(
+        (c for c in node.children if c.type == NT.CLASS_PARAMETERS),
+        None,
+    )
+    if params_node is None:
+        return []
+    return [
+        ctx.node_text(next(c for c in param.children if c.type == NT.IDENTIFIER))
+        for param in params_node.children
+        if param.type == NT.CLASS_PARAMETER
+    ]
+
+
+def _emit_primary_constructor_init(
+    ctx: TreeSitterEmitContext, param_names: list[str]
+) -> None:
+    """Emit a synthetic __init__ that takes primary constructor params and stores as fields."""
+    func_name = "__init__"
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+    end_label = ctx.fresh_label(f"end_{func_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit(Opcode.LABEL, label=func_label)
+
+    for name in param_names:
+        param_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.SYMBOLIC, result_reg=param_reg, operands=[f"param:{name}"])
+        ctx.emit(Opcode.STORE_VAR, operands=[name, param_reg])
+
+    for name in param_names:
+        val_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.LOAD_VAR, result_reg=val_reg, operands=[name])
+        this_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+        ctx.emit(Opcode.STORE_FIELD, operands=[this_reg, name, val_reg])
+
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
+    )
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=func_reg,
+        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+
 def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     class_name = ctx.node_text(name_node) if name_node else "__anon_class"
     parents = _extract_scala_parents(ctx, node)
 
+    primary_ctor_params = _extract_class_parameter_names(ctx, node)
+
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=class_label)
+    if primary_ctor_params:
+        _emit_primary_constructor_init(ctx, primary_ctor_params)
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
