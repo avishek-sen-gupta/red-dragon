@@ -222,10 +222,14 @@ class BaseFrontend(Frontend):
             block_scoped=self.BLOCK_SCOPED,
         )
         ctx.emit(Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)
+        self._emit_prelude(ctx)
         ctx.lower_block(root)
         self._type_env_builder = ctx.type_env_builder
         self._type_env_builder.var_scope_metadata = dict(ctx.var_scope_metadata)
         return ctx.instructions
+
+    def _emit_prelude(self, ctx: TreeSitterEmitContext) -> None:
+        """Override in subclasses to emit prelude type definitions."""
 
     # ── dispatchers ──────────────────────────────────────────────
 

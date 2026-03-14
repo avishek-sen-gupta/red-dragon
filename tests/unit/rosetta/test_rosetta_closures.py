@@ -271,10 +271,14 @@ class TestClosuresLowering:
     def test_closure_emits_nested_function_label(self, language_ir):
         """Closure languages emit 2 func_ labels (outer + inner); fallback emits 1."""
         lang, ir = language_ir
+        prelude_markers = ("Box_", "Option_")
         labels = [
             inst.label
             for inst in ir
-            if inst.opcode == Opcode.LABEL and inst.label and "func_" in inst.label
+            if inst.opcode == Opcode.LABEL
+            and inst.label
+            and "func_" in inst.label
+            and not any(m in inst.label for m in prelude_markers)
         ]
         if lang in CLOSURE_LANGUAGES:
             assert (
