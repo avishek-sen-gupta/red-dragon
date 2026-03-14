@@ -1,7 +1,5 @@
 """Tests for Rust frontend Box::new and Some call lowering."""
 
-import pytest
-
 from interpreter.frontends.rust.frontend import RustFrontend
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
@@ -17,8 +15,8 @@ def _find_all(instructions, opcode):
 
 
 class TestBoxNewLowering:
-    def test_box_new_emits_call_function(self):
-        """Box::new(x) should emit CALL_FUNCTION, not CALL_UNKNOWN."""
+    def test_box_new_is_pass_through(self):
+        """Box::new(x) is a pass-through — no CALL_FUNCTION or CALL_UNKNOWN for Box."""
         instructions = _parse_rust("""\
 struct Node { value: i32 }
 let n = Node { value: 42 };
@@ -31,8 +29,8 @@ let b = Box::new(n);
             if isinstance(c.operands[0], str) and "Box" in c.operands[0]
         ]
         assert (
-            len(box_calls) >= 1
-        ), f"Expected CALL_FUNCTION with Box, got {[c.operands for c in calls]}"
+            len(box_calls) == 0
+        ), f"Box::new should be pass-through (no CALL_FUNCTION Box), got {box_calls}"
 
     def test_box_new_operand_is_not_call_unknown(self):
         """Box::new should NOT produce CALL_UNKNOWN."""
@@ -70,10 +68,6 @@ let opt = Some(n);
 
 
 class TestDerefLowering:
-    @pytest.mark.xfail(
-        reason="Deref lowering for Box not needed for Rosetta (uses .unwrap())",
-        strict=False,
-    )
     def test_deref_emits_load_field_value(self):
         """*box_val should emit LOAD_FIELD with 'value' field name."""
         instructions = _parse_rust("""\

@@ -120,8 +120,8 @@ class TestRustMutPatternExecution:
 
 
 class TestRustBoxExecution:
-    def test_box_value_field_access(self):
-        """Box wraps its argument in a 'value' field."""
+    def test_box_new_is_pass_through(self):
+        """Box::new(x) is transparent — b points to the same object as x."""
         vm, local_vars = _run_rust(
             """\
 struct Node { value: i32 }
@@ -130,10 +130,8 @@ let b = Box::new(n);
 """,
             max_steps=300,
         )
-        b_addr = local_vars.get("b")
-        assert b_addr is not None
-        assert b_addr in vm.heap
-        assert "value" in vm.heap[b_addr].fields
+        # Box::new is pass-through: b and n point to the same heap object
+        assert local_vars["b"] == local_vars["n"]
 
 
 class TestRustOptionExecution:
@@ -174,15 +172,15 @@ let val = ref_opt.unwrap();
         assert local_vars["val"] == 42
 
     def test_nested_box_in_option(self):
-        """Some(Box::new(42)) should create nested wrapper."""
+        """Some(Box::new(42)) — Box is pass-through, so unwrap returns 42."""
         _, local_vars = _run_rust(
             """\
 let opt = Some(Box::new(42));
-let inner_box = opt.unwrap();
+let inner = opt.unwrap();
 """,
             max_steps=400,
         )
-        assert local_vars.get("inner_box") is not None
+        assert local_vars["inner"] == 42
 
     def test_as_ref_unwrap_chain(self):
         """opt.as_ref().unwrap() — the actual Rosetta pattern."""

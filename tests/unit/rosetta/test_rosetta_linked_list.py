@@ -7,8 +7,8 @@ Languages use their most natural node representation: classes, structs,
 records, or tables.  A ``count`` parameter avoids null-check semantics that
 vary across frontends.
 
-13 frontends produce concrete ``answer == 6``.  2 (Rust, Pascal) return
-SymbolicValue due to Box/Option unwrap and array-index traversal limitations.
+14 frontends produce concrete ``answer == 6``.  1 (Pascal) returns
+SymbolicValue due to array-index traversal limitations.
 """
 
 import pytest
@@ -448,13 +448,13 @@ CONCRETE_LANGUAGES: frozenset[str] = frozenset(
         "cpp",
         "kotlin",
         "scala",
+        "rust",
     }
 )
 
 # Languages where linked list traversal returns SymbolicValue.
-# Rust: Box/Option unwrap in recursive traversal not fully resolved.
 # Pascal: array-of-records index-based traversal returns symbolic.
-SYMBOLIC_LANGUAGES: frozenset[str] = frozenset({"rust", "pascal"})
+SYMBOLIC_LANGUAGES: frozenset[str] = frozenset({"pascal"})
 
 EXPECTED_ANSWER = 6  # 1 + 2 + 3
 
