@@ -1,20 +1,14 @@
 """Tests for parameterized CALL_FUNCTION operand handling."""
 
-import pytest
-
-from interpreter.type_expr import ScalarType, ParameterizedType
+from interpreter.type_expr import ScalarType
 from interpreter.typed_value import TypedValue
 from interpreter.run import run
 from interpreter.constants import Language
 
 
 class TestParameterizedCallFunction:
-    @pytest.mark.xfail(
-        reason="Requires prelude emission (Task 4) and Box::new lowering (Task 5)"
-    )
-    def test_box_node_constructor_creates_heap_object(self):
-        """CALL_FUNCTION 'Box[Node]' should look up 'Box' in scope
-        and create a HeapObject with ParameterizedType type_hint."""
+    def test_box_new_is_pass_through(self):
+        """Box::new(n) is a pass-through — b and n point to the same object."""
         source = """\
 struct Node { value: i32 }
 
@@ -26,32 +20,23 @@ let b = Box::new(n);
             k: v.value if isinstance(v, TypedValue) else v
             for k, v in vm.call_stack[0].local_vars.items()
         }
-        # b should be a heap address
-        b_addr = locals_.get("b")
-        assert b_addr is not None
+        # Box::new is pass-through: b and n are the same heap address
+        assert locals_["b"] == locals_["n"]
+        # The heap object is the Node, not a Box
+        b_addr = locals_["b"]
         assert b_addr in vm.heap
-        box_obj = vm.heap[b_addr]
-        assert "value" in box_obj.fields
+        assert vm.heap[b_addr].type_hint == ScalarType("Node")
 
-    @pytest.mark.xfail(
-        reason="Requires prelude emission (Task 4) and Box::new lowering (Task 5)"
-    )
-    def test_parameterized_type_hint_on_heap_object(self):
-        """Box[Node] constructor should produce HeapObject with
-        ParameterizedType('Box', (ScalarType('Node'),)) type_hint."""
-        source = """\
-struct Node { value: i32 }
-
-let n = Node { value: 42 };
-let b = Box::new(n);
-"""
+    def test_option_constructor_creates_heap_object(self):
+        """Option(42) should create a HeapObject with Option type_hint."""
+        source = "let opt = Some(42);"
         vm = run(source, language=Language.RUST, max_steps=300)
         locals_ = {
             k: v.value if isinstance(v, TypedValue) else v
             for k, v in vm.call_stack[0].local_vars.items()
         }
-        b_addr = locals_.get("b")
-        assert b_addr in vm.heap
-        box_obj = vm.heap[b_addr]
-        assert isinstance(box_obj.type_hint, ParameterizedType)
-        assert box_obj.type_hint.constructor == "Box"
+        opt_addr = locals_.get("opt")
+        assert opt_addr in vm.heap
+        opt_obj = vm.heap[opt_addr]
+        assert opt_obj.type_hint == ScalarType("Option")
+        assert "value" in opt_obj.fields

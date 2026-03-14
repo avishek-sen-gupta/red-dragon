@@ -39,18 +39,17 @@ def lower_call_with_box_option(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def _lower_box_new(ctx: TreeSitterEmitContext, args_node, call_node) -> str:
-    """Lower Box::new(expr) -> CALL_FUNCTION 'Box' with single arg."""
+    """Lower Box::new(expr) as pass-through — return the argument directly.
+
+    In our reference-based VM, Box adds no indirection: all values are already
+    heap-allocated references.  Making Box::new transparent means
+    Some(Box::new(node)) stores the Node directly, and .unwrap() returns the
+    Node — matching Rust's auto-deref through Box.
+    """
     from interpreter.frontends.common.expressions import extract_call_args
 
     arg_regs = extract_call_args(ctx, args_node)
-    reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["Box"] + arg_regs,
-        node=call_node,
-    )
-    return reg
+    return arg_regs[0] if arg_regs else ctx.fresh_reg()
 
 
 def _lower_some(ctx: TreeSitterEmitContext, args_node, call_node) -> str:
