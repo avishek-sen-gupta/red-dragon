@@ -178,7 +178,8 @@ def _lower_cpp_constructor_with_field_inits(
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=func_label)
 
-    _emit_this_param(ctx)
+    # Do NOT emit this as a parameter — the VM injects 'this' implicitly
+    # when calling constructors via _try_class_constructor_call().
 
     if params_node:
         lower_c_params(ctx, params_node)

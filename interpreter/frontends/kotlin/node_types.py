@@ -92,6 +92,9 @@ class KotlinNodeType:
     CONTROL_STRUCTURE_BODY = "control_structure_body"
 
     # -- class internals -------------------------------------------------
+    PRIMARY_CONSTRUCTOR = "primary_constructor"
+    CLASS_PARAMETER = "class_parameter"
+    BINDING_PATTERN_KIND = "binding_pattern_kind"
     COMPANION_OBJECT = "companion_object"
     ENUM_ENTRY = "enum_entry"
     DELEGATION_SPECIFIER = "delegation_specifier"

@@ -56,6 +56,10 @@ class ScalaNodeType:
     COMPILATION_UNIT = "compilation_unit"
     ARGUMENTS = "arguments"
 
+    # Primary constructor
+    CLASS_PARAMETERS = "class_parameters"
+    CLASS_PARAMETER = "class_parameter"
+
     # Definitions and declarations
     VAL_DEFINITION = "val_definition"
     VAR_DEFINITION = "var_definition"

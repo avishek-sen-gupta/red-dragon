@@ -437,16 +437,25 @@ class TestLinkedListCrossLanguage:
 
 # Languages where field access on heap objects resolves to concrete values.
 CONCRETE_LANGUAGES: frozenset[str] = frozenset(
-    {"python", "javascript", "typescript", "java", "ruby", "csharp", "php", "go", "lua"}
+    {
+        "python",
+        "javascript",
+        "typescript",
+        "java",
+        "ruby",
+        "csharp",
+        "php",
+        "go",
+        "lua",
+        "cpp",
+        "kotlin",
+        "scala",
+    }
 )
 
 # Languages where constructor/struct field patterns return SymbolicValue.
-# C++: explicit `this` param in __init__; Kotlin/Scala: primary constructor
-# params not lowered to STORE_FIELD; C/Rust/Pascal: pointer/record deref
-# not resolved.
-SYMBOLIC_LANGUAGES: frozenset[str] = frozenset(
-    {"c", "cpp", "rust", "kotlin", "scala", "pascal"}
-)
+# C/Rust/Pascal: pointer/record deref not resolved.
+SYMBOLIC_LANGUAGES: frozenset[str] = frozenset({"c", "rust", "pascal"})
 
 EXPECTED_ANSWER = 6  # 1 + 2 + 3
 

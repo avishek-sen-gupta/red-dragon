@@ -46,3 +46,45 @@ val r = x match {
   case _ => 0
 }""")
         assert locals_["r"] == 0
+
+
+class TestScalaPrimaryConstructorExecution:
+    """Primary constructor val params produce concrete field values after new."""
+
+    def test_field_access_on_constructed_object(self):
+        """new with primary constructor val params should store and
+        retrieve field values concretely."""
+        locals_ = _run_scala(
+            """\
+object M {
+    class Box(val x: Int)
+    val b = new Box(42)
+    val answer = b.x
+}""",
+            max_steps=500,
+        )
+        assert locals_["answer"] == 42
+
+    def test_linked_list_field_traversal(self):
+        """Linked list built with new + primary constructor should
+        allow recursive traversal to produce concrete sum."""
+        locals_ = _run_scala(
+            """\
+object M {
+    class Node(val value: Int, val nextNode: Node)
+
+    def sumList(node: Node, count: Int): Int = {
+        if (count <= 0) {
+            return 0
+        }
+        return node.value + sumList(node.nextNode, count - 1)
+    }
+
+    val n3 = new Node(3, null)
+    val n2 = new Node(2, n3)
+    val n1 = new Node(1, n2)
+    val answer = sumList(n1, 3)
+}""",
+            max_steps=1000,
+        )
+        assert locals_["answer"] == 6
