@@ -121,11 +121,14 @@ func main() {
 
 class TestGoVariadicArgumentExecution:
     def test_code_with_variadic_call(self):
-        """Function call with variadic arg should not block execution."""
+        """Variadic function call should execute without crashing."""
         locals_ = _run_go("""\
 package main
+func identity(args ...int) int {
+    return 42
+}
 func main() {
-  x := 42
-  _ = x
+    answer := identity(1, 2, 3)
+    _ = answer
 }""")
-        assert locals_["x"] == 42
+        assert locals_["answer"] == 42
