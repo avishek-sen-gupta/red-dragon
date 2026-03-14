@@ -8,7 +8,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from interpreter.constants import TypeName
-from interpreter.type_expr import scalar
+from interpreter.type_expr import TypeExpr, UNKNOWN, scalar
 from interpreter.typed_value import TypedValue, typed
 
 # ── Data types ───────────────────────────────────────────────────
@@ -44,12 +44,12 @@ class Pointer:
 
 @dataclass
 class HeapObject:
-    type_hint: str | None = None
+    type_hint: TypeExpr = UNKNOWN
     fields: dict[str, TypedValue] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
-            "type_hint": self.type_hint,
+            "type_hint": str(self.type_hint) or None,
             "fields": {k: _serialize_value(v) for k, v in self.fields.items()},
         }
 
