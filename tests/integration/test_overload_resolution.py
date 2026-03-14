@@ -43,6 +43,24 @@ String result = g.greet("world");
         vm = run(source, language="java", max_steps=2000)
         assert unwrap(vm.call_stack[0].local_vars.get("result")) == "hello world"
 
+    def test_three_arity_overloads(self):
+        source = """\
+class Calc {
+    int add(int a) { return a; }
+    int add(int a, int b) { return a + b; }
+    int add(int a, int b, int c) { return a + b + c; }
+}
+Calc c = new Calc();
+int r1 = c.add(5);
+int r2 = c.add(3, 4);
+int r3 = c.add(1, 2, 3);
+"""
+        vm = run(source, language="java", max_steps=2000)
+        lv = vm.call_stack[0].local_vars
+        assert unwrap(lv.get("r1")) == 5
+        assert unwrap(lv.get("r2")) == 7
+        assert unwrap(lv.get("r3")) == 6
+
 
 class TestJavaOverloadResolutionByType:
     """Java methods overloaded by parameter type (same arity)."""
