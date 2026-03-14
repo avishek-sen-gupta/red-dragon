@@ -33,7 +33,7 @@ from interpreter.registry import FunctionRegistry, _parse_func_ref, _parse_class
 from interpreter.builtins import Builtins, _builtin_array_of
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.type_environment import TypeEnvironment
-from interpreter.type_expr import UNKNOWN, TypeExpr, scalar
+from interpreter.type_expr import UNKNOWN, TypeExpr, parse_type, scalar
 from interpreter.unresolved_call import UnresolvedCallResolver, SymbolicResolver
 from interpreter.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.binop_coercion import BinopCoercionStrategy, DefaultBinopCoercion
@@ -985,6 +985,7 @@ def _try_class_constructor_call(
     current_label: str,
     overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
     type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
+    type_hint_source: str = "",
 ) -> ExecutionResult:
     """Attempt to handle a call as a class constructor."""
     cr = _parse_class_ref(func_val)
@@ -1010,13 +1011,14 @@ def _try_class_constructor_call(
     # Allocate heap object
     addr = f"{constants.OBJ_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
-    vm.heap[addr] = HeapObject(type_hint=scalar(class_name))
+    type_hint = parse_type(type_hint_source) if type_hint_source else scalar(class_name)
+    vm.heap[addr] = HeapObject(type_hint=type_hint)
 
     if not init_label or init_label not in cfg.blocks:
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={inst.result_reg: typed(addr, UNKNOWN)},
-                new_objects=[NewObject(addr=addr, type_hint=class_name)],
+                new_objects=[NewObject(addr=addr, type_hint=str(type_hint) or None)],
                 reasoning=f"new {class_name}() → {addr} (no __init__)",
             )
         )
@@ -1132,47 +1134,53 @@ def _handle_call_function(
     type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
     **kwargs: Any,
 ) -> ExecutionResult:
-    func_name = inst.operands[0]
+    raw_func_name = inst.operands[0]
+    # Extract base name for scope lookup: "Box[Node]" → "Box"
+    base_name = (
+        raw_func_name.split("[")[0]
+        if isinstance(raw_func_name, str) and "[" in raw_func_name
+        else raw_func_name
+    )
     arg_regs = inst.operands[1:]
     args = [_resolve_binop_operand(vm, a) for a in arg_regs]
 
     # 0. Try I/O provider (for __cobol_* calls)
     if (
         vm.io_provider
-        and isinstance(func_name, str)
-        and func_name.startswith("__cobol_")
+        and isinstance(base_name, str)
+        and base_name.startswith("__cobol_")
     ):
-        result = vm.io_provider.handle_call(func_name, args)
+        result = vm.io_provider.handle_call(base_name, args)
         if result is not Operators.UNCOMPUTABLE:
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={inst.result_reg: typed_from_runtime(result)},
-                    reasoning=f"io_provider {func_name}({[a.value for a in args]!r}) = {result!r}",
+                    reasoning=f"io_provider {base_name}({[a.value for a in args]!r}) = {result!r}",
                 )
             )
         # UNCOMPUTABLE — fall through to symbolic wrapping
-        sym = vm.fresh_symbolic(hint=f"{func_name}(…)")
+        sym = vm.fresh_symbolic(hint=f"{base_name}(…)")
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={inst.result_reg: typed(sym, UNKNOWN)},
-                reasoning=f"io_provider {func_name} → symbolic (uncomputable)",
+                reasoning=f"io_provider {base_name} → symbolic (uncomputable)",
             )
         )
 
     # 1. Try builtins
-    builtin_result = _try_builtin_call(func_name, args, inst, vm)
+    builtin_result = _try_builtin_call(base_name, args, inst, vm)
     if builtin_result.handled:
         return builtin_result
 
     # 2. Look up the function/class via scope chain
     func_val = ""
     for f in reversed(vm.call_stack):
-        if func_name in f.local_vars:
-            func_val = f.local_vars[func_name].value
+        if base_name in f.local_vars:
+            func_val = f.local_vars[base_name].value
             break
     if not func_val:
         # Unknown function — resolve via configured strategy
-        return call_resolver.resolve_call(func_name, [a.value for a in args], inst, vm)
+        return call_resolver.resolve_call(base_name, [a.value for a in args], inst, vm)
 
     # 2b. Scala-style apply: arr(i) on heap-backed arrays → index into fields.
     if len(args) == 1 and isinstance(args[0].value, int):
@@ -1185,7 +1193,7 @@ def _handle_call_function(
                 return ExecutionResult.success(
                     StateUpdate(
                         register_writes={inst.result_reg: tv},
-                        reasoning=f"heap call-index {func_name}({args[0].value}) = {tv!r}",
+                        reasoning=f"heap call-index {base_name}({args[0].value}) = {tv!r}",
                     )
                 )
 
@@ -1203,7 +1211,7 @@ def _handle_call_function(
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={inst.result_reg: typed_from_runtime(element)},
-                reasoning=f"native call-index {func_name}({args[0].value}) = {element!r}",
+                reasoning=f"native call-index {base_name}({args[0].value}) = {element!r}",
             )
         )
 
@@ -1218,6 +1226,7 @@ def _handle_call_function(
         current_label,
         overload_resolver=overload_resolver,
         type_env=type_env,
+        type_hint_source=raw_func_name,
     )
     if ctor_result.handled:
         return ctor_result
@@ -1230,7 +1239,7 @@ def _handle_call_function(
         return user_result
 
     # 5. Not a recognized function ref — resolve via configured strategy
-    return call_resolver.resolve_call(func_name, [a.value for a in args], inst, vm)
+    return call_resolver.resolve_call(base_name, [a.value for a in args], inst, vm)
 
 
 def _handle_call_method(
