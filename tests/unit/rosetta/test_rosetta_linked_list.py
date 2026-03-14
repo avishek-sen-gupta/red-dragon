@@ -7,11 +7,8 @@ Languages use their most natural node representation: classes, structs,
 records, or tables.  A ``count`` parameter avoids null-check semantics that
 vary across frontends.
 
-**Concrete vs. symbolic execution:** 9 frontends resolve field access on
-heap objects to concrete values (answer == 6).  6 frontends (C, C++, Rust,
-Kotlin, Scala, Pascal) return SymbolicValue because their constructor or
-struct/record field-through-pointer patterns are not yet fully resolved by
-the VM.  Both tiers are tested.
+13 frontends produce concrete ``answer == 6``.  2 (Rust, Pascal) return
+SymbolicValue due to Box/Option unwrap and array-index traversal limitations.
 """
 
 import pytest
@@ -447,15 +444,17 @@ CONCRETE_LANGUAGES: frozenset[str] = frozenset(
         "php",
         "go",
         "lua",
+        "c",
         "cpp",
         "kotlin",
         "scala",
     }
 )
 
-# Languages where constructor/struct field patterns return SymbolicValue.
-# C/Rust/Pascal: pointer/record deref not resolved.
-SYMBOLIC_LANGUAGES: frozenset[str] = frozenset({"c", "rust", "pascal"})
+# Languages where linked list traversal returns SymbolicValue.
+# Rust: Box/Option unwrap in recursive traversal not fully resolved.
+# Pascal: array-of-records index-based traversal returns symbolic.
+SYMBOLIC_LANGUAGES: frozenset[str] = frozenset({"rust", "pascal"})
 
 EXPECTED_ANSWER = 6  # 1 + 2 + 3
 
@@ -486,12 +485,7 @@ class TestLinkedListConcreteExecution:
 
 
 class TestLinkedListSymbolicExecution:
-    """Languages where field access returns SymbolicValue due to frontend limitations.
-
-    These still verify that:
-    - The program executes without LLM calls
-    - An answer variable exists (even if symbolic)
-    """
+    """Languages where linked list traversal returns SymbolicValue."""
 
     @pytest.fixture(
         params=sorted(SYMBOLIC_LANGUAGES), ids=lambda lang: lang, scope="class"
