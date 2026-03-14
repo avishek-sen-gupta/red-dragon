@@ -118,6 +118,11 @@ class RustFrontend(BaseFrontend):
             RustNodeType.MUT_PATTERN: common_expr.lower_paren,
         }
 
+    def _emit_prelude(self, ctx) -> None:
+        from interpreter.frontends.rust.declarations import emit_prelude
+
+        emit_prelude(ctx)
+
     def _build_stmt_dispatch(self) -> dict[str, Callable]:
         return {
             RustNodeType.EXPRESSION_STATEMENT: common_assign.lower_expression_statement,
