@@ -1,5 +1,7 @@
 """Tests for Rust frontend Box::new and Some call lowering."""
 
+import pytest
+
 from interpreter.frontends.rust.frontend import RustFrontend
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
@@ -65,3 +67,21 @@ let opt = Some(n);
         assert (
             len(option_calls) >= 1
         ), f"Expected CALL_FUNCTION with Option, got {[c.operands for c in calls]}"
+
+
+class TestDerefLowering:
+    @pytest.mark.xfail(
+        reason="Deref lowering for Box not needed for Rosetta (uses .unwrap())",
+        strict=False,
+    )
+    def test_deref_emits_load_field_value(self):
+        """*box_val should emit LOAD_FIELD with 'value' field name."""
+        instructions = _parse_rust("""\
+struct Node { value: i32 }
+let n = Node { value: 42 };
+let b = Box::new(n);
+let inner = *b;
+""")
+        fields = _find_all(instructions, Opcode.LOAD_FIELD)
+        value_fields = [f for f in fields if "value" in f.operands]
+        assert len(value_fields) >= 1
