@@ -125,16 +125,24 @@ def _scan_classes(
     in_class: str = ""
     for inst in instructions:
         if inst.opcode == Opcode.LABEL and inst.label:
-            if inst.label.startswith(
-                constants.CLASS_LABEL_PREFIX
-            ) and not inst.label.startswith(constants.END_CLASS_LABEL_PREFIX):
+            is_class_start = (
+                inst.label.startswith(constants.CLASS_LABEL_PREFIX)
+                and not inst.label.startswith(constants.END_CLASS_LABEL_PREFIX)
+            ) or (
+                inst.label.startswith(constants.PRELUDE_CLASS_LABEL_PREFIX)
+                and not inst.label.startswith(constants.PRELUDE_END_CLASS_LABEL_PREFIX)
+            )
+            is_class_end = inst.label.startswith(
+                constants.END_CLASS_LABEL_PREFIX
+            ) or inst.label.startswith(constants.PRELUDE_END_CLASS_LABEL_PREFIX)
+            if is_class_start:
                 for cname, clabel in classes.items():
                     if inst.label == clabel:
                         in_class = cname
                         if cname not in class_methods:
                             class_methods[cname] = {}
                         break
-            elif inst.label.startswith(constants.END_CLASS_LABEL_PREFIX):
+            elif is_class_end:
                 # Keep in_class set — hoisted methods may follow end_class
                 pass
 

@@ -117,3 +117,82 @@ class TestRustMutPatternExecution:
         """let mut x should allow reassignment."""
         _, locals_ = _run_rust("let mut x = 1;\nx = 2;")
         assert locals_["x"] == 2
+
+
+class TestRustBoxExecution:
+    def test_box_value_field_access(self):
+        """Box wraps its argument in a 'value' field."""
+        vm, local_vars = _run_rust(
+            """\
+struct Node { value: i32 }
+let n = Node { value: 42 };
+let b = Box::new(n);
+""",
+            max_steps=300,
+        )
+        b_addr = local_vars.get("b")
+        assert b_addr is not None
+        assert b_addr in vm.heap
+        assert "value" in vm.heap[b_addr].fields
+
+
+class TestRustOptionExecution:
+    def test_some_creates_option_with_value(self):
+        """Some(42) should create an Option object with value field = 42."""
+        vm, local_vars = _run_rust("let opt = Some(42);", max_steps=300)
+        opt_addr = local_vars.get("opt")
+        assert opt_addr is not None
+        assert opt_addr in vm.heap
+        assert "value" in vm.heap[opt_addr].fields
+        from interpreter.typed_value import TypedValue
+
+        tv = vm.heap[opt_addr].fields["value"]
+        assert isinstance(tv, TypedValue)
+        assert tv.value == 42
+
+    def test_option_unwrap_returns_inner(self):
+        """Some(42).unwrap() should return 42."""
+        _, local_vars = _run_rust(
+            """\
+let opt = Some(42);
+let val = opt.unwrap();
+""",
+            max_steps=300,
+        )
+        assert local_vars["val"] == 42
+
+    def test_option_as_ref_identity(self):
+        """opt.as_ref() should return the same object."""
+        _, local_vars = _run_rust(
+            """\
+let opt = Some(42);
+let ref_opt = opt.as_ref();
+let val = ref_opt.unwrap();
+""",
+            max_steps=400,
+        )
+        assert local_vars["val"] == 42
+
+    def test_nested_box_in_option(self):
+        """Some(Box::new(42)) should create nested wrapper."""
+        _, local_vars = _run_rust(
+            """\
+let opt = Some(Box::new(42));
+let inner_box = opt.unwrap();
+""",
+            max_steps=400,
+        )
+        assert local_vars.get("inner_box") is not None
+
+    def test_as_ref_unwrap_chain(self):
+        """opt.as_ref().unwrap() — the actual Rosetta pattern."""
+        _, local_vars = _run_rust(
+            """\
+struct Node { value: i32 }
+let n = Node { value: 42 };
+let opt = Some(Box::new(n));
+let inner = opt.as_ref().unwrap();
+""",
+            max_steps=500,
+        )
+        assert local_vars.get("inner") is not None
