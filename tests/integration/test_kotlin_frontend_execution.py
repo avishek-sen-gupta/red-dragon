@@ -54,12 +54,13 @@ val y = 42
 
 class TestKotlinSpreadExpressionExecution:
     def test_spread_does_not_crash(self):
-        """*array in function call should not crash."""
+        """Spread operator (*) in function call should not crash the VM."""
         vars_ = _run_kotlin("""\
-val x = 42
+fun sum(a: Int, b: Int, c: Int): Int { return a + b + c }
+val arr = intArrayOf(1, 2, 3)
+val answer = sum(*arr)
 """)
-        # Just verify the VM runs; spread is mainly about lowering
-        assert vars_["x"] == 42
+        assert "answer" in vars_
 
 
 class TestKotlinSetterExecution:
