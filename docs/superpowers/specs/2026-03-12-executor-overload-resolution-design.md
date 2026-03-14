@@ -2,7 +2,9 @@
 
 **Date:** 2026-03-12
 **Bead:** `red-dragon-gsl.7.3.2`
-**Status:** Design approved
+**Status:** Superseded by `2026-03-13-overload-resolution-typedvalue-design.md`
+
+> **Note:** This spec described the initial `list[Any]` overload resolution architecture. It has been superseded by the 2026-03-13 spec which migrates the full resolver chain to `list[TypedValue]` args, injects `TypeGraph` for subtype-aware scoring, and removes the heap address string check. The architecture (composable resolver with TypeCompatibility + ResolutionStrategy + AmbiguityHandler) remains the same; the interface types and scoring logic changed.
 
 ## Problem
 
