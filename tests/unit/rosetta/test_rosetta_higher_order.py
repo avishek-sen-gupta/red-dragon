@@ -1,4 +1,8 @@
-"""Rosetta test: Higher-order functions (interprocedural call chains) across all 15 deterministic frontends."""
+"""Rosetta test: Higher-order functions across all 15 deterministic frontends.
+
+Every program passes a function (or lambda/closure) as an argument to ``apply``,
+which calls it on a value.  The pattern is ``apply(double, 5) => 10``.
+"""
 
 import pytest
 
@@ -17,10 +21,10 @@ from tests.unit.rosetta.conftest import (
 )
 
 # ---------------------------------------------------------------------------
-# Programs: Higher-order function / interprocedural call chain in all 15 languages
-# Each computes apply(double, 5) => 10.
-# Languages without first-class function support in the VM use a chained call
-# pattern: apply(x) internally calls double_val(x).
+# Programs: Higher-order functions in all 15 languages.
+# Each computes apply(double, 5) => 10 by passing a function as an argument.
+# Languages use the most natural mechanism: function references, lambdas, or
+# anonymous functions.
 # ---------------------------------------------------------------------------
 
 PROGRAMS: dict[str, str] = {
@@ -28,44 +32,46 @@ PROGRAMS: dict[str, str] = {
 def apply(f, x):
     return f(x)
 
-def double(x):
+def double_val(x):
     return x * 2
 
-answer = apply(double, 5)
+answer = apply(double_val, 5)
 """,
     "javascript": """\
 function apply(f, x) {
     return f(x);
 }
 
-function double(x) {
+function double_val(x) {
     return x * 2;
 }
 
-let answer = apply(double, 5);
+let answer = apply(double_val, 5);
 """,
     "typescript": """\
 function apply(f: Function, x: number): number {
     return f(x);
 }
 
-function double(x: number): number {
+function double_val(x: number): number {
     return x * 2;
 }
 
-let answer: number = apply(double, 5);
+let answer: number = apply(double_val, 5);
 """,
     "java": """\
+import java.util.function.Function;
+
 class M {
-    static int double_val(int x) {
+    static int doubleVal(int x) {
         return x * 2;
     }
 
-    static int apply(int x) {
-        return double_val(x);
+    static int apply(Function<Integer, Integer> f, int x) {
+        return f.apply(x);
     }
 
-    static int answer = apply(5);
+    static int answer = apply(x -> x * 2, 5);
 }
 """,
     "ruby": """\
@@ -73,52 +79,50 @@ def double_val(x)
     return x * 2
 end
 
-def apply(x)
-    return double_val(x)
+def apply(f, x)
+    return f(x)
 end
 
-answer = apply(5)
+answer = apply(double_val, 5)
 """,
     "go": """\
 package main
 
-func double_val(x int) int {
+func doubleVal(x int) int {
     return x * 2
 }
 
-func apply(x int) int {
-    return double_val(x)
+func apply(f func(int) int, x int) int {
+    return f(x)
 }
 
 func main() {
-    answer := apply(5)
+    answer := apply(doubleVal, 5)
     _ = answer
 }
 """,
     "php": """\
 <?php
-function double_val($x) {
-    return $x * 2;
+function apply_fn($f, $x) {
+    return $f($x);
 }
 
-function apply_fn($x) {
-    return double_val($x);
-}
-
-$answer = apply_fn(5);
+$answer = apply_fn(function($x) { return $x * 2; }, 5);
 ?>
 """,
     "csharp": """\
+using System;
+
 class M {
-    static int double_val(int x) {
+    static int DoubleVal(int x) {
         return x * 2;
     }
 
-    static int apply(int x) {
-        return double_val(x);
+    static int Apply(Func<int, int> f, int x) {
+        return f(x);
     }
 
-    static int answer = apply(5);
+    static int answer = Apply(x => x * 2, 5);
 }
 """,
     "c": """\
@@ -126,44 +130,44 @@ int double_val(int x) {
     return x * 2;
 }
 
-int apply(int x) {
-    return double_val(x);
+int apply(int (*f)(int), int x) {
+    return f(x);
 }
 
-int answer = apply(5);
+int answer = apply(double_val, 5);
 """,
     "cpp": """\
 int double_val(int x) {
     return x * 2;
 }
 
-int apply(int x) {
-    return double_val(x);
+int apply(int (*f)(int), int x) {
+    return f(x);
 }
 
-int answer = apply(5);
+int answer = apply(double_val, 5);
 """,
     "rust": """\
 fn double_val(x: i32) -> i32 {
     return x * 2;
 }
 
-fn apply(x: i32) -> i32 {
-    return double_val(x);
+fn apply(f: fn(i32) -> i32, x: i32) -> i32 {
+    return f(x);
 }
 
-let answer = apply(5);
+let answer = apply(double_val, 5);
 """,
     "kotlin": """\
 fun doubleVal(x: Int): Int {
     return x * 2
 }
 
-fun apply(x: Int): Int {
-    return doubleVal(x)
+fun apply(f: (Int) -> Int, x: Int): Int {
+    return f(x)
 }
 
-val answer = apply(5)
+val answer = apply(::doubleVal, 5)
 """,
     "scala": """\
 object M {
@@ -171,11 +175,11 @@ object M {
         return x * 2
     }
 
-    def apply(x: Int): Int = {
-        return doubleVal(x)
+    def apply(f: Int => Int, x: Int): Int = {
+        return f(x)
     }
 
-    val answer = apply(5)
+    val answer = apply(doubleVal, 5)
 }
 """,
     "lua": """\
@@ -183,28 +187,31 @@ function double_val(x)
     return x * 2
 end
 
-function apply(x)
-    return double_val(x)
+function apply(f, x)
+    return f(x)
 end
 
-answer = apply(5)
+answer = apply(double_val, 5)
 """,
     "pascal": """\
 program M;
+
+type
+    TIntFunc = function(x: integer): integer;
 
 function double_val(x: integer): integer;
 begin
     double_val := x * 2;
 end;
 
-function apply(x: integer): integer;
+function apply(f: TIntFunc; x: integer): integer;
 begin
-    apply := double_val(x);
+    apply := f(x);
 end;
 
 var answer: integer;
 begin
-    answer := apply(5);
+    answer := apply(double_val, 5);
 end.
 """,
 }
