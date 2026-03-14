@@ -78,7 +78,7 @@ class RustFrontend(BaseFrontend):
             RustNodeType.BINARY_EXPRESSION: common_expr.lower_binop,
             RustNodeType.UNARY_EXPRESSION: rust_expr.lower_unary_or_deref,
             RustNodeType.PARENTHESIZED_EXPRESSION: common_expr.lower_paren,
-            RustNodeType.CALL_EXPRESSION: common_expr.lower_call,
+            RustNodeType.CALL_EXPRESSION: rust_expr.lower_call_with_box_option,
             RustNodeType.FIELD_EXPRESSION: rust_expr.lower_field_expr,
             RustNodeType.REFERENCE_EXPRESSION: rust_expr.lower_reference_expr,
             RustNodeType.DEREFERENCE_EXPRESSION: rust_expr.lower_deref_expr,
