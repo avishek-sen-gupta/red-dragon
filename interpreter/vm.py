@@ -225,7 +225,9 @@ def apply_update(
 
     # New objects
     for obj in update.new_objects:
-        vm.heap[obj.addr] = HeapObject(type_hint=obj.type_hint)
+        vm.heap[obj.addr] = HeapObject(
+            type_hint=scalar(obj.type_hint) if obj.type_hint else UNKNOWN
+        )
 
     # Register writes — coerce to declared type if needed
     for reg, val in update.register_writes.items():
