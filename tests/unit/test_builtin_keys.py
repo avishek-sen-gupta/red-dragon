@@ -8,6 +8,7 @@ len() and index-based iteration work correctly.
 from __future__ import annotations
 
 from interpreter.builtins import Builtins, _builtin_len
+from interpreter.type_expr import scalar
 from interpreter.vm import VMState, apply_update
 from interpreter.vm_types import BuiltinResult, HeapObject, StackFrame, StateUpdate
 from interpreter.typed_value import typed_from_runtime
@@ -49,7 +50,7 @@ class TestBuiltinKeysProducesConcreteArray:
     def test_keys_of_empty_object(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="test"))
-        vm.heap["obj_0"] = HeapObject(type_hint="object", fields={})
+        vm.heap["obj_0"] = HeapObject(type_hint=scalar("object"), fields={})
         result = Builtins.TABLE["keys"]([typed_from_runtime("obj_0")], vm)
         _apply_builtin_result(vm, result)
         assert result.value in vm.heap

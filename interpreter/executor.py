@@ -33,7 +33,7 @@ from interpreter.registry import FunctionRegistry, _parse_func_ref, _parse_class
 from interpreter.builtins import Builtins, _builtin_array_of
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.type_environment import TypeEnvironment
-from interpreter.type_expr import UNKNOWN, scalar
+from interpreter.type_expr import UNKNOWN, TypeExpr, scalar
 from interpreter.unresolved_call import UnresolvedCallResolver, SymbolicResolver
 from interpreter.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.binop_coercion import BinopCoercionStrategy, DefaultBinopCoercion
@@ -64,13 +64,14 @@ def _symbolic_name(val: Any) -> str:
     return repr(val)
 
 
-def _symbolic_type_hint(val: Any) -> str:
+def _symbolic_type_hint(val: Any) -> TypeExpr:
     """Extract a type hint from a symbolic value (SymbolicValue or dict)."""
     if isinstance(val, SymbolicValue):
-        return val.type_hint or ""
+        return scalar(val.type_hint) if val.type_hint else UNKNOWN
     if isinstance(val, dict) and val.get("__symbolic__"):
-        return val.get("type_hint", "")
-    return ""
+        hint = val.get("type_hint", "")
+        return scalar(hint) if hint else UNKNOWN
+    return UNKNOWN
 
 
 # ── Opcode handlers ─────────────────────────────────────────────
@@ -1009,7 +1010,7 @@ def _try_class_constructor_call(
     # Allocate heap object
     addr = f"{constants.OBJ_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
-    vm.heap[addr] = HeapObject(type_hint=class_name)
+    vm.heap[addr] = HeapObject(type_hint=scalar(class_name))
 
     if not init_label or init_label not in cfg.blocks:
         return ExecutionResult.success(

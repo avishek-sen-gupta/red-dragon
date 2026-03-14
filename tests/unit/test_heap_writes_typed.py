@@ -39,7 +39,7 @@ class TestStoreFieldTypedValue:
     def test_store_field_produces_typed_value(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
-        vm.heap["obj_0"] = HeapObject(type_hint="Point")
+        vm.heap["obj_0"] = HeapObject(type_hint=scalar("Point"))
         vm.current_frame.registers["%0"] = typed("obj_0", UNKNOWN)
         vm.current_frame.registers["%1"] = typed(42, scalar(TypeName.INT))
         inst = IRInstruction(opcode=Opcode.STORE_FIELD, operands=["%0", "x", "%1"])
@@ -51,7 +51,7 @@ class TestStoreFieldTypedValue:
     def test_store_field_pointer_dereference_produces_typed_value(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
-        vm.heap["mem_0"] = HeapObject(type_hint=None, fields={"0": 0})
+        vm.heap["mem_0"] = HeapObject(fields={"0": 0})
         vm.current_frame.registers["%0"] = typed(
             Pointer(base="mem_0", offset=0), UNKNOWN
         )
@@ -65,7 +65,7 @@ class TestStoreFieldTypedValue:
     def test_store_field_string_value(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
-        vm.heap["obj_0"] = HeapObject(type_hint="Person")
+        vm.heap["obj_0"] = HeapObject(type_hint=scalar("Person"))
         vm.current_frame.registers["%0"] = typed("obj_0", UNKNOWN)
         vm.current_frame.registers["%1"] = typed("Alice", scalar(TypeName.STRING))
         inst = IRInstruction(opcode=Opcode.STORE_FIELD, operands=["%0", "name", "%1"])
@@ -81,7 +81,7 @@ class TestStoreIndexTypedValue:
     def test_store_index_produces_typed_value(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
-        vm.heap["arr_0"] = HeapObject(type_hint="array", fields={"length": 3})
+        vm.heap["arr_0"] = HeapObject(type_hint=scalar("array"), fields={"length": 3})
         vm.current_frame.registers["%0"] = typed("arr_0", UNKNOWN)
         vm.current_frame.registers["%1"] = typed(0, scalar(TypeName.INT))
         vm.current_frame.registers["%2"] = typed(100, scalar(TypeName.INT))
@@ -152,7 +152,7 @@ class TestApplyUpdateStoresTypedValue:
         """apply_update should store TypedValue directly in HeapObject.fields."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
-        vm.heap["obj_0"] = HeapObject(type_hint="Point")
+        vm.heap["obj_0"] = HeapObject(type_hint=scalar("Point"))
         tv = typed(42, scalar(TypeName.INT))
         update = StateUpdate(
             heap_writes=[HeapWrite(obj_addr="obj_0", field="x", value=tv)],
@@ -188,7 +188,7 @@ class TestHeapFieldsStoreTypedValue:
         """_handle_load_field symbolic cache stores typed(sym, UNKNOWN) in fields."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
-        vm.heap["obj_0"] = HeapObject(type_hint="Foo")
+        vm.heap["obj_0"] = HeapObject(type_hint=scalar("Foo"))
         vm.current_frame.registers["%0"] = typed("obj_0", UNKNOWN)
         inst = IRInstruction(
             opcode=Opcode.LOAD_FIELD, operands=["%0", "bar"], result_reg="%1"
@@ -215,7 +215,9 @@ class TestHeapFieldsStoreTypedValue:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         original_tv = typed(42, scalar(TypeName.INT))
-        vm.heap["obj_0"] = HeapObject(type_hint="Point", fields={"x": original_tv})
+        vm.heap["obj_0"] = HeapObject(
+            type_hint=scalar("Point"), fields={"x": original_tv}
+        )
         vm.current_frame.registers["%0"] = typed("obj_0", UNKNOWN)
         inst = IRInstruction(
             opcode=Opcode.LOAD_FIELD, operands=["%0", "x"], result_reg="%1"
@@ -250,7 +252,7 @@ class TestHeapFieldsStoreTypedValue:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         original_tv = typed(77, scalar(TypeName.INT))
-        vm.heap["mem_0"] = HeapObject(type_hint=None, fields={"0": original_tv})
+        vm.heap["mem_0"] = HeapObject(fields={"0": original_tv})
         ptr = Pointer(base="mem_0", offset=0)
         vm.current_frame.var_heap_aliases["x"] = ptr
         inst = IRInstruction(opcode=Opcode.LOAD_VAR, operands=["x"], result_reg="%0")

@@ -11,6 +11,7 @@ from interpreter.unresolved_call import (
     SymbolicResolver,
     UnresolvedCallResolver,
 )
+from interpreter.type_expr import scalar
 from interpreter.typed_value import TypedValue
 from interpreter.vm_types import (
     ExecutionResult,
@@ -293,7 +294,7 @@ class TestLLMPlausibleResolver:
 
         resolver = LLMPlausibleResolver(llm_client=CapturingClient())
         vm = _make_vm()
-        vm.heap["obj_1"] = HeapObject(type_hint="MyClass")
+        vm.heap["obj_1"] = HeapObject(type_hint=scalar("MyClass"))
         vm.heap["obj_1"].fields["x"] = 10
         inst = _make_call_inst()
 
