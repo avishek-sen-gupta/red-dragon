@@ -6,66 +6,78 @@ through the full parse -> lower -> execute pipeline.
 
 from __future__ import annotations
 
-from tests.unit.rosetta.conftest import execute_for_language, extract_answer
+from tests.unit.rosetta.conftest import execute_for_language
 
 
 class TestRubyScopeResolutionExecution:
-    def test_module_class_instantiation(self):
-        """Module::Class.new should instantiate and call methods correctly."""
+    def test_module_class_scope_resolution_does_not_crash(self):
+        """Animals::Dog.new() with scope resolution lowers and executes without crashing.
+
+        The VM does not yet fully resolve classes nested inside modules,
+        so we verify the scope-resolution syntax (::) is lowered and the
+        program completes — but the method dispatch returns symbolic.
+        """
         source = """\
 module Animals
-end
-
-class Dog
+  class Dog
     def initialize()
-        @legs = 4
+      @legs = 4
     end
     def get_legs()
-        return @legs
+      return @legs
     end
+  end
 end
 
-d = Dog.new()
+d = Animals::Dog.new()
 answer = d.get_legs()
 """
         vm, stats = execute_for_language("ruby", source)
-        assert extract_answer(vm, "ruby") == 4
+        assert "answer" in vm.call_stack[0].local_vars
         assert stats.llm_calls == 0
 
-    def test_scope_resolution_constant_access(self):
-        """Accessing a module constant via :: should resolve correctly."""
+    def test_scope_resolution_constant_access_does_not_crash(self):
+        """Config::PI with scope resolution lowers and executes without crashing.
+
+        The VM does not yet execute module bodies, so constants defined
+        inside a module are not materialized.  We verify the :: syntax
+        is lowered and the program completes.
+        """
         source = """\
 module Config
+  PI = 3
 end
 
-PI = 3
-
-answer = PI
+answer = Config::PI
 """
         vm, stats = execute_for_language("ruby", source)
-        assert extract_answer(vm, "ruby") == 3
+        assert "answer" in vm.call_stack[0].local_vars
         assert stats.llm_calls == 0
 
-    def test_scope_resolution_with_class_method(self):
-        """Constant accessed via scope resolution used in class method."""
+    def test_scope_resolution_in_class_method_does_not_crash(self):
+        """MathConsts::PI inside a class method lowers and executes without crashing.
+
+        The VM does not yet execute module bodies, so module constants
+        resolve to symbolic values.  We verify the :: syntax inside a
+        method body is lowered and the program completes.
+        """
         source = """\
-module Math
+module MathConsts
+  PI = 3
 end
 
-PI = 3
-
 class Circle
-    def initialize(r)
-        @r = r
-    end
-    def area()
-        return @r * @r * PI
-    end
+  def initialize(r)
+    @r = r
+  end
+  def area()
+    return @r * @r * MathConsts::PI
+  end
 end
 
 c = Circle.new(2)
 answer = c.area()
 """
         vm, stats = execute_for_language("ruby", source)
-        assert extract_answer(vm, "ruby") == 12
+        assert "answer" in vm.call_stack[0].local_vars
         assert stats.llm_calls == 0
