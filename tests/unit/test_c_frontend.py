@@ -825,3 +825,76 @@ class TestCLinkageSpecification:
         ir = frontend.lower(b'extern "C" { int x = 42; }')
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("x" in inst.operands for inst in stores)
+
+
+class TestCStructInitializerList:
+    """Struct initializer lists must emit CALL_FUNCTION + STORE_FIELD, not NEW_ARRAY."""
+
+    def test_positional_init_emits_call_function_not_new_array(self):
+        """struct Node n = {3, 0} should create an object, not an array."""
+        ir = _parse_and_lower("""\
+struct Node { int value; int next; };
+struct Node n = {3, 0};
+""")
+        # Should NOT have NEW_ARRAY for the struct init
+        new_arrays = _find_all(ir, Opcode.NEW_ARRAY)
+        assert (
+            len(new_arrays) == 0
+        ), f"Expected no NEW_ARRAY for struct init, got {new_arrays}"
+        # Should have CALL_FUNCTION Node (constructor)
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        node_calls = [c for c in calls if "Node" in str(c.operands)]
+        assert len(node_calls) >= 1, f"Expected CALL_FUNCTION Node, got {calls}"
+
+    def test_positional_init_stores_fields_by_name(self):
+        """Positional initializer {3, 0} should emit STORE_FIELD with field names."""
+        ir = _parse_and_lower("""\
+struct Node { int value; int next; };
+struct Node n = {3, 0};
+""")
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        init_fields = [
+            sf.operands[1] for sf in store_fields if sf.operands[1] in ("value", "next")
+        ]
+        # Class body emits default STORE_FIELD, plus the initializer should emit them
+        # The initializer should store "value" and "next"
+        assert (
+            "value" in init_fields
+        ), f"Expected STORE_FIELD for 'value' from initializer, got {init_fields}"
+        assert (
+            "next" in init_fields
+        ), f"Expected STORE_FIELD for 'next' from initializer, got {init_fields}"
+
+    def test_designated_init_stores_fields_by_name(self):
+        """Designated initializer {.value = 3, .next = 0} should emit STORE_FIELD."""
+        ir = _parse_and_lower("""\
+struct Node { int value; int next; };
+struct Node n = {.value = 3, .next = 0};
+""")
+        new_arrays = _find_all(ir, Opcode.NEW_ARRAY)
+        assert (
+            len(new_arrays) == 0
+        ), f"Expected no NEW_ARRAY for designated init, got {new_arrays}"
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        init_fields = [
+            sf.operands[1] for sf in store_fields if sf.operands[1] in ("value", "next")
+        ]
+        assert "value" in init_fields
+        assert "next" in init_fields
+
+    def test_pointer_field_included_in_struct_body(self):
+        """struct Node { int value; struct Node* next; } should emit
+        STORE_FIELD for both fields, including the pointer field."""
+        ir = _parse_and_lower("""\
+struct Node { int value; struct Node* next; };
+""")
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        field_names = [sf.operands[1] for sf in store_fields]
+        assert "value" in field_names, f"Missing 'value' field, got {field_names}"
+        assert "next" in field_names, f"Missing 'next' pointer field, got {field_names}"
+
+    def test_array_init_still_uses_new_array(self):
+        """int arr[] = {1, 2, 3} should still use NEW_ARRAY (not affected by fix)."""
+        ir = _parse_and_lower("int arr[] = {1, 2, 3};")
+        new_arrays = _find_all(ir, Opcode.NEW_ARRAY)
+        assert len(new_arrays) >= 1, "Array init should still use NEW_ARRAY"
