@@ -631,3 +631,40 @@ public:
         store_fields = _find_all(ir, Opcode.STORE_FIELD)
         a_stores = [sf for sf in store_fields if "a" in sf.operands]
         assert len(a_stores) >= 1, "Expected STORE_FIELD for field 'a' with default"
+
+    def test_constructor_does_not_emit_this_param(self):
+        """Constructor __init__ must NOT emit 'this' as a parameter.
+
+        The VM injects 'this' implicitly via _try_class_constructor_call().
+        If the frontend emits 'symbolic param:this', the parameter binding
+        shifts and field stores target a symbolic instead of the real object.
+        """
+        ir = _parse_cpp("""\
+class Node {
+public:
+    int value;
+    Node(int v) {
+        this->value = v;
+    }
+};
+""")
+        # Find __init__ body
+        in_init = False
+        init_params = []
+        for inst in ir:
+            if inst.opcode == Opcode.LABEL and "init" in (inst.label or ""):
+                in_init = True
+            elif inst.opcode == Opcode.LABEL and in_init:
+                break
+            elif in_init and inst.opcode == Opcode.SYMBOLIC:
+                init_params.append(inst.operands[0] if inst.operands else "")
+
+        this_params = [p for p in init_params if p == "param:this"]
+        assert len(this_params) == 0, (
+            f"Constructor should NOT have 'param:this'; VM injects it. "
+            f"Found params: {init_params}"
+        )
+        v_params = [p for p in init_params if p == "param:v"]
+        assert (
+            len(v_params) == 1
+        ), f"Constructor should have 'param:v', found: {init_params}"

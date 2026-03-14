@@ -401,11 +401,18 @@ def lower_new_expr(ctx: TreeSitterEmitContext, node) -> str:
         type_name = ctx.node_text(named_children[0])
     else:
         type_name = "Object"
+
+    args_node = next(
+        (c for c in node.children if c.type == NT.ARGUMENTS),
+        None,
+    )
+    arg_regs = extract_call_args(ctx, args_node) if args_node else []
+
     reg = ctx.fresh_reg()
     ctx.emit(
         Opcode.CALL_FUNCTION,
         result_reg=reg,
-        operands=[type_name],
+        operands=[type_name, *arg_regs],
         node=node,
     )
     ctx.seed_register_type(reg, ScalarType(type_name))

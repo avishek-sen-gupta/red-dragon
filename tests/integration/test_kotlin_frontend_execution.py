@@ -73,3 +73,40 @@ class Foo {
 }
 val y = 42""")
         assert locals_["y"] == 42
+
+
+class TestKotlinPrimaryConstructorExecution:
+    """Primary constructor with val params produces concrete field values."""
+
+    def test_field_access_on_constructed_object(self):
+        """Constructing a class with primary constructor val params
+        and accessing fields should return concrete values."""
+        vars_ = _run_kotlin("""\
+class Box(val x: Int)
+val b = Box(42)
+val answer = b.x
+""")
+        assert vars_["answer"] == 42
+
+    def test_linked_list_field_traversal(self):
+        """Linked list built with primary constructor should allow
+        field traversal to produce concrete sum."""
+        vars_ = _run_kotlin(
+            """\
+class Node(val value: Int, val nextNode: Node?)
+
+fun sumList(node: Node, count: Int): Int {
+    if (count <= 0) {
+        return 0
+    }
+    return node.value + sumList(node.nextNode!!, count - 1)
+}
+
+val n3 = Node(3, null)
+val n2 = Node(2, n3)
+val n1 = Node(1, n2)
+val answer = sumList(n1, 3)
+""",
+            max_steps=1000,
+        )
+        assert vars_["answer"] == 6

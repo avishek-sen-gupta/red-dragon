@@ -1271,3 +1271,47 @@ class TestKotlinInterfaceLowering:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         this_params = [i for i in symbolics if "param:this" in str(i.operands)]
         assert len(this_params) >= 1, "Interface methods should inject 'this'"
+
+
+class TestKotlinPrimaryConstructor:
+    """Primary constructor val params must generate __init__ with STORE_FIELD."""
+
+    def test_primary_constructor_generates_init(self):
+        ir = _parse_kotlin("class Node(val value: Int, val nextNode: Node?)")
+        func_refs = [
+            i
+            for i in _find_all(ir, Opcode.CONST)
+            if i.operands and "__init__" in str(i.operands[0])
+        ]
+        assert len(func_refs) == 1, f"Expected one __init__ FUNC_REF, got {func_refs}"
+
+    def test_primary_constructor_stores_fields(self):
+        ir = _parse_kotlin("class Node(val value: Int, val nextNode: Node?)")
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        field_names = [sf.operands[1] for sf in store_fields]
+        assert (
+            "value" in field_names
+        ), f"Expected STORE_FIELD for 'value', got {field_names}"
+        assert (
+            "nextNode" in field_names
+        ), f"Expected STORE_FIELD for 'nextNode', got {field_names}"
+
+    def test_primary_constructor_declares_params(self):
+        ir = _parse_kotlin("class Node(val value: Int, val nextNode: Node?)")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        param_names = [
+            s.operands[0] for s in symbolics if s.operands[0].startswith("param:")
+        ]
+        assert "param:value" in param_names
+        assert "param:nextNode" in param_names
+
+    def test_class_without_primary_constructor_no_init(self):
+        ir = _parse_kotlin("class Empty")
+        func_refs = [
+            i
+            for i in _find_all(ir, Opcode.CONST)
+            if i.operands and "__init__" in str(i.operands[0])
+        ]
+        assert (
+            len(func_refs) == 0
+        ), "Class without primary constructor should not generate __init__"
