@@ -48,6 +48,8 @@ ENV_ID_PREFIX = "env_"
 FUNC_LABEL_PREFIX = "func_"
 CLASS_LABEL_PREFIX = "class_"
 END_CLASS_LABEL_PREFIX = "end_class_"
+PRELUDE_CLASS_LABEL_PREFIX = "prelude_class_"
+PRELUDE_END_CLASS_LABEL_PREFIX = "prelude_end_class_"
 
 MAIN_FRAME_NAME = "<main>"
 CFG_ENTRY_LABEL = "entry"
