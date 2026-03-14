@@ -471,8 +471,8 @@ class TestTypeGraphFunctionSubtype:
         f = fn_type([scalar("Int")], scalar("Bool"))
         assert not g.is_subtype_expr(scalar("Int"), f)
 
-    def test_function_type_subtype_of_any(self):
-        """Fn(Int) -> Bool should be subtype of Any (via fallback)."""
+    def test_function_type_not_subtype_of_any(self):
+        """Fn(Int) -> Bool is not subtype of Any — FunctionType is not in the DAG."""
         g = self._graph()
         f = fn_type([scalar("Int")], scalar("Bool"))
         # FunctionType is not in the DAG, so it won't be subtype of Any
