@@ -132,7 +132,11 @@ def _lower_init_declarator(
         _wrap_pointer_type(type_hint, ptr_depth) if ptr_depth else type_hint
     )
 
-    if value_node:
+    if value_node and struct_type and value_node.type == CNodeType.INITIALIZER_LIST:
+        val_reg = _lower_struct_initializer_list(
+            ctx, value_node, struct_type, var_name, node
+        )
+    elif value_node:
         val_reg = ctx.lower_expr(value_node)
     elif struct_type:
         val_reg = ctx.fresh_reg()
@@ -155,6 +159,102 @@ def _lower_init_declarator(
         node=node,
     )
     ctx.seed_var_type(var_name, effective_type)
+
+
+def _extract_struct_field_names(
+    ctx: TreeSitterEmitContext, struct_name: str
+) -> list[str]:
+    """Scan emitted IR for STORE_FIELD instructions in the struct's class body.
+
+    Returns field names in declaration order.  The class body is bounded by
+    LABEL class_<name>_N ... LABEL end_class_<name>_N.
+    """
+    class_prefix = f"{constants.CLASS_LABEL_PREFIX}{struct_name}"
+    end_prefix = f"{constants.END_CLASS_LABEL_PREFIX}{struct_name}"
+    in_body = False
+    field_names: list[str] = []
+    for inst in ctx.instructions:
+        if (
+            inst.opcode == Opcode.LABEL
+            and inst.label
+            and inst.label.startswith(class_prefix)
+        ):
+            in_body = True
+            continue
+        if (
+            inst.opcode == Opcode.LABEL
+            and inst.label
+            and inst.label.startswith(end_prefix)
+        ):
+            break
+        if in_body and inst.opcode == Opcode.STORE_FIELD:
+            field_names.append(inst.operands[1])
+    return field_names
+
+
+def _lower_struct_initializer_list(
+    ctx: TreeSitterEmitContext,
+    init_node,
+    struct_type: str,
+    var_name: str,
+    decl_node,
+) -> str:
+    """Lower {val, ...} or {.field = val, ...} as CALL_FUNCTION + STORE_FIELD.
+
+    For positional elements, field names come from scanning the struct's
+    class body IR.  For designated elements (.field = val), field names
+    come from the field_designator AST node.
+    """
+    obj_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_FUNCTION,
+        result_reg=obj_reg,
+        operands=[struct_type],
+        node=decl_node,
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[var_name, obj_reg], node=decl_node)
+
+    field_names = _extract_struct_field_names(ctx, struct_type)
+    elements = [c for c in init_node.children if c.is_named]
+
+    for i, elem in enumerate(elements):
+        if elem.type == CNodeType.INITIALIZER_PAIR:
+            designator = next(
+                (c for c in elem.children if c.type == CNodeType.FIELD_DESIGNATOR),
+                None,
+            )
+            fname = ctx.node_text(designator).lstrip(".") if designator else ""
+            value_node = next(
+                (
+                    c
+                    for c in elem.children
+                    if c.is_named and c.type != CNodeType.FIELD_DESIGNATOR
+                ),
+                None,
+            )
+            val_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
+        elif i < len(field_names):
+            fname = field_names[i]
+            val_reg = ctx.lower_expr(elem)
+        else:
+            logger.warning(
+                "struct %s initializer: more elements than fields (%d >= %d)",
+                struct_type,
+                i,
+                len(field_names),
+            )
+            continue
+
+        if fname:
+            obj_load = ctx.fresh_reg()
+            ctx.emit(Opcode.LOAD_VAR, result_reg=obj_load, operands=[var_name])
+            ctx.emit(
+                Opcode.STORE_FIELD,
+                operands=[obj_load, fname, val_reg],
+                node=elem,
+            )
+
+    return obj_reg
 
 
 def _find_function_declarator(node) -> object | None:
@@ -324,13 +424,24 @@ def lower_struct_body(ctx: TreeSitterEmitContext, node) -> None:
             ctx.lower_stmt(child)
 
 
+def _collect_field_identifiers(node) -> list:
+    """Recursively collect field_identifier/identifier nodes from a field_declaration.
+
+    Handles pointer fields like ``struct Node* next_node`` where the
+    field_identifier is nested inside a pointer_declarator.
+    """
+    results = []
+    for c in node.children:
+        if c.type in (CNodeType.FIELD_IDENTIFIER, CNodeType.IDENTIFIER):
+            results.append(c)
+        elif c.type == CNodeType.POINTER_DECLARATOR:
+            results.extend(_collect_field_identifiers(c))
+    return results
+
+
 def lower_struct_field(ctx: TreeSitterEmitContext, node) -> None:
     """Lower a struct field declaration as STORE_FIELD on this."""
-    declarators = [
-        c
-        for c in node.children
-        if c.type in (CNodeType.FIELD_IDENTIFIER, CNodeType.IDENTIFIER)
-    ]
+    declarators = _collect_field_identifiers(node)
     for decl in declarators:
         fname = ctx.node_text(decl)
         this_reg = ctx.fresh_reg()
