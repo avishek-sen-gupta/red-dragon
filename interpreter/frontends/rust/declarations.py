@@ -500,3 +500,147 @@ def lower_function_signature(ctx: TreeSitterEmitContext, node) -> None:
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
     ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+
+# ── Rust prelude (Box, Option) ─────────────────────────────────────────
+
+
+def emit_prelude(ctx: TreeSitterEmitContext) -> None:
+    """Emit Box and Option class definitions as IR prelude."""
+    _emit_box_class(ctx)
+    _emit_option_class(ctx)
+
+
+def _emit_method_params(ctx: TreeSitterEmitContext, param_names: list[str]) -> None:
+    """Emit SYMBOLIC param: + STORE_VAR for each parameter."""
+    for pname in param_names:
+        reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.SYMBOLIC,
+            result_reg=reg,
+            operands=[f"{constants.PARAM_PREFIX}{pname}"],
+        )
+        ctx.emit(Opcode.STORE_VAR, operands=[pname, reg])
+
+
+def _emit_prelude_func_ref(
+    ctx: TreeSitterEmitContext, func_name: str, func_label: str
+) -> None:
+    """Emit CONST <function:name@label> + STORE_VAR."""
+    func_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=func_reg,
+        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+
+
+def _emit_box_class(ctx: TreeSitterEmitContext) -> None:
+    """Emit Box class: __init__(self, value) stores self.value = value."""
+    class_name = "Box"
+    class_label = ctx.fresh_label(f"{constants.PRELUDE_CLASS_LABEL_PREFIX}{class_name}")
+    end_label = ctx.fresh_label(
+        f"{constants.PRELUDE_END_CLASS_LABEL_PREFIX}{class_name}"
+    )
+    init_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{class_name}___init__")
+    init_end = ctx.fresh_label(f"end_{class_name}___init__")
+
+    # Class body — branch past it
+    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit(Opcode.LABEL, label=class_label)
+
+    # __init__ function body
+    ctx.emit(Opcode.BRANCH, label=init_end)
+    ctx.emit(Opcode.LABEL, label=init_label)
+    _emit_method_params(ctx, [constants.PARAM_SELF, "value"])
+    self_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=self_reg, operands=[constants.PARAM_SELF])
+    val_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=val_reg, operands=["value"])
+    ctx.emit(Opcode.STORE_FIELD, operands=[self_reg, "value", val_reg])
+    ctx.emit(Opcode.RETURN, operands=[self_reg])
+    ctx.emit(Opcode.LABEL, label=init_end)
+
+    # Register __init__ as method — CONST func_ref INSIDE class body
+    _emit_prelude_func_ref(ctx, "__init__", init_label)
+
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    # Store class ref (OUTSIDE class body, after end_label)
+    cls_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=cls_reg,
+        operands=[
+            constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
+        ],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+
+
+def _emit_option_class(ctx: TreeSitterEmitContext) -> None:
+    """Emit Option class: __init__, unwrap, as_ref methods."""
+    class_name = "Option"
+    class_label = ctx.fresh_label(f"{constants.PRELUDE_CLASS_LABEL_PREFIX}{class_name}")
+    end_label = ctx.fresh_label(
+        f"{constants.PRELUDE_END_CLASS_LABEL_PREFIX}{class_name}"
+    )
+    init_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{class_name}___init__")
+    init_end = ctx.fresh_label(f"end_{class_name}___init__")
+    unwrap_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{class_name}__unwrap")
+    unwrap_end = ctx.fresh_label(f"end_{class_name}__unwrap")
+    as_ref_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{class_name}__as_ref")
+    as_ref_end = ctx.fresh_label(f"end_{class_name}__as_ref")
+
+    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit(Opcode.LABEL, label=class_label)
+
+    # __init__(self, value) body
+    ctx.emit(Opcode.BRANCH, label=init_end)
+    ctx.emit(Opcode.LABEL, label=init_label)
+    _emit_method_params(ctx, [constants.PARAM_SELF, "value"])
+    self_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=self_reg, operands=[constants.PARAM_SELF])
+    val_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=val_reg, operands=["value"])
+    ctx.emit(Opcode.STORE_FIELD, operands=[self_reg, "value", val_reg])
+    ctx.emit(Opcode.RETURN, operands=[self_reg])
+    ctx.emit(Opcode.LABEL, label=init_end)
+
+    # unwrap(self) body
+    ctx.emit(Opcode.BRANCH, label=unwrap_end)
+    ctx.emit(Opcode.LABEL, label=unwrap_label)
+    _emit_method_params(ctx, [constants.PARAM_SELF])
+    self_reg2 = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=self_reg2, operands=[constants.PARAM_SELF])
+    val_reg2 = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_FIELD, result_reg=val_reg2, operands=[self_reg2, "value"])
+    ctx.emit(Opcode.RETURN, operands=[val_reg2])
+    ctx.emit(Opcode.LABEL, label=unwrap_end)
+
+    # as_ref(self) body
+    ctx.emit(Opcode.BRANCH, label=as_ref_end)
+    ctx.emit(Opcode.LABEL, label=as_ref_label)
+    _emit_method_params(ctx, [constants.PARAM_SELF])
+    self_reg3 = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=self_reg3, operands=[constants.PARAM_SELF])
+    ctx.emit(Opcode.RETURN, operands=[self_reg3])
+    ctx.emit(Opcode.LABEL, label=as_ref_end)
+
+    # Register all 3 methods — CONST func_ref INSIDE class body
+    _emit_prelude_func_ref(ctx, "__init__", init_label)
+    _emit_prelude_func_ref(ctx, "unwrap", unwrap_label)
+    _emit_prelude_func_ref(ctx, "as_ref", as_ref_label)
+
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    cls_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=cls_reg,
+        operands=[
+            constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
+        ],
+    )
+    ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])

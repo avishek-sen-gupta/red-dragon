@@ -93,12 +93,28 @@ def assert_cross_language_consistency(
     assert not missing, f"Required opcodes not universal: {missing}"
 
     # Instruction count variance <= 5x median
-    counts = [len(ir) for ir in results.values()]
+    # Subtract prelude overhead (Box/Option class defs) from Rust instruction count
+    def _effective_count(lang: str, ir: list[IRInstruction]) -> int:
+        if lang != "rust":
+            return len(ir)
+        last_prelude_idx = max(
+            (i for i, inst in enumerate(ir) if inst.label and "prelude_" in inst.label),
+            default=-1,
+        )
+        # Prelude ends at last prelude STORE_VAR after the last prelude label
+        prelude_end = last_prelude_idx
+        for i in range(last_prelude_idx, min(last_prelude_idx + 3, len(ir))):
+            if ir[i].opcode == Opcode.STORE_VAR:
+                prelude_end = i
+        return len(ir) - prelude_end - 1 if prelude_end >= 0 else len(ir)
+
+    counts = [_effective_count(lang, ir) for lang, ir in results.items()]
     median_count = statistics.median(counts)
     for lang, ir in results.items():
-        ratio = len(ir) / median_count if median_count > 0 else 0
+        count = _effective_count(lang, ir)
+        ratio = count / median_count if median_count > 0 else 0
         assert ratio <= 5.0, (
-            f"[{lang}] instruction count {len(ir)} is {ratio:.1f}x median "
+            f"[{lang}] instruction count {count} is {ratio:.1f}x median "
             f"({median_count:.0f}) — possible degenerate lowering"
         )
 
