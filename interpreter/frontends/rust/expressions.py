@@ -13,6 +13,61 @@ from interpreter.frontends.rust.node_types import RustNodeType
 logger = logging.getLogger(__name__)
 
 
+def lower_call_with_box_option(ctx: TreeSitterEmitContext, node) -> str:
+    """Rust-specific call lowering that intercepts Box::new and Some."""
+    func_node = node.child_by_field_name(ctx.constants.call_function_field)
+    args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
+
+    if func_node and func_node.type == RustNodeType.SCOPED_IDENTIFIER:
+        full_name = "::".join(
+            ctx.node_text(c)
+            for c in func_node.children
+            if c.type == RustNodeType.IDENTIFIER
+        )
+        if full_name == "Box::new":
+            return _lower_box_new(ctx, args_node, node)
+
+    if func_node and func_node.type == RustNodeType.IDENTIFIER:
+        name = ctx.node_text(func_node)
+        if name == "Some":
+            return _lower_some(ctx, args_node, node)
+
+    # Fall through to common call lowering
+    from interpreter.frontends.common.expressions import lower_call_impl
+
+    return lower_call_impl(ctx, func_node, args_node, node)
+
+
+def _lower_box_new(ctx: TreeSitterEmitContext, args_node, call_node) -> str:
+    """Lower Box::new(expr) -> CALL_FUNCTION 'Box' with single arg."""
+    from interpreter.frontends.common.expressions import extract_call_args
+
+    arg_regs = extract_call_args(ctx, args_node)
+    reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_FUNCTION,
+        result_reg=reg,
+        operands=["Box"] + arg_regs,
+        node=call_node,
+    )
+    return reg
+
+
+def _lower_some(ctx: TreeSitterEmitContext, args_node, call_node) -> str:
+    """Lower Some(expr) -> CALL_FUNCTION 'Option' with single arg."""
+    from interpreter.frontends.common.expressions import extract_call_args
+
+    arg_regs = extract_call_args(ctx, args_node)
+    reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_FUNCTION,
+        result_reg=reg,
+        operands=["Option"] + arg_regs,
+        node=call_node,
+    )
+    return reg
+
+
 def lower_field_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower field_expression: value.field -> LOAD_FIELD."""
     value_node = node.child_by_field_name("value")
