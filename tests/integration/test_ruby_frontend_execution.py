@@ -14,23 +14,45 @@ def _run_ruby(source: str, max_steps: int = 200):
 
 class TestRubySplatArgumentExecution:
     def test_splat_does_not_block(self):
-        """Code with *args should not block execution."""
-        locals_ = _run_ruby("arr = [1, 2, 3]\nx = 42")
-        assert locals_["x"] == 42
+        """Code with *args (splat argument) should not block execution."""
+        source = """\
+arr = [1, 2, 3]
+x = 42
+def add(a, b, c)
+  return a + b + c
+end
+answer = add(*arr)
+"""
+        locals_ = _run_ruby(source)
+        assert "answer" in locals_
 
 
 class TestRubyHashSplatExecution:
     def test_hash_splat_does_not_block(self):
-        """Code with **opts should not block execution."""
-        locals_ = _run_ruby("x = 42")
-        assert locals_["x"] == 42
+        """Code with **opts (hash splat argument) should not block execution."""
+        source = """\
+opts = {a: 1}
+def greet(a)
+  return 42
+end
+answer = greet(**opts)
+"""
+        locals_ = _run_ruby(source)
+        assert "answer" in locals_
 
 
 class TestRubyBlockArgumentExecution:
     def test_block_arg_does_not_block(self):
-        """Code with &block should not block execution."""
-        locals_ = _run_ruby("x = 42")
-        assert locals_["x"] == 42
+        """Code with &block (block argument) should not block execution."""
+        source = """\
+my_proc = Proc.new { 99 }
+def run_it(f)
+  return 42
+end
+answer = run_it(&my_proc)
+"""
+        locals_ = _run_ruby(source)
+        assert "answer" in locals_
 
 
 class TestRubyBeginEndBlockExecution:
