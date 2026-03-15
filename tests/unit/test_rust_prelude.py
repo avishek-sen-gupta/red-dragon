@@ -60,11 +60,11 @@ class TestRustPrelude:
     def test_box_store_var_emitted(self):
         """Box class ref should be stored in a variable."""
         instructions = _parse_rust("let x: i32 = 1;")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Box" in inst.operands for inst in stores)
 
     def test_option_store_var_emitted(self):
         """Option class ref should be stored in a variable."""
         instructions = _parse_rust("let x: i32 = 1;")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Option" in inst.operands for inst in stores)

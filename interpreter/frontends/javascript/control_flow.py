@@ -93,7 +93,7 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
 
     init_idx = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
-    ctx.emit(Opcode.STORE_VAR, operands=["__for_idx", init_idx])
+    ctx.emit(Opcode.DECL_VAR, operands=["__for_idx", init_idx])
     len_reg = ctx.fresh_reg()
     ctx.emit(
         Opcode.CALL_FUNCTION,
@@ -134,7 +134,7 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
     else:
         var_name = ctx.declare_block_var(raw_name)
         if var_name:
-            ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+            ctx.emit(Opcode.DECL_VAR, operands=[var_name, elem_reg])
 
     update_label = ctx.fresh_label("for_in_update")
     ctx.push_loop(update_label, end_label)
@@ -179,7 +179,7 @@ def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
 
     init_idx = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
-    ctx.emit(Opcode.STORE_VAR, operands=["__for_idx", init_idx])
+    ctx.emit(Opcode.DECL_VAR, operands=["__for_idx", init_idx])
     len_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
 
@@ -208,7 +208,7 @@ def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
     else:
         var_name = ctx.declare_block_var(raw_name)
         if var_name:
-            ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+            ctx.emit(Opcode.DECL_VAR, operands=[var_name, elem_reg])
 
     update_label = ctx.fresh_label("for_of_update")
     ctx.push_loop(update_label, end_label)

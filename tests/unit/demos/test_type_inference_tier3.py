@@ -103,7 +103,7 @@ class TestCallUnknownResolution:
                 result_reg="%3",
                 operands=["<function:add@func_add_0>"],
             ),
-            IRInstruction(opcode=Opcode.STORE_VAR, operands=["add", "%3"]),
+            IRInstruction(opcode=Opcode.DECL_VAR, operands=["add", "%3"]),
             IRInstruction(opcode=Opcode.LOAD_VAR, result_reg="%4", operands=["add"]),
             IRInstruction(
                 opcode=Opcode.CALL_UNKNOWN,
@@ -186,7 +186,7 @@ class TestArrayElementTypePromotion:
             IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=["42"]),
             IRInstruction(opcode=Opcode.CONST, result_reg="%idx", operands=["0"]),
             IRInstruction(opcode=Opcode.STORE_INDEX, operands=["%arr", "%idx", "%val"]),
-            IRInstruction(opcode=Opcode.STORE_VAR, operands=["nums", "%arr"]),
+            IRInstruction(opcode=Opcode.DECL_VAR, operands=["nums", "%arr"]),
         ]
         env = infer_types(instructions, _resolver())
         assert env.var_types["nums"] == "Array[Int]"
@@ -199,7 +199,7 @@ class TestArrayElementTypePromotion:
             IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=['"hello"']),
             IRInstruction(opcode=Opcode.CONST, result_reg="%idx", operands=["0"]),
             IRInstruction(opcode=Opcode.STORE_INDEX, operands=["%arr", "%idx", "%val"]),
-            IRInstruction(opcode=Opcode.STORE_VAR, operands=["names", "%arr"]),
+            IRInstruction(opcode=Opcode.DECL_VAR, operands=["names", "%arr"]),
         ]
         env = infer_types(instructions, _resolver())
         assert env.var_types["names"] == "Array[String]"
@@ -212,7 +212,7 @@ class TestArrayElementTypePromotion:
             IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=["42"]),
             IRInstruction(opcode=Opcode.CONST, result_reg="%idx", operands=["0"]),
             IRInstruction(opcode=Opcode.STORE_INDEX, operands=["%arr", "%idx", "%val"]),
-            IRInstruction(opcode=Opcode.STORE_VAR, operands=["nums", "%arr"]),
+            IRInstruction(opcode=Opcode.DECL_VAR, operands=["nums", "%arr"]),
             # Load the variable into a new register
             IRInstruction(
                 opcode=Opcode.LOAD_VAR, result_reg="%loaded", operands=["nums"]
@@ -233,7 +233,7 @@ class TestArrayElementTypePromotion:
         instructions = [
             IRInstruction(opcode=Opcode.LABEL, label="entry"),
             IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=["obj"]),
-            IRInstruction(opcode=Opcode.STORE_VAR, operands=["items", "%val"]),
+            IRInstruction(opcode=Opcode.DECL_VAR, operands=["items", "%val"]),
         ]
         env = infer_types(instructions, _resolver(), type_env_builder=builder)
         assert env.var_types["items"] == "List[String]"

@@ -64,7 +64,7 @@ val answer = a + b
 
 DESTRUCTURING_LANGUAGES: frozenset[str] = frozenset(PROGRAMS.keys())
 
-REQUIRED_OPCODES: set[Opcode] = {Opcode.LOAD_INDEX, Opcode.STORE_VAR, Opcode.BINOP}
+REQUIRED_OPCODES: set[Opcode] = {Opcode.LOAD_INDEX, Opcode.BINOP}
 
 MIN_INSTRUCTIONS = 6
 

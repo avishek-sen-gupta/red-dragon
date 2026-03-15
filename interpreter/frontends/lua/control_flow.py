@@ -147,7 +147,7 @@ def _lower_lua_for_numeric(
     start_reg = ctx.lower_expr(start_node) if start_node else ctx.fresh_reg()
     end_reg = ctx.lower_expr(end_node) if end_node else ctx.fresh_reg()
 
-    ctx.emit(Opcode.STORE_VAR, operands=[var_name, start_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[var_name, start_reg])
 
     step_reg = ctx.fresh_reg()
     if step_node:
@@ -244,7 +244,7 @@ def _lower_lua_for_generic(
 
     init_idx = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
-    ctx.emit(Opcode.STORE_VAR, operands=["__for_idx", init_idx])
+    ctx.emit(Opcode.DECL_VAR, operands=["__for_idx", init_idx])
     len_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
 
@@ -266,7 +266,7 @@ def _lower_lua_for_generic(
     ctx.emit(Opcode.LABEL, label=body_label)
     # First var = index, second var = element
     if len(var_names) >= 1:
-        ctx.emit(Opcode.STORE_VAR, operands=[var_names[0], idx_reg])
+        ctx.emit(Opcode.DECL_VAR, operands=[var_names[0], idx_reg])
     if len(var_names) >= 2:
         elem_reg = ctx.fresh_reg()
         ctx.emit(
@@ -274,7 +274,7 @@ def _lower_lua_for_generic(
             result_reg=elem_reg,
             operands=[iter_reg, idx_reg],
         )
-        ctx.emit(Opcode.STORE_VAR, operands=[var_names[1], elem_reg])
+        ctx.emit(Opcode.DECL_VAR, operands=[var_names[1], elem_reg])
 
     update_label = ctx.fresh_label("generic_for_update")
     ctx.push_loop(update_label, end_label)

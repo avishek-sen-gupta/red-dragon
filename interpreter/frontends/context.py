@@ -166,6 +166,10 @@ class TreeSitterEmitContext:
         self.instructions.append(inst)
         return inst
 
+    def emit_decl_var(self, name: str, val_reg: str, *, node=None) -> IRInstruction:
+        """Emit DECL_VAR: declare a new variable in the current scope."""
+        return self.emit(Opcode.DECL_VAR, operands=[name, val_reg], node=node)
+
     def _track_label(self, opcode: Opcode, label: str) -> None:
         """Track current function/class label for param type association."""
         if opcode != Opcode.LABEL:

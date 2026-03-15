@@ -92,7 +92,7 @@ def lower_foreach(ctx: TreeSitterEmitContext, node) -> None:
     var_name = ctx.declare_block_var(raw_name)
     elem_reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
-    ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[var_name, elem_reg])
 
     update_label = ctx.fresh_label("foreach_update")
     ctx.push_loop(update_label, end_label)
@@ -288,7 +288,7 @@ def lower_switch_expr(ctx: TreeSitterEmitContext, node) -> str:
 
         ctx.emit(Opcode.LABEL, label=arm_label)
         val_reg = ctx.lower_expr(value_node)
-        ctx.emit(Opcode.STORE_VAR, operands=[result_var, val_reg])
+        ctx.emit(Opcode.DECL_VAR, operands=[result_var, val_reg])
         ctx.emit(Opcode.BRANCH, label=end_label)
         ctx.emit(Opcode.LABEL, label=next_label)
 

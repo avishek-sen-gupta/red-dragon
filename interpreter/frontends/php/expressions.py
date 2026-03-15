@@ -299,12 +299,12 @@ def lower_php_ternary(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.LABEL, label=true_label)
     true_reg = ctx.lower_expr(true_node) if true_node else cond_reg
     result_var = f"__ternary_{ctx.label_counter}"
-    ctx.emit(Opcode.STORE_VAR, operands=[result_var, true_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, true_reg])
     ctx.emit(Opcode.BRANCH, label=end_label)
 
     ctx.emit(Opcode.LABEL, label=false_label)
     false_reg = ctx.lower_expr(false_node) if false_node else ctx.fresh_reg()
-    ctx.emit(Opcode.STORE_VAR, operands=[result_var, false_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, false_reg])
     ctx.emit(Opcode.BRANCH, label=end_label)
 
     ctx.emit(Opcode.LABEL, label=end_label)
@@ -490,7 +490,7 @@ def lower_php_match_expression(ctx: TreeSitterEmitContext, node) -> str:
         ctx.emit(Opcode.LABEL, label=arm_label)
         if return_expr:
             val_reg = ctx.lower_expr(return_expr)
-            ctx.emit(Opcode.STORE_VAR, operands=[result_var, val_reg])
+            ctx.emit(Opcode.DECL_VAR, operands=[result_var, val_reg])
         ctx.emit(Opcode.BRANCH, label=end_label)
         ctx.emit(Opcode.LABEL, label=next_label)
 
@@ -498,7 +498,7 @@ def lower_php_match_expression(ctx: TreeSitterEmitContext, node) -> str:
         default_body = default_arm.child_by_field_name("return_expression")
         if default_body:
             val_reg = ctx.lower_expr(default_body)
-            ctx.emit(Opcode.STORE_VAR, operands=[result_var, val_reg])
+            ctx.emit(Opcode.DECL_VAR, operands=[result_var, val_reg])
         ctx.emit(Opcode.BRANCH, label=end_label)
 
     ctx.emit(Opcode.LABEL, label=end_label)

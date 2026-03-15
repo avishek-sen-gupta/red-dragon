@@ -245,12 +245,12 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.LABEL, label=true_label)
     true_reg = ctx.lower_expr(true_node)
     result_var = f"__ternary_{ctx.label_counter}"
-    ctx.emit(Opcode.STORE_VAR, operands=[result_var, true_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, true_reg])
     ctx.emit(Opcode.BRANCH, label=end_label)
 
     ctx.emit(Opcode.LABEL, label=false_label)
     false_reg = ctx.lower_expr(false_node)
-    ctx.emit(Opcode.STORE_VAR, operands=[result_var, false_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, false_reg])
     ctx.emit(Opcode.BRANCH, label=end_label)
 
     ctx.emit(Opcode.LABEL, label=end_label)
@@ -460,7 +460,7 @@ def lower_js_field_definition(ctx: TreeSitterEmitContext, node) -> str:
             operands=[ctx.constants.none_literal],
         )
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=[field_name, val_reg],
         node=node,
     )
@@ -495,7 +495,7 @@ def lower_js_param(ctx: TreeSitterEmitContext, child) -> None:
         node=child,
     )
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=[pname, f"%{ctx.reg_counter - 1}"],
     )
 
@@ -530,4 +530,4 @@ def _lower_rest_param(ctx: TreeSitterEmitContext, child, start_index: int) -> No
         operands=["slice", args_reg, idx_reg],
         node=child,
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[rest_name, rest_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[rest_name, rest_reg])
