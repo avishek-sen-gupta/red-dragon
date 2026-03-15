@@ -6,6 +6,8 @@ without errors and produce the expected variable bindings.
 
 from __future__ import annotations
 
+import pytest
+
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.typed_value import unwrap_locals
@@ -23,11 +25,12 @@ class TestPhpPrintExecution:
         vars_ = _run(source)
         assert vars_["$x"] == 42
 
-    def test_print_result_assigned(self):
-        """$r = print 'hi' assigns to $r (VM returns None, not PHP's 1)."""
+    @pytest.mark.xfail(reason="red-dragon-3ie: print not yet lowered as expression returning 1")
+    def test_print_returns_one(self):
+        """print always returns 1 in PHP; $r = print 'hi' stores 1."""
         source = "<?php $r = print 'hello'; ?>"
         vars_ = _run(source)
-        assert "$r" in vars_
+        assert vars_["$r"] == 1
 
 
 class TestPhpCloneExecution:
