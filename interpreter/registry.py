@@ -8,6 +8,7 @@ from typing import Any
 
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.cfg import CFG
+from interpreter.func_ref import FuncRef
 from interpreter import constants
 
 # ── Parse helpers ────────────────────────────────────────────────
@@ -94,6 +95,7 @@ def _scan_func_params(cfg: CFG) -> dict[str, list[str]]:
 
 def _scan_classes(
     instructions: list[IRInstruction],
+    func_symbol_table: dict[str, FuncRef] = {},
 ) -> tuple[dict[str, str], dict[str, dict[str, list[str]]], dict[str, list[str]]]:
     """Scan IR to find classes, their methods, and parent chains.
 
@@ -147,9 +149,14 @@ def _scan_classes(
                 pass
 
         if in_class and inst.opcode == Opcode.CONST and inst.operands:
-            fr = _parse_func_ref(str(inst.operands[0]))
-            if fr.matched:
-                class_methods[in_class].setdefault(fr.name, []).append(fr.label)
+            operand = str(inst.operands[0])
+            if operand in func_symbol_table:
+                ref = func_symbol_table[operand]
+                class_methods[in_class].setdefault(ref.name, []).append(ref.label)
+            else:
+                fr = _parse_func_ref(operand)
+                if fr.matched:
+                    class_methods[in_class].setdefault(fr.name, []).append(fr.label)
 
     return classes, class_methods, class_parents
 
@@ -178,10 +185,16 @@ def _expand_parent_chains(
     return expanded
 
 
-def build_registry(instructions: list[IRInstruction], cfg: CFG) -> FunctionRegistry:
+def build_registry(
+    instructions: list[IRInstruction],
+    cfg: CFG,
+    func_symbol_table: dict[str, FuncRef] = {},
+) -> FunctionRegistry:
     """Scan IR and CFG to build a function/class registry."""
     reg = FunctionRegistry()
     reg.func_params = _scan_func_params(cfg)
-    reg.classes, reg.class_methods, direct_parents = _scan_classes(instructions)
+    reg.classes, reg.class_methods, direct_parents = _scan_classes(
+        instructions, func_symbol_table
+    )
     reg.class_parents = _expand_parent_chains(direct_parents)
     return reg
