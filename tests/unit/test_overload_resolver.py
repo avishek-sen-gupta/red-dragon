@@ -141,7 +141,7 @@ class TestSubtypeOverloadResolution:
         candidates = [_sig(TypeName.STRING), _sig("Animal")]
         assert resolver.resolve(candidates, [typed("obj_0", scalar("Dog"))]) == 1
 
-    def test_sibling_classes_are_ambiguous_with_fallback(self):
+    def test_sibling_class_exact_match_beats_mismatch(self):
         """foo(Dog) and foo(Cat) with a Dog arg — Dog matches exactly, Cat mismatches."""
         resolver = _make_resolver_with_classes()
         candidates = [_sig("Cat"), _sig("Dog")]
