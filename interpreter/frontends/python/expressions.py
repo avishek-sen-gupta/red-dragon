@@ -457,12 +457,7 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
 
     # Reference to the lambda function
     ref_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=ref_reg,
-        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
-        node=node,
-    )
+    ctx.emit_func_ref(func_name, func_label, result_reg=ref_reg, node=node)
     return ref_reg
 
 

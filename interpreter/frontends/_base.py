@@ -171,10 +171,20 @@ class BaseFrontend(Frontend):
     def _emit_func_ref(
         self, func_name: str, func_label: str, result_reg: str, node=None
     ) -> IRInstruction:
-        """Legacy-mode equivalent of ctx.emit_func_ref()."""
+        """Legacy-mode equivalent of ctx.emit_func_ref().
+
+        Emits the legacy ``<function:name@label>`` format as the CONST operand
+        for backward compatibility with existing consumers (_parse_func_ref).
+        The symbol table is populated in parallel, ready for future consumers.
+        """
         self._func_symbol_table[func_label] = FuncRef(name=func_name, label=func_label)
         return self._emit(
-            Opcode.CONST, result_reg=result_reg, operands=[func_label], node=node
+            Opcode.CONST,
+            result_reg=result_reg,
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
+            node=node,
         )
 
     # ── context-mode hooks (override in subclasses for pure-function dispatch) ──
@@ -885,13 +895,7 @@ class BaseFrontend(Frontend):
         self._emit(Opcode.LABEL, label=end_label)
 
         func_reg = self._fresh_reg()
-        self._emit(
-            Opcode.CONST,
-            result_reg=func_reg,
-            operands=[
-                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
-            ],
-        )
+        self._emit_func_ref(func_name, func_label, result_reg=func_reg)
         self._emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
     def _lower_params(self, params_node):
