@@ -2044,3 +2044,15 @@ These are already dispatched to `_lower_ts_interface_method` in `lower_interface
 - `CALL_UNKNOWN` is the established pattern in the Lua frontend for all dynamic call targets.
 
 **Files:** `interpreter/frontends/lua/declarations.py` (dotted declaration → STORE_FIELD), `interpreter/frontends/lua/expressions.py` (dotted call → LOAD_FIELD + CALL_UNKNOWN), `tests/unit/test_lua_frontend.py`, `tests/integration/test_lua_table_oop_execution.py`.
+
+---
+
+### ADR-105: Structured function references via symbol table (2026-03-15)
+
+**Context:** Function references were stringly-typed — frontends emitted `CONST "<function:name@label>"` and every consumer (registry, type inference, executor) regex-parsed this string back via `FUNC_REF_PATTERN`. This was fragile (dotted names like `Counter.new` broke `\w+` matching) and violated the principle of passing decisions through data rather than re-deriving them downstream.
+
+**Decision:** Replace with a symbol table (`dict[str, FuncRef]`) on `TreeSitterEmitContext`. Frontends call `ctx.emit_func_ref(name, label)` which registers a `FuncRef(name, label)` in the symbol table and emits `CONST label` (plain string). The symbol table flows through the pipeline: `build_registry()`, `infer_types()`, and `execute_cfg()` all accept `func_symbol_table`. At runtime, `_handle_const` looks up the label in the symbol table and creates a `BoundFuncRef(func_ref, closure_id)` stored in the register. All consumer sites use `isinstance(val, BoundFuncRef)` instead of regex. The LLM frontend boundary retains a local regex (`_LLM_FUNC_REF_RE`) for parsing LLM-emitted `<function:...>` strings, converting to structured refs before pipeline entry.
+
+**Deletions:** `FUNC_REF_PATTERN`, `FUNC_REF_TEMPLATE` (constants.py), `_parse_func_ref()`, `RefPatterns.FUNC_RE` (registry.py), `_FUNC_REF_EXTRACT`, `_FUNC_REF_PATTERN` (type_inference.py).
+
+**Files:** `interpreter/func_ref.py` (new: `FuncRef`, `BoundFuncRef`), `interpreter/frontends/context.py` (`func_symbol_table`, `emit_func_ref`), `interpreter/executor.py` (7 call sites → `isinstance`), `interpreter/registry.py` (symbol table lookup), `interpreter/type_inference.py` (symbol table lookup), `interpreter/run.py` (threading + `_format_val`), `interpreter/llm_frontend.py` (boundary conversion), all 15 frontend dirs.
