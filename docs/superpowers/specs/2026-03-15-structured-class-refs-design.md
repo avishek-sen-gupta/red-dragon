@@ -24,6 +24,14 @@ class ClassRef:
 
 No runtime binding equivalent (unlike `BoundFuncRef` for closures). Class references are purely compile-time.
 
+A null object sentinel for failed lookups:
+
+```python
+NO_CLASS_REF = ClassRef(name="", label="", parents=())
+```
+
+Consumer sites that look up a label in the symbol table use `class_symbol_table.get(label, NO_CLASS_REF)` and check `ref.name` truthiness — no `None` checks anywhere.
+
 ### Symbol table
 
 A `dict[str, ClassRef]` keyed by label. Lives on `TreeSitterEmitContext` during lowering.
