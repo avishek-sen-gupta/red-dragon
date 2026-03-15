@@ -27,7 +27,10 @@ def _lower_and_infer(source: str, language: str):
     frontend = get_frontend(lang)
     instructions = frontend.lower(source.encode("utf-8"))
     env = infer_types(
-        instructions, _resolver(), type_env_builder=frontend.type_env_builder
+        instructions,
+        _resolver(),
+        type_env_builder=frontend.type_env_builder,
+        func_symbol_table=frontend.func_symbol_table,
     )
     return instructions, env
 
@@ -2466,7 +2469,12 @@ def add(a, b):
             ]
             builder.func_return_types[func_label] = scalar("Int")
 
-        env = infer_types(instructions, _resolver(), type_env_builder=builder)
+        env = infer_types(
+            instructions,
+            _resolver(),
+            type_env_builder=builder,
+            func_symbol_table=frontend.func_symbol_table,
+        )
         # The CONST for function ref should produce a FunctionType register
         func_ref_consts = [
             i
@@ -2474,7 +2482,7 @@ def add(a, b):
             if i.opcode == Opcode.CONST
             and i.result_reg
             and i.operands
-            and "function:add@" in str(i.operands[0])
+            and str(i.operands[0]).startswith("func_add_")
         ]
         assert len(func_ref_consts) >= 1
         func_reg = func_ref_consts[0].result_reg
@@ -2500,7 +2508,7 @@ class M {
             if i.opcode == Opcode.CONST
             and i.result_reg
             and i.operands
-            and "function:add@" in str(i.operands[0])
+            and str(i.operands[0]).startswith("func_add_")
         ]
         assert len(func_ref_consts) >= 1
         func_reg = func_ref_consts[0].result_reg
@@ -2535,7 +2543,12 @@ f = add
         ]
         builder.func_return_types[func_label] = scalar("Int")
 
-        env = infer_types(instructions, _resolver(), type_env_builder=builder)
+        env = infer_types(
+            instructions,
+            _resolver(),
+            type_env_builder=builder,
+            func_symbol_table=frontend.func_symbol_table,
+        )
         # Find if 'f' or 'add' got a FunctionType
         # The add variable should get the FunctionType from STORE_VAR
         # (since the CONST func ref gets FunctionType, and STORE_VAR propagates it)
@@ -2545,7 +2558,7 @@ f = add
             if i.opcode == Opcode.CONST
             and i.result_reg
             and i.operands
-            and "function:add@" in str(i.operands[0])
+            and str(i.operands[0]).startswith("func_add_")
         ]
         assert len(func_ref_consts) >= 1
         func_reg = func_ref_consts[0].result_reg

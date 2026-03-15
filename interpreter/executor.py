@@ -29,7 +29,7 @@ from interpreter.vm import (
     _parse_const,
 )
 from interpreter.vm_types import BuiltinResult, StackFrame
-from interpreter.registry import FunctionRegistry, _parse_func_ref, _parse_class_ref
+from interpreter.registry import FunctionRegistry, _parse_class_ref
 from interpreter.func_ref import FuncRef, BoundFuncRef
 from interpreter.builtins import Builtins, _builtin_array_of
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
@@ -85,14 +85,8 @@ def _handle_const(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
 
     # Symbol table lookup: produce BoundFuncRef for function labels
     func_ref_entry = None
-    if isinstance(val, str):
-        if val in func_symbol_table:
-            func_ref_entry = func_symbol_table[val]
-        else:
-            # Fallback: parse old-format <function:name@label> string
-            fr = _parse_func_ref(val)
-            if fr.matched:
-                func_ref_entry = FuncRef(name=fr.name, label=fr.label)
+    if isinstance(val, str) and val in func_symbol_table:
+        func_ref_entry = func_symbol_table[val]
 
     if func_ref_entry is not None:
         closure_id = ""

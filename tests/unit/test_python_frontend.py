@@ -591,7 +591,7 @@ class TestPythonLambda:
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("f" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("<function:" in str(inst.operands) for inst in consts)
+        assert any("func_" in str(inst.operands[0]) for inst in consts if inst.operands)
 
     def test_lambda_multi_param(self):
         source = "add = lambda a, b: a + b"

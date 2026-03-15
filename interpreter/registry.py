@@ -26,25 +26,9 @@ class RefParseResult:
 
 
 class RefPatterns:
-    """Compiled regex patterns for function/class references."""
+    """Compiled regex patterns for class references."""
 
-    FUNC_RE = re.compile(constants.FUNC_REF_PATTERN)
     CLASS_RE = re.compile(constants.CLASS_REF_PATTERN)
-
-
-def _parse_func_ref(val: Any) -> RefParseResult:
-    """Parse '<function:name@label>' or '<function:name@label#closure_id>'."""
-    if not isinstance(val, str):
-        return RefParseResult(matched=False)
-    m = RefPatterns.FUNC_RE.search(val)
-    if not m:
-        return RefParseResult(matched=False)
-    return RefParseResult(
-        matched=True,
-        name=m.group(1),
-        label=m.group(2),
-        closure_id=m.group(3) or "",
-    )
 
 
 def _parse_class_ref(val: Any) -> RefParseResult:
@@ -153,10 +137,6 @@ def _scan_classes(
             if operand in func_symbol_table:
                 ref = func_symbol_table[operand]
                 class_methods[in_class].setdefault(ref.name, []).append(ref.label)
-            else:
-                fr = _parse_func_ref(operand)
-                if fr.matched:
-                    class_methods[in_class].setdefault(fr.name, []).append(fr.label)
 
     return classes, class_methods, class_parents
 
