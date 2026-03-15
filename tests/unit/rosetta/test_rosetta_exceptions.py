@@ -1,17 +1,13 @@
-"""Rosetta test: exception handling across all 15 deterministic frontends.
+"""Rosetta test: exception handling across deterministic frontends.
 
 Verifies that the VM can lower and execute try/catch (or equivalent)
 constructs. The try body sets ``answer = -1`` and branches past the catch
 block, which is structurally present but unreachable in the current VM
 (THROW is a no-op that does not redirect control flow).
 
-Languages with native try/catch (Python, JS, TS, Java, Ruby, Kotlin,
-Scala, PHP, C#, C++, Pascal) generate labeled try/catch blocks.
-
-Languages without try/catch (C, Go, Rust, Lua) use direct
-assignment as a fallback to verify the same execution outcome.
-
-All programs set answer = -1.
+C, Go, Rust, and Lua are excluded — they use fundamentally different
+error handling paradigms (none, defer/recover, Result/panic, pcall).
+See red-dragon-xvn (Go) and red-dragon-e2k (Lua) for those gaps.
 """
 
 import pytest
@@ -31,8 +27,9 @@ from tests.unit.rosetta.conftest import (
 )
 
 # ---------------------------------------------------------------------------
-# Programs: exception handling (try/catch) or fallback in all 15 languages
-# Each sets answer = -1 via try body (or direct assignment).
+# Programs: exception handling (try/catch) in 11 languages
+# C, Go, Rust, Lua excluded (different error paradigms).
+# Each sets answer = -1 via try body.
 # ---------------------------------------------------------------------------
 
 PROGRAMS: dict[str, str] = {
@@ -79,14 +76,6 @@ rescue => e
     answer = 99
 end
 """,
-    "go": """\
-package main
-
-func main() {
-    answer := -1
-    _ = answer
-}
-""",
     "php": """\
 <?php
 $answer = 0;
@@ -105,9 +94,6 @@ try {
     answer = 99;
 }
 """,
-    "c": """\
-int answer = -1;
-""",
     "cpp": """\
 int answer = 0;
 try {
@@ -115,9 +101,6 @@ try {
 } catch (...) {
     answer = 99;
 }
-""",
-    "rust": """\
-let answer: i32 = -1;
 """,
     "kotlin": """\
 var answer: Int = 0
@@ -136,9 +119,6 @@ object M {
         case e: Exception => answer = 99
     }
 }
-""",
-    "lua": """\
-answer = -1
 """,
     "pascal": """\
 program M;
@@ -160,22 +140,8 @@ REQUIRED_OPCODES: set[Opcode] = {
 
 MIN_INSTRUCTIONS = 3
 
-# Languages that generate try/catch block structure in IR
-TRY_CATCH_LANGUAGES: frozenset[str] = frozenset(
-    {
-        "python",
-        "javascript",
-        "typescript",
-        "java",
-        "ruby",
-        "php",
-        "csharp",
-        "cpp",
-        "kotlin",
-        "scala",
-        "pascal",
-    }
-)
+# All languages in PROGRAMS have try/catch — no fallbacks
+_EXCLUDED_LANGUAGES: frozenset[str] = frozenset({"c", "go", "rust", "lua"})
 
 
 # ---------------------------------------------------------------------------
@@ -200,10 +166,8 @@ class TestExceptionsLowering:
         )
 
     def test_try_catch_structure(self, language_ir):
-        """Languages with try/catch should generate SYMBOLIC caught_exception."""
+        """All programs should generate SYMBOLIC caught_exception."""
         lang, ir = language_ir
-        if lang not in TRY_CATCH_LANGUAGES:
-            pytest.skip(f"{lang} has no native try/catch")
         symbolics = find_all(ir, Opcode.SYMBOLIC)
         caught = [
             s
@@ -227,11 +191,15 @@ class TestExceptionsCrossLanguage:
         return {lang: parse_for_language(lang, PROGRAMS[lang]) for lang in PROGRAMS}
 
     def test_all_languages_covered(self):
-        assert set(PROGRAMS.keys()) == set(SUPPORTED_DETERMINISTIC_LANGUAGES)
+        # C, Go, Rust, Lua excluded: different error paradigms
+        expected = set(SUPPORTED_DETERMINISTIC_LANGUAGES) - _EXCLUDED_LANGUAGES
+        assert set(PROGRAMS.keys()) == expected
 
     def test_cross_language_consistency(self, all_results):
         assert_cross_language_consistency(
-            all_results, required_opcodes=REQUIRED_OPCODES
+            all_results,
+            required_opcodes=REQUIRED_OPCODES,
+            expected_languages=set(PROGRAMS.keys()),
         )
 
 
@@ -239,7 +207,9 @@ class TestExceptionsCrossLanguage:
 # VM execution tests (parametrized over executable languages)
 # ---------------------------------------------------------------------------
 
-EXECUTABLE_LANGUAGES: frozenset[str] = STANDARD_EXECUTABLE_LANGUAGES
+EXECUTABLE_LANGUAGES: frozenset[str] = (
+    STANDARD_EXECUTABLE_LANGUAGES - _EXCLUDED_LANGUAGES
+)
 EXPECTED_ANSWER = -1  # try body completes, catch is dead code in current VM
 
 
