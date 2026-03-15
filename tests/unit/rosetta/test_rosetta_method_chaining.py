@@ -1,11 +1,10 @@
-"""Rosetta test: method chaining across all 15 deterministic frontends.
+"""Rosetta test: method chaining across deterministic frontends.
 
 A Counter class with increment() returning self and get_value() returning
 the count. Chain: counter.increment().increment().get_value() => answer = 2.
 Tests CALL_METHOD chains and NEW_OBJECT.
 
-Languages without classes (C, Lua) use struct-like workarounds or are
-excluded from execution where method chaining produces symbolic results.
+C is excluded — it has no classes or method chaining.
 """
 
 import pytest
@@ -173,13 +172,6 @@ Counter counter = new Counter();
 Counter result = counter.increment().increment();
 int answer = result.get_value();
 """,
-    "c": """\
-struct Counter {
-    int count;
-};
-
-int answer = 2;
-""",
     "cpp": """\
 class Counter {
 public:
@@ -202,7 +194,19 @@ struct Counter {
     count: i32,
 }
 
-let answer = 2;
+impl Counter {
+    fn increment(&mut self) -> &Counter {
+        self.count = self.count + 1;
+        return self;
+    }
+    fn get_value(&self) -> i32 {
+        return self.count;
+    }
+}
+
+let mut counter = Counter { count: 0 };
+let result = counter.increment().increment();
+let answer = result.get_value();
 """,
     "kotlin": """\
 class Counter {
@@ -261,9 +265,34 @@ answer = Counter.get_value(result)
 """,
     "pascal": """\
 program M;
-var answer: integer;
+
+type
+    TCounter = class
+        count: integer;
+        function increment: TCounter;
+        function get_value: integer;
+    end;
+
+function TCounter.increment: TCounter;
 begin
-    answer := 2;
+    count := count + 1;
+    increment := self;
+end;
+
+function TCounter.get_value: integer;
+begin
+    get_value := count;
+end;
+
+var
+    counter: TCounter;
+    result: TCounter;
+    answer: integer;
+begin
+    counter := TCounter.Create;
+    counter.count := 0;
+    result := counter.increment.increment;
+    answer := result.get_value;
 end.
 """,
 }
@@ -298,8 +327,8 @@ class TestMethodChainingLowering:
     def test_call_present(self, language_ir):
         """Languages with classes should have CALL_METHOD or CALL_FUNCTION."""
         lang, ir = language_ir
-        if lang in {"c", "rust", "pascal"}:
-            pytest.skip(f"{lang} uses direct assignment (no class method chaining)")
+        if lang in {"lua"}:
+            pytest.skip(f"{lang} uses table-based OOP (no class method syntax)")
         call_opcodes = {Opcode.CALL_METHOD, Opcode.CALL_FUNCTION}
         present = {inst.opcode for inst in ir}
         has_call = bool(present & call_opcodes)
@@ -319,11 +348,15 @@ class TestMethodChainingCrossLanguage:
         return {lang: parse_for_language(lang, PROGRAMS[lang]) for lang in PROGRAMS}
 
     def test_all_languages_covered(self):
-        assert set(PROGRAMS.keys()) == set(SUPPORTED_DETERMINISTIC_LANGUAGES)
+        # C excluded: no classes or method chaining
+        expected = set(SUPPORTED_DETERMINISTIC_LANGUAGES) - {"c"}
+        assert set(PROGRAMS.keys()) == expected
 
     def test_cross_language_consistency(self, all_results):
         assert_cross_language_consistency(
-            all_results, required_opcodes=REQUIRED_OPCODES
+            all_results,
+            required_opcodes=REQUIRED_OPCODES,
+            expected_languages=set(PROGRAMS.keys()),
         )
 
 
@@ -331,10 +364,13 @@ class TestMethodChainingCrossLanguage:
 # VM execution tests (parametrized over executable languages)
 # ---------------------------------------------------------------------------
 
-# Languages where return-this chaining produces symbolic results (known P1 gaps)
-_CHAINING_SYMBOLIC_LANGUAGES: frozenset[str] = frozenset({"lua"})
+# Languages where method chaining returns symbolic (known gaps)
+# Lua: table-based OOP, return-this chaining symbolic (red-dragon-0vp)
+# Pascal: TCounter.Create returns symbolic (red-dragon-q6e)
+_CHAINING_SYMBOLIC_LANGUAGES: frozenset[str] = frozenset({"lua", "pascal"})
+# C excluded from PROGRAMS entirely (no classes)
 METHOD_CHAINING_EXECUTABLE_LANGUAGES: frozenset[str] = (
-    STANDARD_EXECUTABLE_LANGUAGES - _CHAINING_SYMBOLIC_LANGUAGES
+    STANDARD_EXECUTABLE_LANGUAGES - _CHAINING_SYMBOLIC_LANGUAGES - {"c"}
 )
 EXPECTED_ANSWER = 2
 
