@@ -28,7 +28,7 @@ from interpreter.vm import (
     _heap_addr,
     _parse_const,
 )
-from interpreter.vm_types import BuiltinResult
+from interpreter.vm_types import BuiltinResult, StackFrame
 from interpreter.registry import FunctionRegistry, _parse_func_ref, _parse_class_ref
 from interpreter.builtins import Builtins, _builtin_array_of
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
@@ -156,14 +156,53 @@ def _handle_load_var(
     )
 
 
-def _handle_store_var(
+def _handle_decl_var(
     inst: IRInstruction, vm: VMState, **kwargs: Any
 ) -> ExecutionResult:
+    """DECL_VAR: always create/overwrite in the current frame (declaration)."""
     name = inst.operands[0]
     val = _resolve_reg(vm, inst.operands[1])
     return ExecutionResult.success(
         StateUpdate(
             var_writes={name: typed_from_runtime(val)},
+            reasoning=f"decl {name} = {val!r}",
+        )
+    )
+
+
+def _write_var_to_frame(
+    vm: VMState, frame: StackFrame, name: str, tv: TypedValue
+) -> None:
+    """Write a variable to a specific frame, handling aliases and closure envs."""
+    alias_ptr = frame.var_heap_aliases.get(name)
+    if alias_ptr and alias_ptr.base in vm.heap:
+        vm.heap[alias_ptr.base].fields[str(alias_ptr.offset)] = tv
+    else:
+        frame.local_vars[name] = tv
+    if frame.closure_env_id and name in frame.captured_var_names:
+        env = vm.closures.get(frame.closure_env_id)
+        if env:
+            env.bindings[name] = tv
+
+
+def _handle_store_var(
+    inst: IRInstruction, vm: VMState, **kwargs: Any
+) -> ExecutionResult:
+    """STORE_VAR: assignment — walk scope chain to find existing variable."""
+    name = inst.operands[0]
+    val = _resolve_reg(vm, inst.operands[1])
+    tv = typed_from_runtime(val)
+    # Walk scope chain: if variable exists in a parent frame, update it there.
+    for frame in reversed(vm.call_stack):
+        if name in frame.local_vars:
+            _write_var_to_frame(vm, frame, name, tv)
+            return ExecutionResult.success(
+                StateUpdate(reasoning=f"store {name} = {val!r} (scope chain)")
+            )
+    # Not found in any frame — create in current frame (new variable).
+    return ExecutionResult.success(
+        StateUpdate(
+            var_writes={name: tv},
             reasoning=f"store {name} = {val!r}",
         )
     )
@@ -1403,6 +1442,7 @@ class LocalExecutor:
     DISPATCH: dict[Opcode, Any] = {
         Opcode.CONST: _handle_const,
         Opcode.LOAD_VAR: _handle_load_var,
+        Opcode.DECL_VAR: _handle_decl_var,
         Opcode.STORE_VAR: _handle_store_var,
         Opcode.BRANCH: _handle_branch,
         Opcode.SYMBOLIC: _handle_symbolic,

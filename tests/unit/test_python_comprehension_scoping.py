@@ -41,7 +41,7 @@ result = [item for item in [1, 2, 3]]
         store_vars = [
             str(inst.operands[0])
             for inst in ir
-            if inst.opcode == Opcode.STORE_VAR and inst.operands
+            if inst.opcode == Opcode.DECL_VAR and inst.operands
         ]
         # 'item' should be mangled (e.g. 'item$1'), not stored as raw 'item'
         item_vars = [v for v in store_vars if v.startswith("item")]

@@ -188,7 +188,7 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
         operands=[make_class_ref(iface_name, class_label, [])],
     )
     ctx.seed_var_type(iface_name, metatype(ScalarType(iface_name)))
-    ctx.emit(Opcode.STORE_VAR, operands=[iface_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[iface_name, cls_reg])
 
 
 def _lower_ts_interface_method(ctx: TreeSitterEmitContext, node) -> None:
@@ -220,7 +220,7 @@ def _lower_ts_interface_method(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def _lower_ts_interface_property(ctx: TreeSitterEmitContext, node) -> None:
@@ -239,7 +239,7 @@ def _lower_ts_interface_property(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=val_reg,
         operands=[ctx.constants.none_literal],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[prop_name, val_reg], node=node)
+    ctx.emit(Opcode.DECL_VAR, operands=[prop_name, val_reg], node=node)
     ctx.seed_var_type(prop_name, type_hint)
 
 
@@ -266,7 +266,7 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
                     Opcode.STORE_INDEX,
                     operands=[obj_reg, key_reg, val_reg],
                 )
-        ctx.emit(Opcode.STORE_VAR, operands=[enum_name, obj_reg])
+        ctx.emit(Opcode.DECL_VAR, operands=[enum_name, obj_reg])
 
 
 def lower_ts_field_definition(ctx: TreeSitterEmitContext, node) -> None:
@@ -295,7 +295,7 @@ def lower_ts_field_definition(ctx: TreeSitterEmitContext, node) -> None:
             operands=[ctx.constants.none_literal],
         )
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=[field_name, val_reg],
         node=node,
     )
@@ -386,7 +386,7 @@ def lower_ts_class_def(ctx: TreeSitterEmitContext, node) -> None:
         operands=[make_class_ref(class_name, class_label, parents)],
     )
     ctx.seed_var_type(class_name, metatype(ScalarType(class_name)))
-    ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
 
 def _lower_ts_method_def(ctx: TreeSitterEmitContext, node) -> None:
@@ -435,7 +435,7 @@ def _lower_ts_method_def(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def lower_ts_abstract_method(ctx: TreeSitterEmitContext, node) -> None:
@@ -463,7 +463,7 @@ def lower_ts_abstract_method(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def lower_ts_internal_module(ctx: TreeSitterEmitContext, node) -> None:
@@ -520,7 +520,7 @@ def lower_ts_param(ctx: TreeSitterEmitContext, child) -> None:
             ctx.seed_register_type(sym_reg, type_hint)
             ctx.seed_param_type(pname, type_hint)
             ctx.emit(
-                Opcode.STORE_VAR,
+                Opcode.DECL_VAR,
                 operands=[pname, f"%{ctx.reg_counter - 1}"],
             )
             ctx.seed_var_type(pname, type_hint)
@@ -545,7 +545,7 @@ def lower_ts_param(ctx: TreeSitterEmitContext, child) -> None:
             ctx.seed_register_type(sym_reg, type_hint)
             ctx.seed_param_type(pname, type_hint)
             ctx.emit(
-                Opcode.STORE_VAR,
+                Opcode.DECL_VAR,
                 operands=[pname, f"%{ctx.reg_counter - 1}"],
             )
             ctx.seed_var_type(pname, type_hint)
@@ -680,4 +680,4 @@ def lower_ts_function_def(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])

@@ -121,7 +121,7 @@ def lower_ruby_for(ctx: TreeSitterEmitContext, node) -> None:
 
     init_idx = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
-    ctx.emit(Opcode.STORE_VAR, operands=["__for_idx", init_idx])
+    ctx.emit(Opcode.DECL_VAR, operands=["__for_idx", init_idx])
     len_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
 
@@ -143,7 +143,7 @@ def lower_ruby_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=body_label)
     elem_reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
-    ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[var_name, elem_reg])
 
     update_label = ctx.fresh_label("for_update")
     ctx.push_loop(update_label, end_label)
@@ -609,7 +609,7 @@ def _lower_try_catch_ruby(
         exc_var = clause.get("variable")
         if exc_var:
             ctx.emit(
-                Opcode.STORE_VAR,
+                Opcode.DECL_VAR,
                 operands=[exc_var, exc_reg],
                 node=node,
             )
@@ -688,13 +688,13 @@ def lower_ruby_rescue_modifier_expr(ctx: TreeSitterEmitContext, node) -> str:
 
     ctx.emit(Opcode.TRY_PUSH, operands=[catch_label, "", end_label])
     body_reg = ctx.lower_expr(body_node)
-    ctx.emit(Opcode.STORE_VAR, operands=[result_var, body_reg], node=node)
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, body_reg], node=node)
     ctx.emit(Opcode.TRY_POP)
     ctx.emit(Opcode.BRANCH, label=end_label)
 
     ctx.emit(Opcode.LABEL, label=catch_label)
     fallback_reg = ctx.lower_expr(fallback_node)
-    ctx.emit(Opcode.STORE_VAR, operands=[result_var, fallback_reg], node=node)
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, fallback_reg], node=node)
     ctx.emit(Opcode.BRANCH, label=end_label)
 
     ctx.emit(Opcode.LABEL, label=end_label)

@@ -97,7 +97,7 @@ class TestPascalFunctions:
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH in opcodes
         assert Opcode.RETURN in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Add" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("function:" in str(inst.operands) for inst in consts)
@@ -110,7 +110,7 @@ class TestPascalFunctions:
         )
         opcodes = _opcodes(instructions)
         assert Opcode.LOAD_VAR in opcodes
-        assert Opcode.STORE_VAR in opcodes
+        assert Opcode.DECL_VAR in opcodes
         assert Opcode.RETURN in opcodes
         # Params ARE lowered — expect SYMBOLIC with "param:x"
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
@@ -152,10 +152,10 @@ class TestPascalControlFlow:
             "program M; begin for x := 1 to 10 do WriteLn(x); end."
         )
         opcodes = _opcodes(instructions)
-        assert Opcode.STORE_VAR in opcodes
+        assert Opcode.DECL_VAR in opcodes
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BINOP in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         labels = _find_all(instructions, Opcode.LABEL)
         assert any("for_" in (inst.label or "") for inst in labels)
@@ -195,8 +195,8 @@ class TestPascalVariableDeclarations:
         instructions = _parse_pascal("program M; var x: Integer; begin x := 10; end.")
         opcodes = _opcodes(instructions)
         assert Opcode.CONST in opcodes
-        assert Opcode.STORE_VAR in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert Opcode.DECL_VAR in opcodes
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         # The var decl should initialize x to None (canonical nil)
         consts = _find_all(instructions, Opcode.CONST)
@@ -204,10 +204,13 @@ class TestPascalVariableDeclarations:
 
     def test_var_declaration_then_assignment(self):
         instructions = _parse_pascal("program M; var x: Integer; begin x := 42; end.")
+        decls = _find_all(instructions, Opcode.DECL_VAR)
         stores = _find_all(instructions, Opcode.STORE_VAR)
+        x_decls = [inst for inst in decls if "x" in inst.operands]
         x_stores = [inst for inst in stores if "x" in inst.operands]
-        # At least 2 stores: one from declaration (nil), one from assignment (42)
-        assert len(x_stores) >= 2
+        # Declaration (nil) produces DECL_VAR, assignment (42) produces STORE_VAR
+        assert len(x_decls) >= 1
+        assert len(x_stores) >= 1
 
 
 class TestPascalFallback:
@@ -343,7 +346,7 @@ begin
 end.
 """
         instructions = _parse_pascal(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         # Outer's body references Inner via CALL_FUNCTION
         assert any("Outer" in inst.operands for inst in stores)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -363,9 +366,9 @@ end.
 """
         instructions = _parse_pascal(source)
         opcodes = _opcodes(instructions)
-        assert Opcode.STORE_VAR in opcodes
+        assert Opcode.DECL_VAR in opcodes
         assert Opcode.BRANCH_IF in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         binops = _find_all(instructions, Opcode.BINOP)
         # downto uses >= comparison
@@ -429,7 +432,7 @@ begin
 end.
 """
         instructions = _parse_pascal(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Double" in inst.operands for inst in stores)
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("*" in inst.operands for inst in binops)
@@ -574,14 +577,14 @@ class TestPascalDeclConsts:
 
     def test_const_declaration(self):
         instructions = _parse_pascal("program M; const MAX = 100; begin end.")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("MAX" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("100" in inst.operands for inst in consts)
 
     def test_multiple_consts(self):
         instructions = _parse_pascal("program M; const A = 1; B = 2; begin end.")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("A" in inst.operands for inst in stores)
         assert any("B" in inst.operands for inst in stores)
 
@@ -826,7 +829,7 @@ begin
 end.
 """
         instructions = _parse_pascal(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         stored_names = [inst.operands[0] for inst in stores]
         assert (
             "e" in stored_names
@@ -917,7 +920,7 @@ class TestPascalForeach:
         instructions = _parse_pascal(
             "program M; var i: Integer; begin for i in arr do writeln(i); end."
         )
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("i" in inst.operands for inst in stores)
 
     def test_foreach_lowers_body(self):

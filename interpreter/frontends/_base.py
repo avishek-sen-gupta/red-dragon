@@ -876,7 +876,7 @@ class BaseFrontend(Frontend):
                 constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
             ],
         )
-        self._emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+        self._emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
     def _lower_params(self, params_node):
         """Lower function parameters. Override for language-specific param shapes."""
@@ -884,7 +884,7 @@ class BaseFrontend(Frontend):
             self._lower_param(child)
 
     def _lower_param(self, child):
-        """Lower a single function parameter to SYMBOLIC + STORE_VAR."""
+        """Lower a single function parameter to SYMBOLIC + DECL_VAR."""
         if child.type in (
             BaseNodeType.OPEN_PAREN,
             BaseNodeType.CLOSE_PAREN,
@@ -903,7 +903,7 @@ class BaseFrontend(Frontend):
             node=child,
         )
         self._emit(
-            Opcode.STORE_VAR,
+            Opcode.DECL_VAR,
             operands=[pname, f"%{self._reg_counter - 1}"],
         )
 
@@ -947,7 +947,7 @@ class BaseFrontend(Frontend):
                 constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
             ],
         )
-        self._emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+        self._emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
     def _lower_raise_or_throw(self, node, keyword: str = "raise"):
         children = [c for c in node.children if c.type != keyword]
@@ -1091,7 +1091,7 @@ class BaseFrontend(Frontend):
             exc_var = clause.get("variable")
             if exc_var:
                 self._emit(
-                    Opcode.STORE_VAR,
+                    Opcode.DECL_VAR,
                     operands=[exc_var, exc_reg],
                     node=node,
                 )
@@ -1137,7 +1137,7 @@ class BaseFrontend(Frontend):
                 if name_node and value_node:
                     val_reg = self._lower_expr(value_node)
                     self._emit(
-                        Opcode.STORE_VAR,
+                        Opcode.DECL_VAR,
                         operands=[self._node_text(name_node), val_reg],
                         node=node,
                     )
@@ -1150,7 +1150,7 @@ class BaseFrontend(Frontend):
                         operands=[self.NONE_LITERAL],
                     )
                     self._emit(
-                        Opcode.STORE_VAR,
+                        Opcode.DECL_VAR,
                         operands=[self._node_text(name_node), val_reg],
                         node=node,
                     )

@@ -30,7 +30,7 @@ def lower_local_var_decl(ctx: TreeSitterEmitContext, node) -> None:
                 var_name = ctx.declare_block_var(ctx.node_text(name_node))
                 val_reg = ctx.lower_expr(value_node)
                 ctx.emit(
-                    Opcode.STORE_VAR,
+                    Opcode.DECL_VAR,
                     operands=[var_name, val_reg],
                     node=node,
                 )
@@ -44,7 +44,7 @@ def lower_local_var_decl(ctx: TreeSitterEmitContext, node) -> None:
                     operands=[ctx.constants.none_literal],
                 )
                 ctx.emit(
-                    Opcode.STORE_VAR,
+                    Opcode.DECL_VAR,
                     operands=[var_name, val_reg],
                     node=node,
                 )
@@ -63,7 +63,7 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     ctx.seed_register_type(param_reg, class_type)
     ctx.seed_param_type(constants.PARAM_THIS, class_type)
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=[constants.PARAM_THIS, param_reg],
     )
     ctx.seed_var_type(constants.PARAM_THIS, class_type)
@@ -119,7 +119,7 @@ def lower_method_decl(
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def lower_method_decl_stmt(ctx: TreeSitterEmitContext, node) -> None:
@@ -242,7 +242,7 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=cls_reg,
         operands=[make_class_ref(class_name, class_label, parents)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
     saved_class = ctx._current_class_name
     ctx._current_class_name = class_name
@@ -297,7 +297,7 @@ def lower_record_decl(ctx: TreeSitterEmitContext, node) -> None:
             constants.CLASS_REF_TEMPLATE.format(name=record_name, label=class_label)
         ],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[record_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[record_name, cls_reg])
 
     saved_class = ctx._current_class_name
     ctx._current_class_name = record_name
@@ -366,7 +366,7 @@ def _lower_constructor_decl(
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def _lower_field_decl(ctx: TreeSitterEmitContext, node) -> None:
@@ -430,7 +430,7 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=cls_reg,
         operands=[make_class_ref(iface_name, class_label, [])],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[iface_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[iface_name, cls_reg])
 
     saved_class = ctx._current_class_name
     ctx._current_class_name = iface_name
@@ -467,7 +467,7 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
                 val_reg = ctx.fresh_reg()
                 ctx.emit(Opcode.CONST, result_reg=val_reg, operands=[str(i)])
                 ctx.emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
-        ctx.emit(Opcode.STORE_VAR, operands=[enum_name, obj_reg])
+        ctx.emit(Opcode.DECL_VAR, operands=[enum_name, obj_reg])
 
 
 def lower_annotation_type_decl(ctx: TreeSitterEmitContext, node) -> None:
@@ -497,4 +497,4 @@ def lower_annotation_type_decl(ctx: TreeSitterEmitContext, node) -> None:
             val_reg = ctx.fresh_reg()
             ctx.emit(Opcode.CONST, result_reg=val_reg, operands=[str(i)])
             ctx.emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
-    ctx.emit(Opcode.STORE_VAR, operands=[annot_name, obj_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[annot_name, obj_reg])

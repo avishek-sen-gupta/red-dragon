@@ -35,21 +35,21 @@ class TestKotlinDeclarations:
         instructions = _parse_kotlin("val x = 10")
         opcodes = _opcodes(instructions)
         assert Opcode.CONST in opcodes
-        assert Opcode.STORE_VAR in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert Opcode.DECL_VAR in opcodes
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
     def test_var_declaration(self):
         instructions = _parse_kotlin("var y = 5")
         opcodes = _opcodes(instructions)
         assert Opcode.CONST in opcodes
-        assert Opcode.STORE_VAR in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert Opcode.DECL_VAR in opcodes
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("y" in inst.operands for inst in stores)
 
     def test_val_without_initializer(self):
         instructions = _parse_kotlin("val x: Int")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 
@@ -67,7 +67,7 @@ class TestKotlinFunctions:
         ]
         assert any("a" in p for p in param_names)
         assert any("b" in p for p in param_names)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("add" in inst.operands for inst in stores)
 
     def test_function_call(self):
@@ -108,7 +108,7 @@ class TestKotlinControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
         assert any("when" in (inst.label or "") for inst in labels)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
     def test_if_elseif_chain_all_branches_produce_ir(self):
@@ -146,7 +146,7 @@ class TestKotlinClasses:
         )
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -235,7 +235,7 @@ fun main() {
         assert len(branches) >= 4
         labels = _labels_in_order(instructions)
         assert any("when" in lbl for lbl in labels)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
         assert len(instructions) > 20
 
@@ -248,7 +248,7 @@ fun main() {
         instructions = _parse_kotlin(source)
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("map" in str(inst.operands) for inst in calls)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("doubled" in inst.operands for inst in stores)
 
     def test_class_with_method_and_property(self):
@@ -264,7 +264,7 @@ class Counter {
 }
 """
         instructions = _parse_kotlin(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Counter" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -290,7 +290,7 @@ fun main() {
         assert Opcode.BRANCH_IF in opcodes
         branches = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branches) >= 2
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("total" in inst.operands for inst in stores)
         assert len(instructions) > 15
 
@@ -306,7 +306,7 @@ fun main() {
         instructions = _parse_kotlin(source)
         branches = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branches) >= 3
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("grade" in inst.operands for inst in stores)
         labels = _labels_in_order(instructions)
         assert any("if_true" in lbl for lbl in labels)
@@ -355,7 +355,7 @@ fun main() {
 }
 """
         instructions = _parse_kotlin(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("name" in inst.operands for inst in stores)
         assert any("upper" in inst.operands for inst in stores)
         # ?. lowered as field access + method call (no null-guard IR yet)
@@ -408,7 +408,7 @@ fun main() {
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
         # Result is stored
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("result" in inst.operands for inst in stores)
 
 
@@ -450,7 +450,7 @@ class TestKotlinObjectDeclaration:
 
     def test_object_declaration_stores_var(self):
         instructions = _parse_kotlin("object Config { val debug = true }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Config" in inst.operands for inst in stores)
 
     def test_object_declaration_body_lowered(self):
@@ -469,7 +469,7 @@ class MyClass {
 }
 """
         instructions = _parse_kotlin(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("MyClass" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("42" in inst.operands for inst in consts)
@@ -483,7 +483,7 @@ class Factory {
 }
 """
         instructions = _parse_kotlin(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Factory" in inst.operands for inst in stores)
         # The `create` method must also be lowered
         assert any(
@@ -515,7 +515,7 @@ enum class Direction {
 }
 """
         instructions = _parse_kotlin(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("NORTH" in inst.operands for inst in stores)
         assert any("SOUTH" in inst.operands for inst in stores)
 
@@ -527,7 +527,7 @@ enum class Status {
 }
 """
         instructions = _parse_kotlin(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Status" in inst.operands for inst in stores)
 
 
@@ -541,7 +541,7 @@ class TestKotlinTypeAlias:
 
     def test_type_alias_does_not_produce_store(self):
         instructions = _parse_kotlin("typealias StringList = List<String>")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert len(stores) == 0
 
 
@@ -590,7 +590,7 @@ class TestKotlinElvisExpression:
 
     def test_elvis_stores_result(self):
         instructions = _parse_kotlin('fun main() { val x = name ?: "default" }')
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
     def test_elvis_not_symbolic(self):
@@ -612,7 +612,7 @@ class TestKotlinInfixExpression:
 
     def test_infix_stores_result(self):
         instructions = _parse_kotlin("fun main() { val r = 1 to 10 }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
 
@@ -629,7 +629,7 @@ class TestKotlinIndexingExpression:
 
     def test_indexing_stores_result(self):
         instructions = _parse_kotlin("fun main() { val x = arr[0] }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 
@@ -642,7 +642,7 @@ class TestKotlinAsExpression:
 
     def test_as_stores_result(self):
         instructions = _parse_kotlin("fun main() { val x = obj as String }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
     def test_as_not_symbolic(self):
@@ -725,7 +725,7 @@ class TestKotlinStringInterpolation:
 class TestKotlinDestructuring:
     def test_destructure_two_elements(self):
         instructions = _parse_kotlin("val (a, b) = pair")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "a" in store_names
         assert "b" in store_names
@@ -734,7 +734,7 @@ class TestKotlinDestructuring:
 
     def test_destructure_three_elements(self):
         instructions = _parse_kotlin("val (x, y, z) = triple")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "x" in store_names
         assert "y" in store_names
@@ -745,7 +745,7 @@ class TestKotlinDestructuring:
     def test_destructure_with_usage(self):
         source = "val (first, second) = getPair()\nprintln(first)"
         instructions = _parse_kotlin(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "first" in store_names
         assert "second" in store_names
@@ -933,7 +933,7 @@ class TestKotlinThrowExpression:
     def test_throw_in_elvis_stores_result(self):
         """The val binding should still produce a STORE_VAR for x."""
         instructions = _parse_kotlin('val x = y ?: throw Exception("err")')
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
     def test_throw_in_elvis_calls_exception_constructor(self):
@@ -1044,7 +1044,7 @@ class TestKotlinAnonymousFunction:
         instructions = _parse_kotlin(
             "fun main() { val f = fun(x: Int): Int { return x * 2 } }"
         )
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("f" in inst.operands for inst in stores)
 
     def test_anonymous_function_no_params(self):
@@ -1086,7 +1086,7 @@ class TestKotlinUnsignedLiteral:
     def test_unsigned_literal_stored(self):
         """Unsigned literal should be stored in a variable."""
         ir = _parse_kotlin("val x = 42u")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 
@@ -1143,7 +1143,7 @@ class Foo {
     set(value) { field = value }
 }
 val y = 42""")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("y" in inst.operands for inst in stores)
 
 

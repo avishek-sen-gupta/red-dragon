@@ -845,6 +845,7 @@ _DISPATCH: dict[Opcode, callable] = {
     Opcode.CONST: _infer_const,
     Opcode.LOAD_VAR: _infer_load_var,
     Opcode.STORE_VAR: _infer_store_var,
+    Opcode.DECL_VAR: _infer_store_var,
     Opcode.BINOP: _infer_binop,
     Opcode.UNOP: _infer_unop,
     Opcode.NEW_OBJECT: _infer_new_object,

@@ -70,7 +70,7 @@ def lower_try_catch(
         if exc_var:
             resolved_var = ctx.declare_block_var(exc_var)
             ctx.emit(
-                Opcode.STORE_VAR,
+                Opcode.DECL_VAR,
                 operands=[resolved_var, exc_reg],
                 node=node,
             )

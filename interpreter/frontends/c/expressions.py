@@ -221,12 +221,12 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.LABEL, label=true_label)
     true_reg = ctx.lower_expr(true_node)
     result_var = f"__ternary_{ctx.label_counter}"
-    ctx.emit(Opcode.STORE_VAR, operands=[result_var, true_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, true_reg])
     ctx.emit(Opcode.BRANCH, label=end_label)
 
     ctx.emit(Opcode.LABEL, label=false_label)
     false_reg = ctx.lower_expr(false_node)
-    ctx.emit(Opcode.STORE_VAR, operands=[result_var, false_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, false_reg])
     ctx.emit(Opcode.BRANCH, label=end_label)
 
     ctx.emit(Opcode.LABEL, label=end_label)

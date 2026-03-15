@@ -65,7 +65,7 @@ class TestPhpFrontendFunctionDefinition:
 
     def test_function_name_stored(self):
         ir = _parse_and_lower("<?php function add($a, $b) { return $a + $b; } ?>")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         add_stores = [s for s in stores if "add" in s.operands]
         assert len(add_stores) >= 1
 
@@ -151,7 +151,7 @@ class Dog {
 }
 ?>"""
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         dog_stores = [s for s in stores if "Dog" in s.operands]
         assert len(dog_stores) >= 1
         consts = _find_all(ir, Opcode.CONST)
@@ -267,7 +267,7 @@ class Counter {
 ?>
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Counter" in s.operands for s in stores)
         consts = _find_all(ir, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -410,7 +410,7 @@ class TestPhpForeach:
         opcodes = _opcodes(ir)
         assert Opcode.LOAD_INDEX in opcodes
         assert Opcode.CALL_FUNCTION in opcodes  # len()
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("$v" in inst.operands for inst in stores)
 
     def test_foreach_key_value(self):
@@ -419,7 +419,7 @@ class TestPhpForeach:
         ir = _parse_and_lower(source)
         opcodes = _opcodes(ir)
         assert Opcode.LOAD_INDEX in opcodes
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("$k" in inst.operands for inst in stores)
         assert any("$v" in inst.operands for inst in stores)
 
@@ -622,7 +622,7 @@ namespace App\\Models {
 }
 ?>"""
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("User" in inst.operands for inst in stores)
 
     def test_namespace_with_function(self):
@@ -632,7 +632,7 @@ namespace App\\Helpers {
 }
 ?>"""
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("helper" in inst.operands for inst in stores)
 
 
@@ -657,7 +657,7 @@ interface Printable {
 }
 ?>"""
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Printable" in inst.operands for inst in stores)
 
     def test_interface_has_labels(self):
@@ -692,7 +692,7 @@ trait Loggable {
 }
 ?>"""
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Loggable" in inst.operands for inst in stores)
 
     def test_trait_body_methods_lowered(self):
@@ -702,7 +702,7 @@ trait Loggable {
 }
 ?>"""
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("log" in inst.operands for inst in stores)
 
 
@@ -716,7 +716,7 @@ function counter() {
 }
 ?>"""
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("$count" in inst.operands for inst in stores)
 
     def test_static_var_without_value(self):
@@ -727,7 +727,7 @@ function f() {
 }
 ?>"""
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("$x" in inst.operands for inst in stores)
 
     def test_static_var_produces_const(self):
@@ -764,7 +764,7 @@ enum Color {
 }
 ?>"""
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Color" in inst.operands for inst in stores)
 
     def test_enum_has_labels(self):
@@ -921,7 +921,7 @@ class TestPhpYieldExpression:
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         yield_calls = [c for c in calls if "yield" in c.operands]
         assert len(yield_calls) >= 2
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("gen" in inst.operands for inst in stores)
 
 
@@ -1256,7 +1256,7 @@ class TestPhpConstDeclaration:
     def test_const_produces_store(self):
         """const FOO = 1; should produce STORE_VAR for FOO."""
         ir = _parse_and_lower("<?php const FOO = 1; ?>")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("FOO" in inst.operands for inst in stores)
 
     def test_const_no_unsupported_symbolic(self):
@@ -1268,7 +1268,7 @@ class TestPhpConstDeclaration:
     def test_const_multiple_in_one_declaration(self):
         """const FOO = 1, BAR = 2; should produce two STOREs."""
         ir = _parse_and_lower("<?php const FOO = 1, BAR = 2; ?>")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         foo_stores = [s for s in stores if "FOO" in s.operands]
         bar_stores = [s for s in stores if "BAR" in s.operands]
         assert len(foo_stores) >= 1

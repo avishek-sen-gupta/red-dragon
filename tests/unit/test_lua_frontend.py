@@ -135,7 +135,7 @@ class TestLuaFunctions:
         ]
         assert any("a" in p for p in param_names)
         assert any("b" in p for p in param_names)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("add" in inst.operands for inst in stores)
 
     def test_function_declaration_with_explicit_body(self):
@@ -234,10 +234,10 @@ class TestLuaControlFlow:
     def test_for_numeric(self):
         instructions = _parse_lua("for i = 1, 10 do print(i) end")
         opcodes = _opcodes(instructions)
-        assert Opcode.STORE_VAR in opcodes
+        assert Opcode.DECL_VAR in opcodes
         assert Opcode.BINOP in opcodes
         assert Opcode.BRANCH_IF in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("i" in inst.operands for inst in stores)
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("<=" in inst.operands for inst in binops)
@@ -256,7 +256,7 @@ class TestLuaControlFlow:
         opcodes = _opcodes(instructions)
         assert Opcode.LOAD_INDEX in opcodes
         assert Opcode.BRANCH_IF in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("k" in inst.operands for inst in stores)
         assert any("v" in inst.operands for inst in stores)
 
@@ -338,7 +338,7 @@ end
         opcodes = _opcodes(instructions)
         assert Opcode.LOAD_INDEX in opcodes
         assert Opcode.BRANCH_IF in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("i" in inst.operands for inst in stores)
         assert any("v" in inst.operands for inst in stores)
         # Lua table constructors use NEW_OBJECT
@@ -361,7 +361,7 @@ end
         assert len(branches) >= 2
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 3
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("classify" in inst.operands for inst in stores)
 
     def test_nested_while_with_table_access(self):
@@ -410,9 +410,10 @@ end
         instructions = _parse_lua(source)
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
+        decls = _find_all(instructions, Opcode.DECL_VAR)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("total" in inst.operands for inst in stores)
-        assert any("i" in inst.operands for inst in stores)
+        assert any("i" in inst.operands for inst in decls)
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
@@ -437,7 +438,7 @@ class TestLuaGenericFor:
         opcodes = _opcodes(instructions)
         assert Opcode.LOAD_INDEX in opcodes
         assert Opcode.CALL_FUNCTION in opcodes  # len()
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("i" in inst.operands for inst in stores)
         assert any("v" in inst.operands for inst in stores)
 
@@ -454,7 +455,7 @@ class TestLuaGenericFor:
         instructions = _parse_lua(source)
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("item" in inst.operands for inst in stores)
 
 
