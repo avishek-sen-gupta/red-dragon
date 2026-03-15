@@ -325,16 +325,14 @@ class TestMethodChainingLowering:
         )
 
     def test_call_present(self, language_ir):
-        """Languages with classes should have CALL_METHOD or CALL_FUNCTION."""
+        """Languages with classes should have CALL_METHOD, CALL_FUNCTION, or CALL_UNKNOWN."""
         lang, ir = language_ir
-        if lang in {"lua"}:
-            pytest.skip(f"{lang} uses table-based OOP (no class method syntax)")
-        call_opcodes = {Opcode.CALL_METHOD, Opcode.CALL_FUNCTION}
+        call_opcodes = {Opcode.CALL_METHOD, Opcode.CALL_FUNCTION, Opcode.CALL_UNKNOWN}
         present = {inst.opcode for inst in ir}
         has_call = bool(present & call_opcodes)
         assert (
             has_call
-        ), f"[{lang}] expected CALL_METHOD or CALL_FUNCTION, got opcodes: {present}"
+        ), f"[{lang}] expected CALL_METHOD, CALL_FUNCTION, or CALL_UNKNOWN, got opcodes: {present}"
 
 
 # ---------------------------------------------------------------------------
@@ -367,7 +365,7 @@ class TestMethodChainingCrossLanguage:
 # Languages where method chaining returns symbolic (known gaps)
 # Lua: table-based OOP, return-this chaining symbolic (red-dragon-0vp)
 # Pascal: TCounter.Create returns symbolic (red-dragon-q6e)
-_CHAINING_SYMBOLIC_LANGUAGES: frozenset[str] = frozenset({"lua", "pascal"})
+_CHAINING_SYMBOLIC_LANGUAGES: frozenset[str] = frozenset({"pascal"})
 # C excluded from PROGRAMS entirely (no classes)
 METHOD_CHAINING_EXECUTABLE_LANGUAGES: frozenset[str] = (
     STANDARD_EXECUTABLE_LANGUAGES - _CHAINING_SYMBOLIC_LANGUAGES - {"c"}
