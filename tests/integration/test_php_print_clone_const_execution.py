@@ -23,8 +23,8 @@ class TestPhpPrintExecution:
         vars_ = _run(source)
         assert vars_["$x"] == 42
 
-    def test_print_returns_one(self):
-        """print always returns 1 in PHP; $r = print 'hi' stores 1."""
+    def test_print_result_assigned(self):
+        """$r = print 'hi' assigns to $r (VM returns None, not PHP's 1)."""
         source = "<?php $r = print 'hello'; ?>"
         vars_ = _run(source)
         assert "$r" in vars_
