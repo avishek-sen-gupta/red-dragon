@@ -232,6 +232,13 @@ def _method_slice(
     return _builtin_slice([obj, *args], vm)
 
 
+def _method_to_string(
+    obj: TypedValue, args: list[TypedValue], vm: VMState
+) -> BuiltinResult:
+    """Method builtin: obj.to_string() / obj.toString() → str(obj)."""
+    return BuiltinResult(value=str(obj.value))
+
+
 class Builtins:
     """Table of built-in function implementations."""
 
@@ -263,4 +270,6 @@ class Builtins:
         "subList": _method_slice,
         "substring": _method_slice,
         "slice": _method_slice,
+        "to_string": _method_to_string,
+        "toString": _method_to_string,
     }
