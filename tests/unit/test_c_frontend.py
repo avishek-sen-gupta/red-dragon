@@ -34,14 +34,14 @@ class TestCFrontendDeclaration:
         ir = _parse_and_lower("int x = 10;")
         opcodes = _opcodes(ir)
         assert Opcode.CONST in opcodes
-        assert Opcode.STORE_VAR in opcodes
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert Opcode.DECL_VAR in opcodes
+        stores = _find_all(ir, Opcode.DECL_VAR)
         x_stores = [s for s in stores if "x" in s.operands]
         assert len(x_stores) >= 1
 
     def test_declaration_without_initializer(self):
         ir = _parse_and_lower("int x;")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         x_stores = [s for s in stores if "x" in s.operands]
         assert len(x_stores) >= 1
 
@@ -66,7 +66,7 @@ class TestCFrontendFunctionDefinition:
     def test_function_name_stored(self):
         source = "int add(int a, int b) { return a + b; }"
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         add_stores = [s for s in stores if "add" in s.operands]
         assert len(add_stores) >= 1
 
@@ -184,7 +184,7 @@ struct Point {
 };
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         point_stores = [s for s in stores if "Point" in s.operands]
         assert len(point_stores) >= 1
         consts = _find_all(ir, Opcode.CONST)
@@ -215,9 +215,12 @@ class TestCFrontendAssignmentExpression:
     def test_assignment_expression(self):
         source = "void f() { int x; x = 10; }"
         ir = _parse_and_lower(source)
+        decls = _find_all(ir, Opcode.DECL_VAR)
         stores = _find_all(ir, Opcode.STORE_VAR)
+        x_decls = [s for s in decls if "x" in s.operands]
         x_stores = [s for s in stores if "x" in s.operands]
-        assert len(x_stores) >= 2
+        assert len(x_decls) >= 1
+        assert len(x_stores) >= 1
 
 
 class TestCFrontendFieldAccess:
@@ -273,7 +276,7 @@ class TestCFrontendCastExpression:
         # The cast should transparently lower the inner value
         loads = _find_all(ir, Opcode.LOAD_VAR)
         assert any("x" in inst.operands for inst in loads)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         y_stores = [s for s in stores if "y" in s.operands]
         assert len(y_stores) >= 1
 
@@ -287,7 +290,7 @@ int x = 10;
 """
         ir = _parse_and_lower(source)
         # Preprocessor directives should be noise and not produce meaningful IR
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         x_stores = [s for s in stores if "x" in s.operands]
         assert len(x_stores) >= 1
         # No SYMBOLIC for the preprocessor directives themselves
@@ -365,7 +368,7 @@ void f() {
         ir = _parse_and_lower(source)
         branches = _find_all(ir, Opcode.BRANCH_IF)
         assert len(branches) >= 2
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("sum" in s.operands for s in stores)
         assert any("i" in s.operands for s in stores)
         assert any("j" in s.operands for s in stores)
@@ -389,7 +392,7 @@ void f() {
 }
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Point" in s.operands for s in stores)
         store_fields = _find_all(ir, Opcode.STORE_FIELD)
         assert any("x" in str(inst.operands) for inst in store_fields)
@@ -415,7 +418,7 @@ void f() {
         assert Opcode.LOAD_FIELD in opcodes
         loads = _find_all(ir, Opcode.LOAD_FIELD)
         assert any("*" in inst.operands for inst in loads)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in s.operands for s in stores)
         assert any("p" in s.operands for s in stores)
         assert any("y" in s.operands for s in stores)
@@ -426,7 +429,7 @@ int double_val(int x) { return x * 2; }
 int quadruple(int x) { return double_val(double_val(x)); }
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("double_val" in s.operands for s in stores)
         assert any("quadruple" in s.operands for s in stores)
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
@@ -454,7 +457,7 @@ void f() {
         assert len(branches) >= 2
         labels = _labels_in_order(ir)
         assert any("while" in lbl for lbl in labels)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("total" in s.operands for s in stores)
         assert any("count" in s.operands for s in stores)
         assert len(ir) > 25
@@ -489,7 +492,7 @@ void f() {
         opcodes = _opcodes(ir)
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BRANCH in opcodes
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in s.operands for s in stores)
         assert len(ir) > 10
 
@@ -622,7 +625,7 @@ class TestCFrontendEnumSpecifier:
         assert "A" in field_names
         assert "B" in field_names
         assert "C" in field_names
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Bits" in inst.operands for inst in stores)
 
 
@@ -635,7 +638,7 @@ union Data {
 };
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Data" in inst.operands for inst in stores)
         consts = _find_all(ir, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -675,7 +678,7 @@ class TestCFrontendCharLiteral:
     def test_char_literal_stored_to_variable(self):
         source = "void f() { char c = 'Z'; }"
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("c" in inst.operands for inst in stores)
 
 
@@ -734,7 +737,7 @@ int y = 10;
         ir = _parse_and_lower(source)
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("y" in inst.operands for inst in stores)
 
 
@@ -823,7 +826,7 @@ class TestCLinkageSpecification:
         """Declarations inside extern 'C' should still be lowered."""
         frontend = CFrontend(TreeSitterParserFactory(), "c")
         ir = frontend.lower(b'extern "C" { int x = 42; }')
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 

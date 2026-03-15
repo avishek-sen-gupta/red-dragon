@@ -156,7 +156,7 @@ def _lower_structured_binding(
             operands=[elem_reg, idx_reg],
             node=id_node,
         )
-        ctx.emit(Opcode.STORE_VAR, operands=[var_name, part_reg], node=id_node)
+        ctx.emit(Opcode.DECL_VAR, operands=[var_name, part_reg], node=id_node)
 
 
 def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
@@ -184,7 +184,7 @@ def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
 
     init_idx = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
-    ctx.emit(Opcode.STORE_VAR, operands=["__range_idx", init_idx])
+    ctx.emit(Opcode.DECL_VAR, operands=["__range_idx", init_idx])
     len_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
 
@@ -212,7 +212,7 @@ def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
         _lower_structured_binding(ctx, declarator_node, elem_reg)
     else:
         var_name = ctx.declare_block_var(raw_name)
-        ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+        ctx.emit(Opcode.DECL_VAR, operands=[var_name, elem_reg])
 
     update_label = ctx.fresh_label("range_for_update")
     ctx.push_loop(update_label, end_label)

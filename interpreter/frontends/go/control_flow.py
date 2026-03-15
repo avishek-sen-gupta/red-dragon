@@ -159,7 +159,7 @@ def _lower_go_range(ctx: TreeSitterEmitContext, clause, body_node, parent) -> No
 
     init_idx = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
-    ctx.emit(Opcode.STORE_VAR, operands=["__for_idx", init_idx])
+    ctx.emit(Opcode.DECL_VAR, operands=["__for_idx", init_idx])
     len_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
 
@@ -183,7 +183,7 @@ def _lower_go_range(ctx: TreeSitterEmitContext, clause, body_node, parent) -> No
     var_names = [ctx.declare_block_var(n) for n in raw_names]
     # Store index variable
     if len(var_names) >= 1:
-        ctx.emit(Opcode.STORE_VAR, operands=[var_names[0], idx_reg])
+        ctx.emit(Opcode.DECL_VAR, operands=[var_names[0], idx_reg])
     # Store value variable
     if len(var_names) >= 2:
         elem_reg = ctx.fresh_reg()
@@ -192,7 +192,7 @@ def _lower_go_range(ctx: TreeSitterEmitContext, clause, body_node, parent) -> No
             result_reg=elem_reg,
             operands=[iter_reg, idx_reg],
         )
-        ctx.emit(Opcode.STORE_VAR, operands=[var_names[1], elem_reg])
+        ctx.emit(Opcode.DECL_VAR, operands=[var_names[1], elem_reg])
 
     update_label = ctx.fresh_label("range_update")
     ctx.push_loop(update_label, end_label)
@@ -630,7 +630,7 @@ def lower_receive_stmt(ctx: TreeSitterEmitContext, node) -> None:
         left_names = extract_expression_list(ctx, left)
         for name in left_names:
             ctx.emit(
-                Opcode.STORE_VAR,
+                Opcode.DECL_VAR,
                 operands=[name, recv_reg],
                 node=node,
             )

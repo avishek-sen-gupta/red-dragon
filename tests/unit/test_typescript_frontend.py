@@ -48,8 +48,8 @@ class TestTypeScriptTypedBasics:
         instructions = _parse_ts("let x: number = 10;")
         opcodes = _opcodes(instructions)
         assert Opcode.CONST in opcodes
-        assert Opcode.STORE_VAR in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert Opcode.DECL_VAR in opcodes
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
     def test_typed_arithmetic(self):
@@ -57,11 +57,11 @@ class TestTypeScriptTypedBasics:
         opcodes = _opcodes(instructions)
         assert Opcode.LOAD_VAR in opcodes
         assert Opcode.BINOP in opcodes
-        assert Opcode.STORE_VAR in opcodes
+        assert Opcode.DECL_VAR in opcodes
 
     def test_string_type_variable(self):
         instructions = _parse_ts('let name: string = "hello";')
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("name" in inst.operands for inst in stores)
 
 
@@ -73,7 +73,7 @@ class TestTypeScriptInterfaces:
         assert any(
             "<class:" in str(c.operands) and "Foo" in str(c.operands) for c in consts
         )
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Foo" in inst.operands for inst in stores)
 
     def test_interface_with_multiple_methods(self):
@@ -94,7 +94,7 @@ class TestTypeScriptEnums:
         opcodes = _opcodes(instructions)
         assert Opcode.NEW_OBJECT in opcodes
         assert Opcode.STORE_INDEX in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Color" in inst.operands for inst in stores)
         new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
         assert any("enum:Color" in str(inst.operands) for inst in new_objs)
@@ -116,8 +116,8 @@ class TestTypeScriptTypeFeatures:
         instructions = _parse_ts("const x = y as number;")
         opcodes = _opcodes(instructions)
         assert Opcode.LOAD_VAR in opcodes
-        assert Opcode.STORE_VAR in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert Opcode.DECL_VAR in opcodes
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         # The `as` cast should be handled transparently — no unsupported SYMBOLIC
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
@@ -129,7 +129,7 @@ class TestTypeScriptTypeFeatures:
         instructions = _parse_ts("const x = y!;")
         opcodes = _opcodes(instructions)
         assert Opcode.LOAD_VAR in opcodes
-        assert Opcode.STORE_VAR in opcodes
+        assert Opcode.DECL_VAR in opcodes
         # The `!` non-null assertion should be handled transparently — no unsupported SYMBOLIC
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any(
@@ -159,7 +159,7 @@ class TestTypeScriptFunctions:
         opcodes = _opcodes(instructions)
         assert Opcode.RETURN in opcodes
         assert Opcode.BINOP in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("f" in inst.operands for inst in stores)
 
 
@@ -168,7 +168,7 @@ class TestTypeScriptClasses:
         instructions = _parse_ts(
             "class Dog { name: string; constructor(n: string) { this.name = n; } }"
         )
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -179,12 +179,12 @@ class TestTypeScriptExport:
         instructions = _parse_ts("export function foo() { return 1; }")
         opcodes = _opcodes(instructions)
         assert Opcode.RETURN in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("foo" in inst.operands for inst in stores)
 
     def test_export_variable(self):
         instructions = _parse_ts("export const x = 42;")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 
@@ -246,7 +246,7 @@ function greet(user: User): string {
         assert any(
             "<class:" in str(c.operands) and "User" in str(c.operands) for c in consts
         )
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("greet" in inst.operands for inst in stores)
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 1
@@ -267,7 +267,7 @@ if (s === Status.Active) {
         opcodes = _opcodes(instructions)
         assert Opcode.NEW_OBJECT in opcodes
         assert Opcode.BRANCH_IF in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Status" in inst.operands for inst in stores)
         assert any("s" in inst.operands for inst in stores)
         assert len(instructions) > 15
@@ -288,7 +288,7 @@ class Stack {
 }
 """
         instructions = _parse_ts(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Stack" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -306,7 +306,7 @@ const result: number = add(1, 2);
         instructions = _parse_ts(source)
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("add" in inst.operands for inst in stores)
         assert any("result" in inst.operands for inst in stores)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -324,7 +324,7 @@ for (const item of items) {
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.NEW_ARRAY in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("total" in inst.operands for inst in stores)
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
@@ -346,7 +346,7 @@ export function clamp(val: number, min: number, max: number): number {
         assert len(branches) >= 2
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 3
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("clamp" in inst.operands for inst in stores)
 
     def test_non_null_assertion_chain(self):
@@ -359,7 +359,7 @@ const name: string = obj!.user!.name;
 const upper: string = name.toUpperCase();
 """
         instructions = _parse_ts(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("name" in inst.operands for inst in stores)
         assert any("upper" in inst.operands for inst in stores)
         calls = _find_all(instructions, Opcode.CALL_METHOD)
@@ -383,7 +383,7 @@ class Circle {
         assert any(
             "<class:" in str(c.operands) and "Shape" in str(c.operands) for c in consts
         )
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Circle" in inst.operands for inst in stores)
         store_fields = _find_all(instructions, Opcode.STORE_FIELD)
         assert any("radius" in inst.operands for inst in store_fields)
@@ -406,7 +406,7 @@ class TestTypeScriptDestructuring:
         instructions = _parse_ts(source)
         opcodes = _opcodes(instructions)
         assert Opcode.LOAD_INDEX in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("first" in inst.operands for inst in stores)
         assert any("second" in inst.operands for inst in stores)
 
@@ -422,7 +422,7 @@ abstract class Shape {
 }
 """
         instructions = _parse_ts(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Shape" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -438,7 +438,7 @@ abstract class Animal {
 }
 """
         instructions = _parse_ts(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Animal" in inst.operands for inst in stores)
         store_fields = _find_all(instructions, Opcode.STORE_FIELD)
         assert any("name" in inst.operands for inst in store_fields)
@@ -452,7 +452,7 @@ abstract class Base {
 }
 """
         instructions = _parse_ts(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Base" in inst.operands for inst in stores)
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 1
@@ -478,7 +478,7 @@ class Foo {
 }
 """
         instructions = _parse_ts(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("count" in inst.operands for inst in stores)
 
     def test_public_field_no_value(self):
@@ -488,7 +488,7 @@ class Foo {
 }
 """
         instructions = _parse_ts(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("label" in inst.operands for inst in stores)
 
 
@@ -537,7 +537,7 @@ namespace Utils {
         instructions = _parse_ts(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("PI" in inst.operands for inst in stores)
 
 
@@ -582,13 +582,18 @@ for (let i: number = 0; i < 3; i = i + 1) {
     x = x + 1;
 }
 """)
+        decls = _find_all(ir, Opcode.DECL_VAR)
         stores = _find_all(ir, Opcode.STORE_VAR)
+        i_decls = [inst for inst in decls if inst.operands and inst.operands[0] == "i"]
         i_stores = [
             inst for inst in stores if inst.operands and inst.operands[0] == "i"
         ]
         assert (
-            len(i_stores) >= 2
-        ), f"Expected >= 2 STORE_VAR for 'i' (init + update), got {len(i_stores)}"
+            len(i_decls) >= 1
+        ), f"Expected >= 1 DECL_VAR for 'i' (init), got {len(i_decls)}"
+        assert (
+            len(i_stores) >= 1
+        ), f"Expected >= 1 STORE_VAR for 'i' (update), got {len(i_stores)}"
 
 
 class TestTypeScriptInterfaceLowering:
@@ -635,7 +640,7 @@ interface Shape {
     def test_interface_property_signature(self):
         """Property signatures in interfaces should produce STORE_VAR with type seeding."""
         ir = _parse_ts("interface Logger { level: string; }")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Logger" in inst.operands for inst in stores)
         assert any(
             "level" in inst.operands for inst in stores
@@ -657,7 +662,7 @@ interface Config {
     def test_property_signature_emits_store_var(self):
         """Each property_signature should emit STORE_VAR inside the class block."""
         ir = _parse_ts(self.INTERFACE_WITH_PROPS)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         store_names = [s.operands[0] for s in stores if s.operands]
         assert (
             "name" in store_names
@@ -691,7 +696,7 @@ interface Config {
     def test_method_and_property_coexist(self):
         """Interface with both methods and properties should lower both."""
         ir = _parse_ts(self.INTERFACE_WITH_PROPS)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         store_names = [s.operands[0] for s in stores if s.operands]
         # compute() is a method_signature → lowered as function
         assert (
@@ -725,7 +730,7 @@ class TestFunctionSignature:
             function greet(name: string, greeting: string): string;
             function greet(name: any, greeting?: any): any { return name; }
             """)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         store_names = [s.operands[0] for s in stores if s.operands]
         assert (
             "greet" in store_names
@@ -786,7 +791,7 @@ class TestInstantiationExpression:
         assert (
             len(symbolics) == 0
         ), f"instantiation_expression should not produce SYMBOLIC: {symbolics}"
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         store_names = [s.operands[0] for s in stores if s.operands]
         assert "strId" in store_names, f"Expected 'strId' binding, got: {store_names}"
 

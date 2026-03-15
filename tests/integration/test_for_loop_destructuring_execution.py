@@ -102,7 +102,7 @@ class TestForLoopArrayDestructuringIR:
         store_names = [
             str(inst.operands[0])
             for inst in ir
-            if inst.opcode == Opcode.STORE_VAR and inst.operands
+            if inst.opcode == Opcode.DECL_VAR and inst.operands
         ]
         assert "k" in store_names, f"[{lang}] 'k' not in stored vars: {store_names}"
         assert "v" in store_names, f"[{lang}] 'v' not in stored vars: {store_names}"
@@ -160,7 +160,7 @@ class TestForLoopObjectDestructuringIR:
         store_names = [
             str(inst.operands[0])
             for inst in ir
-            if inst.opcode == Opcode.STORE_VAR and inst.operands
+            if inst.opcode == Opcode.DECL_VAR and inst.operands
         ]
         assert "x" in store_names, f"[{lang}] 'x' not in stored vars"
         assert "y" in store_names, f"[{lang}] 'y' not in stored vars"

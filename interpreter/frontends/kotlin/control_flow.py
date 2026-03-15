@@ -138,7 +138,7 @@ def _lower_for_multi_destructure(
             operands=[elem_reg, idx_reg],
             node=var_decl,
         )
-        ctx.emit(Opcode.STORE_VAR, operands=[var_name, part_reg], node=var_decl)
+        ctx.emit(Opcode.DECL_VAR, operands=[var_name, part_reg], node=var_decl)
 
 
 def lower_for_stmt(ctx: TreeSitterEmitContext, node) -> None:
@@ -174,7 +174,7 @@ def lower_for_stmt(ctx: TreeSitterEmitContext, node) -> None:
 
     init_idx = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
-    ctx.emit(Opcode.STORE_VAR, operands=["__for_idx", init_idx])
+    ctx.emit(Opcode.DECL_VAR, operands=["__for_idx", init_idx])
     len_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
 
@@ -202,7 +202,7 @@ def lower_for_stmt(ctx: TreeSitterEmitContext, node) -> None:
         _lower_for_multi_destructure(ctx, multi_var_node, elem_reg)
     else:
         var_name = ctx.declare_block_var(raw_name)
-        ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+        ctx.emit(Opcode.DECL_VAR, operands=[var_name, elem_reg])
 
     update_label = ctx.fresh_label("for_update")
     ctx.push_loop(update_label, end_label)

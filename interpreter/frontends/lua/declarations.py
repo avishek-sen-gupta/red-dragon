@@ -29,7 +29,7 @@ def lower_lua_variable_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 operands=[ctx.constants.none_literal],
             )
             ctx.emit(
-                Opcode.STORE_VAR,
+                Opcode.DECL_VAR,
                 operands=[ctx.node_text(child), val_reg],
                 node=node,
             )
@@ -145,7 +145,7 @@ def lower_lua_function_declaration(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def lower_lua_return(ctx: TreeSitterEmitContext, node) -> None:

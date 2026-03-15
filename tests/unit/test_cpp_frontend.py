@@ -25,15 +25,15 @@ class TestCppDeclarations:
         instructions = _parse_cpp("int x = 10;")
         opcodes = _opcodes(instructions)
         assert Opcode.CONST in opcodes
-        assert Opcode.STORE_VAR in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert Opcode.DECL_VAR in opcodes
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
     def test_declaration_without_initializer(self):
         instructions = _parse_cpp("int x;")
         opcodes = _opcodes(instructions)
-        assert Opcode.STORE_VAR in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert Opcode.DECL_VAR in opcodes
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 
@@ -52,7 +52,7 @@ class TestCppFunctions:
         ]
         assert any("a" in p for p in param_names)
         assert any("b" in p for p in param_names)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("add" in inst.operands for inst in stores)
 
     def test_function_call(self):
@@ -96,7 +96,7 @@ class TestCppControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BRANCH in opcodes
         assert Opcode.BINOP in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("i" in inst.operands for inst in stores)
 
     def test_if_elseif_chain_all_branches_produce_ir(self):
@@ -132,7 +132,7 @@ class TestCppClasses:
         instructions = _parse_cpp("class Dog { public: void bark() { return; } };")
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -140,8 +140,8 @@ class TestCppClasses:
     def test_namespace_transparent(self):
         instructions = _parse_cpp("namespace myns { int x = 10; }")
         opcodes = _opcodes(instructions)
-        assert Opcode.STORE_VAR in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert Opcode.DECL_VAR in opcodes
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 
@@ -172,7 +172,7 @@ class TestCppExpressions:
         )
         opcodes = _opcodes(instructions)
         assert Opcode.RETURN in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("identity" in inst.operands for inst in stores)
 
 
@@ -214,7 +214,7 @@ public:
 };
 """
         instructions = _parse_cpp(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Counter" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -257,7 +257,7 @@ int main() {
         assert any("__lambda" in str(inst.operands) for inst in consts)
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("result" in inst.operands for inst in stores)
         assert any("f" in inst.operands for inst in stores)
         loads = _find_all(instructions, Opcode.LOAD_VAR)
@@ -289,7 +289,7 @@ int main() {
 }
 """
         instructions = _parse_cpp(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("pi" in inst.operands for inst in stores)
         assert any("truncated" in inst.operands for inst in stores)
         loads = _find_all(instructions, Opcode.LOAD_VAR)
@@ -337,7 +337,7 @@ namespace math {
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.RETURN in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("total" in inst.operands for inst in stores)
         assert any("sum" in inst.operands for inst in stores)
         binops = _find_all(instructions, Opcode.BINOP)
@@ -359,7 +359,7 @@ T max_val(T a, T b) {
         assert Opcode.BRANCH_IF in opcodes
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 2
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("max_val" in inst.operands for inst in stores)
 
 
@@ -459,7 +459,7 @@ class TestCppEnumSpecifier:
         assert "A" in field_names
         assert "B" in field_names
         assert "C" in field_names
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Flag" in inst.operands for inst in stores)
 
 

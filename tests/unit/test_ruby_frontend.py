@@ -141,7 +141,7 @@ end
         instructions = _parse_ruby(source)
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("add" in inst.operands for inst in stores)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         param_names = [
@@ -191,7 +191,7 @@ class Dog
 end
 """
         instructions = _parse_ruby(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -205,7 +205,7 @@ class Dog
 end
 """
         instructions = _parse_ruby(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         field_stores = _find_all(instructions, Opcode.STORE_FIELD)
         assert any("name" in inst.operands for inst in field_stores)
@@ -330,7 +330,7 @@ end
         assert Opcode.UNOP in opcodes
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.RETURN in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("validate" in inst.operands for inst in stores)
 
     def test_until_loop_with_mutation(self):
@@ -389,7 +389,7 @@ class Counter
 end
 """
         instructions = _parse_ruby(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Counter" in inst.operands for inst in stores)
         field_stores = _find_all(instructions, Opcode.STORE_FIELD)
         assert any("count" in inst.operands for inst in field_stores)
@@ -652,7 +652,7 @@ module Greeter
 end
 """
         instructions = _parse_ruby(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Greeter" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -678,7 +678,7 @@ module Math
 end
 """
         instructions = _parse_ruby(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Math" in inst.operands for inst in stores)
         assert any("add" in inst.operands for inst in stores)
         opcodes = _opcodes(instructions)
@@ -901,7 +901,7 @@ class << self
 end
 """
         instructions = _parse_ruby(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("bar" in inst.operands for inst in stores)
 
 
@@ -913,7 +913,7 @@ def self.class_method
 end
 """
         instructions = _parse_ruby(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("self.class_method" in inst.operands for inst in stores)
 
     def test_singleton_method_with_params(self):
