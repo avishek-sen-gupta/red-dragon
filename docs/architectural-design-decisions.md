@@ -2027,3 +2027,20 @@ These are already dispatched to `_lower_ts_interface_method` in `lower_interface
 **Future:** Making Box a real object requires frontend type tracking to insert auto-deref at the right points. The Rust frontend currently has no struct field type metadata and no mechanism to resolve expression types during lowering (see red-dragon-riy). This is deferred until we understand which real-world Rust patterns require it.
 
 **Files:** `interpreter/frontends/rust/expressions.py` (pass-through in `_lower_box_new`, `_lower_some`), `interpreter/frontends/rust/declarations.py` (prelude emission), `interpreter/frontends/rust/frontend.py` (dispatch + `_emit_prelude` override), `interpreter/frontends/_base.py` (`_emit_prelude` hook), `interpreter/registry.py` (prelude class label recognition), `interpreter/executor.py` (base-name extraction, `type_hint_source`), `interpreter/vm_types.py` (`HeapObject.type_hint` → `TypeExpr`).
+
+---
+
+### ADR-104: Lua table-based OOP via frontend STORE_FIELD + LOAD_FIELD + CALL_UNKNOWN (2026-03-15)
+
+**Context:** Lua has no classes — OOP is done via tables with function-valued fields (`function Counter.new()` is sugar for `Counter["new"] = function()`). The Lua frontend was emitting `DECL_VAR "Counter.new"` for dotted function declarations and `CALL_METHOD` for dotted function calls. This failed because: (1) methods stored as top-level variables don't populate the table's fields dict, (2) `CALL_METHOD` looks up `registry.class_methods["table"]` which is empty, (3) falls through to symbolic.
+
+**Decision:** Fix entirely in the Lua frontend with no VM changes:
+1. **Dotted function declarations** (`function Counter.new()`): extract table name and method name from the `dot_index_expression` AST node. Use only the method name (`new`) as the function label name. Emit `LOAD_VAR "Counter"` + `STORE_FIELD %obj "new" %func` instead of `DECL_VAR "Counter.new"`.
+2. **Dotted function calls** (`Counter.increment(counter)`): emit `LOAD_VAR "Counter"` + `LOAD_FIELD %obj "increment"` + `CALL_UNKNOWN %func args...` instead of `CALL_METHOD`. Uses `CALL_UNKNOWN` (not `CALL_FUNCTION`) because the function reference is in a register.
+
+**Rationale:**
+- Lua's dot syntax IS field access + function call, not method dispatch. Only colon syntax (`:`) implies implicit self — that's a separate concern (out of scope).
+- Frontend-only: no VM complexity added. Semantically correct for how Lua actually works.
+- `CALL_UNKNOWN` is the established pattern in the Lua frontend for all dynamic call targets.
+
+**Files:** `interpreter/frontends/lua/declarations.py` (dotted declaration → STORE_FIELD), `interpreter/frontends/lua/expressions.py` (dotted call → LOAD_FIELD + CALL_UNKNOWN), `tests/unit/test_lua_frontend.py`, `tests/integration/test_lua_table_oop_execution.py`.
