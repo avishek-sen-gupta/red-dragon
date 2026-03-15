@@ -495,7 +495,7 @@ class TestPhpArrowFunction:
         ir = _parse_and_lower(source)
         consts = _find_all(ir, Opcode.CONST)
         func_refs = [
-            c for c in consts if any("function:" in str(op) for op in c.operands)
+            c for c in consts if any(str(op).startswith("func_") for op in c.operands)
         ]
         assert len(func_refs) >= 1
 
@@ -820,7 +820,11 @@ class TestPhpAnonymousFunction:
         source = "<?php $f = function($x) { return $x + 1; }; ?>"
         ir = _parse_and_lower(source)
         consts = _find_all(ir, Opcode.CONST)
-        assert any("function:" in str(inst.operands) for inst in consts)
+        assert any(
+            str(inst.operands[0]).startswith("func_")
+            for inst in consts
+            if inst.operands
+        )
 
     def test_anonymous_function_params(self):
         source = "<?php $f = function($a, $b) { return $a + $b; }; ?>"

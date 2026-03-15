@@ -23,12 +23,12 @@ def _run_program(source: str, language: Language, max_steps: int = 200) -> dict:
 
 
 def _has_func_ref(source: str, language: Language) -> bool:
-    """Check whether the IR contains a CONST with a '<function:' FUNC_REF."""
+    """Check whether the IR contains a CONST with a func_ label FUNC_REF."""
     fe = get_deterministic_frontend(language.value)
     ir = fe.lower(source.encode())
     return any(
         inst.opcode == Opcode.CONST
-        and any("<function:" in str(op) for op in inst.operands)
+        and any(str(op).startswith("func_") for op in inst.operands)
         for inst in ir
     )
 

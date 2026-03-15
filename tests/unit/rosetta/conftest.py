@@ -156,11 +156,15 @@ def execute_for_language(
     Returns the final (VMState, ExecutionStats) pair.
     """
     logger.info("Executing %s program through VM (max_steps=%d)", language, max_steps)
-    instructions = parse_for_language(language, source)
+    frontend = get_deterministic_frontend(language)
+    instructions = frontend.lower(source.encode("utf-8"))
+    func_symbol_table = frontend.func_symbol_table
     cfg = build_cfg(instructions)
-    registry = build_registry(instructions, cfg)
+    registry = build_registry(instructions, cfg, func_symbol_table=func_symbol_table)
     config = VMConfig(max_steps=max_steps)
-    vm, stats = execute_cfg(cfg, "entry", registry, config)
+    vm, stats = execute_cfg(
+        cfg, "entry", registry, config, func_symbol_table=func_symbol_table
+    )
     logger.info(
         "Execution complete for %s: %d steps, %d LLM calls",
         language,
