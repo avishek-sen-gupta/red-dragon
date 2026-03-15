@@ -651,6 +651,126 @@ answer = countdown(7)
         assert stats.llm_calls == 0
 
 
+class TestLuaDottedFunctionDeclaration:
+    def test_dotted_function_emits_store_field(self):
+        """function Counter.new() should emit STORE_FIELD on Counter, not DECL_VAR 'Counter.new'."""
+        instructions = _parse_lua("""
+Counter = {}
+function Counter.new()
+    return 1
+end
+""")
+        store_fields = _find_all(instructions, Opcode.STORE_FIELD)
+        func_store = [
+            inst
+            for inst in store_fields
+            if any("new" in str(op) for op in inst.operands)
+        ]
+        assert (
+            len(func_store) >= 1
+        ), f"Expected STORE_FIELD for 'new', got {store_fields}"
+        decl_vars = _find_all(instructions, Opcode.DECL_VAR)
+        dotted = [inst for inst in decl_vars if "Counter.new" in str(inst.operands)]
+        assert len(dotted) == 0, f"Should not DECL_VAR 'Counter.new', got {dotted}"
+
+    def test_dotted_function_uses_method_name_only(self):
+        """Function label and ref should use 'new', not 'Counter.new'."""
+        instructions = _parse_lua("""
+Counter = {}
+function Counter.new()
+    return 1
+end
+""")
+        consts = _find_all(instructions, Opcode.CONST)
+        func_refs = [
+            inst
+            for inst in consts
+            if any("<function:" in str(op) for op in inst.operands)
+        ]
+        assert len(func_refs) >= 1
+        ref_str = str(func_refs[0].operands[0])
+        assert (
+            "Counter.new" not in ref_str
+        ), f"Func ref should not contain dots: {ref_str}"
+        assert (
+            "<function:new@" in ref_str
+        ), f"Func ref should use method name 'new': {ref_str}"
+
+    def test_dotted_function_with_params(self):
+        """function Counter.increment(self) should have params AND STORE_FIELD."""
+        instructions = _parse_lua("""
+Counter = {}
+function Counter.increment(self)
+    return self
+end
+""")
+        store_fields = _find_all(instructions, Opcode.STORE_FIELD)
+        func_store = [
+            inst
+            for inst in store_fields
+            if any("increment" in str(op) for op in inst.operands)
+        ]
+        assert len(func_store) >= 1
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        param_names = [
+            inst.operands[0]
+            for inst in symbolics
+            if inst.operands and str(inst.operands[0]).startswith("param:")
+        ]
+        assert any(
+            "self" in p for p in param_names
+        ), f"Expected param:self, got {param_names}"
+
+
+class TestLuaDottedFunctionCall:
+    def test_dotted_call_emits_load_field_and_call_unknown(self):
+        """Counter.increment(x) should emit LOAD_FIELD + CALL_UNKNOWN, not CALL_METHOD."""
+        instructions = _parse_lua("Counter.increment(x)")
+        load_fields = _find_all(instructions, Opcode.LOAD_FIELD)
+        field_loads = [
+            inst for inst in load_fields if "increment" in str(inst.operands)
+        ]
+        assert (
+            len(field_loads) >= 1
+        ), f"Expected LOAD_FIELD 'increment', got {load_fields}"
+        call_unknowns = _find_all(instructions, Opcode.CALL_UNKNOWN)
+        assert len(call_unknowns) >= 1, f"Expected CALL_UNKNOWN, got none"
+        call_methods = _find_all(instructions, Opcode.CALL_METHOD)
+        dotted_methods = [
+            inst for inst in call_methods if "increment" in str(inst.operands)
+        ]
+        assert (
+            len(dotted_methods) == 0
+        ), f"Should not emit CALL_METHOD for dot call: {dotted_methods}"
+
+    def test_dotted_call_with_multiple_args(self):
+        """Counter.add(a, b) should pass both args to CALL_UNKNOWN."""
+        instructions = _parse_lua("Counter.add(a, b)")
+        call_unknowns = _find_all(instructions, Opcode.CALL_UNKNOWN)
+        assert len(call_unknowns) >= 1
+        assert len(call_unknowns[0].operands) >= 3, "Should have func + 2 args"
+
+    def test_colon_call_still_emits_call_method(self):
+        """obj:method() should still use CALL_METHOD (unchanged)."""
+        instructions = _parse_lua("obj:method()")
+        call_methods = _find_all(instructions, Opcode.CALL_METHOD)
+        assert len(call_methods) >= 1, "Colon syntax should still emit CALL_METHOD"
+
+    def test_chained_dotted_calls(self):
+        """Multiple consecutive dotted calls each produce LOAD_FIELD + CALL_UNKNOWN."""
+        instructions = _parse_lua("Counter.a(x)\nCounter.b(y)")
+        load_fields = _find_all(instructions, Opcode.LOAD_FIELD)
+        field_names = [
+            inst.operands[1] for inst in load_fields if len(inst.operands) >= 2
+        ]
+        assert "a" in field_names, f"Expected LOAD_FIELD 'a', got {field_names}"
+        assert "b" in field_names, f"Expected LOAD_FIELD 'b', got {field_names}"
+        call_unknowns = _find_all(instructions, Opcode.CALL_UNKNOWN)
+        assert (
+            len(call_unknowns) >= 2
+        ), f"Expected 2 CALL_UNKNOWN, got {len(call_unknowns)}"
+
+
 class TestLuaBitwiseXor:
     """Lua uses ~ for bitwise XOR; VM BINOP_TABLE must handle it."""
 
