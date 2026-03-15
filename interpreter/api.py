@@ -99,7 +99,10 @@ def lower_and_infer(
     instructions = frontend.lower(source.encode("utf-8"))
     resolver = TypeResolver(DefaultTypeConversionRules())
     env = infer_types(
-        instructions, resolver, type_env_builder=frontend.type_env_builder
+        instructions,
+        resolver,
+        type_env_builder=frontend.type_env_builder,
+        func_symbol_table=frontend.func_symbol_table,
     )
     return instructions, env
 

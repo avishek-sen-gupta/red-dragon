@@ -4,17 +4,21 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from typing import Any
 
 from interpreter.constants import Language
 from interpreter.frontend import Frontend
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
+from interpreter.func_ref import FuncRef
 from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode
 from interpreter.llm_client import LLMClient
 from interpreter import constants
 
 logger = logging.getLogger(__name__)
+
+_LLM_FUNC_REF_RE = re.compile(r"<function:(\w+)@(\w+)(?:#\w+)?>")
 
 
 class IRParsingError(Exception):
@@ -277,6 +281,25 @@ def _validate_ir(instructions: list[IRInstruction]) -> list[IRInstruction]:
     return instructions
 
 
+def _convert_llm_func_refs(
+    instructions: list[IRInstruction],
+    func_symbol_table: dict[str, FuncRef],
+) -> None:
+    """Convert LLM-emitted <function:name@label> strings to plain labels.
+
+    Mutates instructions in place: replaces operands and populates the symbol table.
+    This is the ONLY place regex is used for function references — at the LLM boundary.
+    """
+    for inst in instructions:
+        if inst.opcode == Opcode.CONST and inst.operands:
+            operand = str(inst.operands[0])
+            m = _LLM_FUNC_REF_RE.search(operand)
+            if m:
+                name, label = m.group(1), m.group(2)
+                func_symbol_table[label] = FuncRef(name=name, label=label)
+                inst.operands[0] = label
+
+
 class LLMFrontend(Frontend):
     """Frontend that uses an LLM to lower source code directly to IR.
 
@@ -299,6 +322,11 @@ class LLMFrontend(Frontend):
         self._max_tokens = max_tokens
         self._max_retries = max_retries
         self._observer = observer
+        self._func_symbol_table: dict[str, FuncRef] = {}
+
+    @property
+    def func_symbol_table(self) -> dict[str, FuncRef]:
+        return self._func_symbol_table
 
     def lower(self, source: bytes) -> list[IRInstruction]:
         """Lower source code to IR via LLM.
@@ -345,6 +373,7 @@ class LLMFrontend(Frontend):
                 continue
 
             instructions = _validate_ir(instructions)
+            _convert_llm_func_refs(instructions, self._func_symbol_table)
             elapsed = time.perf_counter() - t0
             self._observer.on_parse(0.0)
             self._observer.on_lower(elapsed)

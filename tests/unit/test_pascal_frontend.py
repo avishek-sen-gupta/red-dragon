@@ -100,7 +100,11 @@ class TestPascalFunctions:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Add" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("function:" in str(inst.operands) for inst in consts)
+        assert any(
+            str(inst.operands[0]).startswith("func_")
+            for inst in consts
+            if inst.operands
+        )
 
     def test_function_params_are_lowered(self):
         # The Pascal frontend extracts params from declArgs inside defProc
@@ -252,7 +256,11 @@ end.
         assert len(calls) >= 2
         # Pascal procedures are stored under an anonymous name
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("function:" in str(inst.operands) for inst in consts)
+        assert any(
+            str(inst.operands[0]).startswith("func_")
+            for inst in consts
+            if inst.operands
+        )
         assert len(instructions) > 10
 
     def test_function_with_while_loop(self):
@@ -396,7 +404,9 @@ end.
         main_calls = [c for c in calls if "Main" in c.operands]
         assert len(main_calls) >= 1
         consts = _find_all(instructions, Opcode.CONST)
-        func_refs = [c for c in consts if "function:" in str(c.operands)]
+        func_refs = [
+            c for c in consts if any(str(op).startswith("func_") for op in c.operands)
+        ]
         assert len(func_refs) >= 2
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 2
