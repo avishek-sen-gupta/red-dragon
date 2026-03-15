@@ -181,12 +181,19 @@ class TreeSitterEmitContext:
         result_reg: str,
         node=None,
     ) -> IRInstruction:
-        """Register a function reference in the symbol table and emit CONST."""
+        """Register a function reference in the symbol table and emit CONST.
+
+        Emits the legacy ``<function:name@label>`` format as the CONST operand
+        for backward compatibility with existing consumers (_parse_func_ref).
+        The symbol table is populated in parallel, ready for future consumers.
+        """
         self.func_symbol_table[func_label] = FuncRef(name=func_name, label=func_label)
         return self.emit(
             Opcode.CONST,
             result_reg=result_reg,
-            operands=[func_label],
+            operands=[
+                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
+            ],
             node=node,
         )
 

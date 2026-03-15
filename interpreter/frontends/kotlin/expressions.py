@@ -545,11 +545,7 @@ def lower_lambda_literal(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=reg,
-        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
-    )
+    ctx.emit_func_ref(func_name, func_label, result_reg=reg)
     return reg
 
 
@@ -597,11 +593,7 @@ def lower_anonymous_function(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=reg,
-        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
-    )
+    ctx.emit_func_ref(func_name, func_label, result_reg=reg)
     return reg
 
 

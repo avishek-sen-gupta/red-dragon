@@ -26,21 +26,20 @@ class TestEmitFuncRef:
         ref = ctx.func_symbol_table["func_add_0"]
         assert ref == FuncRef(name="add", label="func_add_0")
 
-    def test_emits_const_with_plain_label(self):
+    def test_emits_const_with_legacy_format(self):
         ctx = _make_ctx()
         ctx.emit_func_ref("add", "func_add_0", result_reg="%0")
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         assert len(const_insts) == 1
-        assert const_insts[0].operands == ["func_add_0"]
+        assert const_insts[0].operands == ["<function:add@func_add_0>"]
         assert const_insts[0].result_reg == "%0"
 
-    def test_no_angle_brackets_in_operand(self):
+    def test_legacy_format_includes_angle_brackets(self):
         ctx = _make_ctx()
         ctx.emit_func_ref("my_func", "func_my_func_0", result_reg="%1")
         const_inst = [i for i in ctx.instructions if i.opcode == Opcode.CONST][0]
         operand = str(const_inst.operands[0])
-        assert "<" not in operand
-        assert ">" not in operand
+        assert operand == "<function:my_func@func_my_func_0>"
 
     def test_multiple_registrations(self):
         ctx = _make_ctx()

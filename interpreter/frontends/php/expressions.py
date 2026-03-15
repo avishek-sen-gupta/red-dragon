@@ -538,11 +538,7 @@ def lower_php_arrow_function(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     func_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=func_reg,
-        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
-    )
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     return func_reg
 
 
@@ -599,11 +595,7 @@ def lower_php_anonymous_function(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     func_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=func_reg,
-        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
-    )
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     return func_reg
 
 
