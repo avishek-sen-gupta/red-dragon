@@ -263,7 +263,6 @@ end.
 
 REQUIRED_OPCODES: set[Opcode] = {
     Opcode.BINOP,
-    Opcode.STORE_VAR,
 }
 
 MIN_INSTRUCTIONS = 6

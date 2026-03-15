@@ -254,13 +254,13 @@ def lower_if_expr(ctx: TreeSitterEmitContext, node) -> str:
 
     ctx.emit(Opcode.LABEL, label=true_label)
     true_reg = _lower_control_body(ctx, body_node)
-    ctx.emit(Opcode.STORE_VAR, operands=[result_var, true_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, true_reg])
     ctx.emit(Opcode.BRANCH, label=end_label)
 
     if alt_node:
         ctx.emit(Opcode.LABEL, label=false_label)
         false_reg = _lower_control_body(ctx, alt_node)
-        ctx.emit(Opcode.STORE_VAR, operands=[result_var, false_reg])
+        ctx.emit(Opcode.DECL_VAR, operands=[result_var, false_reg])
         ctx.emit(Opcode.BRANCH, label=end_label)
 
     ctx.emit(Opcode.LABEL, label=end_label)
@@ -313,7 +313,7 @@ def lower_when_expr(ctx: TreeSitterEmitContext, node) -> str:
             name_node = next((c for c in subject_var_decl.children if c.is_named), None)
             raw_name = ctx.node_text(name_node) if name_node else "__when_subject"
             var_name = ctx.declare_block_var(raw_name)
-            ctx.emit(Opcode.STORE_VAR, operands=[var_name, val_reg])
+            ctx.emit(Opcode.DECL_VAR, operands=[var_name, val_reg])
         else:
             inner = next((c for c in subject_node.children if c.is_named), None)
             if inner:
@@ -378,7 +378,7 @@ def lower_when_expr(ctx: TreeSitterEmitContext, node) -> str:
                 result_reg=arm_result,
                 operands=[ctx.constants.none_literal],
             )
-        ctx.emit(Opcode.STORE_VAR, operands=[result_var, arm_result])
+        ctx.emit(Opcode.DECL_VAR, operands=[result_var, arm_result])
         ctx.emit(Opcode.BRANCH, label=end_label)
         ctx.emit(Opcode.LABEL, label=next_label)
 
@@ -501,7 +501,7 @@ def lower_lambda_literal(ctx: TreeSitterEmitContext, node) -> str:
                         node=child,
                     )
                     ctx.emit(
-                        Opcode.STORE_VAR,
+                        Opcode.DECL_VAR,
                         operands=[pname, f"%{ctx.reg_counter - 1}"],
                     )
 
@@ -622,7 +622,7 @@ def _lower_anon_func_params(ctx: TreeSitterEmitContext, params_node) -> None:
                     node=child,
                 )
                 ctx.emit(
-                    Opcode.STORE_VAR,
+                    Opcode.DECL_VAR,
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
                 )
 
@@ -795,7 +795,7 @@ def _lower_elvis_with_throw(
     )
 
     ctx.emit(Opcode.LABEL, label=non_null_label)
-    ctx.emit(Opcode.STORE_VAR, operands=[result_var, left_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, left_reg])
     ctx.emit(Opcode.BRANCH, label=end_label)
 
     ctx.emit(Opcode.LABEL, label=throw_label)

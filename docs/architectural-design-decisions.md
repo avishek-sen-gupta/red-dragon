@@ -2005,3 +2005,25 @@ These are already dispatched to `_lower_ts_interface_method` in `lower_interface
 **Consequences:** Variables declared with `using` are fully usable in subsequent expressions, method calls, and computations. The VM will not call `Symbol.dispose()` at scope exit, so resource cleanup behaviour is not modelled. If scope-exit semantics are needed in the future, the VM would need a scope-exit callback mechanism — this is a separate, larger effort.
 
 **Files:** `node_types.py` (+1 line), `frontend.py` (+1 line dispatch entry). TypeScript inherits via `super()._build_stmt_dispatch()`.
+
+---
+
+### ADR-103: Rust Box<T> as pass-through, Option<T> as real class (2026-03-15)
+
+**Context:** The Rust Rosetta linked list test uses `Option<Box<Node>>` with `.as_ref().unwrap()` for traversal. Without `Box` and `Option` class definitions, constructor calls fell through to `CALL_UNKNOWN` and produced `SymbolicValue` instead of concrete `answer = 6`. The original spec (red-dragon-62g) modeled `Box` as a real heap object with a `value` field, and `*box_expr` as `LOAD_FIELD "value"`. However, Rust's `Deref` trait makes `Box<T>` auto-deref to `T` transparently on field access, method calls, and function arguments — the compiler inserts `*` operations automatically. Our VM has no auto-deref mechanism, so after `.unwrap()` returns a Box object, `node.value` accesses Box's `value` field (the inner Node address) instead of the Node's integer `value` field.
+
+**Decision:** `Box::new(expr)` is lowered as a **pass-through** — it returns its argument directly without creating a Box object. `Some(expr)` is lowered as `CALL_FUNCTION "Option"`, creating a real Option object with `__init__`, `unwrap`, and `as_ref` methods defined in a Rust-specific prelude. The prelude is emitted via a `_emit_prelude` hook on `BaseFrontend` (no-op default), overridden in `RustFrontend`.
+
+**Rationale:**
+- In our reference-based VM, all values are already heap-allocated — Box's purpose (moving values from stack to heap) is a no-op.
+- Auto-deref through `Box` is Rust-specific (`Deref` trait) and not applicable to any other supported language. Baking it into the VM would add Rust-specific behavior to the language-agnostic core.
+- The pass-through makes `Some(Box::new(node))` store the Node directly, so `.unwrap()` returns the Node — matching Rust's auto-deref semantics without VM changes.
+
+**Known limitations:**
+- `*box_val` (explicit deref on a Box variable) produces wrong results: since `box_val` IS the inner value, the deref's `LOAD_FIELD "value"` accesses the inner object's `value` field rather than unwrapping a Box wrapper.
+- `Box<T>` and `T` are indistinguishable at runtime — type_hint reflects the inner type, not `Box<T>`.
+- The Box prelude class is emitted but never instantiated (dead code in the IR).
+
+**Future:** Making Box a real object requires frontend type tracking to insert auto-deref at the right points. The Rust frontend currently has no struct field type metadata and no mechanism to resolve expression types during lowering (see red-dragon-riy). This is deferred until we understand which real-world Rust patterns require it.
+
+**Files:** `interpreter/frontends/rust/expressions.py` (pass-through in `_lower_box_new`, `_lower_some`), `interpreter/frontends/rust/declarations.py` (prelude emission), `interpreter/frontends/rust/frontend.py` (dispatch + `_emit_prelude` override), `interpreter/frontends/_base.py` (`_emit_prelude` hook), `interpreter/registry.py` (prelude class label recognition), `interpreter/executor.py` (base-name extraction, `type_hint_source`), `interpreter/vm_types.py` (`HeapObject.type_hint` → `TypeExpr`).

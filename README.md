@@ -8,8 +8,8 @@
 
 **RedDragon** is an experiment in building infrastructure for **"executing" frequently-incomplete code** — the kind found in legacy code, decompiled binaries, partial extracts, and codebases with missing dependencies. It explores three ideas:
 
-1. **Deterministic language frontends with LLM-assisted repair** — tree-sitter frontends (15 languages) and a ProLeap bridge (COBOL) handle well-formed source deterministically. When tree-sitter hits malformed syntax, an optional **LLM repair loop** fixes only the broken fragments and re-parses, maximising deterministic coverage for real-world incomplete code. All paths produce the same universal [27-opcode IR](docs/ir-reference.md).
-2. **Full LLM frontends for unsupported languages** — for languages without a tree-sitter frontend, an LLM lowers source to IR entirely — supporting any language without new parser code. A chunked variant splits large files into per-function chunks via tree-sitter, lowering each independently. Both produce the same [27-opcode IR](docs/ir-reference.md).
+1. **Deterministic language frontends with LLM-assisted repair** — tree-sitter frontends (15 languages) and a ProLeap bridge (COBOL) handle well-formed source deterministically. When tree-sitter hits malformed syntax, an optional **LLM repair loop** fixes only the broken fragments and re-parses, maximising deterministic coverage for real-world incomplete code. All paths produce the same universal [29-opcode IR](docs/ir-reference.md).
+2. **Full LLM frontends for unsupported languages** — for languages without a tree-sitter frontend, an LLM lowers source to IR entirely — supporting any language without new parser code. A chunked variant splits large files into per-function chunks via tree-sitter, lowering each independently. Both produce the same [29-opcode IR](docs/ir-reference.md).
 3. **A VM that integrates LLMs to produce plausible state changes** when execution hits missing dependencies, unresolved imports, or unknown externals — keeping execution moving through incomplete programs instead of halting at the first unknown.
 
 When source is complete and all dependencies are present, the entire pipeline (parse → lower → execute) is **deterministic with 0 LLM calls**. LLMs are only invoked at the boundaries where information is genuinely missing.
@@ -19,7 +19,7 @@ When source is complete and all dependencies are present, the entire pipeline (p
 Concretely, RedDragon does the following:
 
 - **Parses and lowers** source in 15 languages via tree-sitter (with optional LLM-assisted repair), COBOL via ProLeap bridge, or **any language** via full LLM-based lowering — each frontend owns its parsing internally; callers only provide `source: bytes`
-- **Produces** a universal flattened three-address code [IR (27 opcodes)](docs/ir-reference.md) with structured source location traceability
+- **Produces** a universal flattened three-address code [IR (29 opcodes)](docs/ir-reference.md) with structured source location traceability
 - **Extracts and infers types** — see [Type system](#type-system) below
 - **Builds** control flow graphs from IR instructions
 - **Analyses** data flow via iterative reaching definitions, def-use chains, and variable dependency graphs
@@ -314,7 +314,7 @@ Functions compose hierarchically: `dump_ir` calls `lower_source`; `dump_cfg` and
 
 Python, JavaScript, TypeScript, Java, Ruby, Go, PHP, C#, C, C++, Rust, Kotlin, Scala, Lua, Pascal
 
-Control flow constructs (if/else, while, for, for-of/foreach, switch, break/continue, try/catch/finally, do-while) are lowered into real LABEL+BRANCH IR rather than `SYMBOLIC` placeholders. For-each style loops (for-of, for-in, range-for, enhanced-for) use STORE_VAR/LOAD_VAR for the loop index counter so that SSA-immutable registers correctly advance each iteration. Built-in functions `len()` and `keys()` produce concrete results from heap objects, and Lua `ipairs()`/`pairs()` wrappers are stripped at lowering time, ensuring all for-each loops terminate correctly.
+Control flow constructs (if/else, while, for, for-of/foreach, switch, break/continue, try/catch/finally, do-while) are lowered into real LABEL+BRANCH IR rather than `SYMBOLIC` placeholders. For-each style loops (for-of, for-in, range-for, enhanced-for) use DECL_VAR/LOAD_VAR for the loop index counter so that SSA-immutable registers correctly advance each iteration. Built-in functions `len()` and `keys()` produce concrete results from heap objects, and Lua `ipairs()`/`pairs()` wrappers are stripped at lowering time, ensuring all for-each loops terminate correctly.
 
 <details>
 <summary><strong>Language-specific features</strong> (click to expand)</summary>
@@ -478,7 +478,7 @@ flowchart BT
 
 ## LLM frontend
 
-The LLM frontend (`--frontend llm`) sends source to an LLM constrained by a formal [IR schema](docs/ir-reference.md) — the LLM acts as a **compiler frontend**, not a reasoning engine. The prompt provides all 27 opcode schemas, concrete patterns for functions/classes/control flow, a worked example for function definitions, and a worked example for array initialization (showing that each value and index needs a dedicated CONST register). An explicit rule warns against confusing register names with stored values. On malformed JSON, the call is retried up to 3 times.
+The LLM frontend (`--frontend llm`) sends source to an LLM constrained by a formal [IR schema](docs/ir-reference.md) — the LLM acts as a **compiler frontend**, not a reasoning engine. The prompt provides all 29 opcode schemas, concrete patterns for functions/classes/control flow, a worked example for function definitions, and a worked example for array initialization (showing that each value and index needs a dedicated CONST register). An explicit rule warns against confusing register names with stored values. On malformed JSON, the call is retried up to 3 times.
 
 The **chunked LLM frontend** (`--frontend chunked_llm`) handles large files by decomposing them into per-function/class chunks via tree-sitter, lowering each independently, then renumbering registers/labels and reassembling. Failed chunks produce `SYMBOLIC` placeholders.
 

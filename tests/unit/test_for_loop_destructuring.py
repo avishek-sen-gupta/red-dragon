@@ -31,7 +31,7 @@ def _store_var_names(instructions: list[IRInstruction]) -> list[str]:
     return [
         str(inst.operands[0])
         for inst in instructions
-        if inst.opcode == Opcode.STORE_VAR and inst.operands
+        if inst.opcode == Opcode.DECL_VAR and inst.operands
     ]
 
 

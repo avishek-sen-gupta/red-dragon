@@ -103,7 +103,7 @@ def lower_for_expr(ctx: TreeSitterEmitContext, node) -> None:
             node=gen,
         )
         ctx.emit(
-            Opcode.STORE_VAR,
+            Opcode.DECL_VAR,
             operands=[var_name, next_reg],
             node=gen,
         )

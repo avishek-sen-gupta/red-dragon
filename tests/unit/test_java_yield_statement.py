@@ -50,7 +50,7 @@ class M {
 }
 """
         instructions = _parse_java(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any(
             "__switch_result" in str(inst.operands[0]) for inst in stores
         ), "yield should store to __switch_result variable"

@@ -44,7 +44,7 @@ class TestFunctionPointerDeclaratorName:
             "int add(int a, int b) { return a + b; }\n" "int (*fp)(int, int) = &add;"
         )
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         store_names = [s.operands[0] for s in stores]
         assert "fp" in store_names
         assert "(*fp)" not in store_names

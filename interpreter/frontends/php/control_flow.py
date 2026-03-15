@@ -184,7 +184,7 @@ def lower_php_foreach(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=body_label)
     # Store key variable (index) if present
     if key_var:
-        ctx.emit(Opcode.STORE_VAR, operands=[key_var, idx_reg])
+        ctx.emit(Opcode.DECL_VAR, operands=[key_var, idx_reg])
     # Store value variable (element at index)
     if value_var:
         elem_reg = ctx.fresh_reg()
@@ -193,7 +193,7 @@ def lower_php_foreach(ctx: TreeSitterEmitContext, node) -> None:
             result_reg=elem_reg,
             operands=[iter_reg, idx_reg],
         )
-        ctx.emit(Opcode.STORE_VAR, operands=[value_var, elem_reg])
+        ctx.emit(Opcode.DECL_VAR, operands=[value_var, elem_reg])
 
     update_label = ctx.fresh_label("foreach_update")
     ctx.push_loop(update_label, end_label)

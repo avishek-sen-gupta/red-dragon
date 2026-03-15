@@ -180,7 +180,7 @@ def lower_pascal_for(ctx: TreeSitterEmitContext, node) -> None:
     start_reg = ctx.lower_expr(start_node)
     end_reg = ctx.lower_expr(end_node)
 
-    ctx.emit(Opcode.STORE_VAR, operands=[var_name, start_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[var_name, start_reg])
 
     loop_label = ctx.fresh_label("for_cond")
     body_label = ctx.fresh_label("for_body")
@@ -454,7 +454,7 @@ def lower_pascal_exception_handler(ctx: TreeSitterEmitContext, node) -> None:
             operands=[f"{constants.PARAM_PREFIX}{var_name}"],
             node=id_node,
         )
-        ctx.emit(Opcode.STORE_VAR, operands=[var_name, f"%{ctx.reg_counter - 1}"])
+        ctx.emit(Opcode.DECL_VAR, operands=[var_name, f"%{ctx.reg_counter - 1}"])
     # Lower body statements
     named_children = [
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
@@ -516,7 +516,7 @@ def lower_pascal_foreach(ctx: TreeSitterEmitContext, node) -> None:
     idx_var = f"__foreach_idx_{var_name}"
     zero_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=zero_reg, operands=["0"])
-    ctx.emit(Opcode.STORE_VAR, operands=[idx_var, zero_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[idx_var, zero_reg])
 
     len_reg = ctx.fresh_reg()
     ctx.emit(
@@ -545,7 +545,7 @@ def lower_pascal_foreach(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=body_label)
     elem_reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[coll_reg, cur_idx_reg])
-    ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[var_name, elem_reg])
     ctx.lower_stmt(body_node)
 
     cur2_reg = ctx.fresh_reg()

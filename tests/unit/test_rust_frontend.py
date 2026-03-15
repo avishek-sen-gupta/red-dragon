@@ -25,21 +25,21 @@ class TestRustDeclarations:
         instructions = _parse_rust("fn main() { let x = 10; }")
         opcodes = _opcodes(instructions)
         assert Opcode.CONST in opcodes
-        assert Opcode.STORE_VAR in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert Opcode.DECL_VAR in opcodes
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
     def test_let_mut_declaration(self):
         instructions = _parse_rust("fn main() { let mut x = 5; }")
         opcodes = _opcodes(instructions)
         assert Opcode.CONST in opcodes
-        assert Opcode.STORE_VAR in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert Opcode.DECL_VAR in opcodes
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
     def test_let_without_initializer(self):
         instructions = _parse_rust("fn main() { let x: i32; }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 
@@ -57,7 +57,7 @@ class TestRustFunctions:
         ]
         assert any("a" in p for p in param_names)
         assert any("b" in p for p in param_names)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("add" in inst.operands for inst in stores)
 
     def test_function_call(self):
@@ -79,7 +79,7 @@ class TestRustControlFlow:
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.LABEL in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("y" in inst.operands for inst in stores)
         labels = _find_all(instructions, Opcode.LABEL)
         assert any("if_true" in (inst.label or "") for inst in labels)
@@ -106,7 +106,7 @@ class TestRustControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
         assert any("match" in (inst.label or "") for inst in labels)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
     def test_if_elseif_chain_all_branches_produce_ir(self):
@@ -142,7 +142,7 @@ class TestRustStructs:
         instructions = _parse_rust("struct Dog { name: String }")
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -154,7 +154,7 @@ class TestRustStructs:
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH in opcodes
         assert Opcode.RETURN in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -168,7 +168,7 @@ class TestRustExpressions:
         assert Opcode.BINOP in opcodes
         consts = _find_all(instructions, Opcode.CONST)
         assert any("__closure" in str(inst.operands) for inst in consts)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("f" in inst.operands for inst in stores)
 
     def test_reference_expression(self):
@@ -190,7 +190,7 @@ class TestRustExpressions:
         instructions = _parse_rust("fn main() { x += 5; }")
         opcodes = _opcodes(instructions)
         assert Opcode.BINOP in opcodes
-        assert Opcode.STORE_VAR in opcodes
+        assert Opcode.DECL_VAR in opcodes
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
@@ -215,7 +215,7 @@ class TestRustSpecial:
         instructions = _parse_rust("fn main() { let v = { let a = 1; a + 2 }; }")
         opcodes = _opcodes(instructions)
         assert Opcode.BINOP in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("v" in inst.operands for inst in stores)
 
 
@@ -240,7 +240,7 @@ fn main() {
         assert len(branches) >= 3
         labels = _labels_in_order(instructions)
         assert any("match" in lbl for lbl in labels)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
         assert len(instructions) > 20
 
@@ -257,7 +257,7 @@ impl Counter {
 }
 """
         instructions = _parse_rust(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Counter" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -278,7 +278,7 @@ fn main() {
         assert "map" in method_names
         consts = _find_all(instructions, Opcode.CONST)
         assert any("__closure" in str(inst.operands) for inst in consts)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("doubled" in inst.operands for inst in stores)
 
     def test_for_range_with_mutation(self):
@@ -295,7 +295,7 @@ fn main() {
         instructions = _parse_rust(source)
         branches = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branches) >= 1
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("total" in inst.operands for inst in stores)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("range" in str(inst.operands) for inst in calls)
@@ -319,7 +319,7 @@ fn main() {
         instructions = _parse_rust(source)
         branches = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branches) >= 2
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("grade" in inst.operands for inst in stores)
         labels = _labels_in_order(instructions)
         assert any("if_true" in lbl for lbl in labels)
@@ -340,7 +340,7 @@ fn main() {
         # *r now emits LOAD_FIELD r, "*" (pointer dereference)
         load_fields = _find_all(instructions, Opcode.LOAD_FIELD)
         assert any("*" in inst.operands for inst in load_fields)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         assert any("r" in inst.operands for inst in stores)
         assert any("val" in inst.operands for inst in stores)
@@ -364,7 +364,7 @@ fn main() {
         instructions = _parse_rust(source)
         branches = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branches) >= 2
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("count" in inst.operands for inst in stores)
         assert any("sum" in inst.operands for inst in stores)
         assert len(instructions) > 25
@@ -379,7 +379,7 @@ fn quadruple(x: i32) -> i32 {
 }
 """
         instructions = _parse_rust(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("double" in inst.operands for inst in stores)
         assert any("quadruple" in inst.operands for inst in stores)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -401,7 +401,7 @@ class TestRustTryExpression:
 
     def test_try_expression_stores_result(self):
         instructions = _parse_rust("fn main() { let x = some_fn()?; }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 
@@ -413,7 +413,7 @@ class TestRustAwaitExpression:
 
     def test_await_stores_result(self):
         instructions = _parse_rust("async fn main() { let r = get_data().await; }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
 
@@ -422,21 +422,21 @@ class TestRustAsyncBlock:
         instructions = _parse_rust("fn main() { let f = async { 42 }; }")
         consts = _find_all(instructions, Opcode.CONST)
         assert any("42" in inst.operands for inst in consts)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("f" in inst.operands for inst in stores)
 
     def test_async_block_with_statements(self):
         instructions = _parse_rust("fn main() { let f = async { let x = 1; x + 2 }; }")
         opcodes = _opcodes(instructions)
         assert Opcode.BINOP in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("f" in inst.operands for inst in stores)
 
 
 class TestRustTraitItem:
     def test_trait_definition(self):
         instructions = _parse_rust("trait Animal { fn speak(&self); }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Animal" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -445,7 +445,7 @@ class TestRustTraitItem:
         instructions = _parse_rust(
             'trait Greet { fn hello(&self) -> String { return String::from("hi"); } }'
         )
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Greet" in inst.operands for inst in stores)
         opcodes = _opcodes(instructions)
         assert Opcode.RETURN in opcodes
@@ -459,7 +459,7 @@ class TestRustTraitItem:
 class TestRustEnumItem:
     def test_enum_basic(self):
         instructions = _parse_rust("enum Color { Red, Green, Blue }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Color" in inst.operands for inst in stores)
         new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
         assert any("enum:Color" in inst.operands for inst in new_objs)
@@ -473,56 +473,56 @@ class TestRustEnumItem:
         instructions = _parse_rust("enum Shape { Circle(f64), Rect(f64, f64) }")
         new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
         assert any("enum:Shape" in inst.operands for inst in new_objs)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Shape" in inst.operands for inst in stores)
 
 
 class TestRustConstItem:
     def test_const_item(self):
         instructions = _parse_rust("const MAX: i32 = 100;")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("MAX" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("100" in inst.operands for inst in consts)
 
     def test_const_item_string(self):
         instructions = _parse_rust('const NAME: &str = "hello";')
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("NAME" in inst.operands for inst in stores)
 
 
 class TestRustStaticItem:
     def test_static_item(self):
         instructions = _parse_rust("static COUNT: i32 = 0;")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("COUNT" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("0" in inst.operands for inst in consts)
 
     def test_static_mut_item(self):
         instructions = _parse_rust("static mut COUNTER: i32 = 0;")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("COUNTER" in inst.operands for inst in stores)
 
 
 class TestRustTypeItem:
     def test_type_alias(self):
         instructions = _parse_rust("type Pair = (i32, i32);")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Pair" in inst.operands for inst in stores)
 
     def test_type_alias_const_value(self):
         instructions = _parse_rust("type Meters = f64;")
         consts = _find_all(instructions, Opcode.CONST)
         assert any("f64" in inst.operands for inst in consts)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Meters" in inst.operands for inst in stores)
 
 
 class TestRustModItem:
     def test_mod_item_with_body(self):
         instructions = _parse_rust("mod utils { fn helper() { } }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("helper" in inst.operands for inst in stores)
 
     def test_mod_item_nested_function(self):
@@ -531,7 +531,7 @@ class TestRustModItem:
         )
         opcodes = _opcodes(instructions)
         assert Opcode.BINOP in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("add" in inst.operands for inst in stores)
 
     def test_mod_item_empty(self):
@@ -549,7 +549,7 @@ class TestRustExternCrate:
 
     def test_extern_crate_with_other_code(self):
         instructions = _parse_rust("extern crate serde; const X: i32 = 1;")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("X" in inst.operands for inst in stores)
 
 
@@ -558,7 +558,7 @@ class TestRustUnsafeBlock:
         instructions = _parse_rust("fn main() { unsafe { let x = 1; x + 2 } }")
         opcodes = _opcodes(instructions)
         assert Opcode.BINOP in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
     def test_unsafe_block_with_call(self):
@@ -576,7 +576,7 @@ class TestRustTypeCastExpression:
 
     def test_type_cast_stores_result(self):
         instructions = _parse_rust("fn main() { let x = count as f64; }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
     def test_type_cast_not_symbolic(self):
@@ -609,7 +609,7 @@ class TestRustScopedIdentifier:
 
     def test_scoped_identifier_stores_result(self):
         instructions = _parse_rust("fn main() { let v = Option::None; }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("v" in inst.operands for inst in stores)
         loads = _find_all(instructions, Opcode.LOAD_VAR)
         assert any("Option::None" in inst.operands for inst in loads)
@@ -618,7 +618,7 @@ class TestRustScopedIdentifier:
 class TestRustDestructuring:
     def test_tuple_destructure_two_elements(self):
         instructions = _parse_rust("fn main() { let (a, b) = get_pair(); }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "a" in store_names
         assert "b" in store_names
@@ -627,7 +627,7 @@ class TestRustDestructuring:
 
     def test_tuple_destructure_three_elements(self):
         instructions = _parse_rust("fn main() { let (x, y, z) = get_triple(); }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "x" in store_names
         assert "y" in store_names
@@ -637,7 +637,7 @@ class TestRustDestructuring:
 
     def test_struct_destructure(self):
         instructions = _parse_rust("fn main() { let Point { x, y } = point; }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "x" in store_names
         assert "y" in store_names
@@ -727,7 +727,7 @@ class TestRustUnitExpression:
         instructions = _parse_rust("fn main() { let x = (); }")
         consts = _find_all(instructions, Opcode.CONST)
         assert any("()" in inst.operands for inst in consts)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unit_expression" in str(inst.operands) for inst in symbolics)
@@ -742,7 +742,7 @@ class TestRustFunctionSignatureItem:
 
     def test_function_signature_item_stores_name(self):
         instructions = _parse_rust("trait Drawable { fn draw(&self); }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("draw" in inst.operands for inst in stores)
 
     def test_function_signature_item_in_trait_with_default(self):
@@ -862,7 +862,7 @@ class TestRustRawStringLiteral:
     def test_raw_string_stored(self):
         """Raw string literal should be stored in the variable."""
         ir = _parse_rust('fn main() { let x = r"hello"; }')
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 
@@ -883,7 +883,7 @@ class TestRustNegativeLiteral:
     def test_negative_literal_stored(self):
         """Negative literal should be stored in the variable."""
         ir = _parse_rust("fn main() { let x: i32 = -1; }")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 
@@ -897,7 +897,7 @@ class TestRustForeignModItem:
     def test_foreign_mod_body_lowered(self):
         """Declarations inside extern block should be lowered."""
         ir = _parse_rust('extern "C" { fn foo(); }')
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("foo" in inst.operands for inst in stores)
 
 
@@ -911,7 +911,7 @@ class TestRustUnionItem:
     def test_union_stores_name(self):
         """union Foo should produce a STORE_VAR for Foo."""
         ir = _parse_rust("union Foo { x: i32, y: f64 }")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Foo" in inst.operands for inst in stores)
 
 
@@ -925,7 +925,7 @@ class TestRustMacroDefinition:
     def test_macro_definition_does_not_block(self):
         """Code after macro_rules! should still be lowered."""
         ir = _parse_rust("macro_rules! my_macro { () => {} }\nlet x = 42;")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 
@@ -939,7 +939,7 @@ class TestRustMutPattern:
     def test_mut_pattern_stores_var(self):
         """let mut x = 42 should produce STORE_VAR for x."""
         ir = _parse_rust("let mut x = 42;")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 
