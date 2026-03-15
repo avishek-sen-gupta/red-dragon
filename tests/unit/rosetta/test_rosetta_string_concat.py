@@ -1,4 +1,8 @@
-"""Rosetta test: String concatenation across all 15 deterministic frontends."""
+"""Rosetta test: String concatenation across deterministic frontends.
+
+C is excluded — it has no string concatenation operator (requires strcat
+with mutable buffers, not an expression).
+"""
 
 import pytest
 
@@ -17,10 +21,8 @@ from tests.unit.rosetta.conftest import (
 )
 
 # ---------------------------------------------------------------------------
-# Programs: String concatenation in all 15 languages
+# Programs: String concatenation in 14 languages (C excluded — no concat operator)
 # Each concatenates "hello" and " world" and stores the result in answer.
-# C, C++, Rust, and Pascal use direct string literal assignment because
-# their frontends lack a simple string concat operator in the VM.
 # ---------------------------------------------------------------------------
 
 PROGRAMS: dict[str, str] = {
@@ -50,14 +52,13 @@ _ = answer }
     "csharp": """\
 string answer = "hello" + " world";
 """,
-    "c": """\
-char* answer = "hello world";
-""",
     "cpp": """\
-const char* answer = "hello world";
+std::string a = "hello";
+std::string b = " world";
+std::string answer = a + b;
 """,
     "rust": """\
-let answer = "hello world";
+let answer = "hello" + " world";
 """,
     "kotlin": """\
 val answer = "hello" + " world"
@@ -72,7 +73,7 @@ answer = "hello" .. " world"
 program M;
 var answer: string;
 begin
-  answer := 'hello world';
+  answer := 'hello' + ' world';
 end.
 """,
 }
@@ -126,11 +127,15 @@ class TestStringConcatCrossLanguage:
         return {lang: parse_for_language(lang, PROGRAMS[lang]) for lang in PROGRAMS}
 
     def test_all_languages_covered(self):
-        assert set(PROGRAMS.keys()) == set(SUPPORTED_DETERMINISTIC_LANGUAGES)
+        # C excluded: no string concat operator (requires strcat, not an expression)
+        expected = set(SUPPORTED_DETERMINISTIC_LANGUAGES) - {"c"}
+        assert set(PROGRAMS.keys()) == expected
 
     def test_cross_language_consistency(self, all_results):
         assert_cross_language_consistency(
-            all_results, required_opcodes=REQUIRED_OPCODES
+            all_results,
+            required_opcodes=REQUIRED_OPCODES,
+            expected_languages=set(PROGRAMS.keys()),
         )
 
 
@@ -138,7 +143,10 @@ class TestStringConcatCrossLanguage:
 # VM execution tests (parametrized over executable languages)
 # ---------------------------------------------------------------------------
 
-STRING_CONCAT_EXECUTABLE_LANGUAGES: frozenset[str] = STANDARD_EXECUTABLE_LANGUAGES
+# C excluded from PROGRAMS entirely (no string concat operator)
+STRING_CONCAT_EXECUTABLE_LANGUAGES: frozenset[str] = STANDARD_EXECUTABLE_LANGUAGES - {
+    "c"
+}
 EXPECTED_ANSWER = "hello world"
 
 
