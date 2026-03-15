@@ -469,7 +469,11 @@ class TestLuaFunctionDefinition:
         assert Opcode.BRANCH in opcodes
         assert Opcode.RETURN in opcodes
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("function:" in str(inst.operands) for inst in consts)
+        assert any(
+            str(inst.operands[0]).startswith("func_")
+            for inst in consts
+            if inst.operands
+        )
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("f" in inst.operands for inst in stores)
 
@@ -685,15 +689,15 @@ end
         func_refs = [
             inst
             for inst in consts
-            if any("<function:" in str(op) for op in inst.operands)
+            if any(str(op).startswith("func_") for op in inst.operands)
         ]
         assert len(func_refs) >= 1
         ref_str = str(func_refs[0].operands[0])
         assert (
             "Counter.new" not in ref_str
         ), f"Func ref should not contain dots: {ref_str}"
-        assert (
-            "<function:new@" in ref_str
+        assert ref_str.startswith(
+            "func_new_"
         ), f"Func ref should use method name 'new': {ref_str}"
 
     def test_dotted_function_with_params(self):

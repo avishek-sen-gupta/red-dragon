@@ -743,14 +743,22 @@ class TestJavaScriptFunctionExpression:
         opcodes = _opcodes(instructions)
         assert Opcode.RETURN in opcodes
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("function:" in str(inst.operands) for inst in consts)
+        assert any(
+            str(inst.operands[0]).startswith("func_")
+            for inst in consts
+            if inst.operands
+        )
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("f" in inst.operands for inst in stores)
 
     def test_named_function_expression(self):
         instructions = _parse_js("const f = function myFunc(x) { return x; };")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("function:" in str(inst.operands) for inst in consts)
+        assert any(
+            str(inst.operands[0]).startswith("func_")
+            for inst in consts
+            if inst.operands
+        )
         assert any("myFunc" in str(inst.operands) for inst in consts)
 
     def test_function_expression_as_callback(self):
@@ -759,7 +767,11 @@ class TestJavaScriptFunctionExpression:
         assert any("forEach" in inst.operands for inst in calls)
         # Function expression should be lowered as a CONST with function reference
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("function:" in str(inst.operands) for inst in consts)
+        assert any(
+            str(inst.operands[0]).startswith("func_")
+            for inst in consts
+            if inst.operands
+        )
 
 
 class TestJavaScriptSuperExpression:

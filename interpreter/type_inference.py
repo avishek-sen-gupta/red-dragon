@@ -134,8 +134,6 @@ _BUILTIN_METHOD_RETURN_TYPES: dict[str, TypeExpr] = {
 
 _SELF_PARAM_NAMES = constants.SELF_PARAM_NAMES
 
-_FUNC_REF_PATTERN = re.compile(r"<function:")
-_FUNC_REF_EXTRACT = re.compile(constants.FUNC_REF_PATTERN)
 _CLASS_REF_PATTERN = re.compile(r"<class:")
 
 
@@ -487,15 +485,11 @@ def _infer_const(
         return
     raw = str(inst.operands[0]) if inst.operands else "None"
     # If this is a function reference, extract name→return-type and name→param-types mappings
-    # Try symbol table first (plain label operands after Task 7), regex fallback
+    # Symbol table lookup: plain label operands → FuncRef
     func_name, func_label = "", ""
     if raw in ctx.func_symbol_table:
         ref = ctx.func_symbol_table[raw]
         func_name, func_label = ref.name, ref.label
-    else:
-        match = _FUNC_REF_EXTRACT.search(raw)
-        if match:
-            func_name, func_label = match.group(1), match.group(2)
     if func_name and func_label:
         # Only populate flat (name-keyed) dicts for standalone functions.
         # Class methods go into class_method_signatures instead.
@@ -880,7 +874,7 @@ def _infer_const_type(raw: str, func_symbol_table: dict[str, FuncRef] = {}) -> T
         return scalar(TypeName.BOOL)
     if raw == CanonicalLiteral.NONE:
         return UNKNOWN
-    if str(raw) in func_symbol_table or _FUNC_REF_PATTERN.search(str(raw)):
+    if str(raw) in func_symbol_table:
         return UNKNOWN
     if _CLASS_REF_PATTERN.search(str(raw)):
         return UNKNOWN

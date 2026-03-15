@@ -33,10 +33,8 @@ class Language(StrEnum):
 
 PARAM_PREFIX = "param:"
 
-FUNC_REF_PATTERN = r"<function:(\w+)@(\w+)(?:#(\w+))?>"
 CLASS_REF_PATTERN = r"<class:(\w+)@(\w+)(?::([^>]+))?>"
 
-FUNC_REF_TEMPLATE = "<function:{name}@{label}>"
 CLASS_REF_TEMPLATE = "<class:{name}@{label}>"
 CLASS_REF_WITH_PARENTS_TEMPLATE = "<class:{name}@{label}:{parents}>"
 
