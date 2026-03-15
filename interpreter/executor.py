@@ -30,6 +30,7 @@ from interpreter.vm import (
 )
 from interpreter.vm_types import BuiltinResult, StackFrame
 from interpreter.registry import FunctionRegistry, _parse_func_ref, _parse_class_ref
+from interpreter.func_ref import FuncRef, BoundFuncRef
 from interpreter.builtins import Builtins, _builtin_array_of
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.type_environment import TypeEnvironment
@@ -78,16 +79,24 @@ def _symbolic_type_hint(val: Any) -> TypeExpr:
 
 
 def _handle_const(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
+    func_symbol_table = kwargs.get("func_symbol_table", {})
     raw = inst.operands[0] if inst.operands else "None"
     val = _parse_const(raw)
 
-    # Closure capture: when a function ref is created inside another function,
-    # link it to a shared ClosureEnvironment so mutations persist across calls.
-    # If the enclosing frame already has an environment (second closure from
-    # the same factory), reuse it; otherwise create a new one.
-    if len(vm.call_stack) > 1 and isinstance(val, str):
-        fr = _parse_func_ref(val)
-        if fr.matched:
+    # Symbol table lookup: produce BoundFuncRef for function labels
+    func_ref_entry = None
+    if isinstance(val, str):
+        if val in func_symbol_table:
+            func_ref_entry = func_symbol_table[val]
+        else:
+            # Fallback: parse old-format <function:name@label> string
+            fr = _parse_func_ref(val)
+            if fr.matched:
+                func_ref_entry = FuncRef(name=fr.name, label=fr.label)
+
+    if func_ref_entry is not None:
+        closure_id = ""
+        if len(vm.call_stack) > 1:
             enclosing = vm.current_frame
             env_id = enclosing.closure_env_id
             if env_id:
@@ -106,14 +115,14 @@ def _handle_const(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
             closure_id = f"closure_{vm.symbolic_counter}"
             vm.symbolic_counter += 1
             vm.closures[closure_id] = env
-            val = f"<function:{fr.name}@{fr.label}#{closure_id}>"
             logger.debug(
                 "Captured closure %s (env %s) for %s: %s",
                 closure_id,
                 env_id,
-                fr.name,
+                func_ref_entry.name,
                 list(env.bindings.keys()),
             )
+        val = BoundFuncRef(func_ref=func_ref_entry, closure_id=closure_id)
 
     return ExecutionResult.success(
         StateUpdate(
@@ -236,7 +245,7 @@ def _handle_address_of(
 
     # Function reference: &func_name returns the reference unchanged
     # (identity semantics — our model already uses references for functions)
-    if isinstance(current_val, str) and _parse_func_ref(current_val).matched:
+    if isinstance(current_val, BoundFuncRef):
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={inst.result_reg: typed_from_runtime(current_val)},
@@ -436,11 +445,7 @@ def _handle_load_field(
             )
         )
     # In C, *fp where fp is a function pointer is equivalent to fp.
-    if (
-        field_name == "*"
-        and isinstance(obj_val, str)
-        and _parse_func_ref(obj_val).matched
-    ):
+    if field_name == "*" and isinstance(obj_val, BoundFuncRef):
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={inst.result_reg: typed_from_runtime(obj_val)},
@@ -785,7 +790,7 @@ def _handle_unop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionRe
     # references rather than inline values for these.
     if oper == "&":
         addr = _heap_addr(operand)
-        if addr and (_parse_func_ref(operand).matched or addr in vm.heap):
+        if isinstance(operand, BoundFuncRef) or (addr and addr in vm.heap):
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={inst.result_reg: typed_from_runtime(operand)},
@@ -1108,11 +1113,10 @@ def _try_user_function_call(
     current_label: str,
 ) -> ExecutionResult:
     """Attempt to dispatch a call to a user-defined function."""
-    fr = _parse_func_ref(func_val)
-    if not fr.matched:
+    if not isinstance(func_val, BoundFuncRef):
         return ExecutionResult.not_handled()
 
-    fname, flabel = fr.name, fr.label
+    fname, flabel = func_val.func_ref.name, func_val.func_ref.label
     if flabel not in cfg.blocks:
         return ExecutionResult.not_handled()
 
@@ -1125,8 +1129,8 @@ def _try_user_function_call(
     # Inject captured closure variables; parameter bindings take priority
     closure_env: ClosureEnvironment | None = None
     captured: dict[str, Any] = {}
-    if fr.closure_id:
-        closure_env = vm.closures.get(fr.closure_id)
+    if func_val.closure_id:
+        closure_env = vm.closures.get(func_val.closure_id)
         if closure_env:
             captured = closure_env.bindings
 
@@ -1135,7 +1139,7 @@ def _try_user_function_call(
     if captured:
         logger.debug("Injecting closure vars for %s: %s", fname, list(captured.keys()))
 
-    closure_env_id = fr.closure_id if closure_env else ""
+    closure_env_id = func_val.closure_id if closure_env else ""
     captured_var_names = list(captured.keys()) if closure_env else []
 
     return ExecutionResult.success(
@@ -1305,8 +1309,7 @@ def _handle_call_method(
     args = [_resolve_binop_operand(vm, a) for a in arg_regs]
 
     # If the object is a FUNC_REF, invoke it directly (e.g. .call(), .apply())
-    func_ref = _parse_func_ref(obj_val.value)
-    if func_ref.matched:
+    if isinstance(obj_val.value, BoundFuncRef):
         return _try_user_function_call(
             obj_val.value, args, inst, vm, cfg, registry, current_label
         )
@@ -1484,6 +1487,7 @@ class LocalExecutor:
         type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
         binop_coercion: BinopCoercionStrategy = _DEFAULT_BINOP_COERCION,
         unop_coercion: UnopCoercionStrategy = _DEFAULT_UNOP_COERCION,
+        func_symbol_table: dict[str, FuncRef] = {},
     ) -> ExecutionResult:
         handler = cls.DISPATCH.get(inst.opcode)
         if not handler:
@@ -1500,6 +1504,7 @@ class LocalExecutor:
             type_env=type_env,
             binop_coercion=binop_coercion,
             unop_coercion=unop_coercion,
+            func_symbol_table=func_symbol_table,
         )
 
 
@@ -1515,6 +1520,7 @@ def _try_execute_locally(
     type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
     binop_coercion: BinopCoercionStrategy = _DEFAULT_BINOP_COERCION,
     unop_coercion: UnopCoercionStrategy = _DEFAULT_UNOP_COERCION,
+    func_symbol_table: dict[str, FuncRef] = {},
 ) -> ExecutionResult:
     """Try to execute an instruction without the LLM.
 
@@ -1533,4 +1539,5 @@ def _try_execute_locally(
         type_env=type_env,
         binop_coercion=binop_coercion,
         unop_coercion=unop_coercion,
+        func_symbol_table=func_symbol_table,
     )

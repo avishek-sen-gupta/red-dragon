@@ -17,6 +17,7 @@ from interpreter.frontend import get_frontend
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.cfg import CFG, build_cfg
 from interpreter.registry import build_registry, FunctionRegistry
+from interpreter.func_ref import FuncRef, BoundFuncRef
 from interpreter.executor import _try_execute_locally
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.resolution_strategy import ArityThenTypeStrategy
@@ -215,6 +216,7 @@ def execute_cfg(
     overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
     binop_coercion: BinopCoercionStrategy = DefaultBinopCoercion(),
     unop_coercion: UnopCoercionStrategy = DefaultUnopCoercion(),
+    func_symbol_table: dict[str, FuncRef] = {},
 ) -> tuple[VMState, ExecutionStats]:
     """Execute a pre-built CFG from the given entry point.
 
@@ -282,6 +284,7 @@ def execute_cfg(
             type_env=type_env,
             binop_coercion=binop_coercion,
             unop_coercion=unop_coercion,
+            func_symbol_table=func_symbol_table,
         )
         used_llm = False
         if result.handled:
@@ -362,6 +365,7 @@ def execute_cfg_traced(
     overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
     binop_coercion: BinopCoercionStrategy = DefaultBinopCoercion(),
     unop_coercion: UnopCoercionStrategy = DefaultUnopCoercion(),
+    func_symbol_table: dict[str, FuncRef] = {},
 ) -> tuple[VMState, ExecutionTrace]:
     """Execute a pre-built CFG and record a trace of every step.
 
@@ -429,6 +433,7 @@ def execute_cfg_traced(
             type_env=type_env,
             binop_coercion=binop_coercion,
             unop_coercion=unop_coercion,
+            func_symbol_table=func_symbol_table,
         )
         used_llm = False
         if result.handled:
@@ -646,6 +651,7 @@ def run(
         conversion_rules=conversion_rules,
         overload_resolver=overload_resolver,
         binop_coercion=binop_coercion,
+        func_symbol_table=frontend.func_symbol_table,
     )
     vm.data_layout = frontend.data_layout
     stats.execution_time = time.perf_counter() - exec_start
@@ -679,4 +685,8 @@ def _format_val(v: Any) -> str:
             return f"{name} [{', '.join(str(c) for c in constraints)}]"
         hint = v.get("type_hint", "")
         return f"{name}" + (f" ({hint})" if hint else "")
+    if isinstance(v, BoundFuncRef):
+        if v.closure_id:
+            return f"<function:{v.func_ref.name}@{v.func_ref.label}#{v.closure_id}>"
+        return f"<function:{v.func_ref.name}@{v.func_ref.label}>"
     return repr(v)
