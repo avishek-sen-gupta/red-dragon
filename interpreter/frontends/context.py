@@ -15,6 +15,7 @@ from interpreter import constants
 from interpreter.constants import CanonicalLiteral, Language
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
+from interpreter.class_ref import ClassRef
 from interpreter.func_ref import FuncRef
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.var_scope_info import VarScopeInfo
@@ -131,6 +132,9 @@ class TreeSitterEmitContext:
     # Function reference symbol table: func_label -> FuncRef
     func_symbol_table: dict[str, FuncRef] = field(default_factory=dict)
 
+    # Class reference symbol table: class_label -> ClassRef
+    class_symbol_table: dict[str, ClassRef] = field(default_factory=dict)
+
     # ── utility methods ──────────────────────────────────────────
 
     def fresh_reg(self) -> str:
@@ -191,6 +195,29 @@ class TreeSitterEmitContext:
             Opcode.CONST,
             result_reg=result_reg,
             operands=[func_label],
+            node=node,
+        )
+
+    def emit_class_ref(
+        self,
+        class_name: str,
+        class_label: str,
+        parents: list[str],
+        result_reg: str,
+        node=None,
+    ) -> IRInstruction:
+        """Register a class reference in the symbol table and emit CONST.
+
+        Emits the plain class_label as the CONST operand.  The symbol table
+        maps class_label -> ClassRef(name, label, parents) for downstream consumers.
+        """
+        self.class_symbol_table[class_label] = ClassRef(
+            name=class_name, label=class_label, parents=tuple(parents)
+        )
+        return self.emit(
+            Opcode.CONST,
+            result_reg=result_reg,
+            operands=[class_label],
             node=node,
         )
 

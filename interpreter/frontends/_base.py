@@ -22,6 +22,7 @@ from interpreter.frontends.base_node_types import BaseNodeType
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
 from interpreter.parser import ParserFactory
+from interpreter.class_ref import ClassRef
 from interpreter.func_ref import FuncRef
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter import constants
@@ -101,6 +102,7 @@ class BaseFrontend(Frontend):
         self._observer = observer
         self._type_env_builder: TypeEnvironmentBuilder = TypeEnvironmentBuilder()
         self._func_symbol_table: dict[str, FuncRef] = {}
+        self._class_symbol_table: dict[str, ClassRef] = {}
         # Legacy state (used only by unconverted frontends)
         self._reg_counter: int = 0
         self._label_counter: int = 0
@@ -167,6 +169,33 @@ class BaseFrontend(Frontend):
     @property
     def func_symbol_table(self) -> dict[str, FuncRef]:
         return self._func_symbol_table
+
+    @property
+    def class_symbol_table(self) -> dict[str, ClassRef]:
+        return self._class_symbol_table
+
+    def _emit_class_ref(
+        self,
+        class_name: str,
+        class_label: str,
+        parents: list[str],
+        result_reg: str,
+        node=None,
+    ) -> IRInstruction:
+        """Legacy-mode equivalent of ctx.emit_class_ref().
+
+        Emits the plain class_label as the CONST operand.  The symbol table
+        maps class_label -> ClassRef(name, label, parents) for downstream consumers.
+        """
+        self._class_symbol_table[class_label] = ClassRef(
+            name=class_name, label=class_label, parents=tuple(parents)
+        )
+        return self._emit(
+            Opcode.CONST,
+            result_reg=result_reg,
+            operands=[class_label],
+            node=node,
+        )
 
     def _emit_func_ref(
         self, func_name: str, func_label: str, result_reg: str, node=None
@@ -249,6 +278,7 @@ class BaseFrontend(Frontend):
         self._type_env_builder = ctx.type_env_builder
         self._type_env_builder.var_scope_metadata = dict(ctx.var_scope_metadata)
         self._func_symbol_table = ctx.func_symbol_table
+        self._class_symbol_table = ctx.class_symbol_table
         return ctx.instructions
 
     def _emit_prelude(self, ctx: TreeSitterEmitContext) -> None:
