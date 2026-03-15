@@ -79,12 +79,13 @@ def assert_cross_language_consistency(
     results: dict[str, list[IRInstruction]],
     *,
     required_opcodes: set[Opcode],
+    expected_languages: set[str] = frozenset(),
 ) -> None:
     """Run cross-language aggregate assertions."""
-    # All 15 languages covered
-    assert set(results.keys()) == set(
-        SUPPORTED_DETERMINISTIC_LANGUAGES
-    ), f"Missing languages: {set(SUPPORTED_DETERMINISTIC_LANGUAGES) - set(results.keys())}"
+    expected = expected_languages or set(SUPPORTED_DETERMINISTIC_LANGUAGES)
+    assert (
+        set(results.keys()) == expected
+    ), f"Missing languages: {expected - set(results.keys())}"
 
     # Opcode intersection contains required opcodes
     opcode_sets = [opcodes(ir) for ir in results.values()]
