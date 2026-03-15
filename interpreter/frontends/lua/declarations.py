@@ -112,12 +112,28 @@ def lower_lua_store_target(
 
 
 def lower_lua_function_declaration(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower function_declaration with name, parameters, body fields."""
+    """Lower function_declaration with name, parameters, body fields.
+
+    For dotted names (``function Counter.new()``), the function is stored
+    as a field on the table object via STORE_FIELD rather than as a
+    top-level variable.  The function name used in labels and func refs
+    is just the method name (``new``), not the dotted path.
+    """
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
-    func_name = ctx.node_text(name_node) if name_node else "__anon"
+    is_dotted = (
+        name_node is not None and name_node.type == LuaNodeType.DOT_INDEX_EXPRESSION
+    )
+    if is_dotted:
+        table_node = name_node.child_by_field_name("table")
+        field_node = name_node.child_by_field_name("field")
+        table_name = ctx.node_text(table_node) if table_node else ""
+        func_name = ctx.node_text(field_node) if field_node else "__anon"
+    else:
+        func_name = ctx.node_text(name_node) if name_node else "__anon"
+
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
@@ -145,7 +161,17 @@ def lower_lua_function_declaration(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+
+    if is_dotted and table_name:
+        obj_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.LOAD_VAR, result_reg=obj_reg, operands=[table_name])
+        ctx.emit(
+            Opcode.STORE_FIELD,
+            operands=[obj_reg, func_name, func_reg],
+            node=node,
+        )
+    else:
+        ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def lower_lua_return(ctx: TreeSitterEmitContext, node) -> None:
