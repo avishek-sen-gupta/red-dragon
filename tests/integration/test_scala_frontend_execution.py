@@ -1,4 +1,4 @@
-"""Integration tests for Scala frontend: export_declaration, val_declaration, alternative_pattern."""
+"""Integration tests for Scala frontend: export_declaration, val_declaration, alternative_pattern, array indexing."""
 
 from __future__ import annotations
 
@@ -10,6 +10,11 @@ from interpreter.typed_value import unwrap_locals
 def _run_scala(source: str, max_steps: int = 200):
     vm = run(source, language=Language.SCALA, max_steps=max_steps)
     return unwrap_locals(vm.call_stack[0].local_vars)
+
+
+def _run_scala_vm(source: str, max_steps: int = 200):
+    """Return full VM for heap inspection."""
+    return run(source, language=Language.SCALA, max_steps=max_steps)
 
 
 class TestScalaExportDeclarationExecution:
@@ -88,3 +93,66 @@ object M {
             max_steps=1000,
         )
         assert locals_["answer"] == 6
+
+
+class TestScalaArrayIndexingExecution:
+    """Scala arr(i) syntax should resolve to array indexing at runtime."""
+
+    def test_basic_array_indexing(self):
+        """arr(0), arr(1), arr(2) should return correct elements."""
+        locals_ = _run_scala("""\
+val arr = Array(10, 20, 30)
+val a = arr(0)
+val b = arr(1)
+val c = arr(2)""")
+        assert locals_["a"] == 10
+        assert locals_["b"] == 20
+        assert locals_["c"] == 30
+
+    def test_variable_index(self):
+        """arr(i) with variable i should return the correct element."""
+        locals_ = _run_scala("""\
+val arr = Array(10, 20, 30)
+var i = 1
+val x = arr(i)""")
+        assert locals_["x"] == 20
+
+    def test_expression_index(self):
+        """arr(i + 1) should evaluate the index expression."""
+        locals_ = _run_scala("""\
+val arr = Array(10, 20, 30)
+var i = 0
+val x = arr(i + 1)""")
+        assert locals_["x"] == 20
+
+    def test_array_write_and_read(self):
+        """arr(0) = 99; arr(0) should return 99."""
+        vm = _run_scala_vm("""\
+var arr = Array(10, 20, 30)
+arr(0) = 99
+val x = arr(0)""")
+        locals_ = unwrap_locals(vm.call_stack[0].local_vars)
+        assert locals_["x"] == 99
+
+    def test_swap_elements(self):
+        """Swap arr(0) and arr(1) via temp variable."""
+        vm = _run_scala_vm(
+            """\
+var arr = Array(30, 10, 20)
+val temp = arr(0)
+arr(0) = arr(1)
+arr(1) = temp
+val a = arr(0)
+val b = arr(1)""",
+            max_steps=300,
+        )
+        locals_ = unwrap_locals(vm.call_stack[0].local_vars)
+        assert locals_["a"] == 10
+        assert locals_["b"] == 30
+
+    def test_string_character_indexing(self):
+        """s(1) on a string should return the character at index 1."""
+        locals_ = _run_scala("""\
+val s = "hello"
+val c = s(1)""")
+        assert locals_["c"] == "e"
