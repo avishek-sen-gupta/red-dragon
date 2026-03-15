@@ -139,11 +139,7 @@ def lower_php_func_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     func_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=func_reg,
-        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
-    )
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
@@ -183,11 +179,7 @@ def lower_php_method_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     func_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=func_reg,
-        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
-    )
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
@@ -257,11 +249,7 @@ def _emit_php_synthetic_constructor(
     ctx.emit(Opcode.LABEL, label=end_label)
 
     func_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=func_reg,
-        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
-    )
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
@@ -482,11 +470,7 @@ def _lower_php_constructor_with_field_inits(
     ctx.emit(Opcode.LABEL, label=end_label)
 
     func_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=func_reg,
-        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
-    )
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 

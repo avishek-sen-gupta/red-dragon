@@ -377,11 +377,7 @@ def lower_function_def_c(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     func_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=func_reg,
-        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
-    )
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
@@ -599,9 +595,5 @@ def lower_preproc_function_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     func_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=func_reg,
-        operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
-    )
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
