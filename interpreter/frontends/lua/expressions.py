@@ -54,18 +54,25 @@ def lower_lua_call(ctx: TreeSitterEmitContext, node) -> str:
             )
             return reg
 
-    # Dot-indexed call: obj.method(args)
+    # Dot-indexed call: obj.field(args) — field access + function call
     if name_node.type == LuaNodeType.DOT_INDEX_EXPRESSION:
         table_node = name_node.child_by_field_name("table")
         field_node = name_node.child_by_field_name("field")
         if table_node and field_node:
             obj_reg = ctx.lower_expr(table_node)
-            method_name = ctx.node_text(field_node)
+            field_name = ctx.node_text(field_node)
+            func_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.LOAD_FIELD,
+                result_reg=func_reg,
+                operands=[obj_reg, field_name],
+                node=node,
+            )
             reg = ctx.fresh_reg()
             ctx.emit(
-                Opcode.CALL_METHOD,
+                Opcode.CALL_UNKNOWN,
                 result_reg=reg,
-                operands=[obj_reg, method_name] + arg_regs,
+                operands=[func_reg] + arg_regs,
                 node=node,
             )
             return reg
