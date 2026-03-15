@@ -583,7 +583,10 @@ class TestJavaLambdaExpression:
         )
         consts = _find_all(instructions, Opcode.CONST)
         assert any(
-            "function:" in str(inst.operands) and "lambda" in str(inst.operands)
+            any(
+                str(op).startswith("func_") and "lambda" in str(op)
+                for op in inst.operands
+            )
             for inst in consts
         )
 

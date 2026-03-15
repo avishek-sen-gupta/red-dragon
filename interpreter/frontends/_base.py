@@ -173,17 +173,14 @@ class BaseFrontend(Frontend):
     ) -> IRInstruction:
         """Legacy-mode equivalent of ctx.emit_func_ref().
 
-        Emits the legacy ``<function:name@label>`` format as the CONST operand
-        for backward compatibility with existing consumers (_parse_func_ref).
-        The symbol table is populated in parallel, ready for future consumers.
+        Emits the plain func_label as the CONST operand.  The symbol table
+        maps func_label → FuncRef(name, label) for downstream consumers.
         """
         self._func_symbol_table[func_label] = FuncRef(name=func_name, label=func_label)
         return self._emit(
             Opcode.CONST,
             result_reg=result_reg,
-            operands=[
-                constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)
-            ],
+            operands=[func_label],
             node=node,
         )
 

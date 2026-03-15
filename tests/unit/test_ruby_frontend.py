@@ -560,14 +560,22 @@ class TestRubyLambda:
     def test_lambda_basic(self):
         instructions = _parse_ruby("f = -> { 42 }")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("function:" in str(inst.operands) for inst in consts)
+        assert any(
+            str(inst.operands[0]).startswith("func_")
+            for inst in consts
+            if inst.operands
+        )
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("f" in inst.operands for inst in stores)
 
     def test_lambda_with_params(self):
         instructions = _parse_ruby("f = ->(x, y) { x + y }")
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("function:" in str(inst.operands) for inst in consts)
+        assert any(
+            str(inst.operands[0]).startswith("func_")
+            for inst in consts
+            if inst.operands
+        )
         opcodes = _opcodes(instructions)
         assert Opcode.RETURN in opcodes
 

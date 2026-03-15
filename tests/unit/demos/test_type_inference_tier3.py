@@ -9,6 +9,7 @@ Exercises 3 features:
 
 from interpreter.api import lower_and_infer
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
+from interpreter.func_ref import FuncRef
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.type_expr import parse_type, scalar
@@ -101,7 +102,7 @@ class TestCallUnknownResolution:
             IRInstruction(
                 opcode=Opcode.CONST,
                 result_reg="%3",
-                operands=["<function:add@func_add_0>"],
+                operands=["func_add_0"],
             ),
             IRInstruction(opcode=Opcode.DECL_VAR, operands=["add", "%3"]),
             IRInstruction(opcode=Opcode.LOAD_VAR, result_reg="%4", operands=["add"]),
@@ -119,7 +120,13 @@ class TestCallUnknownResolution:
             },
             register_types={"%0": scalar("Int"), "%1": scalar("Int")},
         )
-        env = infer_types(instructions, _resolver(), type_env_builder=builder)
+        func_st = {"func_add_0": FuncRef(name="add", label="func_add_0")}
+        env = infer_types(
+            instructions,
+            _resolver(),
+            type_env_builder=builder,
+            func_symbol_table=func_st,
+        )
 
         assert env.register_types["%5"] == "Int"
 
