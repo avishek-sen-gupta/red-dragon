@@ -25,7 +25,9 @@ class TestPhpPrintExecution:
         vars_ = _run(source)
         assert vars_["$x"] == 42
 
-    @pytest.mark.xfail(reason="red-dragon-3ie: print not yet lowered as expression returning 1")
+    @pytest.mark.xfail(
+        reason="red-dragon-3ie: print not yet lowered as expression returning 1"
+    )
     def test_print_returns_one(self):
         """print always returns 1 in PHP; $r = print 'hi' stores 1."""
         source = "<?php $r = print 'hello'; ?>"
