@@ -20,6 +20,7 @@ from types import MappingProxyType
 
 from interpreter import constants
 from interpreter.constants import CanonicalLiteral, TypeName
+from interpreter.func_ref import FuncRef
 from interpreter.function_kind import FunctionKind
 from interpreter.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
@@ -170,6 +171,7 @@ class _InferenceContext:
     class_method_signatures: dict[TypeExpr, dict[str, list[FunctionSignature]]] = field(
         default_factory=dict
     )
+    func_symbol_table: dict[str, FuncRef] = field(default_factory=dict)
     _seeded_var_names: frozenset[str] = field(default_factory=frozenset)
 
     def store_var_type(self, name: str, type_expr: TypeExpr) -> None:
@@ -318,6 +320,7 @@ def infer_types(
     instructions: list[IRInstruction],
     type_resolver: TypeResolver,
     type_env_builder: TypeEnvironmentBuilder = TypeEnvironmentBuilder(),
+    func_symbol_table: dict[str, FuncRef] = {},
 ) -> TypeEnvironment:
     """Walk *instructions* to fixpoint and return an immutable TypeEnvironment.
 
@@ -347,6 +350,7 @@ def infer_types(
         interface_implementations={
             k: tuple(v) for k, v in type_env_builder.interface_implementations.items()
         },
+        func_symbol_table=func_symbol_table,
         _seeded_var_names=frozenset(type_env_builder.var_types.keys()),
     )
 
@@ -483,9 +487,16 @@ def _infer_const(
         return
     raw = str(inst.operands[0]) if inst.operands else "None"
     # If this is a function reference, extract name→return-type and name→param-types mappings
-    match = _FUNC_REF_EXTRACT.search(raw)
-    if match:
-        func_name, func_label = match.group(1), match.group(2)
+    # Try symbol table first (plain label operands after Task 7), regex fallback
+    func_name, func_label = "", ""
+    if raw in ctx.func_symbol_table:
+        ref = ctx.func_symbol_table[raw]
+        func_name, func_label = ref.name, ref.label
+    else:
+        match = _FUNC_REF_EXTRACT.search(raw)
+        if match:
+            func_name, func_label = match.group(1), match.group(2)
+    if func_name and func_label:
         # Only populate flat (name-keyed) dicts for standalone functions.
         # Class methods go into class_method_signatures instead.
         if not ctx.current_class_name:
@@ -522,7 +533,7 @@ def _infer_const(
             )
         return
     ctx.const_values[inst.result_reg] = raw
-    inferred = _infer_const_type(raw)
+    inferred = _infer_const_type(raw, func_symbol_table=ctx.func_symbol_table)
     if inferred:
         ctx.register_types[inst.result_reg] = inferred
 
@@ -863,13 +874,13 @@ _DISPATCH: dict[Opcode, callable] = {
 }
 
 
-def _infer_const_type(raw: str) -> TypeExpr:
+def _infer_const_type(raw: str, func_symbol_table: dict[str, FuncRef] = {}) -> TypeExpr:
     """Infer a canonical type from a CONST literal string."""
     if raw in (CanonicalLiteral.TRUE, CanonicalLiteral.FALSE):
         return scalar(TypeName.BOOL)
     if raw == CanonicalLiteral.NONE:
         return UNKNOWN
-    if _FUNC_REF_PATTERN.search(str(raw)):
+    if str(raw) in func_symbol_table or _FUNC_REF_PATTERN.search(str(raw)):
         return UNKNOWN
     if _CLASS_REF_PATTERN.search(str(raw)):
         return UNKNOWN

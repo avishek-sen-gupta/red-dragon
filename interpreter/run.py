@@ -612,7 +612,10 @@ def run(
     conversion_rules = DefaultTypeConversionRules()
     type_resolver = TypeResolver(conversion_rules)
     type_env = infer_types(
-        instructions, type_resolver, type_env_builder=frontend.type_env_builder
+        instructions,
+        type_resolver,
+        type_env_builder=frontend.type_env_builder,
+        func_symbol_table=frontend.func_symbol_table,
     )
 
     # 5. Execute via extract
