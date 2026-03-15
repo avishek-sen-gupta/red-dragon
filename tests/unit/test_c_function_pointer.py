@@ -12,6 +12,7 @@ Covers:
 from __future__ import annotations
 
 from interpreter.constants import Language
+from interpreter.func_ref import BoundFuncRef
 from interpreter.frontends.c import CFrontend
 from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
@@ -71,7 +72,7 @@ class TestAddressOfFuncRef:
         )
         vars_ = _run_c(source)
         assert vars_["fp"] == vars_["add"]
-        assert "<function:" in vars_["fp"]
+        assert isinstance(vars_["fp"], BoundFuncRef)
 
     def test_assign_function_without_address_of(self):
         """fp = add (without &) should also store the FUNC_REF directly."""
