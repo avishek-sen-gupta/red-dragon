@@ -1196,14 +1196,21 @@ def _handle_call_function(
                         reasoning=f"heap call-index {base_name}({args[0].value}) = {tv!r}",
                     )
                 )
+            # Out-of-bounds on heap array → symbolic (do NOT fall through to 2c).
+            sym = vm.fresh_symbolic(hint=f"{base_name}({args[0].value})")
+            return ExecutionResult.success(
+                StateUpdate(
+                    register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                    reasoning=f"heap call-index {base_name}({args[0].value}) out of bounds → symbolic",
+                )
+            )
 
     # 2c. Native string/list indexing — e.g. Scala s1(i) → s1[i]
     # Exclude VM internal references (functions, classes, heap addresses).
     if (
-        (
-            isinstance(func_val, list)
-            or (isinstance(func_val, str) and not func_val.startswith("<"))
-        )
+        isinstance(func_val, (list, str))
+        and not (isinstance(func_val, str) and func_val.startswith("<"))
+        and not _heap_addr(func_val) in vm.heap
         and len(args) == 1
         and isinstance(args[0].value, int)
     ):
