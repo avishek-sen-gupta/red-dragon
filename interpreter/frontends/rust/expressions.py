@@ -24,7 +24,7 @@ def lower_call_with_box_option(ctx: TreeSitterEmitContext, node) -> str:
             for c in func_node.children
             if c.type == RustNodeType.IDENTIFIER
         )
-        if full_name == "Box::new":
+        if full_name == "Box::new" or full_name == "String::from":
             return _lower_box_new(ctx, args_node, node)
 
     if func_node and func_node.type == RustNodeType.IDENTIFIER:
