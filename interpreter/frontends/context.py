@@ -15,6 +15,7 @@ from interpreter import constants
 from interpreter.constants import CanonicalLiteral, Language
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
+from interpreter.func_ref import FuncRef
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.var_scope_info import VarScopeInfo
 from interpreter.type_expr import TypeExpr
@@ -127,6 +128,9 @@ class TreeSitterEmitContext:
     _var_scope_metadata: dict[str, VarScopeInfo] = field(default_factory=dict)
     _base_declared_vars: set[str] = field(default_factory=set)
 
+    # Function reference symbol table: func_label -> FuncRef
+    func_symbol_table: dict[str, FuncRef] = field(default_factory=dict)
+
     # ── utility methods ──────────────────────────────────────────
 
     def fresh_reg(self) -> str:
@@ -169,6 +173,22 @@ class TreeSitterEmitContext:
     def emit_decl_var(self, name: str, val_reg: str, *, node=None) -> IRInstruction:
         """Emit DECL_VAR: declare a new variable in the current scope."""
         return self.emit(Opcode.DECL_VAR, operands=[name, val_reg], node=node)
+
+    def emit_func_ref(
+        self,
+        func_name: str,
+        func_label: str,
+        result_reg: str,
+        node=None,
+    ) -> IRInstruction:
+        """Register a function reference in the symbol table and emit CONST."""
+        self.func_symbol_table[func_label] = FuncRef(name=func_name, label=func_label)
+        return self.emit(
+            Opcode.CONST,
+            result_reg=result_reg,
+            operands=[func_label],
+            node=node,
+        )
 
     def _track_label(self, opcode: Opcode, label: str) -> None:
         """Track current function/class label for param type association."""

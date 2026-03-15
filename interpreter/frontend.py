@@ -7,6 +7,7 @@ from typing import Any
 
 from interpreter.constants import Language
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
+from interpreter.func_ref import FuncRef
 from interpreter.ir import IRInstruction
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter import constants
@@ -35,6 +36,11 @@ class Frontend(ABC):
         Returns an empty builder by default.
         """
         return TypeEnvironmentBuilder()
+
+    @property
+    def func_symbol_table(self) -> dict[str, FuncRef]:
+        """Function reference symbol table accumulated during lowering."""
+        return {}
 
 
 # Backward-compatibility re-export: code that imports PythonFrontend from here still works.
