@@ -55,7 +55,7 @@ def lower_function_def(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def lower_params(ctx: TreeSitterEmitContext, params_node) -> None:
@@ -89,7 +89,7 @@ def lower_param(ctx: TreeSitterEmitContext, child) -> None:
     ctx.seed_register_type(param_reg, type_hint)
     ctx.seed_param_type(pname, type_hint)
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=[pname, f"%{ctx.reg_counter - 1}"],
     )
     ctx.seed_var_type(pname, type_hint)
@@ -192,7 +192,7 @@ def emit_synthetic_init(
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def lower_class_def(ctx: TreeSitterEmitContext, node, parents: list[str] = []) -> None:
@@ -215,7 +215,7 @@ def lower_class_def(ctx: TreeSitterEmitContext, node, parents: list[str] = []) -
         result_reg=cls_reg,
         operands=[make_class_ref(class_name, class_label, parents)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
 
 def lower_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
@@ -227,7 +227,7 @@ def lower_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
             if name_node and value_node:
                 val_reg = ctx.lower_expr(value_node)
                 ctx.emit(
-                    Opcode.STORE_VAR,
+                    Opcode.DECL_VAR,
                     operands=[ctx.node_text(name_node), val_reg],
                     node=node,
                 )
@@ -240,7 +240,7 @@ def lower_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
                     operands=[ctx.constants.none_literal],
                 )
                 ctx.emit(
-                    Opcode.STORE_VAR,
+                    Opcode.DECL_VAR,
                     operands=[ctx.node_text(name_node), val_reg],
                     node=node,
                 )

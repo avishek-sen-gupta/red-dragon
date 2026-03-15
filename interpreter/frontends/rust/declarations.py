@@ -85,7 +85,7 @@ def lower_rust_param(ctx: TreeSitterEmitContext, child) -> None:
     ctx.seed_register_type(reg, type_hint)
     ctx.seed_param_type(pname, type_hint)
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=[pname, f"%{ctx.reg_counter - 1}"],
     )
     ctx.seed_var_type(pname, type_hint)
@@ -133,7 +133,7 @@ def lower_function_def(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 # ── let declaration ──────────────────────────────────────────────────
@@ -163,7 +163,7 @@ def lower_let_decl(ctx: TreeSitterEmitContext, node) -> None:
         raw_name = _extract_let_pattern_name(ctx, pattern_node)
         var_name = ctx.declare_block_var(raw_name)
         ctx.emit(
-            Opcode.STORE_VAR,
+            Opcode.DECL_VAR,
             operands=[var_name, val_reg],
             node=node,
         )
@@ -193,7 +193,7 @@ def _lower_tuple_destructure(
         )
         var_name = _extract_let_pattern_name(ctx, child)
         ctx.emit(
-            Opcode.STORE_VAR,
+            Opcode.DECL_VAR,
             operands=[var_name, elem_reg],
             node=parent_node,
         )
@@ -229,7 +229,7 @@ def _lower_struct_destructure(
                 node=child,
             )
             ctx.emit(
-                Opcode.STORE_VAR,
+                Opcode.DECL_VAR,
                 operands=[field_name, field_reg],
                 node=parent_node,
             )
@@ -257,7 +257,7 @@ def lower_struct_def(ctx: TreeSitterEmitContext, node) -> None:
             constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
         ],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
 
 # ── impl block ───────────────────────────────────────────────────────
@@ -286,7 +286,7 @@ def lower_impl_item(ctx: TreeSitterEmitContext, node) -> None:
             constants.CLASS_REF_TEMPLATE.format(name=impl_name, label=class_label)
         ],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[impl_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[impl_name, cls_reg])
 
 
 # ── trait item ───────────────────────────────────────────────────────
@@ -315,7 +315,7 @@ def lower_trait_item(ctx: TreeSitterEmitContext, node) -> None:
             constants.CLASS_REF_TEMPLATE.format(name=trait_name, label=class_label)
         ],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[trait_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[trait_name, cls_reg])
 
 
 # ── enum item ────────────────────────────────────────────────────────
@@ -357,7 +357,7 @@ def lower_enum_item(ctx: TreeSitterEmitContext, node) -> None:
                 operands=[obj_reg, variant_name, variant_reg],
             )
 
-    ctx.emit(Opcode.STORE_VAR, operands=[enum_name, obj_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[enum_name, obj_reg])
 
 
 # ── const item ───────────────────────────────────────────────────────
@@ -381,7 +381,7 @@ def lower_const_item(ctx: TreeSitterEmitContext, node) -> None:
             operands=[ctx.constants.none_literal],
         )
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=[var_name, val_reg],
         node=node,
     )
@@ -409,7 +409,7 @@ def lower_static_item(ctx: TreeSitterEmitContext, node) -> None:
             operands=[ctx.constants.none_literal],
         )
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=[var_name, val_reg],
         node=node,
     )
@@ -434,7 +434,7 @@ def lower_type_item(ctx: TreeSitterEmitContext, node) -> None:
         node=node,
     )
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=[alias_name, val_reg],
         node=node,
     )
@@ -499,7 +499,7 @@ def lower_function_signature(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 # ── Rust prelude (Box, Option) ─────────────────────────────────────────
@@ -520,7 +520,7 @@ def _emit_method_params(ctx: TreeSitterEmitContext, param_names: list[str]) -> N
             result_reg=reg,
             operands=[f"{constants.PARAM_PREFIX}{pname}"],
         )
-        ctx.emit(Opcode.STORE_VAR, operands=[pname, reg])
+        ctx.emit(Opcode.DECL_VAR, operands=[pname, reg])
 
 
 def _emit_prelude_func_ref(
@@ -533,7 +533,7 @@ def _emit_prelude_func_ref(
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def _emit_box_class(ctx: TreeSitterEmitContext) -> None:
@@ -576,7 +576,7 @@ def _emit_box_class(ctx: TreeSitterEmitContext) -> None:
             constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
         ],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
 
 def _emit_option_class(ctx: TreeSitterEmitContext) -> None:
@@ -643,4 +643,4 @@ def _emit_option_class(ctx: TreeSitterEmitContext) -> None:
             constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
         ],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])

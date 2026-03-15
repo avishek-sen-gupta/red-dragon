@@ -38,8 +38,8 @@ class TestJavaScriptExpressions:
         instructions = _parse_js("let x = 10;")
         opcodes = _opcodes(instructions)
         assert Opcode.CONST in opcodes
-        assert Opcode.STORE_VAR in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert Opcode.DECL_VAR in opcodes
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
     def test_arithmetic_expression(self):
@@ -48,7 +48,7 @@ class TestJavaScriptExpressions:
         assert Opcode.LOAD_VAR in opcodes
         assert Opcode.CONST in opcodes
         assert Opcode.BINOP in opcodes
-        assert Opcode.STORE_VAR in opcodes
+        assert Opcode.DECL_VAR in opcodes
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
 
@@ -56,7 +56,7 @@ class TestJavaScriptExpressions:
         instructions = _parse_js('let y = x > 0 ? "pos" : "neg";')
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
-        assert Opcode.STORE_VAR in opcodes
+        assert Opcode.DECL_VAR in opcodes
 
     def test_template_literal(self):
         instructions = _parse_js("const s = `hello`;")
@@ -86,7 +86,7 @@ class TestJavaScriptControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BRANCH in opcodes
         assert Opcode.BINOP in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("i" in inst.operands for inst in stores)
 
     def test_for_in_loop(self):
@@ -151,7 +151,7 @@ class TestJavaScriptFunctions:
         opcodes = _opcodes(instructions)
         assert Opcode.RETURN in opcodes
         assert Opcode.BINOP in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("f" in inst.operands for inst in stores)
 
     def test_method_call(self):
@@ -168,7 +168,7 @@ class TestJavaScriptClasses:
         )
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -226,7 +226,7 @@ class TestNonTrivialJavaScript:
         assert any("map" in inst.operands for inst in calls)
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("*" in inst.operands for inst in binops)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("doubled" in inst.operands for inst in stores)
 
     def test_for_of_loop_with_method_body(self):
@@ -251,7 +251,7 @@ for (const item of items) {
         instructions = _parse_js(source)
         branches = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branches) >= 2
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("label" in inst.operands for inst in stores)
 
     def test_class_with_constructor_and_methods(self):
@@ -269,7 +269,7 @@ class Counter {
 }
 """
         instructions = _parse_js(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Counter" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -313,7 +313,7 @@ function classify(x) {
         assert len(branches) >= 2
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 3
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("classify" in inst.operands for inst in stores)
 
     def test_template_literal_with_expressions(self):
@@ -323,7 +323,7 @@ const count = 5;
 const msg = `Hello ${name}, you have ${count} items`;
 """
         instructions = _parse_js(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("name" in inst.operands for inst in stores)
         assert any("count" in inst.operands for inst in stores)
         assert any("msg" in inst.operands for inst in stores)
@@ -379,7 +379,7 @@ const upper = config.name.toUpperCase();
         assert Opcode.STORE_INDEX in opcodes
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("toUpperCase" in inst.operands for inst in calls)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("config" in inst.operands for inst in stores)
         assert any("upper" in inst.operands for inst in stores)
 
@@ -394,7 +394,7 @@ class TestJavaScriptForOf:
         assert Opcode.CALL_FUNCTION in opcodes  # len()
         labels = _labels_in_order(instructions)
         assert any("for_of" in lbl for lbl in labels)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
     def test_for_of_with_break(self):
@@ -447,7 +447,7 @@ class TestJavaScriptDestructuring:
         field_names = [inst.operands[1] for inst in loads if len(inst.operands) > 1]
         assert "a" in field_names
         assert "b" in field_names
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("a" in inst.operands for inst in stores)
         assert any("b" in inst.operands for inst in stores)
 
@@ -458,7 +458,7 @@ class TestJavaScriptDestructuring:
         field_names = [inst.operands[1] for inst in loads if len(inst.operands) > 1]
         assert "x" in field_names
         assert "y" in field_names
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("localX" in inst.operands for inst in stores)
         assert any("localY" in inst.operands for inst in stores)
 
@@ -467,7 +467,7 @@ class TestJavaScriptDestructuring:
         instructions = _parse_js(source)
         opcodes = _opcodes(instructions)
         assert Opcode.LOAD_INDEX in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("a" in inst.operands for inst in stores)
         assert any("b" in inst.operands for inst in stores)
 
@@ -476,7 +476,7 @@ class TestJavaScriptDestructuring:
         instructions = _parse_js(source)
         loads = _find_all(instructions, Opcode.LOAD_INDEX)
         assert len(loads) >= 3
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         assert any("y" in inst.operands for inst in stores)
         assert any("z" in inst.operands for inst in stores)
@@ -485,7 +485,7 @@ class TestJavaScriptDestructuring:
         """const [first, ...rest] = arr; should LOAD_INDEX first, then slice for rest."""
         source = "const [first, ...rest] = arr;"
         instructions = _parse_js(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "first" in store_names, f"expected 'first' in stores, got {store_names}"
         assert "rest" in store_names, f"expected 'rest' in stores, got {store_names}"
@@ -506,7 +506,7 @@ class TestJavaScriptDestructuring:
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         slice_calls = [inst for inst in calls if "slice" in inst.operands]
         assert len(slice_calls) == 1, f"expected 1 slice call, got {len(slice_calls)}"
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "a" in store_names
         assert "b" in store_names
@@ -519,7 +519,7 @@ class TestJavaScriptDestructuring:
         loads = _find_all(instructions, Opcode.LOAD_FIELD)
         field_names = [inst.operands[1] for inst in loads if len(inst.operands) > 1]
         assert "a" in field_names
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "rest" in store_names
         assert "...rest" not in store_names
@@ -536,7 +536,7 @@ class TestJavaScriptDestructuring:
         loads = _find_all(instructions, Opcode.LOAD_FIELD)
         field_names = [inst.operands[1] for inst in loads if len(inst.operands) > 1]
         assert "x" in field_names
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "localX" in store_names
         assert "rest" in store_names
@@ -558,7 +558,7 @@ class TestJavaScriptRestParameter:
             "slice" in inst.operands for inst in calls
         ), f"expected slice call, got {[inst.operands for inst in calls]}"
         # Should store as 'rest'
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "rest" in store_names
 
@@ -571,7 +571,7 @@ class TestJavaScriptRestParameter:
         assert len(slice_calls) == 1
         # The start index should be 0 (no preceding params)
         consts = _find_all(instructions, Opcode.CONST)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("args" in inst.operands for inst in stores)
 
     def test_rest_param_loads_arguments(self):
@@ -596,7 +596,7 @@ class TestJavaScriptUsingDeclaration:
         assert any(
             "openFile" in inst.operands for inst in calls
         ), f"expected openFile call, got {[inst.operands for inst in calls]}"
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "file" in store_names, f"expected STORE_VAR file, got {store_names}"
 
@@ -615,7 +615,7 @@ class TestJavaScriptUsingDeclaration:
         """using with object destructuring should work like const."""
         source = "using {conn, pool} = createPool();"
         instructions = _parse_js(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "conn" in store_names
         assert "pool" in store_names
@@ -635,7 +635,7 @@ class TestJavaScriptNewExpression:
         assert any("Dog" in inst.operands for inst in new_objs)
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("constructor" in inst.operands for inst in calls)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("obj" in inst.operands for inst in stores)
         # Args should be loaded
         loads = _find_all(instructions, Opcode.LOAD_VAR)
@@ -654,7 +654,7 @@ class TestJavaScriptAwaitExpression:
         instructions = _parse_js("const result = await fetch(url);")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("await" in inst.operands for inst in calls)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("result" in inst.operands for inst in stores)
 
     def test_await_in_assignment(self):
@@ -705,7 +705,7 @@ class TestJavaScriptSequenceExpression:
         assert any("1" in inst.operands for inst in consts)
         assert any("2" in inst.operands for inst in consts)
         assert any("3" in inst.operands for inst in consts)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
     def test_sequence_with_side_effects(self):
@@ -744,7 +744,7 @@ class TestJavaScriptFunctionExpression:
         assert Opcode.RETURN in opcodes
         consts = _find_all(instructions, Opcode.CONST)
         assert any("function:" in str(inst.operands) for inst in consts)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("f" in inst.operands for inst in stores)
 
     def test_named_function_expression(self):
@@ -894,7 +894,7 @@ class TestJavaScriptTemplateSubstitution:
         instructions = _parse_js(source)
         opcodes = _opcodes(instructions)
         assert Opcode.LOAD_VAR in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("msg" in inst.operands for inst in stores)
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
@@ -929,7 +929,7 @@ class Foo {
 }
 """
         instructions = _parse_js(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Foo" in inst.operands for inst in stores)
         store_fields = _find_all(instructions, Opcode.STORE_FIELD)
         assert any("count" in inst.operands for inst in store_fields)
@@ -947,7 +947,7 @@ class Config {
         instructions = _parse_js(source)
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Config" in inst.operands for inst in stores)
 
 
@@ -974,19 +974,19 @@ class TestJavaScriptExportStatement:
         instructions = _parse_js("export function add(a, b) { return a + b; }")
         opcodes = _opcodes(instructions)
         assert Opcode.RETURN in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("add" in inst.operands for inst in stores)
 
     def test_export_variable_declaration(self):
         instructions = _parse_js("export const x = 42;")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("42" in inst.operands for inst in consts)
 
     def test_export_class_declaration(self):
         instructions = _parse_js("export class Foo { constructor() {} }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Foo" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -1081,7 +1081,7 @@ class Bar {
         instructions = _parse_js(source)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported:" in str(inst.operands) for inst in symbolics)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("count" in inst.operands for inst in stores)
 
 
@@ -1106,7 +1106,7 @@ class TestJSMetaProperty:
         """new.target should be stored as a const."""
         frontend = JavaScriptFrontend(TreeSitterParserFactory(), "javascript")
         ir = frontend.lower(b"let x = new.target;")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 
@@ -1135,15 +1135,20 @@ for (let i = 0; i < 3; i = i + 1) {
     x = x + 1;
 }
 """)
-        # The update 'i = i + 1' should produce a second STORE_VAR for 'i'
-        # (first is from initializer 'let i = 0')
+        # The initializer 'let i = 0' produces DECL_VAR,
+        # the update 'i = i + 1' produces STORE_VAR
+        decls = _find_all(ir, Opcode.DECL_VAR)
         stores = _find_all(ir, Opcode.STORE_VAR)
+        i_decls = [inst for inst in decls if inst.operands and inst.operands[0] == "i"]
         i_stores = [
             inst for inst in stores if inst.operands and inst.operands[0] == "i"
         ]
         assert (
-            len(i_stores) >= 2
-        ), f"Expected >= 2 STORE_VAR for 'i' (init + update), got {len(i_stores)}"
+            len(i_decls) >= 1
+        ), f"Expected >= 1 DECL_VAR for 'i' (init), got {len(i_decls)}"
+        assert (
+            len(i_stores) >= 1
+        ), f"Expected >= 1 STORE_VAR for 'i' (update), got {len(i_stores)}"
 
 
 class TestOptionalChain:
@@ -1271,6 +1276,6 @@ class TestAnonymousClassExpression:
 
     def test_anonymous_class_stored_in_variable(self):
         ir = _parse_js("const Foo = class { constructor() {} };")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         store_names = [s.operands[0] for s in stores if s.operands]
         assert "Foo" in store_names, f"Expected 'Foo' in STORE_VAR, got: {store_names}"

@@ -48,7 +48,7 @@ def _emit_self_param(ctx: TreeSitterEmitContext) -> None:
         operands=[f"{constants.PARAM_PREFIX}self"],
     )
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=[constants.PARAM_SELF, f"%{ctx.reg_counter - 1}"],
     )
 
@@ -97,7 +97,7 @@ def lower_ruby_method(
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def lower_ruby_method_stmt(ctx: TreeSitterEmitContext, node) -> None:
@@ -145,7 +145,7 @@ def lower_ruby_class(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=cls_reg,
         operands=[make_class_ref(class_name, class_label, parents)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
 
 def lower_ruby_singleton_class(ctx: TreeSitterEmitContext, node) -> None:
@@ -209,7 +209,7 @@ def lower_ruby_singleton_method(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def lower_ruby_module(ctx: TreeSitterEmitContext, node) -> None:
@@ -235,4 +235,4 @@ def lower_ruby_module(ctx: TreeSitterEmitContext, node) -> None:
             constants.CLASS_REF_TEMPLATE.format(name=module_name, label=class_label)
         ],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[module_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[module_name, cls_reg])

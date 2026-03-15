@@ -71,7 +71,7 @@ def lower_enhanced_for(ctx: TreeSitterEmitContext, node) -> None:
 
     init_idx = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
-    ctx.emit(Opcode.STORE_VAR, operands=["__for_idx", init_idx])
+    ctx.emit(Opcode.DECL_VAR, operands=["__for_idx", init_idx])
     len_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
 
@@ -95,7 +95,7 @@ def lower_enhanced_for(ctx: TreeSitterEmitContext, node) -> None:
     var_name = ctx.declare_block_var(raw_name)
     elem_reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
-    ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[var_name, elem_reg])
 
     update_label = ctx.fresh_label("for_update")
     ctx.push_loop(update_label, end_label)
@@ -255,7 +255,7 @@ def lower_java_switch_expr(ctx: TreeSitterEmitContext, node) -> str:
             arm_result = ctx.fresh_reg()
             for stmt in body_stmts:
                 arm_result = ctx.lower_expr(stmt)
-            ctx.emit(Opcode.STORE_VAR, operands=[result_var, arm_result])
+            ctx.emit(Opcode.DECL_VAR, operands=[result_var, arm_result])
             ctx.emit(Opcode.BRANCH, label=end_label)
         ctx.emit(Opcode.LABEL, label=next_label)
 
@@ -277,7 +277,7 @@ def lower_yield_statement(ctx: TreeSitterEmitContext, node) -> None:
     val_reg = ctx.lower_expr(value_children[0]) if value_children else ctx.fresh_reg()
     result_var = ctx.switch_result_stack[-1]
     end_label = ctx.break_target_stack[-1]
-    ctx.emit(Opcode.STORE_VAR, operands=[result_var, val_reg], node=node)
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, val_reg], node=node)
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
 
 
@@ -411,7 +411,7 @@ def _lower_resource_decl(ctx: TreeSitterEmitContext, resource) -> None:
     raw_name = ctx.node_text(name_node) if name_node else "__resource"
     var_name = ctx.declare_block_var(raw_name)
     val_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
-    ctx.emit(Opcode.STORE_VAR, operands=[var_name, val_reg], node=resource)
+    ctx.emit(Opcode.DECL_VAR, operands=[var_name, val_reg], node=resource)
 
 
 def lower_explicit_constructor_invocation(ctx: TreeSitterEmitContext, node) -> None:

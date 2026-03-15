@@ -117,7 +117,7 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
             operands=["array", size_reg],
             node=node,
         )
-        ctx.emit(Opcode.STORE_VAR, operands=[var_name, arr_reg], node=node)
+        ctx.emit(Opcode.DECL_VAR, operands=[var_name, arr_reg], node=node)
     else:
         type_name = _pascal_var_type_name(ctx, type_node) if type_node else ""
         type_hint = normalize_type_hint(type_name.lower(), ctx.type_map)
@@ -137,7 +137,7 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
                 operands=[ctx.constants.none_literal],
             )
         ctx.emit(
-            Opcode.STORE_VAR,
+            Opcode.DECL_VAR,
             operands=[var_name, val_reg],
             node=node,
         )
@@ -234,7 +234,7 @@ def lower_pascal_proc(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def _lower_pascal_params(ctx: TreeSitterEmitContext, args_node) -> None:
@@ -253,7 +253,7 @@ def _lower_pascal_params(ctx: TreeSitterEmitContext, args_node) -> None:
                 node=child,
             )
             ctx.emit(
-                Opcode.STORE_VAR,
+                Opcode.DECL_VAR,
                 operands=[pname, f"%{ctx.reg_counter - 1}"],
             )
 
@@ -283,7 +283,7 @@ def _lower_pascal_single_param(ctx: TreeSitterEmitContext, child) -> None:
         ctx.seed_register_type(_sym_reg, type_hint)
         ctx.seed_param_type(pname, type_hint)
         ctx.emit(
-            Opcode.STORE_VAR,
+            Opcode.DECL_VAR,
             operands=[pname, f"%{ctx.reg_counter - 1}"],
         )
         ctx.seed_var_type(pname, type_hint)
@@ -297,7 +297,7 @@ def lower_pascal_decl_consts(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_pascal_decl_const(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower declConst -- extract name + defaultValue child, lower value, STORE_VAR."""
+    """Lower declConst -- extract name + defaultValue child, lower value, DECL_VAR."""
     id_node = next(
         (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
     )
@@ -332,7 +332,7 @@ def lower_pascal_decl_const(ctx: TreeSitterEmitContext, node) -> None:
             operands=[ctx.constants.none_literal],
         )
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=[var_name, val_reg],
         node=node,
     )
@@ -379,4 +379,4 @@ def lower_pascal_decl_type(ctx: TreeSitterEmitContext, node) -> None:
             constants.CLASS_REF_TEMPLATE.format(name=type_name, label=class_label)
         ],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[type_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[type_name, cls_reg])

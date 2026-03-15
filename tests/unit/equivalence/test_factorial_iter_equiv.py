@@ -37,7 +37,7 @@ class TestFactorialIterIRStructure:
     def test_required_opcodes_in_function_body(self, language):
         opcodes = function_opcode_sequence(language, PROGRAMS[language], "factorial")
         opcode_set = set(opcodes)
-        required = {Opcode.BRANCH_IF, Opcode.BINOP, Opcode.STORE_VAR}
+        required = {Opcode.BRANCH_IF, Opcode.BINOP}
         missing = required - opcode_set
         assert not missing, f"[{language}] missing required opcodes in body: {missing}"
 

@@ -182,7 +182,7 @@ class TestPythonFunctions:
         ]
         assert any("a" in p for p in param_names)
         assert any("b" in p for p in param_names)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("add" in inst.operands for inst in stores)
 
     def test_function_call(self):
@@ -201,7 +201,7 @@ class TestPythonFunctions:
 class TestPythonClasses:
     def test_class_definition(self):
         instructions = _parse_python("class Dog:\n    pass")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -273,7 +273,7 @@ def safe_divide(a, b):
         assert len(returns) >= 2
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("/" in inst.operands for inst in binops)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("safe_divide" in inst.operands for inst in stores)
 
     def test_class_with_init_and_method(self):
@@ -285,7 +285,7 @@ class Counter:
         self.count = self.count + 1
 """
         instructions = _parse_python(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Counter" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -374,7 +374,7 @@ def quadruple(x):
     return double(double(x))
 """
         instructions = _parse_python(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("double" in inst.operands for inst in stores)
         assert any("quadruple" in inst.operands for inst in stores)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -394,7 +394,7 @@ def validate(x):
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.THROW in opcodes
         assert Opcode.RETURN in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("validate" in inst.operands for inst in stores)
 
     def test_augmented_assignment_operators(self):
@@ -518,7 +518,7 @@ class TestPythonWithStatement:
         method_names = [inst.operands[1] for inst in calls if len(inst.operands) > 1]
         assert "__enter__" in method_names
         assert "__exit__" in method_names
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("fh" in inst.operands for inst in stores)
 
     def test_with_no_as(self):
@@ -540,7 +540,7 @@ class TestPythonWithStatement:
         # Two enters and two exits
         assert method_names.count("__enter__") == 2
         assert method_names.count("__exit__") == 2
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("f" in inst.operands for inst in stores)
         assert any("g" in inst.operands for inst in stores)
 
@@ -549,7 +549,7 @@ class TestPythonDecorators:
     def test_decorator_basic(self):
         source = "@my_dec\ndef foo():\n    return 1"
         instructions = _parse_python(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("foo" in inst.operands for inst in stores)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert len(calls) >= 1
@@ -562,17 +562,20 @@ class TestPythonDecorators:
     def test_decorator_stacked(self):
         source = "@dec1\n@dec2\ndef bar():\n    return 1"
         instructions = _parse_python(source)
+        decls = _find_all(instructions, Opcode.DECL_VAR)
         stores = _find_all(instructions, Opcode.STORE_VAR)
-        foo_stores = [i for i in stores if "bar" in i.operands]
-        # Initial store + 2 decorator re-stores
-        assert len(foo_stores) >= 3
+        bar_decls = [i for i in decls if "bar" in i.operands]
+        bar_stores = [i for i in stores if "bar" in i.operands]
+        # Initial def is DECL_VAR, 2 decorator re-stores are STORE_VAR
+        assert len(bar_decls) >= 1
+        assert len(bar_stores) >= 2
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert len(calls) >= 2
 
     def test_decorator_on_class(self):
         source = "@register\nclass MyClass:\n    pass"
         instructions = _parse_python(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("MyClass" in inst.operands for inst in stores)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert len(calls) >= 1
@@ -756,7 +759,7 @@ class TestPythonNamedExpression:
     def test_walrus_basic(self):
         source = "if (n := len(data)) > 10:\n    print(n)"
         instructions = _parse_python(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("n" in inst.operands for inst in stores)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("len" in inst.operands for inst in calls)
@@ -764,13 +767,13 @@ class TestPythonNamedExpression:
     def test_walrus_in_while(self):
         source = 'while (line := readline()) != "":\n    process(line)'
         instructions = _parse_python(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("line" in inst.operands for inst in stores)
 
     def test_walrus_standalone(self):
         source = "(y := x + 1)"
         instructions = _parse_python(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("y" in inst.operands for inst in stores)
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
@@ -841,7 +844,7 @@ class TestPythonImportStatement:
         instructions = _parse_python(source)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("import" in inst.operands for inst in calls)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("os" in inst.operands for inst in stores)
 
     def test_import_dotted(self):
@@ -849,7 +852,7 @@ class TestPythonImportStatement:
         instructions = _parse_python(source)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("os.path" in inst.operands for inst in calls)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("os" in inst.operands for inst in stores)
 
     def test_import_from_basic(self):
@@ -857,13 +860,13 @@ class TestPythonImportStatement:
         instructions = _parse_python(source)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("import" in inst.operands for inst in calls)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("path" in inst.operands for inst in stores)
 
     def test_import_from_multiple(self):
         source = "from os import path, getcwd"
         instructions = _parse_python(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("path" in inst.operands for inst in stores)
         assert any("getcwd" in inst.operands for inst in stores)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
@@ -910,7 +913,7 @@ class TestPythonTypeAlias:
         source = "type Vector = list[float]"
         instructions = _parse_python(source)
         # Only entry label should exist, no variable stores
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert len(stores) == 0
 
 

@@ -222,12 +222,12 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.LABEL, label=true_label)
     true_reg = ctx.lower_expr(true_node)
     result_var = f"__ternary_{ctx.label_counter}"
-    ctx.emit(Opcode.STORE_VAR, operands=[result_var, true_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, true_reg])
     ctx.emit(Opcode.BRANCH, label=end_label)
 
     ctx.emit(Opcode.LABEL, label=false_label)
     false_reg = ctx.lower_expr(false_node)
-    ctx.emit(Opcode.STORE_VAR, operands=[result_var, false_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, false_reg])
     ctx.emit(Opcode.BRANCH, label=end_label)
 
     ctx.emit(Opcode.LABEL, label=end_label)
@@ -297,7 +297,7 @@ def lower_declaration_pattern(ctx: TreeSitterEmitContext, node) -> str:
     if designation:
         var_name = ctx.node_text(designation)
         ctx.emit(
-            Opcode.STORE_VAR,
+            Opcode.DECL_VAR,
             operands=[var_name, type_reg],
             node=node,
         )
@@ -667,7 +667,7 @@ def lower_csharp_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 ctx.seed_register_type(param_reg, type_hint)
                 ctx.seed_param_type(pname, type_hint)
                 ctx.emit(
-                    Opcode.STORE_VAR,
+                    Opcode.DECL_VAR,
                     operands=[pname, param_reg],
                 )
                 ctx.seed_var_type(pname, type_hint)

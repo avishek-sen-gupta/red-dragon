@@ -1,6 +1,6 @@
 # IR Reference
 
-RedDragon uses a flattened high-level three-address code IR. Every program — regardless of source language or frontend — is lowered to a linear sequence of `IRInstruction`s drawn from 28 opcodes.
+RedDragon uses a flattened high-level three-address code IR. Every program — regardless of source language or frontend — is lowered to a linear sequence of `IRInstruction`s drawn from 29 opcodes.
 
 ## Instruction format
 
@@ -237,17 +237,33 @@ Used for higher-order functions and dynamic dispatch. Resolves `target_reg` — 
 
 These opcodes have `result_reg = null`.
 
-### STORE_VAR
+### DECL_VAR
 
-Write a value into a named variable.
+Declare a new variable in the current scope.
 
 | Field | Value |
 |-------|-------|
 | `operands` | `[var_name, value_reg]` |
 
-Stores in the current call frame's local variables. If inside a closure, also updates the captured environment.
+Always creates (or overwrites) the variable in the **current** call frame's `local_vars`. Used for all declaration-site bindings: `let`/`var`/`const`/`val` declarations, function/class definitions, parameter bindings, catch variables, and for-loop variable initializations.
+
+```
+decl_var x %5
+```
+
+### STORE_VAR
+
+Assign a value to an existing variable.
+
+| Field | Value |
+|-------|-------|
+| `operands` | `[var_name, value_reg]` |
+
+Walks the **scope chain** (call stack in reverse) to find an existing binding for `var_name`, then writes to that frame. If no existing binding is found, falls back to creating in the current frame. Used for bare assignments (`x = 10`), augmented assignments, and any write to an already-declared variable.
 
 **Alias-aware**: If the variable has been promoted to the heap via `ADDRESS_OF` (i.e., it has an entry in `var_heap_aliases`), the write goes through the heap object instead of `local_vars`. This ensures that assignments to the original variable are visible through pointers.
+
+**Closure-aware**: If the target frame has a `closure_env_id` and the variable is in `captured_var_names`, the closure environment's bindings are also updated.
 
 For block-scoped languages, `var_name` may be a mangled name (e.g. `x$1`) produced by the frontend's scope tracker. See [Block-Scope Tracking](type-system.md#block-scope-tracking-llvm-style).
 

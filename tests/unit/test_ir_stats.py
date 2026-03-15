@@ -30,11 +30,11 @@ class TestCountOpcodes:
     def test_multiple_distinct_opcodes(self):
         instructions = [
             IRInstruction(opcode=Opcode.CONST, operands=[42], result_reg="r0"),
-            IRInstruction(opcode=Opcode.STORE_VAR, operands=["x", "r0"]),
+            IRInstruction(opcode=Opcode.DECL_VAR, operands=["x", "r0"]),
             IRInstruction(opcode=Opcode.LOAD_VAR, operands=["x"], result_reg="r1"),
         ]
         result = count_opcodes(instructions)
-        assert result == {"CONST": 1, "STORE_VAR": 1, "LOAD_VAR": 1}
+        assert result == {"CONST": 1, "DECL_VAR": 1, "LOAD_VAR": 1}
 
     def test_repeated_opcodes_are_summed(self):
         instructions = [
@@ -95,7 +95,7 @@ class TestIrStats:
         js_source = "let x = 42;\n"
         result = ir_stats(js_source, language="javascript")
         assert result["CONST"] == 1
-        assert result["STORE_VAR"] == 1
+        assert result["DECL_VAR"] == 1
 
     def test_all_counts_are_positive(self):
         result = ir_stats(SIMPLE_SOURCE)

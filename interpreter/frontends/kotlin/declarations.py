@@ -70,7 +70,7 @@ def _lower_multi_variable_destructure(
             node=var_decl,
         )
         ctx.emit(
-            Opcode.STORE_VAR,
+            Opcode.DECL_VAR,
             operands=[var_name, elem_reg],
             node=parent_node,
         )
@@ -115,7 +115,7 @@ def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
             operands=[ctx.constants.none_literal],
         )
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=[var_name, val_reg],
         node=node,
     )
@@ -137,7 +137,7 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     ctx.seed_register_type(param_reg, class_type)
     ctx.seed_param_type("this", class_type)
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=["this", param_reg],
     )
     ctx.seed_var_type("this", class_type)
@@ -164,7 +164,7 @@ def _lower_kotlin_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 ctx.seed_register_type(f"%{ctx.reg_counter - 1}", type_hint)
                 ctx.seed_param_type(pname, type_hint)
                 ctx.emit(
-                    Opcode.STORE_VAR,
+                    Opcode.DECL_VAR,
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
                 )
                 ctx.seed_var_type(pname, type_hint)
@@ -249,7 +249,7 @@ def lower_function_decl(
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 # -- class declaration -------------------------------------------------
@@ -340,7 +340,7 @@ def _lower_enum_entry(ctx: TreeSitterEmitContext, node) -> None:
         operands=[f"enum:{entry_name}"],
         node=node,
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[entry_name, reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[entry_name, reg])
 
 
 def _extract_kotlin_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
@@ -413,7 +413,7 @@ def _emit_primary_constructor_init(
     for name in param_names:
         param_reg = ctx.fresh_reg()
         ctx.emit(Opcode.SYMBOLIC, result_reg=param_reg, operands=[f"param:{name}"])
-        ctx.emit(Opcode.STORE_VAR, operands=[name, param_reg])
+        ctx.emit(Opcode.DECL_VAR, operands=[name, param_reg])
 
     for name in param_names:
         val_reg = ctx.fresh_reg()
@@ -437,7 +437,7 @@ def _emit_primary_constructor_init(
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def lower_class_decl(ctx: TreeSitterEmitContext, node) -> None:
@@ -476,7 +476,7 @@ def lower_class_decl(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=cls_reg,
         operands=[make_class_ref(class_name, class_label, parents)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
 
 # -- object declaration (singleton) ------------------------------------
@@ -510,4 +510,4 @@ def lower_object_decl(ctx: TreeSitterEmitContext, node) -> None:
         operands=[obj_name],
         node=node,
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[obj_name, inst_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[obj_name, inst_reg])

@@ -57,7 +57,7 @@ def lower_cpp_declaration(ctx: TreeSitterEmitContext, node) -> None:
                     operands=[ctx.constants.none_literal],
                 )
             ctx.emit(
-                Opcode.STORE_VAR,
+                Opcode.DECL_VAR,
                 operands=[var_name, val_reg],
                 node=node,
             )
@@ -93,7 +93,7 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     ctx.seed_register_type(param_reg, class_type)
     ctx.seed_param_type("this", class_type)
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=["this", param_reg],
     )
     ctx.seed_var_type("this", class_type)
@@ -208,7 +208,7 @@ def _lower_cpp_constructor_with_field_inits(
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def lower_class_specifier(ctx: TreeSitterEmitContext, node) -> None:
@@ -252,7 +252,7 @@ def lower_class_specifier(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=cls_reg,
         operands=[make_class_ref(class_name, class_label, parents)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
 
 def _lower_cpp_class_body_b2(
@@ -391,7 +391,7 @@ def lower_cpp_method(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def lower_field_initializer_list(ctx: TreeSitterEmitContext, node) -> None:
@@ -507,7 +507,7 @@ def lower_cpp_function_def(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def lower_cpp_struct_body(ctx: TreeSitterEmitContext, node) -> None:
@@ -560,4 +560,4 @@ def lower_cpp_struct_def(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=cls_reg,
         operands=[make_class_ref(struct_name, class_label, parents)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[struct_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[struct_name, cls_reg])

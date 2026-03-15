@@ -36,7 +36,7 @@ def lower_js_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
             var_name = ctx.declare_block_var(ctx.node_text(name_node))
             val_reg = ctx.lower_expr(value_node)
             ctx.emit(
-                Opcode.STORE_VAR,
+                Opcode.DECL_VAR,
                 operands=[var_name, val_reg],
                 node=node,
             )
@@ -49,7 +49,7 @@ def lower_js_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 operands=[ctx.constants.none_literal],
             )
             ctx.emit(
-                Opcode.STORE_VAR,
+                Opcode.DECL_VAR,
                 operands=[var_name, val_reg],
                 node=node,
             )
@@ -74,7 +74,7 @@ def _lower_object_destructure(
                 node=child,
             )
             ctx.emit(
-                Opcode.STORE_VAR,
+                Opcode.DECL_VAR,
                 operands=[prop_name, field_reg],
                 node=parent_node,
             )
@@ -93,7 +93,7 @@ def _lower_object_destructure(
                     node=child,
                 )
                 ctx.emit(
-                    Opcode.STORE_VAR,
+                    Opcode.DECL_VAR,
                     operands=[local_name, field_reg],
                     node=parent_node,
                 )
@@ -112,7 +112,7 @@ def _lower_object_destructure(
                 node=rest_child,
             )
             ctx.emit(
-                Opcode.STORE_VAR,
+                Opcode.DECL_VAR,
                 operands=[rest_name, rest_reg],
                 node=parent_node,
             )
@@ -152,7 +152,7 @@ def _lower_array_destructure(
                 node=child,
             )
             ctx.emit(
-                Opcode.STORE_VAR,
+                Opcode.DECL_VAR,
                 operands=[rest_name, rest_reg],
                 node=parent_node,
             )
@@ -167,7 +167,7 @@ def _lower_array_destructure(
                 node=child,
             )
             ctx.emit(
-                Opcode.STORE_VAR,
+                Opcode.DECL_VAR,
                 operands=[ctx.node_text(child), elem_reg],
                 node=parent_node,
             )
@@ -264,7 +264,7 @@ def lower_js_class_def(ctx: TreeSitterEmitContext, node) -> None:
         operands=[make_class_ref(class_name, class_label, parents)],
     )
     ctx.seed_var_type(class_name, metatype(ScalarType(class_name)))
-    ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
 
 def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
@@ -279,7 +279,7 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     ctx.seed_register_type(param_reg, class_type)
     ctx.seed_param_type(constants.PARAM_THIS, class_type)
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=[constants.PARAM_THIS, param_reg],
     )
     ctx.seed_var_type(constants.PARAM_THIS, class_type)
@@ -330,7 +330,7 @@ def _lower_method_def(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def lower_js_function_def(ctx: TreeSitterEmitContext, node) -> None:
@@ -372,7 +372,7 @@ def lower_js_function_def(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def lower_export_statement(ctx: TreeSitterEmitContext, node) -> None:

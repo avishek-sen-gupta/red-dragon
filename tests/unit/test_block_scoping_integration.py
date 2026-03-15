@@ -29,11 +29,11 @@ def _lower(frontend_class, lang: str, source: str) -> list[IRInstruction]:
 
 
 def _store_var_names(instructions: list[IRInstruction]) -> list[str]:
-    """Extract all variable names from STORE_VAR instructions."""
+    """Extract all variable names from STORE_VAR and DECL_VAR instructions."""
     return [
         str(inst.operands[0])
         for inst in instructions
-        if inst.opcode == Opcode.STORE_VAR and inst.operands
+        if inst.opcode in (Opcode.DECL_VAR, Opcode.STORE_VAR) and inst.operands
     ]
 
 

@@ -37,7 +37,7 @@ class TestJavaSmoke:
 
     def test_class_wrapper(self):
         instructions = _parse_java("class M { }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("M" in inst.operands for inst in stores)
 
 
@@ -46,22 +46,25 @@ class TestJavaVariables:
         instructions = _parse_java("class M { void m() { int x = 10; } }")
         opcodes = _opcodes(instructions)
         assert Opcode.CONST in opcodes
-        assert Opcode.STORE_VAR in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert Opcode.DECL_VAR in opcodes
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
     def test_variable_without_initializer(self):
         instructions = _parse_java("class M { void m() { int x; } }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("None" in inst.operands for inst in consts)
 
     def test_assignment_expression(self):
         instructions = _parse_java("class M { void m() { int x; x = 5; } }")
+        decls = _find_all(instructions, Opcode.DECL_VAR)
         stores = _find_all(instructions, Opcode.STORE_VAR)
+        x_decls = [inst for inst in decls if "x" in inst.operands]
         x_stores = [inst for inst in stores if "x" in inst.operands]
-        assert len(x_stores) == 2
+        assert len(x_decls) == 1
+        assert len(x_stores) == 1
 
 
 class TestJavaExpressions:
@@ -76,7 +79,7 @@ class TestJavaExpressions:
         instructions = _parse_java(
             "class M { void m() { double d = 3.14; int x = (int) d; } }"
         )
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         # Cast is lowered as pass-through: d flows directly into x
         loads = _find_all(instructions, Opcode.LOAD_VAR)
@@ -115,7 +118,7 @@ class TestJavaMethodCalls:
         consts = _find_all(instructions, Opcode.CONST)
         assert any('"Rex"' in str(inst.operands) for inst in consts)
         # Result stored in variable d
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("d" in inst.operands for inst in stores)
 
 
@@ -157,7 +160,7 @@ class TestJavaControlFlow:
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BINOP in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("i" in inst.operands for inst in stores)
 
     def test_enhanced_for_loop(self):
@@ -224,7 +227,7 @@ class TestJavaFunctions:
 class TestJavaClasses:
     def test_class_definition(self):
         instructions = _parse_java("class Dog { void bark() { } }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -301,7 +304,7 @@ class M {
         assert Opcode.LOAD_INDEX in opcodes
         branches = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branches) >= 2
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("total" in inst.operands for inst in stores)
         assert len(instructions) > 20
 
@@ -322,7 +325,7 @@ class M {
         method_names = [inst.operands[1] for inst in calls if len(inst.operands) > 1]
         assert method_names.count("append") >= 3
         assert "toString" in method_names
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("result" in inst.operands for inst in stores)
 
     def test_interface_and_instanceof(self):
@@ -339,7 +342,7 @@ class Circle implements Shape {
         assert any(
             "<class:" in str(c.operands) and "Shape" in str(c.operands) for c in consts
         )
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Circle" in inst.operands for inst in stores)
         store_fields = _find_all(instructions, Opcode.STORE_FIELD)
         assert any("radius" in inst.operands for inst in store_fields)
@@ -414,7 +417,7 @@ class M {
         instructions = _parse_java(source)
         branches = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branches) >= 2
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("sum" in inst.operands for inst in stores)
         assert any("i" in inst.operands for inst in stores)
         assert any("j" in inst.operands for inst in stores)
@@ -669,7 +672,7 @@ class TestJavaLabeledStatement:
         instructions = _parse_java(
             "class M { void m() { outer: for (int i = 0; i < 5; i++) { x = i; } } }"
         )
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("i" in inst.operands for inst in stores)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
@@ -732,7 +735,7 @@ class TestJavaAnnotationTypeDeclaration:
         instructions = _parse_java("public @interface MyAnnotation { String value(); }")
         new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
         assert any("annotation:MyAnnotation" in str(inst.operands) for inst in new_objs)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("MyAnnotation" in inst.operands for inst in stores)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
@@ -748,7 +751,7 @@ class TestJavaAnnotationTypeDeclaration:
 class TestJavaRecordDeclaration:
     def test_record_basic(self):
         instructions = _parse_java("record Point(int x, int y) { }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Point" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -759,7 +762,7 @@ class TestJavaRecordDeclaration:
         instructions = _parse_java(
             "record Point(int x, int y) { double distance() { return Math.sqrt(x*x + y*y); } }"
         )
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Point" in inst.operands for inst in stores)
         assert any("distance" in inst.operands for inst in stores)
         returns = _find_all(instructions, Opcode.RETURN)
@@ -767,7 +770,7 @@ class TestJavaRecordDeclaration:
 
     def test_record_empty_body(self):
         instructions = _parse_java("record Empty() { }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Empty" in inst.operands for inst in stores)
         labels = [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
         assert any("class_Empty" in l for l in labels)
@@ -797,7 +800,7 @@ class TestJavaTextBlock:
         instructions = _parse_java(source)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("hello" in str(inst.operands) for inst in consts)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("s" in inst.operands for inst in stores)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
@@ -815,7 +818,7 @@ class TestJavaTextBlock:
             'class M { void m() { var json = """\n    {"key": "value"}\n    """; } }'
         )
         instructions = _parse_java(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("json" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("key" in str(inst.operands) for inst in consts)
@@ -938,7 +941,7 @@ class TestJavaHexFloatingPointLiteral:
     def test_hex_float_stored(self):
         """Hex float should be stored to a variable."""
         ir = _parse_java("class T { void f() { double x = 0x1.0p10; } }")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 

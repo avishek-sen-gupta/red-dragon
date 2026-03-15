@@ -34,14 +34,14 @@ class TestGoFrontendShortVarDecl:
         ir = _parse_and_lower("package main; func main() { x := 10 }")
         opcodes = _opcodes(ir)
         assert Opcode.CONST in opcodes
-        assert Opcode.STORE_VAR in opcodes
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert Opcode.DECL_VAR in opcodes
+        stores = _find_all(ir, Opcode.DECL_VAR)
         x_stores = [s for s in stores if "x" in s.operands]
         assert len(x_stores) >= 1
 
     def test_short_var_decl_string_value(self):
         ir = _parse_and_lower('package main; func main() { name := "hello" }')
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         name_stores = [s for s in stores if "name" in s.operands]
         assert len(name_stores) >= 1
 
@@ -50,9 +50,12 @@ class TestGoFrontendAssignment:
     def test_assignment_produces_store(self):
         source = "package main; func main() { x := 10; x = x + 5 }"
         ir = _parse_and_lower(source)
+        decls = _find_all(ir, Opcode.DECL_VAR)
         stores = _find_all(ir, Opcode.STORE_VAR)
+        x_decls = [s for s in decls if "x" in s.operands]
         x_stores = [s for s in stores if "x" in s.operands]
-        assert len(x_stores) >= 2
+        assert len(x_decls) >= 1
+        assert len(x_stores) >= 1
 
     def test_assignment_with_binop(self):
         source = "package main; func main() { x := 10; x = x + 5 }"
@@ -82,7 +85,7 @@ class TestGoFrontendFunctionDecl:
     def test_function_name_stored(self):
         source = "package main; func add(a int, b int) int { return a + b }"
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         add_stores = [s for s in stores if "add" in s.operands]
         assert len(add_stores) >= 1
 
@@ -202,7 +205,7 @@ type Point struct {
             c for c in consts if any("<class:" in str(op) for op in c.operands)
         ]
         assert len(class_refs) >= 1
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         point_stores = [s for s in stores if "Point" in s.operands]
         assert len(point_stores) >= 1
 
@@ -295,7 +298,7 @@ func main() {
         assert Opcode.BRANCH_IF in opcodes
         branches = _find_all(ir, Opcode.BRANCH_IF)
         assert len(branches) >= 2
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("total" in s.operands for s in stores)
         assert any("v" in s.operands for s in stores)
         assert len(ir) > 20
@@ -315,7 +318,7 @@ func (c Counter) Value() int {
         assert any("<class:" in str(c.operands) for c in consts)
         returns = _find_all(ir, Opcode.RETURN)
         assert len(returns) >= 1
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Counter" in s.operands for s in stores)
         assert any("Value" in s.operands for s in stores)
 
@@ -386,7 +389,7 @@ func main() {
         opcodes = _opcodes(ir)
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BRANCH in opcodes
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("sum" in s.operands for s in stores)
         assert any("i" in s.operands for s in stores)
         binops = _find_all(ir, Opcode.BINOP)
@@ -405,7 +408,7 @@ func quadruple(x int) int {
 }
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("double" in s.operands for s in stores)
         assert any("quadruple" in s.operands for s in stores)
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
@@ -643,7 +646,7 @@ func main() {
 }
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("result" in inst.operands for inst in stores)
 
     def test_switch_end_label(self):
@@ -778,7 +781,7 @@ func main() {
         ir = _parse_and_lower(source)
         labels = _labels_in_order(ir)
         assert any("myLabel" in lbl for lbl in labels)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 
@@ -789,7 +792,7 @@ package main
 const Pi = 3
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Pi" in inst.operands for inst in stores)
 
     def test_const_multiple(self):
@@ -801,7 +804,7 @@ const (
 )
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("A" in inst.operands for inst in stores)
         assert any("B" in inst.operands for inst in stores)
 
@@ -811,7 +814,7 @@ package main
 const X int = 10
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("X" in inst.operands for inst in stores)
 
 
@@ -847,7 +850,7 @@ class TestGoVarDeclarationMultiName:
     def test_var_multi_name_with_values(self):
         source = "package main\nvar a, b = 1, 2"
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "a" in store_names
         assert "b" in store_names
@@ -855,7 +858,7 @@ class TestGoVarDeclarationMultiName:
     def test_var_multi_name_without_values(self):
         source = "package main\nvar a, b int"
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "a" in store_names
         assert "b" in store_names
@@ -863,7 +866,7 @@ class TestGoVarDeclarationMultiName:
     def test_var_block_form(self):
         source = "package main\nvar (\n    x = 10\n    y = 20\n)"
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "x" in store_names
         assert "y" in store_names
@@ -871,7 +874,7 @@ class TestGoVarDeclarationMultiName:
     def test_var_multi_name_three_elements(self):
         source = "package main\nfunc f() { var x, y, z = 1, 2, 3 }"
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "x" in store_names
         assert "y" in store_names
@@ -1010,7 +1013,7 @@ class TestGoRuneLiteral:
     def test_rune_literal_stored_to_variable(self):
         """Rune literal should be stored in a variable."""
         ir = _parse_and_lower("package main; func main() { x := 'a' }")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 

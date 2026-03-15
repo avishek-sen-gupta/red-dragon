@@ -118,6 +118,6 @@ myLabel:
 int y = x + 1;
 """
         instructions = _parse_csharp(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         var_names = [inst.operands[0] for inst in stores]
         assert "y" in var_names, "Statement after label should be lowered"

@@ -114,7 +114,7 @@ def lower_for(ctx: TreeSitterEmitContext, node) -> None:
     iter_reg = ctx.lower_expr(right)
     init_idx = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
-    ctx.emit(Opcode.STORE_VAR, operands=["__for_idx", init_idx])
+    ctx.emit(Opcode.DECL_VAR, operands=["__for_idx", init_idx])
     len_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
 
@@ -252,7 +252,7 @@ def lower_with(ctx: TreeSitterEmitContext, node) -> None:
             node=item,
         )
         if var_name:
-            ctx.emit(Opcode.STORE_VAR, operands=[var_name, enter_reg])
+            ctx.emit(Opcode.DECL_VAR, operands=[var_name, enter_reg])
         enter_info.append((ctx_reg, var_name))
 
     ctx.lower_block(body_node)
@@ -359,7 +359,7 @@ def lower_delete(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_import(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower import module as CALL_FUNCTION('import', module) + STORE_VAR."""
+    """Lower import module as CALL_FUNCTION('import', module) + DECL_VAR."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     module_name = ctx.node_text(name_node) if name_node else "unknown"
     import_reg = ctx.fresh_reg()
@@ -372,7 +372,7 @@ def lower_import(ctx: TreeSitterEmitContext, node) -> None:
     # Store using the top-level module name (e.g., 'os' for 'os.path')
     store_name = module_name.split(".")[0]
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=[store_name, import_reg],
         node=node,
     )
@@ -382,7 +382,7 @@ def lower_import(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_import_from(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower from X import Y, Z as CALL_FUNCTION('import', ...) + STORE_VAR per name."""
+    """Lower from X import Y, Z as CALL_FUNCTION('import', ...) + DECL_VAR per name."""
     module_node = node.child_by_field_name("module_name")
     module_name = ctx.node_text(module_node) if module_node else "unknown"
 
@@ -403,7 +403,7 @@ def lower_import_from(ctx: TreeSitterEmitContext, node) -> None:
             node=node,
         )
         ctx.emit(
-            Opcode.STORE_VAR,
+            Opcode.DECL_VAR,
             operands=[imported_name, import_reg],
             node=node,
         )

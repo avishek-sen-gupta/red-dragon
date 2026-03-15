@@ -45,7 +45,7 @@ def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 ctx.seed_register_type(reg, type_hint)
                 ctx.seed_param_type(pname, type_hint)
                 ctx.emit(
-                    Opcode.STORE_VAR,
+                    Opcode.DECL_VAR,
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
                 )
                 ctx.seed_var_type(pname, type_hint)
@@ -65,7 +65,7 @@ def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 ctx.seed_register_type(reg, type_hint)
                 ctx.seed_param_type(pname, type_hint)
                 ctx.emit(
-                    Opcode.STORE_VAR,
+                    Opcode.DECL_VAR,
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
                 )
                 ctx.seed_var_type(pname, type_hint)
@@ -78,7 +78,7 @@ def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 node=child,
             )
             ctx.emit(
-                Opcode.STORE_VAR,
+                Opcode.DECL_VAR,
                 operands=[pname, f"%{ctx.reg_counter - 1}"],
             )
 
@@ -95,7 +95,7 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     ctx.seed_register_type(param_reg, class_type)
     ctx.seed_param_type(constants.PARAM_PHP_THIS, class_type)
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=[constants.PARAM_PHP_THIS, param_reg],
     )
     ctx.seed_var_type(constants.PARAM_PHP_THIS, class_type)
@@ -144,7 +144,7 @@ def lower_php_func_def(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def lower_php_method_decl(ctx: TreeSitterEmitContext, node) -> None:
@@ -188,7 +188,7 @@ def lower_php_method_decl(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def _lower_php_class_body(ctx: TreeSitterEmitContext, node) -> None:
@@ -262,7 +262,7 @@ def _emit_php_synthetic_constructor(
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def lower_php_class(ctx: TreeSitterEmitContext, node) -> None:
@@ -332,7 +332,7 @@ def lower_php_class(ctx: TreeSitterEmitContext, node) -> None:
         result_reg=cls_reg,
         operands=[make_class_ref(class_name, class_label, parents)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[class_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
 
 def lower_php_interface(ctx: TreeSitterEmitContext, node) -> None:
@@ -360,7 +360,7 @@ def lower_php_interface(ctx: TreeSitterEmitContext, node) -> None:
             constants.CLASS_REF_TEMPLATE.format(name=iface_name, label=class_label)
         ],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[iface_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[iface_name, cls_reg])
 
 
 def lower_php_trait(ctx: TreeSitterEmitContext, node) -> None:
@@ -388,7 +388,7 @@ def lower_php_trait(ctx: TreeSitterEmitContext, node) -> None:
             constants.CLASS_REF_TEMPLATE.format(name=trait_name, label=class_label)
         ],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[trait_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[trait_name, cls_reg])
 
 
 def lower_php_function_static(ctx: TreeSitterEmitContext, node) -> None:
@@ -400,7 +400,7 @@ def lower_php_function_static(ctx: TreeSitterEmitContext, node) -> None:
             if name_node and value_node:
                 val_reg = ctx.lower_expr(value_node)
                 ctx.emit(
-                    Opcode.STORE_VAR,
+                    Opcode.DECL_VAR,
                     operands=[ctx.node_text(name_node), val_reg],
                     node=child,
                 )
@@ -412,7 +412,7 @@ def lower_php_function_static(ctx: TreeSitterEmitContext, node) -> None:
                     operands=[ctx.constants.none_literal],
                 )
                 ctx.emit(
-                    Opcode.STORE_VAR,
+                    Opcode.DECL_VAR,
                     operands=[ctx.node_text(name_node), val_reg],
                     node=child,
                 )
@@ -443,7 +443,7 @@ def lower_php_enum(ctx: TreeSitterEmitContext, node) -> None:
             constants.CLASS_REF_TEMPLATE.format(name=enum_name, label=class_label)
         ],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[enum_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[enum_name, cls_reg])
 
 
 def _lower_php_constructor_with_field_inits(
@@ -487,7 +487,7 @@ def _lower_php_constructor_with_field_inits(
         result_reg=func_reg,
         operands=[constants.FUNC_REF_TEMPLATE.format(name=func_name, label=func_label)],
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[func_name, func_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def _collect_php_field_inits(ctx: TreeSitterEmitContext, node) -> list[FieldInit]:
@@ -620,7 +620,7 @@ def lower_php_const_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 name_node, value_node = named[0], named[1]
                 val_reg = ctx.lower_expr(value_node)
                 ctx.emit(
-                    Opcode.STORE_VAR,
+                    Opcode.DECL_VAR,
                     operands=[ctx.node_text(name_node), val_reg],
                     node=child,
                 )
@@ -639,7 +639,7 @@ def lower_php_global_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 node=child,
             )
             ctx.emit(
-                Opcode.STORE_VAR,
+                Opcode.DECL_VAR,
                 operands=[var_name, reg],
                 node=node,
             )

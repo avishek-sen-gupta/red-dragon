@@ -77,7 +77,7 @@ class TestScalaGenericFunction:
     def test_generic_function_result_stored(self):
         """Result of foo[Int](x) should be stored in 'r'."""
         instructions = _parse_scala("object M { val r = foo[Int](x) }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
 
@@ -110,7 +110,7 @@ class TestScalaPostfixExpression:
     def test_postfix_result_stored(self):
         """Result of 'list sorted' should be stored in 'r'."""
         instructions = _parse_scala("object M { val r = list sorted }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
     def test_postfix_call_method_has_zero_extra_args(self):
@@ -163,12 +163,12 @@ class TestScalaStableTypeIdentifier:
         """When stable_type_identifier appears in expression context, it produces
         LOAD_VAR + LOAD_FIELD chain."""
         instructions = _parse_scala("object M { val r: pkg.MyClass = null }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
     def test_stable_type_id_as_val_type_annotation(self):
         """'val r: pkg.MyClass = null' -- type annotation should not crash."""
         frontend = ScalaFrontend(TreeSitterParserFactory(), "scala")
         instructions = frontend.lower(b"object M { val r: pkg.MyClass = null }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)

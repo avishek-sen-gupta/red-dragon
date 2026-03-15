@@ -65,7 +65,7 @@ class TestBasicTryCatch:
         caught = [s for s in _symbolics(ir) if "caught_exception" in str(s.operands)]
         assert len(caught) == 1
         # Exception variable is stored
-        stores = [i for i in ir if i.opcode == Opcode.STORE_VAR and "e" in i.operands]
+        stores = [i for i in ir if i.opcode == Opcode.DECL_VAR and "e" in i.operands]
         assert len(stores) == 1
 
     def test_javascript_try_catch(self):
@@ -82,7 +82,7 @@ class TestBasicTryCatch:
         caught = [s for s in _symbolics(ir) if "caught_exception" in str(s.operands)]
         assert len(caught) == 1
         # Exception variable is stored
-        stores = [i for i in ir if i.opcode == Opcode.STORE_VAR and "e" in i.operands]
+        stores = [i for i in ir if i.opcode == Opcode.DECL_VAR and "e" in i.operands]
         assert len(stores) == 1
 
     def test_java_try_catch(self):
@@ -97,7 +97,7 @@ class TestBasicTryCatch:
         assert any("try_end" in l for l in labels)
         caught = [s for s in _symbolics(ir) if "caught_exception" in str(s.operands)]
         assert len(caught) == 1
-        stores = [i for i in ir if i.opcode == Opcode.STORE_VAR and "e" in i.operands]
+        stores = [i for i in ir if i.opcode == Opcode.DECL_VAR and "e" in i.operands]
         assert len(stores) == 1
 
     def test_cpp_try_catch(self):
@@ -125,7 +125,7 @@ class TestBasicTryCatch:
         assert any("try_end" in l for l in labels)
         caught = [s for s in _symbolics(ir) if "caught_exception" in str(s.operands)]
         assert len(caught) == 1
-        stores = [i for i in ir if i.opcode == Opcode.STORE_VAR and "e" in i.operands]
+        stores = [i for i in ir if i.opcode == Opcode.DECL_VAR and "e" in i.operands]
         assert len(stores) == 1
 
     def test_php_try_catch(self):
@@ -140,7 +140,7 @@ class TestBasicTryCatch:
         assert any("try_end" in l for l in labels)
         caught = [s for s in _symbolics(ir) if "caught_exception" in str(s.operands)]
         assert len(caught) == 1
-        stores = [i for i in ir if i.opcode == Opcode.STORE_VAR and "$e" in i.operands]
+        stores = [i for i in ir if i.opcode == Opcode.DECL_VAR and "$e" in i.operands]
         assert len(stores) == 1
 
     def test_kotlin_try_catch(self):
@@ -168,7 +168,7 @@ class TestBasicTryCatch:
         assert any("try_end" in l for l in labels)
         caught = [s for s in _symbolics(ir) if "caught_exception" in str(s.operands)]
         assert len(caught) == 1
-        stores = [i for i in ir if i.opcode == Opcode.STORE_VAR and "e" in i.operands]
+        stores = [i for i in ir if i.opcode == Opcode.DECL_VAR and "e" in i.operands]
         assert len(stores) == 1
 
 
@@ -365,7 +365,7 @@ class TestCatchWithoutVariable:
         stores_after_caught = []
         found_caught = False
         for inst in ir:
-            if found_caught and inst.opcode == Opcode.STORE_VAR:
+            if found_caught and inst.opcode == Opcode.DECL_VAR:
                 stores_after_caught.append(inst)
                 break
             if inst.opcode == Opcode.SYMBOLIC and "caught_exception" in str(
@@ -397,7 +397,7 @@ class TestCatchWithoutVariable:
         exc_stores = [
             i
             for i in ir
-            if i.opcode == Opcode.STORE_VAR and caught[0].result_reg in i.operands
+            if i.opcode == Opcode.DECL_VAR and caught[0].result_reg in i.operands
         ]
         assert (
             len(exc_stores) == 0

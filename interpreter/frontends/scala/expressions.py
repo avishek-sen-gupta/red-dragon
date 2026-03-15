@@ -129,13 +129,13 @@ def lower_if_expr(ctx: TreeSitterEmitContext, node) -> str:
 
     ctx.emit(Opcode.LABEL, label=true_label)
     true_reg = _lower_body_as_expr(ctx, body_node)
-    ctx.emit(Opcode.STORE_VAR, operands=[result_var, true_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, true_reg])
     ctx.emit(Opcode.BRANCH, label=end_label)
 
     if alt_node:
         ctx.emit(Opcode.LABEL, label=false_label)
         false_reg = _lower_body_as_expr(ctx, alt_node)
-        ctx.emit(Opcode.STORE_VAR, operands=[result_var, false_reg])
+        ctx.emit(Opcode.DECL_VAR, operands=[result_var, false_reg])
         ctx.emit(Opcode.BRANCH, label=end_label)
 
     ctx.emit(Opcode.LABEL, label=end_label)
@@ -207,7 +207,7 @@ def lower_match_expr(ctx: TreeSitterEmitContext, node) -> str:
                 result_reg=arm_result,
                 operands=[ctx.constants.none_literal],
             )
-        ctx.emit(Opcode.STORE_VAR, operands=[result_var, arm_result])
+        ctx.emit(Opcode.DECL_VAR, operands=[result_var, arm_result])
         ctx.emit(Opcode.BRANCH, label=end_label)
         ctx.emit(Opcode.LABEL, label=next_label)
 
@@ -358,7 +358,7 @@ def lower_lambda_expr(ctx: TreeSitterEmitContext, node) -> str:
                         node=child,
                     )
                     ctx.emit(
-                        Opcode.STORE_VAR,
+                        Opcode.DECL_VAR,
                         operands=[pname, f"%{ctx.reg_counter - 1}"],
                     )
 

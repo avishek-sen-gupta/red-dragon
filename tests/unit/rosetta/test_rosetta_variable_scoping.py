@@ -193,7 +193,7 @@ EXPECTED_ANSWER = 198
 EXPECTED_CALLER_X = 42
 
 MIN_INSTRUCTIONS = 8
-REQUIRED_OPCODES: set[Opcode] = {Opcode.CALL_FUNCTION, Opcode.RETURN, Opcode.STORE_VAR}
+REQUIRED_OPCODES: set[Opcode] = {Opcode.CALL_FUNCTION, Opcode.RETURN, Opcode.DECL_VAR}
 
 
 # ---------------------------------------------------------------------------

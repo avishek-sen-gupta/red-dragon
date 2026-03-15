@@ -34,14 +34,14 @@ class TestCSharpFrontendVariableDeclaration:
         ir = _parse_and_lower("int x = 10;")
         opcodes = _opcodes(ir)
         assert Opcode.CONST in opcodes
-        assert Opcode.STORE_VAR in opcodes
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        assert Opcode.DECL_VAR in opcodes
+        stores = _find_all(ir, Opcode.DECL_VAR)
         x_stores = [s for s in stores if "x" in s.operands]
         assert len(x_stores) >= 1
 
     def test_variable_decl_without_initializer(self):
         ir = _parse_and_lower("int x;")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         x_stores = [s for s in stores if "x" in s.operands]
         assert len(x_stores) >= 1
 
@@ -55,7 +55,7 @@ class TestCSharpFrontendArithmetic:
 
     def test_arithmetic_stores_result(self):
         ir = _parse_and_lower("int x = 10; int y = x + 5;")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         y_stores = [s for s in stores if "y" in s.operands]
         assert len(y_stores) >= 1
 
@@ -191,7 +191,7 @@ class Dog {
 }
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         dog_stores = [s for s in stores if "Dog" in s.operands]
         assert len(dog_stores) >= 1
         consts = _find_all(ir, Opcode.CONST)
@@ -297,7 +297,7 @@ do {
         ir = _parse_and_lower(source)
         opcodes = _opcodes(ir)
         assert Opcode.BRANCH_IF in opcodes
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         labels = _labels_in_order(ir)
         assert any("do_" in lbl for lbl in labels)
@@ -316,7 +316,7 @@ class Counter {
 }
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Counter" in s.operands for s in stores)
         consts = _find_all(ir, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -372,7 +372,7 @@ if (x > 100) {
     def test_lambda_in_declaration(self):
         source = "var square = (x) => x * x;"
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("square" in inst.operands for inst in stores)
         consts = _find_all(ir, Opcode.CONST)
         assert any("<function:" in str(inst.operands) for inst in consts)
@@ -390,7 +390,7 @@ for (int i = 0; i < 20; i++) {
         ir = _parse_and_lower(source)
         branches = _find_all(ir, Opcode.BRANCH_IF)
         assert len(branches) >= 2
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("total" in inst.operands for inst in stores)
         calls = _find_all(ir, Opcode.CALL_METHOD)
         assert any("WriteLine" in inst.operands for inst in calls)
@@ -422,7 +422,7 @@ class TestCSharpLambda:
         assert Opcode.BINOP in opcodes
         consts = _find_all(ir, Opcode.CONST)
         assert any("<function:" in str(inst.operands) for inst in consts)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("f" in inst.operands for inst in stores)
 
     def test_lambda_block_body(self):
@@ -529,7 +529,7 @@ class TestCSharpInterfaceDeclaration:
         assert any(
             "<class:" in str(c.operands) and "IShape" in str(c.operands) for c in consts
         )
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("IShape" in inst.operands for inst in stores)
         labels = [inst.label for inst in ir if inst.opcode == Opcode.LABEL]
         assert any("func_" in l and "Draw" in l for l in labels)
@@ -617,7 +617,7 @@ class C {
         ir = _parse_and_lower(source)
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("await" in inst.operands for inst in calls)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 
@@ -640,7 +640,7 @@ class C {
         assert (
             Opcode.BINOP in opcodes
         ), "switch expression must produce BINOP for arm comparisons"
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("result" in inst.operands for inst in stores)
 
     def test_switch_expression_with_default(self):
@@ -655,7 +655,7 @@ class C {
 }
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("y" in inst.operands for inst in stores)
 
 
@@ -731,7 +731,7 @@ class C {
 }
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("stream" in inst.operands for inst in stores)
 
     def test_using_lowers_body(self):
@@ -765,7 +765,7 @@ class C {
 }
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
     def test_checked_with_arithmetic(self):
@@ -779,7 +779,7 @@ class C {
 }
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("y" in inst.operands for inst in stores)
         # The arithmetic (+) must be lowered as a BINOP
         binops = _find_all(ir, Opcode.BINOP)
@@ -798,7 +798,7 @@ class C {
 }
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("v" in inst.operands for inst in stores)
 
 
@@ -810,7 +810,7 @@ class C {
 }
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("OnClick" in inst.operands for inst in stores)
 
     def test_event_field_with_initializer(self):
@@ -821,7 +821,7 @@ class C {
 }
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("OnChange" in inst.operands for inst in stores)
         assert any("OnReset" in inst.operands for inst in stores)
         consts = _find_all(ir, Opcode.CONST)
@@ -839,7 +839,7 @@ class C {
 }
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("OnClick" in inst.operands for inst in stores)
         consts = _find_all(ir, Opcode.CONST)
         assert any("event:" in str(inst.operands) for inst in consts)
@@ -853,7 +853,7 @@ class TestCSharpConditionalAccess:
 
     def test_conditional_access_stores(self):
         ir = _parse_and_lower("var x = obj?.Name;")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
     def test_conditional_access_nested(self):
@@ -870,7 +870,7 @@ void Main() {
 }
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Add" in inst.operands for inst in stores)
 
     def test_local_function_params(self):
@@ -906,7 +906,7 @@ class TestCSharpTupleExpression:
 
     def test_tuple_stores_result(self):
         ir = _parse_and_lower("var t = (1, 2);")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("t" in inst.operands for inst in stores)
 
     def test_tuple_element_count(self):
@@ -956,7 +956,7 @@ class TestCSharpIsPatternExpression:
 
     def test_is_pattern_stores(self):
         ir = _parse_and_lower("var r = obj is string s;")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
     def test_is_pattern_has_type_const(self):
@@ -976,7 +976,7 @@ class TestCSharpRecordDeclaration:
     def test_record_stores_class_name(self):
         source = "record Point(int X, int Y);"
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Point" in inst.operands for inst in stores)
 
 
@@ -999,7 +999,7 @@ class TestCSharpDeclarationPattern:
 
     def test_declaration_pattern_stores_var(self):
         ir = _parse_and_lower("var r = x switch { int n => n, _ => 0 };")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("n" in inst.operands for inst in stores)
 
 
@@ -1035,7 +1035,7 @@ class TestCSharpDelegateDeclaration:
     def test_delegate_declaration_stores(self):
         source = "delegate void Action();"
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Action" in inst.operands for inst in stores)
 
 
@@ -1050,7 +1050,7 @@ class TestCSharpImplicitObjectCreationExpression:
     def test_implicit_object_creation_stores(self):
         source = "class C { void M() { List<int> items = new(); } }"
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("items" in inst.operands for inst in stores)
 
 
@@ -1080,7 +1080,7 @@ class C {
 }
 """
         ir = _parse_and_lower(source)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("result" in inst.operands for inst in stores)
 
 
@@ -1151,7 +1151,7 @@ class TestCSharpEmptyStatement:
         ir = _parse_and_lower(source)
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("empty_statement" in str(inst.operands) for inst in symbolics)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         assert any("y" in inst.operands for inst in stores)
 
@@ -1169,7 +1169,7 @@ class C {
         ir = _parse_and_lower(source)
         symbolics = _find_all(ir, Opcode.SYMBOLIC)
         assert not any("empty_statement" in str(inst.operands) for inst in symbolics)
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         assert any("y" in inst.operands for inst in stores)
 
@@ -1190,7 +1190,7 @@ class TestCSharpDefaultExpression:
     def test_default_stored(self):
         """default expression should be stored to a variable."""
         ir = _parse_and_lower("int x = default;")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 
@@ -1243,7 +1243,7 @@ namespace Foo;
 class Bar {
   int x = 42;
 }""")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Bar" in inst.operands for inst in stores)
 
 

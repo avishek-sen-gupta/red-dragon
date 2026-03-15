@@ -36,21 +36,21 @@ class TestScalaDeclarations:
         instructions = _parse_scala("object M { val x = 10 }")
         opcodes = _opcodes(instructions)
         assert Opcode.CONST in opcodes
-        assert Opcode.STORE_VAR in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert Opcode.DECL_VAR in opcodes
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
     def test_var_definition(self):
         instructions = _parse_scala("object M { var y = 5 }")
         opcodes = _opcodes(instructions)
         assert Opcode.CONST in opcodes
-        assert Opcode.STORE_VAR in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert Opcode.DECL_VAR in opcodes
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("y" in inst.operands for inst in stores)
 
     def test_var_assignment(self):
         instructions = _parse_scala("object M { var y = 5; y = 10 }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("y" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("10" in inst.operands for inst in consts)
@@ -70,7 +70,7 @@ class TestScalaFunctions:
         ]
         assert any("a" in p for p in param_names)
         assert any("b" in p for p in param_names)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("add" in inst.operands for inst in stores)
 
     def test_function_call(self):
@@ -120,7 +120,7 @@ class TestScalaControlFlow:
         ), "match expression must produce BRANCH_IF for case dispatch"
         labels = _find_all(instructions, Opcode.LABEL)
         assert any("case" in (inst.label or "") for inst in labels)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
     def test_if_elseif_chain_all_branches_produce_ir(self):
@@ -156,7 +156,7 @@ class TestScalaClasses:
         instructions = _parse_scala('class Dog { def bark(): String = "woof" }')
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -165,7 +165,7 @@ class TestScalaClasses:
         instructions = _parse_scala("object Singleton { val x = 42 }")
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Singleton" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -181,7 +181,7 @@ class TestScalaExpressions:
         instructions = _parse_scala("object M { val v = { val a = 1; a + 2 } }")
         opcodes = _opcodes(instructions)
         assert Opcode.BINOP in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("v" in inst.operands for inst in stores)
 
     def test_field_access(self):
@@ -266,7 +266,7 @@ object M {
         assert (
             len(case_labels) >= 3
         ), "4 cases (3 concrete + 1 default) should produce >= 3 case labels"
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
         assert len(instructions) > 15
 
@@ -278,7 +278,7 @@ object Utils {
 }
 """
         instructions = _parse_scala(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Utils" in inst.operands for inst in stores)
         assert any("double" in inst.operands for inst in stores)
         assert any("triple" in inst.operands for inst in stores)
@@ -298,7 +298,7 @@ class Counter(start: Int) {
 }
 """
         instructions = _parse_scala(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Counter" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -321,7 +321,7 @@ object M {
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BRANCH in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("total" in inst.operands for inst in stores)
         assert any("i" in inst.operands for inst in stores)
         labels = _labels_in_order(instructions)
@@ -339,7 +339,7 @@ object M {
         instructions = _parse_scala(source)
         branches = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branches) >= 2
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("grade" in inst.operands for inst in stores)
         labels = _labels_in_order(instructions)
         assert any("if_true" in lbl for lbl in labels)
@@ -357,7 +357,7 @@ object M {
         instructions = _parse_scala(source)
         opcodes = _opcodes(instructions)
         assert Opcode.BINOP in opcodes
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("result" in inst.operands for inst in stores)
         assert any("a" in inst.operands for inst in stores)
         assert any("b" in inst.operands for inst in stores)
@@ -372,7 +372,7 @@ object M {
 }
 """
         instructions = _parse_scala(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         assert any("y" in inst.operands for inst in stores)
         assert any("z" in inst.operands for inst in stores)
@@ -392,7 +392,7 @@ object M {
 }
 """
         instructions = _parse_scala(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("inc" in inst.operands for inst in stores)
         assert any("double_inc" in inst.operands for inst in stores)
         all_calls = _find_all(instructions, Opcode.CALL_FUNCTION) + _find_all(
@@ -437,7 +437,7 @@ object M {
 }
 """
         instructions = _parse_scala(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("item" in inst.operands for inst in stores)
 
 
@@ -449,7 +449,7 @@ trait Animal {
 }
 """
         instructions = _parse_scala(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Animal" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -461,7 +461,7 @@ trait Greeter {
 }
 """
         instructions = _parse_scala(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Greeter" in inst.operands for inst in stores)
         assert any("greet" in inst.operands for inst in stores)
 
@@ -477,7 +477,7 @@ class TestScalaCaseClassDefinition:
     def test_case_class_produces_class_ref(self):
         source = "case class Point(x: Int, y: Int)"
         instructions = _parse_scala(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Point" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("class:" in str(inst.operands) for inst in consts)
@@ -489,7 +489,7 @@ case class Person(name: String, age: Int) {
 }
 """
         instructions = _parse_scala(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Person" in inst.operands for inst in stores)
         assert any("greeting" in inst.operands for inst in stores)
 
@@ -498,7 +498,7 @@ class TestScalaLazyValDefinition:
     def test_lazy_val_produces_store_var(self):
         source = "object M { lazy val x = 42 }"
         instructions = _parse_scala(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
         assert any("42" in inst.operands for inst in consts)
@@ -506,7 +506,7 @@ class TestScalaLazyValDefinition:
     def test_lazy_val_with_expression(self):
         source = "object M { lazy val computed = 10 + 20 }"
         instructions = _parse_scala(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("computed" in inst.operands for inst in stores)
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
@@ -539,7 +539,7 @@ object M {
 }
 """
         instructions = _parse_scala(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("count" in inst.operands for inst in stores)
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
@@ -591,7 +591,7 @@ class TestScalaInstanceExpression:
     def test_new_expression_stored(self):
         source = 'object M { val msg = new String("hello") }'
         instructions = _parse_scala(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("msg" in inst.operands for inst in stores)
 
 
@@ -692,7 +692,7 @@ class TestScalaStringInterpolation:
 class TestScalaDestructuring:
     def test_val_tuple_destructure_two_elements(self):
         instructions = _parse_scala("object M { val (a, b) = getPair() }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "a" in store_names
         assert "b" in store_names
@@ -701,7 +701,7 @@ class TestScalaDestructuring:
 
     def test_val_tuple_destructure_three_elements(self):
         instructions = _parse_scala("object M { val (x, y, z) = getTriple() }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "x" in store_names
         assert "y" in store_names
@@ -711,7 +711,7 @@ class TestScalaDestructuring:
 
     def test_var_tuple_destructure(self):
         instructions = _parse_scala("object M { var (first, second) = split() }")
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         store_names = [inst.operands[0] for inst in stores]
         assert "first" in store_names
         assert "second" in store_names
@@ -745,7 +745,7 @@ class TestScalaFunctionDeclaration:
     def test_function_declaration_stores(self):
         source = "trait Shape { def area(): Double }"
         instructions = _parse_scala(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("area" in inst.operands for inst in stores)
 
 
@@ -890,7 +890,7 @@ object M {
 }
 """
         instructions = _parse_scala(source)
-        stores = _find_all(instructions, Opcode.STORE_VAR)
+        stores = _find_all(instructions, Opcode.DECL_VAR)
         stored_names = [inst.operands[0] for inst in stores]
         assert (
             "e" in stored_names
@@ -1015,7 +1015,7 @@ class TestScalaExportDeclaration:
     def test_export_does_not_block(self):
         """Code after export should still be lowered."""
         ir = _parse_scala("export foo._\nval x = 42")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
 
 
@@ -1029,7 +1029,7 @@ class TestScalaValDeclaration:
     def test_val_declaration_does_not_block(self):
         """Code after val declaration should be lowered."""
         ir = _parse_scala("trait Foo { val x: Int }\nval y = 42")
-        stores = _find_all(ir, Opcode.STORE_VAR)
+        stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("y" in inst.operands for inst in stores)
 
 

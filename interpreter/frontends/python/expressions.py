@@ -165,12 +165,12 @@ def lower_conditional_expr(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.LABEL, label=true_label)
     true_reg = ctx.lower_expr(true_expr)
     result_var = f"__ternary_{ctx.label_counter}"
-    ctx.emit(Opcode.STORE_VAR, operands=[result_var, true_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, true_reg])
     ctx.emit(Opcode.BRANCH, label=end_label)
 
     ctx.emit(Opcode.LABEL, label=false_label)
     false_reg = ctx.lower_expr(false_expr)
-    ctx.emit(Opcode.STORE_VAR, operands=[result_var, false_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, false_reg])
     ctx.emit(Opcode.BRANCH, label=end_label)
 
     ctx.emit(Opcode.LABEL, label=end_label)
@@ -238,7 +238,7 @@ def _lower_comprehension_loop(
     iter_reg = ctx.lower_expr(iterable_node) if iterable_node else ctx.fresh_reg()
     init_idx = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
-    ctx.emit(Opcode.STORE_VAR, operands=["__for_idx", init_idx])
+    ctx.emit(Opcode.DECL_VAR, operands=["__for_idx", init_idx])
     len_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
 
@@ -268,7 +268,7 @@ def _lower_comprehension_loop(
     ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
     if loop_var and loop_var.type == PythonNodeType.IDENTIFIER:
         var_name = ctx.declare_block_var(ctx.node_text(loop_var))
-        ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+        ctx.emit(Opcode.DECL_VAR, operands=[var_name, elem_reg])
     else:
         lower_store_target(ctx, loop_var, elem_reg, node)
 
@@ -308,7 +308,7 @@ def _lower_comprehension_loop(
             result_reg=new_result_idx,
             operands=["+", result_idx, one_reg],
         )
-        ctx.emit(Opcode.STORE_VAR, operands=["__comp_result_idx", new_result_idx])
+        ctx.emit(Opcode.DECL_VAR, operands=["__comp_result_idx", new_result_idx])
 
         if skip_label:
             ctx.emit(Opcode.LABEL, label=skip_label)
@@ -350,7 +350,7 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> str:
     iter_reg = ctx.lower_expr(iterable_node) if iterable_node else ctx.fresh_reg()
     init_idx = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
-    ctx.emit(Opcode.STORE_VAR, operands=["__for_idx", init_idx])
+    ctx.emit(Opcode.DECL_VAR, operands=["__for_idx", init_idx])
     len_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
 
@@ -379,7 +379,7 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
     if loop_var and loop_var.type == PythonNodeType.IDENTIFIER:
         var_name = ctx.declare_block_var(ctx.node_text(loop_var))
-        ctx.emit(Opcode.STORE_VAR, operands=[var_name, elem_reg])
+        ctx.emit(Opcode.DECL_VAR, operands=[var_name, elem_reg])
     else:
         lower_store_target(ctx, loop_var, elem_reg, node)
 
@@ -467,7 +467,7 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def _lower_python_param(ctx: TreeSitterEmitContext, child) -> None:
-    """Lower a single Python parameter to SYMBOLIC + STORE_VAR."""
+    """Lower a single Python parameter to SYMBOLIC + DECL_VAR."""
     if child.type in (
         PythonNodeType.OPEN_PAREN,
         PythonNodeType.CLOSE_PAREN,
@@ -506,7 +506,7 @@ def _lower_python_param(ctx: TreeSitterEmitContext, child) -> None:
         node=child,
     )
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=[pname, f"%{ctx.reg_counter - 1}"],
     )
 
@@ -683,13 +683,13 @@ def lower_splat_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_named_expression(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower (y := expr) as lower value, STORE_VAR name, return register."""
+    """Lower (y := expr) as lower value, DECL_VAR name, return register."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     value_node = node.child_by_field_name(ctx.constants.subscript_value_field)
     val_reg = ctx.lower_expr(value_node)
     var_name = ctx.node_text(name_node)
     ctx.emit(
-        Opcode.STORE_VAR,
+        Opcode.DECL_VAR,
         operands=[var_name, val_reg],
         node=node,
     )
