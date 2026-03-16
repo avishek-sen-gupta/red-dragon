@@ -9,6 +9,7 @@ Covers:
 
 from __future__ import annotations
 
+from interpreter.class_ref import ClassRef
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import (
     _parse_class_ref,
@@ -82,30 +83,28 @@ class TestExpandParentChains:
 
 class TestRegistryClassParents:
     def test_class_parents_populated_from_ir(self):
-        """build_registry should populate class_parents from extended class refs."""
+        """build_registry should populate class_parents from class_symbol_table."""
         instructions = [
             IRInstruction(opcode=Opcode.LABEL, label="entry"),
             IRInstruction(opcode=Opcode.BRANCH, label="end_class_Animal_1"),
             IRInstruction(opcode=Opcode.LABEL, label="class_Animal_0"),
             IRInstruction(opcode=Opcode.LABEL, label="end_class_Animal_1"),
-            IRInstruction(
-                opcode=Opcode.CONST,
-                result_reg="%0",
-                operands=["<class:Animal@class_Animal_0>"],
-            ),
             IRInstruction(opcode=Opcode.STORE_VAR, operands=["Animal", "%0"]),
             IRInstruction(opcode=Opcode.BRANCH, label="end_class_Dog_3"),
             IRInstruction(opcode=Opcode.LABEL, label="class_Dog_2"),
             IRInstruction(opcode=Opcode.LABEL, label="end_class_Dog_3"),
-            IRInstruction(
-                opcode=Opcode.CONST,
-                result_reg="%1",
-                operands=["<class:Dog@class_Dog_2:Animal>"],
-            ),
             IRInstruction(opcode=Opcode.STORE_VAR, operands=["Dog", "%1"]),
         ]
+        class_st = {
+            "class_Animal_0": ClassRef(
+                name="Animal", label="class_Animal_0", parents=()
+            ),
+            "class_Dog_2": ClassRef(
+                name="Dog", label="class_Dog_2", parents=("Animal",)
+            ),
+        }
         cfg = build_cfg(instructions)
-        registry = build_registry(instructions, cfg)
+        registry = build_registry(instructions, cfg, class_symbol_table=class_st)
         assert registry.class_parents.get("Dog") == ["Animal"]
         assert registry.class_parents.get("Animal", []) == []
 
@@ -113,23 +112,13 @@ class TestRegistryClassParents:
         """C extends B extends A — class_parents['C'] should be ['B', 'A']."""
         instructions = [
             IRInstruction(opcode=Opcode.LABEL, label="entry"),
-            IRInstruction(
-                opcode=Opcode.CONST,
-                result_reg="%0",
-                operands=["<class:A@class_A_0>"],
-            ),
-            IRInstruction(
-                opcode=Opcode.CONST,
-                result_reg="%1",
-                operands=["<class:B@class_B_1:A>"],
-            ),
-            IRInstruction(
-                opcode=Opcode.CONST,
-                result_reg="%2",
-                operands=["<class:C@class_C_2:B>"],
-            ),
         ]
+        class_st = {
+            "class_A_0": ClassRef(name="A", label="class_A_0", parents=()),
+            "class_B_1": ClassRef(name="B", label="class_B_1", parents=("A",)),
+            "class_C_2": ClassRef(name="C", label="class_C_2", parents=("B",)),
+        }
         cfg = build_cfg(instructions)
-        registry = build_registry(instructions, cfg)
+        registry = build_registry(instructions, cfg, class_symbol_table=class_st)
         assert registry.class_parents["C"] == ["B", "A"]
         assert registry.class_parents["B"] == ["A"]
