@@ -7,7 +7,7 @@
 The C frontend lowers tree-sitter C ASTs into the RedDragon flattened three-address code IR. It handles the full range of C constructs including pointer arithmetic, struct/union/enum definitions, `sizeof`, ternary expressions, `goto`/labels, `switch` statements, compound literals, and C-style `for` loops. Preprocessor directives are treated as noise and skipped.
 
 The frontend introduces several C-specific lowering patterns:
-- Pointer dereference (`*p`) maps to `LOAD_FIELD ptr, "*"` and store-through-pointer (`*p = v`) maps to `STORE_FIELD ptr, "*", val`
+- Pointer dereference (`*p`) maps to `LOAD_INDIRECT ptr` and store-through-pointer (`*p = v`) maps to `STORE_INDIRECT ptr, val`
 - Address-of (`&x`) maps to `UNOP "&"`
 - `sizeof` maps to `CALL_FUNCTION "sizeof"`
 - `goto`/labels use a `user_` prefix to namespace user labels away from compiler-generated labels
@@ -97,7 +97,7 @@ The full expression dispatch returned by `_build_expr_dispatch()`:
 | `subscript_expression` | `c_expr.lower_subscript_expr` | `LOAD_INDEX arr, idx` |
 | `assignment_expression` | `c_expr.lower_assignment_expr` | `lower_expr(rhs)` + `STORE_VAR/FIELD/INDEX` |
 | `cast_expression` | `c_expr.lower_cast_expr` | Pass-through to inner value |
-| `pointer_expression` | `c_expr.lower_pointer_expr` | `*p`: `LOAD_FIELD ptr, "*"` / `&x`: `UNOP "&"` |
+| `pointer_expression` | `c_expr.lower_pointer_expr` | `*p`: `LOAD_INDIRECT ptr` / `&x`: `UNOP "&"` |
 | `sizeof_expression` | `c_expr.lower_sizeof` | `CALL_FUNCTION "sizeof", arg` |
 | `conditional_expression` | `c_expr.lower_ternary` | `BRANCH_IF` + two arms + `LOAD_VAR __ternary_N` |
 | `comma_expression` | `c_expr.lower_comma_expr` | Evaluates all, returns last register |
@@ -193,7 +193,7 @@ C-specific store target handling:
 - `identifier` -> `STORE_VAR name, val`
 - `field_expression` -> `STORE_FIELD obj, field_name, val`
 - `subscript_expression` -> `STORE_INDEX arr, idx, val`
-- `pointer_expression` (`*ptr = val`) -> `STORE_FIELD ptr, "*", val`
+- `pointer_expression` (`*ptr = val`) -> `STORE_INDIRECT ptr, val`
 - Fallback -> `STORE_VAR node_text, val`
 
 ### `c_expr.lower_cast_expr(ctx, node) -> str`
@@ -203,7 +203,7 @@ Lowers `cast_expression` (e.g., `(int)x`). Type casts are transparent -- the met
 ### `c_expr.lower_pointer_expr(ctx, node) -> str`
 
 Lowers pointer expressions with two modes based on the operator character:
-- `*p` (dereference): emits `LOAD_FIELD ptr_reg, "*"`
+- `*p` (dereference): emits `LOAD_INDIRECT ptr_reg`
 - `&x` (address-of): emits `UNOP "&", operand_reg`
 
 The operator is detected by scanning non-named children for `*` or `&`.
@@ -370,7 +370,7 @@ STORE_VAR "distance", %25
 
 ## Design Notes
 
-1. **Pointer dereference as field access**: `*ptr` is modelled as `LOAD_FIELD ptr, "*"` and `*ptr = v` as `STORE_FIELD ptr, "*", v`. This is a deliberate simplification -- it preserves the data-flow relationship (value flows through the pointer) without modelling actual memory addresses. The `"*"` sentinel field name is unique to the C/C++ frontends.
+1. **Pointer dereference as dedicated opcodes**: `*ptr` is modelled as `LOAD_INDIRECT ptr` and `*ptr = v` as `STORE_INDIRECT ptr, v`. These dedicated opcodes preserve the data-flow relationship (value flows through the pointer) without modelling actual memory addresses.
 
 2. **Address-of as unary operator**: `&x` is modelled as `UNOP "&"` rather than creating a new opcode. This is consistent with the IR design philosophy of keeping the opcode set small.
 
