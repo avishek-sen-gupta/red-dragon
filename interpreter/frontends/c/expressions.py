@@ -89,14 +89,14 @@ def lower_c_store_target(
                 node=parent_node,
             )
     elif target.type == CNodeType.POINTER_EXPRESSION:
-        # *ptr = val -> lower_expr(ptr_operand) -> STORE_FIELD ptr_reg, "*", val_reg
+        # *ptr = val -> lower_expr(ptr_operand) -> STORE_INDIRECT ptr_reg, val_reg
         operand_node = target.child_by_field_name("argument")
         if operand_node is None:
             operand_node = next((c for c in target.children if c.is_named), None)
         ptr_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
         ctx.emit(
-            Opcode.STORE_FIELD,
-            operands=[ptr_reg, "*", val_reg],
+            Opcode.STORE_INDIRECT,
+            operands=[ptr_reg, val_reg],
             node=parent_node,
         )
     else:
@@ -119,7 +119,7 @@ def lower_cast_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_pointer_expr(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower pointer dereference (*p) as LOAD_FIELD or address-of (&x) as ADDRESS_OF."""
+    """Lower pointer dereference (*p) as LOAD_INDIRECT or address-of (&x) as ADDRESS_OF."""
     operand_node = node.child_by_field_name("argument")
     # Detect operator: first non-named child is '*' or '&'
     op_char = next(
@@ -160,13 +160,13 @@ def lower_pointer_expr(ctx: TreeSitterEmitContext, node) -> str:
     if operand_node is not None and ctx.node_text(operand_node) == "this":
         return ctx.lower_expr(operand_node)
 
-    # Dereference: *ptr -> LOAD_FIELD ptr, "*"
+    # Dereference: *ptr -> LOAD_INDIRECT ptr
     inner_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
     reg = ctx.fresh_reg()
     ctx.emit(
-        Opcode.LOAD_FIELD,
+        Opcode.LOAD_INDIRECT,
         result_reg=reg,
-        operands=[inner_reg, "*"],
+        operands=[inner_reg],
         node=node,
     )
     return reg
