@@ -19,6 +19,7 @@ _VALUE_PRODUCERS: frozenset[Opcode] = frozenset(
         Opcode.CONST,
         Opcode.LOAD_VAR,
         Opcode.LOAD_FIELD,
+        Opcode.LOAD_INDIRECT,
         Opcode.LOAD_INDEX,
         Opcode.NEW_OBJECT,
         Opcode.NEW_ARRAY,
@@ -135,6 +136,10 @@ def _uses_of(instruction: IRInstruction) -> list[str]:
         return [operands[0]]
     if op == Opcode.STORE_FIELD and len(operands) >= 3:
         return [operands[0], operands[2]]
+    if op == Opcode.LOAD_INDIRECT and len(operands) >= 1:
+        return [operands[0]]
+    if op == Opcode.STORE_INDIRECT and len(operands) >= 2:
+        return [operands[0], operands[1]]
     if op == Opcode.LOAD_INDEX and len(operands) >= 2:
         return [operands[0], operands[1]]
     if op == Opcode.STORE_INDEX and len(operands) >= 3:
