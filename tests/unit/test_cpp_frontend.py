@@ -519,19 +519,18 @@ public:
         this_loads = [inst for inst in load_vars if "this" in inst.operands]
         assert len(this_loads) >= 1, "Expected at least one LOAD_VAR 'this'"
 
-    def test_deref_non_this_still_uses_load_field(self):
-        """*ptr (not *this) should still produce LOAD_FIELD."""
+    def test_deref_non_this_uses_load_indirect(self):
+        """*ptr (not *this) should produce LOAD_INDIRECT."""
         ir = _parse_cpp("""\
 int main() {
     int* p;
     int x = *p;
 }
 """)
-        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
-        star_fields = [inst for inst in load_fields if "*" in inst.operands]
+        load_indirect = [inst for inst in ir if inst.opcode == Opcode.LOAD_INDIRECT]
         assert (
-            len(star_fields) >= 1
-        ), "Expected LOAD_FIELD with '*' for non-this dereference"
+            len(load_indirect) >= 1
+        ), "Expected LOAD_INDIRECT for non-this dereference"
 
 
 class TestCppFieldInitB2:
