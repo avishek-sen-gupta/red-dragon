@@ -140,7 +140,7 @@ int answer = obj.doubled;
 
 
 class TestCSharpOutVarExecution:
-    """C# out int x / out var x should declare variable in caller scope.
+    """C# out int x / out var x with out on both method signature and call site.
 
     Our VM does not support true pass-by-reference, so out parameters
     get their default value (0) rather than callee-assigned values.
@@ -148,13 +148,14 @@ class TestCSharpOutVarExecution:
     """
 
     def test_try_parse_pattern_out_int(self):
-        """Classic TryParse pattern: out int result declared inline in call."""
+        """Classic TryParse pattern: out on param definition and call site."""
         locals_ = _run_csharp(
             """\
 class IntParser {
     int dummy;
     IntParser() { this.dummy = 0; }
-    bool TryParse(string input, int result) {
+    bool TryParse(string input, out int result) {
+        result = 42;
         return true;
     }
 }
@@ -169,13 +170,14 @@ int answer = result + 1;
         assert locals_["answer"] == 1
 
     def test_try_parse_pattern_out_var(self):
-        """TryParse with out var instead of out int."""
+        """TryParse with out on param definition and out var at call site."""
         locals_ = _run_csharp(
             """\
 class DoubleParser {
     int dummy;
     DoubleParser() { this.dummy = 0; }
-    bool TryParse(string input, int result) {
+    bool TryParse(string input, out int result) {
+        result = 100;
         return true;
     }
 }
@@ -189,13 +191,15 @@ int check = parsed + 10;
         assert locals_["check"] == 10
 
     def test_multiple_out_params(self):
-        """Method with multiple out parameters declares all in caller scope."""
+        """Method with multiple out parameters in signature and call site."""
         locals_ = _run_csharp(
             """\
 class OrderProcessor {
     int id;
     OrderProcessor(int i) { this.id = i; }
-    bool TryProcess(int amount, int tax, int total) {
+    bool TryProcess(int amount, out int tax, out int total) {
+        tax = amount * 2;
+        total = amount + tax;
         return true;
     }
 }
@@ -212,13 +216,14 @@ int totalVal = total;
         assert locals_["totalVal"] == 0
 
     def test_out_var_used_in_if_condition(self):
-        """out var declared inside an if condition should be accessible in body."""
+        """out on param definition and out var at call site, used in if body."""
         locals_ = _run_csharp(
             """\
 class Lookup {
     int store;
     Lookup() { this.store = 0; }
-    bool TryGet(string key, int value) {
+    bool TryGet(string key, out int value) {
+        value = 99;
         return true;
     }
 }
