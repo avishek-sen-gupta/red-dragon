@@ -17,7 +17,6 @@ from interpreter.frontends.type_extraction import (
 )
 from interpreter.type_expr import ScalarType
 
-
 _BYREF_KEYWORDS = frozenset({"out", "ref", "in"})
 
 
@@ -44,7 +43,9 @@ def extract_csharp_call_args(ctx: TreeSitterEmitContext, args_node) -> list[str]
             if has_byref and inner.type == NT.IDENTIFIER:
                 # ref x / in x / out existingVar — emit ADDRESS_OF
                 reg = ctx.fresh_reg()
-                ctx.emit(Opcode.ADDRESS_OF, result_reg=reg, operands=[ctx.node_text(inner)])
+                ctx.emit(
+                    Opcode.ADDRESS_OF, result_reg=reg, operands=[ctx.node_text(inner)]
+                )
                 regs.append(reg)
             else:
                 # declaration_expression (out int x) or regular arg
@@ -327,12 +328,16 @@ def emit_byref_load(ctx: TreeSitterEmitContext, name: str, *, node=None) -> str:
     ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[resolved], node=node)
     if name in ctx.byref_params:
         deref_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.LOAD_FIELD, result_reg=deref_reg, operands=[reg, "*"], node=node)
+        ctx.emit(
+            Opcode.LOAD_FIELD, result_reg=deref_reg, operands=[reg, "*"], node=node
+        )
         return deref_reg
     return reg
 
 
-def emit_byref_store(ctx: TreeSitterEmitContext, name: str, val_reg: str, *, node=None) -> None:
+def emit_byref_store(
+    ctx: TreeSitterEmitContext, name: str, val_reg: str, *, node=None
+) -> None:
     """Store to a variable, writing through pointer if it's a byref param."""
     if name in ctx.byref_params:
         ptr_reg = ctx.fresh_reg()
@@ -736,8 +741,12 @@ def lower_csharp_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 pname = ctx.node_text(name_node)
                 # Detect out/ref/in modifier
                 modifier = next(
-                    (c for c in child.children
-                     if c.type == NT.MODIFIER and ctx.node_text(c) in ("out", "ref", "in")),
+                    (
+                        c
+                        for c in child.children
+                        if c.type == NT.MODIFIER
+                        and ctx.node_text(c) in ("out", "ref", "in")
+                    ),
                     None,
                 )
                 if modifier:
