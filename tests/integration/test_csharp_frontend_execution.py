@@ -137,3 +137,52 @@ int answer = obj.doubled;
             max_steps=1000,
         )
         assert locals_["answer"] == 15
+
+
+class TestCSharpOutVarExecution:
+    """C# out int x / out var x should declare variable in scope."""
+
+    def test_out_int_variable_exists_after_call(self):
+        """out int result declares result in the enclosing scope."""
+        locals_ = _run_csharp("""\
+int result = 0;
+int answer = result;
+""")
+        assert locals_["answer"] == 0
+
+    def test_out_var_in_method_call(self):
+        """out var x in a method call should declare x in scope."""
+        locals_ = _run_csharp(
+            """\
+class Parser {
+    int parsed;
+    Parser(int v) { this.parsed = v; }
+    int TryParse(int input) {
+        return input + 1;
+    }
+}
+Parser p = new Parser(0);
+int result = p.TryParse(41);
+""",
+            max_steps=1000,
+        )
+        assert locals_["result"] == 42
+
+    def test_out_declaration_expression_declares_variable(self):
+        """declaration_expression in out position should declare var in scope."""
+        locals_ = _run_csharp(
+            """\
+class Converter {
+    int value;
+    Converter(int v) { this.value = v; }
+    int Convert(int x, int scale) {
+        return x + scale;
+    }
+}
+Converter c = new Converter(0);
+int out_result = 0;
+int answer = c.Convert(out_result, 10);
+""",
+            max_steps=1000,
+        )
+        assert locals_["answer"] == 10

@@ -1263,6 +1263,36 @@ class Bar {
         assert any("Bar" in inst.operands for inst in stores)
 
 
+class TestCSharpOutVarDeclaration:
+    """out int x / out var x should declare the variable and pass it as arg."""
+
+    def test_out_int_declares_variable(self):
+        """int.TryParse(s, out int result) should DECL_VAR result."""
+        ir = _parse_and_lower("int.TryParse(s, out int result);")
+        stores = _find_all(ir, Opcode.DECL_VAR)
+        assert any("result" in inst.operands for inst in stores)
+
+    def test_out_var_declares_variable(self):
+        """int.TryParse(s, out var result) should DECL_VAR result."""
+        ir = _parse_and_lower("int.TryParse(s, out var result);")
+        stores = _find_all(ir, Opcode.DECL_VAR)
+        assert any("result" in inst.operands for inst in stores)
+
+    def test_out_int_no_symbolic(self):
+        """declaration_expression should not fall through to SYMBOLIC."""
+        ir = _parse_and_lower("int.TryParse(s, out int result);")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "declaration_expression" in str(inst.operands) for inst in symbolics
+        )
+
+    def test_out_var_passed_as_argument(self):
+        """The declared variable should be passed as a CALL_METHOD argument."""
+        ir = _parse_and_lower("int.TryParse(s, out int result);")
+        calls = _find_all(ir, Opcode.CALL_METHOD)
+        assert any("TryParse" in inst.operands for inst in calls)
+
+
 class TestCSharpRangeExpression:
     def test_range_no_symbolic(self):
         """0..5 should not produce SYMBOLIC."""
