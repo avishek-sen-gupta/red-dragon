@@ -9,9 +9,15 @@ from typing import Any
 
 from interpreter.constants import Language
 from interpreter.frontend import Frontend
+from interpreter.class_ref import ClassRef
 from interpreter.func_ref import FuncRef
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.llm_frontend import IRParsingError, LLMFrontend, _convert_llm_func_refs
+from interpreter.llm_frontend import (
+    IRParsingError,
+    LLMFrontend,
+    _convert_llm_class_refs,
+    _convert_llm_func_refs,
+)
 from interpreter.parser import ParserFactory
 from interpreter import constants
 
@@ -257,10 +263,15 @@ class ChunkedLLMFrontend(Frontend):
         self._chunk_extractor = ChunkExtractor()
         self._renumberer = IRRenumberer()
         self._func_symbol_table: dict[str, FuncRef] = {}
+        self._class_symbol_table: dict[str, ClassRef] = {}
 
     @property
     def func_symbol_table(self) -> dict[str, FuncRef]:
         return self._func_symbol_table
+
+    @property
+    def class_symbol_table(self) -> dict[str, ClassRef]:
+        return self._class_symbol_table
 
     def lower(self, source: bytes) -> list[IRInstruction]:
         """Lower source code to IR by chunking and delegating to wrapped LLMFrontend.
@@ -339,8 +350,9 @@ class ChunkedLLMFrontend(Frontend):
         entry = IRInstruction(opcode=Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)
         combined = [entry] + all_instructions
 
-        # Convert LLM-emitted <function:...> strings to plain labels after renumbering
+        # Convert LLM-emitted <function:...> and <class:...> strings to plain labels after renumbering
         _convert_llm_func_refs(combined, self._func_symbol_table)
+        _convert_llm_class_refs(combined, self._class_symbol_table)
 
         logger.info(
             "ChunkedLLMFrontend: produced %d IR instructions from %d chunks",
