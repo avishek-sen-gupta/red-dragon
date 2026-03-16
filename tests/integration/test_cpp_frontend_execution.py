@@ -1,4 +1,4 @@
-"""Integration tests for C++ frontend: constructor field storage."""
+"""Integration tests for C++ frontend: constructor field storage, structured bindings."""
 
 from __future__ import annotations
 
@@ -63,3 +63,27 @@ int answer = sumList(n1, 3);
             max_steps=1000,
         )
         assert vars_["answer"] == 6
+
+
+class TestCppStructuredBindingExecution:
+    """auto [a, b] = expr; should decompose and bind correct values."""
+
+    def test_structured_binding_from_array(self):
+        """auto [a, b] = arr; binds elements by position."""
+        vars_ = _run_cpp("""\
+int arr[2] = {10, 20};
+auto [a, b] = arr;
+int sum = a + b;
+""")
+        assert vars_["a"] == 10
+        assert vars_["b"] == 20
+        assert vars_["sum"] == 30
+
+    def test_structured_binding_three_elements(self):
+        """auto [x, y, z] = arr; with three elements."""
+        vars_ = _run_cpp("""\
+int arr[3] = {1, 2, 3};
+auto [x, y, z] = arr;
+int total = x + y + z;
+""")
+        assert vars_["total"] == 6
