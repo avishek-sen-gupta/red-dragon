@@ -116,6 +116,7 @@ def lower_method_decl(
     ctx.emit(Opcode.LABEL, label=func_label)
     ctx.seed_func_return_type(func_label, return_hint)
 
+    saved_byref = ctx.byref_params.copy()
     if inject_this:
         _emit_this_param(ctx)
 
@@ -124,6 +125,8 @@ def lower_method_decl(
 
     if body_node:
         ctx.lower_block(body_node)
+
+    ctx.byref_params = saved_byref
 
     none_reg = ctx.fresh_reg()
     ctx.emit(
@@ -156,6 +159,7 @@ def lower_constructor_decl(
     ctx.emit(Opcode.BRANCH, label=end_label)
     ctx.emit(Opcode.LABEL, label=func_label)
 
+    saved_byref = ctx.byref_params.copy()
     _emit_this_param(ctx)
 
     if params_node:
@@ -170,6 +174,8 @@ def lower_constructor_decl(
 
     if body_node:
         ctx.lower_block(body_node)
+
+    ctx.byref_params = saved_byref
 
     none_reg = ctx.fresh_reg()
     ctx.emit(
@@ -499,11 +505,14 @@ def lower_local_function_stmt(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=func_label)
 
+    saved_byref = ctx.byref_params.copy()
     if params_node:
         lower_csharp_params(ctx, params_node)
 
     if body_node:
         ctx.lower_block(body_node)
+
+    ctx.byref_params = saved_byref
 
     none_reg = ctx.fresh_reg()
     ctx.emit(
