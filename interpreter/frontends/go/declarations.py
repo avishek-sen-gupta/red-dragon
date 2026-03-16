@@ -368,18 +368,53 @@ def _lower_var_spec(ctx: TreeSitterEmitContext, spec, parent_node) -> None:
 
 
 def lower_go_const_decl(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower const_declaration: iterate const_spec children."""
+    """Lower const_declaration: iterate const_spec children with iota tracking.
+
+    In Go, `iota` starts at 0 and increments per const_spec in a block.
+    Value-less specs replay the previous expression with the new iota value.
+    """
+    iota_counter = 0
+    prev_value_node = None
+    old_iota = getattr(ctx, "_go_iota_value", 0)
     for child in node.children:
         if child.type == GoNodeType.CONST_SPEC:
-            _lower_const_spec(ctx, child)
+            ctx._go_iota_value = iota_counter
+            _lower_const_spec(ctx, child, prev_value_node)
+            raw_value = child.child_by_field_name("value")
+            if raw_value is not None:
+                prev_value_node = _unwrap_expression_list(raw_value)
+            iota_counter += 1
+    ctx._go_iota_value = old_iota
 
 
-def _lower_const_spec(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower a single const_spec: lower value, STORE_VAR."""
+def _unwrap_expression_list(node):
+    """Unwrap a single-element expression_list to its inner expression."""
+    if node.type == GoNodeType.EXPRESSION_LIST:
+        named = [c for c in node.children if c.is_named]
+        if len(named) == 1:
+            return named[0]
+    return node
+
+
+def _lower_const_spec(ctx: TreeSitterEmitContext, node, prev_value_node=None) -> None:
+    """Lower a single const_spec: lower value, DECL_VAR.
+
+    If the spec has no value but a previous expression exists (iota pattern),
+    re-lower the previous expression with the current iota counter.
+    """
     name_node = node.child_by_field_name("name")
     value_node = node.child_by_field_name("value")
+    if value_node:
+        value_node = _unwrap_expression_list(value_node)
     if name_node and value_node:
         val_reg = ctx.lower_expr(value_node)
+        ctx.emit(
+            Opcode.DECL_VAR,
+            operands=[ctx.node_text(name_node), val_reg],
+            node=node,
+        )
+    elif name_node and prev_value_node is not None:
+        val_reg = ctx.lower_expr(prev_value_node)
         ctx.emit(
             Opcode.DECL_VAR,
             operands=[ctx.node_text(name_node), val_reg],

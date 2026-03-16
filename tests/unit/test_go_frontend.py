@@ -1128,3 +1128,54 @@ type Calculator interface {
             len(compute_entries) >= 1
         ), f"Expected return type for 'Compute', got: {rt}"
         assert len(reset_entries) >= 1, f"Expected return type for 'Reset', got: {rt}"
+
+
+class TestGoIota:
+    """iota in const blocks should emit sequential integer constants."""
+
+    def test_simple_iota_emits_sequential_consts(self):
+        """const (A = iota; B; C) should emit CONST 0, 1, 2."""
+        ir = _parse_and_lower("""
+            package main
+            const (
+                A = iota
+                B
+                C
+            )
+            """)
+        consts = _find_all(ir, Opcode.CONST)
+        const_values = [str(c.operands[0]) for c in consts if c.operands]
+        assert "0" in const_values, f"Expected CONST 0 for iota, got: {const_values}"
+        assert "1" in const_values, f"Expected CONST 1 for iota, got: {const_values}"
+        assert "2" in const_values, f"Expected CONST 2 for iota, got: {const_values}"
+
+    def test_iota_with_expression(self):
+        """const (X = iota * 10; Y; Z) should emit 0, 10, 20."""
+        ir = _parse_and_lower("""
+            package main
+            const (
+                X = iota * 10
+                Y
+                Z
+            )
+            """)
+        # iota*10 produces BINOP, so check DECL_VAR names exist
+        decls = _find_all(ir, Opcode.DECL_VAR)
+        decl_names = [d.operands[0] for d in decls if d.operands]
+        assert "X" in decl_names, f"Expected DECL_VAR for 'X', got: {decl_names}"
+        assert "Y" in decl_names, f"Expected DECL_VAR for 'Y', got: {decl_names}"
+        assert "Z" in decl_names, f"Expected DECL_VAR for 'Z', got: {decl_names}"
+
+    def test_iota_does_not_produce_symbolic(self):
+        """iota should not produce SYMBOLIC."""
+        ir = _parse_and_lower("""
+            package main
+            const (
+                A = iota
+                B
+            )
+            """)
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "iota" in str(s.operands) for s in symbolics
+        ), f"iota should not produce SYMBOLIC: {symbolics}"
