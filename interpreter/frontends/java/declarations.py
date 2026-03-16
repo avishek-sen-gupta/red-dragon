@@ -123,7 +123,11 @@ def lower_method_decl_stmt(ctx: TreeSitterEmitContext, node) -> None:
 
 
 _CLASS_BODY_METHOD_TYPES = frozenset(
-    {JavaNodeType.METHOD_DECLARATION, JavaNodeType.CONSTRUCTOR_DECLARATION}
+    {
+        JavaNodeType.METHOD_DECLARATION,
+        JavaNodeType.CONSTRUCTOR_DECLARATION,
+        JavaNodeType.COMPACT_CONSTRUCTOR_DECLARATION,
+    }
 )
 _CLASS_BODY_SKIP_TYPES = frozenset(
     {JavaNodeType.MODIFIERS, JavaNodeType.MARKER_ANNOTATION, JavaNodeType.ANNOTATION}
@@ -267,10 +271,19 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_record_decl(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower record_declaration like class_declaration."""
+    """Lower record_declaration with primary constructor from record header params.
+
+    Java records automatically generate an ``__init__`` from their header
+    parameters (e.g. ``record Point(int x, int y)``).  A compact constructor
+    (``Point { validate(x); }``) is a body that runs inside the generated
+    ``__init__`` before the implicit field assignments.
+    """
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
     record_name = ctx.node_text(name_node) if name_node else "__anon_record"
+
+    # Extract record header params: record Point(int x, int y) → ["x", "y"]
+    record_params = _extract_record_params(ctx, node)
 
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{record_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{record_name}")
@@ -298,6 +311,16 @@ def lower_record_decl(ctx: TreeSitterEmitContext, node) -> None:
         child.type == JavaNodeType.CONSTRUCTOR_DECLARATION for child in deferred
     )
 
+    # Find compact constructor body (if any)
+    compact_body = next(
+        (
+            child.child_by_field_name(ctx.constants.func_body_field)
+            for child in deferred
+            if child.type == JavaNodeType.COMPACT_CONSTRUCTOR_DECLARATION
+        ),
+        None,
+    )
+
     for child in deferred:
         if child.type == JavaNodeType.FIELD_DECLARATION and not _has_static_modifier(
             child
@@ -305,13 +328,81 @@ def lower_record_decl(ctx: TreeSitterEmitContext, node) -> None:
             continue
         elif child.type == JavaNodeType.CONSTRUCTOR_DECLARATION:
             _lower_constructor_decl(ctx, child, field_inits=field_inits_rec)
+        elif child.type == JavaNodeType.COMPACT_CONSTRUCTOR_DECLARATION:
+            continue  # Handled via _emit_record_init below
         else:
             _lower_deferred_class_child(ctx, child)
 
-    if not has_constructor and field_inits_rec:
+    if record_params and not has_constructor:
+        _emit_record_init(ctx, record_params, field_inits_rec, compact_body)
+    elif not has_constructor and field_inits_rec:
         emit_synthetic_init(ctx, field_inits_rec)
 
     ctx._current_class_name = saved_class
+
+
+def _extract_record_params(ctx: TreeSitterEmitContext, node) -> list[str]:
+    """Extract parameter names from a record header: record Foo(int x, int y) → ["x", "y"]."""
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    if params_node is None:
+        return []
+    return [
+        ctx.node_text(param.child_by_field_name(ctx.constants.func_name_field))
+        for param in params_node.children
+        if param.type == JavaNodeType.FORMAL_PARAMETER
+        and param.child_by_field_name(ctx.constants.func_name_field) is not None
+    ]
+
+
+def _emit_record_init(
+    ctx: TreeSitterEmitContext,
+    param_names: list[str],
+    field_inits: list[FieldInit] = [],
+    compact_body=None,
+) -> None:
+    """Emit __init__ for a Java record: params → fields, with optional compact constructor body."""
+    func_name = "__init__"
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+    end_label = ctx.fresh_label(f"end_{func_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit(Opcode.LABEL, label=func_label)
+
+    _emit_this_param(ctx)
+
+    # Declare record header params
+    for name in param_names:
+        param_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.SYMBOLIC, result_reg=param_reg, operands=[f"param:{name}"])
+        ctx.emit(Opcode.DECL_VAR, operands=[name, param_reg])
+
+    # Compact constructor body runs before field assignments (validation etc.)
+    if compact_body:
+        ctx.lower_block(compact_body)
+
+    # Prepend field initializers
+    emit_field_initializers(ctx, field_inits)
+
+    # Store record params as fields on this
+    for name in param_names:
+        val_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.LOAD_VAR, result_reg=val_reg, operands=[name])
+        this_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+        ctx.emit(Opcode.STORE_FIELD, operands=[this_reg, name, val_reg])
+
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
+    )
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def _lower_constructor_decl(
