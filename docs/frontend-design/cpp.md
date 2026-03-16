@@ -98,7 +98,7 @@ The full expression dispatch after `CppFrontend._build_expr_dispatch()` complete
 | `subscript_expression` | `cpp_expr.lower_cpp_subscript_expr` | **(C++)** override | `LOAD_INDEX obj, idx` (handles `subscript_argument_list`) |
 | `assignment_expression` | `cpp_expr.lower_cpp_assignment_expr` | **(C++)** override | `lower_expr(rhs)` + `STORE_VAR/FIELD/INDEX` (handles C++ subscript) |
 | `cast_expression` | `c_expr.lower_cast_expr` | **(C)** | Pass-through to inner value |
-| `pointer_expression` | `c_expr.lower_pointer_expr` | **(C)** | `LOAD_FIELD ptr, "*"` / `UNOP "&"` |
+| `pointer_expression` | `c_expr.lower_pointer_expr` | **(C)** | `LOAD_INDIRECT ptr` / `UNOP "&"` |
 | `sizeof_expression` | `c_expr.lower_sizeof` | **(C)** | `CALL_FUNCTION "sizeof", arg` |
 | `conditional_expression` | `c_expr.lower_ternary` | **(C)** | `BRANCH_IF` + two arms + `LOAD_VAR` |
 | `comma_expression` | `c_expr.lower_comma_expr` | **(C)** | Evaluates all, returns last |

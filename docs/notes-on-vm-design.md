@@ -852,14 +852,14 @@ When `&x` is taken on a primitive variable, the `ADDRESS_OF` handler:
 2. Records the alias in `frame.var_heap_aliases[var_name] = Pointer(base=heap_addr, offset=0)`
 3. Returns the `Pointer` as the instruction result
 
-After promotion, all reads (`LOAD_VAR`) and writes (`STORE_VAR`) for that variable are **alias-aware** — they go through the heap object instead of `local_vars`. This means `*ptr = 99` (via `STORE_FIELD ptr, "*", 99`) writes to the heap, and the next `LOAD_VAR x` reads back `99` from the same heap location.
+After promotion, all reads (`LOAD_VAR`) and writes (`STORE_VAR`) for that variable are **alias-aware** — they go through the heap object instead of `local_vars`. This means `*ptr = 99` (via `STORE_INDIRECT ptr, val`) writes to the heap, and the next `LOAD_VAR x` reads back `99` from the same heap location.
 
 ### Pointer operations
 
 | Operation | IR pattern | Executor behaviour |
 |---|---|---|
-| **Dereference read** (`*ptr`) | `LOAD_FIELD %ptr "*"` | Reads `heap[ptr.base].fields[str(ptr.offset)]` |
-| **Dereference write** (`*ptr = val`) | `STORE_FIELD %ptr "*" %val` | Writes to `heap[ptr.base].fields[str(ptr.offset)]` |
+| **Dereference read** (`*ptr`) | `LOAD_INDIRECT %ptr` | Reads `heap[ptr.base].fields[str(ptr.offset)]` |
+| **Dereference write** (`*ptr = val`) | `STORE_INDIRECT %ptr %val` | Writes to `heap[ptr.base].fields[str(ptr.offset)]` |
 | **Pointer + int** | `BINOP "+" %ptr %n` | `Pointer(base=ptr.base, offset=ptr.offset + n)` |
 | **Pointer - int** | `BINOP "-" %ptr %n` | `Pointer(base=ptr.base, offset=ptr.offset - n)` |
 | **Pointer - Pointer** | `BINOP "-" %p2 %p1` | `p2.offset - p1.offset` (integer result, same base required) |
