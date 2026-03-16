@@ -328,9 +328,7 @@ def emit_byref_load(ctx: TreeSitterEmitContext, name: str, *, node=None) -> str:
     ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[resolved], node=node)
     if name in ctx.byref_params:
         deref_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.LOAD_FIELD, result_reg=deref_reg, operands=[reg, "*"], node=node
-        )
+        ctx.emit(Opcode.LOAD_INDIRECT, result_reg=deref_reg, operands=[reg], node=node)
         return deref_reg
     return reg
 
@@ -343,7 +341,7 @@ def emit_byref_store(
         ptr_reg = ctx.fresh_reg()
         resolved = ctx.resolve_var(name)
         ctx.emit(Opcode.LOAD_VAR, result_reg=ptr_reg, operands=[resolved], node=node)
-        ctx.emit(Opcode.STORE_FIELD, operands=[ptr_reg, "*", val_reg], node=node)
+        ctx.emit(Opcode.STORE_INDIRECT, operands=[ptr_reg, val_reg], node=node)
     else:
         ctx.emit(Opcode.STORE_VAR, operands=[ctx.resolve_var(name), val_reg], node=node)
 
