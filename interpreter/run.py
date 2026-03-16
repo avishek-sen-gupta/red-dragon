@@ -18,6 +18,7 @@ from interpreter.frontend_observer import FrontendObserver
 from interpreter.cfg import CFG, build_cfg
 from interpreter.registry import build_registry, FunctionRegistry
 from interpreter.func_ref import FuncRef, BoundFuncRef
+from interpreter.class_ref import ClassRef
 from interpreter.executor import _try_execute_locally
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.resolution_strategy import ArityThenTypeStrategy
@@ -217,6 +218,7 @@ def execute_cfg(
     binop_coercion: BinopCoercionStrategy = DefaultBinopCoercion(),
     unop_coercion: UnopCoercionStrategy = DefaultUnopCoercion(),
     func_symbol_table: dict[str, FuncRef] = {},
+    class_symbol_table: dict[str, ClassRef] = {},
 ) -> tuple[VMState, ExecutionStats]:
     """Execute a pre-built CFG from the given entry point.
 
@@ -285,6 +287,7 @@ def execute_cfg(
             binop_coercion=binop_coercion,
             unop_coercion=unop_coercion,
             func_symbol_table=func_symbol_table,
+            class_symbol_table=class_symbol_table,
         )
         used_llm = False
         if result.handled:
@@ -366,6 +369,7 @@ def execute_cfg_traced(
     binop_coercion: BinopCoercionStrategy = DefaultBinopCoercion(),
     unop_coercion: UnopCoercionStrategy = DefaultUnopCoercion(),
     func_symbol_table: dict[str, FuncRef] = {},
+    class_symbol_table: dict[str, ClassRef] = {},
 ) -> tuple[VMState, ExecutionTrace]:
     """Execute a pre-built CFG and record a trace of every step.
 
@@ -434,6 +438,7 @@ def execute_cfg_traced(
             binop_coercion=binop_coercion,
             unop_coercion=unop_coercion,
             func_symbol_table=func_symbol_table,
+            class_symbol_table=class_symbol_table,
         )
         used_llm = False
         if result.handled:
@@ -624,6 +629,7 @@ def run(
         type_resolver,
         type_env_builder=frontend.type_env_builder,
         func_symbol_table=frontend.func_symbol_table,
+        class_symbol_table=frontend.class_symbol_table,
     )
 
     # 5. Execute via extract
@@ -655,6 +661,7 @@ def run(
         overload_resolver=overload_resolver,
         binop_coercion=binop_coercion,
         func_symbol_table=frontend.func_symbol_table,
+        class_symbol_table=frontend.class_symbol_table,
     )
     vm.data_layout = frontend.data_layout
     stats.execution_time = time.perf_counter() - exec_start
@@ -692,4 +699,8 @@ def _format_val(v: Any) -> str:
         if v.closure_id:
             return f"<function:{v.func_ref.name}@{v.func_ref.label}#{v.closure_id}>"
         return f"<function:{v.func_ref.name}@{v.func_ref.label}>"
+    if isinstance(v, ClassRef):
+        if v.parents:
+            return f"<class:{v.name}@{v.label}:{','.join(v.parents)}>"
+        return f"<class:{v.name}@{v.label}>"
     return repr(v)

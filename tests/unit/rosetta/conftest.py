@@ -169,7 +169,12 @@ def execute_for_language(
     )
     config = VMConfig(max_steps=max_steps)
     vm, stats = execute_cfg(
-        cfg, "entry", registry, config, func_symbol_table=func_symbol_table
+        cfg,
+        "entry",
+        registry,
+        config,
+        func_symbol_table=func_symbol_table,
+        class_symbol_table=class_symbol_table,
     )
     logger.info(
         "Execution complete for %s: %d steps, %d LLM calls",
