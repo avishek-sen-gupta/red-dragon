@@ -727,8 +727,8 @@ class TestJavaExplicitConstructorInvocation:
 
     def test_this_constructor_call(self):
         instructions = _parse_java("class M { M() { this(0); } M(int x) { } }")
-        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
-        assert any("this" in inst.operands for inst in calls)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any("__init__" in inst.operands for inst in calls)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
