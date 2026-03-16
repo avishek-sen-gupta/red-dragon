@@ -1,6 +1,6 @@
 # IR Reference
 
-RedDragon uses a flattened high-level three-address code IR. Every program — regardless of source language or frontend — is lowered to a linear sequence of `IRInstruction`s drawn from 29 opcodes.
+RedDragon uses a flattened high-level three-address code IR. Every program — regardless of source language or frontend — is lowered to a linear sequence of `IRInstruction`s drawn from 31 opcodes.
 
 ## Instruction format
 
