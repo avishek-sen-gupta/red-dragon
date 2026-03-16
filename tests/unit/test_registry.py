@@ -105,7 +105,7 @@ class Calc {
 }
 """)
         cfg = build_cfg(ir)
-        reg = build_registry(ir, cfg, fe.func_symbol_table)
+        reg = build_registry(ir, cfg, fe.func_symbol_table, fe.class_symbol_table)
         assert "Calc" in reg.class_methods
         # __init__ should have 2 overloads (from two constructors)
         assert len(reg.class_methods["Calc"]["__init__"]) == 2

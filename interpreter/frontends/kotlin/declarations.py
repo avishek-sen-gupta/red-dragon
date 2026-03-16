@@ -13,7 +13,6 @@ from interpreter.frontends.type_extraction import (
 from interpreter.frontends.common.declarations import (
     FieldInit,
     emit_synthetic_init,
-    make_class_ref,
 )
 from interpreter.type_expr import ScalarType
 
@@ -463,11 +462,7 @@ def lower_class_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=cls_reg,
-        operands=[make_class_ref(class_name, class_label, parents)],
-    )
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
 

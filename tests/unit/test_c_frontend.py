@@ -189,7 +189,7 @@ struct Point {
         assert len(point_stores) >= 1
         consts = _find_all(ir, Opcode.CONST)
         class_refs = [
-            c for c in consts if any("class:" in str(op) for op in c.operands)
+            c for c in consts if any("class_" in str(op) for op in c.operands)
         ]
         assert len(class_refs) >= 1
 
@@ -641,7 +641,7 @@ union Data {
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Data" in inst.operands for inst in stores)
         consts = _find_all(ir, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
 
     def test_union_fields_lowered(self):
         source = """\

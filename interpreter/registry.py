@@ -8,6 +8,7 @@ from typing import Any
 
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.cfg import CFG
+from interpreter.class_ref import ClassRef
 from interpreter.func_ref import FuncRef
 from interpreter import constants
 
@@ -80,6 +81,7 @@ def _scan_func_params(cfg: CFG) -> dict[str, list[str]]:
 def _scan_classes(
     instructions: list[IRInstruction],
     func_symbol_table: dict[str, FuncRef] = {},
+    class_symbol_table: dict[str, ClassRef] = {},
 ) -> tuple[dict[str, str], dict[str, dict[str, list[str]]], dict[str, list[str]]]:
     """Scan IR to find classes, their methods, and parent chains.
 
@@ -92,7 +94,13 @@ def _scan_classes(
     class_methods: dict[str, dict[str, list[str]]] = {}
     class_parents: dict[str, list[str]] = {}
 
-    # First pass: find class constants.
+    # First pass: populate from class_symbol_table (new path).
+    for label, cref in class_symbol_table.items():
+        classes[cref.name] = cref.label
+        if cref.parents:
+            class_parents[cref.name] = list(cref.parents)
+
+    # First pass fallback: find class constants via _parse_class_ref (legacy path).
     for inst in instructions:
         if inst.opcode != Opcode.CONST or not inst.operands:
             continue
@@ -169,12 +177,13 @@ def build_registry(
     instructions: list[IRInstruction],
     cfg: CFG,
     func_symbol_table: dict[str, FuncRef] = {},
+    class_symbol_table: dict[str, ClassRef] = {},
 ) -> FunctionRegistry:
     """Scan IR and CFG to build a function/class registry."""
     reg = FunctionRegistry()
     reg.func_params = _scan_func_params(cfg)
     reg.classes, reg.class_methods, direct_parents = _scan_classes(
-        instructions, func_symbol_table
+        instructions, func_symbol_table, class_symbol_table
     )
     reg.class_parents = _expand_parent_chains(direct_parents)
     return reg

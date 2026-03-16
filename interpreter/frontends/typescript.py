@@ -19,7 +19,6 @@ from interpreter.frontends.type_extraction import (
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.typescript_node_types import TypeScriptNodeType
-from interpreter.frontends.common.declarations import make_class_ref
 from interpreter.type_expr import UNKNOWN, ScalarType, TypeExpr, metatype
 
 
@@ -182,11 +181,7 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=cls_reg,
-        operands=[make_class_ref(iface_name, class_label, [])],
-    )
+    ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)
     ctx.seed_var_type(iface_name, metatype(ScalarType(iface_name)))
     ctx.emit(Opcode.DECL_VAR, operands=[iface_name, cls_reg])
 
@@ -376,11 +371,7 @@ def lower_ts_class_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=cls_reg,
-        operands=[make_class_ref(class_name, class_label, parents)],
-    )
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
     ctx.seed_var_type(class_name, metatype(ScalarType(class_name)))
     ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
