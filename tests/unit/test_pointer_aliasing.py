@@ -4,7 +4,7 @@ Covers:
   1. Pointer dataclass basics (creation, arithmetic, equality)
   2. ADDRESS_OF opcode handler (promotes variable to heap, returns Pointer)
   3. Alias-aware LOAD_VAR / STORE_VAR (reads/writes go through heap)
-  4. LOAD_FIELD/STORE_FIELD with "*" on Pointer (dereference read/write)
+  4. LOAD_INDIRECT/STORE_INDIRECT on Pointer (dereference read/write)
   5. BINOP pointer arithmetic (Pointer + int, Pointer - int)
   6. Nested pointers (int **pp = &ptr)
 """
@@ -30,6 +30,8 @@ from interpreter.executor import (
     _handle_store_var,
     _handle_load_field,
     _handle_store_field,
+    _handle_load_indirect,
+    _handle_store_indirect,
     _handle_binop,
     _handle_unop,
 )
@@ -183,11 +185,11 @@ class TestAliasAwareLoadStore:
         vm = _make_vm(x=42)
         ptr = self._promote(vm, "x")
 
-        # Write through pointer: STORE_FIELD ptr, "*", 99
+        # Write through pointer: STORE_INDIRECT ptr, 99
         vm.current_frame.registers["%ptr"] = typed_from_runtime(ptr)
         vm.current_frame.registers["%99"] = typed_from_runtime(99)
-        store_inst = _make_inst(Opcode.STORE_FIELD, operands=["%ptr", "*", "%99"])
-        store_result = _handle_store_field(store_inst, vm)
+        store_inst = _make_inst(Opcode.STORE_INDIRECT, operands=["%ptr", "%99"])
+        store_result = _handle_store_indirect(store_inst, vm)
         _apply(vm, store_result)
 
         # Now LOAD_VAR x should see 99
@@ -198,7 +200,7 @@ class TestAliasAwareLoadStore:
         assert unwrap(vm.current_frame.registers["%val"]) == 99
 
 
-# ── Dereference via LOAD_FIELD / STORE_FIELD with "*" ─────────────
+# ── Dereference via LOAD_INDIRECT / STORE_INDIRECT ────────────────
 
 
 class TestPointerDereference:
@@ -208,27 +210,27 @@ class TestPointerDereference:
         _apply(vm, result)
         return unwrap(vm.current_frame.registers["%ptr"])
 
-    def test_load_field_star_reads_through_pointer(self):
-        """LOAD_FIELD ptr, '*' should read from heap[ptr.base].fields[str(ptr.offset)]."""
+    def test_load_indirect_reads_through_pointer(self):
+        """LOAD_INDIRECT ptr should read from heap[ptr.base].fields[str(ptr.offset)]."""
         vm = _make_vm(x=42)
         ptr = self._promote(vm, "x")
         vm.current_frame.registers["%ptr"] = typed_from_runtime(ptr)
 
-        inst = _make_inst(Opcode.LOAD_FIELD, result_reg="%val", operands=["%ptr", "*"])
-        result = _handle_load_field(inst, vm)
+        inst = _make_inst(Opcode.LOAD_INDIRECT, result_reg="%val", operands=["%ptr"])
+        result = _handle_load_indirect(inst, vm)
         _apply(vm, result)
 
         assert unwrap(vm.current_frame.registers["%val"]) == 42
 
-    def test_store_field_star_writes_through_pointer(self):
-        """STORE_FIELD ptr, '*', 99 should write to heap."""
+    def test_store_indirect_writes_through_pointer(self):
+        """STORE_INDIRECT ptr, 99 should write to heap."""
         vm = _make_vm(x=42)
         ptr = self._promote(vm, "x")
         vm.current_frame.registers["%ptr"] = typed_from_runtime(ptr)
         vm.current_frame.registers["%99"] = typed_from_runtime(99)
 
-        inst = _make_inst(Opcode.STORE_FIELD, operands=["%ptr", "*", "%99"])
-        result = _handle_store_field(inst, vm)
+        inst = _make_inst(Opcode.STORE_INDIRECT, operands=["%ptr", "%99"])
+        result = _handle_store_indirect(inst, vm)
         _apply(vm, result)
 
         assert vm.heap[ptr.base].fields["0"].value == 99
@@ -293,7 +295,7 @@ class TestPointerArithmetic:
         assert new_ptr.offset == 3
 
     def test_pointer_arithmetic_then_deref(self):
-        """(ptr + 1) then LOAD_FIELD '*' should read offset 1 from the heap."""
+        """(ptr + 1) then LOAD_INDIRECT should read offset 1 from the heap."""
         vm = _make_vm()
         # Set up a heap array with 3 elements
         vm.heap["arr_0"] = HeapObject(
@@ -315,9 +317,9 @@ class TestPointerArithmetic:
 
         # *(ptr + 1)
         deref_inst = _make_inst(
-            Opcode.LOAD_FIELD, result_reg="%val", operands=["%ptr1", "*"]
+            Opcode.LOAD_INDIRECT, result_reg="%val", operands=["%ptr1"]
         )
-        deref_result = _handle_load_field(deref_inst, vm)
+        deref_result = _handle_load_indirect(deref_inst, vm)
         _apply(vm, deref_result)
 
         assert unwrap(vm.current_frame.registers["%val"]) == 20
@@ -427,15 +429,15 @@ class TestNestedPointers:
 
         # *pp should give us the Pointer to x
         deref1 = _make_inst(
-            Opcode.LOAD_FIELD, result_reg="%inner", operands=["%pp", "*"]
+            Opcode.LOAD_INDIRECT, result_reg="%inner", operands=["%pp"]
         )
-        _apply(vm, _handle_load_field(deref1, vm))
+        _apply(vm, _handle_load_indirect(deref1, vm))
         inner = unwrap(vm.current_frame.registers["%inner"])
         assert isinstance(inner, Pointer)
 
         # **pp should give us 42
         deref2 = _make_inst(
-            Opcode.LOAD_FIELD, result_reg="%val", operands=["%inner", "*"]
+            Opcode.LOAD_INDIRECT, result_reg="%val", operands=["%inner"]
         )
-        _apply(vm, _handle_load_field(deref2, vm))
+        _apply(vm, _handle_load_indirect(deref2, vm))
         assert unwrap(vm.current_frame.registers["%val"]) == 42
