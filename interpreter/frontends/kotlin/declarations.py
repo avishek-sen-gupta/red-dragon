@@ -12,6 +12,7 @@ from interpreter.frontends.type_extraction import (
 )
 from interpreter.frontends.common.declarations import (
     FieldInit,
+    emit_field_initializers,
     emit_synthetic_init,
 )
 from interpreter.type_expr import ScalarType
@@ -293,7 +294,7 @@ def _lower_class_body_with_companions(
         elif child.type == KNT.FUNCTION_DECLARATION:
             lower_function_decl(ctx, child, inject_this=True)
         elif child.type == KNT.SECONDARY_CONSTRUCTOR:
-            lower_secondary_constructor(ctx, child, primary_ctor_params)
+            lower_secondary_constructor(ctx, child, primary_ctor_params, field_inits)
         elif (
             child.type == KNT.PROPERTY_DECLARATION
             and _collect_kotlin_field_init(ctx, child) is not None
@@ -436,12 +437,15 @@ def _emit_primary_constructor_init(
 
 
 def lower_secondary_constructor(
-    ctx: TreeSitterEmitContext, node, primary_ctor_params: list[str] = []
+    ctx: TreeSitterEmitContext,
+    node,
+    primary_ctor_params: list[str] = [],
+    field_inits: list[FieldInit] = [],
 ) -> None:
     """Lower a Kotlin secondary constructor as an __init__ overload.
 
     Emits params, inlines the primary constructor's field stores from the
-    delegation args, then lowers the optional body.
+    delegation args (including field initializers), then lowers the optional body.
     """
     params_node = next(
         (c for c in node.children if c.type == KNT.FUNCTION_VALUE_PARAMETERS),
@@ -466,9 +470,12 @@ def lower_secondary_constructor(
     if params_node:
         _lower_kotlin_params(ctx, params_node)
 
-    # Inline delegation: evaluate args and store as fields on this
+    # Inline delegation: evaluate args and store as fields on this,
+    # then replay field initializers (e.g. var doubled: Int = 0)
     if delegation_node:
-        _emit_constructor_delegation(ctx, delegation_node, primary_ctor_params)
+        _emit_constructor_delegation(
+            ctx, delegation_node, primary_ctor_params, field_inits
+        )
 
     if body_node:
         ctx.lower_block(body_node)
@@ -491,11 +498,16 @@ def _emit_constructor_delegation(
     ctx: TreeSitterEmitContext,
     delegation_node,
     primary_ctor_params: list[str] = [],
+    field_inits: list[FieldInit] = [],
 ) -> None:
-    """Inline the primary constructor's field stores from delegation args.
+    """Inline the full primary constructor body from delegation args.
 
     Evaluates each delegation arg and stores it as a field on ``this``,
     using the primary constructor's parameter names as field names.
+    Then replays field initializers (e.g. ``var doubled: Int = 0``)
+    so all fields exist on the heap object before the secondary
+    constructor body runs.
+
     This avoids calling __init__ across frame boundaries where ``this``
     would not be accessible.
     """
@@ -517,6 +529,9 @@ def _emit_constructor_delegation(
             operands=[this_reg, field_name, arg_reg],
             node=delegation_node,
         )
+    # Replay field initializers from class body (e.g. var doubled: Int = 0)
+    if field_inits:
+        emit_field_initializers(ctx, field_inits)
 
 
 def lower_class_decl(ctx: TreeSitterEmitContext, node) -> None:

@@ -172,10 +172,6 @@ val answer = b.get()
 """)
         assert vars_["answer"] == 42
 
-    @pytest.mark.xfail(
-        reason="red-dragon-cb2: delegation inlining only maps primary params, "
-        "doesn't replay field initializers — doubled never created on heap"
-    )
     def test_secondary_constructor_body_reads_field(self):
         """Field set by delegation readable by bare name in constructor body."""
         vars_ = _run_kotlin(
