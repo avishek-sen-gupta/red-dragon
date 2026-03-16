@@ -122,8 +122,21 @@ def _lower_init_declarator(
     type_hint: TypeExpr = UNKNOWN,
 ) -> None:
     """Lower init_declarator (fields: declarator, value)."""
+    from interpreter.frontends.cpp.node_types import CppNodeType
+
     decl_node = node.child_by_field_name("declarator")
     value_node = node.child_by_field_name("value")
+
+    # C++17 structured bindings: auto [a, b] = expr;
+    if (
+        decl_node is not None
+        and decl_node.type == CppNodeType.STRUCTURED_BINDING_DECLARATOR
+    ):
+        from interpreter.frontends.cpp.control_flow import _lower_structured_binding
+
+        rhs_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
+        _lower_structured_binding(ctx, decl_node, rhs_reg)
+        return
 
     raw_name = extract_declarator_name(ctx, decl_node) if decl_node else "__anon"
     var_name = ctx.declare_block_var(raw_name)
