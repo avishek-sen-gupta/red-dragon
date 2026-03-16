@@ -1,6 +1,6 @@
 # IR Reference
 
-RedDragon uses a flattened high-level three-address code IR. Every program — regardless of source language or frontend — is lowered to a linear sequence of `IRInstruction`s drawn from 31 opcodes.
+RedDragon uses a flattened high-level three-address code IR. Every program — regardless of source language or frontend — is lowered to a linear sequence of `IRInstruction`s drawn from 33 opcodes.
 
 ## Instruction format
 
@@ -71,11 +71,8 @@ Read a field from a heap object.
 
 Resolves `obj_reg` to a heap address, then looks up `field_name` in the object's fields. Returns a fresh symbolic value if the field does not exist.
 
-When `field_name` is `"*"` and the resolved value is a `Pointer`, performs a **pointer dereference read**: reads `heap[ptr.base].fields[str(ptr.offset)]`. This is how both C and Rust lower `*ptr` in read context.
-
 ```
 %5 = load_field %obj "name"
-%6 = load_field %ptr "*"        // pointer dereference: *ptr
 ```
 
 ### LOAD_INDEX
@@ -184,6 +181,36 @@ Taking `&x` twice on the same variable returns the same `Pointer` (idempotent).
 %0 = address_of x              // &x → Pointer to x's heap-backed storage
 ```
 
+### LOAD_INDIRECT
+
+Read through a pointer (pointer dereference).
+
+| Field | Value |
+|-------|-------|
+| `result_reg` | target register |
+| `operands` | `[ptr_reg]` |
+
+Resolves `ptr_reg` to a `Pointer`, then reads `heap[base].fields[str(offset)]`. If the resolved value is a `BoundFuncRef`, returns it unchanged (identity). If the resolved value is not a `Pointer` but is on the heap, returns a fresh symbolic value. This is how C and Rust lower `*ptr` in read context.
+
+```
+%1 = load_indirect %ptr        // *ptr → reads through the pointer
+```
+
+### STORE_INDIRECT
+
+Write through a pointer (pointer dereference write).
+
+| Field | Value |
+|-------|-------|
+| `result_reg` | None |
+| `operands` | `[ptr_reg, val_reg]` |
+
+Resolves `ptr_reg` to a `Pointer`, then writes `val_reg` to `heap[base].fields[str(offset)]`. This is how C and Rust lower `*ptr = val`.
+
+```
+store_indirect %ptr %val       // *ptr = val → writes through the pointer
+```
+
 ### CALL_FUNCTION
 
 Call a named function or constructor.
@@ -279,11 +306,8 @@ Write a value into a heap object field.
 |-------|-------|
 | `operands` | `[obj_reg, field_name, value_reg]` |
 
-When `field_name` is `"*"` and the resolved value is a `Pointer`, performs a **pointer dereference write**: writes `value` to `heap[ptr.base].fields[str(ptr.offset)]`. This is how both C and Rust lower `*ptr = val`.
-
 ```
 store_field %obj "name" %val
-store_field %ptr "*" %val       // pointer dereference write: *ptr = val
 ```
 
 ### STORE_INDEX
@@ -586,7 +610,7 @@ end_try_0:
 
 ### Pointer aliasing (C/Rust)
 
-The `ADDRESS_OF` + `LOAD_FIELD`/`STORE_FIELD` with `"*"` pattern implements pointer semantics:
+The `ADDRESS_OF` + `LOAD_INDIRECT`/`STORE_INDIRECT` pattern implements pointer semantics:
 
 ```
 // C source: int x = 42; int *ptr = &x; *ptr = 99; int answer = x;
@@ -596,7 +620,7 @@ store_var x %0
 store_var ptr %1
 %2 = load_var ptr
 %3 = const 99
-store_field %2 "*" %3           // *ptr = 99 (writes through to x's heap storage)
+store_indirect %2 %3           // *ptr = 99 (writes through to x's heap storage)
 %4 = load_var x                 // reads 99 from heap (alias-aware)
 store_var answer %4
 ```
@@ -609,5 +633,5 @@ Pointer arithmetic on arrays:
 %p = load_var arr               // heap address string, auto-wraps to Pointer
 %1 = const 1
 %p1 = binop + %p %1            // Pointer(base=arr_0, offset=1)
-%val = load_field %p1 "*"      // reads heap[arr_0].fields["1"] → 20
+%val = load_indirect %p1       // reads heap[arr_0].fields["1"] → 20
 ```
