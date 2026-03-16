@@ -1,51 +1,69 @@
 """Unit tests for class inheritance — parent chain in FunctionRegistry.
 
 Covers:
-  1. _parse_class_ref extracts parent names from extended class ref format.
-  2. _scan_classes populates class_parents from IR metadata.
-  3. _expand_parent_chains transitively expands direct parents into full MRO.
-  4. Method resolution walks the parent chain on miss.
+  1. _convert_llm_class_refs extracts class refs from LLM-emitted strings.
+  2. _expand_parent_chains transitively expands direct parents into full MRO.
+  3. build_registry populates class_parents from class_symbol_table.
 """
 
 from __future__ import annotations
 
 from interpreter.class_ref import ClassRef
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.llm_frontend import _convert_llm_class_refs
 from interpreter.registry import (
-    _parse_class_ref,
     _expand_parent_chains,
     build_registry,
 )
 from interpreter.cfg import build_cfg
 
-# ── _parse_class_ref ─────────────────────────────────────────────
+# ── _convert_llm_class_refs ──────────────────────────────────────
 
 
-class TestParseClassRef:
+class TestConvertLLMClassRefs:
     def test_class_ref_without_parents(self):
-        result = _parse_class_ref("<class:Dog@class_Dog_0>")
-        assert result.matched
-        assert result.name == "Dog"
-        assert result.label == "class_Dog_0"
-        assert result.parents == []
+        inst = IRInstruction(opcode=Opcode.CONST, operands=["<class:Dog@class_Dog_0>"])
+        table: dict[str, ClassRef] = {}
+        _convert_llm_class_refs([inst], table)
+        assert inst.operands[0] == "class_Dog_0"
+        assert table["class_Dog_0"] == ClassRef(
+            name="Dog", label="class_Dog_0", parents=()
+        )
 
     def test_class_ref_with_single_parent(self):
-        result = _parse_class_ref("<class:Dog@class_Dog_0:Animal>")
-        assert result.matched
-        assert result.name == "Dog"
-        assert result.label == "class_Dog_0"
-        assert result.parents == ["Animal"]
+        inst = IRInstruction(
+            opcode=Opcode.CONST, operands=["<class:Dog@class_Dog_0:Animal>"]
+        )
+        table: dict[str, ClassRef] = {}
+        _convert_llm_class_refs([inst], table)
+        assert inst.operands[0] == "class_Dog_0"
+        assert table["class_Dog_0"] == ClassRef(
+            name="Dog", label="class_Dog_0", parents=("Animal",)
+        )
 
     def test_class_ref_with_multiple_parents(self):
-        result = _parse_class_ref("<class:C@class_C_0:A,B>")
-        assert result.matched
-        assert result.name == "C"
-        assert result.parents == ["A", "B"]
+        inst = IRInstruction(opcode=Opcode.CONST, operands=["<class:C@class_C_0:A,B>"])
+        table: dict[str, ClassRef] = {}
+        _convert_llm_class_refs([inst], table)
+        assert inst.operands[0] == "class_C_0"
+        assert table["class_C_0"].parents == ("A", "B")
 
-    def test_class_ref_non_matching(self):
-        result = _parse_class_ref("not a class ref")
-        assert not result.matched
-        assert result.parents == []
+    def test_non_matching_operand_unchanged(self):
+        inst = IRInstruction(opcode=Opcode.CONST, operands=["not a class ref"])
+        table: dict[str, ClassRef] = {}
+        _convert_llm_class_refs([inst], table)
+        assert inst.operands[0] == "not a class ref"
+        assert table == {}
+
+    def test_non_const_opcode_skipped(self):
+        inst = IRInstruction(
+            opcode=Opcode.STORE_VAR,
+            operands=["Dog", "<class:Dog@class_Dog_0>"],
+        )
+        table: dict[str, ClassRef] = {}
+        _convert_llm_class_refs([inst], table)
+        assert inst.operands[1] == "<class:Dog@class_Dog_0>"
+        assert table == {}
 
 
 # ── _expand_parent_chains ────────────────────────────────────────
