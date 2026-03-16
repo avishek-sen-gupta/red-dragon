@@ -19,7 +19,7 @@ When source is complete and all dependencies are present, the entire pipeline (p
 Concretely, RedDragon does the following:
 
 - **Parses and lowers** source in 15 languages via tree-sitter (with optional LLM-assisted repair), COBOL via ProLeap bridge, or **any language** via full LLM-based lowering — each frontend owns its parsing internally; callers only provide `source: bytes`
-- **Produces** a universal flattened three-address code [IR (31 opcodes)](docs/ir-reference.md) with structured source location traceability
+- **Produces** a universal flattened three-address code [IR (33 opcodes)](docs/ir-reference.md) with structured source location traceability
 - **Extracts and infers types** — see [Type system](#type-system) below
 - **Builds** control flow graphs from IR instructions
 - **Analyses** data flow via iterative reaching definitions, def-use chains, and variable dependency graphs
@@ -589,7 +589,7 @@ Each problem tests:
 
 **Python comprehension scoping** follows Python 3 semantics — loop variables in list, dict, set comprehensions and generator expressions are scoped to the comprehension body using `enter_block_scope`/`exit_block_scope` with name mangling, preventing leakage to the enclosing scope.
 
-**Pointer aliasing** uses a KLEE-inspired promote-on-address-of model for C and Rust. The `ADDRESS_OF` opcode promotes primitive variables to heap-backed storage when their address is taken (`&x`), enabling `*ptr = 99` to correctly update the original variable. Supports nested pointers (`int **pp = &ptr`), pointer arithmetic (`ptr + n`, `ptr - ptr`), pointer comparison (`<`, `>`, `<=`, `>=`, `==`, `!=`), struct pointers (`ptr->field`), and array pointer decay. Both C and Rust dereference reads (`*ptr`) emit `LOAD_FIELD ptr, "*"` for consistent pointer resolution through the executor.
+**Pointer aliasing** uses a KLEE-inspired promote-on-address-of model for C and Rust. The `ADDRESS_OF` opcode promotes primitive variables to heap-backed storage when their address is taken (`&x`), enabling `*ptr = 99` to correctly update the original variable. Supports nested pointers (`int **pp = &ptr`), pointer arithmetic (`ptr + n`, `ptr - ptr`), pointer comparison (`<`, `>`, `<=`, `>=`, `==`, `!=`), struct pointers (`ptr->field`), and array pointer decay. Dereference reads (`*ptr`) emit `LOAD_INDIRECT ptr` and dereference writes (`*ptr = val`) emit `STORE_INDIRECT ptr, val` as dedicated opcodes for pointer resolution through the executor.
 
 All frontends emit **canonical Python-form literals** (`"None"`, `"True"`, `"False"`) — language-native forms (`nil`, `null`, `undefined`, `NULL`, `true`, `false`) are canonicalized at lowering time.
 

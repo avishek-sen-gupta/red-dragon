@@ -428,9 +428,7 @@ class TestNestedPointers:
         pp = unwrap(vm.current_frame.registers["%pp"])
 
         # *pp should give us the Pointer to x
-        deref1 = _make_inst(
-            Opcode.LOAD_INDIRECT, result_reg="%inner", operands=["%pp"]
-        )
+        deref1 = _make_inst(Opcode.LOAD_INDIRECT, result_reg="%inner", operands=["%pp"])
         _apply(vm, _handle_load_indirect(deref1, vm))
         inner = unwrap(vm.current_frame.registers["%inner"])
         assert isinstance(inner, Pointer)
