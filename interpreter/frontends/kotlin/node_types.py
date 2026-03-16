@@ -98,6 +98,8 @@ class KotlinNodeType:
     COMPANION_OBJECT = "companion_object"
     ENUM_ENTRY = "enum_entry"
     DELEGATION_SPECIFIER = "delegation_specifier"
+    SECONDARY_CONSTRUCTOR = "secondary_constructor"
+    CONSTRUCTOR_DELEGATION_CALL = "constructor_delegation_call"
     SETTER = "setter"
     GETTER = "getter"
 
