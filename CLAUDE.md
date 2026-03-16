@@ -44,6 +44,7 @@ Do NOT use markdown TODO lists. All tasks live in Beads.
 ## Common Mistakes to Avoid
 - When the user asks to run detection/analysis on a specific subdirectory or module (e.g., 'smojol-api'), scope the operation precisely to that directory. Do not run on the parent repo or broader scope unless explicitly asked.
 - When working with LLM API calls or external APIs, start with small test inputs before processing large datasets. Large inputs (e.g., full grammar files, large symbol sets) can overflow context windows or crash connections.
+- Review subagent output for workaround guards — subagents will add `is not None` checks or similar guards to make test suites pass, masking real bugs instead of fixing root causes.
 
 ## Interaction Style
 - When a user interrupts or cancels a task, do not ask clarifying questions — immediately proceed with the redirected instruction. Treat interruptions as implicit 'stop what you're doing and do this instead'.
@@ -54,6 +55,7 @@ Do NOT use markdown TODO lists. All tasks live in Beads.
 - Before committing anything, update the README based on the diffs.
 - Before committing anything, run `poetry run black` on the full codebase. The CI pipeline enforces Black formatting and will fail if this is skipped.
 - Before committing anything, run all tests, fixing them if necessary. If test assertions are being removed, ask me to review them.
+- Always leave the working directory clean. Commit all changes (including transient file deletions) before finishing work. Never leave uncommitted files behind.
 
 ## Testing Patterns
 
@@ -66,6 +68,7 @@ Do NOT use markdown TODO lists. All tasks live in Beads.
 - Always start from writing unit tests for the smallest feasible units of code. True unit tests (which do not exercise true I/O) should be in a `unit` directory under the test directory. Tests which exercise I/O (call LLMs, touch databases) should be in the `integration` directory under the test directory.
 - Make sure you are not creating any special implementation behaviour just to get the tests to pass. It's far better to document hard-to-implement behaviour than to try to fix the test for the test's sake. Alternatively, pause and ask me for guidance.
 - Write both unit and integration tests for every new feature.
+- Never rename tests or write fallback programs to avoid testing a feature the language actually supports. If a frontend doesn't handle the feature yet, write the real program with correct assertions, mark it `xfail`, and file an issue for the gap. Exclude languages that genuinely lack the feature (e.g., C has no classes) rather than faking a test.
 
 
 ## Programming Patterns
