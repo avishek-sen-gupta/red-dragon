@@ -10,21 +10,63 @@ from interpreter.frontends.common.expressions import lower_const_literal
 from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
 
 
+def _has_optional_chain(node) -> bool:
+    """Check if a node contains an optional_chain (?.) child token."""
+    return any(c.type == JSN.OPTIONAL_CHAIN for c in node.children)
+
+
+def _emit_optional_guard(ctx: TreeSitterEmitContext, obj_reg: str, emit_access) -> str:
+    """Wrap an access in a null guard: obj == None ? None : access(obj).
+
+    emit_access is a callable that emits the access IR and returns the result register.
+    """
+    null_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=null_reg, operands=[ctx.constants.none_literal])
+    cmp_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.BINOP, result_reg=cmp_reg, operands=["==", obj_reg, null_reg])
+
+    null_label = ctx.fresh_label("optchain_null")
+    access_label = ctx.fresh_label("optchain_access")
+    end_label = ctx.fresh_label("optchain_end")
+    result_var = f"__optchain_{ctx.label_counter}"
+
+    ctx.emit(Opcode.BRANCH_IF, operands=[cmp_reg], label=f"{null_label},{access_label}")
+
+    ctx.emit(Opcode.LABEL, label=null_label)
+    none_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=none_reg, operands=[ctx.constants.none_literal])
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, none_reg])
+    ctx.emit(Opcode.BRANCH, label=end_label)
+
+    ctx.emit(Opcode.LABEL, label=access_label)
+    access_reg = emit_access()
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, access_reg])
+    ctx.emit(Opcode.BRANCH, label=end_label)
+
+    ctx.emit(Opcode.LABEL, label=end_label)
+    result_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=result_reg, operands=[result_var])
+    return result_reg
+
+
 def lower_js_subscript(ctx: TreeSitterEmitContext, node) -> str:
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     idx_node = node.child_by_field_name("index")
     if obj_node is None or idx_node is None:
         return lower_const_literal(ctx, node)
     obj_reg = ctx.lower_expr(obj_node)
-    idx_reg = ctx.lower_expr(idx_node)
-    reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_INDEX,
-        result_reg=reg,
-        operands=[obj_reg, idx_reg],
-        node=node,
-    )
-    return reg
+
+    def emit_access():
+        idx_reg = ctx.lower_expr(idx_node)
+        reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.LOAD_INDEX, result_reg=reg, operands=[obj_reg, idx_reg], node=node
+        )
+        return reg
+
+    if _has_optional_chain(node):
+        return _emit_optional_guard(ctx, obj_reg, emit_access)
+    return emit_access()
 
 
 def lower_js_attribute(ctx: TreeSitterEmitContext, node) -> str:
@@ -34,14 +76,17 @@ def lower_js_attribute(ctx: TreeSitterEmitContext, node) -> str:
         return lower_const_literal(ctx, node)
     obj_reg = ctx.lower_expr(obj_node)
     field_name = ctx.node_text(prop_node)
-    reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_FIELD,
-        result_reg=reg,
-        operands=[obj_reg, field_name],
-        node=node,
-    )
-    return reg
+
+    def emit_access():
+        reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.LOAD_FIELD, result_reg=reg, operands=[obj_reg, field_name], node=node
+        )
+        return reg
+
+    if _has_optional_chain(node):
+        return _emit_optional_guard(ctx, obj_reg, emit_access)
+    return emit_access()
 
 
 def lower_js_call(ctx: TreeSitterEmitContext, node) -> str:
@@ -55,14 +100,20 @@ def lower_js_call(ctx: TreeSitterEmitContext, node) -> str:
         if obj_node and prop_node:
             obj_reg = ctx.lower_expr(obj_node)
             method_name = ctx.node_text(prop_node)
-            reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CALL_METHOD,
-                result_reg=reg,
-                operands=[obj_reg, method_name] + arg_regs,
-                node=node,
-            )
-            return reg
+
+            def emit_method_call():
+                reg = ctx.fresh_reg()
+                ctx.emit(
+                    Opcode.CALL_METHOD,
+                    result_reg=reg,
+                    operands=[obj_reg, method_name] + arg_regs,
+                    node=node,
+                )
+                return reg
+
+            if _has_optional_chain(func_node):
+                return _emit_optional_guard(ctx, obj_reg, emit_method_call)
+            return emit_method_call()
 
     if func_node and func_node.type == JSN.IDENTIFIER:
         func_name = ctx.node_text(func_node)
