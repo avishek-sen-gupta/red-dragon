@@ -11,7 +11,16 @@ from interpreter.typed_value import unwrap_locals
 
 def _run_csharp(source: str, max_steps: int = 500) -> dict:
     vm = run(source, language=Language.CSHARP, max_steps=max_steps)
-    return unwrap_locals(vm.call_stack[0].local_vars)
+    frame = vm.call_stack[0]
+    result = unwrap_locals(frame.local_vars)
+    # Resolve heap aliases (e.g. ADDRESS_OF-promoted variables from out/ref params)
+    for name, ptr in frame.var_heap_aliases.items():
+        heap_obj = vm.heap.get(ptr.base)
+        if heap_obj:
+            field_val = heap_obj.fields.get(str(ptr.offset))
+            if field_val:
+                result[name] = field_val.value if hasattr(field_val, "value") else field_val
+    return result
 
 
 class TestCSharpDefaultExpressionExecution:
@@ -144,9 +153,6 @@ int answer = obj.doubled;
 class TestCSharpOutVarExecution:
     """C# out int x / out var x with out on both method signature and call site."""
 
-    @pytest.mark.xfail(
-        reason="red-dragon-ia8: VM lacks pass-by-reference; out params keep default value"
-    )
     def test_try_parse_pattern_out_int(self):
         """Classic TryParse pattern: callee assigns result=42, caller reads it."""
         locals_ = _run_csharp(
@@ -169,9 +175,6 @@ int answer = result + 1;
         assert locals_["result"] == 42
         assert locals_["answer"] == 43
 
-    @pytest.mark.xfail(
-        reason="red-dragon-ia8: VM lacks pass-by-reference; out params keep default value"
-    )
     def test_try_parse_pattern_out_var(self):
         """TryParse with out var: callee assigns result=100, caller reads it."""
         locals_ = _run_csharp(
@@ -193,9 +196,6 @@ int check = parsed + 10;
         assert locals_["parsed"] == 100
         assert locals_["check"] == 110
 
-    @pytest.mark.xfail(
-        reason="red-dragon-ia8: VM lacks pass-by-reference; out params keep default value"
-    )
     def test_multiple_out_params(self):
         """Multiple out params: callee assigns tax and total, caller reads them."""
         locals_ = _run_csharp(
@@ -219,9 +219,6 @@ int totalVal = total;
         assert locals_["taxVal"] == 1000
         assert locals_["totalVal"] == 1500
 
-    @pytest.mark.xfail(
-        reason="red-dragon-ia8: VM lacks pass-by-reference; out params keep default value"
-    )
     def test_out_var_used_in_if_condition(self):
         """out var at call site: callee assigns value=99, used in if body."""
         locals_ = _run_csharp(
@@ -245,3 +242,150 @@ if (found) {
         )
         assert locals_["value"] == 99
         assert locals_["answer"] == 199
+
+
+class TestCSharpRefParamExecution:
+    """C# ref parameter — callee modifies, caller sees the change."""
+
+    def test_ref_swap(self):
+        """Classic swap via ref params."""
+        locals_ = _run_csharp(
+            """\
+class Swapper {
+    int dummy;
+    Swapper() { this.dummy = 0; }
+    void Swap(ref int a, ref int b) {
+        int temp = a;
+        a = b;
+        b = temp;
+    }
+}
+Swapper s = new Swapper();
+int x = 10;
+int y = 20;
+s.Swap(ref x, ref y);
+int rx = x;
+int ry = y;
+""",
+            max_steps=1000,
+        )
+        assert locals_["rx"] == 20
+        assert locals_["ry"] == 10
+
+    def test_ref_increment(self):
+        """Callee increments a ref param, caller sees updated value."""
+        locals_ = _run_csharp(
+            """\
+class Inc {
+    int dummy;
+    Inc() { this.dummy = 0; }
+    void Increment(ref int x) {
+        x = x + 1;
+    }
+}
+Inc inc = new Inc();
+int val = 5;
+inc.Increment(ref val);
+int answer = val;
+""",
+            max_steps=1000,
+        )
+        assert locals_["answer"] == 6
+
+    def test_mixed_regular_and_ref_params(self):
+        """Method with both regular and ref params."""
+        locals_ = _run_csharp(
+            """\
+class Calc {
+    int dummy;
+    Calc() { this.dummy = 0; }
+    int AddAndStore(int a, ref int result) {
+        result = a + result;
+        return result;
+    }
+}
+Calc c = new Calc();
+int r = 10;
+int ret = c.AddAndStore(5, ref r);
+int answer = r;
+""",
+            max_steps=1000,
+        )
+        assert locals_["answer"] == 15
+        assert locals_["ret"] == 15
+
+
+class TestCSharpInParamExecution:
+    """C# in parameter — callee reads via dereference."""
+
+    def test_in_param_read(self):
+        """in param should be readable in callee."""
+        locals_ = _run_csharp(
+            """\
+class Reader {
+    int dummy;
+    Reader() { this.dummy = 0; }
+    int Double(in int x) {
+        return x + x;
+    }
+}
+Reader r = new Reader();
+int val = 7;
+int answer = r.Double(in val);
+""",
+            max_steps=1000,
+        )
+        assert locals_["answer"] == 14
+
+
+class TestCSharpByrefEdgeCases:
+    """Edge cases for out/ref/in params."""
+
+    def test_out_param_reassigned_multiple_times(self):
+        """Callee assigns to out param multiple times; caller sees last value."""
+        locals_ = _run_csharp(
+            """\
+class Multi {
+    int dummy;
+    Multi() { this.dummy = 0; }
+    void Fill(out int result) {
+        result = 1;
+        result = 2;
+        result = 3;
+    }
+}
+Multi m = new Multi();
+int x = 0;
+m.Fill(out x);
+int answer = x;
+""",
+            max_steps=1000,
+        )
+        assert locals_["answer"] == 3
+
+    @pytest.mark.xfail(
+        reason="ref param holding object type: LOAD_FIELD '*' on heap object Pointer needs work"
+    )
+    def test_byref_param_as_method_receiver(self):
+        """Byref param used as method receiver should dereference first."""
+        locals_ = _run_csharp(
+            """\
+class Box {
+    int value;
+    Box(int v) { this.value = v; }
+    int GetValue() { return value; }
+}
+class Wrapper {
+    int dummy;
+    Wrapper() { this.dummy = 0; }
+    int Extract(ref Box b) {
+        return b.GetValue();
+    }
+}
+Wrapper w = new Wrapper();
+Box box = new Box(42);
+int answer = w.Extract(ref box);
+""",
+            max_steps=1500,
+        )
+        assert locals_["answer"] == 42

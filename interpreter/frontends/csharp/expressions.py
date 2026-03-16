@@ -397,6 +397,7 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.BRANCH, label=end_label)
     ctx.emit(Opcode.LABEL, label=func_label)
 
+    saved_byref = ctx.byref_params.copy()
     # Lower parameters
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     if params_node:
@@ -421,6 +422,7 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
         )
         ctx.emit(Opcode.RETURN, operands=[none_reg])
 
+    ctx.byref_params = saved_byref
     ctx.emit(Opcode.LABEL, label=end_label)
 
     ref_reg = ctx.fresh_reg()
