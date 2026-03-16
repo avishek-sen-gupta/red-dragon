@@ -368,11 +368,5 @@ def lower_pascal_decl_type(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=type_name, label=class_label)
-        ],
-    )
+    ctx.emit_class_ref(type_name, class_label, [], result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[type_name, cls_reg])

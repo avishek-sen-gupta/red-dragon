@@ -8,7 +8,6 @@ from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.ruby.expressions import lower_ruby_params
 from interpreter.frontends.ruby.node_types import RubyNodeType
-from interpreter.frontends.common.declarations import make_class_ref
 
 
 def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> str:
@@ -136,11 +135,7 @@ def lower_ruby_class(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=cls_reg,
-        operands=[make_class_ref(class_name, class_label, parents)],
-    )
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
 
@@ -220,11 +215,5 @@ def lower_ruby_module(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=module_name, label=class_label)
-        ],
-    )
+    ctx.emit_class_ref(module_name, class_label, [], result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[module_name, cls_reg])

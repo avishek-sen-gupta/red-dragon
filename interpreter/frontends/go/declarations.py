@@ -17,7 +17,6 @@ from interpreter.frontends.go.expressions import (
     lower_expression_list,
     lower_go_store_target,
 )
-from interpreter.frontends.common.declarations import make_class_ref
 from interpreter.frontends.go.node_types import GoNodeType
 
 logger = logging.getLogger(__name__)
@@ -225,13 +224,7 @@ def _lower_go_struct_type(
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=type_name, label=class_label)
-        ],
-    )
+    ctx.emit_class_ref(type_name, class_label, [], result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[type_name, cls_reg])
 
 
@@ -252,11 +245,7 @@ def _lower_go_interface_type(
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=cls_reg,
-        operands=[make_class_ref(type_name, class_label, [])],
-    )
+    ctx.emit_class_ref(type_name, class_label, [], result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[type_name, cls_reg])
 
 
