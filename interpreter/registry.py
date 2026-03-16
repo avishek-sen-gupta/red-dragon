@@ -2,49 +2,13 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
-from typing import Any
 
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.cfg import CFG
 from interpreter.class_ref import ClassRef
 from interpreter.func_ref import FuncRef
 from interpreter import constants
-
-# ── Parse helpers ────────────────────────────────────────────────
-
-
-@dataclass
-class RefParseResult:
-    """Result of parsing a function or class reference string."""
-
-    matched: bool
-    name: str = ""
-    label: str = ""
-    closure_id: str = ""
-    parents: list[str] = field(default_factory=list)
-
-
-class RefPatterns:
-    """Compiled regex patterns for class references."""
-
-    CLASS_RE = re.compile(constants.CLASS_REF_PATTERN)
-
-
-def _parse_class_ref(val: Any) -> RefParseResult:
-    """Parse '<class:name@label>' or '<class:name@label:Parent1,Parent2>'."""
-    if not isinstance(val, str):
-        return RefParseResult(matched=False)
-    m = RefPatterns.CLASS_RE.search(val)
-    if not m:
-        return RefParseResult(matched=False)
-    parents_str = m.group(3) or ""
-    parents = [p for p in parents_str.split(",") if p]
-    return RefParseResult(
-        matched=True, name=m.group(1), label=m.group(2), parents=parents
-    )
-
 
 # ── Registry ─────────────────────────────────────────────────────
 
