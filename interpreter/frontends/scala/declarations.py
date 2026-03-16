@@ -12,6 +12,7 @@ from interpreter.frontends.type_extraction import (
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 from interpreter.frontends.common.declarations import (
     FieldInit,
+    emit_field_initializers,
     emit_synthetic_init,
 )
 from interpreter.type_expr import ScalarType
@@ -224,6 +225,76 @@ _CLASS_BODY_FUNC_TYPES = frozenset({NT.FUNCTION_DEFINITION})
 _SCALA_FIELD_TYPES = frozenset({NT.VAL_DEFINITION, NT.VAR_DEFINITION})
 
 
+def _lower_auxiliary_constructor(
+    ctx: TreeSitterEmitContext,
+    node,
+    primary_ctor_params: list[str] = [],
+    field_inits: list[FieldInit] = [],
+) -> None:
+    """Lower ``def this(...) = this(args)`` as an ``__init__`` overload.
+
+    Emits this as explicit first param, inlines field initializers,
+    and lowers the delegation body as CALL_METHOD on this for __init__.
+    """
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
+
+    func_name = "__init__"
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+    end_label = ctx.fresh_label(f"end_{func_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit(Opcode.LABEL, label=func_label)
+
+    _emit_this_param(ctx)
+
+    if params_node:
+        lower_scala_params(ctx, params_node)
+
+    # Replay field initializers so all fields exist on the heap
+    emit_field_initializers(ctx, field_inits)
+
+    # Lower body: this(args) → CALL_METHOD this __init__ args
+    if body_node and body_node.type == NT.CALL_EXPRESSION:
+        _lower_this_delegation_call(ctx, body_node)
+    elif body_node:
+        ctx.lower_block(body_node)
+
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
+    )
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+
+
+def _lower_this_delegation_call(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower ``this(args)`` call as CALL_METHOD on this for __init__."""
+    args_node = next(
+        (c for c in node.children if c.type == NT.ARGUMENTS),
+        None,
+    )
+    arg_regs = [
+        ctx.lower_expr(c)
+        for c in (args_node.children if args_node else [])
+        if c.is_named
+    ]
+    this_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+    ctx.emit(
+        Opcode.CALL_METHOD,
+        result_reg=ctx.fresh_reg(),
+        operands=[this_reg, "__init__"] + arg_regs,
+        node=node,
+    )
+
+
 def _collect_scala_field_init(ctx: TreeSitterEmitContext, node) -> FieldInit | None:
     """Extract (field_name, value_node) from a val/var definition, or None."""
     pattern_node = node.child_by_field_name("pattern")
@@ -239,6 +310,7 @@ def _lower_class_body_hoisted(
     node,
     inject_this: bool = False,
     collect_field_inits: bool = False,
+    primary_ctor_params: list[str] = [],
 ) -> None:
     """Hoist all class-body children to top level.
 
@@ -271,7 +343,12 @@ def _lower_class_body_hoisted(
     )
 
     for child in functions:
-        lower_function_def(ctx, child, inject_this=inject_this)
+        name_node = child.child_by_field_name(ctx.constants.func_name_field)
+        func_name = ctx.node_text(name_node) if name_node else ""
+        if func_name == "this":
+            _lower_auxiliary_constructor(ctx, child, primary_ctor_params, field_inits)
+        else:
+            lower_function_def(ctx, child, inject_this=inject_this)
     for child in rest:
         if (
             collect_field_inits
@@ -325,6 +402,8 @@ def _emit_primary_constructor_init(
     ctx.emit(Opcode.BRANCH, label=end_label)
     ctx.emit(Opcode.LABEL, label=func_label)
 
+    _emit_this_param(ctx)
+
     for name in param_names:
         param_reg = ctx.fresh_reg()
         ctx.emit(Opcode.SYMBOLIC, result_reg=param_reg, operands=[f"param:{name}"])
@@ -376,7 +455,11 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
         saved_class = ctx._current_class_name
         ctx._current_class_name = class_name
         _lower_class_body_hoisted(
-            ctx, body_node, inject_this=True, collect_field_inits=True
+            ctx,
+            body_node,
+            inject_this=True,
+            collect_field_inits=True,
+            primary_ctor_params=primary_ctor_params,
         )
         ctx._current_class_name = saved_class
 
