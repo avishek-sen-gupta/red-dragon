@@ -132,3 +132,63 @@ func main() {
     _ = answer
 }""")
         assert locals_["answer"] == 42
+
+
+class TestGoIotaExecution:
+    """iota in const blocks produces sequential integer values at runtime."""
+
+    def test_simple_iota(self):
+        locals_ = _run_go("""
+package main
+const (
+    A = iota
+    B
+    C
+)
+func main() {
+    a := A
+    b := B
+    c := C
+}""")
+        assert locals_["a"] == 0
+        assert locals_["b"] == 1
+        assert locals_["c"] == 2
+
+    def test_iota_with_expression(self):
+        locals_ = _run_go("""
+package main
+const (
+    X = iota * 10
+    Y
+    Z
+)
+func main() {
+    x := X
+    y := Y
+    z := Z
+}""")
+        assert locals_["x"] == 0
+        assert locals_["y"] == 10
+        assert locals_["z"] == 20
+
+    def test_iota_resets_per_block(self):
+        locals_ = _run_go("""
+package main
+const (
+    A = iota
+    B
+)
+const (
+    X = iota
+    Y
+)
+func main() {
+    a := A
+    b := B
+    x := X
+    y := Y
+}""")
+        assert locals_["a"] == 0
+        assert locals_["b"] == 1
+        assert locals_["x"] == 0
+        assert locals_["y"] == 1
