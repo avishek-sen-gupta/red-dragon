@@ -7,10 +7,10 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
-    extract_call_args_unwrap,
     lower_const_literal,
     lower_interpolated_string_parts,
 )
+from interpreter.frontends.common.node_types import CommonNodeType
 from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
 from interpreter.frontends.type_extraction import (
     extract_normalized_type,
@@ -18,11 +18,47 @@ from interpreter.frontends.type_extraction import (
 from interpreter.type_expr import ScalarType
 
 
+_BYREF_KEYWORDS = frozenset({"out", "ref", "in"})
+
+
+def extract_csharp_call_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
+    """Extract call args, emitting ADDRESS_OF for out/ref/in arguments."""
+    if args_node is None:
+        return []
+    regs: list[str] = []
+    for c in args_node.children:
+        if c.type in (
+            CommonNodeType.OPEN_PAREN,
+            CommonNodeType.CLOSE_PAREN,
+            CommonNodeType.COMMA,
+        ):
+            continue
+        if c.type in (CommonNodeType.ARGUMENT, CommonNodeType.VALUE_ARGUMENT):
+            has_byref = any(
+                not gc.is_named and ctx.node_text(gc) in _BYREF_KEYWORDS
+                for gc in c.children
+            )
+            inner = next((gc for gc in c.children if gc.is_named), None)
+            if inner is None:
+                continue
+            if has_byref and inner.type == NT.IDENTIFIER:
+                # ref x / in x / out existingVar — emit ADDRESS_OF
+                reg = ctx.fresh_reg()
+                ctx.emit(Opcode.ADDRESS_OF, result_reg=reg, operands=[ctx.node_text(inner)])
+                regs.append(reg)
+            else:
+                # declaration_expression (out int x) or regular arg
+                regs.append(ctx.lower_expr(inner))
+        elif c.is_named:
+            regs.append(ctx.lower_expr(c))
+    return regs
+
+
 def lower_invocation(ctx: TreeSitterEmitContext, node) -> str:
     """Lower invocation_expression (function field, arguments field)."""
     func_node = node.child_by_field_name(ctx.constants.call_function_field)
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
-    arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
+    arg_regs = extract_csharp_call_args(ctx, args_node) if args_node else []
 
     if func_node and func_node.type == NT.MEMBER_ACCESS_EXPRESSION:
         obj_node = func_node.child_by_field_name("expression")
@@ -73,7 +109,7 @@ def lower_invocation(ctx: TreeSitterEmitContext, node) -> str:
 def lower_object_creation(ctx: TreeSitterEmitContext, node) -> str:
     type_node = node.child_by_field_name("type")
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
-    arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
+    arg_regs = extract_csharp_call_args(ctx, args_node) if args_node else []
     type_name = ctx.node_text(type_node) if type_node else "Object"
     reg = ctx.fresh_reg()
     ctx.emit(
