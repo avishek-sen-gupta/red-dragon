@@ -1315,3 +1315,70 @@ class TestKotlinPrimaryConstructor:
         assert (
             len(func_refs) == 0
         ), "Class without primary constructor should not generate __init__"
+
+
+class TestKotlinSecondaryConstructor:
+    """Secondary constructors emit __init__ with delegation and body."""
+
+    def test_secondary_constructor_generates_init(self):
+        """Secondary constructor should produce an __init__ FUNC_REF."""
+        ir = _parse_kotlin("""\
+class Rect(val w: Int, val h: Int) {
+    constructor(side: Int) : this(side, side)
+}
+""")
+        func_ref_instrs = [
+            i
+            for i in _find_all(ir, Opcode.CONST)
+            if i.operands and "__init__" in str(i.operands[0])
+        ]
+        # primary + secondary = 2 __init__ refs
+        assert (
+            len(func_ref_instrs) == 2
+        ), f"Expected 2 __init__ CONST refs (primary + secondary), got {func_ref_instrs}"
+
+    def test_secondary_constructor_has_params(self):
+        """Secondary constructor should emit SYMBOLIC param: for its parameters."""
+        ir = _parse_kotlin("""\
+class Rect(val w: Int, val h: Int) {
+    constructor(side: Int) : this(side, side)
+}
+""")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        param_names = [
+            s.operands[0] for s in symbolics if s.operands[0].startswith("param:")
+        ]
+        assert "param:side" in param_names, f"Expected param:side, got {param_names}"
+
+    def test_secondary_constructor_delegation_stores_fields(self):
+        """this(...) delegation should emit STORE_FIELD for primary params."""
+        ir = _parse_kotlin("""\
+class Rect(val w: Int, val h: Int) {
+    constructor(side: Int) : this(side, side)
+}
+""")
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        field_names = [sf.operands[1] for sf in store_fields]
+        # Primary constructor stores w, h; secondary also stores w, h via delegation
+        assert (
+            field_names.count("w") == 2
+        ), f"Expected 2 STORE_FIELD for 'w', got {field_names}"
+        assert (
+            field_names.count("h") == 2
+        ), f"Expected 2 STORE_FIELD for 'h', got {field_names}"
+
+    def test_secondary_constructor_no_symbolic_unsupported(self):
+        """Secondary constructor should not produce SYMBOLIC unsupported."""
+        ir = _parse_kotlin("""\
+class Rect(val w: Int, val h: Int) {
+    constructor(side: Int) : this(side, side)
+}
+""")
+        unsupported = [
+            i
+            for i in _find_all(ir, Opcode.SYMBOLIC)
+            if "unsupported" in str(i.operands)
+        ]
+        assert (
+            unsupported == []
+        ), f"Should not have unsupported symbolics: {unsupported}"
