@@ -462,8 +462,7 @@ def _handle_store_field(
     val = _resolve_reg(vm, inst.operands[2])
     # Pointer field/dereference write
     if isinstance(obj_val, Pointer):
-        # *ptr = val — dereference writes to the offset field
-        target_field = str(obj_val.offset) if field_name == "*" else field_name
+        target_field = field_name
         return ExecutionResult.success(
             StateUpdate(
                 heap_writes=[
@@ -511,15 +510,6 @@ def _handle_load_field(
     # Pointer field/dereference access
     if isinstance(obj_val, Pointer) and obj_val.base in vm.heap:
         heap_obj = vm.heap[obj_val.base]
-        # *ptr — dereference reads from the offset field
-        if field_name == "*":
-            tv = heap_obj.fields.get(str(obj_val.offset))
-            return ExecutionResult.success(
-                StateUpdate(
-                    register_writes={inst.result_reg: tv},
-                    reasoning=f"load *{obj_val} = {tv!r}",
-                )
-            )
         # ptr->field — struct pointer field access (reads field from the object)
         if field_name in heap_obj.fields:
             tv = heap_obj.fields[field_name]
@@ -535,14 +525,6 @@ def _handle_load_field(
             StateUpdate(
                 register_writes={inst.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"load *{obj_val} (not on heap) → {sym.name}",
-            )
-        )
-    # In C, *fp where fp is a function pointer is equivalent to fp.
-    if field_name == "*" and isinstance(obj_val, BoundFuncRef):
-        return ExecutionResult.success(
-            StateUpdate(
-                register_writes={inst.result_reg: typed_from_runtime(obj_val)},
-                reasoning=f"deref {obj_val} → {obj_val} (dereference of function pointer is identity)",
             )
         )
     addr = _heap_addr(obj_val)

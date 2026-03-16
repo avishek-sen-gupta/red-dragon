@@ -41,17 +41,11 @@ class TestCAddressOfLowering:
         ]
         assert len(unop_addr) == 0
 
-    def test_deref_still_emits_load_field(self):
-        """*ptr should still emit LOAD_FIELD ptr, '*'."""
+    def test_deref_emits_load_indirect(self):
+        """*ptr should emit LOAD_INDIRECT."""
         ir = _parse_c("int x = 42; int *ptr = &x; int y = *ptr;")
-        load_field_star = [
-            inst
-            for inst in ir
-            if inst.opcode == Opcode.LOAD_FIELD
-            and len(inst.operands) >= 2
-            and inst.operands[1] == "*"
-        ]
-        assert len(load_field_star) >= 1
+        load_indirect = [inst for inst in ir if inst.opcode == Opcode.LOAD_INDIRECT]
+        assert len(load_indirect) >= 1
 
 
 class TestRustAddressOfLowering:
@@ -62,14 +56,8 @@ class TestRustAddressOfLowering:
         assert len(addr_of_insts) >= 1
         assert addr_of_insts[0].operands[0] == "x"
 
-    def test_deref_assignment_emits_store_field(self):
-        """*ptr = val should emit STORE_FIELD ptr, '*', val."""
+    def test_deref_assignment_emits_store_indirect(self):
+        """*ptr = val should emit STORE_INDIRECT."""
         ir = _parse_rust("let mut x = 42; let ptr = &mut x; *ptr = 99;")
-        store_field_star = [
-            inst
-            for inst in ir
-            if inst.opcode == Opcode.STORE_FIELD
-            and len(inst.operands) >= 2
-            and inst.operands[1] == "*"
-        ]
-        assert len(store_field_star) >= 1
+        store_indirect = [inst for inst in ir if inst.opcode == Opcode.STORE_INDIRECT]
+        assert len(store_indirect) >= 1
