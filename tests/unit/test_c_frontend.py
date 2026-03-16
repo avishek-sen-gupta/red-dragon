@@ -305,10 +305,8 @@ class TestCFrontendPointerOps:
     def test_pointer_dereference(self):
         source = "void f() { int z = *ptr; }"
         ir = _parse_and_lower(source)
-        opcodes = _opcodes(ir)
-        assert Opcode.LOAD_FIELD in opcodes
-        loads = _find_all(ir, Opcode.LOAD_FIELD)
-        assert any("*" in inst.operands for inst in loads)
+        loads = _find_all(ir, Opcode.LOAD_INDIRECT)
+        assert len(loads) >= 1
 
     def test_address_of(self):
         source = "void f() { int *p = &x; }"
@@ -321,10 +319,8 @@ class TestCFrontendPointerOps:
     def test_pointer_store(self):
         source = "void f() { *ptr = 42; }"
         ir = _parse_and_lower(source)
-        opcodes = _opcodes(ir)
-        assert Opcode.STORE_FIELD in opcodes
-        stores = _find_all(ir, Opcode.STORE_FIELD)
-        assert any("*" in inst.operands for inst in stores)
+        stores = _find_all(ir, Opcode.STORE_INDIRECT)
+        assert len(stores) >= 1
 
     def test_sizeof_type(self):
         source = "void f() { int s = sizeof(int); }"
@@ -414,10 +410,9 @@ void f() {
         assert Opcode.ADDRESS_OF in opcodes
         addr_ofs = _find_all(ir, Opcode.ADDRESS_OF)
         assert any("x" in inst.operands for inst in addr_ofs)
-        # Pointer dereference produces LOAD_FIELD with "*"
-        assert Opcode.LOAD_FIELD in opcodes
-        loads = _find_all(ir, Opcode.LOAD_FIELD)
-        assert any("*" in inst.operands for inst in loads)
+        # Pointer dereference produces LOAD_INDIRECT
+        loads = _find_all(ir, Opcode.LOAD_INDIRECT)
+        assert len(loads) >= 1
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("x" in s.operands for s in stores)
         assert any("p" in s.operands for s in stores)
