@@ -137,6 +137,8 @@ class CSharpNodeType:
     # -- Out / ref expressions --
     DECLARATION_EXPRESSION = "declaration_expression"
     IMPLICIT_TYPE = "implicit_type"
+    REF_EXPRESSION = "ref_expression"
+    REF_TYPE = "ref_type"
 
     # -- Constructor chaining --
     CONSTRUCTOR_INITIALIZER = "constructor_initializer"
