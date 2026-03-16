@@ -89,6 +89,7 @@ class GoFrontend(BaseFrontend):
             GoNodeType.SLICE_TYPE: common_expr.lower_const_literal,
             GoNodeType.EXPRESSION_LIST: common_expr.lower_const_literal,
             GoNodeType.VARIADIC_ARGUMENT: common_expr.lower_paren,
+            GoNodeType.IOTA: go_expr.lower_go_iota,
         }
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:
