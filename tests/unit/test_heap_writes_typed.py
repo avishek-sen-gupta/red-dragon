@@ -7,6 +7,7 @@ from interpreter.identity_conversion_rules import IdentityConversionRules
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.executor import (
     _handle_store_field,
+    _handle_store_indirect,
     _handle_store_index,
     _handle_load_field,
     _handle_load_index,
@@ -48,7 +49,7 @@ class TestStoreFieldTypedValue:
         assert isinstance(hw.value, TypedValue)
         assert hw.value.value == 42
 
-    def test_store_field_pointer_dereference_produces_typed_value(self):
+    def test_store_indirect_pointer_dereference_produces_typed_value(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         vm.heap["mem_0"] = HeapObject(fields={"0": 0})
@@ -56,8 +57,8 @@ class TestStoreFieldTypedValue:
             Pointer(base="mem_0", offset=0), UNKNOWN
         )
         vm.current_frame.registers["%1"] = typed(99, scalar(TypeName.INT))
-        inst = IRInstruction(opcode=Opcode.STORE_FIELD, operands=["%0", "*", "%1"])
-        result = _handle_store_field(inst, vm)
+        inst = IRInstruction(opcode=Opcode.STORE_INDIRECT, operands=["%0", "%1"])
+        result = _handle_store_indirect(inst, vm)
         hw = result.update.heap_writes[0]
         assert isinstance(hw.value, TypedValue)
         assert hw.value.value == 99
