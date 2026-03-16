@@ -103,6 +103,9 @@ class GoNodeType:
     IMPORT_DECLARATION = "import_declaration"
     NEWLINE = "\n"
 
+    # -- Special atoms --------------------------------------------------------
+    IOTA = "iota"
+
     # -- Keywords (appear as node types in tree-sitter) -----------------------
     RETURN = "return"
     FOR = "for"

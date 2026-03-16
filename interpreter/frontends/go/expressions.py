@@ -13,6 +13,15 @@ from interpreter.frontends.common.expressions import (
 )
 from interpreter.frontends.go.node_types import GoNodeType
 
+
+def lower_go_iota(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower `iota` to CONST with current iota counter value."""
+    iota_val = getattr(ctx, "_go_iota_value", 0)
+    reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=reg, operands=[str(iota_val)], node=node)
+    return reg
+
+
 logger = logging.getLogger(__name__)
 
 
