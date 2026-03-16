@@ -317,10 +317,7 @@ def lower_declaration_expression(ctx: TreeSitterEmitContext, node) -> str:
     """Lower `out int x` / `out var x` declaration_expression.
 
     Declares the variable in the current scope with a default value (0)
-    and returns a LOAD_VAR register so it can be passed as an argument.
-    Our VM does not support true pass-by-reference, so the callee cannot
-    write back through the out parameter — but the variable will exist
-    in scope after the call.
+    and emits ADDRESS_OF to produce a Pointer for pass-by-reference.
     """
     name_node = next(
         (c for c in node.children if c.type == NT.IDENTIFIER),
@@ -331,7 +328,7 @@ def lower_declaration_expression(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.CONST, result_reg=default_reg, operands=["0"])
     ctx.emit(Opcode.DECL_VAR, operands=[var_name, default_reg], node=node)
     result_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=result_reg, operands=[var_name])
+    ctx.emit(Opcode.ADDRESS_OF, result_reg=result_reg, operands=[var_name])
     return result_reg
 
 

@@ -1343,6 +1343,18 @@ class C {
         load_fields = _find_all(ir, Opcode.LOAD_FIELD)
         assert any("*" in inst.operands for inst in load_fields)
 
+    def test_out_int_call_site_emits_address_of(self):
+        """out int result at call site should emit DECL_VAR + ADDRESS_OF."""
+        ir = _parse_and_lower("int.TryParse(s, out int result);")
+        address_ofs = _find_all(ir, Opcode.ADDRESS_OF)
+        assert any("result" in inst.operands for inst in address_ofs)
+
+    def test_out_var_call_site_emits_address_of(self):
+        """out var result at call site should emit DECL_VAR + ADDRESS_OF."""
+        ir = _parse_and_lower("int.TryParse(s, out var result);")
+        address_ofs = _find_all(ir, Opcode.ADDRESS_OF)
+        assert any("result" in inst.operands for inst in address_ofs)
+
     def test_regular_param_no_deref(self):
         """Regular param should NOT emit LOAD_FIELD '*'."""
         ir = _parse_and_lower("""\
