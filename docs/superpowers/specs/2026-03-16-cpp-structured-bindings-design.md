@@ -10,26 +10,27 @@ Support declaration-level C++17 structured bindings (`auto [a, b] = expr;`) by r
 
 ## Background
 
-Range-for structured bindings (`for (auto [a, b] : pairs)`) already work via `_lower_structured_binding()` in `cpp/control_flow.py`. Declaration-level structured bindings (`auto [a, b] = expr;`) use the same tree-sitter node type (`STRUCTURED_BINDING_DECLARATOR`) but appear as children of a `DECLARATION` node rather than a `FOR_RANGE_LOOP` node. `lower_cpp_declaration()` currently doesn't handle this child type.
+Range-for structured bindings (`for (auto [a, b] : pairs)`) already work via `_lower_structured_binding()` in `cpp/control_flow.py`. Declaration-level structured bindings (`auto [a, b] = expr;`) use the same tree-sitter node type (`STRUCTURED_BINDING_DECLARATOR`) but appear inside an `INIT_DECLARATOR` child of a `DECLARATION` node. The existing `_lower_init_declarator` in `c/declarations.py` doesn't handle this declarator type.
 
 ## Design
 
-Add an `elif child.type == CppNodeType.STRUCTURED_BINDING_DECLARATOR` branch in `lower_cpp_declaration()`. The declaration node structure:
+The tree-sitter parse of `auto [a, b] = expr;`:
 
 ```
 declaration
   placeholder_type_specifier (auto)
-  structured_binding_declarator ([a, b])
-    identifier (a)
-    identifier (b)
-  =
-  <initializer expression>
+  init_declarator
+    structured_binding_declarator ([a, b])
+      identifier (a)
+      identifier (b)
+    identifier (expr)           <- the "value" field
 ```
 
-The new branch:
-1. Finds the initializer (next named sibling after the binding declarator, skipping `=`)
-2. Lowers it to get `rhs_reg`
-3. Calls `_lower_structured_binding(ctx, child, rhs_reg)` — emits `CONST i` + `LOAD_INDEX rhs, i` + `DECL_VAR name` per binding variable
+The `structured_binding_declarator` is inside an `init_declarator`, so the fix goes in `_lower_init_declarator` in `interpreter/frontends/c/declarations.py`. Early in that function, check if `decl_node.type == CppNodeType.STRUCTURED_BINDING_DECLARATOR`. If so:
+
+1. Lower the `value_node` (RHS expression) to get `rhs_reg`
+2. Call `_lower_structured_binding(ctx, decl_node, rhs_reg)` — emits `CONST i` + `LOAD_INDEX rhs, i` + `DECL_VAR name` per binding variable
+3. Return early (skip the normal init_declarator logic)
 
 No VM changes. No new opcodes. No changes to type inference or dataflow.
 
@@ -46,7 +47,7 @@ No VM changes. No new opcodes. No changes to type inference or dataflow.
 
 ## Files to Modify
 
-- `interpreter/frontends/cpp/declarations.py` — add `elif` branch (~8 lines)
+- `interpreter/frontends/c/declarations.py` — add early return in `_lower_init_declarator` for `STRUCTURED_BINDING_DECLARATOR`
 - `tests/unit/test_for_loop_destructuring.py` — add `TestCppStructuredBindingDeclaration`
 - `tests/integration/test_cpp_frontend_execution.py` — add integration test
 
