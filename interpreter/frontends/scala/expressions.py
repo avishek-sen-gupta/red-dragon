@@ -25,15 +25,44 @@ def lower_scala_call(ctx: TreeSitterEmitContext, node) -> str:
 
     Note: Scala arr(i) and f(x) are syntactically identical. Array indexing is
     handled at VM level via CALL_FUNCTION on array values (Scala apply semantics).
+
+    ``this(args)`` inside a class context is constructor delegation — lowered
+    as CALL_METHOD on this for __init__.
     """
     func_node = node.child_by_field_name(ctx.constants.call_function_field)
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
+
+    # this(args) → constructor delegation via CALL_METHOD
+    if (
+        func_node
+        and func_node.type == NT.IDENTIFIER
+        and ctx.node_text(func_node) == "this"
+    ):
+        return _lower_this_call_as_delegation(ctx, args_node, node)
+
     unwrapped_func = (
         func_node.child_by_field_name("function")
         if func_node and func_node.type == NT.GENERIC_FUNCTION
         else func_node
     )
     return lower_call_impl(ctx, unwrapped_func, args_node, node)
+
+
+def _lower_this_call_as_delegation(ctx: TreeSitterEmitContext, args_node, node) -> str:
+    """Lower ``this(args)`` as CALL_METHOD on this for __init__."""
+    from interpreter.frontends.common.expressions import extract_call_args_unwrap
+
+    arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
+    this_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+    result_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_METHOD,
+        result_reg=result_reg,
+        operands=[this_reg, "__init__"] + arg_regs,
+        node=node,
+    )
+    return result_reg
 
 
 def lower_field_expr(ctx: TreeSitterEmitContext, node) -> str:
