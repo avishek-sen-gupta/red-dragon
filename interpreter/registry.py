@@ -100,16 +100,6 @@ def _scan_classes(
         if cref.parents:
             class_parents[cref.name] = list(cref.parents)
 
-    # First pass fallback: find class constants via _parse_class_ref (legacy path).
-    for inst in instructions:
-        if inst.opcode != Opcode.CONST or not inst.operands:
-            continue
-        cr = _parse_class_ref(str(inst.operands[0]))
-        if cr.matched:
-            classes[cr.name] = cr.label
-            if cr.parents:
-                class_parents[cr.name] = cr.parents
-
     # Second pass: identify class scopes and their methods.
     # Python emits methods inside the class scope (class_X ... end_class_X).
     # Java/C#/Scala hoist methods after end_class_X (so they execute at top
