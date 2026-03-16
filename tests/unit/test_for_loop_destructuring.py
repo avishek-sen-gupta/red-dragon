@@ -258,3 +258,43 @@ class TestCppStructuredBindingRangeFor:
         load_idx = _load_index_count(ir)
         # At least 3: one for iteration element, two for destructuring
         assert load_idx >= 3, f"Expected >= 3 LOAD_INDEX, got {load_idx}"
+
+
+class TestCppStructuredBindingDeclaration:
+    """auto [a, b] = expr; should decompose into LOAD_INDEX + DECL_VAR."""
+
+    def test_structured_binding_declaration_emits_decl_vars(self):
+        source = """
+        int main() {
+            int arr[2] = {10, 20};
+            auto [a, b] = arr;
+        }
+        """
+        ir = _lower(CppFrontend, "cpp", source)
+        decl_names = _store_var_names(ir)
+        assert "a" in decl_names, f"Expected 'a' in decls, got {decl_names}"
+        assert "b" in decl_names, f"Expected 'b' in decls, got {decl_names}"
+
+    def test_structured_binding_declaration_emits_load_index(self):
+        source = """
+        int main() {
+            int arr[2] = {10, 20};
+            auto [x, y] = arr;
+        }
+        """
+        ir = _lower(CppFrontend, "cpp", source)
+        load_idx = _load_index_count(ir)
+        assert load_idx >= 2, f"Expected >= 2 LOAD_INDEX, got {load_idx}"
+
+    def test_structured_binding_three_vars(self):
+        source = """
+        int main() {
+            int arr[3] = {1, 2, 3};
+            auto [a, b, c] = arr;
+        }
+        """
+        ir = _lower(CppFrontend, "cpp", source)
+        decl_names = _store_var_names(ir)
+        assert "a" in decl_names
+        assert "b" in decl_names
+        assert "c" in decl_names
