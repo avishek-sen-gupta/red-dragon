@@ -156,3 +156,55 @@ val b = arr(1)""",
 val s = "hello"
 val c = s(1)""")
         assert locals_["c"] == "e"
+
+
+class TestScalaAuxiliaryConstructorExecution:
+    """Scala def this(...) = this(args) auxiliary constructor chaining."""
+
+    def test_single_field_auxiliary_constructor(self):
+        """Two-arg auxiliary constructor delegates to primary via this(v + scale)."""
+        locals_ = _run_scala(
+            """\
+class Box(val value: Int) {
+  def this(v: Int, scale: Int) = this(v + scale)
+}
+val b = new Box(3, 4)
+val answer = b.value
+""",
+            max_steps=1000,
+        )
+        assert locals_["answer"] == 7
+
+    def test_auxiliary_with_field_initializer(self):
+        """Field initializer should exist after auxiliary constructor chaining."""
+        locals_ = _run_scala(
+            """\
+class Calc(val result: Int) {
+  val extra: Int = 10
+  def this(a: Int, b: Int) = this(a + b)
+  def total(): Int = result + extra
+}
+val c = new Calc(3, 4)
+val answer = c.total()
+""",
+            max_steps=1000,
+        )
+        assert locals_["answer"] == 17
+
+    def test_auxiliary_body_reads_field_by_bare_name(self):
+        """After this(...) delegation, body can read fields via implicit this."""
+        locals_ = _run_scala(
+            """\
+class Counter(val count: Int) {
+  var doubled: Int = 0
+  def this(c: Int, scale: Int) = {
+    this(c)
+    doubled = count * scale
+  }
+}
+val obj = new Counter(5, 3)
+val answer = obj.doubled
+""",
+            max_steps=1000,
+        )
+        assert locals_["answer"] == 15
