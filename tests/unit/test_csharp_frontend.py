@@ -1310,38 +1310,38 @@ class TestCSharpRangeExpression:
 class TestCSharpByrefParamIR:
     """Unit tests for out/ref/in byref parameter IR emission."""
 
-    def test_out_param_write_emits_store_field_deref(self):
-        """Assignment to out param should emit LOAD_VAR + STORE_FIELD '*'."""
+    def test_out_param_write_emits_store_indirect(self):
+        """Assignment to out param should emit LOAD_VAR + STORE_INDIRECT."""
         ir = _parse_and_lower("""\
 class C {
     void Fill(out int result) {
         result = 42;
     }
 }""")
-        store_fields = _find_all(ir, Opcode.STORE_FIELD)
-        assert any("*" in inst.operands for inst in store_fields)
+        store_indirects = _find_all(ir, Opcode.STORE_INDIRECT)
+        assert len(store_indirects) >= 1
 
-    def test_ref_param_read_emits_load_field_deref(self):
-        """Reading a ref param should emit LOAD_VAR + LOAD_FIELD '*'."""
+    def test_ref_param_read_emits_load_indirect(self):
+        """Reading a ref param should emit LOAD_VAR + LOAD_INDIRECT."""
         ir = _parse_and_lower("""\
 class C {
     int Read(ref int x) {
         return x;
     }
 }""")
-        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
-        assert any("*" in inst.operands for inst in load_fields)
+        load_indirects = _find_all(ir, Opcode.LOAD_INDIRECT)
+        assert len(load_indirects) >= 1
 
-    def test_in_param_read_emits_load_field_deref(self):
-        """Reading an in param should emit LOAD_VAR + LOAD_FIELD '*'."""
+    def test_in_param_read_emits_load_indirect(self):
+        """Reading an in param should emit LOAD_VAR + LOAD_INDIRECT."""
         ir = _parse_and_lower("""\
 class C {
     int Read(in int x) {
         return x;
     }
 }""")
-        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
-        assert any("*" in inst.operands for inst in load_fields)
+        load_indirects = _find_all(ir, Opcode.LOAD_INDIRECT)
+        assert len(load_indirects) >= 1
 
     def test_out_int_call_site_emits_address_of(self):
         """out int result at call site should emit DECL_VAR + ADDRESS_OF."""
@@ -1370,12 +1370,12 @@ class C {
         assert len(address_ofs) >= 2
 
     def test_regular_param_no_deref(self):
-        """Regular param should NOT emit LOAD_FIELD '*'."""
+        """Regular param should NOT emit LOAD_INDIRECT."""
         ir = _parse_and_lower("""\
 class C {
     int Read(int x) {
         return x;
     }
 }""")
-        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
-        assert not any("*" in inst.operands for inst in load_fields)
+        load_indirects = _find_all(ir, Opcode.LOAD_INDIRECT)
+        assert len(load_indirects) == 0
