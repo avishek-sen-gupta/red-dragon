@@ -134,6 +134,10 @@ class CSharpNodeType:
     USING_DIRECTIVE = "using_directive"
     NEWLINE = "\n"
 
+    # -- Out / ref expressions --
+    DECLARATION_EXPRESSION = "declaration_expression"
+    IMPLICIT_TYPE = "implicit_type"
+
     # -- Constructor chaining --
     CONSTRUCTOR_INITIALIZER = "constructor_initializer"
     THIS = "this"
