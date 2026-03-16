@@ -987,13 +987,7 @@ class BaseFrontend(Frontend):
         self._emit(Opcode.LABEL, label=end_label)
 
         cls_reg = self._fresh_reg()
-        self._emit(
-            Opcode.CONST,
-            result_reg=cls_reg,
-            operands=[
-                constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
-            ],
-        )
+        self._emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
         self._emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
     def _lower_raise_or_throw(self, node, keyword: str = "raise"):

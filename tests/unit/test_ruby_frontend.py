@@ -194,7 +194,7 @@ end
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
 
     def test_class_with_constructor(self):
         source = """
@@ -394,7 +394,7 @@ end
         field_stores = _find_all(instructions, Opcode.STORE_FIELD)
         assert any("count" in inst.operands for inst in field_stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
         assert len(instructions) > 20
@@ -663,7 +663,7 @@ end
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Greeter" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
 
     def test_module_labels(self):
         source = """\

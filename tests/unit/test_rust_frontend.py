@@ -145,7 +145,7 @@ class TestRustStructs:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
 
     def test_impl_block_with_methods(self):
         instructions = _parse_rust(
@@ -157,7 +157,7 @@ class TestRustStructs:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
 
 
 class TestRustExpressions:
@@ -260,7 +260,7 @@ impl Counter {
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Counter" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
         returns = _find_all(instructions, Opcode.RETURN)
         assert len(returns) >= 1
         assert len(instructions) > 15
@@ -439,7 +439,7 @@ class TestRustTraitItem:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Animal" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
 
     def test_trait_with_default_method(self):
         instructions = _parse_rust(

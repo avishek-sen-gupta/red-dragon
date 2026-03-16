@@ -159,8 +159,14 @@ def execute_for_language(
     frontend = get_deterministic_frontend(language)
     instructions = frontend.lower(source.encode("utf-8"))
     func_symbol_table = frontend.func_symbol_table
+    class_symbol_table = frontend.class_symbol_table
     cfg = build_cfg(instructions)
-    registry = build_registry(instructions, cfg, func_symbol_table=func_symbol_table)
+    registry = build_registry(
+        instructions,
+        cfg,
+        func_symbol_table=func_symbol_table,
+        class_symbol_table=class_symbol_table,
+    )
     config = VMConfig(max_steps=max_steps)
     vm, stats = execute_cfg(
         cfg, "entry", registry, config, func_symbol_table=func_symbol_table

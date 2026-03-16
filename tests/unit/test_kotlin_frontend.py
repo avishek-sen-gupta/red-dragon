@@ -149,7 +149,7 @@ class TestKotlinClasses:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
 
 
 class TestKotlinExpressions:
@@ -267,7 +267,7 @@ class Counter {
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Counter" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
         returns = _find_all(instructions, Opcode.RETURN)
@@ -1235,7 +1235,7 @@ class TestKotlinInterfaceLowering:
         """Interface produces BRANCH-LABEL...LABEL-CONST(<class:>)-STORE_VAR."""
         instructions = _parse_kotlin("interface Drawable { fun draw(): String }")
         consts = _find_all(instructions, Opcode.CONST)
-        class_refs = [i for i in consts if "<class:" in str(i.operands)]
+        class_refs = [i for i in consts if "class_" in str(i.operands)]
         assert len(class_refs) == 1
         assert "Drawable" in str(class_refs[0].operands[0])
         labels = _find_all(instructions, Opcode.LABEL)
