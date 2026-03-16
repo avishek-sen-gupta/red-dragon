@@ -62,7 +62,7 @@ class CSharpFrontend(BaseFrontend):
 
     def _build_expr_dispatch(self) -> dict[str, Callable]:
         return {
-            NT.IDENTIFIER: common_expr.lower_identifier,
+            NT.IDENTIFIER: csharp_expr.lower_csharp_identifier,
             NT.INTEGER_LITERAL: common_expr.lower_const_literal,
             NT.REAL_LITERAL: common_expr.lower_const_literal,
             NT.STRING_LITERAL: common_expr.lower_const_literal,

@@ -1305,3 +1305,51 @@ class TestCSharpRangeExpression:
         ir = _parse_and_lower("var r = 0..5;")
         calls = _find_all(ir, Opcode.CALL_FUNCTION)
         assert any("range" in inst.operands for inst in calls)
+
+
+class TestCSharpByrefParamIR:
+    """Unit tests for out/ref/in byref parameter IR emission."""
+
+    def test_out_param_write_emits_store_field_deref(self):
+        """Assignment to out param should emit LOAD_VAR + STORE_FIELD '*'."""
+        ir = _parse_and_lower("""\
+class C {
+    void Fill(out int result) {
+        result = 42;
+    }
+}""")
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        assert any("*" in inst.operands for inst in store_fields)
+
+    def test_ref_param_read_emits_load_field_deref(self):
+        """Reading a ref param should emit LOAD_VAR + LOAD_FIELD '*'."""
+        ir = _parse_and_lower("""\
+class C {
+    int Read(ref int x) {
+        return x;
+    }
+}""")
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        assert any("*" in inst.operands for inst in load_fields)
+
+    def test_in_param_read_emits_load_field_deref(self):
+        """Reading an in param should emit LOAD_VAR + LOAD_FIELD '*'."""
+        ir = _parse_and_lower("""\
+class C {
+    int Read(in int x) {
+        return x;
+    }
+}""")
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        assert any("*" in inst.operands for inst in load_fields)
+
+    def test_regular_param_no_deref(self):
+        """Regular param should NOT emit LOAD_FIELD '*'."""
+        ir = _parse_and_lower("""\
+class C {
+    int Read(int x) {
+        return x;
+    }
+}""")
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        assert not any("*" in inst.operands for inst in load_fields)
