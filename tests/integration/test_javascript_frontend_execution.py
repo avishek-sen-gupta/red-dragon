@@ -49,7 +49,7 @@ class TestJSComputedPropertyNameExecution:
 
 
 class TestJSOptionalChainExecution:
-    """optional_chain (obj?.prop) should not produce SYMBOLIC and should execute."""
+    """optional_chain (obj?.prop) short-circuits to None on null, accesses on non-null."""
 
     def test_optional_chain_on_object(self):
         locals_ = _run_js("""
@@ -57,6 +57,20 @@ class TestJSOptionalChainExecution:
             let result = obj?.name;
             """)
         assert locals_["result"] == "Alice"
+
+    def test_optional_chain_on_null_returns_none(self):
+        locals_ = _run_js("""
+            let obj = null;
+            let result = obj?.name;
+            """)
+        assert locals_["result"] is None
+
+    def test_optional_chain_nested_short_circuits(self):
+        locals_ = _run_js("""
+            let outer = { inner: { value: 42 } };
+            let result = outer?.inner?.value;
+            """)
+        assert locals_["result"] == 42
 
 
 class TestJSAnonymousClassExpressionExecution:
