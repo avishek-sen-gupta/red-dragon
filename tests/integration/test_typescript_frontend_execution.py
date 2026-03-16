@@ -91,18 +91,18 @@ class TestTSInterfacePropertySignatureExecution:
 
 
 class TestTSOptionalChainExecution:
-    """Optional chaining (?.) executes as regular member/index/method access."""
+    """Optional chaining (?.) short-circuits to None on null, accesses on non-null."""
 
     def test_optional_chain_on_object(self):
         locals_ = _run_ts('let obj = { name: "Alice" }; let result = obj?.name;')
         assert locals_["result"] == "Alice"
 
-    def test_optional_chain_on_nested_field(self):
+    def test_optional_chain_on_null_returns_none(self):
         locals_ = _run_ts("""
-            let obj = { x: 10 };
-            let result: number = obj?.x;
+            let obj: any = null;
+            let result = obj?.name;
             """)
-        assert locals_["result"] == 10
+        assert locals_["result"] is None
 
     def test_optional_chain_nested(self):
         locals_ = _run_ts("""
