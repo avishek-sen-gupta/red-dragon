@@ -134,6 +134,12 @@ class CSharpNodeType:
     USING_DIRECTIVE = "using_directive"
     NEWLINE = "\n"
 
+    # -- Constructor chaining --
+    CONSTRUCTOR_INITIALIZER = "constructor_initializer"
+    THIS = "this"
+    ARGUMENT_LIST = "argument_list"
+    ARGUMENT = "argument"
+
     # -- Punctuation used in type comparisons --
     LBRACE = "{"
     RBRACE = "}"

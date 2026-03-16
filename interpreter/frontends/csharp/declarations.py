@@ -144,6 +144,10 @@ def lower_constructor_decl(
 ) -> None:
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
+    initializer_node = next(
+        (c for c in node.children if c.type == NT.CONSTRUCTOR_INITIALIZER),
+        None,
+    )
 
     func_name = "__init__"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -152,11 +156,17 @@ def lower_constructor_decl(
     ctx.emit(Opcode.BRANCH, label=end_label)
     ctx.emit(Opcode.LABEL, label=func_label)
 
+    _emit_this_param(ctx)
+
     if params_node:
         lower_csharp_params(ctx, params_node)
 
     # Prepend field initializers before the constructor body
     emit_field_initializers(ctx, field_inits)
+
+    # Handle : this(args) constructor chaining
+    if initializer_node:
+        _lower_constructor_initializer(ctx, initializer_node)
 
     if body_node:
         ctx.lower_block(body_node)
@@ -173,6 +183,33 @@ def lower_constructor_decl(
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+
+
+def _lower_constructor_initializer(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower ``: this(args)`` as CALL_METHOD on this for __init__."""
+    target = next(
+        (c for c in node.children if c.type == NT.THIS),
+        None,
+    )
+    if target is None:
+        return  # :base() — not yet supported
+    args_node = next(
+        (c for c in node.children if c.type == NT.ARGUMENT_LIST),
+        None,
+    )
+    arg_regs = [
+        ctx.lower_expr(next((gc for gc in arg.children if gc.is_named), arg))
+        for arg in (args_node.children if args_node else [])
+        if arg.type == NT.ARGUMENT
+    ]
+    this_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+    ctx.emit(
+        Opcode.CALL_METHOD,
+        result_reg=ctx.fresh_reg(),
+        operands=[this_reg, "__init__"] + arg_regs,
+        node=node,
+    )
 
 
 _CLASS_BODY_METHOD_TYPES = frozenset(
