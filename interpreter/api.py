@@ -103,6 +103,7 @@ def lower_and_infer(
         resolver,
         type_env_builder=frontend.type_env_builder,
         func_symbol_table=frontend.func_symbol_table,
+        class_symbol_table=frontend.class_symbol_table,
     )
     return instructions, env
 
@@ -255,13 +256,27 @@ def execute_traced(
         function_name,
         max_steps,
     )
-    instructions = lower_source(source, language, frontend_type, backend)
+    lang = Language(language)
+    frontend = get_frontend(lang, frontend_type=frontend_type, llm_provider=backend)
+    instructions = frontend.lower(source.encode("utf-8"))
     cfg = build_cfg_from_source(
         source, language, frontend_type, backend, function_name=function_name
     )
-    registry = build_registry(instructions, cfg)
+    registry = build_registry(
+        instructions,
+        cfg,
+        func_symbol_table=frontend.func_symbol_table,
+        class_symbol_table=frontend.class_symbol_table,
+    )
     config = VMConfig(backend=backend, max_steps=max_steps)
-    _vm, trace = execute_cfg_traced(cfg, entry_point, registry, config)
+    _vm, trace = execute_cfg_traced(
+        cfg,
+        entry_point,
+        registry,
+        config,
+        func_symbol_table=frontend.func_symbol_table,
+        class_symbol_table=frontend.class_symbol_table,
+    )
     return trace
 
 

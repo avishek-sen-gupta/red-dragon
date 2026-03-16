@@ -25,6 +25,7 @@ from interpreter.type_expr import (
     fn_type,
     tuple_of,
 )
+from interpreter.class_ref import ClassRef
 from interpreter.func_ref import FuncRef
 from interpreter.type_inference import infer_types, _infer_const_type
 from interpreter.type_resolver import TypeResolver
@@ -97,7 +98,10 @@ class TestInferConstType:
         assert _infer_const_type("func_add_0", func_symbol_table=func_st) == ""
 
     def test_class_ref(self):
-        assert _infer_const_type("<class:Dog@class_Dog_0>") == ""
+        class_st = {
+            "class_Dog_0": ClassRef(name="Dog", label="class_Dog_0", parents=())
+        }
+        assert _infer_const_type("class_Dog_0", class_symbol_table=class_st) == ""
 
     def test_quoted_string(self):
         assert _infer_const_type('"hello"') == TypeName.STRING
@@ -2310,7 +2314,10 @@ class TestInferConstTypeReturnsTypeExpr:
         assert isinstance(result, UnknownType)
 
     def test_class_ref_returns_unknown(self):
-        result = _infer_const_type("<class:Dog@class_Dog_0>")
+        class_st = {
+            "class_Dog_0": ClassRef(name="Dog", label="class_Dog_0", parents=())
+        }
+        result = _infer_const_type("class_Dog_0", class_symbol_table=class_st)
         assert isinstance(result, UnknownType)
 
     def test_unrecognised_literal_returns_unknown(self):
