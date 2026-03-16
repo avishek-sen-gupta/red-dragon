@@ -43,6 +43,8 @@ class Opcode(str, Enum):
     RESUME_CONTINUATION = "RESUME_CONTINUATION"
     # Pointer operations
     ADDRESS_OF = "ADDRESS_OF"
+    LOAD_INDIRECT = "LOAD_INDIRECT"
+    STORE_INDIRECT = "STORE_INDIRECT"
     # Labels (pseudo-instruction)
     LABEL = "LABEL"
 

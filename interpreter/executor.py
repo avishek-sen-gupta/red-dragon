@@ -311,6 +311,76 @@ def _handle_address_of(
     )
 
 
+def _handle_load_indirect(
+    inst: IRInstruction, vm: VMState, **kwargs: Any
+) -> ExecutionResult:
+    """LOAD_INDIRECT %ptr: read through a Pointer (dereference)."""
+    obj_val = _resolve_reg(vm, inst.operands[0])
+    # Pointer dereference: read from heap[base].fields[offset]
+    if isinstance(obj_val, Pointer) and obj_val.base in vm.heap:
+        heap_obj = vm.heap[obj_val.base]
+        tv = heap_obj.fields.get(str(obj_val.offset))
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: tv},
+                reasoning=f"load *{obj_val} = {tv!r}",
+            )
+        )
+    if isinstance(obj_val, Pointer) and obj_val.base not in vm.heap:
+        sym = vm.fresh_symbolic(hint=f"*{obj_val}")
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                reasoning=f"load *{obj_val} (not on heap) → {sym.name}",
+            )
+        )
+    # Function pointer dereference is identity: (*fp)(args) == fp(args)
+    if isinstance(obj_val, BoundFuncRef):
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: typed_from_runtime(obj_val)},
+                reasoning=f"deref {obj_val} → {obj_val} (function pointer identity)",
+            )
+        )
+    # Fallback: symbolic
+    sym = vm.fresh_symbolic(hint=f"*{_symbolic_name(obj_val)}")
+    return ExecutionResult.success(
+        StateUpdate(
+            register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+            reasoning=f"load_indirect on non-pointer {obj_val!r} → {sym.name}",
+        )
+    )
+
+
+def _handle_store_indirect(
+    inst: IRInstruction, vm: VMState, **kwargs: Any
+) -> ExecutionResult:
+    """STORE_INDIRECT %ptr %val: write through a Pointer (dereference)."""
+    obj_val = _resolve_reg(vm, inst.operands[0])
+    val = _resolve_reg(vm, inst.operands[1])
+    if isinstance(obj_val, Pointer):
+        target_field = str(obj_val.offset)
+        return ExecutionResult.success(
+            StateUpdate(
+                heap_writes=[
+                    HeapWrite(
+                        obj_addr=obj_val.base,
+                        field=target_field,
+                        value=typed_from_runtime(val),
+                    )
+                ],
+                reasoning=f"store *{obj_val} = {val!r}",
+            )
+        )
+    obj_desc = _symbolic_name(obj_val)
+    logger.debug("store_indirect on non-pointer %s", obj_desc)
+    return ExecutionResult.success(
+        StateUpdate(
+            reasoning=f"store_indirect on {obj_desc} = {val!r} (non-pointer, no-op)",
+        )
+    )
+
+
 def _handle_branch(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
     return ExecutionResult.success(
         StateUpdate(
@@ -1498,6 +1568,8 @@ class LocalExecutor:
         Opcode.WRITE_REGION: _handle_write_region,
         Opcode.LOAD_REGION: _handle_load_region,
         Opcode.ADDRESS_OF: _handle_address_of,
+        Opcode.LOAD_INDIRECT: _handle_load_indirect,
+        Opcode.STORE_INDIRECT: _handle_store_indirect,
     }
 
     @classmethod
