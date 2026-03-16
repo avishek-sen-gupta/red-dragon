@@ -11,6 +11,7 @@ from typing import Any
 from interpreter.constants import Language
 from interpreter.frontend import Frontend
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
+from interpreter.class_ref import ClassRef
 from interpreter.func_ref import FuncRef
 from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode
 from interpreter.llm_client import LLMClient
@@ -19,6 +20,7 @@ from interpreter import constants
 logger = logging.getLogger(__name__)
 
 _LLM_FUNC_REF_RE = re.compile(r"<function:(\w+)@(\w+)(?:#\w+)?>")
+_LLM_CLASS_REF_RE = re.compile(r"<class:(\w+)@(\w+)(?::([^>]+))?>")
 
 
 class IRParsingError(Exception):
@@ -300,6 +302,29 @@ def _convert_llm_func_refs(
                 inst.operands[0] = label
 
 
+def _convert_llm_class_refs(
+    instructions: list[IRInstruction],
+    class_symbol_table: dict[str, ClassRef],
+) -> None:
+    """Convert LLM-emitted <class:name@label> strings to plain labels.
+
+    Mutates instructions in place: replaces operands and populates the symbol table.
+    This is the ONLY place regex is used for class references — at the LLM boundary.
+    """
+    for inst in instructions:
+        if inst.opcode == Opcode.CONST and inst.operands:
+            operand = str(inst.operands[0])
+            m = _LLM_CLASS_REF_RE.search(operand)
+            if m:
+                name, label = m.group(1), m.group(2)
+                parents_str = m.group(3) or ""
+                parents = tuple(p for p in parents_str.split(",") if p)
+                class_symbol_table[label] = ClassRef(
+                    name=name, label=label, parents=parents
+                )
+                inst.operands[0] = label
+
+
 class LLMFrontend(Frontend):
     """Frontend that uses an LLM to lower source code directly to IR.
 
@@ -323,10 +348,15 @@ class LLMFrontend(Frontend):
         self._max_retries = max_retries
         self._observer = observer
         self._func_symbol_table: dict[str, FuncRef] = {}
+        self._class_symbol_table: dict[str, ClassRef] = {}
 
     @property
     def func_symbol_table(self) -> dict[str, FuncRef]:
         return self._func_symbol_table
+
+    @property
+    def class_symbol_table(self) -> dict[str, ClassRef]:
+        return self._class_symbol_table
 
     def lower(self, source: bytes) -> list[IRInstruction]:
         """Lower source code to IR via LLM.
@@ -374,6 +404,7 @@ class LLMFrontend(Frontend):
 
             instructions = _validate_ir(instructions)
             _convert_llm_func_refs(instructions, self._func_symbol_table)
+            _convert_llm_class_refs(instructions, self._class_symbol_table)
             elapsed = time.perf_counter() - t0
             self._observer.on_parse(0.0)
             self._observer.on_lower(elapsed)

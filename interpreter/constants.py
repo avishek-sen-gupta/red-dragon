@@ -33,11 +33,6 @@ class Language(StrEnum):
 
 PARAM_PREFIX = "param:"
 
-CLASS_REF_PATTERN = r"<class:(\w+)@(\w+)(?::([^>]+))?>"
-
-CLASS_REF_TEMPLATE = "<class:{name}@{label}>"
-CLASS_REF_WITH_PARENTS_TEMPLATE = "<class:{name}@{label}:{parents}>"
-
 OBJ_ADDR_PREFIX = "obj_"
 REGION_ADDR_PREFIX = "rgn_"
 ARR_ADDR_PREFIX = "arr_"
