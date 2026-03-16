@@ -28,7 +28,7 @@ from interpreter.vm import (
     _heap_addr,
     _parse_const,
 )
-from interpreter.vm_types import BuiltinResult, StackFrame
+from interpreter.vm_types import BuiltinResult, HeapWrite, StackFrame
 from interpreter.registry import FunctionRegistry
 from interpreter.func_ref import FuncRef, BoundFuncRef
 from interpreter.class_ref import ClassRef
@@ -40,12 +40,17 @@ from interpreter.unresolved_call import UnresolvedCallResolver, SymbolicResolver
 from interpreter.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.binop_coercion import BinopCoercionStrategy, DefaultBinopCoercion
 from interpreter.unop_coercion import UnopCoercionStrategy, DefaultUnopCoercion
+from interpreter.field_fallback import (
+    FieldFallbackStrategy,
+    NoFieldFallback,
+)
 from interpreter import constants
 
 _DEFAULT_RESOLVER = SymbolicResolver()
 _DEFAULT_OVERLOAD_RESOLVER = NullOverloadResolver()
 _DEFAULT_BINOP_COERCION = DefaultBinopCoercion()
 _DEFAULT_UNOP_COERCION = DefaultUnopCoercion()
+_NO_FIELD_FALLBACK = NoFieldFallback()
 _EMPTY_TYPE_ENV = TypeEnvironment(
     register_types=MappingProxyType({}),
     var_types=MappingProxyType({}),
@@ -154,7 +159,17 @@ def _handle_load_var(
                     reasoning=f"load {name} = {stored.value!r} → {inst.result_reg}",
                 )
             )
-    # Variable not found — create symbolic
+    # Variable not found — try field fallback strategy
+    fallback: FieldFallbackStrategy = kwargs.get("field_fallback", _NO_FIELD_FALLBACK)
+    this_field = fallback.resolve_load(vm, name)
+    if this_field is not None:
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: this_field},
+                reasoning=f"load {name} = {this_field.value!r} (via implicit this.{name})",
+            )
+        )
+    # Not found anywhere — create symbolic
     sym = vm.fresh_symbolic(hint=name)
     return ExecutionResult.success(
         StateUpdate(
@@ -207,7 +222,17 @@ def _handle_store_var(
             return ExecutionResult.success(
                 StateUpdate(reasoning=f"store {name} = {val!r} (scope chain)")
             )
-    # Not found in any frame — create in current frame (new variable).
+    # Not found in any frame — try field fallback strategy
+    fallback: FieldFallbackStrategy = kwargs.get("field_fallback", _NO_FIELD_FALLBACK)
+    this_addr = fallback.resolve_store(vm, name)
+    if this_addr is not None:
+        return ExecutionResult.success(
+            StateUpdate(
+                heap_writes=[HeapWrite(obj_addr=this_addr, field=name, value=tv)],
+                reasoning=f"store {name} = {val!r} (via implicit this.{name})",
+            )
+        )
+    # Not found anywhere — create in current frame (new variable).
     return ExecutionResult.success(
         StateUpdate(
             var_writes={name: tv},
@@ -1491,6 +1516,7 @@ class LocalExecutor:
         unop_coercion: UnopCoercionStrategy = _DEFAULT_UNOP_COERCION,
         func_symbol_table: dict[str, FuncRef] = {},
         class_symbol_table: dict[str, ClassRef] = {},
+        field_fallback: FieldFallbackStrategy = _NO_FIELD_FALLBACK,
     ) -> ExecutionResult:
         handler = cls.DISPATCH.get(inst.opcode)
         if not handler:
@@ -1509,6 +1535,7 @@ class LocalExecutor:
             unop_coercion=unop_coercion,
             func_symbol_table=func_symbol_table,
             class_symbol_table=class_symbol_table,
+            field_fallback=field_fallback,
         )
 
 
@@ -1526,6 +1553,7 @@ def _try_execute_locally(
     unop_coercion: UnopCoercionStrategy = _DEFAULT_UNOP_COERCION,
     func_symbol_table: dict[str, FuncRef] = {},
     class_symbol_table: dict[str, ClassRef] = {},
+    field_fallback: FieldFallbackStrategy = _NO_FIELD_FALLBACK,
 ) -> ExecutionResult:
     """Try to execute an instruction without the LLM.
 
@@ -1546,4 +1574,5 @@ def _try_execute_locally(
         unop_coercion=unop_coercion,
         func_symbol_table=func_symbol_table,
         class_symbol_table=class_symbol_table,
+        field_fallback=field_fallback,
     )

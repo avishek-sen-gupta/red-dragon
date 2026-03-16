@@ -35,6 +35,11 @@ from interpreter.unop_coercion import (
     UnopCoercionStrategy,
     DefaultUnopCoercion,
 )
+from interpreter.field_fallback import (
+    FieldFallbackStrategy,
+    NoFieldFallback,
+    ImplicitThisFieldFallback,
+)
 from interpreter.type_environment import TypeEnvironment
 from interpreter.type_expr import scalar
 from interpreter.typed_value import TypedValue
@@ -93,6 +98,20 @@ class _StopExecution:
     """Sentinel indicating the interpreter should halt."""
 
     pass
+
+
+def _field_fallback_for_language(lang: Language) -> FieldFallbackStrategy:
+    """Select FieldFallbackStrategy based on source language.
+
+    Languages with implicit this (bare field names in method/constructor
+    bodies resolve to this.field): Java, C#, Kotlin, Scala, C++.
+    """
+    _IMPLICIT_THIS_LANGS = frozenset(
+        {Language.JAVA, Language.CSHARP, Language.KOTLIN, Language.SCALA, Language.CPP}
+    )
+    if lang in _IMPLICIT_THIS_LANGS:
+        return ImplicitThisFieldFallback()
+    return NoFieldFallback()
 
 
 def _binop_coercion_for_language(lang: Language) -> BinopCoercionStrategy:
@@ -219,6 +238,7 @@ def execute_cfg(
     unop_coercion: UnopCoercionStrategy = DefaultUnopCoercion(),
     func_symbol_table: dict[str, FuncRef] = {},
     class_symbol_table: dict[str, ClassRef] = {},
+    field_fallback: FieldFallbackStrategy = NoFieldFallback(),
 ) -> tuple[VMState, ExecutionStats]:
     """Execute a pre-built CFG from the given entry point.
 
@@ -288,6 +308,7 @@ def execute_cfg(
             unop_coercion=unop_coercion,
             func_symbol_table=func_symbol_table,
             class_symbol_table=class_symbol_table,
+            field_fallback=field_fallback,
         )
         used_llm = False
         if result.handled:
@@ -370,6 +391,7 @@ def execute_cfg_traced(
     unop_coercion: UnopCoercionStrategy = DefaultUnopCoercion(),
     func_symbol_table: dict[str, FuncRef] = {},
     class_symbol_table: dict[str, ClassRef] = {},
+    field_fallback: FieldFallbackStrategy = NoFieldFallback(),
 ) -> tuple[VMState, ExecutionTrace]:
     """Execute a pre-built CFG and record a trace of every step.
 
@@ -439,6 +461,7 @@ def execute_cfg_traced(
             unop_coercion=unop_coercion,
             func_symbol_table=func_symbol_table,
             class_symbol_table=class_symbol_table,
+            field_fallback=field_fallback,
         )
         used_llm = False
         if result.handled:
@@ -650,6 +673,7 @@ def run(
         FallbackFirstWithWarning(),
     )
     binop_coercion = _binop_coercion_for_language(lang)
+    field_fallback = _field_fallback_for_language(lang)
     exec_start = time.perf_counter()
     vm, exec_stats = execute_cfg(
         cfg,
@@ -662,6 +686,7 @@ def run(
         binop_coercion=binop_coercion,
         func_symbol_table=frontend.func_symbol_table,
         class_symbol_table=frontend.class_symbol_table,
+        field_fallback=field_fallback,
     )
     vm.data_layout = frontend.data_layout
     stats.execution_time = time.perf_counter() - exec_start
