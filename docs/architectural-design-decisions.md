@@ -2056,3 +2056,15 @@ These are already dispatched to `_lower_ts_interface_method` in `lower_interface
 **Deletions:** `FUNC_REF_PATTERN`, `FUNC_REF_TEMPLATE` (constants.py), `_parse_func_ref()`, `RefPatterns.FUNC_RE` (registry.py), `_FUNC_REF_EXTRACT`, `_FUNC_REF_PATTERN` (type_inference.py).
 
 **Files:** `interpreter/func_ref.py` (new: `FuncRef`, `BoundFuncRef`), `interpreter/frontends/context.py` (`func_symbol_table`, `emit_func_ref`), `interpreter/executor.py` (7 call sites → `isinstance`), `interpreter/registry.py` (symbol table lookup), `interpreter/type_inference.py` (symbol table lookup), `interpreter/run.py` (threading + `_format_val`), `interpreter/llm_frontend.py` (boundary conversion), all 15 frontend dirs.
+
+---
+
+### ADR-106: Structured class references via symbol table (2026-03-15)
+
+**Context:** Class references were stringly-typed — frontends emitted `CONST "<class:name@label>"` or `CONST "<class:name@label:Parent1,Parent2>"` and every consumer (registry, type inference, executor) regex-parsed this string back. This was the same fragility that `FUNC_REF_PATTERN` had (fixed in ADR-105).
+
+**Decision:** Replace with a symbol table (`dict[str, ClassRef]`) on `TreeSitterEmitContext`. Frontends call `ctx.emit_class_ref(name, label, parents)` which registers a `ClassRef(name, label, parents)` and emits `CONST label` (plain string). Unlike function references, class references have no runtime binding equivalent (`BoundFuncRef` for closures) — `ClassRef` objects are stored directly in registers. Consumer sites use `isinstance(val, ClassRef)` (executor) or `label in class_symbol_table` (registry, type inference). A `NO_CLASS_REF` null object sentinel eliminates None checks. The LLM frontend boundary retains a local regex for parsing LLM-emitted strings. With this change, all stringly-typed reference patterns are eliminated from the pipeline.
+
+**Deletions:** `CLASS_REF_PATTERN`, `CLASS_REF_TEMPLATE`, `CLASS_REF_WITH_PARENTS_TEMPLATE` (constants.py), `RefPatterns`, `RefParseResult`, `_parse_class_ref()` (registry.py), `_CLASS_REF_PATTERN` (type_inference.py), `make_class_ref()` (common/declarations.py).
+
+**Files:** `interpreter/class_ref.py`, `interpreter/frontends/context.py`, `interpreter/executor.py`, `interpreter/registry.py`, `interpreter/type_inference.py`, `interpreter/run.py`, all 15 frontend dirs.
