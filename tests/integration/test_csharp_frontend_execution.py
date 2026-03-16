@@ -77,3 +77,63 @@ class TestCSharpRangeExpressionExecution:
         """Code after range expression should execute."""
         locals_ = _run_csharp("var r = 0..5;\nvar x = 42;")
         assert locals_["x"] == 42
+
+
+class TestCSharpConstructorChainingExecution:
+    """C# : this(args) constructor chaining with field initializers."""
+
+    def test_single_field_constructor_chaining(self):
+        """Two-arg constructor delegates to one-arg via : this(v + scale)."""
+        locals_ = _run_csharp(
+            """\
+class Box {
+    int value;
+    Box(int v) { this.value = v; }
+    Box(int v, int scale) : this(v + scale) { }
+}
+Box b = new Box(3, 4);
+int answer = b.value;
+""",
+            max_steps=1000,
+        )
+        assert locals_["answer"] == 7
+
+    def test_chaining_with_field_initializer(self):
+        """Field initializer should exist after constructor chaining."""
+        locals_ = _run_csharp(
+            """\
+class Calc {
+    int result;
+    int extra = 10;
+    Calc(int r) { this.result = r; }
+    Calc(int a, int b) : this(a + b) { }
+    int Total() { return result + extra; }
+}
+Calc c = new Calc(3, 4);
+int answer = c.Total();
+""",
+            max_steps=1000,
+        )
+        assert locals_["answer"] == 17
+
+    def test_chaining_body_reads_field_by_bare_name(self):
+        """After : this(...), constructor body can read fields via implicit this."""
+        locals_ = _run_csharp(
+            """\
+class Counter {
+    int count;
+    int doubled;
+    Counter(int c) {
+        this.count = c;
+        this.doubled = 0;
+    }
+    Counter(int c, int scale) : this(c) {
+        doubled = count * scale;
+    }
+}
+Counter obj = new Counter(5, 3);
+int answer = obj.doubled;
+""",
+            max_steps=1000,
+        )
+        assert locals_["answer"] == 15
