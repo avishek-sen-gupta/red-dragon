@@ -125,3 +125,59 @@ int answer = obj.doubled;
 """
         _, locals_ = _run_java(source, max_steps=1000)
         assert locals_["answer"] == 15
+
+
+class TestJavaCompactRecordConstructorExecution:
+    """Java record with compact constructor should store fields and run body."""
+
+    def test_record_field_access(self):
+        """record Point(int x, int y) — new Point(3, 5).x should be 3."""
+        source = """\
+record Point(int x, int y) {}
+Point p = new Point(3, 5);
+int answer = p.x;
+"""
+        _, locals_ = _run_java(source, max_steps=500)
+        assert locals_["answer"] == 3
+
+    def test_record_both_fields(self):
+        """Both record component fields should be accessible."""
+        source = """\
+record Point(int x, int y) {}
+Point p = new Point(3, 5);
+int a = p.x;
+int b = p.y;
+"""
+        _, locals_ = _run_java(source, max_steps=500)
+        assert locals_["a"] == 3
+        assert locals_["b"] == 5
+
+    def test_compact_constructor_with_validation(self):
+        """Compact constructor body runs before field assignment."""
+        source = """\
+record Range(int lo, int hi) {
+    Range {
+        int temp = lo + hi;
+    }
+}
+Range r = new Range(1, 10);
+int a = r.lo;
+int b = r.hi;
+"""
+        _, locals_ = _run_java(source, max_steps=500)
+        assert locals_["a"] == 1
+        assert locals_["b"] == 10
+
+    def test_record_with_method(self):
+        """Record with an additional method should work."""
+        source = """\
+record Point(int x, int y) {
+    int sum() {
+        return x + y;
+    }
+}
+Point p = new Point(3, 5);
+int answer = p.sum();
+"""
+        _, locals_ = _run_java(source, max_steps=1000)
+        assert locals_["answer"] == 8
