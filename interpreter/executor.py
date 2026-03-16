@@ -1091,10 +1091,10 @@ def _try_class_constructor_call(
 
     params = registry.func_params.get(init_label, [])
     new_vars: dict[str, Any] = {}
-    # Python emits self as explicit first param; Java/C++/C# do not
-    has_explicit_self = bool(params) and params[0] == constants.PARAM_SELF
+    # Python emits self, Java/C#/Kotlin/Scala/C++ emit this as explicit first param
+    has_explicit_self = bool(params) and params[0] in constants.SELF_PARAM_NAMES
     if has_explicit_self:
-        # Python-style: first param is self/this, rest are constructor args
+        # Explicit self/this: first param is self/this, rest are constructor args
         new_vars[params[0]] = typed(addr, UNKNOWN)
         for i, arg in enumerate(args):
             if i + 1 < len(params):
