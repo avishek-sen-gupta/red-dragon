@@ -1002,7 +1002,7 @@ begin
 end."""
         instructions = _parse_pascal(source)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
 
 
 class TestPascalBitwiseOperators:

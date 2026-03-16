@@ -159,7 +159,7 @@ class TestScalaClasses:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
 
     def test_object_definition_singleton(self):
         instructions = _parse_scala("object Singleton { val x = 42 }")
@@ -168,7 +168,7 @@ class TestScalaClasses:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Singleton" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
 
 
 class TestScalaExpressions:
@@ -301,7 +301,7 @@ class Counter(start: Int) {
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Counter" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
         assert len(instructions) > 15
@@ -452,7 +452,7 @@ trait Animal {
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Animal" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
 
     def test_trait_with_method(self):
         source = """\
@@ -480,7 +480,7 @@ class TestScalaCaseClassDefinition:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Point" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
 
     def test_case_class_with_body(self):
         source = """\

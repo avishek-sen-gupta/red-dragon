@@ -202,7 +202,7 @@ type Point struct {
         ir = _parse_and_lower(source)
         consts = _find_all(ir, Opcode.CONST)
         class_refs = [
-            c for c in consts if any("<class:" in str(op) for op in c.operands)
+            c for c in consts if any("class_" in str(op) for op in c.operands)
         ]
         assert len(class_refs) >= 1
         stores = _find_all(ir, Opcode.DECL_VAR)
@@ -315,7 +315,7 @@ func (c Counter) Value() int {
 """
         ir = _parse_and_lower(source)
         consts = _find_all(ir, Opcode.CONST)
-        assert any("<class:" in str(c.operands) for c in consts)
+        assert any("class_" in str(c.operands) for c in consts)
         returns = _find_all(ir, Opcode.RETURN)
         assert len(returns) >= 1
         stores = _find_all(ir, Opcode.DECL_VAR)
@@ -1092,7 +1092,7 @@ type Shape interface {
 }
 """)
         consts = _find_all(ir, Opcode.CONST)
-        class_refs = [i for i in consts if "<class:" in str(i.operands)]
+        class_refs = [i for i in consts if "class_" in str(i.operands)]
         assert len(class_refs) == 1
         assert "Shape" in str(class_refs[0].operands[0])
 

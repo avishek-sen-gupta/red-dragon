@@ -607,7 +607,10 @@ def run(
     # 4b. Build function registry
     t0 = time.perf_counter()
     registry = build_registry(
-        instructions, cfg, func_symbol_table=frontend.func_symbol_table
+        instructions,
+        cfg,
+        func_symbol_table=frontend.func_symbol_table,
+        class_symbol_table=frontend.class_symbol_table,
     )
     stats.registry_time = time.perf_counter() - t0
     stats.registry_functions = len(registry.func_params)

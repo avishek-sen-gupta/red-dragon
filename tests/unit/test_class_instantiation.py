@@ -72,7 +72,7 @@ class Dog {
 }
 """)
         cfg = build_cfg(ir)
-        reg = build_registry(ir, cfg, fe.func_symbol_table)
+        reg = build_registry(ir, cfg, fe.func_symbol_table, fe.class_symbol_table)
         assert "Dog" in reg.class_methods
         assert "__init__" in reg.class_methods["Dog"]
 
@@ -133,7 +133,7 @@ class Dog {
 }
 """)
         cfg = build_cfg(ir)
-        reg = build_registry(ir, cfg, fe.func_symbol_table)
+        reg = build_registry(ir, cfg, fe.func_symbol_table, fe.class_symbol_table)
         assert "Dog" in reg.class_methods
         assert "__init__" in reg.class_methods["Dog"]
 
@@ -152,7 +152,7 @@ class Dog(name: String) {
 }
 """)
         cfg = build_cfg(ir)
-        reg = build_registry(ir, cfg, fe.func_symbol_table)
+        reg = build_registry(ir, cfg, fe.func_symbol_table, fe.class_symbol_table)
         assert "Dog" in reg.class_methods
         assert "getName" in reg.class_methods["Dog"]
 

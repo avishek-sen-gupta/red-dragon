@@ -156,7 +156,7 @@ class Dog {
         assert len(dog_stores) >= 1
         consts = _find_all(ir, Opcode.CONST)
         class_refs = [
-            c for c in consts if any("class:" in str(op) for op in c.operands)
+            c for c in consts if any("class_" in str(op) for op in c.operands)
         ]
         assert len(class_refs) >= 1
 
@@ -270,7 +270,7 @@ class Counter {
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("Counter" in s.operands for s in stores)
         consts = _find_all(ir, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
         store_fields = _find_all(ir, Opcode.STORE_FIELD)
         assert any("count" in inst.operands for inst in store_fields)
         returns = _find_all(ir, Opcode.RETURN)
@@ -646,7 +646,7 @@ interface Printable {
         ir = _parse_and_lower(source)
         consts = _find_all(ir, Opcode.CONST)
         class_refs = [
-            c for c in consts if any("class:" in str(op) for op in c.operands)
+            c for c in consts if any("class_" in str(op) for op in c.operands)
         ]
         assert len(class_refs) >= 1
 
@@ -681,7 +681,7 @@ trait Loggable {
         ir = _parse_and_lower(source)
         consts = _find_all(ir, Opcode.CONST)
         class_refs = [
-            c for c in consts if any("class:" in str(op) for op in c.operands)
+            c for c in consts if any("class_" in str(op) for op in c.operands)
         ]
         assert len(class_refs) >= 1
 
@@ -752,7 +752,7 @@ enum Color {
         ir = _parse_and_lower(source)
         consts = _find_all(ir, Opcode.CONST)
         class_refs = [
-            c for c in consts if any("class:" in str(op) for op in c.operands)
+            c for c in consts if any("class_" in str(op) for op in c.operands)
         ]
         assert len(class_refs) >= 1
 
