@@ -848,6 +848,25 @@ def _infer_return(
         ctx.func_return_types[ctx.current_func_label] = ret_type
 
 
+def _infer_load_indirect(
+    inst: IRInstruction,
+    ctx: _InferenceContext,
+    type_resolver: TypeResolver,
+) -> None:
+    """LOAD_INDIRECT produces UNKNOWN — no field-type lookup for dereferences."""
+    if inst.result_reg:
+        ctx.register_types[inst.result_reg] = UNKNOWN
+
+
+def _infer_store_indirect(
+    inst: IRInstruction,
+    ctx: _InferenceContext,
+    type_resolver: TypeResolver,
+) -> None:
+    """STORE_INDIRECT — no type inference side effects."""
+    pass
+
+
 _DISPATCH: dict[Opcode, callable] = {
     Opcode.LABEL: _infer_label,
     Opcode.SYMBOLIC: _infer_symbolic,
@@ -869,6 +888,8 @@ _DISPATCH: dict[Opcode, callable] = {
     Opcode.CALL_UNKNOWN: _infer_call_unknown,
     Opcode.STORE_INDEX: _infer_store_index,
     Opcode.LOAD_INDEX: _infer_load_index,
+    Opcode.LOAD_INDIRECT: _infer_load_indirect,
+    Opcode.STORE_INDIRECT: _infer_store_indirect,
 }
 
 
