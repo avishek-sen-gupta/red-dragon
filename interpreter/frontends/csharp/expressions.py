@@ -284,6 +284,28 @@ def lower_as_expr(ctx: TreeSitterEmitContext, node) -> str:
     return lower_const_literal(ctx, node)
 
 
+def lower_declaration_expression(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower `out int x` / `out var x` declaration_expression.
+
+    Declares the variable in the current scope with a default value (0)
+    and returns a LOAD_VAR register so it can be passed as an argument.
+    Our VM does not support true pass-by-reference, so the callee cannot
+    write back through the out parameter — but the variable will exist
+    in scope after the call.
+    """
+    name_node = next(
+        (c for c in node.children if c.type == NT.IDENTIFIER),
+        None,
+    )
+    var_name = ctx.node_text(name_node) if name_node else "__out_var"
+    default_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=default_reg, operands=["0"])
+    ctx.emit(Opcode.DECL_VAR, operands=[var_name, default_reg], node=node)
+    result_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=result_reg, operands=[var_name])
+    return result_reg
+
+
 def lower_declaration_pattern(ctx: TreeSitterEmitContext, node) -> str:
     """Lower `int i` declaration pattern -> CONST type + STORE_VAR binding."""
     named_children = [c for c in node.children if c.is_named]
