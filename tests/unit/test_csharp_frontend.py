@@ -1355,6 +1355,20 @@ class C {
         address_ofs = _find_all(ir, Opcode.ADDRESS_OF)
         assert any("result" in inst.operands for inst in address_ofs)
 
+    def test_ref_arg_call_site_emits_address_of(self):
+        """ref x at call site should emit ADDRESS_OF."""
+        ir = _parse_and_lower("""\
+class C {
+    void Swap(ref int a, ref int b) { }
+    void M() {
+        int x = 1;
+        int y = 2;
+        Swap(ref x, ref y);
+    }
+}""")
+        address_ofs = _find_all(ir, Opcode.ADDRESS_OF)
+        assert len(address_ofs) >= 2
+
     def test_regular_param_no_deref(self):
         """Regular param should NOT emit LOAD_FIELD '*'."""
         ir = _parse_and_lower("""\
