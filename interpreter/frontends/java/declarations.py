@@ -327,6 +327,8 @@ def _lower_constructor_decl(
     ctx.emit(Opcode.BRANCH, label=end_label)
     ctx.emit(Opcode.LABEL, label=func_label)
 
+    _emit_this_param(ctx)
+
     if params_node:
         lower_java_params(ctx, params_node)
 
