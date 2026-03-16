@@ -284,6 +284,35 @@ def lower_as_expr(ctx: TreeSitterEmitContext, node) -> str:
     return lower_const_literal(ctx, node)
 
 
+def emit_byref_load(ctx: TreeSitterEmitContext, name: str, *, node=None) -> str:
+    """Load a variable, dereferencing if it's a byref (out/ref/in) param."""
+    reg = ctx.fresh_reg()
+    resolved = ctx.resolve_var(name)
+    ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[resolved], node=node)
+    if name in ctx.byref_params:
+        deref_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.LOAD_FIELD, result_reg=deref_reg, operands=[reg, "*"], node=node)
+        return deref_reg
+    return reg
+
+
+def emit_byref_store(ctx: TreeSitterEmitContext, name: str, val_reg: str, *, node=None) -> None:
+    """Store to a variable, writing through pointer if it's a byref param."""
+    if name in ctx.byref_params:
+        ptr_reg = ctx.fresh_reg()
+        resolved = ctx.resolve_var(name)
+        ctx.emit(Opcode.LOAD_VAR, result_reg=ptr_reg, operands=[resolved], node=node)
+        ctx.emit(Opcode.STORE_FIELD, operands=[ptr_reg, "*", val_reg], node=node)
+    else:
+        ctx.emit(Opcode.STORE_VAR, operands=[ctx.resolve_var(name), val_reg], node=node)
+
+
+def lower_csharp_identifier(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower identifier with byref dereference support."""
+    name = ctx.node_text(node)
+    return emit_byref_load(ctx, name, node=node)
+
+
 def lower_declaration_expression(ctx: TreeSitterEmitContext, node) -> str:
     """Lower `out int x` / `out var x` declaration_expression.
 
@@ -620,11 +649,7 @@ def lower_csharp_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
     if target.type == NT.IDENTIFIER:
-        ctx.emit(
-            Opcode.STORE_VAR,
-            operands=[ctx.node_text(target), val_reg],
-            node=parent_node,
-        )
+        emit_byref_store(ctx, ctx.node_text(target), val_reg, node=parent_node)
     elif target.type == NT.MEMBER_ACCESS_EXPRESSION:
         obj_node = target.child_by_field_name("expression")
         name_node = target.child_by_field_name("name")
@@ -668,11 +693,20 @@ def lower_csharp_store_target(
 
 def lower_csharp_params(ctx: TreeSitterEmitContext, params_node) -> None:
     """Lower C# formal parameters (parameter nodes)."""
+    ctx.byref_params.clear()
     for child in params_node.children:
         if child.type == NT.PARAMETER:
             name_node = child.child_by_field_name("name")
             if name_node:
                 pname = ctx.node_text(name_node)
+                # Detect out/ref/in modifier
+                modifier = next(
+                    (c for c in child.children
+                     if c.type == NT.MODIFIER and ctx.node_text(c) in ("out", "ref", "in")),
+                    None,
+                )
+                if modifier:
+                    ctx.byref_params.add(pname)
                 type_hint = extract_normalized_type(ctx, child, "type", ctx.type_map)
                 param_reg = ctx.fresh_reg()
                 ctx.emit(
