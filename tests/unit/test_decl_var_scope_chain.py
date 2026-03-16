@@ -5,9 +5,11 @@ STORE_VAR walks the scope chain to update existing variables (assignment).
 """
 
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.typed_value import typed_from_runtime, unwrap
+from interpreter.typed_value import typed_from_runtime, unwrap, typed
 from interpreter.vm import VMState, apply_update
-from interpreter.vm_types import StackFrame, StateUpdate, StackFramePush
+from interpreter.vm_types import HeapObject, StackFrame, StateUpdate, StackFramePush
+from interpreter.type_expr import UNKNOWN
+from interpreter.field_fallback import ImplicitThisFieldFallback
 from interpreter.executor import LocalExecutor
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
@@ -19,9 +21,9 @@ def _make_vm() -> VMState:
     return vm
 
 
-def _execute(vm, inst):
+def _execute(vm, inst, **kwargs):
     result = LocalExecutor.execute(
-        inst=inst, vm=vm, cfg=CFG(), registry=FunctionRegistry()
+        inst=inst, vm=vm, cfg=CFG(), registry=FunctionRegistry(), **kwargs
     )
     assert result.handled
     apply_update(vm, result.update)
@@ -128,3 +130,89 @@ class TestStoreVarScopeChain:
         assert unwrap(vm.current_frame.local_vars["x"]) == 30
         # Parent frame x unchanged
         assert unwrap(vm.call_stack[0].local_vars["x"]) == 10
+
+
+class TestImplicitThisFieldResolution:
+    """LOAD_VAR falls back to this.field when ImplicitThisFieldFallback is injected."""
+
+    FALLBACK = ImplicitThisFieldFallback()
+
+    def _make_vm_with_this(self, fields: dict) -> VMState:
+        """Create a VM with a heap object and 'this' pointing to it."""
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="<main>"))
+        addr = "obj_0"
+        heap_fields = {k: typed(v, UNKNOWN) for k, v in fields.items()}
+        vm.heap[addr] = HeapObject(fields=heap_fields)
+        vm.current_frame.local_vars["this"] = typed(addr, UNKNOWN)
+        return vm
+
+    def test_bare_field_resolves_via_this(self):
+        """LOAD_VAR 'count' should find this.count when count not in scope."""
+        vm = self._make_vm_with_this({"count": 42})
+        _execute(
+            vm,
+            IRInstruction(opcode=Opcode.LOAD_VAR, result_reg="%0", operands=["count"]),
+            field_fallback=self.FALLBACK,
+        )
+        assert unwrap(vm.current_frame.registers["%0"]) == 42
+
+    def test_local_var_takes_precedence_over_field(self):
+        """Local variable should shadow this.field."""
+        vm = self._make_vm_with_this({"x": 10})
+        _set_reg(vm, "%v", 99)
+        _execute(vm, IRInstruction(opcode=Opcode.DECL_VAR, operands=["x", "%v"]))
+        _execute(
+            vm,
+            IRInstruction(opcode=Opcode.LOAD_VAR, result_reg="%0", operands=["x"]),
+            field_fallback=self.FALLBACK,
+        )
+        assert unwrap(vm.current_frame.registers["%0"]) == 99
+
+    def test_no_this_produces_symbolic(self):
+        """Without this in scope, missing var should still produce symbolic."""
+        vm = _make_vm()
+        _execute(
+            vm,
+            IRInstruction(
+                opcode=Opcode.LOAD_VAR, result_reg="%0", operands=["missing"]
+            ),
+            field_fallback=self.FALLBACK,
+        )
+        val = vm.current_frame.registers["%0"].value
+        assert hasattr(val, "name"), f"Expected symbolic, got {val}"
+
+    def test_field_not_on_heap_object_produces_symbolic(self):
+        """this exists but field not on object should produce symbolic."""
+        vm = self._make_vm_with_this({"other": 5})
+        _execute(
+            vm,
+            IRInstruction(
+                opcode=Opcode.LOAD_VAR, result_reg="%0", operands=["missing"]
+            ),
+            field_fallback=self.FALLBACK,
+        )
+        val = vm.current_frame.registers["%0"].value
+        assert hasattr(val, "name"), f"Expected symbolic, got {val}"
+
+    def test_no_fallback_strategy_produces_symbolic(self):
+        """Without ImplicitThisFieldFallback, bare field name produces symbolic."""
+        vm = self._make_vm_with_this({"count": 42})
+        _execute(
+            vm,
+            IRInstruction(opcode=Opcode.LOAD_VAR, result_reg="%0", operands=["count"]),
+            # No field_fallback — uses default NoFieldFallback
+        )
+        val = vm.current_frame.registers["%0"].value
+        assert hasattr(val, "name"), f"Expected symbolic without fallback, got {val}"
+
+    def test_store_var_writes_to_this_field(self):
+        """STORE_VAR should write to this.field when var not in scope."""
+        vm = self._make_vm_with_this({"doubled": 0})
+        _set_reg(vm, "%v", 42)
+        _execute(
+            vm,
+            IRInstruction(opcode=Opcode.STORE_VAR, operands=["doubled", "%v"]),
+            field_fallback=self.FALLBACK,
+        )
+        assert unwrap(vm.heap["obj_0"].fields["doubled"]) == 42

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.typed_value import unwrap_locals
@@ -152,3 +154,41 @@ val b = Box()
 val answer = b.x
 """)
         assert vars_["answer"] == 99
+
+
+class TestKotlinImplicitThisFieldExecution:
+    """Bare field names in method/constructor bodies resolve via implicit this."""
+
+    def test_method_reads_field_by_bare_name(self):
+        """this.value accessed as bare 'value' in method body."""
+        vars_ = _run_kotlin("""\
+class Box(val value: Int) {
+    fun get(): Int {
+        return value
+    }
+}
+val b = Box(42)
+val answer = b.get()
+""")
+        assert vars_["answer"] == 42
+
+    @pytest.mark.xfail(
+        reason="red-dragon-cb2: delegation inlining only maps primary params, "
+        "doesn't replay field initializers — doubled never created on heap"
+    )
+    def test_secondary_constructor_body_reads_field(self):
+        """Field set by delegation readable by bare name in constructor body."""
+        vars_ = _run_kotlin(
+            """\
+class Counter(val count: Int) {
+    var doubled: Int = 0
+    constructor(x: Int, scale: Int) : this(x) {
+        doubled = count * scale
+    }
+}
+val c = Counter(3, 2)
+val answer = c.doubled
+""",
+            max_steps=1000,
+        )
+        assert vars_["answer"] == 6
