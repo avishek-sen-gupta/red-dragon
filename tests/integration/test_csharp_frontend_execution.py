@@ -142,47 +142,63 @@ int answer = obj.doubled;
 class TestCSharpOutVarExecution:
     """C# out int x / out var x should declare variable in scope."""
 
-    def test_out_int_variable_exists_after_call(self):
-        """out int result declares result in the enclosing scope."""
-        locals_ = _run_csharp("""\
-int result = 0;
-int answer = result;
-""")
-        assert locals_["answer"] == 0
-
-    def test_out_var_in_method_call(self):
-        """out var x in a method call should declare x in scope."""
+    def test_out_int_declares_variable_in_scope(self):
+        """out int result in a method call should declare result in scope."""
         locals_ = _run_csharp(
             """\
 class Parser {
-    int parsed;
-    Parser(int v) { this.parsed = v; }
-    int TryParse(int input) {
-        return input + 1;
+    int stored;
+    Parser() { this.stored = 0; }
+    int Parse(int input, int extra) {
+        return input + extra;
     }
 }
-Parser p = new Parser(0);
-int result = p.TryParse(41);
-""",
-            max_steps=1000,
-        )
-        assert locals_["result"] == 42
-
-    def test_out_declaration_expression_declares_variable(self):
-        """declaration_expression in out position should declare var in scope."""
-        locals_ = _run_csharp(
-            """\
-class Converter {
-    int value;
-    Converter(int v) { this.value = v; }
-    int Convert(int x, int scale) {
-        return x + scale;
-    }
-}
-Converter c = new Converter(0);
-int out_result = 0;
-int answer = c.Convert(out_result, 10);
+Parser p = new Parser();
+int answer = p.Parse(10, out int result);
+int check = result;
 """,
             max_steps=1000,
         )
         assert locals_["answer"] == 10
+        assert "result" in locals_
+        assert locals_["check"] == 0
+
+    def test_out_var_declares_variable_in_scope(self):
+        """out var result in a method call should declare result in scope."""
+        locals_ = _run_csharp(
+            """\
+class Util {
+    int v;
+    Util() { this.v = 0; }
+    int Process(int x, int y) {
+        return x + y;
+    }
+}
+Util u = new Util();
+int answer = u.Process(3, out var extra);
+int check = extra;
+""",
+            max_steps=1000,
+        )
+        assert locals_["answer"] == 3
+        assert "extra" in locals_
+        assert locals_["check"] == 0
+
+    def test_out_int_variable_used_after_call(self):
+        """Variable declared via out int should be usable in subsequent code."""
+        locals_ = _run_csharp(
+            """\
+class Converter {
+    int base_val;
+    Converter(int b) { this.base_val = b; }
+    int Convert(int x, int y) {
+        return x + y;
+    }
+}
+Converter c = new Converter(100);
+int r = c.Convert(5, out int parsed);
+int answer = parsed + 42;
+""",
+            max_steps=1000,
+        )
+        assert locals_["answer"] == 42
