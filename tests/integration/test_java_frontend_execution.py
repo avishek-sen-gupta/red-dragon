@@ -38,3 +38,25 @@ class M {
         _, locals_ = _run_java(source)
         assert locals_["x"] == 1024.0
         assert locals_["y"] == 1025.0
+
+
+class TestJavaImplicitThisFieldExecution:
+    """Bare field names in method bodies should resolve via implicit this."""
+
+    def test_method_reads_field_by_bare_name(self):
+        """this.count accessed as bare 'count' in method body."""
+        source = """\
+class Counter {
+    int count;
+    Counter(int c) {
+        this.count = c;
+    }
+    int getCount() {
+        return count;
+    }
+}
+Counter c = new Counter(42);
+int answer = c.getCount();
+"""
+        _, locals_ = _run_java(source, max_steps=1000)
+        assert locals_["answer"] == 42
