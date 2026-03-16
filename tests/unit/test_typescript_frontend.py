@@ -820,3 +820,41 @@ class TestInstantiationExpression:
         assert (
             len(symbolics) == 0
         ), f"instantiation_expression should not produce SYMBOLIC: {symbolics}"
+
+
+class TestOptionalChain:
+    """optional_chain (?.) is consumed by parent member/subscript handlers."""
+
+    def test_optional_chain_property(self):
+        """obj?.prop should emit LOAD_FIELD, not SYMBOLIC."""
+        ir = _parse_ts("const x: string = obj?.prop;")
+        loads = _find_all(ir, Opcode.LOAD_FIELD)
+        assert any(
+            "prop" in inst.operands for inst in loads
+        ), f"Expected LOAD_FIELD for 'prop', got: {[i.operands for i in loads]}"
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "optional_chain" in str(s.operands) for s in symbolics
+        ), "optional_chain should not produce SYMBOLIC"
+
+    def test_optional_chain_method_call(self):
+        """obj?.method(1) should emit CALL_METHOD."""
+        ir = _parse_ts("const y: number = obj?.method(1);")
+        calls = _find_all(ir, Opcode.CALL_METHOD)
+        assert any(
+            "method" in inst.operands for inst in calls
+        ), f"Expected CALL_METHOD for 'method', got: {[i.operands for i in calls]}"
+
+    def test_optional_chain_index(self):
+        """obj?.[0] should emit LOAD_INDEX."""
+        ir = _parse_ts("const z: number = obj?.[0];")
+        loads = _find_all(ir, Opcode.LOAD_INDEX)
+        assert len(loads) >= 1, f"Expected LOAD_INDEX, got opcodes: {_opcodes(ir)}"
+
+    def test_optional_chain_nested(self):
+        """a?.b?.c should emit two LOAD_FIELDs."""
+        ir = _parse_ts("const w: string = a?.b?.c;")
+        loads = _find_all(ir, Opcode.LOAD_FIELD)
+        field_names = [inst.operands[1] for inst in loads if len(inst.operands) >= 2]
+        assert "b" in field_names, f"Expected LOAD_FIELD for 'b', got: {field_names}"
+        assert "c" in field_names, f"Expected LOAD_FIELD for 'c', got: {field_names}"

@@ -88,3 +88,25 @@ class TestTSInterfacePropertySignatureExecution:
             let x = 99;
             """)
         assert locals_["x"] == 99
+
+
+class TestTSOptionalChainExecution:
+    """Optional chaining (?.) executes as regular member/index/method access."""
+
+    def test_optional_chain_on_object(self):
+        locals_ = _run_ts('let obj = { name: "Alice" }; let result = obj?.name;')
+        assert locals_["result"] == "Alice"
+
+    def test_optional_chain_on_nested_field(self):
+        locals_ = _run_ts("""
+            let obj = { x: 10 };
+            let result: number = obj?.x;
+            """)
+        assert locals_["result"] == 10
+
+    def test_optional_chain_nested(self):
+        locals_ = _run_ts("""
+            let outer = { inner: { value: 42 } };
+            let result: number = outer?.inner?.value;
+            """)
+        assert locals_["result"] == 42
