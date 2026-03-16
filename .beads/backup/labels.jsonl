@@ -539,6 +539,8 @@
 {"issue_id":"red-dragon-oej","label":"vm"}
 {"issue_id":"red-dragon-q6e","label":"frontend"}
 {"issue_id":"red-dragon-q6e","label":"pascal"}
+{"issue_id":"red-dragon-q79","label":"csharp"}
+{"issue_id":"red-dragon-q79","label":"frontend"}
 {"issue_id":"red-dragon-qtx","label":"frontend"}
 {"issue_id":"red-dragon-qtx","label":"pascal"}
 {"issue_id":"red-dragon-riy","label":"rust"}
