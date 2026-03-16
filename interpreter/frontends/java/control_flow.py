@@ -415,7 +415,12 @@ def _lower_resource_decl(ctx: TreeSitterEmitContext, resource) -> None:
 
 
 def lower_explicit_constructor_invocation(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower super(...) or this(...) explicit constructor calls."""
+    """Lower super(...) or this(...) explicit constructor calls.
+
+    ``this(args)`` is lowered as CALL_METHOD on the current object so that
+    the VM dispatches to the matching ``__init__`` overload with ``this``
+    properly set via params[0] in the child frame.
+    """
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
 
@@ -425,9 +430,19 @@ def lower_explicit_constructor_invocation(ctx: TreeSitterEmitContext, node) -> N
     )
     target_name = first_named.type if first_named else "super"
 
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=ctx.fresh_reg(),
-        operands=[target_name] + arg_regs,
-        node=node,
-    )
+    if target_name == JavaNodeType.THIS:
+        this_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+        ctx.emit(
+            Opcode.CALL_METHOD,
+            result_reg=ctx.fresh_reg(),
+            operands=[this_reg, "__init__"] + arg_regs,
+            node=node,
+        )
+    else:
+        ctx.emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=ctx.fresh_reg(),
+            operands=[target_name] + arg_regs,
+            node=node,
+        )

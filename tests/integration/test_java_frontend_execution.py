@@ -60,3 +60,68 @@ int answer = c.getCount();
 """
         _, locals_ = _run_java(source, max_steps=1000)
         assert locals_["answer"] == 42
+
+
+class TestJavaConstructorChainingExecution:
+    """Java this(...) constructor chaining with field initializers."""
+
+    def test_single_field_constructor_chaining(self):
+        """Two-arg constructor delegates to one-arg via this(x)."""
+        source = """\
+class Box {
+    int value;
+    Box(int v) {
+        this.value = v;
+    }
+    Box(int v, int scale) {
+        this(v * scale);
+    }
+}
+Box b = new Box(3, 4);
+int answer = b.value;
+"""
+        _, locals_ = _run_java(source, max_steps=1000)
+        assert locals_["answer"] == 12
+
+    def test_chaining_with_field_initializer(self):
+        """Field initializer (int extra = 10) should exist after constructor chaining."""
+        source = """\
+class Calc {
+    int result;
+    int extra = 10;
+    Calc(int r) {
+        this.result = r;
+    }
+    Calc(int a, int b) {
+        this(a + b);
+    }
+    int total() {
+        return result + extra;
+    }
+}
+Calc c = new Calc(3, 4);
+int answer = c.total();
+"""
+        _, locals_ = _run_java(source, max_steps=1000)
+        assert locals_["answer"] == 17
+
+    def test_chaining_body_reads_field_by_bare_name(self):
+        """After this(...), constructor body can read fields set by delegation."""
+        source = """\
+class Counter {
+    int count;
+    int doubled;
+    Counter(int c) {
+        this.count = c;
+        this.doubled = 0;
+    }
+    Counter(int c, int scale) {
+        this(c);
+        doubled = count * scale;
+    }
+}
+Counter obj = new Counter(5, 3);
+int answer = obj.doubled;
+"""
+        _, locals_ = _run_java(source, max_steps=1000)
+        assert locals_["answer"] == 15
