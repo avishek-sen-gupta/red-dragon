@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.typed_value import unwrap_locals
@@ -140,15 +142,13 @@ int answer = obj.doubled;
 
 
 class TestCSharpOutVarExecution:
-    """C# out int x / out var x with out on both method signature and call site.
+    """C# out int x / out var x with out on both method signature and call site."""
 
-    Our VM does not support true pass-by-reference, so out parameters
-    get their default value (0) rather than callee-assigned values.
-    These tests verify the variable is declared and usable after the call.
-    """
-
+    @pytest.mark.xfail(
+        reason="red-dragon-ia8: VM lacks pass-by-reference; out params keep default value"
+    )
     def test_try_parse_pattern_out_int(self):
-        """Classic TryParse pattern: out on param definition and call site."""
+        """Classic TryParse pattern: callee assigns result=42, caller reads it."""
         locals_ = _run_csharp(
             """\
 class IntParser {
@@ -166,11 +166,14 @@ int answer = result + 1;
 """,
             max_steps=1000,
         )
-        assert "result" in locals_
-        assert locals_["answer"] == 1
+        assert locals_["result"] == 42
+        assert locals_["answer"] == 43
 
+    @pytest.mark.xfail(
+        reason="red-dragon-ia8: VM lacks pass-by-reference; out params keep default value"
+    )
     def test_try_parse_pattern_out_var(self):
-        """TryParse with out on param definition and out var at call site."""
+        """TryParse with out var: callee assigns result=100, caller reads it."""
         locals_ = _run_csharp(
             """\
 class DoubleParser {
@@ -187,11 +190,14 @@ int check = parsed + 10;
 """,
             max_steps=1000,
         )
-        assert "parsed" in locals_
-        assert locals_["check"] == 10
+        assert locals_["parsed"] == 100
+        assert locals_["check"] == 110
 
+    @pytest.mark.xfail(
+        reason="red-dragon-ia8: VM lacks pass-by-reference; out params keep default value"
+    )
     def test_multiple_out_params(self):
-        """Method with multiple out parameters in signature and call site."""
+        """Multiple out params: callee assigns tax and total, caller reads them."""
         locals_ = _run_csharp(
             """\
 class OrderProcessor {
@@ -210,13 +216,14 @@ int totalVal = total;
 """,
             max_steps=1000,
         )
-        assert "tax" in locals_
-        assert "total" in locals_
-        assert locals_["taxVal"] == 0
-        assert locals_["totalVal"] == 0
+        assert locals_["taxVal"] == 1000
+        assert locals_["totalVal"] == 1500
 
+    @pytest.mark.xfail(
+        reason="red-dragon-ia8: VM lacks pass-by-reference; out params keep default value"
+    )
     def test_out_var_used_in_if_condition(self):
-        """out on param definition and out var at call site, used in if body."""
+        """out var at call site: callee assigns value=99, used in if body."""
         locals_ = _run_csharp(
             """\
 class Lookup {
@@ -236,5 +243,5 @@ if (found) {
 """,
             max_steps=1000,
         )
-        assert "value" in locals_
-        assert locals_["answer"] == 100
+        assert locals_["value"] == 99
+        assert locals_["answer"] == 199
