@@ -110,3 +110,45 @@ val answer = sumList(n1, 3)
             max_steps=1000,
         )
         assert vars_["answer"] == 6
+
+
+class TestKotlinSecondaryConstructorExecution:
+    """Secondary constructors with this() delegation execute correctly."""
+
+    def test_secondary_constructor_delegates_to_primary(self):
+        """constructor(side) : this(side, side) should create object with both fields."""
+        vars_ = _run_kotlin("""\
+class Rect(val w: Int, val h: Int) {
+    constructor(side: Int) : this(side, side)
+}
+val r = Rect(5)
+val answer = r.w
+""")
+        assert vars_["answer"] == 5
+
+    def test_secondary_constructor_with_body(self):
+        """Secondary constructor body should execute after delegation."""
+        vars_ = _run_kotlin(
+            """\
+class Pair(val a: Int, val b: Int) {
+    constructor(x: Int) : this(x, x + 1) {
+        val sum = x + x + 1
+    }
+}
+val p = Pair(3)
+val answer = p.b
+""",
+            max_steps=1000,
+        )
+        assert vars_["answer"] == 4
+
+    def test_zero_arg_secondary_constructor(self):
+        """constructor() : this(default) should work with no args."""
+        vars_ = _run_kotlin("""\
+class Box(val x: Int) {
+    constructor() : this(99)
+}
+val b = Box()
+val answer = b.x
+""")
+        assert vars_["answer"] == 99

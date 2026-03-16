@@ -268,7 +268,9 @@ def _collect_kotlin_field_init(ctx: TreeSitterEmitContext, node) -> FieldInit | 
     return (name, value_node)
 
 
-def _lower_class_body_with_companions(ctx: TreeSitterEmitContext, node) -> None:
+def _lower_class_body_with_companions(
+    ctx: TreeSitterEmitContext, node, primary_ctor_params: list[str] = []
+) -> None:
     """Lower class_body, handling companion_object children specially.
 
     Collects field initializers from property declarations and emits
@@ -290,6 +292,8 @@ def _lower_class_body_with_companions(ctx: TreeSitterEmitContext, node) -> None:
             _lower_companion_object(ctx, child)
         elif child.type == KNT.FUNCTION_DECLARATION:
             lower_function_decl(ctx, child, inject_this=True)
+        elif child.type == KNT.SECONDARY_CONSTRUCTOR:
+            lower_secondary_constructor(ctx, child, primary_ctor_params)
         elif (
             child.type == KNT.PROPERTY_DECLARATION
             and _collect_kotlin_field_init(ctx, child) is not None
@@ -431,6 +435,90 @@ def _emit_primary_constructor_init(
     ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
+def lower_secondary_constructor(
+    ctx: TreeSitterEmitContext, node, primary_ctor_params: list[str] = []
+) -> None:
+    """Lower a Kotlin secondary constructor as an __init__ overload.
+
+    Emits params, inlines the primary constructor's field stores from the
+    delegation args, then lowers the optional body.
+    """
+    params_node = next(
+        (c for c in node.children if c.type == KNT.FUNCTION_VALUE_PARAMETERS),
+        None,
+    )
+    delegation_node = next(
+        (c for c in node.children if c.type == KNT.CONSTRUCTOR_DELEGATION_CALL),
+        None,
+    )
+    body_node = next(
+        (c for c in node.children if c.type == KNT.STATEMENTS),
+        None,
+    )
+
+    func_name = "__init__"
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+    end_label = ctx.fresh_label(f"end_{func_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit(Opcode.LABEL, label=func_label)
+
+    if params_node:
+        _lower_kotlin_params(ctx, params_node)
+
+    # Inline delegation: evaluate args and store as fields on this
+    if delegation_node:
+        _emit_constructor_delegation(ctx, delegation_node, primary_ctor_params)
+
+    if body_node:
+        ctx.lower_block(body_node)
+
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
+    )
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+
+
+def _emit_constructor_delegation(
+    ctx: TreeSitterEmitContext,
+    delegation_node,
+    primary_ctor_params: list[str] = [],
+) -> None:
+    """Inline the primary constructor's field stores from delegation args.
+
+    Evaluates each delegation arg and stores it as a field on ``this``,
+    using the primary constructor's parameter names as field names.
+    This avoids calling __init__ across frame boundaries where ``this``
+    would not be accessible.
+    """
+    args_node = next(
+        (c for c in delegation_node.children if c.type == KNT.VALUE_ARGUMENTS),
+        None,
+    )
+    arg_regs = [
+        ctx.lower_expr(next((gc for gc in arg.children if gc.is_named), arg))
+        for arg in (args_node.children if args_node else [])
+        if arg.type == KNT.VALUE_ARGUMENT
+    ]
+    this_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+    for i, arg_reg in enumerate(arg_regs):
+        field_name = primary_ctor_params[i] if i < len(primary_ctor_params) else str(i)
+        ctx.emit(
+            Opcode.STORE_FIELD,
+            operands=[this_reg, field_name, arg_reg],
+            node=delegation_node,
+        )
+
+
 def lower_class_decl(ctx: TreeSitterEmitContext, node) -> None:
     name_node = next(
         (c for c in node.children if c.type == KNT.TYPE_IDENTIFIER),
@@ -458,7 +546,7 @@ def lower_class_decl(ctx: TreeSitterEmitContext, node) -> None:
         if body_node.type == KNT.ENUM_CLASS_BODY:
             _lower_enum_class_body(ctx, body_node)
         else:
-            _lower_class_body_with_companions(ctx, body_node)
+            _lower_class_body_with_companions(ctx, body_node, primary_ctor_params)
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
