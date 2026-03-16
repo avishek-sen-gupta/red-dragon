@@ -140,65 +140,96 @@ int answer = obj.doubled;
 
 
 class TestCSharpOutVarExecution:
-    """C# out int x / out var x should declare variable in scope."""
+    """C# out int x / out var x should declare variable in caller scope.
 
-    def test_out_int_declares_variable_in_scope(self):
-        """out int result in a method call should declare result in scope."""
+    Our VM does not support true pass-by-reference, so out parameters
+    get their default value (0) rather than callee-assigned values.
+    These tests verify the variable is declared and usable after the call.
+    """
+
+    def test_try_parse_pattern_out_int(self):
+        """Classic TryParse pattern: out int result declared inline in call."""
         locals_ = _run_csharp(
             """\
-class Parser {
-    int stored;
-    Parser() { this.stored = 0; }
-    int Parse(int input, int extra) {
-        return input + extra;
+class IntParser {
+    int dummy;
+    IntParser() { this.dummy = 0; }
+    bool TryParse(string input, int result) {
+        return true;
     }
 }
-Parser p = new Parser();
-int answer = p.Parse(10, out int result);
-int check = result;
+IntParser parser = new IntParser();
+string s = "42";
+bool ok = parser.TryParse(s, out int result);
+int answer = result + 1;
 """,
             max_steps=1000,
         )
-        assert locals_["answer"] == 10
         assert "result" in locals_
-        assert locals_["check"] == 0
+        assert locals_["answer"] == 1
 
-    def test_out_var_declares_variable_in_scope(self):
-        """out var result in a method call should declare result in scope."""
+    def test_try_parse_pattern_out_var(self):
+        """TryParse with out var instead of out int."""
         locals_ = _run_csharp(
             """\
-class Util {
-    int v;
-    Util() { this.v = 0; }
-    int Process(int x, int y) {
-        return x + y;
+class DoubleParser {
+    int dummy;
+    DoubleParser() { this.dummy = 0; }
+    bool TryParse(string input, int result) {
+        return true;
     }
 }
-Util u = new Util();
-int answer = u.Process(3, out var extra);
-int check = extra;
+DoubleParser dp = new DoubleParser();
+bool ok = dp.TryParse("3.14", out var parsed);
+int check = parsed + 10;
 """,
             max_steps=1000,
         )
-        assert locals_["answer"] == 3
-        assert "extra" in locals_
-        assert locals_["check"] == 0
+        assert "parsed" in locals_
+        assert locals_["check"] == 10
 
-    def test_out_int_variable_used_after_call(self):
-        """Variable declared via out int should be usable in subsequent code."""
+    def test_multiple_out_params(self):
+        """Method with multiple out parameters declares all in caller scope."""
         locals_ = _run_csharp(
             """\
-class Converter {
-    int base_val;
-    Converter(int b) { this.base_val = b; }
-    int Convert(int x, int y) {
-        return x + y;
+class OrderProcessor {
+    int id;
+    OrderProcessor(int i) { this.id = i; }
+    bool TryProcess(int amount, int tax, int total) {
+        return true;
     }
 }
-Converter c = new Converter(100);
-int r = c.Convert(5, out int parsed);
-int answer = parsed + 42;
+OrderProcessor proc = new OrderProcessor(1);
+bool ok = proc.TryProcess(500, out int tax, out int total);
+int taxVal = tax;
+int totalVal = total;
 """,
             max_steps=1000,
         )
-        assert locals_["answer"] == 42
+        assert "tax" in locals_
+        assert "total" in locals_
+        assert locals_["taxVal"] == 0
+        assert locals_["totalVal"] == 0
+
+    def test_out_var_used_in_if_condition(self):
+        """out var declared inside an if condition should be accessible in body."""
+        locals_ = _run_csharp(
+            """\
+class Lookup {
+    int store;
+    Lookup() { this.store = 0; }
+    bool TryGet(string key, int value) {
+        return true;
+    }
+}
+Lookup cache = new Lookup();
+int answer = 0;
+bool found = cache.TryGet("key", out var value);
+if (found) {
+    answer = value + 100;
+}
+""",
+            max_steps=1000,
+        )
+        assert "value" in locals_
+        assert locals_["answer"] == 100
