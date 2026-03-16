@@ -13,7 +13,6 @@ from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 from interpreter.frontends.common.declarations import (
     FieldInit,
     emit_synthetic_init,
-    make_class_ref,
 )
 from interpreter.type_expr import ScalarType
 
@@ -370,11 +369,7 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=cls_reg,
-        operands=[make_class_ref(class_name, class_label, parents)],
-    )
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
     if body_node:
@@ -399,13 +394,7 @@ def lower_object_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=obj_name, label=class_label)
-        ],
-    )
+    ctx.emit_class_ref(obj_name, class_label, [], result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[obj_name, cls_reg])
 
     if body_node:
@@ -429,11 +418,7 @@ def lower_trait_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=cls_reg,
-        operands=[make_class_ref(trait_name, class_label, parents)],
-    )
+    ctx.emit_class_ref(trait_name, class_label, parents, result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[trait_name, cls_reg])
 
 

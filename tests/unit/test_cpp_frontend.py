@@ -135,7 +135,7 @@ class TestCppClasses:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
 
     def test_namespace_transparent(self):
         instructions = _parse_cpp("namespace myns { int x = 10; }")
@@ -217,7 +217,7 @@ public:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Counter" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
         store_fields = _find_all(instructions, Opcode.STORE_FIELD)
         assert any("count" in inst.operands for inst in store_fields)
         returns = _find_all(instructions, Opcode.RETURN)

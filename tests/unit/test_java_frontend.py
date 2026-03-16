@@ -230,14 +230,14 @@ class TestJavaClasses:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
 
     def test_interface_emits_class_block(self):
         """Interface lowered as CLASS block with method defs (not NEW_OBJECT)."""
         instructions = _parse_java("interface Runnable { void run(); }")
         consts = _find_all(instructions, Opcode.CONST)
         assert any(
-            "<class:" in str(c.operands) and "Runnable" in str(c.operands)
+            "class_" in str(c.operands) and "Runnable" in str(c.operands)
             for c in consts
         )
         labels = [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
@@ -340,7 +340,7 @@ class Circle implements Shape {
         instructions = _parse_java(source)
         consts = _find_all(instructions, Opcode.CONST)
         assert any(
-            "<class:" in str(c.operands) and "Shape" in str(c.operands) for c in consts
+            "class_" in str(c.operands) and "Shape" in str(c.operands) for c in consts
         )
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Circle" in inst.operands for inst in stores)
@@ -757,7 +757,7 @@ class TestJavaRecordDeclaration:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Point" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("unsupported" in str(inst.operands) for inst in symbolics)
 
@@ -987,7 +987,7 @@ interface Shape {
         """Interface should be stored as a class reference, not a NEW_OBJECT."""
         ir = _parse_java(self.INTERFACE_SOURCE)
         consts = _find_all(ir, Opcode.CONST)
-        class_refs = [c for c in consts if "<class:" in str(c.operands)]
+        class_refs = [c for c in consts if "class_" in str(c.operands)]
         assert any(
             "Shape" in str(c.operands) for c in class_refs
         ), f"Expected class ref for Shape, got consts: {[c.operands for c in consts]}"

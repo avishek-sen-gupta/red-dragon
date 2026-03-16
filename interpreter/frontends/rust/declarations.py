@@ -246,13 +246,7 @@ def lower_struct_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
-        ],
-    )
+    ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
 
@@ -275,13 +269,7 @@ def lower_impl_item(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=impl_name, label=class_label)
-        ],
-    )
+    ctx.emit_class_ref(impl_name, class_label, [], result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[impl_name, cls_reg])
 
 
@@ -304,13 +292,7 @@ def lower_trait_item(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=trait_name, label=class_label)
-        ],
-    )
+    ctx.emit_class_ref(trait_name, class_label, [], result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[trait_name, cls_reg])
 
 
@@ -557,13 +539,7 @@ def _emit_box_class(ctx: TreeSitterEmitContext) -> None:
 
     # Store class ref (OUTSIDE class body, after end_label)
     cls_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
-        ],
-    )
+    ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
 
@@ -624,11 +600,5 @@ def _emit_option_class(ctx: TreeSitterEmitContext) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=cls_reg,
-        operands=[
-            constants.CLASS_REF_TEMPLATE.format(name=class_name, label=class_label)
-        ],
-    )
+    ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])

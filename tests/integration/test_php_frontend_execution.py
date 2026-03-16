@@ -76,4 +76,4 @@ class TestPHPEnumCaseExecution:
         """Enum declaration should store a class reference in local vars."""
         vars_ = _run_php("<?php enum Color { case Red; case Green; } ?>")
         assert "Color" in vars_
-        assert "class:Color@" in str(vars_["Color"])
+        assert "class_Color" in str(vars_["Color"])

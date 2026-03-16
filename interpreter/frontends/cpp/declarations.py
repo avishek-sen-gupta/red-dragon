@@ -23,7 +23,6 @@ from interpreter.frontends.common.declarations import (
     FieldInit,
     emit_field_initializers,
     emit_synthetic_init,
-    make_class_ref,
 )
 
 
@@ -243,11 +242,7 @@ def lower_class_specifier(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=cls_reg,
-        operands=[make_class_ref(class_name, class_label, parents)],
-    )
+    ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
 
@@ -543,9 +538,5 @@ def lower_cpp_struct_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=cls_reg,
-        operands=[make_class_ref(struct_name, class_label, parents)],
-    )
+    ctx.emit_class_ref(struct_name, class_label, parents, result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[struct_name, cls_reg])

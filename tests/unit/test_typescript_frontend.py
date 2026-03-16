@@ -71,7 +71,7 @@ class TestTypeScriptInterfaces:
         instructions = _parse_ts("interface Foo { bar: string; }")
         consts = _find_all(instructions, Opcode.CONST)
         assert any(
-            "<class:" in str(c.operands) and "Foo" in str(c.operands) for c in consts
+            "class_" in str(c.operands) and "Foo" in str(c.operands) for c in consts
         )
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Foo" in inst.operands for inst in stores)
@@ -80,7 +80,7 @@ class TestTypeScriptInterfaces:
         instructions = _parse_ts("interface Point { getX(): number; getY(): number; }")
         consts = _find_all(instructions, Opcode.CONST)
         assert any(
-            "<class:" in str(c.operands) and "Point" in str(c.operands) for c in consts
+            "class_" in str(c.operands) and "Point" in str(c.operands) for c in consts
         )
         labels = [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
         func_labels = [l for l in labels if "func_" in l]
@@ -171,7 +171,7 @@ class TestTypeScriptClasses:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Dog" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
 
 
 class TestTypeScriptExport:
@@ -244,7 +244,7 @@ function greet(user: User): string {
         instructions = _parse_ts(source)
         consts = _find_all(instructions, Opcode.CONST)
         assert any(
-            "<class:" in str(c.operands) and "User" in str(c.operands) for c in consts
+            "class_" in str(c.operands) and "User" in str(c.operands) for c in consts
         )
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("greet" in inst.operands for inst in stores)
@@ -291,7 +291,7 @@ class Stack {
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Stack" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("push" in inst.operands for inst in calls)
         returns = _find_all(instructions, Opcode.RETURN)
@@ -381,7 +381,7 @@ class Circle {
         instructions = _parse_ts(source)
         consts = _find_all(instructions, Opcode.CONST)
         assert any(
-            "<class:" in str(c.operands) and "Shape" in str(c.operands) for c in consts
+            "class_" in str(c.operands) and "Shape" in str(c.operands) for c in consts
         )
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Circle" in inst.operands for inst in stores)
@@ -425,7 +425,7 @@ abstract class Shape {
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Shape" in inst.operands for inst in stores)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("class:" in str(inst.operands) for inst in consts)
+        assert any("class_" in str(inst.operands) for inst in consts)
 
     def test_abstract_class_with_constructor(self):
         source = """\
@@ -632,7 +632,7 @@ interface Shape {
     def test_interface_stored_as_class_ref(self):
         ir = _parse_ts(self.INTERFACE_SOURCE)
         consts = _find_all(ir, Opcode.CONST)
-        class_refs = [c for c in consts if "<class:" in str(c.operands)]
+        class_refs = [c for c in consts if "class_" in str(c.operands)]
         assert any(
             "Shape" in str(c.operands) for c in class_refs
         ), f"Expected class ref for Shape, got: {[c.operands for c in consts]}"
