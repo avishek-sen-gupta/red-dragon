@@ -391,3 +391,36 @@ int answer = w.Extract(ref box);
             max_steps=1500,
         )
         assert locals_["answer"] == 42
+
+
+class TestCSharpRefLocalExecution:
+    """Integration tests for ref local variables (red-dragon-c4v)."""
+
+    def test_ref_local_write_through(self):
+        """Writing to a ref local should modify the original variable."""
+        locals_ = _run_csharp("""\
+int y = 10;
+ref int x = ref y;
+x = 42;
+int z = y;
+""")
+        assert locals_["z"] == 42
+
+    def test_ref_local_read_through(self):
+        """Reading a ref local should return the original variable's value."""
+        locals_ = _run_csharp("""\
+int y = 10;
+ref int x = ref y;
+int z = x;
+""")
+        assert locals_["z"] == 10
+
+    def test_ref_local_reflects_original_update(self):
+        """Ref local should reflect changes made to the original variable."""
+        locals_ = _run_csharp("""\
+int y = 5;
+ref int x = ref y;
+y = 99;
+int z = x;
+""")
+        assert locals_["z"] == 99

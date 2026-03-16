@@ -71,6 +71,7 @@ class CSharpFrontend(BaseFrontend):
             NT.CONSTANT_PATTERN: common_expr.lower_const_literal,
             NT.DECLARATION_PATTERN: csharp_expr.lower_declaration_pattern,
             NT.DECLARATION_EXPRESSION: csharp_expr.lower_declaration_expression,
+            NT.REF_EXPRESSION: csharp_expr.lower_ref_expression,
             NT.BOOLEAN_LITERAL: common_expr.lower_canonical_bool,
             NT.NULL_LITERAL: common_expr.lower_canonical_none,
             NT.THIS_EXPRESSION: common_expr.lower_identifier,

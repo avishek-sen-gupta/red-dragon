@@ -346,6 +346,22 @@ def emit_byref_store(
         ctx.emit(Opcode.STORE_VAR, operands=[ctx.resolve_var(name), val_reg], node=node)
 
 
+def lower_ref_expression(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower ``ref <expr>`` — emit ADDRESS_OF for identifier targets."""
+    inner = next((c for c in node.children if c.is_named), None)
+    if inner is not None and inner.type == NT.IDENTIFIER:
+        reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.ADDRESS_OF,
+            result_reg=reg,
+            operands=[ctx.node_text(inner)],
+            node=node,
+        )
+        return reg
+    # Degraded: unsupported inner expression (arr[i], obj.field) — lower as value
+    return ctx.lower_expr(inner) if inner else ctx.fresh_reg()
+
+
 def lower_csharp_identifier(ctx: TreeSitterEmitContext, node) -> str:
     """Lower identifier with byref dereference support."""
     name = ctx.node_text(node)
