@@ -29,18 +29,21 @@ def lower_local_decl_stmt(ctx: TreeSitterEmitContext, node) -> None:
 def lower_variable_declaration(ctx: TreeSitterEmitContext, node) -> None:
     """Lower a variable_declaration node with one or more declarators."""
     type_hint = extract_normalized_type(ctx, node, "type", ctx.type_map)
+    is_ref = any(child.type == NT.REF_TYPE for child in node.children)
     for child in node.children:
         if child.type == NT.VARIABLE_DECLARATOR:
-            _lower_csharp_declarator(ctx, child, type_hint=type_hint)
+            _lower_csharp_declarator(ctx, child, type_hint=type_hint, is_ref=is_ref)
 
 
 def _lower_csharp_declarator(
-    ctx: TreeSitterEmitContext, node, type_hint: str = ""
+    ctx: TreeSitterEmitContext, node, type_hint: str = "", is_ref: bool = False
 ) -> None:
     """Lower a C# variable_declarator.
 
     The name is the first named child (identifier).
     The initializer value is the named child after the '=' token.
+    When *is_ref* is True, the variable is a ref local and joins
+    ``ctx.byref_params`` so reads/writes dereference through the pointer.
     """
     name_node = None
     value_node = None
@@ -72,6 +75,8 @@ def _lower_csharp_declarator(
         node=node,
     )
     ctx.seed_var_type(var_name, type_hint)
+    if is_ref:
+        ctx.byref_params.add(var_name)
 
 
 def _emit_this_param(ctx: TreeSitterEmitContext) -> None:

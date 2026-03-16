@@ -1379,3 +1379,33 @@ class C {
 }""")
         load_indirects = _find_all(ir, Opcode.LOAD_INDIRECT)
         assert len(load_indirects) == 0
+
+
+class TestCSharpRefLocalIR:
+    """Unit tests for ref local variable IR emission."""
+
+    def test_ref_local_emits_address_of(self):
+        """ref int x = ref y; should emit ADDRESS_OF y."""
+        ir = _parse_and_lower("""\
+int y = 10;
+ref int x = ref y;""")
+        address_ofs = _find_all(ir, Opcode.ADDRESS_OF)
+        assert any("y" in inst.operands for inst in address_ofs)
+
+    def test_ref_local_read_emits_load_indirect(self):
+        """Reading a ref local should emit LOAD_INDIRECT."""
+        ir = _parse_and_lower("""\
+int y = 10;
+ref int x = ref y;
+int z = x;""")
+        load_indirects = _find_all(ir, Opcode.LOAD_INDIRECT)
+        assert len(load_indirects) >= 1
+
+    def test_ref_local_write_emits_store_indirect(self):
+        """Writing to a ref local should emit STORE_INDIRECT."""
+        ir = _parse_and_lower("""\
+int y = 10;
+ref int x = ref y;
+x = 42;""")
+        store_indirects = _find_all(ir, Opcode.STORE_INDIRECT)
+        assert len(store_indirects) >= 1
