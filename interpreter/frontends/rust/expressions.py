@@ -123,15 +123,15 @@ def lower_reference_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_deref_expr(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower *expr -> LOAD_FIELD expr, '*' (pointer dereference read)."""
+    """Lower *expr -> LOAD_INDIRECT (pointer dereference read)."""
     children = [c for c in node.children if c.type != RustNodeType.ASTERISK]
     inner = children[0] if children else node
     inner_reg = ctx.lower_expr(inner)
     reg = ctx.fresh_reg()
     ctx.emit(
-        Opcode.LOAD_FIELD,
+        Opcode.LOAD_INDIRECT,
         result_reg=reg,
-        operands=[inner_reg, "*"],
+        operands=[inner_reg],
         node=node,
     )
     return reg
@@ -952,8 +952,8 @@ def lower_rust_store_target(
         if inner_children:
             inner_reg = ctx.lower_expr(inner_children[0])
             ctx.emit(
-                Opcode.STORE_FIELD,
-                operands=[inner_reg, "*", val_reg],
+                Opcode.STORE_INDIRECT,
+                operands=[inner_reg, val_reg],
                 node=parent_node,
             )
     else:
