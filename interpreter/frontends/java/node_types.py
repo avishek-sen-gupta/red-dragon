@@ -81,6 +81,7 @@ class JavaNodeType:
     SUPER_INTERFACES = "super_interfaces"
     TYPE_LIST = "type_list"
     CONSTRUCTOR_DECLARATION = "constructor_declaration"
+    COMPACT_CONSTRUCTOR_DECLARATION = "compact_constructor_declaration"
     FIELD_DECLARATION = "field_declaration"
     STATIC_INITIALIZER = "static_initializer"
     VARIABLE_DECLARATOR = "variable_declarator"
