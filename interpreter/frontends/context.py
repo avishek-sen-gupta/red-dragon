@@ -135,6 +135,9 @@ class TreeSitterEmitContext:
     # Class reference symbol table: class_label -> ClassRef
     class_symbol_table: dict[str, ClassRef] = field(default_factory=dict)
 
+    # Byref parameter tracking (C# out/ref/in)
+    byref_params: set[str] = field(default_factory=set)
+
     # ── utility methods ──────────────────────────────────────────
 
     def fresh_reg(self) -> str:
