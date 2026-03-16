@@ -29,8 +29,9 @@ from interpreter.vm import (
     _parse_const,
 )
 from interpreter.vm_types import BuiltinResult, StackFrame
-from interpreter.registry import FunctionRegistry, _parse_class_ref
+from interpreter.registry import FunctionRegistry
 from interpreter.func_ref import FuncRef, BoundFuncRef
+from interpreter.class_ref import ClassRef
 from interpreter.builtins import Builtins, _builtin_array_of
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.type_environment import TypeEnvironment
@@ -51,30 +52,6 @@ _EMPTY_TYPE_ENV = TypeEnvironment(
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _is_vm_internal_ref(val: Any, registry: FunctionRegistry) -> bool:
-    """Check if a value is a VM internal reference (function, class, or old-format ref)."""
-    if not isinstance(val, str):
-        return False
-    if val.startswith("<"):
-        return True
-    if val.startswith(constants.FUNC_LABEL_PREFIX):
-        return True
-    if _resolve_class_label(val, registry):
-        return True
-    return False
-
-
-def _resolve_class_label(label: str, registry: FunctionRegistry) -> str:
-    """Reverse-lookup a plain class label to its class name via the registry.
-
-    Returns the class name if found, or empty string if not.
-    """
-    return next(
-        (name for name, lbl in registry.classes.items() if lbl == label),
-        "",
-    )
 
 
 # ── Symbolic helpers ─────────────────────────────────────────────
@@ -104,6 +81,7 @@ def _symbolic_type_hint(val: Any) -> TypeExpr:
 
 def _handle_const(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
     func_symbol_table = kwargs.get("func_symbol_table", {})
+    class_symbol_table = kwargs.get("class_symbol_table", {})
     raw = inst.operands[0] if inst.operands else "None"
     val = _parse_const(raw)
 
@@ -141,6 +119,9 @@ def _handle_const(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
                 list(env.bindings.keys()),
             )
         val = BoundFuncRef(func_ref=func_ref_entry, closure_id=closure_id)
+    # Class symbol table lookup: store ClassRef directly in register
+    elif isinstance(val, str) and val in class_symbol_table:
+        val = class_symbol_table[val]
 
     return ExecutionResult.success(
         StateUpdate(
@@ -343,20 +324,14 @@ def _handle_symbolic(
 def _handle_new_object(
     inst: IRInstruction, vm: VMState, **kwargs: Any
 ) -> ExecutionResult:
-    registry: FunctionRegistry = kwargs.get("registry", FunctionRegistry())
     type_hint = inst.operands[0] if inst.operands else ""
-    # Dereference: if type_hint is a variable holding a class ref,
+    # Dereference: if type_hint is a variable holding a ClassRef,
     # extract the canonical class name (e.g. Foo → __anon_class_0).
     for frame in reversed(vm.call_stack):
         if type_hint in frame.local_vars:
             raw = frame.local_vars[type_hint].value
-            cr = _parse_class_ref(str(raw))
-            if cr.matched:
-                type_hint = cr.name
-            else:
-                resolved = _resolve_class_label(str(raw), registry)
-                if resolved:
-                    type_hint = resolved
+            if isinstance(raw, ClassRef):
+                type_hint = raw.name
             break
     addr = f"{constants.OBJ_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
@@ -1055,16 +1030,9 @@ def _try_class_constructor_call(
     type_hint_source: str = "",
 ) -> ExecutionResult:
     """Attempt to handle a call as a class constructor."""
-    cr = _parse_class_ref(func_val)
-    if cr.matched:
-        class_name, class_label = cr.name, cr.label
-    else:
-        resolved = _resolve_class_label(func_val, registry)
-        if resolved:
-            class_name = resolved
-            class_label = func_val
-        else:
-            return ExecutionResult.not_handled()
+    if not isinstance(func_val, ClassRef):
+        return ExecutionResult.not_handled()
+    class_name, class_label = func_val.name, func_val.label
 
     methods = registry.class_methods.get(class_name, {})
     init_labels = methods.get("__init__", [])
@@ -1279,9 +1247,14 @@ def _handle_call_function(
 
     # 2c. Native string/list indexing — e.g. Scala s1(i) → s1[i]
     # Exclude VM internal references (functions, classes, heap addresses).
+    # ClassRef / BoundFuncRef objects are excluded by the isinstance check.
     if (
         isinstance(func_val, (list, str))
-        and not _is_vm_internal_ref(func_val, registry)
+        and not (isinstance(func_val, str) and func_val.startswith("<"))
+        and not (
+            isinstance(func_val, str)
+            and func_val.startswith(constants.FUNC_LABEL_PREFIX)
+        )
         and not _heap_addr(func_val) in vm.heap
         and len(args) == 1
         and isinstance(args[0].value, int)
@@ -1517,6 +1490,7 @@ class LocalExecutor:
         binop_coercion: BinopCoercionStrategy = _DEFAULT_BINOP_COERCION,
         unop_coercion: UnopCoercionStrategy = _DEFAULT_UNOP_COERCION,
         func_symbol_table: dict[str, FuncRef] = {},
+        class_symbol_table: dict[str, ClassRef] = {},
     ) -> ExecutionResult:
         handler = cls.DISPATCH.get(inst.opcode)
         if not handler:
@@ -1534,6 +1508,7 @@ class LocalExecutor:
             binop_coercion=binop_coercion,
             unop_coercion=unop_coercion,
             func_symbol_table=func_symbol_table,
+            class_symbol_table=class_symbol_table,
         )
 
 
@@ -1550,6 +1525,7 @@ def _try_execute_locally(
     binop_coercion: BinopCoercionStrategy = _DEFAULT_BINOP_COERCION,
     unop_coercion: UnopCoercionStrategy = _DEFAULT_UNOP_COERCION,
     func_symbol_table: dict[str, FuncRef] = {},
+    class_symbol_table: dict[str, ClassRef] = {},
 ) -> ExecutionResult:
     """Try to execute an instruction without the LLM.
 
@@ -1569,4 +1545,5 @@ def _try_execute_locally(
         binop_coercion=binop_coercion,
         unop_coercion=unop_coercion,
         func_symbol_table=func_symbol_table,
+        class_symbol_table=class_symbol_table,
     )

@@ -14,12 +14,12 @@ strings as the "type not yet known" marker.  It is falsy, so existing
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
 from interpreter import constants
 from interpreter.constants import CanonicalLiteral, TypeName
+from interpreter.class_ref import ClassRef
 from interpreter.func_ref import FuncRef
 from interpreter.function_kind import FunctionKind
 from interpreter.function_signature import FunctionSignature
@@ -134,9 +134,6 @@ _BUILTIN_METHOD_RETURN_TYPES: dict[str, TypeExpr] = {
 
 _SELF_PARAM_NAMES = constants.SELF_PARAM_NAMES
 
-_CLASS_REF_PATTERN = re.compile(r"<class:")
-
-
 _GLOBAL_SCOPE = ""
 
 
@@ -170,6 +167,7 @@ class _InferenceContext:
         default_factory=dict
     )
     func_symbol_table: dict[str, FuncRef] = field(default_factory=dict)
+    class_symbol_table: dict[str, ClassRef] = field(default_factory=dict)
     _seeded_var_names: frozenset[str] = field(default_factory=frozenset)
 
     def store_var_type(self, name: str, type_expr: TypeExpr) -> None:
@@ -319,6 +317,7 @@ def infer_types(
     type_resolver: TypeResolver,
     type_env_builder: TypeEnvironmentBuilder = TypeEnvironmentBuilder(),
     func_symbol_table: dict[str, FuncRef] = {},
+    class_symbol_table: dict[str, ClassRef] = {},
 ) -> TypeEnvironment:
     """Walk *instructions* to fixpoint and return an immutable TypeEnvironment.
 
@@ -349,6 +348,7 @@ def infer_types(
             k: tuple(v) for k, v in type_env_builder.interface_implementations.items()
         },
         func_symbol_table=func_symbol_table,
+        class_symbol_table=class_symbol_table,
         _seeded_var_names=frozenset(type_env_builder.var_types.keys()),
     )
 
@@ -527,7 +527,11 @@ def _infer_const(
             )
         return
     ctx.const_values[inst.result_reg] = raw
-    inferred = _infer_const_type(raw, func_symbol_table=ctx.func_symbol_table)
+    inferred = _infer_const_type(
+        raw,
+        func_symbol_table=ctx.func_symbol_table,
+        class_symbol_table=ctx.class_symbol_table,
+    )
     if inferred:
         ctx.register_types[inst.result_reg] = inferred
 
@@ -868,7 +872,11 @@ _DISPATCH: dict[Opcode, callable] = {
 }
 
 
-def _infer_const_type(raw: str, func_symbol_table: dict[str, FuncRef] = {}) -> TypeExpr:
+def _infer_const_type(
+    raw: str,
+    func_symbol_table: dict[str, FuncRef] = {},
+    class_symbol_table: dict[str, ClassRef] = {},
+) -> TypeExpr:
     """Infer a canonical type from a CONST literal string."""
     if raw in (CanonicalLiteral.TRUE, CanonicalLiteral.FALSE):
         return scalar(TypeName.BOOL)
@@ -876,7 +884,7 @@ def _infer_const_type(raw: str, func_symbol_table: dict[str, FuncRef] = {}) -> T
         return UNKNOWN
     if str(raw) in func_symbol_table:
         return UNKNOWN
-    if _CLASS_REF_PATTERN.search(str(raw)):
+    if str(raw) in class_symbol_table:
         return UNKNOWN
     try:
         int(raw)
