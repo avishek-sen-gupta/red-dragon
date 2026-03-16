@@ -19,7 +19,9 @@ def _run_csharp(source: str, max_steps: int = 500) -> dict:
         if heap_obj:
             field_val = heap_obj.fields.get(str(ptr.offset))
             if field_val:
-                result[name] = field_val.value if hasattr(field_val, "value") else field_val
+                result[name] = (
+                    field_val.value if hasattr(field_val, "value") else field_val
+                )
     return result
 
 
