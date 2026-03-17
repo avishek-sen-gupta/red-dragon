@@ -1475,3 +1475,18 @@ class Foo {
         assert any(
             "x" in inst.operands for inst in store_fields
         ), f"Expected STORE_FIELD with field 'x', got: {[(inst.operands) for inst in store_fields]}"
+
+    def test_this_dot_x_assign_with_setter_emits_call_method(self):
+        """this.x = val with custom setter should emit CALL_METHOD __set_x__."""
+        ir = _parse_kotlin("""\
+class Foo {
+    var x: Int = 0
+        set(value) { field = value * 2 }
+    fun bar() {
+        this.x = 5
+    }
+}""")
+        call_methods = _find_all(ir, Opcode.CALL_METHOD)
+        assert any(
+            "__set_x__" in inst.operands for inst in call_methods
+        ), f"Expected CALL_METHOD with __set_x__, got: {[(inst.operands) for inst in call_methods]}"
