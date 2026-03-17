@@ -1,4 +1,4 @@
-function twoFer(name: string): string {
+function twoFer(name: string = "you"): string {
     return "One for " + name + ", one for me.";
 }
 
