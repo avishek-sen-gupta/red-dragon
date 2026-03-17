@@ -78,6 +78,17 @@ class DefaultBinopCoercion:
         return UNKNOWN
 
 
+def _java_stringify(value: object) -> str:
+    """Convert a value to its Java string representation.
+
+    Java uses lowercase ``true``/``false`` for booleans, unlike Python's
+    ``True``/``False``.
+    """
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
 class JavaBinopCoercion:
     """Java-style coercion: auto-stringify for String + non-String."""
 
@@ -92,9 +103,9 @@ class JavaBinopCoercion:
             lhs_str = _scalar_name(lhs.type) == "String"
             rhs_str = _scalar_name(rhs.type) == "String"
             if lhs_str and not rhs_str:
-                return lhs, typed(str(rhs.value), string_type)
+                return lhs, typed(_java_stringify(rhs.value), string_type)
             if rhs_str and not lhs_str:
-                return typed(str(lhs.value), string_type), rhs
+                return typed(_java_stringify(lhs.value), string_type), rhs
         return lhs, rhs
 
     def result_type(self, op: str, lhs: TypedValue, rhs: TypedValue) -> TypeExpr:
