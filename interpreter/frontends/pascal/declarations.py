@@ -14,6 +14,10 @@ from interpreter.frontends.type_extraction import (
 )
 from interpreter.frontends.pascal.type_helpers import extract_pascal_return_type
 from interpreter.frontends.pascal.node_types import PascalNodeType
+from interpreter.frontends.common.property_accessors import (
+    register_property_accessor,
+    emit_field_store_or_setter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -500,6 +504,158 @@ def _lower_pascal_method(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
-def _lower_pascal_property(ctx, node, class_name, field_names) -> None:
-    """Lower a declProp -- stub, implemented in Task 3."""
-    pass
+def _lower_pascal_property(
+    ctx: TreeSitterEmitContext,
+    node,
+    class_name: str,
+    field_names: list[str],
+) -> None:
+    """Lower declProp -- emit synthetic __get_<prop>__ and/or __set_<prop>__ methods."""
+    children = node.children
+    prop_name = ""
+    read_target = ""
+    write_target = ""
+
+    saw_property = False
+    saw_read = False
+    saw_write = False
+    for child in children:
+        if child.type == PascalNodeType.K_PROPERTY:
+            saw_property = True
+        elif child.type == PascalNodeType.K_READ:
+            saw_read = True
+        elif child.type == PascalNodeType.K_WRITE:
+            saw_write = True
+        elif child.type == PascalNodeType.IDENTIFIER:
+            text = ctx.node_text(child)
+            if saw_write:
+                write_target = text
+                saw_write = False
+            elif saw_read:
+                read_target = text
+                saw_read = False
+            elif saw_property and not prop_name:
+                prop_name = text
+
+    if not prop_name:
+        return
+
+    field_name_set = set(field_names)
+
+    if read_target:
+        _emit_property_getter(ctx, class_name, prop_name, read_target, field_name_set)
+
+    if write_target:
+        _emit_property_setter(ctx, class_name, prop_name, write_target, field_name_set)
+
+
+def _emit_property_getter(
+    ctx: TreeSitterEmitContext,
+    class_name: str,
+    prop_name: str,
+    target: str,
+    field_names: set[str],
+) -> None:
+    """Emit synthetic __get_<prop>__ method."""
+    getter_name = f"__get_{prop_name}__"
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{getter_name}")
+    end_label = ctx.fresh_label(f"end_{getter_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit(Opcode.LABEL, label=func_label)
+
+    sym_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.SYMBOLIC,
+        result_reg=sym_reg,
+        operands=[f"{constants.PARAM_PREFIX}this"],
+    )
+    ctx.emit(Opcode.DECL_VAR, operands=["this", f"%{ctx.reg_counter - 1}"])
+
+    this_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+
+    if target in field_names:
+        result_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.LOAD_FIELD,
+            result_reg=result_reg,
+            operands=[this_reg, target],
+        )
+    else:
+        result_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.CALL_METHOD,
+            result_reg=result_reg,
+            operands=[this_reg, target],
+        )
+
+    ctx.emit(Opcode.RETURN, operands=[result_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit_func_ref(getter_name, func_label, result_reg=func_reg)
+    ctx.emit(Opcode.DECL_VAR, operands=[getter_name, func_reg])
+
+    register_property_accessor(ctx, class_name, prop_name, "get")
+
+
+def _emit_property_setter(
+    ctx: TreeSitterEmitContext,
+    class_name: str,
+    prop_name: str,
+    target: str,
+    field_names: set[str],
+) -> None:
+    """Emit synthetic __set_<prop>__ method."""
+    setter_name = f"__set_{prop_name}__"
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{setter_name}")
+    end_label = ctx.fresh_label(f"end_{setter_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit(Opcode.LABEL, label=func_label)
+
+    sym_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.SYMBOLIC,
+        result_reg=sym_reg,
+        operands=[f"{constants.PARAM_PREFIX}this"],
+    )
+    ctx.emit(Opcode.DECL_VAR, operands=["this", f"%{ctx.reg_counter - 1}"])
+
+    val_sym = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.SYMBOLIC,
+        result_reg=val_sym,
+        operands=[f"{constants.PARAM_PREFIX}value"],
+    )
+    ctx.emit(Opcode.DECL_VAR, operands=["value", f"%{ctx.reg_counter - 1}"])
+
+    this_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+    val_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=val_reg, operands=["value"])
+
+    if target in field_names:
+        ctx.emit(Opcode.STORE_FIELD, operands=[this_reg, target, val_reg])
+    else:
+        ctx.emit(
+            Opcode.CALL_METHOD,
+            result_reg=ctx.fresh_reg(),
+            operands=[this_reg, target, val_reg],
+        )
+
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
+    )
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit_func_ref(setter_name, func_label, result_reg=func_reg)
+    ctx.emit(Opcode.DECL_VAR, operands=[setter_name, func_reg])
+
+    register_property_accessor(ctx, class_name, prop_name, "set")

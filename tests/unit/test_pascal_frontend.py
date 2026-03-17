@@ -1128,3 +1128,118 @@ end.""",
         )
         assert extract_answer(vm, "pascal") == 13
         assert stats.llm_calls == 0
+
+
+class TestPascalPropertyAccessors:
+    """Tests for declProp -> synthetic __get_<prop>__/__set_<prop>__ methods."""
+
+    def test_field_read_accessor_emits_getter_with_load_field(self):
+        """property Name: string read FName -> __get_Name__ with LOAD_FIELD this FName."""
+        source = """\
+program M;
+type
+  TFoo = class
+  private
+    FName: string;
+  public
+    property Name: string read FName;
+  end;
+begin
+end."""
+        instructions = _parse_pascal(source)
+        labels = _labels_in_order(instructions)
+        assert any(
+            "__get_Name__" in lbl for lbl in labels
+        ), f"Expected __get_Name__ label, got {labels}"
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert any(
+            "FName" in inst.operands for inst in loads
+        ), f"Expected LOAD_FIELD with FName, got {[l.operands for l in loads]}"
+
+    def test_method_write_accessor_emits_setter_with_call_method(self):
+        """property Name: string write SetName -> __set_Name__ with CALL_METHOD this SetName."""
+        source = """\
+program M;
+type
+  TFoo = class
+  private
+    FName: string;
+    procedure SetName(const AValue: string);
+  public
+    property Name: string read FName write SetName;
+  end;
+begin
+end."""
+        instructions = _parse_pascal(source)
+        labels = _labels_in_order(instructions)
+        assert any(
+            "__set_Name__" in lbl for lbl in labels
+        ), f"Expected __set_Name__ label, got {labels}"
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any(
+            "SetName" in inst.operands for inst in calls
+        ), f"Expected CALL_METHOD with SetName, got {[c.operands for c in calls]}"
+
+    def test_read_only_property_no_setter(self):
+        """property Name: string read FName (no write) -> only getter, no setter."""
+        source = """\
+program M;
+type
+  TFoo = class
+  private
+    FName: string;
+  public
+    property Name: string read FName;
+  end;
+begin
+end."""
+        instructions = _parse_pascal(source)
+        labels = _labels_in_order(instructions)
+        assert any("__get_Name__" in lbl for lbl in labels)
+        assert not any(
+            "__set_Name__" in lbl for lbl in labels
+        ), f"Read-only property should not emit setter, got labels {labels}"
+
+    def test_field_write_accessor_emits_store_field(self):
+        """property Name: string write FName -> __set_Name__ with STORE_FIELD this FName."""
+        source = """\
+program M;
+type
+  TFoo = class
+  private
+    FName: string;
+  public
+    property Name: string read FName write FName;
+  end;
+begin
+end."""
+        instructions = _parse_pascal(source)
+        labels = _labels_in_order(instructions)
+        assert any("__set_Name__" in lbl for lbl in labels)
+        stores = _find_all(instructions, Opcode.STORE_FIELD)
+        fname_stores = [s for s in stores if "FName" in s.operands]
+        assert (
+            len(fname_stores) >= 2
+        ), f"Expected >= 2 STORE_FIELD for FName, got {len(fname_stores)}"
+
+    def test_method_read_accessor_emits_call_method(self):
+        """property Name: string read GetName -> __get_Name__ with CALL_METHOD this GetName."""
+        source = """\
+program M;
+type
+  TFoo = class
+  private
+    FName: string;
+    function GetName: string;
+  public
+    property Name: string read GetName;
+  end;
+begin
+end."""
+        instructions = _parse_pascal(source)
+        labels = _labels_in_order(instructions)
+        assert any("__get_Name__" in lbl for lbl in labels)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        assert any(
+            "GetName" in inst.operands for inst in calls
+        ), f"Expected CALL_METHOD with GetName, got {[c.operands for c in calls]}"
