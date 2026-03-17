@@ -158,9 +158,7 @@ class TestTwoFerDefaultParameter:
     @pytest.mark.parametrize("lang", sorted(EXECUTABLE_LANGUAGES))
     def test_no_arg_uses_default(self, lang):
         if lang != "python":
-            pytest.xfail(
-                "VM does not support default parameters for this language yet"
-            )
+            pytest.xfail("VM does not support default parameters for this language yet")
         fn_name = _function_name(lang)
         source = build_program(SOLUTIONS[lang], fn_name, [], lang)
         vm, _stats = execute_for_language(lang, source)
