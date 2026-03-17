@@ -7,10 +7,14 @@ from interpreter.run import run
 from interpreter.typed_value import unwrap_locals
 
 
-def _run_python(source: str, max_steps: int = 500) -> tuple:
-    """Run a Python program and return (vm, unwrapped local vars)."""
-    vm = run(source, language=Language.PYTHON, max_steps=max_steps)
+def _run(source: str, language: Language, max_steps: int = 500) -> tuple:
+    """Run a program and return (vm, unwrapped local vars)."""
+    vm = run(source, language=language, max_steps=max_steps)
     return vm, unwrap_locals(vm.call_stack[0].local_vars)
+
+
+def _run_python(source: str, max_steps: int = 500) -> tuple:
+    return _run(source, Language.PYTHON, max_steps)
 
 
 class TestPythonDefaultParamExecution:
@@ -93,3 +97,341 @@ def add(a, b):
 
 answer = add(3, 4)""")
         assert vars_["answer"] == 7
+
+
+class TestJavaScriptDefaultParamExecution:
+    """End-to-end default parameter tests for JavaScript."""
+
+    def test_string_default_used_when_no_arg(self):
+        _, vars_ = _run(
+            'function greet(name = "you") { return "hello " + name; }\n'
+            "let answer = greet();",
+            Language.JAVASCRIPT,
+        )
+        assert vars_["answer"] == "hello you"
+
+    def test_string_default_overridden(self):
+        _, vars_ = _run(
+            'function greet(name = "you") { return "hello " + name; }\n'
+            'let answer = greet("Alice");',
+            Language.JAVASCRIPT,
+        )
+        assert vars_["answer"] == "hello Alice"
+
+    def test_mixed_required_and_default(self):
+        _, vars_ = _run(
+            'function greet(greeting, name = "world") {\n'
+            '    return greeting + " " + name;\n'
+            "}\n"
+            'let answer = greet("hi");',
+            Language.JAVASCRIPT,
+        )
+        assert vars_["answer"] == "hi world"
+
+
+class TestTypeScriptDefaultParamExecution:
+    """End-to-end default parameter tests for TypeScript."""
+
+    def test_string_default_used_when_no_arg(self):
+        _, vars_ = _run(
+            'function greet(name: string = "you"): string {\n'
+            '    return "hello " + name;\n'
+            "}\n"
+            "let answer: string = greet();",
+            Language.TYPESCRIPT,
+        )
+        assert vars_["answer"] == "hello you"
+
+    def test_string_default_overridden(self):
+        _, vars_ = _run(
+            'function greet(name: string = "you"): string {\n'
+            '    return "hello " + name;\n'
+            "}\n"
+            'let answer: string = greet("Alice");',
+            Language.TYPESCRIPT,
+        )
+        assert vars_["answer"] == "hello Alice"
+
+    def test_mixed_required_and_default(self):
+        _, vars_ = _run(
+            'function greet(greeting: string, name: string = "world"): string {\n'
+            '    return greeting + " " + name;\n'
+            "}\n"
+            'let answer: string = greet("hi");',
+            Language.TYPESCRIPT,
+        )
+        assert vars_["answer"] == "hi world"
+
+
+class TestRubyDefaultParamExecution:
+    """End-to-end default parameter tests for Ruby."""
+
+    def test_string_default_used_when_no_arg(self):
+        _, vars_ = _run(
+            'def greet(name = "you")\n'
+            '    return "hello " + name\n'
+            "end\n"
+            "answer = greet()",
+            Language.RUBY,
+        )
+        assert vars_["answer"] == "hello you"
+
+    def test_string_default_overridden(self):
+        _, vars_ = _run(
+            'def greet(name = "you")\n'
+            '    return "hello " + name\n'
+            "end\n"
+            'answer = greet("Alice")',
+            Language.RUBY,
+        )
+        assert vars_["answer"] == "hello Alice"
+
+    def test_mixed_required_and_default(self):
+        _, vars_ = _run(
+            'def greet(greeting, name = "world")\n'
+            '    return greeting + " " + name\n'
+            "end\n"
+            'answer = greet("hi")',
+            Language.RUBY,
+        )
+        assert vars_["answer"] == "hi world"
+
+
+class TestCppDefaultParamExecution:
+    """End-to-end default parameter tests for C++."""
+
+    def test_string_default_used_when_no_arg(self):
+        _, vars_ = _run(
+            'string greet(string name = "you") {\n'
+            '    return "hello " + name;\n'
+            "}\n"
+            "string answer = greet();",
+            Language.CPP,
+        )
+        assert vars_["answer"] == "hello you"
+
+    def test_string_default_overridden(self):
+        _, vars_ = _run(
+            'string greet(string name = "you") {\n'
+            '    return "hello " + name;\n'
+            "}\n"
+            'string answer = greet("Alice");',
+            Language.CPP,
+        )
+        assert vars_["answer"] == "hello Alice"
+
+    def test_mixed_required_and_default(self):
+        _, vars_ = _run(
+            'string greet(string greeting, string name = "world") {\n'
+            '    return greeting + " " + name;\n'
+            "}\n"
+            'string answer = greet("hi");',
+            Language.CPP,
+        )
+        assert vars_["answer"] == "hi world"
+
+
+class TestScalaDefaultParamExecution:
+    """End-to-end default parameter tests for Scala."""
+
+    def test_string_default_used_when_no_arg(self):
+        _, vars_ = _run(
+            "object M {\n"
+            '    def greet(name: String = "you"): String = {\n'
+            '        return "hello " + name\n'
+            "    }\n"
+            "    val answer = greet()\n"
+            "}",
+            Language.SCALA,
+        )
+        assert vars_["answer"] == "hello you"
+
+    def test_string_default_overridden(self):
+        _, vars_ = _run(
+            "object M {\n"
+            '    def greet(name: String = "you"): String = {\n'
+            '        return "hello " + name\n'
+            "    }\n"
+            '    val answer = greet("Alice")\n'
+            "}",
+            Language.SCALA,
+        )
+        assert vars_["answer"] == "hello Alice"
+
+    def test_mixed_required_and_default(self):
+        _, vars_ = _run(
+            "object M {\n"
+            '    def greet(greeting: String, name: String = "world"): String = {\n'
+            '        return greeting + " " + name\n'
+            "    }\n"
+            '    val answer = greet("hi")\n'
+            "}",
+            Language.SCALA,
+        )
+        assert vars_["answer"] == "hi world"
+
+
+class TestPhpDefaultParamExecution:
+    """End-to-end default parameter tests for PHP."""
+
+    def test_string_default_used_when_no_arg(self):
+        _, vars_ = _run(
+            "<?php\n"
+            'function greet($name = "you") {\n'
+            '    return "hello " . $name;\n'
+            "}\n"
+            "$answer = greet();\n"
+            "?>",
+            Language.PHP,
+        )
+        assert vars_["$answer"] == "hello you"
+
+    def test_string_default_overridden(self):
+        _, vars_ = _run(
+            "<?php\n"
+            'function greet($name = "you") {\n'
+            '    return "hello " . $name;\n'
+            "}\n"
+            '$answer = greet("Alice");\n'
+            "?>",
+            Language.PHP,
+        )
+        assert vars_["$answer"] == "hello Alice"
+
+    def test_mixed_required_and_default(self):
+        _, vars_ = _run(
+            "<?php\n"
+            'function greet($greeting, $name = "world") {\n'
+            '    return $greeting . " " . $name;\n'
+            "}\n"
+            '$answer = greet("hi");\n'
+            "?>",
+            Language.PHP,
+        )
+        assert vars_["$answer"] == "hi world"
+
+
+class TestCsharpDefaultParamExecution:
+    """End-to-end default parameter tests for C#."""
+
+    def test_string_default_used_when_no_arg(self):
+        _, vars_ = _run(
+            "class M {\n"
+            '    static string greet(string name = "you") {\n'
+            '        return "hello " + name;\n'
+            "    }\n"
+            "    static string answer = greet();\n"
+            "}",
+            Language.CSHARP,
+        )
+        assert vars_["answer"] == "hello you"
+
+    def test_string_default_overridden(self):
+        _, vars_ = _run(
+            "class M {\n"
+            '    static string greet(string name = "you") {\n'
+            '        return "hello " + name;\n'
+            "    }\n"
+            '    static string answer = greet("Alice");\n'
+            "}",
+            Language.CSHARP,
+        )
+        assert vars_["answer"] == "hello Alice"
+
+    def test_mixed_required_and_default(self):
+        _, vars_ = _run(
+            "class M {\n"
+            '    static string greet(string greeting, string name = "world") {\n'
+            '        return greeting + " " + name;\n'
+            "    }\n"
+            '    static string answer = greet("hi");\n'
+            "}",
+            Language.CSHARP,
+        )
+        assert vars_["answer"] == "hi world"
+
+
+class TestKotlinDefaultParamExecution:
+    """End-to-end default parameter tests for Kotlin."""
+
+    def test_string_default_used_when_no_arg(self):
+        _, vars_ = _run(
+            'fun greet(name: String = "you"): String {\n'
+            '    return "hello " + name\n'
+            "}\n"
+            "val answer = greet()",
+            Language.KOTLIN,
+        )
+        assert vars_["answer"] == "hello you"
+
+    def test_string_default_overridden(self):
+        _, vars_ = _run(
+            'fun greet(name: String = "you"): String {\n'
+            '    return "hello " + name\n'
+            "}\n"
+            'val answer = greet("Alice")',
+            Language.KOTLIN,
+        )
+        assert vars_["answer"] == "hello Alice"
+
+    def test_mixed_required_and_default(self):
+        _, vars_ = _run(
+            'fun greet(greeting: String, name: String = "world"): String {\n'
+            '    return greeting + " " + name\n'
+            "}\n"
+            'val answer = greet("hi")',
+            Language.KOTLIN,
+        )
+        assert vars_["answer"] == "hi world"
+
+
+class TestPascalDefaultParamExecution:
+    """End-to-end default parameter tests for Pascal."""
+
+    def test_string_default_used_when_no_arg(self):
+        _, vars_ = _run(
+            "program M;\n"
+            "function greet(name: string = 'you'): string;\n"
+            "begin\n"
+            "    greet := 'hello ' + name;\n"
+            "end;\n"
+            "var answer: string;\n"
+            "begin\n"
+            "    answer := greet();\n"
+            "end.",
+            Language.PASCAL,
+            max_steps=1000,
+        )
+        assert vars_["answer"] == "hello you"
+
+    def test_string_default_overridden(self):
+        _, vars_ = _run(
+            "program M;\n"
+            "function greet(name: string = 'you'): string;\n"
+            "begin\n"
+            "    greet := 'hello ' + name;\n"
+            "end;\n"
+            "var answer: string;\n"
+            "begin\n"
+            "    answer := greet('Alice');\n"
+            "end.",
+            Language.PASCAL,
+            max_steps=1000,
+        )
+        assert vars_["answer"] == "hello Alice"
+
+    def test_mixed_required_and_default(self):
+        _, vars_ = _run(
+            "program M;\n"
+            "function greet(greeting: string; name: string = 'world'): string;\n"
+            "begin\n"
+            "    greet := greeting + ' ' + name;\n"
+            "end;\n"
+            "var answer: string;\n"
+            "begin\n"
+            "    answer := greet('hi');\n"
+            "end.",
+            Language.PASCAL,
+            max_steps=1000,
+        )
+        assert vars_["answer"] == "hi world"
