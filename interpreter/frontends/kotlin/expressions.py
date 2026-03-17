@@ -18,6 +18,23 @@ from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
 logger = logging.getLogger(__name__)
 
 
+def lower_kotlin_identifier(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower identifier, intercepting 'field' inside property accessor bodies."""
+    text = ctx.node_text(node)
+    if text == "field" and ctx._accessor_backing_field:
+        this_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+        reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.LOAD_FIELD,
+            result_reg=reg,
+            operands=[this_reg, ctx._accessor_backing_field],
+            node=node,
+        )
+        return reg
+    return lower_identifier(ctx, node)
+
+
 # -- string interpolation ----------------------------------------------
 
 
@@ -918,9 +935,19 @@ def lower_kotlin_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
     if target.type == KNT.SIMPLE_IDENTIFIER:
+        text = ctx.node_text(target)
+        if text == "field" and ctx._accessor_backing_field:
+            this_reg = ctx.fresh_reg()
+            ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+            ctx.emit(
+                Opcode.STORE_FIELD,
+                operands=[this_reg, ctx._accessor_backing_field, val_reg],
+                node=parent_node,
+            )
+            return
         ctx.emit(
             Opcode.STORE_VAR,
-            operands=[ctx.node_text(target), val_reg],
+            operands=[text, val_reg],
             node=parent_node,
         )
     elif target.type == KNT.NAVIGATION_EXPRESSION:

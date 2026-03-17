@@ -1436,3 +1436,27 @@ class Foo {
         label_names = [inst.label for inst in labels if inst.label]
         assert not any("__get_" in lbl for lbl in label_names)
         assert not any("__set_" in lbl for lbl in label_names)
+
+    def test_field_keyword_in_getter_emits_load_field(self):
+        """'field' in getter body should emit LOAD_FIELD this 'x'."""
+        ir = _parse_kotlin("""\
+class Foo {
+    var x: Int = 0
+        get() = field
+}""")
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        assert any(
+            "x" in inst.operands for inst in load_fields
+        ), f"Expected LOAD_FIELD with field 'x', got: {[(inst.operands) for inst in load_fields]}"
+
+    def test_field_keyword_in_setter_emits_store_field(self):
+        """'field = value' in setter body should emit STORE_FIELD this 'x'."""
+        ir = _parse_kotlin("""\
+class Foo {
+    var x: Int = 0
+        set(value) { field = value }
+}""")
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        assert any(
+            "x" in inst.operands for inst in store_fields
+        ), f"Expected STORE_FIELD with field 'x', got: {[(inst.operands) for inst in store_fields]}"
