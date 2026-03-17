@@ -145,7 +145,11 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
 
 
 def _lower_kotlin_params(ctx: TreeSitterEmitContext, params_node) -> None:
-    for child in params_node.children:
+    children = params_node.children
+    param_index = 0
+    i = 0
+    while i < len(children):
+        child = children[i]
         if child.type == KNT.PARAMETER:
             id_node = next(
                 (c for c in child.children if c.type == KNT.SIMPLE_IDENTIFIER),
@@ -169,6 +173,23 @@ def _lower_kotlin_params(ctx: TreeSitterEmitContext, params_node) -> None:
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
                 )
                 ctx.seed_var_type(pname, type_hint)
+                # Kotlin default values are siblings: parameter = value
+                if (
+                    i + 2 < len(children)
+                    and children[i + 1].type == "="
+                    and children[i + 1].child_count == 0
+                ):
+                    default_value_node = children[i + 2]
+                    from interpreter.frontends.common.default_params import (
+                        emit_default_param_guard,
+                    )
+
+                    emit_default_param_guard(
+                        ctx, pname, param_index, default_value_node
+                    )
+                    i += 2  # skip = and default value
+                param_index += 1
+        i += 1
 
 
 def _lower_function_body(ctx: TreeSitterEmitContext, body_node) -> str:
