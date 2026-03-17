@@ -102,6 +102,7 @@ class KotlinNodeType:
     CONSTRUCTOR_DELEGATION_CALL = "constructor_delegation_call"
     SETTER = "setter"
     GETTER = "getter"
+    PARAMETER_WITH_OPTIONAL_TYPE = "parameter_with_optional_type"
 
     # -- suffixes --------------------------------------------------------
     CALL_SUFFIX = "call_suffix"
