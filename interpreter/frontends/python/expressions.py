@@ -11,6 +11,10 @@ from interpreter.frontends.common.expressions import (
     lower_interpolated_string_parts,
     lower_store_target as common_lower_store_target,
 )
+from interpreter.frontends.type_extraction import (
+    extract_type_from_field,
+    normalize_type_hint,
+)
 from interpreter.frontends.python.node_types import PythonNodeType
 
 # ── store target (with tuple unpack) ──────────────────────────
@@ -438,8 +442,10 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
         (c for c in node.children if c.type == PythonNodeType.LAMBDA_PARAMETERS), None
     )
     if params_node:
+        param_idx = 0
         for child in params_node.children:
-            _lower_python_param(ctx, child)
+            if _lower_python_param(ctx, child, param_idx):
+                param_idx += 1
 
     # Lower body expression and return
     body_node = node.child_by_field_name(ctx.constants.func_body_field) or next(
@@ -461,49 +467,87 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
     return ref_reg
 
 
-def _lower_python_param(ctx: TreeSitterEmitContext, child) -> None:
-    """Lower a single Python parameter to SYMBOLIC + DECL_VAR."""
+def _lower_python_param(ctx: TreeSitterEmitContext, child, param_index: int) -> bool:
+    """Lower a single Python parameter to SYMBOLIC + DECL_VAR.
+
+    Returns True if a parameter was processed (for index counting),
+    False if the child was punctuation or unrecognized.
+    """
     if child.type in (
         PythonNodeType.OPEN_PAREN,
         PythonNodeType.CLOSE_PAREN,
         PythonNodeType.COMMA,
         PythonNodeType.COLON,
     ):
-        return
+        return False
+
+    default_value_node = None
 
     if child.type == PythonNodeType.IDENTIFIER:
         pname = ctx.node_text(child)
     elif child.type == PythonNodeType.DEFAULT_PARAMETER:
         pname_node = child.child_by_field_name(ctx.constants.func_name_field)
         if not pname_node:
-            return
+            return False
         pname = ctx.node_text(pname_node)
+        default_value_node = child.child_by_field_name("value")
     elif child.type == PythonNodeType.TYPED_PARAMETER:
         id_node = next(
             (sub for sub in child.children if sub.type == PythonNodeType.IDENTIFIER),
             None,
         )
         if not id_node:
-            return
+            return False
         pname = ctx.node_text(id_node)
     elif child.type == PythonNodeType.TYPED_DEFAULT_PARAMETER:
         pname_node = child.child_by_field_name(ctx.constants.func_name_field)
         if not pname_node:
-            return
+            return False
         pname = ctx.node_text(pname_node)
+        default_value_node = child.child_by_field_name("value")
     else:
-        return
+        return False
 
+    raw_type = extract_type_from_field(ctx, child, "type")
+    type_hint = normalize_type_hint(raw_type, ctx.type_map)
+    param_reg = ctx.fresh_reg()
     ctx.emit(
         Opcode.SYMBOLIC,
-        result_reg=ctx.fresh_reg(),
+        result_reg=param_reg,
         operands=[f"{constants.PARAM_PREFIX}{pname}"],
         node=child,
     )
+    ctx.seed_register_type(param_reg, type_hint)
+    ctx.seed_param_type(pname, type_hint)
     ctx.emit(
         Opcode.DECL_VAR,
         operands=[pname, f"%{ctx.reg_counter - 1}"],
     )
+    ctx.seed_var_type(pname, type_hint)
+
+    if default_value_node:
+        from interpreter.frontends.common.default_params import (
+            emit_default_param_guard,
+        )
+
+        emit_default_param_guard(ctx, pname, param_index, default_value_node)
+
+    return True
+
+
+def lower_python_params(ctx: TreeSitterEmitContext, params_node) -> None:
+    """Lower Python function parameters, handling default values."""
+    param_idx = 0
+    for child in params_node.children:
+        if _lower_python_param(ctx, child, param_idx):
+            param_idx += 1
+
+
+def lower_python_function_def(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower a Python function definition, handling default parameter values."""
+    from interpreter.frontends.common.declarations import lower_function_def
+
+    lower_function_def(ctx, node, params_lowerer=lower_python_params)
 
 
 # ── generator expression ─────────────────────────────────────

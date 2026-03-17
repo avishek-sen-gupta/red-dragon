@@ -108,7 +108,7 @@ class PythonFrontend(BaseFrontend):
             PythonNodeType.IF_STATEMENT: py_cf.lower_python_if,
             PythonNodeType.WHILE_STATEMENT: common_cf.lower_while,
             PythonNodeType.FOR_STATEMENT: py_cf.lower_for,
-            PythonNodeType.FUNCTION_DEFINITION: common_decl.lower_function_def,
+            PythonNodeType.FUNCTION_DEFINITION: py_expr.lower_python_function_def,
             PythonNodeType.CLASS_DEFINITION: py_decl.lower_python_class_def,
             PythonNodeType.RAISE_STATEMENT: py_cf.lower_raise,
             PythonNodeType.TRY_STATEMENT: py_cf.lower_try,
