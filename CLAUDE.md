@@ -49,6 +49,9 @@ Do NOT use markdown TODO lists. All tasks live in Beads.
 ## Interaction Style
 - When a user interrupts or cancels a task, do not ask clarifying questions — immediately proceed with the redirected instruction. Treat interruptions as implicit 'stop what you're doing and do this instead'.
 
+## Python introspection commands
+- Write temporary scripts to /tmp/*.py and execute with `poetry run python /tmp/script.py` rather than using python -c with multiline strings. Clean up temp files after use.
+
 ## Build
 
 - When asked to commit and push, always push to 'main' branch, unless otherwise instructed.
@@ -95,6 +98,7 @@ Do NOT use markdown TODO lists. All tasks live in Beads.
 - For variables which can only take a fixed set of values (a set of strings, for example), use enums instead of strings.
 - Avoid using direct print statements, unless it's for one-off debugging. Use logging facilities.
 - Do not mutate objects to initialise them. All dependencies should be injected during object construction time.
+- Do not use primitives to pass around data across functions. Make sure you are using domain-appropriate wrapping types. Any wrapping / unwrapping should happen strictly at the boundary layers of the system.
 
 ## Code Review Patterns
 
