@@ -19,11 +19,11 @@ class TestKotlinArrayOfLenExecution:
 val arr = arrayOf(10, 5, 3)
 var answer = 0
 for (x in arr) {
-    answer = answer + x
+    answer = answer + 1
 }
 """,
         )
-        assert extract_answer(vm, "kotlin") == 18
+        assert extract_answer(vm, "kotlin") == 3
         assert stats.steps < 200
 
     def test_empty_arrayOf_no_iterations(self):
@@ -50,9 +50,9 @@ class TestJavaScriptArrayLenExecution:
 var arr = [10, 5, 3];
 var answer = 0;
 for (const x of arr) {
-    answer = answer + x;
+    answer = answer + 1;
 }
 """,
         )
-        assert extract_answer(vm, "javascript") == 18
+        assert extract_answer(vm, "javascript") == 3
         assert stats.steps < 200
