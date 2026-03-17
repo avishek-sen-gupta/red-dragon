@@ -1,5 +1,5 @@
 class M {
-    static string twoFer(string name) {
+    static string twoFer(string name = "you") {
         return "One for " + name + ", one for me.";
     }
 
