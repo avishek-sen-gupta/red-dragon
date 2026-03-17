@@ -1005,6 +1005,48 @@ end."""
         assert any("class_" in str(inst.operands) for inst in consts)
 
 
+class TestPascalClassBodyTraversal:
+    """Tests for class body traversal: fields -> synthetic __init__, methods."""
+
+    def test_class_with_field_emits_synthetic_init(self):
+        """declField inside declClass should produce a synthetic __init__ with STORE_FIELD."""
+        source = """\
+program M;
+type
+  TFoo = class
+  private
+    FName: string;
+  end;
+begin
+end."""
+        instructions = _parse_pascal(source)
+        labels = _labels_in_order(instructions)
+        assert any(
+            "__init__" in lbl for lbl in labels
+        ), f"Expected __init__ label, got {labels}"
+        stores = _find_all(instructions, Opcode.STORE_FIELD)
+        assert any(
+            "FName" in inst.operands for inst in stores
+        ), f"Expected STORE_FIELD for FName, got {[s.operands for s in stores]}"
+
+    def test_class_with_multiple_fields_emits_store_field_per_field(self):
+        source = """\
+program M;
+type
+  TPoint = class
+  private
+    FX: Integer;
+    FY: Integer;
+  end;
+begin
+end."""
+        instructions = _parse_pascal(source)
+        stores = _find_all(instructions, Opcode.STORE_FIELD)
+        field_names = [s.operands[1] for s in stores]
+        assert "FX" in field_names
+        assert "FY" in field_names
+
+
 class TestPascalBitwiseOperators:
     """Pascal 'and', 'or', 'xor' keywords emit bitwise BINOP operators."""
 

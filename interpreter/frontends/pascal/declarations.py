@@ -342,7 +342,7 @@ def lower_pascal_decl_types(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_pascal_decl_type(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower declType -- emit CLASS_REF for record types, skip others."""
+    """Lower declType -- emit CLASS_REF for class/record types with body traversal."""
     id_node = next(
         (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
     )
@@ -353,9 +353,6 @@ def lower_pascal_decl_type(ctx: TreeSitterEmitContext, node) -> None:
     if id_node is None or class_node is None:
         return
 
-    # Handle both record and class types
-    has_record = any(c.type == PascalNodeType.K_RECORD for c in class_node.children)
-
     type_name = ctx.node_text(id_node)
     record_types: set[str] = getattr(ctx, "_pascal_record_types", set())
     record_types.add(type_name)
@@ -365,8 +362,102 @@ def lower_pascal_decl_type(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=class_label)
+
+    prev_class_name = getattr(ctx, "_current_class_name", "")
+    ctx._current_class_name = type_name
+
+    # First pass: collect all field names across all declSection children
+    field_names = _collect_class_field_names(ctx, class_node)
+
+    # Second pass: emit synthetic __init__, methods, and properties
+    _emit_synthetic_init_for_fields(ctx, field_names)
+
+    for section in class_node.children:
+        if section.type == PascalNodeType.DECL_SECTION:
+            _lower_pascal_class_section(ctx, section, type_name, field_names)
+
+    ctx._current_class_name = prev_class_name
+
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(type_name, class_label, [], result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[type_name, cls_reg])
+
+
+def _collect_class_field_names(ctx: TreeSitterEmitContext, class_node) -> list[str]:
+    """Collect all field names from declField nodes across all declSection children."""
+    return [
+        ctx.node_text(id_node)
+        for section in class_node.children
+        if section.type == PascalNodeType.DECL_SECTION
+        for child in section.children
+        if child.type == PascalNodeType.DECL_FIELD
+        for id_node in child.children
+        if id_node.type == PascalNodeType.IDENTIFIER
+    ]
+
+
+def _emit_synthetic_init_for_fields(
+    ctx: TreeSitterEmitContext, field_names: list[str]
+) -> None:
+    """Emit a synthetic __init__ that stores None for each field."""
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}__init__")
+    end_label = ctx.fresh_label("end___init__")
+
+    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit(Opcode.LABEL, label=func_label)
+
+    sym_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.SYMBOLIC,
+        result_reg=sym_reg,
+        operands=[f"{constants.PARAM_PREFIX}this"],
+    )
+    ctx.emit(Opcode.DECL_VAR, operands=["this", f"%{ctx.reg_counter - 1}"])
+
+    for fname in field_names:
+        val_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.CONST, result_reg=val_reg, operands=[ctx.constants.none_literal]
+        )
+        this_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+        ctx.emit(Opcode.STORE_FIELD, operands=[this_reg, fname, val_reg])
+
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
+    )
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit_func_ref("__init__", func_label, result_reg=func_reg)
+    ctx.emit(Opcode.DECL_VAR, operands=["__init__", func_reg])
+
+
+def _lower_pascal_class_section(
+    ctx: TreeSitterEmitContext,
+    section,
+    class_name: str,
+    field_names: list[str],
+) -> None:
+    """Lower children of a declSection (declField, declProc, declProp)."""
+    for child in section.children:
+        if child.type == PascalNodeType.DECL_PROC:
+            _lower_pascal_method(ctx, child)
+        elif child.type == PascalNodeType.DECL_PROP:
+            _lower_pascal_property(ctx, child, class_name, field_names)
+
+
+def _lower_pascal_method(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower a declProc inside a class -- stub, implemented in Task 2."""
+    pass
+
+
+def _lower_pascal_property(ctx, node, class_name, field_names) -> None:
+    """Lower a declProp -- stub, implemented in Task 3."""
+    pass
