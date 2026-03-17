@@ -63,13 +63,13 @@ int result = apply(&add, 7, 3);
         source = """\
 int add(int a, int b) { return a + b; }
 
-int apply_returned(int x, int y) {
-    int (*fp)(int, int) = &add;
-    return (*fp)(x, y);
+int (*get_adder())(int, int) {
+    return &add;
 }
 
-int r1 = apply_returned(2, 3);
-int r2 = apply_returned(10, 20);
+int (*fp)(int, int) = get_adder();
+int r1 = (*fp)(2, 3);
+int r2 = (*fp)(10, 20);
 """
         vars_ = _run_c(source)
         assert vars_["r1"] == 5
