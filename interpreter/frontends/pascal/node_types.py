@@ -97,6 +97,7 @@ class PascalNodeType:
     K_PUBLIC = "kPublic"
     K_PROTECTED = "kProtected"
     DECL_FIELD = "declField"
+    GENERIC_DOT = "genericDot"
 
     # -- Comment -----------------------------------------------------------
     COMMENT = "comment"
