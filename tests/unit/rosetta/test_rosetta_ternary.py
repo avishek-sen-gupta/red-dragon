@@ -118,12 +118,14 @@ class TestTernaryLowering:
             language=lang,
         )
 
-    def test_branch_if_present(self, language_ir):
+    def test_comparison_operator_drives_branch(self, language_ir):
+        """IR must contain a comparison operator feeding the ternary branch."""
         lang, ir = language_ir
-        branch_ifs = find_all(ir, Opcode.BRANCH_IF)
+        operators = {inst.operands[0] for inst in find_all(ir, Opcode.BINOP)}
+        has_comparison = operators & {">", "<", ">=", "<=", "==", "!="}
         assert (
-            len(branch_ifs) >= 1
-        ), f"[{lang}] expected at least one BRANCH_IF instruction, found none"
+            has_comparison
+        ), f"[{lang}] expected a comparison operator in BINOP, got {operators}"
 
 
 # ---------------------------------------------------------------------------

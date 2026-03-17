@@ -129,12 +129,13 @@ class TestUnaryOperatorsLowering:
             language=lang,
         )
 
-    def test_unop_present(self, language_ir):
+    def test_negation_operator_in_unops(self, language_ir):
+        """IR must contain unary negation operator."""
         lang, ir = language_ir
-        unops = find_all(ir, Opcode.UNOP)
+        operators = {inst.operands[0] for inst in find_all(ir, Opcode.UNOP)}
         assert (
-            len(unops) >= 1
-        ), f"[{lang}] expected at least one UNOP instruction, got {len(unops)}"
+            "-" in operators
+        ), f"[{lang}] expected '-' (negation) in UNOP operators, got {operators}"
 
 
 # ---------------------------------------------------------------------------
