@@ -21,6 +21,7 @@ from interpreter.type_expr import ScalarType
 
 def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
     """Lower PHP function parameters."""
+    param_index = 0
     for child in params_node.children:
         if child.type in (
             PHPNodeType.OPEN_PAREN,
@@ -48,6 +49,15 @@ def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
                 )
                 ctx.seed_var_type(pname, type_hint)
+                default_value_node = child.child_by_field_name("default_value")
+                if default_value_node:
+                    from interpreter.frontends.common.default_params import (
+                        emit_default_param_guard,
+                    )
+
+                    emit_default_param_guard(
+                        ctx, pname, param_index, default_value_node
+                    )
         elif child.type == PHPNodeType.VARIADIC_PARAMETER:
             name_node = child.child_by_field_name("name")
             if name_node:
@@ -80,6 +90,7 @@ def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 Opcode.DECL_VAR,
                 operands=[pname, f"%{ctx.reg_counter - 1}"],
             )
+        param_index += 1
 
 
 def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
