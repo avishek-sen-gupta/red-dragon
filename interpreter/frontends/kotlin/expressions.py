@@ -165,11 +165,23 @@ def lower_kotlin_call(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_navigation_expr(ctx: TreeSitterEmitContext, node) -> str:
+    from interpreter.frontends.common.property_accessors import (
+        emit_field_load_or_getter,
+    )
+
     named_children = [c for c in node.children if c.is_named]
     if len(named_children) < 2:
         return lower_const_literal(ctx, node)
-    obj_reg = ctx.lower_expr(named_children[0])
+    obj_node = named_children[0]
+    obj_reg = ctx.lower_expr(obj_node)
     field_name = _extract_nav_field_name(ctx, named_children[-1])
+
+    # Intercept this.x when a custom getter is registered
+    if obj_node.type == KNT.THIS_EXPRESSION and ctx._current_class_name:
+        return emit_field_load_or_getter(
+            ctx, obj_reg, ctx._current_class_name, field_name, node
+        )
+
     reg = ctx.fresh_reg()
     ctx.emit(
         Opcode.LOAD_FIELD,
