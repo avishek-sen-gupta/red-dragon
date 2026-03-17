@@ -1345,3 +1345,59 @@ end."""
         calls = _find_all(instructions, Opcode.CALL_METHOD)
         setter_calls = [c for c in calls if "__set_" in str(c.operands)]
         assert len(setter_calls) == 0
+
+
+class TestPascalQualifiedDefProc:
+    """Tests for defProc with qualified name (procedure TFoo.MethodName)."""
+
+    def test_qualified_defproc_emits_this_and_self_params(self):
+        """procedure TFoo.SetName(...) should inject this+self and use correct name."""
+        source = """\
+program M;
+type
+  TFoo = class
+  private
+    FName: string;
+    procedure SetName(const AValue: string);
+  end;
+
+procedure TFoo.SetName(const AValue: string);
+begin
+  self.FName := AValue;
+end;
+begin
+end."""
+        instructions = _parse_pascal(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        # Find the SYMBOLIC param:this that belongs to the defProc body (not the stub)
+        # The defProc body also has param:AValue after param:this
+        this_params = [s for s in symbolics if s.operands == ["param:this"]]
+        # There should be at least 2: one from the stub, one from the defProc body
+        assert (
+            len(this_params) >= 2
+        ), f"Expected at least 2 SYMBOLIC param:this (stub + body), got {len(this_params)}"
+        # The defProc should emit func_ref with name "SetName", not "__anon"
+        func_consts = _find_all(instructions, Opcode.CONST)
+        func_labels = [c for c in func_consts if "func_SetName" in str(c.operands[0])]
+        # At least 2: one from stub inside class, one from defProc body
+        assert (
+            len(func_labels) >= 2
+        ), f"Expected at least 2 func_SetName refs (stub + body), got {func_labels}"
+        # self alias: DECL_VAR self should appear in the defProc body
+        decl_vars = _find_all(instructions, Opcode.DECL_VAR)
+        self_decls = [d for d in decl_vars if d.operands[0] == "self"]
+        assert len(self_decls) >= 1, "Expected DECL_VAR self alias in qualified defProc"
+
+    def test_unqualified_defproc_unchanged(self):
+        """Plain procedure (no dot) should NOT inject this/self."""
+        source = """\
+program M;
+procedure Greet;
+begin
+end;
+begin
+end."""
+        instructions = _parse_pascal(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        this_params = [s for s in symbolics if s.operands == ["param:this"]]
+        assert len(this_params) == 0, "Plain procedure should not have param:this"

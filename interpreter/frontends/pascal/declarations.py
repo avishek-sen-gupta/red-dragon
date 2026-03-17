@@ -218,15 +218,30 @@ def lower_pascal_proc(ctx: TreeSitterEmitContext, node) -> None:
         (c for c in node.children if c.type == PascalNodeType.DECL_PROC), None
     )
     search_node = decl_node if decl_node else node
-    id_node = next(
-        (c for c in search_node.children if c.type == PascalNodeType.IDENTIFIER), None
+
+    # Detect qualified name (genericDot): procedure TFoo.SetName(...)
+    generic_dot = next(
+        (c for c in search_node.children if c.type == PascalNodeType.GENERIC_DOT), None
     )
+    if generic_dot:
+        dot_ids = [
+            c for c in generic_dot.children if c.type == PascalNodeType.IDENTIFIER
+        ]
+        class_name = ctx.node_text(dot_ids[0])
+        func_name = ctx.node_text(dot_ids[1])
+    else:
+        class_name = ""
+        id_node = next(
+            (c for c in search_node.children if c.type == PascalNodeType.IDENTIFIER),
+            None,
+        )
+        func_name = ctx.node_text(id_node) if id_node else "__anon"
+
     args_node = next(
         (c for c in search_node.children if c.type == PascalNodeType.DECL_ARGS), None
     )
     body_node = next((c for c in node.children if c.type == PascalNodeType.BLOCK), None)
 
-    func_name = ctx.node_text(id_node) if id_node else "__anon"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
@@ -236,17 +251,33 @@ def lower_pascal_proc(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=func_label)
     ctx.seed_func_return_type(func_label, return_hint)
 
+    # Inject this + self for qualified methods
+    if class_name:
+        sym_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.SYMBOLIC,
+            result_reg=sym_reg,
+            operands=[f"{constants.PARAM_PREFIX}this"],
+            node=node,
+        )
+        ctx.emit(Opcode.DECL_VAR, operands=["this", f"%{ctx.reg_counter - 1}"])
+        ctx.emit(Opcode.DECL_VAR, operands=["self", f"%{ctx.reg_counter - 1}"])
+
     if args_node:
         _lower_pascal_params(ctx, args_node)
 
     prev_func_name = getattr(ctx, "_pascal_current_function_name", "")
     ctx._pascal_current_function_name = func_name
+    prev_class_name = getattr(ctx, "_current_class_name", "")
+    if class_name:
+        ctx._current_class_name = class_name
     for child in node.children:
         if child.type == PascalNodeType.DEF_PROC:
             lower_pascal_proc(ctx, child)
     if body_node:
         lower_pascal_block(ctx, body_node)
     ctx._pascal_current_function_name = prev_func_name
+    ctx._current_class_name = prev_class_name
 
     none_reg = ctx.fresh_reg()
     ctx.emit(
