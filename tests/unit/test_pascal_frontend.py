@@ -1377,12 +1377,12 @@ end."""
             len(this_params) >= 2
         ), f"Expected at least 2 SYMBOLIC param:this (stub + body), got {len(this_params)}"
         # The defProc should emit func_ref with name "SetName", not "__anon"
+        # Only the defProc body emits func_ref (stub is a forward declaration, no func_ref)
         func_consts = _find_all(instructions, Opcode.CONST)
         func_labels = [c for c in func_consts if "func_SetName" in str(c.operands[0])]
-        # At least 2: one from stub inside class, one from defProc body
         assert (
-            len(func_labels) >= 2
-        ), f"Expected at least 2 func_SetName refs (stub + body), got {func_labels}"
+            len(func_labels) >= 1
+        ), f"Expected at least 1 func_SetName ref from defProc body, got {func_labels}"
         # self alias: DECL_VAR self should appear in the defProc body
         decl_vars = _find_all(instructions, Opcode.DECL_VAR)
         self_decls = [d for d in decl_vars if d.operands[0] == "self"]
