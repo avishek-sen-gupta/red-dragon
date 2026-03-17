@@ -963,16 +963,30 @@ def lower_kotlin_store_target(
             node=parent_node,
         )
     elif target.type == KNT.NAVIGATION_EXPRESSION:
+        from interpreter.frontends.common.property_accessors import (
+            emit_field_store_or_setter,
+        )
+
         named_children = [c for c in target.children if c.is_named]
         if len(named_children) >= 2:
-            obj_reg = ctx.lower_expr(named_children[0])
+            obj_node = named_children[0]
+            obj_reg = ctx.lower_expr(obj_node)
+            field_name = _extract_nav_field_name(ctx, named_children[-1])
+
+            if obj_node.type == KNT.THIS_EXPRESSION and ctx._current_class_name:
+                emit_field_store_or_setter(
+                    ctx,
+                    obj_reg,
+                    ctx._current_class_name,
+                    field_name,
+                    val_reg,
+                    parent_node,
+                )
+                return
+
             ctx.emit(
                 Opcode.STORE_FIELD,
-                operands=[
-                    obj_reg,
-                    _extract_nav_field_name(ctx, named_children[-1]),
-                    val_reg,
-                ],
+                operands=[obj_reg, field_name, val_reg],
                 node=parent_node,
             )
         else:
@@ -1033,6 +1047,10 @@ def lower_kotlin_store_target(
                 node=parent_node,
             )
         elif nav_suffix:
+            from interpreter.frontends.common.property_accessors import (
+                emit_field_store_or_setter,
+            )
+
             # Navigation assignment: this.field = val or obj.field = val
             named_children = [c for c in target.children if c.is_named]
             obj_node = next(
@@ -1041,6 +1059,22 @@ def lower_kotlin_store_target(
             )
             obj_reg = ctx.lower_expr(obj_node) if obj_node else ctx.fresh_reg()
             field_name = _extract_nav_field_name(ctx, nav_suffix)
+
+            if (
+                obj_node
+                and obj_node.type == KNT.THIS_EXPRESSION
+                and ctx._current_class_name
+            ):
+                emit_field_store_or_setter(
+                    ctx,
+                    obj_reg,
+                    ctx._current_class_name,
+                    field_name,
+                    val_reg,
+                    parent_node,
+                )
+                return
+
             ctx.emit(
                 Opcode.STORE_FIELD,
                 operands=[obj_reg, field_name, val_reg],
