@@ -1449,6 +1449,21 @@ class Foo {
             "x" in inst.operands for inst in load_fields
         ), f"Expected LOAD_FIELD with field 'x', got: {[(inst.operands) for inst in load_fields]}"
 
+    def test_this_dot_x_with_getter_emits_call_method(self):
+        """this.x with custom getter should emit CALL_METHOD __get_x__."""
+        ir = _parse_kotlin("""\
+class Foo {
+    var x: Int = 0
+        get() = field + 1
+    fun bar(): Int {
+        return this.x
+    }
+}""")
+        call_methods = _find_all(ir, Opcode.CALL_METHOD)
+        assert any(
+            "__get_x__" in inst.operands for inst in call_methods
+        ), f"Expected CALL_METHOD with __get_x__, got: {[(inst.operands) for inst in call_methods]}"
+
     def test_field_keyword_in_setter_emits_store_field(self):
         """'field = value' in setter body should emit STORE_FIELD this 'x'."""
         ir = _parse_kotlin("""\

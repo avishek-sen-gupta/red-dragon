@@ -17,18 +17,16 @@ def register_property_accessor(
 
     *kind* is ``"get"`` or ``"set"``.
     """
-    ctx.property_accessors.setdefault(class_name, {}).setdefault(
-        prop_name, set()
-    ).add(kind)
+    ctx.property_accessors.setdefault(class_name, {}).setdefault(prop_name, set()).add(
+        kind
+    )
 
 
 def has_property_accessor(
     ctx: TreeSitterEmitContext, class_name: str, prop_name: str, kind: str
 ) -> bool:
     """Check whether *prop_name* on *class_name* has a custom *kind* accessor."""
-    return kind in ctx.property_accessors.get(class_name, {}).get(
-        prop_name, set()
-    )
+    return kind in ctx.property_accessors.get(class_name, {}).get(prop_name, set())
 
 
 def emit_field_load_or_getter(
