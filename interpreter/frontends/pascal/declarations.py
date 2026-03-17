@@ -558,9 +558,10 @@ def _lower_pascal_method(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.RETURN, operands=[none_reg])
     ctx.emit(Opcode.LABEL, label=end_label)
 
-    func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+    # Do NOT emit func_ref here — forward declarations are placeholders.
+    # The real implementation comes from a defProc with a qualified name
+    # (e.g., procedure TFoo.SetName). Emitting func_ref here would create
+    # duplicate method entries in the registry, breaking method dispatch.
 
 
 def _lower_pascal_property(
