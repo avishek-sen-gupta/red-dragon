@@ -1,6 +1,10 @@
 """Unit tests for BinopCoercionStrategy implementations."""
 
-from interpreter.binop_coercion import DefaultBinopCoercion, JavaBinopCoercion
+from interpreter.binop_coercion import (
+    DefaultBinopCoercion,
+    JavaBinopCoercion,
+    _java_stringify,
+)
 from interpreter.type_expr import UNKNOWN, scalar
 from interpreter.typed_value import TypedValue, typed
 
@@ -180,3 +184,31 @@ class TestJavaBinopCoercion:
         lhs = typed(1, scalar("Int"))
         rhs = typed(2, scalar("Int"))
         assert self.coercion.result_type("==", lhs, rhs) == scalar("Bool")
+
+
+class TestJavaStringify:
+    """Unit tests for _java_stringify boolean and non-boolean conversion."""
+
+    def test_true_is_lowercase(self):
+        assert _java_stringify(True) == "true"
+
+    def test_false_is_lowercase(self):
+        assert _java_stringify(False) == "false"
+
+    def test_int_unchanged(self):
+        assert _java_stringify(42) == "42"
+
+    def test_float_unchanged(self):
+        assert _java_stringify(3.14) == "3.14"
+
+    def test_string_unchanged(self):
+        assert _java_stringify("hello") == "hello"
+
+    def test_zero_is_not_boolean(self):
+        assert _java_stringify(0) == "0"
+
+    def test_one_is_not_boolean(self):
+        assert _java_stringify(1) == "1"
+
+    def test_none_unchanged(self):
+        assert _java_stringify(None) == "None"
