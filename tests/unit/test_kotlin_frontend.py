@@ -1382,3 +1382,57 @@ class Rect(val w: Int, val h: Int) {
         assert (
             unsupported == []
         ), f"Should not have unsupported symbolics: {unsupported}"
+
+
+class TestKotlinPropertyAccessors:
+    """Tests for custom property getter/setter IR emission."""
+
+    def test_getter_emits_synthetic_method(self):
+        """Property getter should emit a __get_x__ method label."""
+        ir = _parse_kotlin("""\
+class Foo {
+    var x: Int = 0
+        get() = field + 1
+}""")
+        labels = _find_all(ir, Opcode.LABEL)
+        getter_labels = [
+            inst for inst in labels if inst.label and "__get_x__" in inst.label
+        ]
+        assert len(getter_labels) >= 1, "Expected a __get_x__ method label"
+
+    def test_setter_emits_synthetic_method(self):
+        """Property setter should emit a __set_x__ method label."""
+        ir = _parse_kotlin("""\
+class Foo {
+    var x: Int = 0
+        set(value) { field = value * 2 }
+}""")
+        labels = _find_all(ir, Opcode.LABEL)
+        setter_labels = [
+            inst for inst in labels if inst.label and "__set_x__" in inst.label
+        ]
+        assert len(setter_labels) >= 1, "Expected a __set_x__ method label"
+
+    def test_getter_setter_both_emitted(self):
+        """Both getter and setter should produce synthetic methods."""
+        ir = _parse_kotlin("""\
+class Foo {
+    var x: Int = 0
+        get() = field + 1
+        set(value) { field = value * 2 }
+}""")
+        labels = _find_all(ir, Opcode.LABEL)
+        label_names = [inst.label for inst in labels if inst.label]
+        assert any("__get_x__" in lbl for lbl in label_names)
+        assert any("__set_x__" in lbl for lbl in label_names)
+
+    def test_property_without_accessors_unchanged(self):
+        """Property without custom accessors should not emit synthetic methods."""
+        ir = _parse_kotlin("""\
+class Foo {
+    var x: Int = 0
+}""")
+        labels = _find_all(ir, Opcode.LABEL)
+        label_names = [inst.label for inst in labels if inst.label]
+        assert not any("__get_" in lbl for lbl in label_names)
+        assert not any("__set_" in lbl for lbl in label_names)
