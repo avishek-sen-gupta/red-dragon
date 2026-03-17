@@ -157,7 +157,7 @@ class TestTwoFerDefaultParameter:
 
     @pytest.mark.parametrize("lang", sorted(EXECUTABLE_LANGUAGES))
     def test_no_arg_uses_default(self, lang):
-        _DEFAULT_PARAM_SUPPORTED = {"python", "javascript"}
+        _DEFAULT_PARAM_SUPPORTED = {"python", "javascript", "typescript"}
         if lang not in _DEFAULT_PARAM_SUPPORTED:
             pytest.xfail("VM does not support default parameters for this language yet")
         fn_name = _function_name(lang)

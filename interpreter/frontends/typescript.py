@@ -469,7 +469,7 @@ def _extract_ts_type_hint(ctx: TreeSitterEmitContext, param_node) -> TypeExpr:
     return normalize_type_hint(raw, ctx.type_map)
 
 
-def lower_ts_param(ctx: TreeSitterEmitContext, child) -> None:
+def lower_ts_param(ctx: TreeSitterEmitContext, child, param_index: int) -> None:
     """Lower a single TS parameter, extracting type annotations."""
     if child.type in (
         TypeScriptNodeType.OPEN_PAREN,
@@ -503,6 +503,13 @@ def lower_ts_param(ctx: TreeSitterEmitContext, child) -> None:
                 operands=[pname, f"%{ctx.reg_counter - 1}"],
             )
             ctx.seed_var_type(pname, type_hint)
+            default_value_node = child.child_by_field_name("value")
+            if default_value_node:
+                from interpreter.frontends.common.default_params import (
+                    emit_default_param_guard,
+                )
+
+                emit_default_param_guard(ctx, pname, param_index, default_value_node)
         return
     if child.type == TypeScriptNodeType.OPTIONAL_PARAMETER:
         pname_node = child.child_by_field_name("pattern")
@@ -532,12 +539,20 @@ def lower_ts_param(ctx: TreeSitterEmitContext, child) -> None:
     # Fall back to JS param handling
     from interpreter.frontends.javascript.expressions import lower_js_param
 
-    lower_js_param(ctx, child)
+    lower_js_param(ctx, child, param_index)
 
 
 def lower_ts_params(ctx: TreeSitterEmitContext, params_node) -> None:
+    param_index = 0
     for child in params_node.children:
-        lower_ts_param(ctx, child)
+        if child.type in (
+            TypeScriptNodeType.OPEN_PAREN,
+            TypeScriptNodeType.CLOSE_PAREN,
+            TypeScriptNodeType.COMMA,
+        ):
+            continue
+        lower_ts_param(ctx, child, param_index)
+        param_index += 1
 
 
 def lower_ts_arrow_function(ctx: TreeSitterEmitContext, node) -> str:
@@ -554,7 +569,7 @@ def lower_ts_arrow_function(ctx: TreeSitterEmitContext, node) -> str:
 
     if params_node:
         if params_node.type == TypeScriptNodeType.IDENTIFIER:
-            lower_ts_param(ctx, params_node)
+            lower_ts_param(ctx, params_node, 0)
         else:
             lower_ts_params(ctx, params_node)
 
