@@ -80,7 +80,7 @@ New file: `interpreter/frontends/common/default_params.py`
 
 Two public functions:
 
-1. **`emit_resolve_default_func(ctx)`** — Emits the `__resolve_default__` IR function using `emit_func_ref` (consistent with the codebase's `FuncRef` pattern). Called lazily from `emit_default_param_guard` on first use, guarded by `hasattr(ctx, '_resolve_default_emitted')`. Lazy emission avoids modifying all frontend preludes — Rust and Pascal override `_emit_prelude` without calling `super()`.
+1. **`emit_resolve_default_func(ctx)`** — Emits the `__resolve_default__` IR function using `emit_func_ref` (consistent with the codebase's `FuncRef` pattern). Called lazily from `emit_default_param_guard` on first use. Add a `_resolve_default_emitted: bool = False` field to `TreeSitterEmitContext.__init__` in `interpreter/frontends/context.py`, checked and set by `emit_resolve_default_func`. Lazy emission avoids modifying all frontend preludes — Rust and Pascal override `_emit_prelude` without calling `super()`.
 
 2. **`emit_default_param_guard(ctx, param_name, param_index, default_value_node)`** — Emits the 5-instruction guard for one default parameter. Evaluates `default_value_node` via `ctx.lower_expr()`, then calls `__resolve_default__`. Reassigns `param_name` with the result via `STORE_VAR`. The `param_index` is the absolute positional index including any required params that precede this default param (e.g., in `def f(a, b="x")`, `b` has `param_index=1`).
 
@@ -88,7 +88,9 @@ Two public functions:
 
 The default value expression is always evaluated (even when the caller provides the argument). The result is discarded if the argument was provided. This matches JavaScript, Kotlin, and Scala semantics. It diverges from Python's evaluate-once semantics for mutable defaults, but this is an acceptable simplification — the two-fer tests and most real-world defaults use literals or simple expressions where always-evaluate is indistinguishable.
 
-Only literal and simple expressions are in scope for this iteration (string literals, numeric literals, simple calls like `list()`). Complex default expressions referencing forward-declared functions are not targeted.
+Only literal and simple expressions are in scope for this iteration (string literals, numeric literals, simple calls like `list()`). Complex default expressions referencing forward-declared functions are not targeted. Side-effecting default expressions (e.g., `def f(x=print("hi"))`) will always execute even when an argument is provided — this is a known divergence from Python semantics, acceptable for the current scope.
+
+Note: the IR pseudocode above uses shorthand notation. Actual implementation uses the codebase's `ctx.emit(Opcode.CALL_FUNCTION, ...)` pattern with `operands=[func_name, arg_reg1, arg_reg2, ...]`.
 
 ### Python frontend wiring
 
@@ -102,7 +104,7 @@ The call sites that iterate parameters are:
 - `_lower_python_param` called from the `for child in params_node.children` loop in `_lower_python_function_def` (regular functions)
 - Lambda parameter lowering in `_lower_lambda_expr` (line 440-442)
 
-Both call sites need a parameter index counter threaded through. The simplest approach: modify the loop that calls `_lower_python_param` to pass an `enumerate` index.
+Both call sites need a parameter index counter threaded through. The counter should only increment when a parameter is actually processed (not for punctuation nodes like parens and commas that are filtered out with early returns). Add a `param_index` accumulator to the loop and pass it to `_lower_python_param`.
 
 ### Two-fer test changes
 
@@ -134,4 +136,4 @@ Both call sites need a parameter index counter threaded through. The simplest ap
 
 ## Deferred work (one issue per language)
 
-File issues for: JavaScript, TypeScript, Ruby, Go, Java, C#, C++, Kotlin, Scala, PHP, Rust, Lua, Pascal. (C excluded — language has no default parameters.)
+File issues for: JavaScript, TypeScript, Ruby, Java, C#, C++, Kotlin, Scala, PHP, Rust, Lua, Pascal. (C and Go excluded — neither language has default parameters.)
