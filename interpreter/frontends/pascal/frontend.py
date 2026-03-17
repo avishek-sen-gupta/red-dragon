@@ -48,6 +48,12 @@ class PascalFrontend(BaseFrontend):
             "string": "String",
         }
 
+    def _emit_prelude(self, ctx) -> None:
+        """Initialize Pascal-specific mutable state on the context."""
+        ctx._pascal_current_function_name = ""
+        ctx._pascal_record_types = set()
+        ctx._pascal_var_types = {}
+
     def _build_context(self, source: bytes) -> TreeSitterEmitContext:
         ctx = super()._build_context(source)
         # Pascal-specific mutable state stored on the context
