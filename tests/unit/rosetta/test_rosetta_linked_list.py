@@ -453,9 +453,6 @@ CONCRETE_LANGUAGES: frozenset[str] = frozenset(
     }
 )
 
-# Languages where linked list traversal returns SymbolicValue.
-SYMBOLIC_LANGUAGES: frozenset[str] = frozenset()
-
 EXPECTED_ANSWER = 6  # 1 + 2 + 3
 
 
@@ -476,29 +473,6 @@ class TestLinkedListConcreteExecution:
         assert (
             answer == EXPECTED_ANSWER
         ), f"[{lang}] expected answer={EXPECTED_ANSWER}, got {answer}"
-
-    def test_zero_llm_calls(self, execution_result):
-        lang, _vm, stats = execution_result
-        assert (
-            stats.llm_calls == 0
-        ), f"[{lang}] expected 0 LLM calls, got {stats.llm_calls}"
-
-
-class TestLinkedListSymbolicExecution:
-    """Languages where linked list traversal returns SymbolicValue."""
-
-    @pytest.fixture(
-        params=sorted(SYMBOLIC_LANGUAGES), ids=lambda lang: lang, scope="class"
-    )
-    def execution_result(self, request):
-        lang = request.param
-        vm, stats = execute_for_language(lang, PROGRAMS[lang])
-        return lang, vm, stats
-
-    def test_answer_exists(self, execution_result):
-        lang, vm, _stats = execution_result
-        answer = extract_answer(vm, lang)
-        assert answer is not None, f"[{lang}] expected answer variable to exist"
 
     def test_zero_llm_calls(self, execution_result):
         lang, _vm, stats = execution_result
