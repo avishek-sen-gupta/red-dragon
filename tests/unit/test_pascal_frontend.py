@@ -1307,3 +1307,41 @@ end."""
             f"Expected CALL_METHOD __get_X__ from param type tracking, "
             f"got {[c.operands for c in calls]}"
         )
+
+
+class TestPascalAssignmentInterception:
+    """Tests for property setter interception in lower_pascal_assignment."""
+
+    def test_dot_assign_on_typed_var_with_setter_emits_call_method(self):
+        """foo.Name := 'x' on class-typed var with setter -> CALL_METHOD __set_Name__."""
+        source = """\
+program M;
+type
+  TFoo = class
+  private
+    FName: string;
+    procedure SetName(const AValue: string);
+  public
+    property Name: string read FName write SetName;
+  end;
+var
+  foo: TFoo;
+begin
+  foo := TFoo;
+  foo.Name := 'hello';
+end."""
+        instructions = _parse_pascal(source)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        setter_calls = [c for c in calls if "__set_Name__" in c.operands]
+        assert (
+            len(setter_calls) >= 1
+        ), f"Expected CALL_METHOD __set_Name__, got {[c.operands for c in calls]}"
+
+    def test_dot_assign_on_untyped_var_emits_plain_store_field(self):
+        """rec.field := 10 on unknown-type variable -> plain STORE_FIELD."""
+        instructions = _parse_pascal("program M; begin rec.field := 10; end.")
+        stores = _find_all(instructions, Opcode.STORE_FIELD)
+        assert any("field" in inst.operands for inst in stores)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        setter_calls = [c for c in calls if "__set_" in str(c.operands)]
+        assert len(setter_calls) == 0
