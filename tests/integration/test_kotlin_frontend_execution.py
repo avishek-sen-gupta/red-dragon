@@ -188,3 +188,84 @@ val answer = c.doubled
             max_steps=1000,
         )
         assert vars_["answer"] == 6
+
+
+class TestKotlinPropertyAccessorExecution:
+    """Integration tests for custom property getter/setter execution."""
+
+    def test_getter_transforms_read(self):
+        """Custom getter should transform the read value."""
+        vars_ = _run_kotlin(
+            """\
+class Foo {
+    var x: Int = 10
+        get() = field + 1
+    fun getX(): Int {
+        return this.x
+    }
+}
+val foo = Foo()
+val result = foo.getX()""",
+            max_steps=1000,
+        )
+        assert vars_["result"] == 11
+
+    def test_setter_transforms_write(self):
+        """Custom setter should transform the written value."""
+        vars_ = _run_kotlin(
+            """\
+class Foo {
+    var x: Int = 0
+        set(value) { field = value * 2 }
+    fun setX(v: Int) {
+        this.x = v
+    }
+    fun getX(): Int {
+        return this.x
+    }
+}
+val foo = Foo()
+foo.setX(5)
+val result = foo.getX()""",
+            max_steps=1500,
+        )
+        assert vars_["result"] == 10
+
+    def test_getter_and_setter_together(self):
+        """Both getter and setter should apply their transformations."""
+        vars_ = _run_kotlin(
+            """\
+class Foo {
+    var x: Int = 0
+        get() = field + 1
+        set(value) { field = value * 2 }
+    fun setX(v: Int) {
+        this.x = v
+    }
+    fun getX(): Int {
+        return this.x
+    }
+}
+val foo = Foo()
+foo.setX(5)
+val result = foo.getX()""",
+            max_steps=1500,
+        )
+        # setter stores 5 * 2 = 10, getter returns 10 + 1 = 11
+        assert vars_["result"] == 11
+
+    def test_property_without_accessors_regression(self):
+        """Property without custom accessors should still work as plain field."""
+        vars_ = _run_kotlin(
+            """\
+class Foo {
+    var x: Int = 42
+    fun getX(): Int {
+        return this.x
+    }
+}
+val foo = Foo()
+val result = foo.getX()""",
+            max_steps=1000,
+        )
+        assert vars_["result"] == 42
