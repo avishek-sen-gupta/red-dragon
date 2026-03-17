@@ -302,33 +302,52 @@ def _find_function_declarator_in_declarator_child(func_decl) -> object | None:
     return None
 
 
+def _lower_c_single_param(ctx: TreeSitterEmitContext, child, param_index: int) -> None:
+    """Lower a single C/C++ parameter_declaration or optional_parameter_declaration."""
+    decl_node = child.child_by_field_name("declarator")
+    if not decl_node:
+        return
+    pname = extract_declarator_name(ctx, decl_node)
+    raw_type = extract_type_from_field(ctx, child, "type")
+    type_hint = normalize_type_hint(raw_type, ctx.type_map)
+    ptr_depth = _count_pointer_depth(decl_node)
+    effective_type = (
+        _wrap_pointer_type(type_hint, ptr_depth) if ptr_depth else type_hint
+    )
+    sym_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.SYMBOLIC,
+        result_reg=sym_reg,
+        operands=[f"{constants.PARAM_PREFIX}{pname}"],
+        node=child,
+    )
+    ctx.seed_register_type(sym_reg, effective_type)
+    ctx.seed_param_type(pname, effective_type)
+    ctx.emit(
+        Opcode.DECL_VAR,
+        operands=[pname, f"%{ctx.reg_counter - 1}"],
+    )
+    ctx.seed_var_type(pname, effective_type)
+    # C++ optional_parameter_declaration has a default_value field
+    default_value_node = child.child_by_field_name("default_value")
+    if default_value_node:
+        from interpreter.frontends.common.default_params import (
+            emit_default_param_guard,
+        )
+
+        emit_default_param_guard(ctx, pname, param_index, default_value_node)
+
+
 def lower_c_params(ctx: TreeSitterEmitContext, params_node) -> None:
-    """Lower C function parameters (parameter_declaration nodes)."""
+    """Lower C/C++ function parameters."""
+    param_index = 0
     for child in params_node.children:
-        if child.type == CNodeType.PARAMETER_DECLARATION:
-            decl_node = child.child_by_field_name("declarator")
-            if decl_node:
-                pname = extract_declarator_name(ctx, decl_node)
-                raw_type = extract_type_from_field(ctx, child, "type")
-                type_hint = normalize_type_hint(raw_type, ctx.type_map)
-                ptr_depth = _count_pointer_depth(decl_node)
-                effective_type = (
-                    _wrap_pointer_type(type_hint, ptr_depth) if ptr_depth else type_hint
-                )
-                sym_reg = ctx.fresh_reg()
-                ctx.emit(
-                    Opcode.SYMBOLIC,
-                    result_reg=sym_reg,
-                    operands=[f"{constants.PARAM_PREFIX}{pname}"],
-                    node=child,
-                )
-                ctx.seed_register_type(sym_reg, effective_type)
-                ctx.seed_param_type(pname, effective_type)
-                ctx.emit(
-                    Opcode.DECL_VAR,
-                    operands=[pname, f"%{ctx.reg_counter - 1}"],
-                )
-                ctx.seed_var_type(pname, effective_type)
+        if child.type in (
+            CNodeType.PARAMETER_DECLARATION,
+            "optional_parameter_declaration",
+        ):
+            _lower_c_single_param(ctx, child, param_index)
+            param_index += 1
 
 
 def lower_function_def_c(ctx: TreeSitterEmitContext, node) -> None:
