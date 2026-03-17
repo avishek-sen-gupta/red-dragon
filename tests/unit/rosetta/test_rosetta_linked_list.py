@@ -449,12 +449,12 @@ CONCRETE_LANGUAGES: frozenset[str] = frozenset(
         "kotlin",
         "scala",
         "rust",
+        "pascal",
     }
 )
 
 # Languages where linked list traversal returns SymbolicValue.
-# Pascal: array-of-records index-based traversal returns symbolic.
-SYMBOLIC_LANGUAGES: frozenset[str] = frozenset({"pascal"})
+SYMBOLIC_LANGUAGES: frozenset[str] = frozenset()
 
 EXPECTED_ANSWER = 6  # 1 + 2 + 3
 
