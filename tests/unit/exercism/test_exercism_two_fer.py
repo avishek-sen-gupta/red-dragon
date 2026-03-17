@@ -151,8 +151,9 @@ class TestTwoFerExecution:
 class TestTwoFerDefaultParameter:
     """Verify that calling two_fer() with no arguments uses the default parameter.
 
-    Currently xfail for all languages except Python, which has default param
-    support wired into the frontend.
+    Supported for 10 frontends (Python, JS, TS, Ruby, C++, Scala, PHP, C#,
+    Kotlin, Pascal). xfail for languages that lack default parameters
+    (C, Go, Java, Rust, Lua).
     """
 
     @pytest.mark.parametrize("lang", sorted(EXECUTABLE_LANGUAGES))
