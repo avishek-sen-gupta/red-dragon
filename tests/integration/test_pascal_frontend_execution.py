@@ -60,9 +60,6 @@ begin
 end.""")
         assert vars_["answer"] == "Bob"
 
-    @pytest.mark.xfail(
-        reason="defProc qualified name (TFoo.SetName) body not wired back to class method stub"
-    )
     def test_method_write_property_calls_setter_procedure(self):
         """foo.Name := 'x' should call SetName which stores to self.FName."""
         _, vars_ = _run_pascal(
