@@ -18,8 +18,8 @@ class TestPythonFutureImportExecution:
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
         assert local_vars["answer"] == 42
 
-    def test_future_import_with_class(self):
-        """Future import followed by class definition should work."""
+    def test_future_import_with_arithmetic(self):
+        """Future import followed by arithmetic should not interfere."""
         source = """\
 from __future__ import annotations
 x = 10
