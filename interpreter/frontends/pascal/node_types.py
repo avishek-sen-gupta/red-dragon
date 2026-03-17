@@ -85,6 +85,18 @@ class PascalNodeType:
     K_TRY = "kTry"
     K_END = "kEnd"
     K_ELSE = "kElse"
+    K_CLASS = "kClass"
+
+    # -- Property declaration nodes ----------------------------------------
+    DECL_PROP = "declProp"
+    K_PROPERTY = "kProperty"
+    K_READ = "kRead"
+    K_WRITE = "kWrite"
+    DECL_SECTION = "declSection"
+    K_PRIVATE = "kPrivate"
+    K_PUBLIC = "kPublic"
+    K_PROTECTED = "kProtected"
+    DECL_FIELD = "declField"
 
     # -- Comment -----------------------------------------------------------
     COMMENT = "comment"
