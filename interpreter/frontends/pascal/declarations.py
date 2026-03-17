@@ -22,6 +22,17 @@ from interpreter.frontends.common.property_accessors import (
 logger = logging.getLogger(__name__)
 
 
+def _resolve_object_class(ctx: TreeSitterEmitContext, obj_node) -> str:
+    """Resolve the class name of an object node, if known."""
+    if obj_node.type == PascalNodeType.IDENTIFIER:
+        obj_name = ctx.node_text(obj_node)
+        if obj_name == "self":
+            return getattr(ctx, "_current_class_name", "")
+        pascal_var_types: dict = getattr(ctx, "_pascal_var_types", {})
+        return pascal_var_types.get(obj_name, "")
+    return ""
+
+
 def lower_pascal_assignment(ctx: TreeSitterEmitContext, node) -> None:
     """Lower assignment -- children: target, kAssign, expression."""
     named_children = [
@@ -146,6 +157,10 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
             node=node,
         )
         ctx.seed_var_type(var_name, type_hint)
+        pascal_var_types: dict = getattr(ctx, "_pascal_var_types", {})
+        if type_name in record_types:
+            pascal_var_types[var_name] = type_name
+            ctx._pascal_var_types = pascal_var_types
 
 
 def _pascal_array_size(ctx: TreeSitterEmitContext, type_node) -> int:
@@ -287,6 +302,11 @@ def _lower_pascal_single_param(ctx: TreeSitterEmitContext, child) -> None:
             operands=[pname, f"%{ctx.reg_counter - 1}"],
         )
         ctx.seed_var_type(pname, type_hint)
+        record_types: set[str] = getattr(ctx, "_pascal_record_types", set())
+        pascal_var_types: dict = getattr(ctx, "_pascal_var_types", {})
+        if type_name in record_types:
+            pascal_var_types[pname] = type_name
+            ctx._pascal_var_types = pascal_var_types
 
 
 def lower_pascal_decl_consts(ctx: TreeSitterEmitContext, node) -> None:
