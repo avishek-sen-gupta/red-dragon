@@ -79,6 +79,7 @@ class CppNodeType:
     CATCH_CLAUSE = "catch_clause"
     CATCH_DECLARATOR = "catch_declarator"
     PARAMETER_DECLARATION = "parameter_declaration"
+    OPTIONAL_PARAMETER_DECLARATION = "optional_parameter_declaration"
     REFERENCE_DECLARATOR = "reference_declarator"
 
     # Field initializers
