@@ -514,13 +514,17 @@ def lower_js_field_definition(ctx: TreeSitterEmitContext, node) -> str:
 # ── JS param handling ────────────────────────────────────────
 
 
-def lower_js_param(ctx: TreeSitterEmitContext, child) -> None:
+def lower_js_param(ctx: TreeSitterEmitContext, child, param_index: int) -> None:
     if child.type in (JSN.OPEN_PAREN, JSN.CLOSE_PAREN, JSN.COMMA):
         return
+    default_value_node = None
     if child.type == JSN.IDENTIFIER:
         pname = ctx.node_text(child)
+    elif child.type == JSN.ASSIGNMENT_PATTERN:
+        # name = default_expr — first child is the identifier, last is the value
+        pname = ctx.node_text(child.children[0])
+        default_value_node = child.children[-1]
     elif child.type in (
-        JSN.ASSIGNMENT_PATTERN,
         JSN.OBJECT_PATTERN,
         JSN.ARRAY_PATTERN,
     ):
@@ -541,6 +545,12 @@ def lower_js_param(ctx: TreeSitterEmitContext, child) -> None:
         Opcode.DECL_VAR,
         operands=[pname, f"%{ctx.reg_counter - 1}"],
     )
+    if default_value_node is not None:
+        from interpreter.frontends.common.default_params import (
+            emit_default_param_guard,
+        )
+
+        emit_default_param_guard(ctx, pname, param_index, default_value_node)
 
 
 def lower_js_params(ctx: TreeSitterEmitContext, params_node) -> None:
@@ -551,7 +561,7 @@ def lower_js_params(ctx: TreeSitterEmitContext, params_node) -> None:
         if child.type == JSN.REST_PATTERN:
             _lower_rest_param(ctx, child, param_index)
         else:
-            lower_js_param(ctx, child)
+            lower_js_param(ctx, child, param_index)
         param_index += 1
 
 
