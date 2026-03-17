@@ -69,7 +69,7 @@ def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
     load_idx = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_VAR, result_reg=load_idx, operands=["param_index"])
     cmp_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=cmp_reg, operands=[len_reg, ">", load_idx])
+    ctx.emit(Opcode.BINOP, result_reg=cmp_reg, operands=[">", len_reg, load_idx])
 
     ctx.emit(
         Opcode.BRANCH_IF,
