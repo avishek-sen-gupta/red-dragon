@@ -164,6 +164,7 @@ class TestTwoFerDefaultParameter:
             "ruby",
             "cpp",
             "scala",
+            "php",
         }
         if lang not in _DEFAULT_PARAM_SUPPORTED:
             pytest.xfail("VM does not support default parameters for this language yet")
