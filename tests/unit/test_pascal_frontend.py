@@ -1243,3 +1243,67 @@ end."""
         assert any(
             "GetName" in inst.operands for inst in calls
         ), f"Expected CALL_METHOD with GetName, got {[c.operands for c in calls]}"
+
+
+class TestPascalVarTypeTracking:
+    """Tests for _pascal_var_types population -- verified via getter interception."""
+
+    def test_var_declaration_of_class_type_enables_getter_interception(self):
+        """var foo: TFoo should enable foo.Name to route through __get_Name__."""
+        source = """\
+program M;
+type
+  TFoo = class
+  private
+    FName: string;
+  public
+    property Name: string read FName;
+  end;
+var
+  foo: TFoo;
+begin
+  foo := TFoo;
+  WriteLn(foo.Name);
+end."""
+        instructions = _parse_pascal(source)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        getter_calls = [c for c in calls if "__get_Name__" in c.operands]
+        assert len(getter_calls) >= 1, (
+            f"Expected CALL_METHOD __get_Name__ (var type tracking + getter), "
+            f"got {[c.operands for c in calls]}"
+        )
+
+    def test_dot_access_on_untyped_var_emits_plain_load_field(self):
+        """rec.field on unknown-type variable -> plain LOAD_FIELD (no interception)."""
+        instructions = _parse_pascal("program M; begin x := rec.field; end.")
+        loads = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert len(loads) >= 1
+        assert "field" in loads[0].operands
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        getter_calls = [c for c in calls if "__get_" in str(c.operands)]
+        assert len(getter_calls) == 0
+
+    def test_param_of_class_type_enables_getter_interception(self):
+        """procedure Foo(bar: TBar) -> bar.X should use getter if registered."""
+        source = """\
+program M;
+type
+  TBar = class
+  private
+    FX: Integer;
+  public
+    property X: Integer read FX;
+  end;
+procedure DoWork(bar: TBar);
+begin
+  WriteLn(bar.X);
+end;
+begin
+end."""
+        instructions = _parse_pascal(source)
+        calls = _find_all(instructions, Opcode.CALL_METHOD)
+        getter_calls = [c for c in calls if "__get_X__" in c.operands]
+        assert len(getter_calls) >= 1, (
+            f"Expected CALL_METHOD __get_X__ from param type tracking, "
+            f"got {[c.operands for c in calls]}"
+        )

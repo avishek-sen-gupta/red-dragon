@@ -7,12 +7,14 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter.frontends.common.expressions import lower_const_literal
+from interpreter.frontends.common.property_accessors import emit_field_load_or_getter
 from interpreter.frontends.pascal.pascal_constants import (
     K_OPERATOR_MAP,
     K_UNARY_MAP,
     KEYWORD_NOISE,
 )
 from interpreter.frontends.pascal.node_types import PascalNodeType
+from interpreter.frontends.pascal.declarations import _resolve_object_class
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +112,11 @@ def lower_pascal_paren(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_pascal_dot(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower exprDot -- first child = object, last child = field name."""
+    """Lower exprDot -- first child = object, last child = field name.
+
+    If the object is a class-typed variable with a registered property getter,
+    emit CALL_METHOD __get_<field>__ instead of plain LOAD_FIELD.
+    """
     named_children = [
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
     ]
@@ -120,6 +126,12 @@ def lower_pascal_dot(ctx: TreeSitterEmitContext, node) -> str:
     field_node = named_children[-1]
     obj_reg = ctx.lower_expr(obj_node)
     field_name = ctx.node_text(field_node)
+
+    # Check if obj is a class-typed variable for property interception
+    obj_class = _resolve_object_class(ctx, obj_node)
+    if obj_class:
+        return emit_field_load_or_getter(ctx, obj_reg, obj_class, field_name, node)
+
     reg = ctx.fresh_reg()
     ctx.emit(
         Opcode.LOAD_FIELD,
