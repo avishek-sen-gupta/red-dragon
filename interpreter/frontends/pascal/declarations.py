@@ -82,13 +82,21 @@ def lower_pascal_assignment(ctx: TreeSitterEmitContext, node) -> None:
         dot_named = [
             c for c in target.children if c.is_named and c.type not in KEYWORD_NOISE
         ]
-        obj_reg = ctx.lower_expr(dot_named[0])
+        obj_node = dot_named[0]
+        obj_reg = ctx.lower_expr(obj_node)
         field_name = ctx.node_text(dot_named[-1])
-        ctx.emit(
-            Opcode.STORE_FIELD,
-            operands=[obj_reg, field_name, val_reg],
-            node=node,
-        )
+
+        obj_class = _resolve_object_class(ctx, obj_node)
+        if obj_class:
+            emit_field_store_or_setter(
+                ctx, obj_reg, obj_class, field_name, val_reg, node
+            )
+        else:
+            ctx.emit(
+                Opcode.STORE_FIELD,
+                operands=[obj_reg, field_name, val_reg],
+                node=node,
+            )
     else:
         target_name = ctx.node_text(target)
         current_function_name = getattr(ctx, "_pascal_current_function_name", "")
