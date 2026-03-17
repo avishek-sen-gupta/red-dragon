@@ -280,12 +280,14 @@ class TestPatternMatchingLowering:
             language=lang,
         )
 
-    def test_branch_if_instructions_present(self, language_ir):
+    def test_equality_comparisons_for_dispatch(self, language_ir):
+        """Pattern matching dispatch needs equality checks against case values."""
         lang, ir = language_ir
-        branches = find_all(ir, Opcode.BRANCH_IF)
+        operators = {inst.operands[0] for inst in find_all(ir, Opcode.BINOP)}
+        has_equality = operators & {"==", "="}
         assert (
-            len(branches) >= 2
-        ), f"[{lang}] expected >= 2 BRANCH_IF instructions, got {len(branches)}"
+            has_equality
+        ), f"[{lang}] expected equality operator in BINOP for case dispatch, got {operators}"
 
 
 # ---------------------------------------------------------------------------
