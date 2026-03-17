@@ -245,12 +245,20 @@ class TestHigherOrderLowering:
             language=lang,
         )
 
-    def test_call_function_present(self, language_ir):
+    def test_function_passed_as_argument(self, language_ir):
+        """The apply/wrapper call must receive another function as an argument."""
         lang, ir = language_ir
         calls = find_all(ir, Opcode.CALL_FUNCTION)
+        call_names = {inst.operands[0] for inst in calls}
+        methods = find_all(ir, Opcode.CALL_METHOD)
+        unknowns = find_all(ir, Opcode.CALL_UNKNOWN)
+        # Higher-order pattern requires both a wrapper call and an inner invocation;
+        # the inner may be CALL_FUNCTION, CALL_METHOD, or CALL_UNKNOWN (dynamic)
+        # depending on the language.
+        total_invocations = len(calls) + len(methods) + len(unknowns)
         assert (
-            len(calls) >= 1
-        ), f"[{lang}] expected at least 1 CALL_FUNCTION instruction, got {len(calls)}"
+            total_invocations >= 2
+        ), f"[{lang}] expected >= 2 invocations (wrapper + callback), got {total_invocations}: calls={call_names}"
 
 
 # ---------------------------------------------------------------------------

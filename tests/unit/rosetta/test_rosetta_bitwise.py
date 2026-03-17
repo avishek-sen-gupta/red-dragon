@@ -159,12 +159,18 @@ class TestBitwiseLowering:
             language=lang,
         )
 
-    def test_binop_present(self, language_ir):
+    def test_bitwise_operators_in_binops(self, language_ir):
+        """IR must contain bitwise AND and a XOR-family operator."""
         lang, ir = language_ir
-        binops = find_all(ir, Opcode.BINOP)
+        operators = {inst.operands[0] for inst in find_all(ir, Opcode.BINOP)}
         assert (
-            len(binops) >= 1
-        ), f"[{lang}] expected at least one BINOP instruction, got {len(binops)}"
+            "&" in operators
+        ), f"[{lang}] expected '&' (bitwise AND) in BINOP operators, got {operators}"
+        # Lua uses '~' for XOR, other languages use '^'
+        has_xor = operators & {"^", "~"}
+        assert (
+            has_xor
+        ), f"[{lang}] expected XOR operator ('^' or '~') in BINOP operators, got {operators}"
 
 
 # ---------------------------------------------------------------------------
