@@ -144,6 +144,9 @@ class TreeSitterEmitContext:
     # Temporary context for the `field` keyword inside getter/setter bodies
     _accessor_backing_field: str = ""
 
+    # Default parameter resolution helper — lazily emitted
+    _resolve_default_emitted: bool = False
+
     # ── utility methods ──────────────────────────────────────────
 
     def fresh_reg(self) -> str:
