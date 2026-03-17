@@ -151,16 +151,16 @@ class TestTwoFerExecution:
 class TestTwoFerDefaultParameter:
     """Verify that calling two_fer() with no arguments uses the default parameter.
 
-    Currently xfail: solutions take name as a required argument because the VM
-    lacks crnoss-language default-parameter support.
+    Currently xfail for all languages except Python, which has default param
+    support wired into the frontend.
     """
 
-    @pytest.mark.xfail(
-        reason="VM does not support default parameters; solutions require explicit name",
-        strict=True,
-    )
     @pytest.mark.parametrize("lang", sorted(EXECUTABLE_LANGUAGES))
     def test_no_arg_uses_default(self, lang):
+        if lang != "python":
+            pytest.xfail(
+                "VM does not support default parameters for this language yet"
+            )
         fn_name = _function_name(lang)
         source = build_program(SOLUTIONS[lang], fn_name, [], lang)
         vm, _stats = execute_for_language(lang, source)
