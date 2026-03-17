@@ -116,6 +116,7 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
 
 
 def lower_scala_params(ctx: TreeSitterEmitContext, params_node) -> None:
+    param_index = 0
     for child in params_node.children:
         if child.type == NT.PARAMETER:
             name_node = child.child_by_field_name("name")
@@ -135,6 +136,16 @@ def lower_scala_params(ctx: TreeSitterEmitContext, params_node) -> None:
                     operands=[pname, f"%{ctx.reg_counter - 1}"],
                 )
                 ctx.seed_var_type(pname, type_hint)
+                default_value_node = child.child_by_field_name("default_value")
+                if default_value_node:
+                    from interpreter.frontends.common.default_params import (
+                        emit_default_param_guard,
+                    )
+
+                    emit_default_param_guard(
+                        ctx, pname, param_index, default_value_node
+                    )
+                param_index += 1
 
 
 def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> str:
