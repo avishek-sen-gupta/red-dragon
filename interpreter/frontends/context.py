@@ -138,6 +138,12 @@ class TreeSitterEmitContext:
     # Byref parameter tracking (C# out/ref/in)
     byref_params: set[str] = field(default_factory=set)
 
+    # Kotlin property accessors: class_name → {prop_name → {"get", "set"}}
+    property_accessors: dict[str, dict[str, set[str]]] = field(default_factory=dict)
+
+    # Temporary context for the `field` keyword inside getter/setter bodies
+    _accessor_backing_field: str = ""
+
     # ── utility methods ──────────────────────────────────────────
 
     def fresh_reg(self) -> str:
