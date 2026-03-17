@@ -129,7 +129,7 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
         return
     var_name = ctx.node_text(id_node)
     type_node = next((c for c in node.children if c.type == PascalNodeType.TYPE), None)
-    array_size = _pascal_array_size(ctx, type_node) if type_node else 0
+    array_size, elem_type = _pascal_array_info(ctx, type_node) if type_node else (0, "")
     if array_size > 0:
         size_reg = ctx.fresh_reg()
         ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(array_size)])
@@ -140,6 +140,9 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
             operands=["array", size_reg],
             node=node,
         )
+        record_types: set[str] = getattr(ctx, "_pascal_record_types", set())
+        if elem_type in record_types:
+            _populate_array_with_records(ctx, arr_reg, array_size, elem_type, node)
         ctx.emit(Opcode.DECL_VAR, operands=[var_name, arr_reg], node=node)
     else:
         type_name = _pascal_var_type_name(ctx, type_node) if type_node else ""
@@ -171,27 +174,58 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
             ctx._pascal_var_types = pascal_var_types
 
 
-def _pascal_array_size(ctx: TreeSitterEmitContext, type_node) -> int:
-    """Extract array size from a Pascal type node containing declArray."""
+def _populate_array_with_records(
+    ctx: TreeSitterEmitContext,
+    arr_reg: str,
+    size: int,
+    record_type: str,
+    node,
+) -> None:
+    """Pre-populate each slot of *arr_reg* with a fresh record instance."""
+    for i in range(size):
+        idx_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+        obj_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=obj_reg,
+            operands=[record_type],
+            node=node,
+        )
+        ctx.emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, obj_reg], node=node)
+
+
+def _pascal_array_info(ctx: TreeSitterEmitContext, type_node) -> tuple[int, str]:
+    """Extract (size, element_type_name) from a Pascal array type node.
+
+    Returns (0, "") if *type_node* does not contain a ``declArray``.
+    """
     decl_array = next(
         (c for c in type_node.children if c.type == PascalNodeType.DECL_ARRAY), None
     )
     if decl_array is None:
-        return 0
+        return 0, ""
     range_node = next(
         (c for c in decl_array.children if c.type == PascalNodeType.RANGE), None
     )
     if range_node is None:
-        return 0
+        return 0, ""
     nums = [c for c in range_node.children if c.type == PascalNodeType.LITERAL_NUMBER]
     if len(nums) < 2:
-        return 0
+        return 0, ""
     try:
         lo = int(ctx.node_text(nums[0]))
         hi = int(ctx.node_text(nums[1]))
-        return hi - lo + 1
+        size = hi - lo + 1
     except ValueError:
-        return 0
+        return 0, ""
+    elem_type_node = next(
+        (c for c in decl_array.children if c.type == PascalNodeType.TYPE), None
+    )
+    elem_type_name = (
+        _pascal_var_type_name(ctx, elem_type_node) if elem_type_node else ""
+    )
+    return size, elem_type_name
 
 
 def _pascal_var_type_name(ctx: TreeSitterEmitContext, type_node) -> str:
