@@ -454,8 +454,50 @@ def _lower_pascal_class_section(
 
 
 def _lower_pascal_method(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower a declProc inside a class -- stub, implemented in Task 2."""
-    pass
+    """Lower a declProc inside a class -- forward declaration with `this` injected."""
+    id_node = next(
+        (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
+    )
+    args_node = next(
+        (c for c in node.children if c.type == PascalNodeType.DECL_ARGS), None
+    )
+
+    func_name = ctx.node_text(id_node) if id_node else "__anon_method"
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+    end_label = ctx.fresh_label(f"end_{func_name}")
+
+    return_hint = extract_pascal_return_type(ctx, node)
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
+
+    # Inject `this` as first parameter
+    sym_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.SYMBOLIC,
+        result_reg=sym_reg,
+        operands=[f"{constants.PARAM_PREFIX}this"],
+        node=node,
+    )
+    ctx.emit(Opcode.DECL_VAR, operands=["this", f"%{ctx.reg_counter - 1}"])
+
+    if args_node:
+        _lower_pascal_params(ctx, args_node)
+
+    # Forward declarations have no body -- emit default return
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
+    )
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 def _lower_pascal_property(ctx, node, class_name, field_names) -> None:
