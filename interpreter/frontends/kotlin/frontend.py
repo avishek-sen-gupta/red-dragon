@@ -44,7 +44,7 @@ class KotlinFrontend(BaseFrontend):
 
     def _build_expr_dispatch(self) -> dict[str, Callable]:
         return {
-            KNT.SIMPLE_IDENTIFIER: common_expr.lower_identifier,
+            KNT.SIMPLE_IDENTIFIER: kotlin_expr.lower_kotlin_identifier,
             KNT.INTEGER_LITERAL: common_expr.lower_const_literal,
             KNT.LONG_LITERAL: common_expr.lower_const_literal,
             KNT.REAL_LITERAL: common_expr.lower_const_literal,
