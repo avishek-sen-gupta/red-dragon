@@ -6,6 +6,7 @@ from interpreter.frontends.common.default_params import (
     emit_resolve_default_func,
 )
 from interpreter.frontends.context import TreeSitterEmitContext, GrammarConstants
+from interpreter.frontends import get_deterministic_frontend
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.constants import Language
 from interpreter.ir import Opcode
@@ -71,3 +72,85 @@ class TestEmitResolveDefaultFunc:
         assert ctx._resolve_default_emitted is False
         emit_resolve_default_func(ctx)
         assert ctx._resolve_default_emitted is True
+
+
+def _parse_python(source: str) -> list:
+    """Parse Python source and return IR instructions."""
+    fe = get_deterministic_frontend(Language.PYTHON)
+    return fe.lower(source.encode())
+
+
+class TestPythonDefaultParamIR:
+    """Tests for Python frontend default parameter IR emission."""
+
+    def test_default_param_emits_resolve_call(self):
+        """def f(x='hello') should emit CALL_FUNCTION __resolve_default__."""
+        instructions = _parse_python("def f(x='hello'):\n    return x\nf()")
+        call_fns = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.CALL_FUNCTION
+            and "__resolve_default__" in str(i.operands[0])
+        ]
+        assert (
+            len(call_fns) >= 1
+        ), "Expected at least 1 CALL_FUNCTION __resolve_default__"
+
+    def test_default_param_emits_store_var(self):
+        """Default param guard should reassign the param via STORE_VAR."""
+        instructions = _parse_python("def f(x='hello'):\n    return x\nf()")
+        store_vars = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.STORE_VAR and i.operands[0] == "x"
+        ]
+        assert len(store_vars) >= 1, "Expected STORE_VAR x for default resolution"
+
+    def test_typed_default_param_emits_resolve_call(self):
+        """def f(x: int = 42) should also emit __resolve_default__."""
+        instructions = _parse_python("def f(x: int = 42):\n    return x\nf()")
+        call_fns = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.CALL_FUNCTION
+            and "__resolve_default__" in str(i.operands[0])
+        ]
+        assert len(call_fns) >= 1
+
+    def test_required_param_no_resolve(self):
+        """def f(x) should NOT emit __resolve_default__."""
+        instructions = _parse_python("def f(x):\n    return x\nf('a')")
+        call_fns = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.CALL_FUNCTION
+            and "__resolve_default__" in str(i.operands[0])
+        ]
+        assert len(call_fns) == 0
+
+    def test_mixed_params_correct_index(self):
+        """def f(a, b='x') — b should get param_index=1."""
+        instructions = _parse_python("def f(a, b='x'):\n    return b\nf('a')")
+        call_fns = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.CALL_FUNCTION
+            and "__resolve_default__" in str(i.operands[0])
+        ]
+        assert len(call_fns) == 1
+        # The param_index constant (1) should appear before the call
+        const_1s = [
+            i for i in instructions if i.opcode == Opcode.CONST and i.operands == [1]
+        ]
+        assert len(const_1s) >= 1, "Expected CONST 1 for param_index of b"
+
+    def test_lambda_default_param(self):
+        """lambda x='hi': x should emit __resolve_default__."""
+        instructions = _parse_python("f = lambda x='hi': x\nf()")
+        call_fns = [
+            i
+            for i in instructions
+            if i.opcode == Opcode.CALL_FUNCTION
+            and "__resolve_default__" in str(i.operands[0])
+        ]
+        assert len(call_fns) >= 1
