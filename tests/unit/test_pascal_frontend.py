@@ -1029,6 +1029,26 @@ end."""
             "FName" in inst.operands for inst in stores
         ), f"Expected STORE_FIELD for FName, got {[s.operands for s in stores]}"
 
+    def test_method_inside_class_has_this_param(self):
+        """declProc inside declClass should emit SYMBOLIC param:this."""
+        source = """\
+program M;
+type
+  TFoo = class
+  public
+    procedure DoSomething;
+  end;
+begin
+end."""
+        instructions = _parse_pascal(source)
+        symbolics = _find_all(instructions, Opcode.SYMBOLIC)
+        # Should have param:this from the method (and from __init__)
+        this_params = [s for s in symbolics if "param:this" in str(s.operands)]
+        # At least 2: one from __init__, one from DoSomething
+        assert (
+            len(this_params) >= 2
+        ), f"Expected >= 2 param:this (init + method), got {len(this_params)}"
+
     def test_class_with_multiple_fields_emits_store_field_per_field(self):
         source = """\
 program M;
