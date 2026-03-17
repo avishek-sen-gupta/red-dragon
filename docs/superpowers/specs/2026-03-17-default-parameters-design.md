@@ -20,7 +20,7 @@ Emit a shared `__resolve_default__` IR function in the program prelude. For each
 
 ### `__resolve_default__` IR function
 
-A small IR function emitted once per program (by the prelude or first frontend that needs it):
+A small IR function emitted once per program on first use (lazily by `emit_default_param_guard`):
 
 ```
 BRANCH end___resolve_default__
@@ -45,8 +45,8 @@ LABEL func___resolve_default__
   LOAD_VAR %10 default_value
   RETURN %10
 LABEL end___resolve_default__
-CONST %11 <func_ref>
-DECL_VAR __resolve_default__ %11
+emit_func_ref("__resolve_default__", func___resolve_default__)
+DECL_VAR __resolve_default__ <func_ref_reg>
 ```
 
 ### Per-default-parameter emission
@@ -80,23 +80,29 @@ New file: `interpreter/frontends/common/default_params.py`
 
 Two public functions:
 
-1. **`emit_resolve_default_func(ctx)`** — Emits the `__resolve_default__` IR function. Called once in the program prelude. Uses a guard (`ctx._resolve_default_emitted`) to prevent double emission.
+1. **`emit_resolve_default_func(ctx)`** — Emits the `__resolve_default__` IR function using `emit_func_ref` (consistent with the codebase's `FuncRef` pattern). Called lazily from `emit_default_param_guard` on first use, guarded by `hasattr(ctx, '_resolve_default_emitted')`. Lazy emission avoids modifying all frontend preludes — Rust and Pascal override `_emit_prelude` without calling `super()`.
 
-2. **`emit_default_param_guard(ctx, param_name, param_index, default_value_node)`** — Emits the 5-instruction guard for one default parameter. Evaluates `default_value_node` via `ctx.lower_expr()`, then calls `__resolve_default__`. Reassigns `param_name` with the result via `STORE_VAR`.
+2. **`emit_default_param_guard(ctx, param_name, param_index, default_value_node)`** — Emits the 5-instruction guard for one default parameter. Evaluates `default_value_node` via `ctx.lower_expr()`, then calls `__resolve_default__`. Reassigns `param_name` with the result via `STORE_VAR`. The `param_index` is the absolute positional index including any required params that precede this default param (e.g., in `def f(a, b="x")`, `b` has `param_index=1`).
 
 ### Default value evaluation semantics
 
 The default value expression is always evaluated (even when the caller provides the argument). The result is discarded if the argument was provided. This matches JavaScript, Kotlin, and Scala semantics. It diverges from Python's evaluate-once semantics for mutable defaults, but this is an acceptable simplification — the two-fer tests and most real-world defaults use literals or simple expressions where always-evaluate is indistinguishable.
 
+Only literal and simple expressions are in scope for this iteration (string literals, numeric literals, simple calls like `list()`). Complex default expressions referencing forward-declared functions are not targeted.
+
 ### Python frontend wiring
 
-In `interpreter/frontends/python/expressions.py`, the `_lower_python_param` function currently handles `default_parameter` and `typed_default_parameter` by extracting only the parameter name. After this change:
+In `interpreter/frontends/python/expressions.py`, the `_lower_python_param` function (line 464) currently handles `default_parameter` and `typed_default_parameter` by extracting only the parameter name. After this change:
 
-1. Extract the default value expression node (third named child after `=` in `default_parameter`, or the child after `=` in `typed_default_parameter`)
+1. Extract the default value expression node (the named child after `=` — e.g., `string`, `integer`, or `call` node)
 2. Track the parameter's positional index (count of parameters seen so far)
 3. After emitting the normal `SYMBOLIC` + `DECL_VAR`, call `emit_default_param_guard(ctx, pname, param_index, default_value_node)`
 
-The Python frontend's `_lower_python_params` will need to pass a parameter index counter through to `_lower_python_param`.
+The call sites that iterate parameters are:
+- `_lower_python_param` called from the `for child in params_node.children` loop in `_lower_python_function_def` (regular functions)
+- Lambda parameter lowering in `_lower_lambda_expr` (line 440-442)
+
+Both call sites need a parameter index counter threaded through. The simplest approach: modify the loop that calls `_lower_python_param` to pass an `enumerate` index.
 
 ### Two-fer test changes
 
@@ -107,7 +113,7 @@ The Python frontend's `_lower_python_params` will need to pass a parameter index
    - In `TestTwoFerDefaultParameter`, change the xfail for Python from `strict=True` to removing it entirely (Python test should pass)
    - Keep xfail for all other 14 languages (they still need frontend wiring)
 
-3. **Update `_case_args`**: The workaround that substitutes `"you"` for `None` stays in place for non-Python languages. For Python, the `no name given` case should call `two_fer()` with no arguments.
+3. **`_case_args` unchanged**: The workaround in `_case_args` (substituting `"you"` for `None`) only affects `TestTwoFerExecution`, not `TestTwoFerDefaultParameter`. The default-parameter test class already calls with `[]` args (line 165), so no `_case_args` change is needed.
 
 ### What this does NOT change
 
@@ -128,4 +134,4 @@ The Python frontend's `_lower_python_params` will need to pass a parameter index
 
 ## Deferred work (one issue per language)
 
-File issues for: JavaScript, TypeScript, Ruby, Go, Java, C#, C++, Kotlin, Scala, PHP, Rust, Lua, Pascal, C (where applicable — C has no default params).
+File issues for: JavaScript, TypeScript, Ruby, Go, Java, C#, C++, Kotlin, Scala, PHP, Rust, Lua, Pascal. (C excluded — language has no default parameters.)
