@@ -5,6 +5,8 @@ Extracted from BaseFrontend: function_def, params, class_def, var_declaration.
 
 from __future__ import annotations
 
+from typing import Callable
+
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.node_types import CommonNodeType
 
@@ -16,48 +18,23 @@ from interpreter.frontends.type_extraction import (
 )
 
 
-def lower_function_def(ctx: TreeSitterEmitContext, node) -> None:
-    name_node = node.child_by_field_name(ctx.constants.func_name_field)
-    params_node = node.child_by_field_name(ctx.constants.func_params_field)
-    body_node = node.child_by_field_name(ctx.constants.func_body_field)
-
-    func_name = ctx.node_text(name_node)
-    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
-    end_label = ctx.fresh_label(f"end_{func_name}")
-
-    raw_return = extract_type_from_field(ctx, node, "return_type")
-    return_hint = normalize_type_hint(raw_return, ctx.type_map)
-
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
-    ctx.seed_func_return_type(func_label, return_hint)
-
-    if params_node:
-        lower_params(ctx, params_node)
-
-    if body_node:
-        ctx.lower_block(body_node)
-
-    # Implicit return at end of function
-    none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
+def extract_param_name(ctx: TreeSitterEmitContext, child) -> str | None:
+    """Extract parameter name from a parameter node."""
+    if child.type == CommonNodeType.IDENTIFIER:
+        return ctx.node_text(child)
+    # Try common field names
+    for field in ("name", "pattern"):
+        name_node = child.child_by_field_name(field)
+        if name_node:
+            return ctx.node_text(name_node)
+    # Try first identifier child
+    id_node = next(
+        (sub for sub in child.children if sub.type == CommonNodeType.IDENTIFIER),
+        None,
     )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
-
-    ctx.emit(Opcode.LABEL, label=end_label)
-
-    func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
-
-
-def lower_params(ctx: TreeSitterEmitContext, params_node) -> None:
-    """Lower function parameters. Override for language-specific param shapes."""
-    for child in params_node.children:
-        lower_param(ctx, child)
+    if id_node:
+        return ctx.node_text(id_node)
+    return None
 
 
 def lower_param(ctx: TreeSitterEmitContext, child) -> None:
@@ -91,23 +68,52 @@ def lower_param(ctx: TreeSitterEmitContext, child) -> None:
     ctx.seed_var_type(pname, type_hint)
 
 
-def extract_param_name(ctx: TreeSitterEmitContext, child) -> str | None:
-    """Extract parameter name from a parameter node."""
-    if child.type == CommonNodeType.IDENTIFIER:
-        return ctx.node_text(child)
-    # Try common field names
-    for field in ("name", "pattern"):
-        name_node = child.child_by_field_name(field)
-        if name_node:
-            return ctx.node_text(name_node)
-    # Try first identifier child
-    id_node = next(
-        (sub for sub in child.children if sub.type == CommonNodeType.IDENTIFIER),
-        None,
+def lower_params(ctx: TreeSitterEmitContext, params_node) -> None:
+    """Lower function parameters. Override for language-specific param shapes."""
+    for child in params_node.children:
+        lower_param(ctx, child)
+
+
+def lower_function_def(
+    ctx: TreeSitterEmitContext,
+    node,
+    params_lowerer: Callable = lower_params,
+) -> None:
+    name_node = node.child_by_field_name(ctx.constants.func_name_field)
+    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    body_node = node.child_by_field_name(ctx.constants.func_body_field)
+
+    func_name = ctx.node_text(name_node)
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+    end_label = ctx.fresh_label(f"end_{func_name}")
+
+    raw_return = extract_type_from_field(ctx, node, "return_type")
+    return_hint = normalize_type_hint(raw_return, ctx.type_map)
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.seed_func_return_type(func_label, return_hint)
+
+    if params_node:
+        params_lowerer(ctx, params_node)
+
+    if body_node:
+        ctx.lower_block(body_node)
+
+    # Implicit return at end of function
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
     )
-    if id_node:
-        return ctx.node_text(id_node)
-    return None
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
 FieldInit = tuple  # (field_name: str, value_node)
