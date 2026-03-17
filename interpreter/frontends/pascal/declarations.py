@@ -293,11 +293,12 @@ def lower_pascal_proc(ctx: TreeSitterEmitContext, node) -> None:
 
 def _lower_pascal_params(ctx: TreeSitterEmitContext, args_node) -> None:
     """Lower declArgs -- contains declArg children with identifier and typeref."""
+    param_index = 0
     for child in args_node.children:
         if child.type in KEYWORD_NOISE:
             continue
         if child.type == PascalNodeType.DECL_ARG:
-            _lower_pascal_single_param(ctx, child)
+            param_index = _lower_pascal_single_param(ctx, child, param_index)
         elif child.type == PascalNodeType.IDENTIFIER:
             pname = ctx.node_text(child)
             ctx.emit(
@@ -310,19 +311,31 @@ def _lower_pascal_params(ctx: TreeSitterEmitContext, args_node) -> None:
                 Opcode.DECL_VAR,
                 operands=[pname, f"%{ctx.reg_counter - 1}"],
             )
+            param_index += 1
 
 
-def _lower_pascal_single_param(ctx: TreeSitterEmitContext, child) -> None:
+def _lower_pascal_single_param(
+    ctx: TreeSitterEmitContext, child, param_index: int
+) -> int:
     """Lower a single declArg -- extract all identifier names.
 
     Pascal allows multiple identifiers sharing a type in one declArg,
     e.g. ``a, b: integer``.  Only direct ``identifier`` children are
     parameter names; the type identifier is nested inside ``type > typeref``.
+
+    Returns the updated param_index after processing all identifiers.
     """
     type_name = _pascal_var_type_name(
         ctx, next((c for c in child.children if c.type == PascalNodeType.TYPE), None)
     )
     type_hint = normalize_type_hint(type_name.lower(), ctx.type_map)
+    # Extract default value if present (defaultValue > kEq, value_expr)
+    default_node = next((c for c in child.children if c.type == "defaultValue"), None)
+    default_value_node = (
+        next((c for c in default_node.children if c.type != "kEq"), None)
+        if default_node
+        else None
+    )
     for id_node in child.children:
         if id_node.type != PascalNodeType.IDENTIFIER:
             continue
@@ -341,11 +354,19 @@ def _lower_pascal_single_param(ctx: TreeSitterEmitContext, child) -> None:
             operands=[pname, f"%{ctx.reg_counter - 1}"],
         )
         ctx.seed_var_type(pname, type_hint)
+        if default_value_node:
+            from interpreter.frontends.common.default_params import (
+                emit_default_param_guard,
+            )
+
+            emit_default_param_guard(ctx, pname, param_index, default_value_node)
         record_types: set[str] = getattr(ctx, "_pascal_record_types", set())
         pascal_var_types: dict = getattr(ctx, "_pascal_var_types", {})
         if type_name in record_types:
             pascal_var_types[pname] = type_name
             ctx._pascal_var_types = pascal_var_types
+        param_index += 1
+    return param_index
 
 
 def lower_pascal_decl_consts(ctx: TreeSitterEmitContext, node) -> None:
