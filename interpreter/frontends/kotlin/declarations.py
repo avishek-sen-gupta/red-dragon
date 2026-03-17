@@ -16,6 +16,7 @@ from interpreter.frontends.common.declarations import (
     emit_synthetic_init,
 )
 from interpreter.type_expr import ScalarType
+from interpreter.frontends.common.property_accessors import register_property_accessor
 
 # -- property declaration ----------------------------------------------
 
@@ -269,6 +270,104 @@ def _collect_kotlin_field_init(ctx: TreeSitterEmitContext, node) -> FieldInit | 
     return (name, value_node)
 
 
+def _emit_synthetic_getter(
+    ctx: TreeSitterEmitContext, prop_name: str, getter_node
+) -> None:
+    """Emit a synthetic __get_<prop>__ method from a getter node."""
+    func_name = f"__get_{prop_name}__"
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+    end_label = ctx.fresh_label(f"end_{func_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=getter_node)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    _emit_this_param(ctx)
+
+    prev_backing = ctx._accessor_backing_field
+    ctx._accessor_backing_field = prop_name
+
+    body_node = next(
+        (c for c in getter_node.children if c.type == KNT.FUNCTION_BODY), None
+    )
+    expr_reg = ""
+    if body_node:
+        expr_reg = _lower_function_body(ctx, body_node)
+
+    ctx._accessor_backing_field = prev_backing
+
+    if expr_reg:
+        ctx.emit(Opcode.RETURN, operands=[expr_reg])
+    else:
+        none_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[ctx.constants.default_return_value],
+        )
+        ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+
+
+def _emit_synthetic_setter(
+    ctx: TreeSitterEmitContext, prop_name: str, setter_node
+) -> None:
+    """Emit a synthetic __set_<prop>__ method from a setter node."""
+    func_name = f"__set_{prop_name}__"
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
+    end_label = ctx.fresh_label(f"end_{func_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=setter_node)
+    ctx.emit(Opcode.LABEL, label=func_label)
+    _emit_this_param(ctx)
+
+    param_name = "value"
+    param_node = next(
+        (c for c in setter_node.children if c.type == KNT.PARAMETER_WITH_OPTIONAL_TYPE),
+        None,
+    )
+    if param_node:
+        id_node = next(
+            (c for c in param_node.children if c.type == KNT.SIMPLE_IDENTIFIER), None
+        )
+        if id_node:
+            param_name = ctx.node_text(id_node)
+
+    param_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.SYMBOLIC,
+        result_reg=param_reg,
+        operands=[f"{constants.PARAM_PREFIX}{param_name}"],
+    )
+    ctx.emit(Opcode.DECL_VAR, operands=[param_name, param_reg])
+
+    prev_backing = ctx._accessor_backing_field
+    ctx._accessor_backing_field = prop_name
+
+    body_node = next(
+        (c for c in setter_node.children if c.type == KNT.FUNCTION_BODY), None
+    )
+    if body_node:
+        _lower_function_body(ctx, body_node)
+
+    ctx._accessor_backing_field = prev_backing
+
+    none_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST,
+        result_reg=none_reg,
+        operands=[ctx.constants.default_return_value],
+    )
+    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+    func_reg = ctx.fresh_reg()
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+
+
 def _lower_class_body_with_companions(
     ctx: TreeSitterEmitContext, node, primary_ctor_params: list[str] = []
 ) -> None:
@@ -276,10 +375,10 @@ def _lower_class_body_with_companions(
 
     Collects field initializers from property declarations and emits
     a synthetic ``__init__`` constructor when field inits are present.
+    Getter/setter sibling nodes are paired with the preceding property_declaration.
     """
     named_children = [c for c in node.children if c.is_named]
 
-    # Collect field initializers from property declarations
     field_inits: list[FieldInit] = [
         init
         for c in named_children
@@ -288,7 +387,28 @@ def _lower_class_body_with_companions(
         if init is not None
     ]
 
+    last_property_name = ""
     for child in named_children:
+        if child.type == KNT.PROPERTY_DECLARATION:
+            var_decl = next(
+                (c for c in child.children if c.type == KNT.VARIABLE_DECLARATION), None
+            )
+            last_property_name = (
+                _extract_property_name(ctx, var_decl) if var_decl else ""
+            )
+        elif child.type == KNT.GETTER and last_property_name:
+            _emit_synthetic_getter(ctx, last_property_name, child)
+            register_property_accessor(
+                ctx, ctx._current_class_name, last_property_name, "get"
+            )
+            continue
+        elif child.type == KNT.SETTER and last_property_name:
+            _emit_synthetic_setter(ctx, last_property_name, child)
+            register_property_accessor(
+                ctx, ctx._current_class_name, last_property_name, "set"
+            )
+            continue
+
         if child.type == KNT.COMPANION_OBJECT:
             _lower_companion_object(ctx, child)
         elif child.type == KNT.FUNCTION_DECLARATION:
@@ -299,7 +419,7 @@ def _lower_class_body_with_companions(
             child.type == KNT.PROPERTY_DECLARATION
             and _collect_kotlin_field_init(ctx, child) is not None
         ):
-            continue  # Skip — will be emitted via synthetic __init__
+            continue
         else:
             ctx.lower_stmt(child)
 
