@@ -58,7 +58,7 @@ String result = "val:" + 3.14;
 String result = "flag:" + true;
 """
         local_vars = _run_java(source)
-        assert local_vars["result"] == "flag:True"
+        assert local_vars["result"] == "flag:true"
 
     def test_string_concat_no_symbolic(self):
         """String + int should NOT produce SymbolicValue anymore."""

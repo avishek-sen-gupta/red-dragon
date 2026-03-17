@@ -135,7 +135,7 @@ class TestJavaBinopCoercion:
         rhs = typed(True, scalar("Bool"))
         a, b = self.coercion.coerce("+", lhs, rhs)
         assert a.value == "flag:"
-        assert b.value == "True"
+        assert b.value == "true"
         assert b.type == scalar("String")
 
     def test_coerce_string_plus_string_no_change(self):
