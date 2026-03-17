@@ -745,9 +745,21 @@ def lower_csharp_store_target(
 # -- shared C# param helper (used by expressions + declarations) ------
 
 
+def _extract_csharp_default_value(child) -> object:
+    """Extract the default value node from a C# parameter (child after '=')."""
+    found_eq = False
+    for c in child.children:
+        if found_eq:
+            return c
+        if c.type == "=" and c.child_count == 0:
+            found_eq = True
+    return None
+
+
 def lower_csharp_params(ctx: TreeSitterEmitContext, params_node) -> None:
     """Lower C# formal parameters (parameter nodes)."""
     ctx.byref_params.clear()
+    param_index = 0
     for child in params_node.children:
         if child.type == NT.PARAMETER:
             name_node = child.child_by_field_name("name")
@@ -780,6 +792,16 @@ def lower_csharp_params(ctx: TreeSitterEmitContext, params_node) -> None:
                     operands=[pname, param_reg],
                 )
                 ctx.seed_var_type(pname, type_hint)
+                default_value_node = _extract_csharp_default_value(child)
+                if default_value_node:
+                    from interpreter.frontends.common.default_params import (
+                        emit_default_param_guard,
+                    )
+
+                    emit_default_param_guard(
+                        ctx, pname, param_index, default_value_node
+                    )
+                param_index += 1
 
 
 # -- P1 gap handlers ------------------------------------------------------
