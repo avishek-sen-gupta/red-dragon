@@ -1,4 +1,4 @@
-string twoFer(string name) {
+string twoFer(string name = "you") {
     return "One for " + name + ", one for me.";
 }
 
