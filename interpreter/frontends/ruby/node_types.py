@@ -118,6 +118,10 @@ class RubyNodeType:
     BEGIN_BLOCK = "begin_block"
     END_BLOCK = "end_block"
 
+    # ── Parameters ────────────────────────────────────────────────
+    OPTIONAL_PARAMETER = "optional_parameter"
+    METHOD_PARAMETERS = "method_parameters"
+
     # ── Structural ───────────────────────────────────────────────────
     PROGRAM = "program"
     BODY_STATEMENT = "body_statement"

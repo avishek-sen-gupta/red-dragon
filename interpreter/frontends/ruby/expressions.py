@@ -605,6 +605,7 @@ def lower_ruby_block(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_ruby_params(ctx: TreeSitterEmitContext, params_node) -> None:
     """Lower Ruby function/block parameters."""
+    param_index = 0
     for child in params_node.children:
         if child.type in (
             RubyNodeType.OPEN_PAREN,
@@ -613,8 +614,13 @@ def lower_ruby_params(ctx: TreeSitterEmitContext, params_node) -> None:
             RubyNodeType.PIPE,
         ):
             continue
-        pname = ctx.node_text(child) if child.type == RubyNodeType.IDENTIFIER else None
-        if pname is None:
+        default_value_node = None
+        if child.type == RubyNodeType.OPTIONAL_PARAMETER:
+            pname = ctx.node_text(child.children[0])
+            default_value_node = child.children[-1]
+        elif child.type == RubyNodeType.IDENTIFIER:
+            pname = ctx.node_text(child)
+        else:
             pname = _extract_param_name(ctx, child)
         if pname is None:
             continue
@@ -628,6 +634,13 @@ def lower_ruby_params(ctx: TreeSitterEmitContext, params_node) -> None:
             Opcode.DECL_VAR,
             operands=[pname, f"%{ctx.reg_counter - 1}"],
         )
+        if default_value_node is not None:
+            from interpreter.frontends.common.default_params import (
+                emit_default_param_guard,
+            )
+
+            emit_default_param_guard(ctx, pname, param_index, default_value_node)
+        param_index += 1
 
 
 def _extract_param_name(ctx: TreeSitterEmitContext, child) -> str | None:
