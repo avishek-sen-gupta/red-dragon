@@ -578,6 +578,43 @@ def _find_method_missing(
     return None
 
 
+def _resolve_method_delegation_target(
+    addr: str,
+    method_name: str,
+    vm: VMState,
+    registry: FunctionRegistry,
+    cfg: CFG,
+) -> tuple[str, TypedValue] | None:
+    """Follow __boxed__ delegation chain to find an inner object that owns *method_name*.
+
+    Returns (inner_addr, inner_typed_value) for the first object whose type
+    has *method_name* in the class method registry, or None if the chain is
+    exhausted without finding one.
+    """
+    current_addr = addr
+    visited: set[str] = set()
+    while current_addr and current_addr in vm.heap and current_addr not in visited:
+        visited.add(current_addr)
+        heap_obj = vm.heap[current_addr]
+        # Only follow delegation if this object has __method_missing__
+        if _find_method_missing(heap_obj, registry, cfg) is None:
+            return None
+        # Follow the __boxed__ field to the inner object
+        if constants.BOXED_FIELD not in heap_obj.fields:
+            return None
+        inner_tv = heap_obj.fields[constants.BOXED_FIELD]
+        inner_addr = _heap_addr(inner_tv.value)
+        if not inner_addr or inner_addr not in vm.heap:
+            return None
+        inner_type = str(vm.heap[inner_addr].type_hint or "")
+        inner_methods = registry.class_methods.get(inner_type, {})
+        if method_name in inner_methods:
+            return (inner_addr, inner_tv)
+        # Inner object might itself be a Box — continue the chain
+        current_addr = inner_addr
+    return None
+
+
 def _handle_load_field(
     inst: IRInstruction,
     vm: VMState,
@@ -1550,28 +1587,39 @@ def _handle_call_method(
                 func_label = candidate
                 break
     if not func_label or func_label not in cfg.blocks:
-        # Known type but unknown method — check __method_missing__ first
-        if addr and addr in vm.heap:
-            heap_obj = vm.heap[addr]
-            mm_ref = _find_method_missing(heap_obj, registry, cfg)
-            if mm_ref is not None:
-                mm_args = [
-                    obj_val,
-                    typed(method_name, scalar("String")),
-                ] + list(args)
-                return _try_user_function_call(
-                    mm_ref,
-                    mm_args,
-                    inst,
-                    vm,
-                    cfg,
-                    registry,
-                    current_label,
+        # Known type but unknown method — follow __method_missing__ delegation chain
+        if addr:
+            delegation = _resolve_method_delegation_target(
+                addr, method_name, vm, registry, cfg
+            )
+            if delegation is not None:
+                inner_addr, inner_tv = delegation
+                inner_type = str(vm.heap[inner_addr].type_hint or "")
+                inner_methods = registry.class_methods.get(inner_type, {})
+                inner_labels = inner_methods[method_name]
+                inner_sigs = type_env.method_signatures.get(scalar(inner_type), {}).get(
+                    method_name, []
                 )
-        # No __method_missing__ — resolve via configured strategy
-        return call_resolver.resolve_method(
-            type_hint, method_name, [a.value for a in args], inst, vm
-        )
+                if len(inner_sigs) != len(inner_labels):
+                    logger.warning(
+                        "sig/label count mismatch for %s.%s",
+                        inner_type,
+                        method_name,
+                    )
+                    target_label = inner_labels[0]
+                else:
+                    winner = overload_resolver.resolve(inner_sigs, args)
+                    target_label = inner_labels[winner]
+                if target_label in cfg.blocks:
+                    func_label = target_label
+                    # Re-bind obj_val to the inner object for correct 'self'
+                    obj_val = inner_tv
+                    addr = inner_addr
+        if not func_label or func_label not in cfg.blocks:
+            # No delegation target found — resolve via configured strategy
+            return call_resolver.resolve_method(
+                type_hint, method_name, [a.value for a in args], inst, vm
+            )
 
     params = registry.func_params.get(func_label, [])
     new_vars: dict[str, Any] = {}
