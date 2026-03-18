@@ -86,6 +86,9 @@ DEFAULT_EXCEPTION_TYPE = "Exception"
 PARAM_SELF = "self"
 PARAM_THIS = "this"
 PARAM_PHP_THIS = "$this"
+
+METHOD_MISSING = "__method_missing__"
+BOXED_FIELD = "__boxed__"
 SELF_PARAM_NAMES: frozenset[str] = frozenset({PARAM_SELF, PARAM_THIS, PARAM_PHP_THIS})
 
 
