@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from interpreter.constants import Language
 from interpreter.run import run
+from interpreter.type_expr import scalar
 from interpreter.typed_value import unwrap_locals
+from interpreter.vm_types import SymbolicValue
 
 
 def _run_rust(source: str, max_steps: int = 200):
@@ -12,10 +14,15 @@ def _run_rust(source: str, max_steps: int = 200):
     return vm, unwrap_locals(vm.call_stack[0].local_vars)
 
 
+def _typed_locals(vm):
+    """Return raw TypedValue dict (not unwrapped) for type assertions."""
+    return vm.call_stack[0].local_vars
+
+
 class TestBoxFieldDelegation:
     def test_box_field_access_delegates_to_inner(self):
         """box_val.field delegates to inner object's field via __method_missing__."""
-        _, local_vars = _run_rust(
+        vm, local_vars = _run_rust(
             """\
 struct Point { x: i32, y: i32 }
 let p = Point { x: 10, y: 20 };
@@ -25,10 +32,13 @@ let answer = b.x;
             max_steps=500,
         )
         assert local_vars["answer"] == 10
+        assert _typed_locals(vm)["answer"].type == scalar("Int")
+        assert vm.heap[local_vars["b"]].type_hint == "Box"
+        assert vm.heap[local_vars["p"]].type_hint == "Point"
 
     def test_box_explicit_deref(self):
         """*box_val returns the inner value via LOAD_FIELD '__boxed__'."""
-        _, local_vars = _run_rust(
+        vm, local_vars = _run_rust(
             """\
 struct Point { x: i32, y: i32 }
 let p = Point { x: 10, y: 20 };
@@ -39,12 +49,15 @@ let answer = inner.x;
             max_steps=500,
         )
         assert local_vars["answer"] == 10
+        assert _typed_locals(vm)["answer"].type == scalar("Int")
+        # *b dereferences to the inner Point heap address
+        assert vm.heap[local_vars["inner"]].type_hint == "Point"
 
 
 class TestBoxMultiLevel:
     def test_double_box_field_access(self):
         """Box<Box<T>> chains __method_missing__ through two levels."""
-        _, local_vars = _run_rust(
+        vm, local_vars = _run_rust(
             """\
 struct Point { x: i32 }
 let p = Point { x: 42 };
@@ -55,12 +68,15 @@ let answer = b2.x;
             max_steps=600,
         )
         assert local_vars["answer"] == 42
+        assert _typed_locals(vm)["answer"].type == scalar("Int")
+        assert vm.heap[local_vars["b1"]].type_hint == "Box"
+        assert vm.heap[local_vars["b2"]].type_hint == "Box"
 
 
 class TestBoxMethodDelegation:
     def test_box_method_call_delegates_to_inner(self):
         """box_val.method() delegates to inner object's method via __method_missing__."""
-        _, local_vars = _run_rust(
+        vm, local_vars = _run_rust(
             """\
 struct Counter { count: i32 }
 
@@ -77,12 +93,15 @@ let answer = b.get_count();
             max_steps=600,
         )
         assert local_vars["answer"] == 42
+        assert _typed_locals(vm)["answer"].type == scalar("Int")
+        assert vm.heap[local_vars["b"]].type_hint == "Box"
+        assert vm.heap[local_vars["c"]].type_hint == "Counter"
 
 
 class TestBoxMultiLevelMethodDelegation:
     def test_double_box_method_call(self):
         """Box<Box<Counter>> chains method delegation through two levels."""
-        _, local_vars = _run_rust(
+        vm, local_vars = _run_rust(
             """\
 struct Counter { count: i32 }
 
@@ -100,12 +119,14 @@ let answer = b2.get_count();
             max_steps=800,
         )
         assert local_vars["answer"] == 77
+        assert _typed_locals(vm)["answer"].type == scalar("Int")
+        assert vm.heap[local_vars["b2"]].type_hint == "Box"
 
 
 class TestBoxChainedDeref:
     def test_chained_field_access_in_expression(self):
         """b.x + b.y — two auto-derefs in one arithmetic expression."""
-        _, local_vars = _run_rust(
+        vm, local_vars = _run_rust(
             """\
 struct Point { x: i32, y: i32 }
 let p = Point { x: 3, y: 7 };
@@ -115,10 +136,11 @@ let answer = b.x + b.y;
             max_steps=600,
         )
         assert local_vars["answer"] == 10
+        assert _typed_locals(vm)["answer"].type == scalar("Int")
 
     def test_nested_struct_field_through_box(self):
         """tree.left.value — Box in a struct field, then access inner field."""
-        _, local_vars = _run_rust(
+        vm, local_vars = _run_rust(
             """\
 struct Node { value: i32 }
 struct Tree { left: Box<Node> }
@@ -130,13 +152,13 @@ let answer = boxed_node.value;
             max_steps=600,
         )
         assert local_vars["answer"] == 55
+        assert _typed_locals(vm)["answer"].type == scalar("Int")
+        assert vm.heap[local_vars["t"]].type_hint == "Tree"
 
 
 class TestBoxNegativeCases:
     def test_missing_field_on_inner_returns_symbolic(self):
         """Accessing a field that doesn't exist on the inner struct produces symbolic, not crash."""
-        from interpreter.vm_types import SymbolicValue
-
         vm, local_vars = _run_rust(
             """\
 struct Point { x: i32 }
@@ -147,11 +169,10 @@ let answer = b.nonexistent;
             max_steps=500,
         )
         assert isinstance(local_vars["answer"], SymbolicValue)
+        assert vm.heap[local_vars["b"]].type_hint == "Box"
 
     def test_box_primitive_field_access_returns_symbolic(self):
         """Box::new(42) — accessing a field on a boxed primitive returns symbolic."""
-        from interpreter.vm_types import SymbolicValue
-
         vm, local_vars = _run_rust(
             """\
 let b = Box::new(42);
@@ -160,12 +181,13 @@ let answer = b.x;
             max_steps=500,
         )
         assert isinstance(local_vars["answer"], SymbolicValue)
+        assert vm.heap[local_vars["b"]].type_hint == "Box"
 
 
 class TestBoxOptionInteraction:
     def test_some_box_unwrap_field_access(self):
         """Some(Box::new(node)).unwrap().field works via __method_missing__."""
-        _, local_vars = _run_rust(
+        vm, local_vars = _run_rust(
             """\
 struct Node { value: i32 }
 let n = Node { value: 99 };
@@ -176,3 +198,4 @@ let answer = inner.value;
             max_steps=600,
         )
         assert local_vars["answer"] == 99
+        assert _typed_locals(vm)["answer"].type == scalar("Int")
