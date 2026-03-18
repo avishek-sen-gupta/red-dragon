@@ -6,6 +6,8 @@ through the full parse -> lower -> execute pipeline.
 
 from __future__ import annotations
 
+import pytest
+
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.typed_value import unwrap_locals
@@ -27,6 +29,7 @@ local r = t:greet()
 """)
         assert "r" in local_vars
 
+    @pytest.mark.xfail(reason="Lua colon-call method returns produce symbolic values")
     def test_method_call_with_args_executes(self):
         """obj:method(arg) should pass arguments correctly."""
         _, local_vars = _run_lua("""\
@@ -34,7 +37,7 @@ local t = {}
 t.add = function(self, x) return x end
 local r = t:add(42)
 """)
-        assert "r" in local_vars
+        assert local_vars["r"] == 42
 
     def test_method_call_chained(self):
         """obj:method1():method2() chained call should not crash."""
