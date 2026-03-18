@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from interpreter.frontends.python import PythonFrontend
 from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
+from interpreter.ir import (
+    NO_SOURCE_LOCATION,
+    IRInstruction,
+    Opcode,
+    SourceLocation,
+    SpreadArguments,
+)
 
 
 def _parse_python(source: str) -> list[IRInstruction]:
@@ -1213,11 +1219,16 @@ class TestPythonListSplat:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("list_splat" in str(inst.operands) for inst in symbolics)
 
-    def test_list_splat_call_function(self):
+    def test_list_splat_produces_spread_arguments(self):
         source = "x = [*items, 1]"
         instructions = _parse_python(source)
-        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
-        assert any("spread" in inst.operands for inst in calls)
+        spread_ops = [
+            op
+            for inst in instructions
+            for op in inst.operands
+            if isinstance(op, SpreadArguments)
+        ]
+        assert len(spread_ops) >= 1
 
     def test_dict_splat_no_symbolic(self):
         source = "x = {**defaults, 'key': 1}"
