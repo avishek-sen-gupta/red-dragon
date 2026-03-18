@@ -1,54 +1,76 @@
-"""Unit tests for the spread builtin and argument flattening."""
+"""Unit tests for SpreadArguments expansion in _resolve_call_args."""
 
 from __future__ import annotations
 
-from interpreter.builtins import Builtins
+from interpreter.executor import _resolve_call_args
+from interpreter.ir import SpreadArguments
 from interpreter.vm import VMState
-from interpreter.vm_types import BuiltinResult, HeapObject, Pointer
+from interpreter.vm_types import HeapObject, Pointer, StackFrame
 from interpreter.typed_value import typed, typed_from_runtime
 from interpreter.type_expr import scalar
 from interpreter.constants import TypeName
 
 
-class TestSpreadBuiltin:
+class TestResolveCallArgs:
     def _make_vm_with_array(self, elements: list) -> tuple[VMState, Pointer]:
-        """Create a VM with a heap array containing the given elements."""
+        """Create a VM with a heap array and a frame holding a register pointing to it."""
         vm = VMState()
         fields = {
             str(i): typed(e, scalar(TypeName.INT)) for i, e in enumerate(elements)
         }
         fields["length"] = typed(len(elements), scalar(TypeName.INT))
         vm.heap["arr_0"] = HeapObject(type_hint="Array", fields=fields)
-        return vm, Pointer(base="arr_0", offset=0)
+        ptr = Pointer(base="arr_0", offset=0)
+        vm.call_stack.append(
+            StackFrame(
+                function_name="test",
+                registers={"%arr": typed_from_runtime(ptr)},
+            )
+        )
+        return vm, ptr
 
-    def test_spread_is_registered(self):
-        """spread should be in the builtins TABLE."""
-        assert "spread" in Builtins.TABLE
+    def test_plain_args_resolve_normally(self):
+        """Non-spread operands resolve via _resolve_reg as usual."""
+        vm = VMState()
+        vm.call_stack.append(
+            StackFrame(
+                function_name="test",
+                registers={
+                    "%a": typed_from_runtime(1),
+                    "%b": typed_from_runtime(2),
+                },
+            )
+        )
+        args = _resolve_call_args(vm, ["%a", "%b"])
+        assert [a.value for a in args] == [1, 2]
 
-    def test_spread_returns_tuple_of_elements(self):
-        """spread(array_ptr) should return a tuple (not list) of the array's elements."""
-        vm, ptr = self._make_vm_with_array([10, 5, 3])
-        result = Builtins.TABLE["spread"]([typed_from_runtime(ptr)], vm)
-        assert isinstance(result, BuiltinResult)
-        assert isinstance(result.value, tuple)
-        assert result.value == (10, 5, 3)
+    def test_spread_expands_heap_array(self):
+        """SpreadArguments should expand a heap array into individual args."""
+        vm, _ = self._make_vm_with_array([10, 5, 3])
+        args = _resolve_call_args(vm, [SpreadArguments(register="%arr")])
+        assert [a.value for a in args] == [10, 5, 3]
 
     def test_spread_empty_array(self):
-        """spread on an empty array should return an empty tuple."""
-        vm, ptr = self._make_vm_with_array([])
-        result = Builtins.TABLE["spread"]([typed_from_runtime(ptr)], vm)
-        assert isinstance(result, BuiltinResult)
-        assert result.value == ()
+        """SpreadArguments on an empty array should produce zero args."""
+        vm, _ = self._make_vm_with_array([])
+        args = _resolve_call_args(vm, [SpreadArguments(register="%arr")])
+        assert args == []
 
-    def test_spread_single_element(self):
-        """spread on a single-element array should return a one-element tuple."""
-        vm, ptr = self._make_vm_with_array([42])
-        result = Builtins.TABLE["spread"]([typed_from_runtime(ptr)], vm)
-        assert isinstance(result, BuiltinResult)
-        assert result.value == (42,)
+    def test_spread_mixed_with_plain_args(self):
+        """SpreadArguments can be mixed with plain register args."""
+        vm, _ = self._make_vm_with_array([2, 3])
+        vm.current_frame.registers["%x"] = typed_from_runtime(1)
+        vm.current_frame.registers["%y"] = typed_from_runtime(4)
+        args = _resolve_call_args(vm, ["%x", SpreadArguments(register="%arr"), "%y"])
+        assert [a.value for a in args] == [1, 2, 3, 4]
 
-    def test_spread_preserves_order(self):
+    def test_spread_preserves_element_order(self):
         """Elements should come out in index order 0, 1, 2, ..."""
-        vm, ptr = self._make_vm_with_array([100, 200, 300, 400])
-        result = Builtins.TABLE["spread"]([typed_from_runtime(ptr)], vm)
-        assert result.value == (100, 200, 300, 400)
+        vm, _ = self._make_vm_with_array([100, 200, 300, 400])
+        args = _resolve_call_args(vm, [SpreadArguments(register="%arr")])
+        assert [a.value for a in args] == [100, 200, 300, 400]
+
+    def test_spread_str_representation(self):
+        """SpreadArguments should have a readable str for IR display."""
+        sa = SpreadArguments(register="%arr")
+        assert str(sa) == "*%arr"
