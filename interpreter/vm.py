@@ -306,12 +306,14 @@ def _is_symbolic(val: Any) -> bool:
 def _heap_addr(val: Any) -> str:
     """Extract a heap address from a value.
 
-    Values can be plain strings ("obj_Point_1") or dicts with an addr key
-    ({"addr": "obj_Point_1", "type_hint": "Point"}) — the latter is what
-    the LLM returns for constructor calls.  Symbolic value dicts use their
-    name as the heap address (for materialised symbolic heap entries).
-    Returns empty string if val doesn't reference a heap address.
+    Handles Pointer objects (extracting ``.base``), plain strings
+    ("obj_Point_1"), dicts with an ``addr`` key ({"addr": "obj_Point_1",
+    "type_hint": "Point"}) — the latter is what the LLM returns for
+    constructor calls — and SymbolicValue objects (using ``.name``).
+    Returns empty string if *val* doesn't reference a heap address.
     """
+    if isinstance(val, Pointer):
+        return val.base
     if isinstance(val, str):
         return val
     if isinstance(val, SymbolicValue):
