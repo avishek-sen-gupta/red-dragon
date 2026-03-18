@@ -277,10 +277,12 @@ def _handle_address_of(
             )
         )
 
-    # If variable holds a heap address (struct/array/symbolic), wrap it in a Pointer
-    # but do NOT alias the variable — structs are already on the heap, so
-    # LOAD_VAR should continue to return the heap address string directly.
-    addr = _heap_addr(current_val)
+    # If variable holds a bare heap address string (struct/array/symbolic), wrap it
+    # in a Pointer but do NOT alias the variable — structs are already on the heap,
+    # so LOAD_VAR should continue to return the heap address string directly.
+    # Pointer values must NOT take this path: &ptr needs to promote the Pointer
+    # itself to a new heap slot (double-indirection), not re-wrap its base.
+    addr = _heap_addr(current_val) if not isinstance(current_val, Pointer) else ""
     if addr and addr in vm.heap:
         ptr = Pointer(base=addr, offset=0)
         return ExecutionResult.success(
