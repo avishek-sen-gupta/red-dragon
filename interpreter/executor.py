@@ -515,21 +515,6 @@ def _handle_store_field(
     obj_val = _resolve_reg(vm, inst.operands[0])
     field_name = inst.operands[1]
     val = _resolve_reg(vm, inst.operands[2])
-    # Pointer field/dereference write
-    if isinstance(obj_val, Pointer):
-        target_field = field_name
-        return ExecutionResult.success(
-            StateUpdate(
-                heap_writes=[
-                    HeapWrite(
-                        obj_addr=obj_val.base,
-                        field=target_field,
-                        value=typed_from_runtime(val),
-                    )
-                ],
-                reasoning=f"store {obj_val.base}.{target_field} = {val!r} (via Pointer)",
-            )
-        )
     addr = _heap_addr(obj_val)
     if addr and addr not in vm.heap:
         # Materialise a synthetic heap entry for symbolic objects so that
