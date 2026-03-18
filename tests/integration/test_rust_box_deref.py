@@ -79,6 +79,59 @@ let answer = b.get_count();
         assert local_vars["answer"] == 42
 
 
+class TestBoxMultiLevelMethodDelegation:
+    def test_double_box_method_call(self):
+        """Box<Box<Counter>> chains method delegation through two levels."""
+        _, local_vars = _run_rust(
+            """\
+struct Counter { count: i32 }
+
+impl Counter {
+    fn get_count(&self) -> i32 {
+        return self.count;
+    }
+}
+
+let c = Counter { count: 77 };
+let b1 = Box::new(c);
+let b2 = Box::new(b1);
+let answer = b2.get_count();
+""",
+            max_steps=800,
+        )
+        assert local_vars["answer"] == 77
+
+
+class TestBoxNegativeCases:
+    def test_missing_field_on_inner_returns_symbolic(self):
+        """Accessing a field that doesn't exist on the inner struct produces symbolic, not crash."""
+        from interpreter.vm_types import SymbolicValue
+
+        vm, local_vars = _run_rust(
+            """\
+struct Point { x: i32 }
+let p = Point { x: 10 };
+let b = Box::new(p);
+let answer = b.nonexistent;
+""",
+            max_steps=500,
+        )
+        assert isinstance(local_vars["answer"], SymbolicValue)
+
+    def test_box_primitive_field_access_returns_symbolic(self):
+        """Box::new(42) — accessing a field on a boxed primitive returns symbolic."""
+        from interpreter.vm_types import SymbolicValue
+
+        vm, local_vars = _run_rust(
+            """\
+let b = Box::new(42);
+let answer = b.x;
+""",
+            max_steps=500,
+        )
+        assert isinstance(local_vars["answer"], SymbolicValue)
+
+
 class TestBoxOptionInteraction:
     def test_some_box_unwrap_field_access(self):
         """Some(Box::new(node)).unwrap().field works via __method_missing__."""
