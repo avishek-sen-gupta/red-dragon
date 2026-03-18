@@ -15,8 +15,8 @@ def _find_all(instructions, opcode):
 
 
 class TestBoxNewLowering:
-    def test_box_new_is_pass_through(self):
-        """Box::new(x) is a pass-through — no CALL_FUNCTION or CALL_UNKNOWN for Box."""
+    def test_box_new_emits_call_function_box(self):
+        """Box::new(x) should emit CALL_FUNCTION with 'Box'."""
         instructions = _parse_rust("""\
 struct Node { value: i32 }
 let n = Node { value: 42 };
@@ -26,11 +26,11 @@ let b = Box::new(n);
         box_calls = [
             c
             for c in calls
-            if isinstance(c.operands[0], str) and "Box" in c.operands[0]
+            if isinstance(c.operands[0], str) and c.operands[0] == "Box"
         ]
         assert (
-            len(box_calls) == 0
-        ), f"Box::new should be pass-through (no CALL_FUNCTION Box), got {box_calls}"
+            len(box_calls) == 1
+        ), f"Expected exactly one CALL_FUNCTION 'Box', got {[c.operands for c in calls]}"
 
     def test_box_new_operand_is_not_call_unknown(self):
         """Box::new should NOT produce CALL_UNKNOWN."""
@@ -46,6 +46,23 @@ let b = Box::new(n);
         assert (
             len(box_unknowns) == 0
         ), f"Box::new should not produce CALL_UNKNOWN: {box_unknowns}"
+
+
+class TestStringFromLowering:
+    def test_string_from_is_pass_through(self):
+        """String::from(x) should be pass-through — no CALL_FUNCTION for String."""
+        instructions = _parse_rust("""\
+let s = String::from("hello");
+""")
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        string_calls = [
+            c
+            for c in calls
+            if isinstance(c.operands[0], str) and "String" in c.operands[0]
+        ]
+        assert (
+            len(string_calls) == 0
+        ), f"String::from should be pass-through (no CALL_FUNCTION String), got {string_calls}"
 
 
 class TestSomeLowering:
