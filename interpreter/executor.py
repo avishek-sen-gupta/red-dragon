@@ -1529,7 +1529,26 @@ def _handle_call_method(
                 func_label = candidate
                 break
     if not func_label or func_label not in cfg.blocks:
-        # Known type but unknown method — resolve via configured strategy
+        # Known type but unknown method — check __method_missing__ first
+        if addr and addr in vm.heap:
+            heap_obj = vm.heap[addr]
+            if constants.METHOD_MISSING in heap_obj.fields:
+                mm_tv = heap_obj.fields[constants.METHOD_MISSING]
+                if isinstance(mm_tv.value, BoundFuncRef):
+                    mm_args = [
+                        obj_val,
+                        typed(method_name, scalar("String")),
+                    ] + list(args)
+                    return _try_user_function_call(
+                        mm_tv.value,
+                        mm_args,
+                        inst,
+                        vm,
+                        cfg,
+                        registry,
+                        current_label,
+                    )
+        # No __method_missing__ — resolve via configured strategy
         return call_resolver.resolve_method(
             type_hint, method_name, [a.value for a in args], inst, vm
         )
