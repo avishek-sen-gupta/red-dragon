@@ -21,9 +21,9 @@ let b = Box::new(n);
             for k, v in vm.call_stack[0].local_vars.items()
         }
         # Box::new creates a Box heap object
-        b_addr = locals_["b"]
-        assert b_addr in vm.heap
-        box_obj = vm.heap[b_addr]
+        b_ptr = locals_["b"]
+        assert b_ptr.base in vm.heap
+        box_obj = vm.heap[b_ptr.base]
         assert box_obj.type_hint == ScalarType("Box")
         # The Box stores the inner Node via __boxed__
         assert "__boxed__" in box_obj.fields
@@ -31,7 +31,7 @@ let b = Box::new(n);
         inner_val = (
             inner_addr.value if isinstance(inner_addr, TypedValue) else inner_addr
         )
-        assert inner_val == locals_["n"]
+        assert inner_val == locals_["n"]  # Both are Pointers now
 
     def test_option_constructor_creates_heap_object(self):
         """Option(42) should create a HeapObject with Option type_hint."""
@@ -41,8 +41,8 @@ let b = Box::new(n);
             k: v.value if isinstance(v, TypedValue) else v
             for k, v in vm.call_stack[0].local_vars.items()
         }
-        opt_addr = locals_.get("opt")
-        assert opt_addr in vm.heap
-        opt_obj = vm.heap[opt_addr]
+        opt_ptr = locals_.get("opt")
+        assert opt_ptr.base in vm.heap
+        opt_obj = vm.heap[opt_ptr.base]
         assert opt_obj.type_hint == ScalarType("Option")
         assert "value" in opt_obj.fields

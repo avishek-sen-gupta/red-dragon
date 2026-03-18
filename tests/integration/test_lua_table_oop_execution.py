@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.typed_value import unwrap_locals
+from interpreter.vm_types import Pointer
 
 
 def _run_lua(source: str, max_steps: int = 500):
@@ -26,9 +27,9 @@ end
 counter = Counter.new()
 """)
         counter = result["counter"]
-        assert isinstance(counter, str) and counter.startswith(
+        assert isinstance(counter, Pointer) and counter.base.startswith(
             "obj_"
-        ), f"counter should be a heap address, got {counter!r}"
+        ), f"counter should be a Pointer to a heap address, got {counter!r}"
 
     def test_method_chaining_produces_answer(self):
         """Full method chaining should produce answer = 6."""
