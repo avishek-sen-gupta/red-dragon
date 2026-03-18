@@ -7,10 +7,16 @@ from typing import Any
 
 from interpreter.constants import ARR_ADDR_PREFIX, TypeName
 from interpreter.vm import VMState, Operators, _is_symbolic, _heap_addr
-from interpreter.vm_types import HeapObject, BuiltinResult, NewObject, HeapWrite
+from interpreter.vm_types import (
+    HeapObject,
+    BuiltinResult,
+    NewObject,
+    HeapWrite,
+    Pointer,
+)
 from interpreter.cobol.byte_builtins import BYTE_BUILTINS
 from interpreter.typed_value import TypedValue, typed, typed_from_runtime
-from interpreter.type_expr import scalar
+from interpreter.type_expr import pointer, scalar
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 
@@ -134,7 +140,7 @@ def _builtin_array_of(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     }
     fields["length"] = typed(len(args), scalar(TypeName.INT))
     return BuiltinResult(
-        value=addr,
+        value=typed(Pointer(base=addr, offset=0), pointer(scalar("Array"))),
         new_objects=[NewObject(addr=addr, type_hint="array")],
         heap_writes=[
             HeapWrite(obj_addr=addr, field=k, value=v) for k, v in fields.items()
@@ -216,7 +222,7 @@ def _builtin_object_rest(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     rest_addr = f"{ARR_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
     return BuiltinResult(
-        value=rest_addr,
+        value=typed(Pointer(base=rest_addr, offset=0), pointer(scalar("Object"))),
         new_objects=[NewObject(addr=rest_addr, type_hint="object")],
         heap_writes=[
             HeapWrite(obj_addr=rest_addr, field=k, value=v)
