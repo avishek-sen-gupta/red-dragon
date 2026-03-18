@@ -7,8 +7,8 @@ from interpreter.constants import Language
 
 
 class TestParameterizedCallFunction:
-    def test_box_new_is_pass_through(self):
-        """Box::new(n) is a pass-through — b and n point to the same object."""
+    def test_box_new_creates_box_object(self):
+        """Box::new(n) creates a Box object wrapping n via __boxed__."""
         source = """\
 struct Node { value: i32 }
 
@@ -20,12 +20,18 @@ let b = Box::new(n);
             k: v.value if isinstance(v, TypedValue) else v
             for k, v in vm.call_stack[0].local_vars.items()
         }
-        # Box::new is pass-through: b and n are the same heap address
-        assert locals_["b"] == locals_["n"]
-        # The heap object is the Node, not a Box
+        # Box::new creates a Box heap object
         b_addr = locals_["b"]
         assert b_addr in vm.heap
-        assert vm.heap[b_addr].type_hint == ScalarType("Node")
+        box_obj = vm.heap[b_addr]
+        assert box_obj.type_hint == ScalarType("Box")
+        # The Box stores the inner Node via __boxed__
+        assert "__boxed__" in box_obj.fields
+        inner_addr = box_obj.fields["__boxed__"]
+        inner_val = (
+            inner_addr.value if isinstance(inner_addr, TypedValue) else inner_addr
+        )
+        assert inner_val == locals_["n"]
 
     def test_option_constructor_creates_heap_object(self):
         """Option(42) should create a HeapObject with Option type_hint."""

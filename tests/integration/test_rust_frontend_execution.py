@@ -120,8 +120,8 @@ class TestRustMutPatternExecution:
 
 
 class TestRustBoxExecution:
-    def test_box_new_is_pass_through(self):
-        """Box::new(x) is transparent — b points to the same object as x."""
+    def test_box_new_creates_box_object(self):
+        """Box::new(x) creates a Box wrapping x via __boxed__."""
         vm, local_vars = _run_rust(
             """\
 struct Node { value: i32 }
@@ -130,8 +130,19 @@ let b = Box::new(n);
 """,
             max_steps=300,
         )
-        # Box::new is pass-through: b and n point to the same heap object
-        assert local_vars["b"] == local_vars["n"]
+        # Box::new creates a Box heap object containing the Node via __boxed__
+        b_addr = local_vars["b"]
+        assert b_addr in vm.heap
+        box_obj = vm.heap[b_addr]
+        from interpreter.type_expr import ScalarType
+
+        assert box_obj.type_hint == ScalarType("Box")
+        assert "__boxed__" in box_obj.fields
+        from interpreter.typed_value import TypedValue
+
+        inner = box_obj.fields["__boxed__"]
+        inner_val = inner.value if isinstance(inner, TypedValue) else inner
+        assert inner_val == local_vars["n"]
 
 
 class TestRustOptionExecution:
@@ -172,15 +183,20 @@ let val = ref_opt.unwrap();
         assert local_vars["val"] == 42
 
     def test_nested_box_in_option(self):
-        """Some(Box::new(42)) — Box is pass-through, so unwrap returns 42."""
-        _, local_vars = _run_rust(
+        """Some(Box::new(42)) — unwrap returns the Box object."""
+        vm, local_vars = _run_rust(
             """\
 let opt = Some(Box::new(42));
 let inner = opt.unwrap();
 """,
             max_steps=400,
         )
-        assert local_vars["inner"] == 42
+        # unwrap returns the Box object; auto-deref to 42 is a separate concern
+        inner_addr = local_vars["inner"]
+        assert inner_addr in vm.heap
+        from interpreter.type_expr import ScalarType
+
+        assert vm.heap[inner_addr].type_hint == ScalarType("Box")
 
     def test_as_ref_unwrap_chain(self):
         """opt.as_ref().unwrap() — the actual Rosetta pattern."""
