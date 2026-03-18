@@ -277,16 +277,17 @@ def _handle_address_of(
             )
         )
 
-    # If variable holds a bare heap address string or a Pointer from NEW_OBJECT
-    # (base starts with obj_ prefix), return identity — the object is already on
-    # the heap. Pointer values from ADDRESS_OF (base starts with mem_) need
-    # double-indirection: promote the Pointer itself to a new heap slot.
-    is_new_object_pointer = isinstance(
-        current_val, Pointer
-    ) and current_val.base.startswith(constants.OBJ_ADDR_PREFIX)
+    # If variable holds a bare heap address string or a Pointer from NEW_OBJECT /
+    # NEW_ARRAY (base starts with obj_ or arr_ prefix), return identity — the
+    # object is already on the heap. Pointer values from ADDRESS_OF (base starts
+    # with mem_) need double-indirection: promote the Pointer itself to a new heap slot.
+    is_heap_pointer = isinstance(current_val, Pointer) and (
+        current_val.base.startswith(constants.OBJ_ADDR_PREFIX)
+        or current_val.base.startswith(constants.ARR_ADDR_PREFIX)
+    )
     addr = (
         _heap_addr(current_val)
-        if not isinstance(current_val, Pointer) or is_new_object_pointer
+        if not isinstance(current_val, Pointer) or is_heap_pointer
         else ""
     )
     if addr and addr in vm.heap:
@@ -1160,14 +1161,15 @@ def _handle_load_region(
 
 
 def _unwrap_builtin_result(result: BuiltinResult, name: str) -> TypedValue:
-    """Extract TypedValue from BuiltinResult, warning if bare value received."""
+    """Extract TypedValue from BuiltinResult, warning if heap address returned bare."""
     if isinstance(result.value, TypedValue):
         return result.value
-    logger.warning(
-        "Builtin %s returned bare value %r, expected TypedValue",
-        name,
-        type(result.value).__name__,
-    )
+    if isinstance(result.value, (Pointer, str)) and _heap_addr(result.value):
+        logger.warning(
+            "Builtin %s returned bare heap address %r, expected TypedValue",
+            name,
+            result.value,
+        )
     return typed_from_runtime(result.value)
 
 
