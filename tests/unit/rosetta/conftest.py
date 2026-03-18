@@ -5,6 +5,7 @@ import statistics
 
 from interpreter.cfg import build_cfg
 from interpreter.typed_value import TypedValue
+from interpreter.vm import _heap_addr
 from interpreter.frontends import (
     get_deterministic_frontend,
     SUPPORTED_DETERMINISTIC_LANGUAGES,
@@ -219,9 +220,10 @@ def extract_array(
         f"got: {sorted(frame.local_vars.keys())}"
     )
     stored = frame.local_vars[name]
-    heap_addr = stored.value if isinstance(stored, TypedValue) else stored
-    assert heap_addr in vm.heap, (
-        f"[{language}] expected heap address '{heap_addr}' in heap, "
+    raw_val = stored.value if isinstance(stored, TypedValue) else stored
+    heap_addr = _heap_addr(raw_val)
+    assert heap_addr and heap_addr in vm.heap, (
+        f"[{language}] expected heap address '{raw_val}' in heap, "
         f"got: {sorted(vm.heap.keys())}"
     )
     obj = vm.heap[heap_addr]

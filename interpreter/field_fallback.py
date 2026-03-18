@@ -16,7 +16,7 @@ from abc import ABC, abstractmethod
 
 from interpreter import constants
 from interpreter.typed_value import TypedValue
-from interpreter.vm import VMState
+from interpreter.vm import VMState, _heap_addr as shared_heap_addr
 
 
 class FieldFallbackStrategy(ABC):
@@ -56,8 +56,9 @@ class ImplicitThisFieldFallback(FieldFallbackStrategy):
         return None
 
     def _heap_addr(self, value: object) -> str | None:
-        if isinstance(value, str) and value.startswith(constants.OBJ_ADDR_PREFIX):
-            return value
+        addr = shared_heap_addr(value)
+        if addr and addr.startswith(constants.OBJ_ADDR_PREFIX):
+            return addr
         return None
 
     def resolve_load(self, vm: VMState, name: str) -> TypedValue | None:
