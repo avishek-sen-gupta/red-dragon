@@ -77,6 +77,40 @@ class TestAddressOfPointerGuard:
         assert isinstance(promoted_val, Pointer)
         assert promoted_val.base == "mem_0"
 
+    def test_address_of_new_array_pointer_returns_identity(self):
+        # A variable holding a Pointer from NEW_ARRAY (base starts with arr_)
+        # should return identity — the array IS the heap object.
+        arr_ptr = Pointer(base="arr_0", offset=0)
+        frame = StackFrame(
+            function_name="main",
+            local_vars={
+                "arr": typed(arr_ptr, pointer(scalar("Array"))),
+            },
+        )
+        vm = VMState(
+            call_stack=[frame],
+            heap={
+                "arr_0": HeapObject(
+                    type_hint="Array",
+                    fields={"0": typed(10, scalar(TypeName.INT))},
+                ),
+            },
+        )
+
+        inst = IRInstruction(
+            opcode=Opcode.ADDRESS_OF,
+            result_reg="t0",
+            operands=["arr"],
+        )
+
+        result = _handle_address_of(inst, vm)
+
+        result_ptr = result.update.register_writes["t0"].value
+        assert isinstance(result_ptr, Pointer)
+        assert (
+            result_ptr.base == "arr_0"
+        ), "ADDRESS_OF on NEW_ARRAY Pointer should return identity"
+
     def test_address_of_new_object_pointer_returns_identity(self):
         # A variable holding a Pointer from NEW_OBJECT (base starts with obj_)
         # should return identity — the struct IS the heap object.
