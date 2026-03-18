@@ -6,7 +6,7 @@ import logging
 from types import MappingProxyType
 from typing import Any
 
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, SpreadArguments
 from interpreter.cfg import CFG
 from interpreter.vm import (
     VMState,
@@ -56,6 +56,28 @@ _EMPTY_TYPE_ENV = TypeEnvironment(
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ── Call arg resolution ──────────────────────────────────────────
+
+
+def _resolve_call_args(vm: VMState, arg_operands: list) -> list[TypedValue]:
+    """Resolve call arguments, expanding SpreadArguments from the heap."""
+    args: list[TypedValue] = []
+    for op in arg_operands:
+        if isinstance(op, SpreadArguments):
+            tv = _resolve_reg(vm, op.register)
+            addr = _heap_addr(tv.value)
+            if addr and addr in vm.heap:
+                fields = vm.heap[addr].fields
+                args.extend(
+                    fields[str(i)] for i in range(len(fields)) if str(i) in fields
+                )
+            else:
+                args.append(tv)
+        else:
+            args.append(_resolve_reg(vm, op))
+    return args
 
 
 # ── Symbolic helpers ─────────────────────────────────────────────
@@ -1371,15 +1393,7 @@ def _handle_call_function(
         else raw_func_name
     )
     arg_regs = inst.operands[1:]
-    args_raw = [_resolve_reg(vm, a) for a in arg_regs]
-    # Flatten spread results: spread builtin returns a tuple (not list)
-    # to distinguish from regular list values (e.g. range(), byte builtins).
-    args = []
-    for a in args_raw:
-        if isinstance(a.value, tuple):
-            args.extend(typed_from_runtime(e) for e in a.value)
-        else:
-            args.append(a)
+    args = _resolve_call_args(vm, arg_regs)
 
     # 0. Try I/O provider (for __cobol_* calls)
     if (
@@ -1505,7 +1519,7 @@ def _handle_call_method(
     obj_val = _resolve_reg(vm, inst.operands[0])
     method_name = inst.operands[1]
     arg_regs = inst.operands[2:]
-    args = [_resolve_reg(vm, a) for a in arg_regs]
+    args = _resolve_call_args(vm, arg_regs)
 
     # If the object is a FUNC_REF, invoke it directly (e.g. .call(), .apply())
     if isinstance(obj_val.value, BoundFuncRef):

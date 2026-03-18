@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel
+
+
+@dataclass(frozen=True)
+class SpreadArguments:
+    """Marks a call operand as spread — the VM unpacks the heap array into individual args."""
+
+    register: str
+
+    def __str__(self) -> str:
+        return f"*{self.register}"
 
 
 class Opcode(str, Enum):

@@ -9,7 +9,7 @@ from __future__ import annotations
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.node_types import CommonNodeType
 
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, SpreadArguments
 
 
 def lower_const_literal(ctx: TreeSitterEmitContext, node) -> str:
@@ -90,22 +90,20 @@ def lower_paren(ctx: TreeSitterEmitContext, node) -> str:
     return ctx.lower_expr(inner)
 
 
-def lower_spread_arg(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower *expr / ...expr / **expr as CALL_FUNCTION('spread', inner)."""
+def lower_spread_arg(ctx: TreeSitterEmitContext, node) -> SpreadArguments:
+    """Lower *expr / ...expr / **expr as SpreadArguments(register).
+
+    Returns a SpreadArguments wrapper (not a plain register string).
+    The call-site lowerer includes it in CALL_FUNCTION operands;
+    the VM unpacks the heap array into individual args at call time.
+    """
     named_children = [c for c in node.children if c.is_named]
     inner_reg = (
         ctx.lower_expr(named_children[0])
         if named_children
         else lower_const_literal(ctx, node)
     )
-    reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["spread", inner_reg],
-        node=node,
-    )
-    return reg
+    return SpreadArguments(register=inner_reg)
 
 
 def lower_binop(ctx: TreeSitterEmitContext, node) -> str:
