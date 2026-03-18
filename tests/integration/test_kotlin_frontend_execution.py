@@ -20,14 +20,16 @@ class TestKotlinUnsignedLiteralExecution:
         vars_ = _run_kotlin("val x = 42u")
         assert "x" in vars_
 
+    @pytest.mark.xfail(
+        reason="Kotlin unsigned literal suffix 'u' not parsed as numeric"
+    )
     def test_unsigned_literal_in_arithmetic(self):
         """Unsigned literal should be usable in arithmetic."""
         vars_ = _run_kotlin("""\
 val x = 10u
-val y = 5
-val z = y + 1
+val z = x + 1
 """)
-        assert vars_["z"] == 6
+        assert vars_["z"] == 11
 
     def test_unsigned_long_literal(self):
         """val x = 42UL should execute without errors."""
