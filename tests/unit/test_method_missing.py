@@ -153,13 +153,22 @@ class TestMethodMissingLoadField:
 
 
 class TestMethodMissingCallMethod:
-    def test_delegates_method_call_via_method_missing(self):
-        """CALL_METHOD for unknown method triggers __method_missing__ dispatch."""
+    def test_delegates_method_call_to_inner_object_method(self):
+        """CALL_METHOD for unknown method on Outer delegates to Inner's method via __boxed__."""
         vm, cfg, registry = _make_vm_with_method_missing(
             inner_fields={"value": typed_from_runtime(42)}
         )
-        # Register "Outer" as a known class with no methods
+        # Register "Outer" with no methods, "Inner" with 'some_method'
         registry.class_methods["Outer"] = {}
+        inner_method_label = "func_inner_some_method_0"
+        cfg.blocks[inner_method_label] = BasicBlock(
+            label=inner_method_label,
+            instructions=[
+                IRInstruction(opcode=Opcode.RETURN, operands=["%result"]),
+            ],
+        )
+        registry.class_methods["Inner"] = {"some_method": [inner_method_label]}
+        registry.func_params[inner_method_label] = ["self", "arg"]
 
         inst = IRInstruction(
             opcode=Opcode.CALL_METHOD,
@@ -177,7 +186,34 @@ class TestMethodMissingCallMethod:
 
         assert result.handled
         assert result.update.call_push is not None
-        assert result.update.next_label == "func_mm_0"
+        assert result.update.next_label == inner_method_label
+
+    def test_unknown_method_on_inner_falls_through_to_symbolic(self):
+        """CALL_METHOD for method not on Outer or Inner falls through to symbolic."""
+        vm, cfg, registry = _make_vm_with_method_missing(
+            inner_fields={"value": typed_from_runtime(42)}
+        )
+        registry.class_methods["Outer"] = {}
+
+        inst = IRInstruction(
+            opcode=Opcode.CALL_METHOD,
+            result_reg="%result",
+            operands=["%outer", "nonexistent_method", "%arg0"],
+        )
+        vm.call_stack[-1].registers["%arg0"] = typed_from_runtime(99)
+
+        result = LocalExecutor.execute(
+            inst=inst,
+            vm=vm,
+            cfg=cfg,
+            registry=registry,
+        )
+
+        assert result.handled
+        assert result.update.call_push is None
+        assert isinstance(
+            unwrap(result.update.register_writes["%result"]), SymbolicValue
+        )
 
     def test_existing_method_does_not_trigger_method_missing(self):
         """CALL_METHOD for known method dispatches to real label, not __method_missing__."""
