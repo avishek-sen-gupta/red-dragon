@@ -326,18 +326,19 @@ def _heap_addr(val: Any) -> str:
     return ""
 
 
-def _resolve_reg(vm: VMState, operand: str) -> Any:
-    """Resolve a register name to its raw value, or return the operand as-is.
+def _resolve_reg(vm: VMState, operand: str) -> TypedValue:
+    """Resolve a register name to its TypedValue.
 
-    Unwraps TypedValue automatically so existing handlers work unchanged.
+    Returns the TypedValue as-is if the register holds one, otherwise
+    wraps the raw value via typed_from_runtime().
     """
     if isinstance(operand, str) and operand.startswith("%"):
         frame = vm.current_frame
         val = frame.registers.get(operand, operand)
         if isinstance(val, TypedValue):
-            return val.value
-        return val
-    return operand
+            return val
+        return typed_from_runtime(val)
+    return typed_from_runtime(operand)
 
 
 def _resolve_binop_operand(vm: VMState, operand: str) -> TypedValue:
@@ -391,7 +392,7 @@ def _resolve_typed_reg(
     Falls back to plain ``_resolve_reg`` when the operand is not a register,
     has no declared type, or the runtime type already matches.
     """
-    val = _resolve_reg(vm, operand)
+    val = _resolve_reg(vm, operand).value
     return _coerce_value(val, operand, type_env, conversion_rules)
 
 
