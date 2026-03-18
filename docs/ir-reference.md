@@ -1,6 +1,6 @@
 # IR Reference
 
-RedDragon uses a flattened high-level three-address code IR. Every program — regardless of source language or frontend — is lowered to a linear sequence of `IRInstruction`s drawn from 33 opcodes.
+RedDragon uses a flattened high-level three-address code IR. Every program — regardless of source language or frontend — is lowered to a linear sequence of `IRInstruction`s drawn from 34 opcodes.
 
 ## Instruction format
 
@@ -194,6 +194,21 @@ Resolves `ptr_reg` to a `Pointer`, then reads `heap[base].fields[str(offset)]`. 
 
 ```
 %1 = load_indirect %ptr        // *ptr → reads through the pointer
+```
+
+### LOAD_FIELD_INDIRECT
+
+Load a field from a heap object where the field name is in a register (dynamic field access).
+
+| Field | Value |
+|-------|-------|
+| `result_reg` | target register |
+| `operands` | `[obj_reg, name_reg]` |
+
+Resolves `obj_reg` to a heap address and `name_reg` to a field name string. If the object is on the heap and the field exists, returns the field value. If the field is missing, checks for a `__method_missing__` method on the object and dispatches to it with `(self, field_name)`. If no `__method_missing__` exists or the object is not on the heap, returns a fresh symbolic value. Used by `__method_missing__` implementations to forward field access by dynamic name.
+
+```
+%1 = load_field_indirect %obj %name   // obj[name] where name is a register
 ```
 
 ### STORE_INDIRECT
