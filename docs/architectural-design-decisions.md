@@ -2068,3 +2068,13 @@ These are already dispatched to `_lower_ts_interface_method` in `lower_interface
 **Deletions:** `CLASS_REF_PATTERN`, `CLASS_REF_TEMPLATE`, `CLASS_REF_WITH_PARENTS_TEMPLATE` (constants.py), `RefPatterns`, `RefParseResult`, `_parse_class_ref()` (registry.py), `_CLASS_REF_PATTERN` (type_inference.py), `make_class_ref()` (common/declarations.py).
 
 **Files:** `interpreter/class_ref.py`, `interpreter/frontends/context.py`, `interpreter/executor.py`, `interpreter/registry.py`, `interpreter/type_inference.py`, `interpreter/run.py`, all 15 frontend dirs.
+
+---
+
+### ADR-107: `_resolve_reg` returns `TypedValue` — unified register resolution (2026-03-18)
+
+**Context:** `_resolve_reg()` in `vm.py` returned bare Python values (unwrapping `TypedValue` via `.value`), while `_resolve_binop_operand()` returned the full `TypedValue`. This split forced write callsites (DECL_VAR, STORE_VAR, STORE_FIELD, STORE_INDEX, STORE_INDIRECT, RETURN) to re-wrap bare values via `typed_from_runtime()`, losing parameterized type information (e.g. `pointer(scalar("Dog"))` was flattened to a generic type). The two functions had identical logic except for the final unwrap step.
+
+**Decision:** Change `_resolve_reg()` to return `TypedValue` directly. Delete `_resolve_binop_operand()` (now identical). Write callsites use the `TypedValue` as-is without re-wrapping. Read callsites that need bare values extract `.value` (for `isinstance`, `_heap_addr`, `bool`, `int`, dict keys, etc.). `typed_from_runtime()` remains as a fallback inside `_resolve_reg()` for registers that hold non-`TypedValue` values (e.g. raw constants).
+
+**Consequences:** Parameterized type information is preserved through the register→handler→storage pipeline — e.g. a `pointer(scalar("Dog"))` stored via `STORE_VAR` retains its full type instead of being flattened. The dual-function API surface is simplified to a single `_resolve_reg()`. All callers are updated: 7 write callsites drop redundant `typed_from_runtime()` wrapping, 19 read callsites add `.value` extraction.
