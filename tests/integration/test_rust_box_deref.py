@@ -102,6 +102,36 @@ let answer = b2.get_count();
         assert local_vars["answer"] == 77
 
 
+class TestBoxChainedDeref:
+    def test_chained_field_access_in_expression(self):
+        """b.x + b.y — two auto-derefs in one arithmetic expression."""
+        _, local_vars = _run_rust(
+            """\
+struct Point { x: i32, y: i32 }
+let p = Point { x: 3, y: 7 };
+let b = Box::new(p);
+let answer = b.x + b.y;
+""",
+            max_steps=600,
+        )
+        assert local_vars["answer"] == 10
+
+    def test_nested_struct_field_through_box(self):
+        """tree.left.value — Box in a struct field, then access inner field."""
+        _, local_vars = _run_rust(
+            """\
+struct Node { value: i32 }
+struct Tree { left: Box<Node> }
+let n = Node { value: 55 };
+let t = Tree { left: Box::new(n) };
+let boxed_node = t.left;
+let answer = boxed_node.value;
+""",
+            max_steps=600,
+        )
+        assert local_vars["answer"] == 55
+
+
 class TestBoxNegativeCases:
     def test_missing_field_on_inner_returns_symbolic(self):
         """Accessing a field that doesn't exist on the inner struct produces symbolic, not crash."""
