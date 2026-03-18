@@ -1,0 +1,152 @@
+"""Tests for __method_missing__ fallback in LOAD_FIELD handler.
+
+When a heap object has a __method_missing__ field (a BoundFuncRef), loading a
+non-existent field should dispatch through that function instead of returning
+a symbolic value.
+"""
+
+from interpreter.cfg import CFG
+from interpreter.cfg_types import BasicBlock
+from interpreter.constants import BOXED_FIELD, METHOD_MISSING
+from interpreter.executor import LocalExecutor
+from interpreter.func_ref import BoundFuncRef, FuncRef
+from interpreter.ir import IRInstruction, Opcode
+from interpreter.registry import FunctionRegistry
+from interpreter.typed_value import TypedValue, typed, typed_from_runtime, unwrap
+from interpreter.type_expr import UNKNOWN, scalar
+from interpreter.vm import HeapObject, VMState
+from interpreter.vm_types import StackFrame, StateUpdate, SymbolicValue
+
+
+def _make_vm_with_method_missing(
+    inner_fields: dict[str, TypedValue],
+) -> tuple[VMState, CFG, FunctionRegistry]:
+    """Create VM with outer object that has __method_missing__ delegating to inner."""
+    vm = VMState()
+    vm.call_stack.append(StackFrame(function_name="<test>", return_label=""))
+
+    # Inner object
+    inner_addr = "obj_0"
+    vm.heap[inner_addr] = HeapObject(type_hint="Inner", fields=inner_fields)
+
+    # __method_missing__ function: takes (self, name) -> LOAD_FIELD_INDIRECT(self.__boxed__, name)
+    mm_label = "func_mm_0"
+    cfg = CFG()
+    cfg.blocks[mm_label] = BasicBlock(
+        label=mm_label,
+        instructions=[
+            IRInstruction(
+                opcode=Opcode.LOAD_VAR, result_reg="%mm_self", operands=["self"]
+            ),
+            IRInstruction(
+                opcode=Opcode.LOAD_FIELD,
+                result_reg="%mm_inner",
+                operands=["%mm_self", BOXED_FIELD],
+            ),
+            IRInstruction(
+                opcode=Opcode.LOAD_VAR, result_reg="%mm_name", operands=["name"]
+            ),
+            IRInstruction(
+                opcode=Opcode.LOAD_FIELD_INDIRECT,
+                result_reg="%mm_result",
+                operands=["%mm_inner", "%mm_name"],
+            ),
+            IRInstruction(opcode=Opcode.RETURN, operands=["%mm_result"]),
+        ],
+    )
+
+    mm_func_ref = BoundFuncRef(
+        func_ref=FuncRef(name=METHOD_MISSING, label=mm_label), closure_id=""
+    )
+
+    # Outer object: __boxed__ -> inner_addr, __method_missing__ -> func_ref
+    outer_addr = "obj_1"
+    vm.heap[outer_addr] = HeapObject(
+        type_hint="Outer",
+        fields={
+            BOXED_FIELD: typed(inner_addr, scalar("Object")),
+            METHOD_MISSING: typed(mm_func_ref, UNKNOWN),
+        },
+    )
+    vm.call_stack[-1].registers["%outer"] = typed(outer_addr, scalar("Object"))
+
+    registry = FunctionRegistry()
+    registry.func_params[mm_label] = ["self", "name"]
+
+    return vm, cfg, registry
+
+
+class TestMethodMissingLoadField:
+    def test_delegates_to_inner_object_field(self):
+        """LOAD_FIELD for a missing field triggers __method_missing__ dispatch."""
+        vm, cfg, registry = _make_vm_with_method_missing(
+            inner_fields={"value": typed_from_runtime(42)}
+        )
+
+        inst = IRInstruction(
+            opcode=Opcode.LOAD_FIELD,
+            result_reg="%result",
+            operands=["%outer", "nonexistent_field"],
+        )
+        result = LocalExecutor.execute(
+            inst=inst,
+            vm=vm,
+            cfg=cfg,
+            registry=registry,
+        )
+
+        assert result.handled
+        assert result.update.call_push is not None
+        assert result.update.next_label == "func_mm_0"
+
+    def test_existing_field_does_not_trigger_method_missing(self):
+        """LOAD_FIELD for __boxed__ (which exists) returns directly, no method_missing."""
+        vm, cfg, registry = _make_vm_with_method_missing(
+            inner_fields={"value": typed_from_runtime(42)}
+        )
+
+        inst = IRInstruction(
+            opcode=Opcode.LOAD_FIELD,
+            result_reg="%result",
+            operands=["%outer", BOXED_FIELD],
+        )
+        result = LocalExecutor.execute(
+            inst=inst,
+            vm=vm,
+            cfg=cfg,
+            registry=registry,
+        )
+
+        assert result.handled
+        assert result.update.call_push is None
+        assert unwrap(result.update.register_writes["%result"]) == "obj_0"
+
+    def test_no_method_missing_falls_through_to_symbolic(self):
+        """Object WITHOUT __method_missing__; missing field returns SymbolicValue."""
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="<test>", return_label=""))
+
+        addr = "obj_0"
+        vm.heap[addr] = HeapObject(
+            type_hint="Plain",
+            fields={"x": typed_from_runtime(10)},
+        )
+        vm.call_stack[-1].registers["%obj"] = typed(addr, scalar("Object"))
+
+        inst = IRInstruction(
+            opcode=Opcode.LOAD_FIELD,
+            result_reg="%result",
+            operands=["%obj", "missing_field"],
+        )
+        result = LocalExecutor.execute(
+            inst=inst,
+            vm=vm,
+            cfg=CFG(),
+            registry=FunctionRegistry(),
+        )
+
+        assert result.handled
+        assert result.update.call_push is None
+        assert isinstance(
+            unwrap(result.update.register_writes["%result"]), SymbolicValue
+        )
