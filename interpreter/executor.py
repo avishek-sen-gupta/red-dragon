@@ -352,6 +352,60 @@ def _handle_load_indirect(
     )
 
 
+def _handle_load_field_indirect(
+    inst: IRInstruction,
+    vm: VMState,
+    cfg: CFG = CFG(),
+    registry: FunctionRegistry = FunctionRegistry(),
+    current_label: str = "",
+    **kwargs: Any,
+) -> ExecutionResult:
+    """LOAD_FIELD_INDIRECT %obj %name: load field whose name is in a register."""
+    obj_val = _resolve_reg(vm, inst.operands[0])
+    field_name = _resolve_reg(vm, inst.operands[1])
+    addr = _heap_addr(obj_val)
+    if not addr or addr not in vm.heap:
+        sym = vm.fresh_symbolic(hint=f"{_symbolic_name(obj_val)}.{field_name}")
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                reasoning=f"load_field_indirect on non-heap {obj_val!r} → {sym.name}",
+            )
+        )
+    heap_obj = vm.heap[addr]
+    if field_name in heap_obj.fields:
+        tv = heap_obj.fields[field_name]
+        return ExecutionResult.success(
+            StateUpdate(
+                register_writes={inst.result_reg: tv},
+                reasoning=f"load {addr}.{field_name} (indirect) = {tv!r}",
+            )
+        )
+    # Field not found — check for __method_missing__ on the object
+    if constants.METHOD_MISSING in heap_obj.fields:
+        mm_tv = heap_obj.fields[constants.METHOD_MISSING]
+        if isinstance(mm_tv.value, BoundFuncRef):
+            self_tv = typed(obj_val, scalar(heap_obj.type_hint))
+            name_tv = typed(field_name, scalar("String"))
+            return _try_user_function_call(
+                mm_tv.value,
+                [self_tv, name_tv],
+                inst,
+                vm,
+                cfg,
+                registry,
+                current_label,
+            )
+    # No __method_missing__ — return symbolic
+    sym = vm.fresh_symbolic(hint=f"{addr}.{field_name}")
+    return ExecutionResult.success(
+        StateUpdate(
+            register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+            reasoning=f"load {addr}.{field_name} (indirect, unknown) → {sym.name}",
+        )
+    )
+
+
 def _handle_store_indirect(
     inst: IRInstruction, vm: VMState, **kwargs: Any
 ) -> ExecutionResult:
@@ -1551,6 +1605,7 @@ class LocalExecutor:
         Opcode.LOAD_REGION: _handle_load_region,
         Opcode.ADDRESS_OF: _handle_address_of,
         Opcode.LOAD_INDIRECT: _handle_load_indirect,
+        Opcode.LOAD_FIELD_INDIRECT: _handle_load_field_indirect,
         Opcode.STORE_INDIRECT: _handle_store_indirect,
     }
 

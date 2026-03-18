@@ -44,6 +44,7 @@ class Opcode(str, Enum):
     # Pointer operations
     ADDRESS_OF = "ADDRESS_OF"
     LOAD_INDIRECT = "LOAD_INDIRECT"
+    LOAD_FIELD_INDIRECT = "LOAD_FIELD_INDIRECT"
     STORE_INDIRECT = "STORE_INDIRECT"
     # Labels (pseudo-instruction)
     LABEL = "LABEL"
