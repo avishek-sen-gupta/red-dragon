@@ -2,7 +2,7 @@
 
 from interpreter.builtins import _builtin_array_of
 from interpreter.vm import VMState
-from interpreter.vm_types import BuiltinResult
+from interpreter.vm_types import BuiltinResult, Pointer
 from interpreter.typed_value import TypedValue, typed_from_runtime
 
 
@@ -17,14 +17,15 @@ class TestArrayOfBuiltinResult:
     def test_value_is_heap_address(self):
         vm = VMState()
         result = _builtin_array_of([typed_from_runtime(10)], vm)
-        assert isinstance(result.value, str)
-        assert result.value.startswith("arr_")
+        assert isinstance(result.value, TypedValue)
+        assert isinstance(result.value.value, Pointer)
+        assert result.value.value.base.startswith("arr_")
 
     def test_new_objects_contains_array(self):
         vm = VMState()
         result = _builtin_array_of([typed_from_runtime(10)], vm)
         assert len(result.new_objects) == 1
-        assert result.new_objects[0].addr == result.value
+        assert result.new_objects[0].addr == result.value.value.base
         assert result.new_objects[0].type_hint == "array"
 
     def test_heap_writes_contain_elements_and_length(self):
@@ -41,7 +42,7 @@ class TestArrayOfBuiltinResult:
     def test_does_not_mutate_heap(self):
         vm = VMState()
         result = _builtin_array_of([typed_from_runtime(10)], vm)
-        assert result.value not in vm.heap
+        assert result.value.value.base not in vm.heap
 
     def test_empty_array(self):
         vm = VMState()

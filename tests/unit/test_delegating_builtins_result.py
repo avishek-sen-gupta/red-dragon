@@ -8,9 +8,10 @@ from interpreter.builtins import (
 )
 from interpreter.vm import Operators
 from interpreter.vm_types import BuiltinResult, HeapObject, VMState
-from interpreter.typed_value import typed, typed_from_runtime
+from interpreter.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.type_expr import scalar
 from interpreter.constants import TypeName
+from interpreter.vm_types import Pointer
 
 
 class TestBuiltinKeysResult:
@@ -34,7 +35,8 @@ class TestBuiltinKeysResult:
         )
         result = _builtin_keys([typed_from_runtime("obj_0")], vm)
         assert isinstance(result, BuiltinResult)
-        assert isinstance(result.value, str)
+        assert isinstance(result.value, TypedValue)
+        assert isinstance(result.value.value, Pointer)
         assert len(result.new_objects) == 1
 
 
@@ -56,7 +58,8 @@ class TestBuiltinSliceResult:
             vm,
         )
         assert isinstance(result, BuiltinResult)
-        assert isinstance(result.value, str)
+        assert isinstance(result.value, TypedValue)
+        assert isinstance(result.value.value, Pointer)
 
     def test_native_string_returns_builtin_result(self):
         vm = VMState()
@@ -84,7 +87,8 @@ class TestBuiltinSliceResult:
             vm,
         )
         assert isinstance(result, BuiltinResult)
-        assert isinstance(result.value, str)
+        assert isinstance(result.value, TypedValue)
+        assert isinstance(result.value.value, Pointer)
         assert len(result.new_objects) == 1
 
 
@@ -101,7 +105,8 @@ class TestSliceHeapArrayResult:
         vm = VMState()
         result = _slice_heap_array(heap_obj, slice(0, 1), vm)
         assert isinstance(result, BuiltinResult)
-        assert isinstance(result.value, str)
+        assert isinstance(result.value, TypedValue)
+        assert isinstance(result.value.value, Pointer)
         assert len(result.new_objects) == 1
 
     def test_uncomputable_non_int_length(self):

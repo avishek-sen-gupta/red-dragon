@@ -34,7 +34,7 @@ class TestBuiltinLenRespectsLengthField:
             [typed_from_runtime(10), typed_from_runtime(5), typed_from_runtime(3)], vm
         )
         _apply_builtin_result(vm, result)
-        length = _builtin_len([typed_from_runtime(result.value)], vm)
+        length = _builtin_len([result.value], vm)
         assert length.value == 3
 
     def test_len_of_arrayOf_empty(self):
@@ -42,7 +42,7 @@ class TestBuiltinLenRespectsLengthField:
         vm.call_stack.append(StackFrame(function_name="test"))
         result = _builtin_array_of([], vm)
         _apply_builtin_result(vm, result)
-        length = _builtin_len([typed_from_runtime(result.value)], vm)
+        length = _builtin_len([result.value], vm)
         assert length.value == 0
 
     def test_len_of_arrayOf_single_element(self):
@@ -50,7 +50,7 @@ class TestBuiltinLenRespectsLengthField:
         vm.call_stack.append(StackFrame(function_name="test"))
         result = _builtin_array_of([typed_from_runtime(42)], vm)
         _apply_builtin_result(vm, result)
-        length = _builtin_len([typed_from_runtime(result.value)], vm)
+        length = _builtin_len([result.value], vm)
         assert length.value == 1
 
     def test_len_of_heap_object_without_length_field(self):
