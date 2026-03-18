@@ -92,9 +92,9 @@ Respond with ONLY valid JSON. No markdown fences. No text outside the JSON objec
         resolved = {}
         for i, op in enumerate(instruction.operands):
             raw = op
-            val = _resolve_reg(state, op)
-            if val is not raw:  # was a register reference
-                resolved[str(op)] = _serialize_value(val)
+            tv = _resolve_reg(state, op)
+            if tv.value is not raw:  # was a register reference
+                resolved[str(op)] = _serialize_value(tv.value)
 
         # Build a compact state snapshot (only what's relevant)
         compact_state: dict[str, Any] = {
