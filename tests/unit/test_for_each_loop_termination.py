@@ -84,9 +84,9 @@ class TestJavaForEachTermination:
             "java",
             """\
 class M {
-    void m() {
-        int[] arr = {10, 5, 3};
-        int answer = 0;
+    static int[] arr = {10, 5, 3};
+    static int answer = 0;
+    static {
         for (int x : arr) {
             answer = answer + x;
         }
@@ -94,7 +94,7 @@ class M {
 }
 """,
         )
-        # Java answer is inside a method — not extractable from frame 0
+        assert extract_answer(vm, "java") == 18
         assert stats.steps < 200
 
 
