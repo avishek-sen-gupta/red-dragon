@@ -90,6 +90,24 @@ def lower_paren(ctx: TreeSitterEmitContext, node) -> str:
     return ctx.lower_expr(inner)
 
 
+def lower_spread_arg(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower *expr / ...expr / **expr as CALL_FUNCTION('spread', inner)."""
+    named_children = [c for c in node.children if c.is_named]
+    inner_reg = (
+        ctx.lower_expr(named_children[0])
+        if named_children
+        else lower_const_literal(ctx, node)
+    )
+    reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_FUNCTION,
+        result_reg=reg,
+        operands=["spread", inner_reg],
+        node=node,
+    )
+    return reg
+
+
 def lower_binop(ctx: TreeSitterEmitContext, node) -> str:
     children = [
         c
