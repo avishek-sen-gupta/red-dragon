@@ -35,7 +35,7 @@ from interpreter.class_ref import ClassRef
 from interpreter.builtins import Builtins, _builtin_array_of
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.type_environment import TypeEnvironment
-from interpreter.type_expr import UNKNOWN, TypeExpr, parse_type, scalar
+from interpreter.type_expr import UNKNOWN, TypeExpr, parse_type, pointer, scalar
 from interpreter.unresolved_call import UnresolvedCallResolver, SymbolicResolver
 from interpreter.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.binop_coercion import BinopCoercionStrategy, DefaultBinopCoercion
@@ -277,12 +277,18 @@ def _handle_address_of(
             )
         )
 
-    # If variable holds a bare heap address string (struct/array/symbolic), wrap it
-    # in a Pointer but do NOT alias the variable — structs are already on the heap,
-    # so LOAD_VAR should continue to return the heap address string directly.
-    # Pointer values must NOT take this path: &ptr needs to promote the Pointer
-    # itself to a new heap slot (double-indirection), not re-wrap its base.
-    addr = _heap_addr(current_val) if not isinstance(current_val, Pointer) else ""
+    # If variable holds a bare heap address string or a Pointer from NEW_OBJECT
+    # (base starts with obj_ prefix), return identity — the object is already on
+    # the heap. Pointer values from ADDRESS_OF (base starts with mem_) need
+    # double-indirection: promote the Pointer itself to a new heap slot.
+    is_new_object_pointer = isinstance(
+        current_val, Pointer
+    ) and current_val.base.startswith(constants.OBJ_ADDR_PREFIX)
+    addr = (
+        _heap_addr(current_val)
+        if not isinstance(current_val, Pointer) or is_new_object_pointer
+        else ""
+    )
     if addr and addr in vm.heap:
         ptr = Pointer(base=addr, offset=0)
         return ExecutionResult.success(
@@ -488,7 +494,12 @@ def _handle_new_object(
     return ExecutionResult.success(
         StateUpdate(
             new_objects=[NewObject(addr=addr, type_hint=type_hint or None)],
-            register_writes={inst.result_reg: typed(addr, UNKNOWN)},
+            register_writes={
+                inst.result_reg: typed(
+                    Pointer(base=addr, offset=0),
+                    pointer(scalar(type_hint or "Object")),
+                )
+            },
             reasoning=f"new {type_hint} → {addr}",
         )
     )
@@ -1230,11 +1241,12 @@ def _try_class_constructor_call(
     vm.symbolic_counter += 1
     type_hint = parse_type(type_hint_source) if type_hint_source else scalar(class_name)
     vm.heap[addr] = HeapObject(type_hint=type_hint)
+    ptr_tv = typed(Pointer(base=addr, offset=0), pointer(type_hint))
 
     if not init_label or init_label not in cfg.blocks:
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed(addr, UNKNOWN)},
+                register_writes={inst.result_reg: ptr_tv},
                 new_objects=[NewObject(addr=addr, type_hint=str(type_hint) or None)],
                 reasoning=f"new {class_name}() → {addr} (no __init__)",
             )
@@ -1246,20 +1258,20 @@ def _try_class_constructor_call(
     has_explicit_self = bool(params) and params[0] in constants.SELF_PARAM_NAMES
     if has_explicit_self:
         # Explicit self/this: first param is self/this, rest are constructor args
-        new_vars[params[0]] = typed(addr, UNKNOWN)
+        new_vars[params[0]] = ptr_tv
         for i, arg in enumerate(args):
             if i + 1 < len(params):
                 new_vars[params[i + 1]] = arg
     else:
         # Java/C++/C#-style: this is implicit, all params are constructor args
-        new_vars[constants.PARAM_THIS] = typed(addr, UNKNOWN)
+        new_vars[constants.PARAM_THIS] = ptr_tv
         for i, arg in enumerate(args):
             if i < len(params):
                 new_vars[params[i]] = arg
 
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: typed(addr, UNKNOWN)},
+            register_writes={inst.result_reg: ptr_tv},
             call_push=StackFramePush(
                 function_name=f"{class_name}.__init__",
                 return_label=current_label,
