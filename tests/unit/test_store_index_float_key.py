@@ -13,7 +13,7 @@ from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.type_environment import TypeEnvironment
-from interpreter.vm import VMState, apply_update
+from interpreter.vm import VMState, apply_update, _heap_addr
 from interpreter.vm_types import StackFrame, StateUpdate
 from interpreter.executor import LocalExecutor
 from interpreter.cfg import CFG
@@ -169,7 +169,7 @@ class TestFloatIndexHeapKeyMismatch:
             conversion_rules=rules,
         )
 
-        arr_addr = unwrap(vm.current_frame.registers["%arr"])
+        arr_addr = _heap_addr(unwrap(vm.current_frame.registers["%arr"]))
         heap_obj = vm.heap[arr_addr]
         assert "2" in heap_obj.fields, "Expected int key '2' in heap fields"
         assert (
