@@ -5,7 +5,7 @@ from interpreter.vm_types import Pointer, StackFrame, SymbolicValue
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.executor import _handle_address_of
 from interpreter.typed_value import typed
-from interpreter.type_expr import scalar
+from interpreter.type_expr import pointer, scalar
 from interpreter.constants import TypeName
 
 
@@ -34,10 +34,11 @@ class TestAddressOfPointerGuard:
     new heap slot (double-indirection), NOT re-wrap its base address."""
 
     def test_address_of_pointer_produces_new_heap_slot(self):
-        # Set up: variable "ptr" holds a Pointer whose base IS on the heap.
-        # Without the guard, _heap_addr would return "obj_0" and the handler
-        # would short-circuit to wrap that base — wrong for &ptr semantics.
-        existing_ptr = Pointer(base="obj_0", offset=0)
+        # Set up: variable "ptr" holds a Pointer from a previous &x operation
+        # (base starts with mem_, NOT obj_). Taking &ptr must promote the
+        # Pointer itself to a new heap slot (double-indirection).
+        # Pointers with obj_ base (from NEW_OBJECT) are treated as identity.
+        existing_ptr = Pointer(base="mem_0", offset=0)
         frame = StackFrame(
             function_name="main",
             local_vars={
@@ -47,11 +48,12 @@ class TestAddressOfPointerGuard:
         vm = VMState(
             call_stack=[frame],
             heap={
-                "obj_0": HeapObject(
-                    type_hint="SomeStruct",
-                    fields={"x": typed(42, scalar(TypeName.INT))},
+                "mem_0": HeapObject(
+                    type_hint=None,
+                    fields={"0": typed(42, scalar(TypeName.INT))},
                 ),
             },
+            symbolic_counter=1,
         )
 
         inst = IRInstruction(
@@ -62,15 +64,49 @@ class TestAddressOfPointerGuard:
 
         result = _handle_address_of(inst, vm)
 
-        # The result must be a Pointer to a NEW heap slot (mem_*), not obj_0.
+        # The result must be a Pointer to a NEW heap slot (mem_*), not mem_0.
         result_ptr = result.update.register_writes["t0"].value
         assert isinstance(result_ptr, Pointer)
         assert result_ptr.base.startswith(
             "mem_"
         ), f"Expected a new mem_ heap slot for &ptr, got {result_ptr.base}"
-        assert result_ptr.base != "obj_0"
+        assert result_ptr.base != "mem_0"
         # The new heap slot must contain the original Pointer as its value.
         assert result_ptr.base in vm.heap
         promoted_val = vm.heap[result_ptr.base].fields["0"].value
         assert isinstance(promoted_val, Pointer)
-        assert promoted_val.base == "obj_0"
+        assert promoted_val.base == "mem_0"
+
+    def test_address_of_new_object_pointer_returns_identity(self):
+        # A variable holding a Pointer from NEW_OBJECT (base starts with obj_)
+        # should return identity — the struct IS the heap object.
+        struct_ptr = Pointer(base="obj_0", offset=0)
+        frame = StackFrame(
+            function_name="main",
+            local_vars={
+                "pt": typed(struct_ptr, pointer(scalar("Point"))),
+            },
+        )
+        vm = VMState(
+            call_stack=[frame],
+            heap={
+                "obj_0": HeapObject(
+                    type_hint="Point",
+                    fields={"x": typed(42, scalar(TypeName.INT))},
+                ),
+            },
+        )
+
+        inst = IRInstruction(
+            opcode=Opcode.ADDRESS_OF,
+            result_reg="t0",
+            operands=["pt"],
+        )
+
+        result = _handle_address_of(inst, vm)
+
+        result_ptr = result.update.register_writes["t0"].value
+        assert isinstance(result_ptr, Pointer)
+        assert (
+            result_ptr.base == "obj_0"
+        ), "ADDRESS_OF on NEW_OBJECT Pointer should return identity"

@@ -9,6 +9,7 @@ from interpreter.parser import TreeSitterParserFactory
 from interpreter.run import run
 from interpreter.type_expr import ParameterizedType, ScalarType, metatype
 from interpreter.typed_value import unwrap_locals
+from interpreter.vm_types import Pointer
 
 
 def _run_js(source: str, max_steps: int = 200):
@@ -39,9 +40,10 @@ class TestNewObjectDereference:
             let obj = new Foo();
             """)
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        addr = locals_["obj"]
+        obj_ptr = locals_["obj"]
+        assert isinstance(obj_ptr, Pointer)
         assert (
-            vm.heap[addr].type_hint != "Foo"
+            vm.heap[obj_ptr.base].type_hint != "Foo"
         ), "type_hint should be the canonical class name, not the variable alias"
 
     def test_named_class_heap_type_hint(self):
@@ -51,8 +53,9 @@ class TestNewObjectDereference:
             let obj = new Bar();
             """)
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        addr = locals_["obj"]
-        assert vm.heap[addr].type_hint == "Bar"
+        obj_ptr = locals_["obj"]
+        assert isinstance(obj_ptr, Pointer)
+        assert vm.heap[obj_ptr.base].type_hint == "Bar"
 
     def test_reassigned_class_ref(self):
         """const B = A where A is a named class — new B() should resolve to A."""
