@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from interpreter.builtins import Builtins
 from interpreter.vm import VMState
 from interpreter.vm_types import BuiltinResult, HeapObject, Pointer
@@ -27,29 +25,30 @@ class TestSpreadBuiltin:
         """spread should be in the builtins TABLE."""
         assert "spread" in Builtins.TABLE
 
-    def test_spread_returns_list_of_elements(self):
-        """spread(array_ptr) should return a list of the array's elements."""
+    def test_spread_returns_tuple_of_elements(self):
+        """spread(array_ptr) should return a tuple (not list) of the array's elements."""
         vm, ptr = self._make_vm_with_array([10, 5, 3])
         result = Builtins.TABLE["spread"]([typed_from_runtime(ptr)], vm)
         assert isinstance(result, BuiltinResult)
-        assert result.value == [10, 5, 3]
+        assert isinstance(result.value, tuple)
+        assert result.value == (10, 5, 3)
 
     def test_spread_empty_array(self):
-        """spread on an empty array should return an empty list."""
+        """spread on an empty array should return an empty tuple."""
         vm, ptr = self._make_vm_with_array([])
         result = Builtins.TABLE["spread"]([typed_from_runtime(ptr)], vm)
         assert isinstance(result, BuiltinResult)
-        assert result.value == []
+        assert result.value == ()
 
     def test_spread_single_element(self):
-        """spread on a single-element array should return a one-element list."""
+        """spread on a single-element array should return a one-element tuple."""
         vm, ptr = self._make_vm_with_array([42])
         result = Builtins.TABLE["spread"]([typed_from_runtime(ptr)], vm)
         assert isinstance(result, BuiltinResult)
-        assert result.value == [42]
+        assert result.value == (42,)
 
     def test_spread_preserves_order(self):
         """Elements should come out in index order 0, 1, 2, ..."""
         vm, ptr = self._make_vm_with_array([100, 200, 300, 400])
         result = Builtins.TABLE["spread"]([typed_from_runtime(ptr)], vm)
-        assert result.value == [100, 200, 300, 400]
+        assert result.value == (100, 200, 300, 400)
