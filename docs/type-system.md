@@ -1115,7 +1115,7 @@ class TypedValue:
 | Builtin function args | `list[TypedValue]` | Builtins receive typed arguments |
 | `BuiltinResult.value` | `TypedValue` | Builtin return values carry type |
 
-Opcode handlers resolve register operands via `_resolve_binop_operand()` which returns `TypedValue`, preserving the type through the computation pipeline. The raw value is extracted with `.value` only at the point of computation (e.g. before calling `Operators.eval_binop()`).
+Opcode handlers resolve register operands via `_resolve_reg()` which returns `TypedValue`, preserving the type through the computation pipeline. The raw value is extracted with `.value` only at the point of computation (e.g. before calling `Operators.eval_binop()`).
 
 ---
 
@@ -1439,7 +1439,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     subgraph BinaryOp["BINOP Execution"]
-        B1["_resolve_binop_operand → TypedValue"]
+        B1["_resolve_reg → TypedValue"]
         B2["Symbolic check (short-circuit)"]
         B3["binop_coercion.coerce(op, lhs, rhs)"]
         B4["Extract .value from coerced operands"]
@@ -1461,7 +1461,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     subgraph UnaryOp["UNOP Execution"]
-        U1["_resolve_binop_operand → TypedValue"]
+        U1["_resolve_reg → TypedValue"]
         U2["Symbolic check (short-circuit)"]
         U3["unop_coercion.coerce(op, operand)"]
         U4["Extract .value from coerced operand"]
