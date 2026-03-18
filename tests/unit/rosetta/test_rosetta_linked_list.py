@@ -455,22 +455,7 @@ CONCRETE_LANGUAGES: frozenset[str] = frozenset(
 
 EXPECTED_ANSWER = 6  # 1 + 2 + 3
 
-# Languages where Box auto-deref is not yet wired (Tasks 6-7 pending)
-_BOX_AUTODEREF_PENDING: frozenset[str] = frozenset({"rust"})
-
-_CONCRETE_PARAMS = [
-    (
-        pytest.param(
-            lang,
-            marks=pytest.mark.xfail(
-                reason="Box auto-deref not yet wired (Tasks 6-7)",
-            ),
-        )
-        if lang in _BOX_AUTODEREF_PENDING
-        else lang
-    )
-    for lang in sorted(CONCRETE_LANGUAGES)
-]
+_CONCRETE_PARAMS = list(sorted(CONCRETE_LANGUAGES))
 
 
 class TestLinkedListConcreteExecution:

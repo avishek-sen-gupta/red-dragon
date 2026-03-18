@@ -382,20 +382,19 @@ def _handle_load_field_indirect(
             )
         )
     # Field not found — check for __method_missing__ on the object
-    if constants.METHOD_MISSING in heap_obj.fields:
-        mm_tv = heap_obj.fields[constants.METHOD_MISSING]
-        if isinstance(mm_tv.value, BoundFuncRef):
-            self_tv = typed(obj_val, scalar(heap_obj.type_hint))
-            name_tv = typed(field_name, scalar("String"))
-            return _try_user_function_call(
-                mm_tv.value,
-                [self_tv, name_tv],
-                inst,
-                vm,
-                cfg,
-                registry,
-                current_label,
-            )
+    mm_ref = _find_method_missing(heap_obj, registry, cfg)
+    if mm_ref is not None:
+        self_tv = typed(obj_val, heap_obj.type_hint)
+        name_tv = typed(field_name, scalar("String"))
+        return _try_user_function_call(
+            mm_ref,
+            [self_tv, name_tv],
+            inst,
+            vm,
+            cfg,
+            registry,
+            current_label,
+        )
     # No __method_missing__ — return symbolic
     sym = vm.fresh_symbolic(hint=f"{addr}.{field_name}")
     return ExecutionResult.success(
@@ -556,6 +555,29 @@ def _handle_store_field(
     )
 
 
+def _find_method_missing(
+    heap_obj: HeapObject,
+    registry: FunctionRegistry,
+    cfg: CFG,
+) -> BoundFuncRef | None:
+    """Look up __method_missing__ on a heap object: instance field first, then class registry."""
+    if constants.METHOD_MISSING in heap_obj.fields:
+        mm_tv = heap_obj.fields[constants.METHOD_MISSING]
+        if isinstance(mm_tv.value, BoundFuncRef):
+            return mm_tv.value
+    # Check class-level __method_missing__ via registry
+    type_name = str(heap_obj.type_hint) if heap_obj.type_hint else ""
+    mm_labels = registry.class_methods.get(type_name, {}).get(
+        constants.METHOD_MISSING, []
+    )
+    if mm_labels and mm_labels[0] in cfg.blocks:
+        return BoundFuncRef(
+            func_ref=FuncRef(name=constants.METHOD_MISSING, label=mm_labels[0]),
+            closure_id="",
+        )
+    return None
+
+
 def _handle_load_field(
     inst: IRInstruction,
     vm: VMState,
@@ -610,20 +632,19 @@ def _handle_load_field(
             )
         )
     # Field not found — check for __method_missing__ on the object
-    if constants.METHOD_MISSING in heap_obj.fields:
-        mm_tv = heap_obj.fields[constants.METHOD_MISSING]
-        if isinstance(mm_tv.value, BoundFuncRef):
-            self_tv = typed(obj_val, scalar(heap_obj.type_hint))
-            name_tv = typed(field_name, scalar("String"))
-            return _try_user_function_call(
-                mm_tv.value,
-                [self_tv, name_tv],
-                inst,
-                vm,
-                cfg,
-                registry,
-                current_label,
-            )
+    mm_ref = _find_method_missing(heap_obj, registry, cfg)
+    if mm_ref is not None:
+        self_tv = typed(obj_val, heap_obj.type_hint)
+        name_tv = typed(field_name, scalar("String"))
+        return _try_user_function_call(
+            mm_ref,
+            [self_tv, name_tv],
+            inst,
+            vm,
+            cfg,
+            registry,
+            current_label,
+        )
     # No __method_missing__ — create symbolic and cache it
     sym = vm.fresh_symbolic(hint=f"{addr}.{field_name}")
     heap_obj.fields[field_name] = typed(sym, UNKNOWN)
@@ -1532,22 +1553,21 @@ def _handle_call_method(
         # Known type but unknown method — check __method_missing__ first
         if addr and addr in vm.heap:
             heap_obj = vm.heap[addr]
-            if constants.METHOD_MISSING in heap_obj.fields:
-                mm_tv = heap_obj.fields[constants.METHOD_MISSING]
-                if isinstance(mm_tv.value, BoundFuncRef):
-                    mm_args = [
-                        obj_val,
-                        typed(method_name, scalar("String")),
-                    ] + list(args)
-                    return _try_user_function_call(
-                        mm_tv.value,
-                        mm_args,
-                        inst,
-                        vm,
-                        cfg,
-                        registry,
-                        current_label,
-                    )
+            mm_ref = _find_method_missing(heap_obj, registry, cfg)
+            if mm_ref is not None:
+                mm_args = [
+                    obj_val,
+                    typed(method_name, scalar("String")),
+                ] + list(args)
+                return _try_user_function_call(
+                    mm_ref,
+                    mm_args,
+                    inst,
+                    vm,
+                    cfg,
+                    registry,
+                    current_label,
+                )
         # No __method_missing__ — resolve via configured strategy
         return call_resolver.resolve_method(
             type_hint, method_name, [a.value for a in args], inst, vm
