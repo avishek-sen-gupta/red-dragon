@@ -23,7 +23,6 @@ from interpreter.vm import (
     ExecutionResult,
     Operators,
     _resolve_reg,
-    _resolve_binop_operand,
     _is_symbolic,
     _heap_addr,
     _parse_const,
@@ -861,8 +860,8 @@ def _handle_branch_if(
 def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
     binop_coercion = kwargs.get("binop_coercion", _DEFAULT_BINOP_COERCION)
     oper = inst.operands[0]
-    lhs_typed = _resolve_binop_operand(vm, inst.operands[1])
-    rhs_typed = _resolve_binop_operand(vm, inst.operands[2])
+    lhs_typed = _resolve_reg(vm, inst.operands[1])
+    rhs_typed = _resolve_reg(vm, inst.operands[2])
 
     # Unwrap for special-case checks
     lhs = lhs_typed.value
@@ -955,7 +954,7 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
 def _handle_unop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
     unop_coercion = kwargs.get("unop_coercion", _DEFAULT_UNOP_COERCION)
     oper = inst.operands[0]
-    operand_typed = _resolve_binop_operand(vm, inst.operands[1])
+    operand_typed = _resolve_reg(vm, inst.operands[1])
     operand = operand_typed.value
     # Address-of (&) on a value that is already a reference (function ref or
     # heap object) returns the reference unchanged — our model already uses
@@ -1372,7 +1371,7 @@ def _handle_call_function(
         else raw_func_name
     )
     arg_regs = inst.operands[1:]
-    args = [_resolve_binop_operand(vm, a) for a in arg_regs]
+    args = [_resolve_reg(vm, a) for a in arg_regs]
 
     # 0. Try I/O provider (for __cobol_* calls)
     if (
@@ -1495,10 +1494,10 @@ def _handle_call_method(
     type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
     **kwargs: Any,
 ) -> ExecutionResult:
-    obj_val = _resolve_binop_operand(vm, inst.operands[0])
+    obj_val = _resolve_reg(vm, inst.operands[0])
     method_name = inst.operands[1]
     arg_regs = inst.operands[2:]
-    args = [_resolve_binop_operand(vm, a) for a in arg_regs]
+    args = [_resolve_reg(vm, a) for a in arg_regs]
 
     # If the object is a FUNC_REF, invoke it directly (e.g. .call(), .apply())
     if isinstance(obj_val.value, BoundFuncRef):
@@ -1644,9 +1643,9 @@ def _handle_call_unknown(
     **kwargs: Any,
 ) -> ExecutionResult:
     """Handle CALL_UNKNOWN — dynamic call target, resolve via configured strategy."""
-    target_val = _resolve_binop_operand(vm, inst.operands[0])
+    target_val = _resolve_reg(vm, inst.operands[0])
     arg_regs = inst.operands[1:]
-    args = [_resolve_binop_operand(vm, a) for a in arg_regs]
+    args = [_resolve_reg(vm, a) for a in arg_regs]
 
     # If the target resolves to a FUNC_REF, invoke it directly
     user_result = _try_user_function_call(

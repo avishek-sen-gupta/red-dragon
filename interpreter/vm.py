@@ -341,21 +341,6 @@ def _resolve_reg(vm: VMState, operand: str) -> TypedValue:
     return typed_from_runtime(operand)
 
 
-def _resolve_binop_operand(vm: VMState, operand: str) -> TypedValue:
-    """Resolve a register name to its TypedValue.
-
-    Used by type-aware handlers (BINOP). Falls back to typed_from_runtime
-    if the operand is not a register or not wrapped.
-    """
-    if isinstance(operand, str) and operand.startswith("%"):
-        frame = vm.current_frame
-        val = frame.registers.get(operand, operand)
-        if isinstance(val, TypedValue):
-            return val
-        return typed_from_runtime(val)
-    return typed_from_runtime(operand)
-
-
 def _parse_const(raw: str) -> Any:
     """Parse a constant literal string into a Python value."""
     if raw == CanonicalLiteral.NONE:
