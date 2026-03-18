@@ -42,9 +42,13 @@ class TestNewObjectDereference:
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
         obj_ptr = locals_["obj"]
         assert isinstance(obj_ptr, Pointer)
+        type_hint = vm.heap[obj_ptr.base].type_hint
         assert (
-            vm.heap[obj_ptr.base].type_hint != "Foo"
+            str(type_hint) != "Foo"
         ), "type_hint should be the canonical class name, not the variable alias"
+        assert "__anon_class_" in str(
+            type_hint
+        ), f"expected canonical anonymous class name, got: {type_hint}"
 
     def test_named_class_heap_type_hint(self):
         """Regular class declaration should still use its own name as type_hint."""
