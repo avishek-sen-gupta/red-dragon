@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.typed_value import unwrap_locals
@@ -15,7 +13,6 @@ def _run_ruby(source: str, max_steps: int = 200):
 
 
 class TestRubySplatArgumentExecution:
-    @pytest.mark.xfail(reason="Ruby splat array destructuring produces symbolic values")
     def test_splat_does_not_block(self):
         """Code with *args (splat argument) should not block execution."""
         source = """\

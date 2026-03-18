@@ -387,16 +387,9 @@ def lower_sequence_expression(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_spread_element(ctx: TreeSitterEmitContext, node) -> str:
     """Lower `...expr` -> CALL_FUNCTION('spread', expr)."""
-    children = [c for c in node.children if c.is_named]
-    expr_reg = ctx.lower_expr(children[0]) if children else ctx.fresh_reg()
-    reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["spread", expr_reg],
-        node=node,
-    )
-    return reg
+    from interpreter.frontends.common.expressions import lower_spread_arg
+
+    return lower_spread_arg(ctx, node)
 
 
 def lower_function_expression(ctx: TreeSitterEmitContext, node) -> str:

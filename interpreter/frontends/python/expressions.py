@@ -706,16 +706,9 @@ def lower_await(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_splat_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower *expr (list_splat) or **expr (dictionary_splat) as CALL_FUNCTION('spread', inner)."""
-    named_children = [c for c in node.children if c.is_named]
-    arg_regs = [ctx.lower_expr(c) for c in named_children]
-    reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["spread"] + arg_regs,
-        node=node,
-    )
-    return reg
+    from interpreter.frontends.common.expressions import lower_spread_arg
+
+    return lower_spread_arg(ctx, node)
 
 
 # ── named expression (walrus :=) ─────────────────────────────

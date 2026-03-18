@@ -757,16 +757,9 @@ def lower_php_clone_expression(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_php_variadic_unpacking(ctx: TreeSitterEmitContext, node) -> str:
     """Lower ``...$arr`` as CALL_FUNCTION('spread', inner)."""
-    named_children = [c for c in node.children if c.is_named]
-    inner_reg = ctx.lower_expr(named_children[0]) if named_children else ctx.fresh_reg()
-    reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["spread", inner_reg],
-        node=node,
-    )
-    return reg
+    from interpreter.frontends.common.expressions import lower_spread_arg
+
+    return lower_spread_arg(ctx, node)
 
 
 def lower_php_error_suppression(ctx: TreeSitterEmitContext, node) -> str:
