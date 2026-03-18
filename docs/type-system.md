@@ -1095,7 +1095,7 @@ class TypedValue:
 | Function | Purpose |
 |---|---|
 | `typed(value, type_expr)` | Construct a `TypedValue` with an explicit type |
-| `typed_from_runtime(value)` | Construct a `TypedValue` by inferring type from the Python value (`int` → `Int`, `float` → `Float`, `bool` → `Bool`, `str` → `String`, otherwise `UNKNOWN`) |
+| `typed_from_runtime(value)` | Construct a `TypedValue` by inferring type from the Python value (`int` → `Int`, `float` → `Float`, `bool` → `Bool`, `str` → `String`, otherwise `UNKNOWN`). Used as a fallback inside `_resolve_reg()` when a register holds a non-`TypedValue` value |
 | `unwrap_locals(local_vars)` | Extract `{name: raw_value}` dict from `{name: TypedValue}` — used by tests and display code |
 
 ### Where TypedValue Lives
@@ -1115,7 +1115,7 @@ class TypedValue:
 | Builtin function args | `list[TypedValue]` | Builtins receive typed arguments |
 | `BuiltinResult.value` | `TypedValue` | Builtin return values carry type |
 
-Opcode handlers resolve register operands via `_resolve_reg()` which returns `TypedValue`, preserving the type through the computation pipeline. The raw value is extracted with `.value` only at the point of computation (e.g. before calling `Operators.eval_binop()`).
+Opcode handlers resolve register operands via `_resolve_reg()` which returns `TypedValue`, preserving parameterized type information (e.g. `pointer(scalar("Dog"))`) through the register→handler→storage pipeline. Write callsites (`DECL_VAR`, `STORE_VAR`, `STORE_FIELD`, `STORE_INDEX`, `STORE_INDIRECT`, `RETURN`) use the `TypedValue` directly instead of re-wrapping via `typed_from_runtime()`. Read callsites extract `.value` for bare-value operations (`isinstance`, `_heap_addr`, `bool`, `int`, dict keys, etc.). The former `_resolve_binop_operand()` function was deleted as it became identical to `_resolve_reg()` after this change.
 
 ---
 

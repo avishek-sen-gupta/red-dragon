@@ -645,10 +645,10 @@ The VM's best-effort execution mechanism enables running programs with incomplet
 ```python
 def _handle_binop(inst, vm, **kwargs):
     oper = inst.operands[0]
-    lhs = _resolve_reg(vm, inst.operands[1])
-    rhs = _resolve_reg(vm, inst.operands[2])
+    lhs = _resolve_reg(vm, inst.operands[1])   # returns TypedValue
+    rhs = _resolve_reg(vm, inst.operands[2])   # returns TypedValue
 
-    if _is_symbolic(lhs) or _is_symbolic(rhs):
+    if _is_symbolic(lhs.value) or _is_symbolic(rhs.value):
         # Either operand is symbolic → result must be symbolic
         sym = vm.fresh_symbolic(hint=f"{lhs_desc} {oper} {rhs_desc}")
         sym.constraints = [f"{lhs_desc} {oper} {rhs_desc}"]
@@ -1094,7 +1094,7 @@ Both graphs are returned in `DataflowResult`: `raw_dependency_graph` (direct edg
 interpreter/
 ├── ir.py                    IR instruction format, Opcode enum, SourceLocation
 ├── vm_types.py              VM data types (SymbolicValue, HeapObject, VMState, StateUpdate, ...)
-├── vm.py                    apply_update(), helpers (Operators, _parse_const [canonical forms only], _resolve_reg, ...)
+├── vm.py                    apply_update(), helpers (Operators, _parse_const [canonical forms only], _resolve_reg [returns TypedValue], ...)
 ├── cfg_types.py             BasicBlock, CFG
 ├── cfg.py                   build_cfg(), cfg_to_mermaid(), extract_function_instructions()
 ├── run_types.py             VMConfig, ExecutionStats, PipelineStats
