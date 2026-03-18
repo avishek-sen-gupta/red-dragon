@@ -557,7 +557,12 @@ def _handle_store_field(
 
 
 def _handle_load_field(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction,
+    vm: VMState,
+    cfg: CFG = CFG(),
+    registry: FunctionRegistry = FunctionRegistry(),
+    current_label: str = "",
+    **kwargs: Any,
 ) -> ExecutionResult:
     obj_val = _resolve_reg(vm, inst.operands[0])
     field_name = inst.operands[1]
@@ -604,7 +609,22 @@ def _handle_load_field(
                 reasoning=f"load {addr}.{field_name} = {tv!r}",
             )
         )
-    # Field not found — create symbolic and cache it
+    # Field not found — check for __method_missing__ on the object
+    if constants.METHOD_MISSING in heap_obj.fields:
+        mm_tv = heap_obj.fields[constants.METHOD_MISSING]
+        if isinstance(mm_tv.value, BoundFuncRef):
+            self_tv = typed(obj_val, scalar(heap_obj.type_hint))
+            name_tv = typed(field_name, scalar("String"))
+            return _try_user_function_call(
+                mm_tv.value,
+                [self_tv, name_tv],
+                inst,
+                vm,
+                cfg,
+                registry,
+                current_label,
+            )
+    # No __method_missing__ — create symbolic and cache it
     sym = vm.fresh_symbolic(hint=f"{addr}.{field_name}")
     heap_obj.fields[field_name] = typed(sym, UNKNOWN)
     return ExecutionResult.success(
