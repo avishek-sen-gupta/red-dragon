@@ -507,7 +507,7 @@ def _emit_prelude_func_ref(
 
 
 def _emit_box_class(ctx: TreeSitterEmitContext) -> None:
-    """Emit Box class: __init__(self, value) stores self.value = value."""
+    """Emit Box class: __init__ + __method_missing__ for auto-deref delegation."""
     class_name = "Box"
     class_label = ctx.fresh_label(f"{constants.PRELUDE_CLASS_LABEL_PREFIX}{class_name}")
     end_label = ctx.fresh_label(
@@ -515,12 +515,16 @@ def _emit_box_class(ctx: TreeSitterEmitContext) -> None:
     )
     init_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{class_name}___init__")
     init_end = ctx.fresh_label(f"end_{class_name}___init__")
+    mm_label = ctx.fresh_label(
+        f"{constants.FUNC_LABEL_PREFIX}{class_name}___{constants.METHOD_MISSING}"
+    )
+    mm_end = ctx.fresh_label(f"end_{class_name}___{constants.METHOD_MISSING}")
 
     # Class body — branch past it
     ctx.emit(Opcode.BRANCH, label=end_label)
     ctx.emit(Opcode.LABEL, label=class_label)
 
-    # __init__ function body
+    # __init__(self, value) body
     ctx.emit(Opcode.BRANCH, label=init_end)
     ctx.emit(Opcode.LABEL, label=init_label)
     _emit_method_params(ctx, [constants.PARAM_SELF, "value"])
@@ -528,12 +532,36 @@ def _emit_box_class(ctx: TreeSitterEmitContext) -> None:
     ctx.emit(Opcode.LOAD_VAR, result_reg=self_reg, operands=[constants.PARAM_SELF])
     val_reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_VAR, result_reg=val_reg, operands=["value"])
-    ctx.emit(Opcode.STORE_FIELD, operands=[self_reg, "value", val_reg])
+    ctx.emit(Opcode.STORE_FIELD, operands=[self_reg, constants.BOXED_FIELD, val_reg])
     ctx.emit(Opcode.RETURN, operands=[self_reg])
     ctx.emit(Opcode.LABEL, label=init_end)
 
-    # Register __init__ as method — CONST func_ref INSIDE class body
+    # __method_missing__(self, name) body
+    ctx.emit(Opcode.BRANCH, label=mm_end)
+    ctx.emit(Opcode.LABEL, label=mm_label)
+    _emit_method_params(ctx, [constants.PARAM_SELF, "name"])
+    mm_self = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=mm_self, operands=[constants.PARAM_SELF])
+    mm_inner = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.LOAD_FIELD,
+        result_reg=mm_inner,
+        operands=[mm_self, constants.BOXED_FIELD],
+    )
+    mm_name = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=mm_name, operands=["name"])
+    mm_result = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.LOAD_FIELD_INDIRECT,
+        result_reg=mm_result,
+        operands=[mm_inner, mm_name],
+    )
+    ctx.emit(Opcode.RETURN, operands=[mm_result])
+    ctx.emit(Opcode.LABEL, label=mm_end)
+
+    # Register methods — CONST func_ref INSIDE class body
     _emit_prelude_func_ref(ctx, "__init__", init_label)
+    _emit_prelude_func_ref(ctx, constants.METHOD_MISSING, mm_label)
 
     ctx.emit(Opcode.LABEL, label=end_label)
 
