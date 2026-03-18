@@ -1176,6 +1176,18 @@ def _handle_load_region(
 # ── Call helpers ─────────────────────────────────────────────────
 
 
+def _unwrap_builtin_result(result: BuiltinResult, name: str) -> TypedValue:
+    """Extract TypedValue from BuiltinResult, warning if bare value received."""
+    if isinstance(result.value, TypedValue):
+        return result.value
+    logger.warning(
+        "Builtin %s returned bare value %r, expected TypedValue",
+        name,
+        type(result.value).__name__,
+    )
+    return typed_from_runtime(result.value)
+
+
 def _try_builtin_call(
     func_name: str,
     args: list[TypedValue],
@@ -1198,7 +1210,9 @@ def _try_builtin_call(
         )
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: typed_from_runtime(result.value)},
+            register_writes={
+                inst.result_reg: _unwrap_builtin_result(result, func_name)
+            },
             new_objects=result.new_objects,
             heap_writes=result.heap_writes,
             reasoning=(
@@ -1314,7 +1328,7 @@ def _try_user_function_call(
     param_vars = {params[i]: arg for i, arg in enumerate(args) if i < len(params)}
     # Inject 'arguments' array so rest params can slice it
     args_result = _builtin_array_of(list(args), vm)
-    param_vars["arguments"] = typed(args_result.value, UNKNOWN)
+    param_vars["arguments"] = args_result.value
 
     # Inject captured closure variables; parameter bindings take priority
     closure_env: ClosureEnvironment | None = None
@@ -1516,7 +1530,9 @@ def _handle_call_method(
         if result.value is not Operators.UNCOMPUTABLE:
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: typed_from_runtime(result.value)},
+                    register_writes={
+                        inst.result_reg: _unwrap_builtin_result(result, method_name)
+                    },
                     new_objects=result.new_objects,
                     heap_writes=result.heap_writes,
                     reasoning=f"method builtin {method_name}({obj_val.value!r}, {[a.value for a in args]}) = {result.value!r}",

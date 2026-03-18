@@ -2,8 +2,8 @@
 
 from interpreter.builtins import _builtin_object_rest
 from interpreter.vm import VMState, Operators
-from interpreter.vm_types import BuiltinResult, HeapObject
-from interpreter.typed_value import typed_from_runtime
+from interpreter.vm_types import BuiltinResult, HeapObject, Pointer
+from interpreter.typed_value import TypedValue, typed_from_runtime
 
 
 class TestObjectRestBuiltinResult:
@@ -35,7 +35,9 @@ class TestObjectRestBuiltinResult:
             [typed_from_runtime("obj_0"), typed_from_runtime("a")], vm
         )
         assert len(result.new_objects) == 1
-        assert result.new_objects[0].addr == result.value
+        assert isinstance(result.value, TypedValue)
+        assert isinstance(result.value.value, Pointer)
+        assert result.new_objects[0].addr == result.value.value.base
         assert result.new_objects[0].type_hint == "object"
 
     def test_heap_writes_contain_rest_fields(self):
@@ -65,7 +67,7 @@ class TestObjectRestBuiltinResult:
         result = _builtin_object_rest(
             [typed_from_runtime("obj_0"), typed_from_runtime("a")], vm
         )
-        assert result.value not in vm.heap
+        assert result.value.value.base not in vm.heap
 
     def test_uncomputable_no_args_returns_builtin_result(self):
         vm = VMState()

@@ -11,7 +11,18 @@ from interpreter.builtins import Builtins, _builtin_len
 from interpreter.type_expr import scalar
 from interpreter.vm import VMState, apply_update
 from interpreter.vm_types import BuiltinResult, HeapObject, StackFrame, StateUpdate
-from interpreter.typed_value import typed_from_runtime
+from interpreter.typed_value import TypedValue, typed_from_runtime
+from interpreter.vm_types import Pointer
+
+
+def _result_addr(result: BuiltinResult) -> str:
+    """Extract the heap address from a BuiltinResult value."""
+    val = result.value
+    if isinstance(val, TypedValue):
+        val = val.value
+    if isinstance(val, Pointer):
+        return val.base
+    return val
 
 
 def _apply_builtin_result(vm: VMState, result: BuiltinResult) -> None:
@@ -40,9 +51,10 @@ class TestBuiltinKeysProducesConcreteArray:
         )
         result = Builtins.TABLE["keys"]([typed_from_runtime("obj_0")], vm)
         _apply_builtin_result(vm, result)
-        assert isinstance(result.value, str)
-        assert result.value in vm.heap
-        keys_obj = vm.heap[result.value]
+        assert isinstance(result.value, TypedValue)
+        assert isinstance(result.value.value, Pointer)
+        assert _result_addr(result) in vm.heap
+        keys_obj = vm.heap[_result_addr(result)]
         assert keys_obj.fields["length"].value == 2
         key_values = {keys_obj.fields["0"].value, keys_obj.fields["1"].value}
         assert key_values == {"a", "b"}
@@ -53,8 +65,8 @@ class TestBuiltinKeysProducesConcreteArray:
         vm.heap["obj_0"] = HeapObject(type_hint=scalar("object"), fields={})
         result = Builtins.TABLE["keys"]([typed_from_runtime("obj_0")], vm)
         _apply_builtin_result(vm, result)
-        assert result.value in vm.heap
-        assert vm.heap[result.value].fields["length"].value == 0
+        assert _result_addr(result) in vm.heap
+        assert vm.heap[_result_addr(result)].fields["length"].value == 0
 
     def test_keys_excludes_length_field(self):
         """Arrays have a 'length' field — keys() should exclude it."""
@@ -69,7 +81,7 @@ class TestBuiltinKeysProducesConcreteArray:
         )
         result = Builtins.TABLE["keys"]([typed_from_runtime("arr_0")], vm)
         _apply_builtin_result(vm, result)
-        keys_obj = vm.heap[result.value]
+        keys_obj = vm.heap[_result_addr(result)]
         assert keys_obj.fields["length"].value == 2
         key_values = {keys_obj.fields["0"].value, keys_obj.fields["1"].value}
         assert key_values == {"0", "1"}
@@ -86,5 +98,5 @@ class TestBuiltinKeysProducesConcreteArray:
         )
         keys_result = Builtins.TABLE["keys"]([typed_from_runtime("obj_0")], vm)
         _apply_builtin_result(vm, keys_result)
-        length = _builtin_len([typed_from_runtime(keys_result.value)], vm)
+        length = _builtin_len([keys_result.value], vm)
         assert length.value == 3

@@ -16,7 +16,8 @@ from interpreter.vm_types import (
     StateUpdate,
     VMState,
 )
-from interpreter.typed_value import typed_from_runtime
+from interpreter.typed_value import TypedValue, typed_from_runtime
+from interpreter.vm_types import Pointer
 
 
 def _apply_builtin_result(vm: VMState, result: BuiltinResult) -> None:
@@ -28,6 +29,16 @@ def _apply_builtin_result(vm: VMState, result: BuiltinResult) -> None:
             heap_writes=result.heap_writes,
         ),
     )
+
+
+def _result_addr(result: BuiltinResult) -> str:
+    """Extract the heap address from a BuiltinResult value (TypedValue<Pointer> or bare string)."""
+    val = result.value
+    if isinstance(val, TypedValue):
+        val = val.value
+    if isinstance(val, Pointer):
+        return val.base
+    return val
 
 
 class TestBuiltinPrint:
@@ -59,7 +70,7 @@ class TestBuiltinSlice:
             [typed_from_runtime([10, 20, 30, 40]), typed_from_runtime(1)], vm
         )
         _apply_builtin_result(vm, result)
-        heap_obj = vm.heap[result.value]
+        heap_obj = vm.heap[_result_addr(result)]
         assert heap_obj.fields["0"].value == 20
         assert heap_obj.fields["1"].value == 30
         assert heap_obj.fields["2"].value == 40
@@ -72,7 +83,7 @@ class TestBuiltinSlice:
             [typed_from_runtime([1, 2, 3, 4, 5]), typed_from_runtime(2)], vm
         )
         _apply_builtin_result(vm, result)
-        heap_obj = vm.heap[result.value]
+        heap_obj = vm.heap[_result_addr(result)]
         assert heap_obj.fields["length"].value == 3
         assert heap_obj.fields["0"].value == 3
 
@@ -89,7 +100,7 @@ class TestBuiltinSlice:
         )
         result = _builtin_slice([typed_from_runtime(addr), typed_from_runtime(1)], vm)
         _apply_builtin_result(vm, result)
-        heap_obj = vm.heap[result.value]
+        heap_obj = vm.heap[_result_addr(result)]
         assert heap_obj.fields["0"].value == "b"
         assert heap_obj.fields["1"].value == "c"
         assert heap_obj.fields["length"].value == 2
@@ -113,7 +124,7 @@ class TestBuiltinSlice:
             vm,
         )
         _apply_builtin_result(vm, result)
-        heap_obj = vm.heap[result.value]
+        heap_obj = vm.heap[_result_addr(result)]
         assert heap_obj.fields["0"].value == 20
         assert heap_obj.fields["1"].value == 30
         assert heap_obj.fields["length"].value == 2
@@ -140,7 +151,7 @@ class TestBuiltinSlice:
             [typed_from_runtime(addr), typed_from_runtime(1), typed_from_runtime(3)], vm
         )
         _apply_builtin_result(vm, result)
-        heap_obj = vm.heap[result.value]
+        heap_obj = vm.heap[_result_addr(result)]
         assert heap_obj.fields["0"].value == "b"
         assert heap_obj.fields["1"].value == "c"
         assert heap_obj.fields["length"].value == 2
@@ -159,7 +170,7 @@ class TestBuiltinSlice:
             vm,
         )
         _apply_builtin_result(vm, result)
-        heap_obj = vm.heap[result.value]
+        heap_obj = vm.heap[_result_addr(result)]
         assert heap_obj.fields["0"].value == 0
         assert heap_obj.fields["1"].value == 2
         assert heap_obj.fields["2"].value == 4
@@ -178,7 +189,7 @@ class TestBuiltinSlice:
             vm,
         )
         _apply_builtin_result(vm, result)
-        heap_obj = vm.heap[result.value]
+        heap_obj = vm.heap[_result_addr(result)]
         assert heap_obj.fields["0"].value == 30
         assert heap_obj.fields["1"].value == 40
         assert heap_obj.fields["length"].value == 2
@@ -196,7 +207,7 @@ class TestBuiltinSlice:
             vm,
         )
         _apply_builtin_result(vm, result)
-        heap_obj = vm.heap[result.value]
+        heap_obj = vm.heap[_result_addr(result)]
         assert heap_obj.fields["0"].value == 10
         assert heap_obj.fields["1"].value == 20
         assert heap_obj.fields["length"].value == 2
@@ -209,7 +220,7 @@ class TestBuiltinSlice:
             [typed_from_runtime([10, 20, 30, 40]), typed_from_runtime(-2)], vm
         )
         _apply_builtin_result(vm, result)
-        heap_obj = vm.heap[result.value]
+        heap_obj = vm.heap[_result_addr(result)]
         assert heap_obj.fields["0"].value == 30
         assert heap_obj.fields["1"].value == 40
         assert heap_obj.fields["length"].value == 2
@@ -247,7 +258,7 @@ class TestBuiltinObjectRest:
             [typed_from_runtime(addr), typed_from_runtime("a")], vm
         )
         _apply_builtin_result(vm, result)
-        heap_obj = vm.heap[result.value]
+        heap_obj = vm.heap[_result_addr(result)]
         assert "a" not in heap_obj.fields
         assert heap_obj.fields["b"].value == 2
         assert heap_obj.fields["c"].value == 3
@@ -271,7 +282,7 @@ class TestBuiltinObjectRest:
             vm,
         )
         _apply_builtin_result(vm, result)
-        heap_obj = vm.heap[result.value]
+        heap_obj = vm.heap[_result_addr(result)]
         assert heap_obj.fields["z"].value == 30
         assert set(heap_obj.fields.keys()) == {"z"}
 
@@ -306,7 +317,7 @@ class TestMethodBuiltins:
             typed_from_runtime(addr), [typed_from_runtime(1), typed_from_runtime(3)], vm
         )
         _apply_builtin_result(vm, result)
-        heap_obj = vm.heap[result.value]
+        heap_obj = vm.heap[_result_addr(result)]
         assert heap_obj.fields["0"].value == 20
         assert heap_obj.fields["1"].value == 30
         assert heap_obj.fields["length"].value == 2
