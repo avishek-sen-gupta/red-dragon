@@ -99,6 +99,7 @@ Do NOT use markdown TODO lists. All tasks live in Beads.
 - Avoid using direct print statements, unless it's for one-off debugging. Use logging facilities.
 - Do not mutate objects to initialise them. All dependencies should be injected during object construction time.
 - Do not use primitives to pass around data across functions. Make sure you are using domain-appropriate wrapping types. Any wrapping / unwrapping should happen strictly at the boundary layers of the system.
+- **Do not encode information in string representations.** Use typed objects (`Pointer`, `FuncRef`, `ClassRef`, etc.) to carry structured data. Never use string prefixes, patterns, or regex to deduce what a value represents — use `isinstance` checks on the actual type.
 
 ## Code Review Patterns
 
