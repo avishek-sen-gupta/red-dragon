@@ -1372,10 +1372,11 @@ def _handle_call_function(
     )
     arg_regs = inst.operands[1:]
     args_raw = [_resolve_reg(vm, a) for a in arg_regs]
-    # Flatten spread results: spread builtin returns a native list
+    # Flatten spread results: spread builtin returns a tuple (not list)
+    # to distinguish from regular list values (e.g. range(), byte builtins).
     args = []
     for a in args_raw:
-        if isinstance(a.value, list):
+        if isinstance(a.value, tuple):
             args.extend(typed_from_runtime(e) for e in a.value)
         else:
             args.append(a)
