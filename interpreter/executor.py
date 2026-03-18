@@ -1371,7 +1371,14 @@ def _handle_call_function(
         else raw_func_name
     )
     arg_regs = inst.operands[1:]
-    args = [_resolve_reg(vm, a) for a in arg_regs]
+    args_raw = [_resolve_reg(vm, a) for a in arg_regs]
+    # Flatten spread results: spread builtin returns a native list
+    args = []
+    for a in args_raw:
+        if isinstance(a.value, list):
+            args.extend(typed_from_runtime(e) for e in a.value)
+        else:
+            args.append(a)
 
     # 0. Try I/O provider (for __cobol_* calls)
     if (
