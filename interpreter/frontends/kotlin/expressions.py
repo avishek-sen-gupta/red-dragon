@@ -1114,10 +1114,7 @@ def lower_callable_reference(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_spread_expression(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower *array — just lower the inner expression (the spread target)."""
-    named_children = [c for c in node.children if c.is_named]
-    return (
-        ctx.lower_expr(named_children[0])
-        if named_children
-        else lower_const_literal(ctx, node)
-    )
+    """Lower *array as CALL_FUNCTION('spread', inner) for call-site flattening."""
+    from interpreter.frontends.common.expressions import lower_spread_arg
+
+    return lower_spread_arg(ctx, node)

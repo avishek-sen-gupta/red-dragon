@@ -79,8 +79,8 @@ class RubyFrontend(BaseFrontend):
             RubyNodeType.SUPER: ruby_expr.lower_ruby_super,
             RubyNodeType.YIELD: ruby_expr.lower_ruby_yield,
             RubyNodeType.RESCUE_MODIFIER: ruby_cf.lower_ruby_rescue_modifier_expr,
-            RubyNodeType.SPLAT_ARGUMENT: common_expr.lower_paren,
-            RubyNodeType.HASH_SPLAT_ARGUMENT: common_expr.lower_paren,
+            RubyNodeType.SPLAT_ARGUMENT: common_expr.lower_spread_arg,
+            RubyNodeType.HASH_SPLAT_ARGUMENT: common_expr.lower_spread_arg,
             RubyNodeType.BLOCK_ARGUMENT: common_expr.lower_paren,
         }
 
