@@ -69,7 +69,7 @@ Read a field from a heap object.
 | `result_reg` | target register |
 | `operands` | `[obj_reg, field_name]` |
 
-Resolves `obj_reg` to a heap address, then looks up `field_name` in the object's fields. Returns a fresh symbolic value if the field does not exist.
+Resolves `obj_reg` to a `Pointer`, extracts the base heap address via `_heap_addr()`, then looks up `field_name` in the object's fields. Returns a fresh symbolic value if the field does not exist.
 
 ```
 %5 = load_field %obj "name"
@@ -96,10 +96,10 @@ Allocate a new heap object.
 
 | Field | Value |
 |-------|-------|
-| `result_reg` | target register (receives heap address like `obj_0`) |
+| `result_reg` | target register (receives a `Pointer(base=heap_addr, offset=0)` wrapped in `TypedValue` with parameterized type, e.g. `pointer(scalar("Point"))`) |
 | `operands` | `[type_name]` |
 
-Creates a new entry in the heap with the given type hint. Fields are initially empty.
+Creates a new entry in the heap with the given type hint. Fields are initially empty. The result is a `Pointer` dataclass, not a bare string address.
 
 ```
 %7 = new_object Point
@@ -111,10 +111,10 @@ Allocate a new heap array.
 
 | Field | Value |
 |-------|-------|
-| `result_reg` | target register (receives heap address like `arr_0`) |
+| `result_reg` | target register (receives a `Pointer(base=heap_addr, offset=0)` wrapped in `TypedValue` with parameterized type, e.g. `pointer(scalar("int[]"))`) |
 | `operands` | `[type_name]` |
 
-Like `NEW_OBJECT` but semantically represents an array/list. Elements are stored as fields keyed by stringified indices (`"0"`, `"1"`, ...).
+Like `NEW_OBJECT` but semantically represents an array/list. Elements are stored as fields keyed by stringified indices (`"0"`, `"1"`, ...). The result is a `Pointer` dataclass, not a bare string address.
 
 ```
 %8 = new_array int[]
@@ -133,7 +133,7 @@ Resolves both operand registers. If either is symbolic, produces a symbolic resu
 
 Operators: `+`, `-`, `*`, `/`, `//`, `%`, `mod`, `**`, `==`, `!=`, `~=`, `<`, `>`, `<=`, `>=`, `and`, `or`, `in`, `&`, `|`, `^`, `<<`, `>>`, `..`, `.`, `===`, `?:`.
 
-**Pointer arithmetic**: When one operand is a `Pointer` (or a heap address string, for C array decay), `+` and `-` with an integer produce a new `Pointer` with adjusted offset. `Pointer - Pointer` (same base) returns the integer offset difference. Relational operators (`<`, `>`, `<=`, `>=`, `==`, `!=`) between same-base Pointers compare offsets.
+**Pointer arithmetic**: When one operand is a `Pointer`, `+` and `-` with an integer produce a new `Pointer` with adjusted offset. `Pointer - Pointer` (same base) returns the integer offset difference. Relational operators (`<`, `>`, `<=`, `>=`, `==`, `!=`) between same-base Pointers compare offsets.
 
 ```
 %9 = binop + %a %b
@@ -205,7 +205,7 @@ Load a field from a heap object where the field name is in a register (dynamic f
 | `result_reg` | target register |
 | `operands` | `[obj_reg, name_reg]` |
 
-Resolves `obj_reg` to a heap address and `name_reg` to a field name string. If the object is on the heap and the field exists, returns the field value. If the field is missing, checks for a `__method_missing__` method on the object and dispatches to it with `(self, field_name)`. If no `__method_missing__` exists or the object is not on the heap, returns a fresh symbolic value. Used by `__method_missing__` implementations to forward field access by dynamic name.
+Resolves `obj_reg` to a `Pointer` and extracts the base heap address via `_heap_addr()`, then resolves `name_reg` to a field name string. If the object is on the heap and the field exists, returns the field value. If the field is missing, checks for a `__method_missing__` method on the object and dispatches to it with `(self, field_name)`. If no `__method_missing__` exists or the object is not on the heap, returns a fresh symbolic value. Used by `__method_missing__` implementations to forward field access by dynamic name.
 
 ```
 %1 = load_field_indirect %obj %name   // obj[name] where name is a register
@@ -320,6 +320,8 @@ Write a value into a heap object field.
 | Field | Value |
 |-------|-------|
 | `operands` | `[obj_reg, field_name, value_reg]` |
+
+Resolves `obj_reg` to a `Pointer`, extracts the base heap address via `_heap_addr()`, then writes `value_reg` into the object's field. All heap references are `Pointer` objects — there is no separate bare-string code path.
 
 ```
 store_field %obj "name" %val
@@ -645,7 +647,7 @@ Pointer arithmetic on arrays:
 ```
 // C source: int arr[3] = {10, 20, 30}; int *p = arr; int val = *(p + 1);
 ... arr setup ...
-%p = load_var arr               // heap address string, auto-wraps to Pointer
+%p = load_var arr               // Pointer from NEW_ARRAY
 %1 = const 1
 %p1 = binop + %p %1            // Pointer(base=arr_0, offset=1)
 %val = load_indirect %p1       // reads heap[arr_0].fields["1"] → 20
