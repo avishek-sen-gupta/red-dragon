@@ -246,14 +246,20 @@ def _method_to_string(
 
 
 def _builtin_spread(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    """Unpack a heap array into a flat Python list for call-site flattening."""
+    """Unpack a heap array into a tuple for call-site flattening.
+
+    Returns a *tuple* (not list) so the call-site flatten step can
+    distinguish spread results from regular list values (e.g. range()).
+    """
     if not args:
         return BuiltinResult(value=_UNCOMPUTABLE)
     addr = _heap_addr(args[0].value)
     if not addr or addr not in vm.heap:
         return BuiltinResult(value=_UNCOMPUTABLE)
     fields = vm.heap[addr].fields
-    elements = [fields[str(i)].value for i in range(len(fields)) if str(i) in fields]
+    elements = tuple(
+        fields[str(i)].value for i in range(len(fields)) if str(i) in fields
+    )
     return BuiltinResult(value=elements)
 
 
