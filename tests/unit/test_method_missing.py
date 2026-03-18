@@ -152,6 +152,103 @@ class TestMethodMissingLoadField:
         )
 
 
+class TestFindMethodMissingRegistryPath:
+    """Tests that _find_method_missing finds __method_missing__ via registry.class_methods
+    when it is NOT an instance field (the path used by Box prelude classes)."""
+
+    def test_finds_method_missing_via_class_registry(self):
+        """Object has no __method_missing__ field, but type has it in registry.class_methods."""
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="<test>", return_label=""))
+
+        addr = "obj_0"
+        vm.heap[addr] = HeapObject(
+            type_hint="BoxType",
+            fields={BOXED_FIELD: typed("inner_0", scalar("Object"))},
+        )
+        vm.call_stack[-1].registers["%obj"] = typed(addr, scalar("Object"))
+
+        mm_label = "func_box_mm_0"
+        cfg = CFG()
+        cfg.blocks[mm_label] = BasicBlock(
+            label=mm_label,
+            instructions=[
+                IRInstruction(opcode=Opcode.RETURN, operands=["%result"]),
+            ],
+        )
+        registry = FunctionRegistry()
+        registry.class_methods["BoxType"] = {METHOD_MISSING: [mm_label]}
+        registry.func_params[mm_label] = ["self", "name"]
+
+        inst = IRInstruction(
+            opcode=Opcode.LOAD_FIELD,
+            result_reg="%result",
+            operands=["%obj", "some_field"],
+        )
+        result = LocalExecutor.execute(
+            inst=inst,
+            vm=vm,
+            cfg=cfg,
+            registry=registry,
+        )
+
+        assert result.handled
+        assert result.update.call_push is not None
+        assert result.update.next_label == mm_label
+
+    def test_instance_field_takes_precedence_over_registry(self):
+        """If __method_missing__ exists as both instance field and registry entry,
+        the instance field wins."""
+        vm = VMState()
+        vm.call_stack.append(StackFrame(function_name="<test>", return_label=""))
+
+        instance_mm_label = "func_instance_mm"
+        registry_mm_label = "func_registry_mm"
+
+        cfg = CFG()
+        cfg.blocks[instance_mm_label] = BasicBlock(
+            label=instance_mm_label,
+            instructions=[IRInstruction(opcode=Opcode.RETURN, operands=["%r"])],
+        )
+        cfg.blocks[registry_mm_label] = BasicBlock(
+            label=registry_mm_label,
+            instructions=[IRInstruction(opcode=Opcode.RETURN, operands=["%r"])],
+        )
+
+        instance_mm_ref = BoundFuncRef(
+            func_ref=FuncRef(name=METHOD_MISSING, label=instance_mm_label),
+            closure_id="",
+        )
+
+        addr = "obj_0"
+        vm.heap[addr] = HeapObject(
+            type_hint="DualBox",
+            fields={METHOD_MISSING: typed(instance_mm_ref, UNKNOWN)},
+        )
+        vm.call_stack[-1].registers["%obj"] = typed(addr, scalar("Object"))
+
+        registry = FunctionRegistry()
+        registry.class_methods["DualBox"] = {METHOD_MISSING: [registry_mm_label]}
+        registry.func_params[instance_mm_label] = ["self", "name"]
+        registry.func_params[registry_mm_label] = ["self", "name"]
+
+        inst = IRInstruction(
+            opcode=Opcode.LOAD_FIELD,
+            result_reg="%result",
+            operands=["%obj", "some_field"],
+        )
+        result = LocalExecutor.execute(
+            inst=inst,
+            vm=vm,
+            cfg=cfg,
+            registry=registry,
+        )
+
+        assert result.handled
+        assert result.update.call_push is not None
+        assert result.update.next_label == instance_mm_label
+
+
 class TestMethodMissingCallMethod:
     def test_delegates_method_call_to_inner_object_method(self):
         """CALL_METHOD for unknown method on Outer delegates to Inner's method via __boxed__."""
