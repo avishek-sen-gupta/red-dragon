@@ -57,6 +57,28 @@ let answer = b2.x;
         assert local_vars["answer"] == 42
 
 
+class TestBoxMethodDelegation:
+    def test_box_method_call_delegates_to_inner(self):
+        """box_val.method() delegates to inner object's method via __method_missing__."""
+        _, local_vars = _run_rust(
+            """\
+struct Counter { count: i32 }
+
+impl Counter {
+    fn get_count(&self) -> i32 {
+        return self.count;
+    }
+}
+
+let c = Counter { count: 42 };
+let b = Box::new(c);
+let answer = b.get_count();
+""",
+            max_steps=600,
+        )
+        assert local_vars["answer"] == 42
+
+
 class TestBoxOptionInteraction:
     def test_some_box_unwrap_field_access(self):
         """Some(Box::new(node)).unwrap().field works via __method_missing__."""
