@@ -184,11 +184,11 @@ def _handle_decl_var(
 ) -> ExecutionResult:
     """DECL_VAR: always create/overwrite in the current frame (declaration)."""
     name = inst.operands[0]
-    val = _resolve_reg(vm, inst.operands[1])
+    tv = _resolve_reg(vm, inst.operands[1])
     return ExecutionResult.success(
         StateUpdate(
-            var_writes={name: typed_from_runtime(val)},
-            reasoning=f"decl {name} = {val!r}",
+            var_writes={name: tv},
+            reasoning=f"decl {name} = {tv.value!r}",
         )
     )
 
@@ -213,14 +213,13 @@ def _handle_store_var(
 ) -> ExecutionResult:
     """STORE_VAR: assignment — walk scope chain to find existing variable."""
     name = inst.operands[0]
-    val = _resolve_reg(vm, inst.operands[1])
-    tv = typed_from_runtime(val)
+    tv = _resolve_reg(vm, inst.operands[1])
     # Walk scope chain: if variable exists in a parent frame, update it there.
     for frame in reversed(vm.call_stack):
         if name in frame.local_vars:
             _write_var_to_frame(vm, frame, name, tv)
             return ExecutionResult.success(
-                StateUpdate(reasoning=f"store {name} = {val!r} (scope chain)")
+                StateUpdate(reasoning=f"store {name} = {tv.value!r} (scope chain)")
             )
     # Not found in any frame — try field fallback strategy
     fallback: FieldFallbackStrategy = kwargs.get("field_fallback", _NO_FIELD_FALLBACK)
@@ -229,14 +228,14 @@ def _handle_store_var(
         return ExecutionResult.success(
             StateUpdate(
                 heap_writes=[HeapWrite(obj_addr=this_addr, field=name, value=tv)],
-                reasoning=f"store {name} = {val!r} (via implicit this.{name})",
+                reasoning=f"store {name} = {tv.value!r} (via implicit this.{name})",
             )
         )
     # Not found anywhere — create in current frame (new variable).
     return ExecutionResult.success(
         StateUpdate(
             var_writes={name: tv},
-            reasoning=f"store {name} = {val!r}",
+            reasoning=f"store {name} = {tv.value!r}",
         )
     )
 
@@ -324,7 +323,7 @@ def _handle_load_indirect(
     inst: IRInstruction, vm: VMState, **kwargs: Any
 ) -> ExecutionResult:
     """LOAD_INDIRECT %ptr: read through a Pointer (dereference)."""
-    obj_val = _resolve_reg(vm, inst.operands[0])
+    obj_val = _resolve_reg(vm, inst.operands[0]).value
     # Pointer dereference: read from heap[base].fields[offset]
     if isinstance(obj_val, Pointer) and obj_val.base in vm.heap:
         heap_obj = vm.heap[obj_val.base]
@@ -370,8 +369,8 @@ def _handle_load_field_indirect(
     **kwargs: Any,
 ) -> ExecutionResult:
     """LOAD_FIELD_INDIRECT %obj %name: load field whose name is in a register."""
-    obj_val = _resolve_reg(vm, inst.operands[0])
-    field_name = _resolve_reg(vm, inst.operands[1])
+    obj_val = _resolve_reg(vm, inst.operands[0]).value
+    field_name = _resolve_reg(vm, inst.operands[1]).value
     addr = _heap_addr(obj_val)
     if not addr or addr not in vm.heap:
         sym = vm.fresh_symbolic(hint=f"{_symbolic_name(obj_val)}.{field_name}")
@@ -418,8 +417,8 @@ def _handle_store_indirect(
     inst: IRInstruction, vm: VMState, **kwargs: Any
 ) -> ExecutionResult:
     """STORE_INDIRECT %ptr %val: write through a Pointer (dereference)."""
-    obj_val = _resolve_reg(vm, inst.operands[0])
-    val = _resolve_reg(vm, inst.operands[1])
+    obj_val = _resolve_reg(vm, inst.operands[0]).value
+    tv = _resolve_reg(vm, inst.operands[1])
     if isinstance(obj_val, Pointer):
         target_field = str(obj_val.offset)
         return ExecutionResult.success(
@@ -428,10 +427,10 @@ def _handle_store_indirect(
                     HeapWrite(
                         obj_addr=obj_val.base,
                         field=target_field,
-                        value=typed_from_runtime(val),
+                        value=tv,
                     )
                 ],
-                reasoning=f"store *{obj_val} = {val!r}",
+                reasoning=f"store *{obj_val} = {tv.value!r}",
             )
         )
     obj_desc = _symbolic_name(obj_val)
@@ -529,9 +528,9 @@ def _handle_new_array(
 def _handle_store_field(
     inst: IRInstruction, vm: VMState, **kwargs: Any
 ) -> ExecutionResult:
-    obj_val = _resolve_reg(vm, inst.operands[0])
+    obj_val = _resolve_reg(vm, inst.operands[0]).value
     field_name = inst.operands[1]
-    val = _resolve_reg(vm, inst.operands[2])
+    tv = _resolve_reg(vm, inst.operands[2])
     addr = _heap_addr(obj_val)
     if addr and addr not in vm.heap:
         # Materialise a synthetic heap entry for symbolic objects so that
@@ -542,7 +541,7 @@ def _handle_store_field(
         logger.debug("store_field on unknown object %s.%s", obj_desc, field_name)
         return ExecutionResult.success(
             StateUpdate(
-                reasoning=f"store {obj_desc}.{field_name} = {val!r} (object not on heap, no-op)",
+                reasoning=f"store {obj_desc}.{field_name} = {tv.value!r} (object not on heap, no-op)",
             )
         )
     return ExecutionResult.success(
@@ -551,10 +550,10 @@ def _handle_store_field(
                 HeapWrite(
                     obj_addr=addr,
                     field=field_name,
-                    value=typed_from_runtime(val),
+                    value=tv,
                 )
             ],
-            reasoning=f"store {addr}.{field_name} = {val!r}",
+            reasoning=f"store {addr}.{field_name} = {tv.value!r}",
         )
     )
 
@@ -627,7 +626,7 @@ def _handle_load_field(
     current_label: str = "",
     **kwargs: Any,
 ) -> ExecutionResult:
-    obj_val = _resolve_reg(vm, inst.operands[0])
+    obj_val = _resolve_reg(vm, inst.operands[0]).value
     field_name = inst.operands[1]
     addr = _heap_addr(obj_val)
     if addr and addr not in vm.heap:
@@ -680,9 +679,9 @@ def _handle_load_field(
 def _handle_store_index(
     inst: IRInstruction, vm: VMState, **kwargs: Any
 ) -> ExecutionResult:
-    arr_val = _resolve_reg(vm, inst.operands[0])
-    idx_val = _resolve_reg(vm, inst.operands[1])
-    val = _resolve_reg(vm, inst.operands[2])
+    arr_val = _resolve_reg(vm, inst.operands[0]).value
+    idx_val = _resolve_reg(vm, inst.operands[1]).value
+    tv = _resolve_reg(vm, inst.operands[2])
     addr = _heap_addr(arr_val)
     if addr and addr not in vm.heap:
         # Materialise a synthetic heap entry for symbolic arrays so that
@@ -693,7 +692,7 @@ def _handle_store_index(
         logger.debug("store_index on unknown array %s[%s]", arr_desc, idx_val)
         return ExecutionResult.success(
             StateUpdate(
-                reasoning=f"store {arr_desc}[{idx_val}] = {val!r} (array not on heap, no-op)",
+                reasoning=f"store {arr_desc}[{idx_val}] = {tv.value!r} (array not on heap, no-op)",
             )
         )
     return ExecutionResult.success(
@@ -702,10 +701,10 @@ def _handle_store_index(
                 HeapWrite(
                     obj_addr=addr,
                     field=str(idx_val),
-                    value=typed_from_runtime(val),
+                    value=tv,
                 )
             ],
-            reasoning=f"store {addr}[{idx_val}] = {val!r}",
+            reasoning=f"store {addr}[{idx_val}] = {tv.value!r}",
         )
     )
 
@@ -713,8 +712,8 @@ def _handle_store_index(
 def _handle_load_index(
     inst: IRInstruction, vm: VMState, **kwargs: Any
 ) -> ExecutionResult:
-    arr_val = _resolve_reg(vm, inst.operands[0])
-    idx_val = _resolve_reg(vm, inst.operands[1])
+    arr_val = _resolve_reg(vm, inst.operands[0]).value
+    idx_val = _resolve_reg(vm, inst.operands[1]).value
     addr = _heap_addr(arr_val)
 
     # Native string/list indexing — bypass heap for raw Python values.
@@ -772,8 +771,7 @@ def _handle_return(inst: IRInstruction, vm: VMState, **kwargs: Any) -> Execution
     if vm.current_frame.is_ctor:
         tv = typed(None, scalar(constants.TypeName.VOID))
     elif inst.operands:
-        val = _resolve_reg(vm, inst.operands[0])
-        tv = typed_from_runtime(val)
+        tv = _resolve_reg(vm, inst.operands[0])
     else:
         tv = typed(None, scalar(constants.TypeName.VOID))
     return ExecutionResult.success(
@@ -786,7 +784,7 @@ def _handle_return(inst: IRInstruction, vm: VMState, **kwargs: Any) -> Execution
 
 
 def _handle_throw(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
-    val = _resolve_reg(vm, inst.operands[0]) if inst.operands else None
+    val = _resolve_reg(vm, inst.operands[0]).value if inst.operands else None
     if vm.exception_stack:
         handler = vm.exception_stack.pop()
         # Redirect to the first catch label (or finally if no catch)
@@ -832,7 +830,7 @@ def _handle_try_pop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> Executio
 def _handle_branch_if(
     inst: IRInstruction, vm: VMState, **kwargs: Any
 ) -> ExecutionResult:
-    cond_val = _resolve_reg(vm, inst.operands[0])
+    cond_val = _resolve_reg(vm, inst.operands[0]).value
     targets = inst.label.split(",")
     true_label = targets[0].strip()
     false_label = targets[1].strip() if len(targets) > 1 else None
@@ -1054,7 +1052,7 @@ def _handle_alloc_region(
     inst: IRInstruction, vm: VMState, **kwargs: Any
 ) -> ExecutionResult:
     """ALLOC_REGION: operands[0] = size literal. Allocate a zeroed byte region."""
-    size = _resolve_reg(vm, inst.operands[0])
+    size = _resolve_reg(vm, inst.operands[0]).value
     if _is_symbolic(size):
         sym = vm.fresh_symbolic(hint="region_addr")
         return ExecutionResult.success(
@@ -1081,10 +1079,10 @@ def _handle_write_region(
 
     Write bytes from value_reg (a list[int]) into the region at the given offset.
     """
-    region_addr = _resolve_reg(vm, inst.operands[0])
-    offset = _resolve_reg(vm, inst.operands[1])
+    region_addr = _resolve_reg(vm, inst.operands[0]).value
+    offset = _resolve_reg(vm, inst.operands[1]).value
     length = inst.operands[2]
-    value = _resolve_reg(vm, inst.operands[3])
+    value = _resolve_reg(vm, inst.operands[3]).value
 
     has_symbolic_elements = isinstance(value, list) and any(
         _is_symbolic(v) for v in value
@@ -1123,8 +1121,8 @@ def _handle_load_region(
 
     Read bytes from the region and return as list[int].
     """
-    region_addr = _resolve_reg(vm, inst.operands[0])
-    offset = _resolve_reg(vm, inst.operands[1])
+    region_addr = _resolve_reg(vm, inst.operands[0]).value
+    offset = _resolve_reg(vm, inst.operands[1]).value
     length = inst.operands[2]
 
     if _is_symbolic(region_addr) or _is_symbolic(offset):
