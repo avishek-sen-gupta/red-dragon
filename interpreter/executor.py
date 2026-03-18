@@ -870,25 +870,8 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
     rhs = rhs_typed.value
 
     # Pointer arithmetic: Pointer +/- int or int + Pointer
-    # Also handles heap address strings (array decay to pointer in C)
-    lhs_ptr = (
-        lhs
-        if isinstance(lhs, Pointer)
-        else (
-            Pointer(base=lhs, offset=0)
-            if isinstance(lhs, str) and _heap_addr(lhs) and _heap_addr(lhs) in vm.heap
-            else None
-        )
-    )
-    rhs_ptr = (
-        rhs
-        if isinstance(rhs, Pointer)
-        else (
-            Pointer(base=rhs, offset=0)
-            if isinstance(rhs, str) and _heap_addr(rhs) and _heap_addr(rhs) in vm.heap
-            else None
-        )
-    )
+    lhs_ptr = lhs if isinstance(lhs, Pointer) else None
+    rhs_ptr = rhs if isinstance(rhs, Pointer) else None
     if lhs_ptr and rhs_ptr:
         if oper == "-" and lhs_ptr.base == rhs_ptr.base:
             diff = lhs_ptr.offset - rhs_ptr.offset
