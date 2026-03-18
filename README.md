@@ -390,7 +390,7 @@ Final state: result = 120  (67 steps, 0 LLM calls)
 
 The VM also handles — all deterministically:
 
-- **Classes** — heap allocation via `Pointer(base, offset)` with parameterized types (`Pointer[ClassName]`), method dispatch with overload resolution (arity + type + subtype-aware scoring via TypeGraph), field access
+- **Classes & Arrays** — heap allocation via `Pointer(base, offset)` with parameterized types (`Pointer[ClassName]`, `Pointer[ElementType]`), method dispatch with overload resolution (arity + type + subtype-aware scoring via TypeGraph), field access
 - **Closures** — shared mutable environments (capture-by-reference); mutations persist across calls and are visible to sibling closures
 - **Byte-addressed memory regions** — `ALLOC_REGION`/`WRITE_REGION`/`LOAD_REGION` for COBOL-style REDEFINES overlays
 - **Named continuations** — `SET_CONTINUATION`/`RESUME_CONTINUATION` for COBOL PERFORM return semantics

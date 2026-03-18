@@ -514,7 +514,12 @@ def _handle_new_array(
     return ExecutionResult.success(
         StateUpdate(
             new_objects=[NewObject(addr=addr, type_hint=type_hint or None)],
-            register_writes={inst.result_reg: typed(addr, UNKNOWN)},
+            register_writes={
+                inst.result_reg: typed(
+                    Pointer(base=addr, offset=0),
+                    pointer(scalar(type_hint or "Array")),
+                )
+            },
             reasoning=f"new {type_hint}[] → {addr}",
         )
     )
