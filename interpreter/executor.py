@@ -627,26 +627,6 @@ def _handle_load_field(
 ) -> ExecutionResult:
     obj_val = _resolve_reg(vm, inst.operands[0])
     field_name = inst.operands[1]
-    # Pointer field/dereference access
-    if isinstance(obj_val, Pointer) and obj_val.base in vm.heap:
-        heap_obj = vm.heap[obj_val.base]
-        # ptr->field — struct pointer field access (reads field from the object)
-        if field_name in heap_obj.fields:
-            tv = heap_obj.fields[field_name]
-            return ExecutionResult.success(
-                StateUpdate(
-                    register_writes={inst.result_reg: tv},
-                    reasoning=f"load {obj_val.base}.{field_name} = {tv!r} (via Pointer)",
-                )
-            )
-    if isinstance(obj_val, Pointer) and obj_val.base not in vm.heap:
-        sym = vm.fresh_symbolic(hint=f"*{obj_val}")
-        return ExecutionResult.success(
-            StateUpdate(
-                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
-                reasoning=f"load *{obj_val} (not on heap) → {sym.name}",
-            )
-        )
     addr = _heap_addr(obj_val)
     if addr and addr not in vm.heap:
         # Materialise a synthetic heap entry for symbolic objects so that
