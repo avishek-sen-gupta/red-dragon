@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from interpreter.frontends.javascript import JavaScriptFrontend
 from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, SpreadArguments
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
@@ -723,18 +723,30 @@ class TestJavaScriptSpreadElement:
     def test_spread_in_call(self):
         instructions = _parse_js("foo(...args);")
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
-        assert any("spread" in inst.operands for inst in calls)
+        assert any(
+            any(isinstance(op, SpreadArguments) for op in inst.operands)
+            for inst in calls
+        )
 
     def test_spread_in_array(self):
         instructions = _parse_js("const arr = [...items, 4, 5];")
-        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
-        assert any("spread" in inst.operands for inst in calls)
+        spread_ops = [
+            op
+            for inst in instructions
+            for op in inst.operands
+            if isinstance(op, SpreadArguments)
+        ]
+        assert len(spread_ops) >= 1
 
     def test_spread_multiple(self):
         instructions = _parse_js("foo(...a, ...b);")
-        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
-        spread_calls = [c for c in calls if "spread" in c.operands]
-        assert len(spread_calls) >= 2
+        spread_ops = [
+            op
+            for inst in instructions
+            for op in inst.operands
+            if isinstance(op, SpreadArguments)
+        ]
+        assert len(spread_ops) >= 2
 
 
 class TestJavaScriptFunctionExpression:

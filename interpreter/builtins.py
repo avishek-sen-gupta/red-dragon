@@ -245,24 +245,6 @@ def _method_to_string(
     return BuiltinResult(value=str(obj.value))
 
 
-def _builtin_spread(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    """Unpack a heap array into a tuple for call-site flattening.
-
-    Returns a *tuple* (not list) so the call-site flatten step can
-    distinguish spread results from regular list values (e.g. range()).
-    """
-    if not args:
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    addr = _heap_addr(args[0].value)
-    if not addr or addr not in vm.heap:
-        return BuiltinResult(value=_UNCOMPUTABLE)
-    fields = vm.heap[addr].fields
-    elements = tuple(
-        fields[str(i)].value for i in range(len(fields)) if str(i) in fields
-    )
-    return BuiltinResult(value=elements)
-
-
 class Builtins:
     """Table of built-in function implementations."""
 
@@ -284,7 +266,6 @@ class Builtins:
         "mutableListOf": _builtin_array_of,
         "Array": _builtin_array_of,
         "slice": _builtin_slice,
-        "spread": _builtin_spread,
         "object_rest": _builtin_object_rest,
         **BYTE_BUILTINS,
     }
