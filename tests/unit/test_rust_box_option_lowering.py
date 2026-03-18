@@ -85,8 +85,8 @@ let opt = Some(n);
 
 
 class TestDerefLowering:
-    def test_deref_emits_load_field_value(self):
-        """*box_val should emit LOAD_FIELD with 'value' field name."""
+    def test_deref_emits_load_field_boxed(self):
+        """*box_val should emit LOAD_FIELD with '__boxed__' field name."""
         instructions = _parse_rust("""\
 struct Node { value: i32 }
 let n = Node { value: 42 };
@@ -94,5 +94,18 @@ let b = Box::new(n);
 let inner = *b;
 """)
         fields = _find_all(instructions, Opcode.LOAD_FIELD)
-        value_fields = [f for f in fields if "value" in f.operands]
-        assert len(value_fields) >= 1
+        boxed_fields = [f for f in fields if "__boxed__" in f.operands]
+        assert (
+            len(boxed_fields) >= 1
+        ), f"Expected LOAD_FIELD with '__boxed__', got {[f.operands for f in fields]}"
+
+    def test_deref_does_not_emit_load_indirect(self):
+        """*expr should NOT produce LOAD_INDIRECT — Rust deref is Box unwrap."""
+        instructions = _parse_rust("""\
+let b = Box::new(42);
+let inner = *b;
+""")
+        indirects = _find_all(instructions, Opcode.LOAD_INDIRECT)
+        assert (
+            len(indirects) == 0
+        ), f"Rust deref should not produce LOAD_INDIRECT: {indirects}"
