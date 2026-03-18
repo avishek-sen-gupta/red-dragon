@@ -2078,3 +2078,18 @@ These are already dispatched to `_lower_ts_interface_method` in `lower_interface
 **Decision:** Change `_resolve_reg()` to return `TypedValue` directly. Delete `_resolve_binop_operand()` (now identical). Write callsites use the `TypedValue` as-is without re-wrapping. Read callsites that need bare values extract `.value` (for `isinstance`, `_heap_addr`, `bool`, `int`, dict keys, etc.). `typed_from_runtime()` remains as a fallback inside `_resolve_reg()` for registers that hold non-`TypedValue` values (e.g. raw constants).
 
 **Consequences:** Parameterized type information is preserved through the register→handler→storage pipeline — e.g. a `pointer(scalar("Dog"))` stored via `STORE_VAR` retains its full type instead of being flattened. The dual-function API surface is simplified to a single `_resolve_reg()`. All callers are updated: 7 write callsites drop redundant `typed_from_runtime()` wrapping, 19 read callsites add `.value` extraction.
+
+---
+
+### ADR-108: Heap object references migrated from bare strings to `Pointer` dataclass (2026-03-18)
+
+**Context:** Heap objects were referenced by bare strings (e.g. `"obj_0"`, `"arr_0"`) throughout the VM. `NEW_OBJECT` and `NEW_ARRAY` returned these strings directly, and `LOAD_FIELD`/`STORE_FIELD` had separate code paths for bare string addresses vs. `Pointer` objects. The `_heap_addr()` helper had to pattern-match on both strings and `Pointer` instances, and parameterized type information (e.g. "this is a pointer to a Dog") was lost because bare strings carry no type metadata.
+
+**Decision:** Migrate all heap object references to `Pointer(base, offset)` dataclass instances. `NEW_OBJECT` and `NEW_ARRAY` now produce `Pointer(base=heap_addr, offset=0)` wrapped in `TypedValue` with parameterized types (e.g. `pointer(scalar("Dog"))`). `_heap_addr()` is updated to extract the base address from `Pointer` instances. `LOAD_FIELD` and `STORE_FIELD` are unified — the separate `Pointer` branch is eliminated because all heap references are now `Pointer` objects. Builtins that allocate heap objects (e.g. `slice`, `range`, `dict`) return `Pointer` in `TypedValue`.
+
+**Rationale:**
+- Bare string addresses were stringly-typed — they carried no semantic information about what they pointed to. `Pointer` is a proper domain type that can carry base/offset and be composed with `TypedValue` for parameterized types.
+- The dual code paths in `LOAD_FIELD`/`STORE_FIELD` (one for strings, one for Pointer) were a maintenance burden and a source of subtle bugs when one path was updated but not the other.
+- Pointer arithmetic (ADR-099) already required `Pointer` objects; having `NEW_OBJECT`/`NEW_ARRAY` produce bare strings that were later wrapped into `Pointer` was an unnecessary conversion step.
+
+**Consequences:** All heap references are now `Pointer` objects from creation through consumption. `_heap_addr()` handles `Pointer` uniformly. `LOAD_FIELD`/`STORE_FIELD` have a single code path. Type information flows end-to-end — a `NEW_OBJECT "Dog"` produces `TypedValue(Pointer(base="obj_0", offset=0), pointer(scalar("Dog")))`, and this type is preserved through `STORE_VAR`, `LOAD_VAR`, and field access. The trade-off is that all code that previously compared or matched on bare heap address strings must now go through `_heap_addr()` or access `pointer.base`.
