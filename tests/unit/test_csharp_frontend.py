@@ -485,13 +485,19 @@ class TestCSharpEnumDeclaration:
         assert len(stores) >= 3
 
     def test_enum_with_values(self):
+        """Enum members should have implicit ordinal values 0, 1, 2."""
         source = "enum Priority { Low, Medium, High }"
         ir = _parse_and_lower(source)
         consts = _find_all(ir, Opcode.CONST)
         const_vals = [inst.operands[0] for inst in consts if inst.operands]
+        # Member names as keys
         assert "Low" in const_vals
         assert "Medium" in const_vals
         assert "High" in const_vals
+        # Implicit ordinal values
+        assert "0" in const_vals
+        assert "1" in const_vals
+        assert "2" in const_vals
 
 
 class TestCSharpTypeofAndIsCheck:
