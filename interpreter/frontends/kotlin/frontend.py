@@ -87,7 +87,7 @@ class KotlinFrontend(BaseFrontend):
             KNT.TYPE_TEST: kotlin_expr.lower_type_test,
             KNT.LABEL: common_expr.lower_const_literal,
             KNT.ANONYMOUS_FUNCTION: kotlin_expr.lower_anonymous_function,
-            KNT.UNSIGNED_LITERAL: common_expr.lower_const_literal,
+            KNT.UNSIGNED_LITERAL: kotlin_expr.lower_unsigned_literal,
             KNT.CALLABLE_REFERENCE: kotlin_expr.lower_callable_reference,
             KNT.SPREAD_EXPRESSION: kotlin_expr.lower_spread_expression,
         }
