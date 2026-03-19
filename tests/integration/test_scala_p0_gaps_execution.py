@@ -14,9 +14,6 @@ from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 class TestScalaGenericFunctionExecution:
     """Verify generic function calls execute correctly through VM."""
 
-    @pytest.mark.xfail(
-        reason="Generic function def with type param [T] produces symbolic params"
-    )
     def test_generic_function_call_executes(self):
         """def identity[T](x: T): T = x; identity[Int](42) should return 42."""
         source = """\

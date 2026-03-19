@@ -1254,3 +1254,16 @@ object M {
         )
         assert extract_answer(vm, "scala") == 15
         assert stats.llm_calls == 0
+
+
+class TestScalaGenericFunctionParams:
+    def test_generic_def_emits_param_symbolic(self):
+        """def identity[T](x: T): T = x should emit SYMBOLIC param:x."""
+        ir = _parse_scala("object M { def identity[T](x: T): T = x }")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        param_names = [
+            inst.operands[0].replace("param:", "")
+            for inst in symbolics
+            if inst.operands and str(inst.operands[0]).startswith("param:")
+        ]
+        assert "x" in param_names, f"Expected param:x, got: {param_names}"
