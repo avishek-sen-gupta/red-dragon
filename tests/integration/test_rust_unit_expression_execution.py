@@ -18,9 +18,9 @@ def _run_rust(source: str, max_steps: int = 200):
 
 class TestRustUnitExpressionExecution:
     def test_unit_expression_assigned(self):
-        """let x = (); should execute without errors."""
+        """let x = (); should store the unit value."""
         _, local_vars = _run_rust("let x = ();")
-        assert "x" in local_vars
+        assert local_vars["x"] == "()"
 
     def test_unit_expression_in_block(self):
         """Unit expression as last expression in a block."""
@@ -29,10 +29,10 @@ let a = 42;
 let x = ();
 """)
         assert local_vars["a"] == 42
-        assert "x" in local_vars
+        assert local_vars["x"] == "()"
 
     def test_unit_as_function_return(self):
-        """Function returning () should not crash the VM."""
+        """Function returning () should return unit."""
         _, local_vars = _run_rust("""\
 fn do_nothing() {
     ()
@@ -41,3 +41,4 @@ let x = do_nothing();
 let y = 42;
 """)
         assert local_vars["y"] == 42
+        assert local_vars["x"] == "()"
