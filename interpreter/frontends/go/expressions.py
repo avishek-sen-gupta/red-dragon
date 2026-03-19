@@ -31,6 +31,42 @@ logger = logging.getLogger(__name__)
 def lower_go_call(ctx: TreeSitterEmitContext, node) -> str:
     func_node = node.child_by_field_name(ctx.constants.call_function_field)
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
+
+    # Desugar make(): emit NEW_OBJECT or NEW_ARRAY based on type argument.
+    # Must intercept BEFORE extract_call_args to avoid lowering type nodes as expressions.
+    if (
+        func_node
+        and func_node.type == GoNodeType.IDENTIFIER
+        and ctx.node_text(func_node) == "make"
+        and args_node
+    ):
+        type_args = [c for c in args_node.children if c.is_named]
+        if type_args:
+            type_node = type_args[0]
+            type_text = ctx.node_text(type_node)
+            if type_node.type == "slice_type":
+                reg = ctx.fresh_reg()
+                size_reg = (
+                    ctx.lower_expr(type_args[1])
+                    if len(type_args) > 1
+                    else ctx.fresh_reg()
+                )
+                ctx.emit(
+                    Opcode.NEW_ARRAY,
+                    result_reg=reg,
+                    operands=[type_text, size_reg],
+                    node=node,
+                )
+                return reg
+            reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.NEW_OBJECT,
+                result_reg=reg,
+                operands=[type_text],
+                node=node,
+            )
+            return reg
+
     arg_regs = extract_call_args(ctx, args_node) if args_node else []
 
     # Method call via selector: obj.Method(...)
@@ -52,6 +88,7 @@ def lower_go_call(ctx: TreeSitterEmitContext, node) -> str:
     # Plain function call
     if func_node and func_node.type == GoNodeType.IDENTIFIER:
         func_name = ctx.node_text(func_node)
+
         reg = ctx.fresh_reg()
         ctx.emit(
             Opcode.CALL_FUNCTION,
