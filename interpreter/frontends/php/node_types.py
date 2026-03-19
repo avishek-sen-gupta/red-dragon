@@ -57,6 +57,7 @@ class PHPNodeType:
     PRINT_INTRINSIC = "print_intrinsic"
     CLONE_EXPRESSION = "clone_expression"
     LIST_LITERAL = "list_literal"
+    ANONYMOUS_CLASS = "anonymous_class"
     ERROR_SUPPRESSION_EXPRESSION = "error_suppression_expression"
     SEQUENCE_EXPRESSION = "sequence_expression"
     INCLUDE_ONCE_EXPRESSION = "include_once_expression"

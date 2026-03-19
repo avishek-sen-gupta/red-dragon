@@ -341,7 +341,40 @@ def lower_php_throw_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_php_object_creation(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower ``new Foo(args)`` -> NEW_OBJECT + CALL_METHOD('__construct')."""
+    """Lower ``new Foo(args)`` or ``new class { ... }``."""
+    from interpreter.frontends.php.declarations import lower_php_class
+
+    # Anonymous class: new class { ... }
+    anon_node = next(
+        (c for c in node.children if c.type == PHPNodeType.ANONYMOUS_CLASS), None
+    )
+    if anon_node is not None:
+        # Lower the anonymous class body as a named class with synthetic name
+        anon_name = f"__anon_class_{ctx.label_counter}"
+        # Wrap the anonymous_class node so lower_php_class can process it
+        # by setting a synthetic name and lowering the declaration_list body.
+        _lower_php_anonymous_class(ctx, anon_node, anon_name)
+        args_node = next(
+            (c for c in node.children if c.type == PHPNodeType.ARGUMENTS), None
+        )
+        arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
+        obj_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.NEW_OBJECT,
+            result_reg=obj_reg,
+            operands=[anon_name],
+            node=node,
+        )
+        ctor_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.CALL_METHOD,
+            result_reg=ctor_reg,
+            operands=[obj_reg, "__construct"] + arg_regs,
+            node=node,
+        )
+        return obj_reg
+
+    # Named class: new Foo(args)
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     if name_node is None:
         name_node = next((c for c in node.children if c.type == PHPNodeType.NAME), None)
@@ -366,6 +399,67 @@ def lower_php_object_creation(ctx: TreeSitterEmitContext, node) -> str:
         node=node,
     )
     return obj_reg
+
+
+def _lower_php_anonymous_class(
+    ctx: TreeSitterEmitContext, anon_node, class_name: str
+) -> None:
+    """Lower an anonymous_class node as a class with a synthetic name."""
+    from interpreter.frontends.php.declarations import (
+        lower_php_method_decl,
+        lower_php_property_declaration,
+        _collect_php_field_inits,
+        _emit_php_synthetic_constructor,
+        _has_static_modifier,
+        _is_php_constructor,
+        _lower_php_constructor_with_field_inits,
+    )
+
+    body_node = next(
+        (c for c in anon_node.children if c.type == PHPNodeType.DECLARATION_LIST),
+        None,
+    )
+    class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
+    end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
+
+    ctx.emit(Opcode.BRANCH, label=end_label, node=anon_node)
+    ctx.emit(Opcode.LABEL, label=class_label)
+
+    field_inits = []
+    has_constructor = False
+    if body_node:
+        field_inits = [
+            init
+            for child in body_node.children
+            if child.type == PHPNodeType.PROPERTY_DECLARATION
+            and not _has_static_modifier(child)
+            for init in _collect_php_field_inits(ctx, child)
+        ]
+        has_constructor = any(
+            _is_php_constructor(ctx, child) for child in body_node.children
+        )
+        saved_class = ctx._current_class_name
+        ctx._current_class_name = class_name
+        for child in body_node.children:
+            if child.type == PHPNodeType.METHOD_DECLARATION:
+                if _is_php_constructor(ctx, child):
+                    _lower_php_constructor_with_field_inits(ctx, child, field_inits)
+                else:
+                    lower_php_method_decl(ctx, child)
+            elif child.is_named and child.type not in (
+                PHPNodeType.VISIBILITY_MODIFIER,
+                PHPNodeType.PROPERTY_DECLARATION,
+            ):
+                ctx.lower_stmt(child)
+        ctx._current_class_name = saved_class
+
+    if not has_constructor and field_inits:
+        _emit_php_synthetic_constructor(ctx, field_inits)
+
+    ctx.emit(Opcode.LABEL, label=end_label)
+    cls_reg = ctx.fresh_reg()
+    ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
+    ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
 
 def lower_php_array(ctx: TreeSitterEmitContext, node) -> str:
