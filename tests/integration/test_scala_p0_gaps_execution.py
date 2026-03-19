@@ -6,18 +6,23 @@ These tests verify end-to-end execution through the VM.
 
 from __future__ import annotations
 
+import pytest
+
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 
 class TestScalaGenericFunctionExecution:
     """Verify generic function calls execute correctly through VM."""
 
+    @pytest.mark.xfail(
+        reason="Generic function def with type param [T] produces symbolic params"
+    )
     def test_generic_function_call_executes(self):
-        """foo[Int](x) should call foo and produce the correct result."""
+        """def identity[T](x: T): T = x; identity[Int](42) should return 42."""
         source = """\
 object M {
-    def identity(x: Int): Int = x
-    val answer = identity(42)
+    def identity[T](x: T): T = x
+    val answer = identity[Int](42)
 }
 """
         vm, stats = execute_for_language("scala", source)
