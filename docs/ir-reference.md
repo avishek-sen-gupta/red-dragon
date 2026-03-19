@@ -235,11 +235,14 @@ Call a named function or constructor.
 | `result_reg` | target register (receives return value) |
 | `operands` | `[func_name, arg1_reg, arg2_reg, ...]` |
 
+Arguments may include `SpreadArguments(register)` operands. When the VM encounters a `SpreadArguments` in the operand list, it reads the heap array at that register's pointer and inlines the elements as individual arguments. This supports spread/splat syntax across all 5 supported languages (`*args` in Python/Ruby/Kotlin, `...arr` in JS, `...$arr` in PHP).
+
 Resolution order: I/O provider, builtins (print, len, range, ...), local variable lookup. If the value is a class reference, dispatches as a constructor (`NEW_OBJECT` + `__init__` call). If it's a function reference, pushes a call frame and branches to the function label.
 
 ```
 %13 = call_function fib %n
 %14 = call_function Point %x %y
+%15 = call_function add *%arr          # SpreadArguments — unpacks heap array
 ```
 
 ### CALL_METHOD
@@ -251,7 +254,9 @@ Call a method on an object.
 | `result_reg` | target register |
 | `operands` | `[obj_reg, method_name, arg1_reg, ...]` |
 
-Resolves `obj_reg`, looks up the object's type hint in the class registry, finds the method, binds the object as the first parameter (self/this), and dispatches.
+Arguments (after `method_name`) may include `SpreadArguments` operands, expanded the same way as in CALL_FUNCTION.
+
+Resolution order: method builtins, class registry lookup, **heap field callable lookup** (for table-based OOP — if the method exists as a `BoundFuncRef` field on the heap object, it is invoked directly with `obj` injected as `self`), parent chain walk, `__method_missing__` delegation, symbolic fallback.
 
 ```
 %15 = call_method %obj "toString"
