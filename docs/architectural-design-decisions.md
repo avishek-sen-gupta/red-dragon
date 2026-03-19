@@ -2093,3 +2093,32 @@ These are already dispatched to `_lower_ts_interface_method` in `lower_interface
 - Pointer arithmetic (ADR-099) already required `Pointer` objects; having `NEW_OBJECT`/`NEW_ARRAY` produce bare strings that were later wrapped into `Pointer` was an unnecessary conversion step.
 
 **Consequences:** All heap references are now `Pointer` objects from creation through consumption. `_heap_addr()` handles `Pointer` uniformly. `LOAD_FIELD`/`STORE_FIELD` have a single code path. Type information flows end-to-end — a `NEW_OBJECT "Dog"` produces `TypedValue(Pointer(base="obj_0", offset=0), pointer(scalar("Dog")))`, and this type is preserved through `STORE_VAR`, `LOAD_VAR`, and field access. The trade-off is that all code that previously compared or matched on bare heap address strings must now go through `_heap_addr()` or access `pointer.base`.
+
+---
+
+### ADR-109: SpreadArguments operand for spread/splat call arguments (2026-03-19)
+
+**Context:** Spread/splat syntax (`*args` in Python/Ruby/Kotlin, `...arr` in JS, `...$arr` in PHP) lets callers unpack arrays into individual function arguments. The array length is unknown at lowering time, so the frontend cannot emit a fixed number of individual arg registers.
+
+**Decision:** Introduce `SpreadArguments(register)` as a frozen dataclass in `ir.py`. The frontend emits it directly as an operand in `CALL_FUNCTION`/`CALL_METHOD` instructions. The VM's `_resolve_call_args()` checks each operand — if it is a `SpreadArguments`, it reads the heap array at that register's pointer and inlines the elements as individual arguments. The frontend decides which args are spread; the IR carries the decision; the VM acts on it.
+
+**Alternatives considered:**
+1. *Spread builtin returning a marker type:* Initially implemented with a `spread` builtin that returned a tuple, and a flatten step in `_handle_call_function` checking `isinstance(tuple)`. Failed because `range()` and COBOL byte builtins also return native lists/tuples — no safe way to distinguish spread results from regular collection values without a marker type flowing through registers.
+2. *`spread_args: frozenset[int]` on IRInstruction:* Indices tracking which args to unpack. Worked but required extracting and passing indices through the frontend lowering pipeline.
+3. *Hybrid stack-based arg passing:* Research into production VMs (CPython, V8, Lua, JVM, Ruby YARV) showed no production VM uses a hybrid registers+arg-stack model. The `SpreadArguments` operand pattern matches Ruby YARV's `ARGS_SPLAT` flag and V8's `CallWithSpread` opcode — a marker on the call instruction telling the VM which args to unpack.
+
+**Rationale:** Follows the project's design principle "pass decisions through data, don't re-derive them downstream." The frontend made the spread decision at lowering time; `SpreadArguments` carries it through the IR; the VM reads it without heuristics. No new opcodes, no builtin, no type-checking guesses.
+
+**Consequences:** All five language frontends (Python, JS, Ruby, Kotlin, PHP) emit `SpreadArguments` via the common `lower_spread_arg()` function. The VM's `_resolve_call_args()` handles expansion for both `CALL_FUNCTION` and `CALL_METHOD`. `SpreadArguments.__str__()` renders as `*%reg` for readable IR display.
+
+---
+
+### ADR-110: CALL_METHOD resolves methods from heap object fields (2026-03-19)
+
+**Context:** Lua table-based OOP stores methods as fields on heap objects (`t.add = function(self, x) ... end`). The same pattern occurs in JavaScript/Python with dynamic property assignment. Previously, `_handle_call_method` only checked `registry.class_methods` for the method — if the object's type wasn't registered (e.g., Lua `table`), it fell back to symbolic resolution even though the method was present as a heap field.
+
+**Decision:** Before falling back to the symbolic resolver, `_handle_call_method` now checks `heap_obj.fields[method_name]`. If the field contains a `BoundFuncRef`, it dispatches the function via `_try_user_function_call()`, injecting the object as the first argument (`self`).
+
+**Rationale:** The method IS on the object — the VM just wasn't looking in the right place. This mirrors how `LOAD_FIELD` + `CALL_UNKNOWN` (dot-call syntax) already worked: load the function from the field, then call it. The fix makes `CALL_METHOD` (colon-call) follow the same path.
+
+**Consequences:** Lua colon-call syntax (`t:method(args)`) now produces concrete return values. Any language where methods are stored as object fields benefits. The check is positioned after method builtins but before registry lookup, so it doesn't affect class-based languages where methods are in the registry.
