@@ -16,9 +16,9 @@ def _run_kotlin(source: str, max_steps: int = 500) -> dict:
 
 class TestKotlinUnsignedLiteralExecution:
     def test_unsigned_literal_assigned(self):
-        """val x = 42u should execute and store a value."""
+        """val x = 42u should execute and store 42."""
         vars_ = _run_kotlin("val x = 42u")
-        assert "x" in vars_
+        assert vars_["x"] == 42
 
     def test_unsigned_literal_in_arithmetic(self):
         """Unsigned literal should be usable in arithmetic."""
@@ -29,9 +29,9 @@ val z = x + 1
         assert vars_["z"] == 11
 
     def test_unsigned_long_literal(self):
-        """val x = 42UL should execute without errors."""
+        """val x = 42UL should store 42."""
         vars_ = _run_kotlin("val x = 42UL")
-        assert "x" in vars_
+        assert vars_["x"] == 42
 
 
 class TestKotlinCallableReferenceExecution:
@@ -55,13 +55,13 @@ val y = 42
 
 class TestKotlinSpreadExpressionExecution:
     def test_spread_does_not_crash(self):
-        """Spread operator (*) in function call should not crash the VM."""
+        """Spread operator (*) in function call should produce correct result."""
         vars_ = _run_kotlin("""\
 fun sum(a: Int, b: Int, c: Int): Int { return a + b + c }
 val arr = intArrayOf(1, 2, 3)
 val answer = sum(*arr)
 """)
-        assert "answer" in vars_
+        assert vars_["answer"] == 6
 
 
 class TestKotlinSetterExecution:
