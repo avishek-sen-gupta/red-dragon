@@ -6,8 +6,6 @@ through the full parse -> lower -> execute pipeline.
 
 from __future__ import annotations
 
-import pytest
-
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.typed_value import unwrap_locals
@@ -21,13 +19,13 @@ def _run_lua(source: str, max_steps: int = 200):
 
 class TestLuaMethodIndexExecution:
     def test_method_call_executes(self):
-        """obj:method() should execute without errors."""
+        """obj:method() should return the correct value."""
         _, local_vars = _run_lua("""\
 local t = {}
 t.greet = function(self) return "hello" end
 local r = t:greet()
 """)
-        assert "r" in local_vars
+        assert local_vars["r"] == "hello"
 
     def test_method_call_with_args_executes(self):
         """obj:method(arg) should pass arguments correctly."""
@@ -39,11 +37,11 @@ local r = t:add(42)
         assert local_vars["r"] == 42
 
     def test_method_call_chained(self):
-        """obj:method1():method2() chained call should not crash."""
+        """obj:method1():method2() chained call should return correct value."""
         _, local_vars = _run_lua("""\
 local t = {}
 t.get = function(self) return self end
 t.val = function(self) return 42 end
 local r = t:get():val()
 """)
-        assert "r" in local_vars
+        assert local_vars["r"] == 42
