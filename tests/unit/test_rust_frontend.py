@@ -86,17 +86,29 @@ class TestRustControlFlow:
         assert any("if_false" in (inst.label or "") for inst in labels)
 
     def test_while_loop_produces_ir(self):
-        """Test that a while loop in Rust produces meaningful IR."""
+        """While loop should produce condition label, body label, back-edge, and conditional branch."""
         instructions = _parse_rust(
             "fn main() { let mut x: i32 = 10; while x > 0 { x = x - 1; } }"
         )
-        # The while should produce some IR beyond just function scaffolding
-        # (even if the tree-sitter grammar version maps it to a different node type)
-        opcodes = _opcodes(instructions)
-        assert Opcode.BRANCH in opcodes
-        assert Opcode.LABEL in opcodes
-        # Should have lowered the condition or body in some form
-        assert len(instructions) > 10
+        labels = _find_all(instructions, Opcode.LABEL)
+        label_names = [inst.label for inst in labels]
+        assert any(
+            "while_cond" in n for n in label_names
+        ), f"Missing while_cond label: {label_names}"
+        assert any(
+            "while_body" in n for n in label_names
+        ), f"Missing while_body label: {label_names}"
+        assert any(
+            "while_end" in n for n in label_names
+        ), f"Missing while_end label: {label_names}"
+        # Condition: BINOP > comparing x and 0
+        binops = _find_all(instructions, Opcode.BINOP)
+        assert any(">" in inst.operands for inst in binops)
+        # Back-edge: unconditional BRANCH to while_cond
+        branches = _find_all(instructions, Opcode.BRANCH)
+        assert any("while_cond" in (inst.label or "") for inst in branches)
+        # Conditional branch to body/end
+        assert Opcode.BRANCH_IF in _opcodes(instructions)
 
     def test_match_expression(self):
         instructions = _parse_rust(
@@ -188,12 +200,20 @@ class TestRustExpressions:
         assert any("x" in inst.operands for inst in stores)
 
     def test_compound_assignment(self):
+        """x += 5 should lower to LOAD_VAR x, CONST 5, BINOP +, STORE_VAR x."""
         instructions = _parse_rust("fn main() { x += 5; }")
-        opcodes = _opcodes(instructions)
-        assert Opcode.BINOP in opcodes
-        assert Opcode.DECL_VAR in opcodes
+        # Read: LOAD_VAR x
+        loads = _find_all(instructions, Opcode.LOAD_VAR)
+        assert any("x" in inst.operands for inst in loads)
+        # Constant: CONST 5
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("5" in str(inst.operands) for inst in consts)
+        # Modify: BINOP +
         binops = _find_all(instructions, Opcode.BINOP)
         assert any("+" in inst.operands for inst in binops)
+        # Write: STORE_VAR x (not DECL_VAR — compound assignment is a write, not a declaration)
+        stores = _find_all(instructions, Opcode.STORE_VAR)
+        assert any("x" in inst.operands for inst in stores)
 
     def test_macro_invocation(self):
         instructions = _parse_rust('fn main() { println!("hello"); }')
