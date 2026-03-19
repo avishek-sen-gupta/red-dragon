@@ -1430,3 +1430,27 @@ class TestPhpListDestructuring:
         store_names = [inst.operands[0] for inst in stores]
         assert "$a" in store_names
         assert "$b" in store_names
+
+
+class TestPhpAnonymousClass:
+    def test_anonymous_class_no_symbolic(self):
+        """new class { ... } should not produce SYMBOLIC for the class body."""
+        ir = _parse_and_lower("""\
+<?php
+$obj = new class {
+    public $x = 42;
+};
+?>""")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("anonymous_class" in str(inst.operands) for inst in symbolics)
+
+    def test_anonymous_class_has_method(self):
+        """Anonymous class methods should be lowered as functions."""
+        ir = _parse_and_lower("""\
+<?php
+$obj = new class {
+    public function greet() { return "hello"; }
+};
+?>""")
+        labels = [inst.label for inst in ir if inst.opcode == Opcode.LABEL]
+        assert any("greet" in (lbl or "") for lbl in labels)
