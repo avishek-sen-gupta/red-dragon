@@ -3,6 +3,7 @@
 from interpreter.builtins import _builtin_array_of
 from interpreter.vm import VMState
 from interpreter.vm_types import BuiltinResult, Pointer
+from interpreter.type_expr import scalar
 from interpreter.typed_value import TypedValue, typed_from_runtime
 
 
@@ -26,7 +27,7 @@ class TestArrayOfBuiltinResult:
         result = _builtin_array_of([typed_from_runtime(10)], vm)
         assert len(result.new_objects) == 1
         assert result.new_objects[0].addr == result.value.value.base
-        assert result.new_objects[0].type_hint == "array"
+        assert result.new_objects[0].type_hint == scalar("Array")
 
     def test_heap_writes_contain_elements_and_length(self):
         vm = VMState()

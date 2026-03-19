@@ -141,7 +141,7 @@ def _builtin_array_of(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     fields["length"] = typed(len(args), scalar(TypeName.INT))
     return BuiltinResult(
         value=typed(Pointer(base=addr, offset=0), pointer(scalar("Array"))),
-        new_objects=[NewObject(addr=addr, type_hint="array")],
+        new_objects=[NewObject(addr=addr, type_hint=scalar("Array"))],
         heap_writes=[
             HeapWrite(obj_addr=addr, field=k, value=v) for k, v in fields.items()
         ],
@@ -214,11 +214,11 @@ def _builtin_clone(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     source = vm.heap[addr]
     clone_addr = f"{ARR_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
-    hint = str(source.type_hint) if source.type_hint else "Object"
+    hint = source.type_hint if source.type_hint else scalar("Object")
     return BuiltinResult(
         value=typed(
             Pointer(base=clone_addr, offset=0),
-            pointer(scalar(hint)),
+            pointer(hint),
         ),
         new_objects=[NewObject(addr=clone_addr, type_hint=hint)],
         heap_writes=[
@@ -247,7 +247,7 @@ def _builtin_object_rest(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     vm.symbolic_counter += 1
     return BuiltinResult(
         value=typed(Pointer(base=rest_addr, offset=0), pointer(scalar("Object"))),
-        new_objects=[NewObject(addr=rest_addr, type_hint="object")],
+        new_objects=[NewObject(addr=rest_addr, type_hint=scalar("Object"))],
         heap_writes=[
             HeapWrite(obj_addr=rest_addr, field=k, value=v)
             for k, v in rest_fields.items()
