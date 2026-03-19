@@ -44,6 +44,7 @@ class CSharpNodeType:
     ARRAY_CREATION_EXPRESSION = "array_creation_expression"
     IMPLICIT_ARRAY_CREATION_EXPRESSION = "implicit_array_creation_expression"
     IMPLICIT_OBJECT_CREATION_EXPRESSION = "implicit_object_creation_expression"
+    ANONYMOUS_OBJECT_CREATION_EXPRESSION = "anonymous_object_creation_expression"
     QUERY_EXPRESSION = "query_expression"
     AWAIT_EXPRESSION = "await_expression"
     SWITCH_EXPRESSION = "switch_expression"

@@ -1415,3 +1415,25 @@ ref int x = ref y;
 x = 42;""")
         store_indirects = _find_all(ir, Opcode.STORE_INDIRECT)
         assert len(store_indirects) >= 1
+
+
+class TestCSharpAnonymousObjectCreation:
+    def test_anonymous_object_no_symbolic(self):
+        """new { Name = 'foo', Age = 42 } should not produce SYMBOLIC."""
+        ir = _parse_and_lower('var obj = new { Name = "foo", Age = 42 };')
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("anonymous_object" in str(inst.operands) for inst in symbolics)
+
+    def test_anonymous_object_creates_heap_object(self):
+        """Should emit NEW_OBJECT for the anonymous object."""
+        ir = _parse_and_lower('var obj = new { Name = "foo", Age = 42 };')
+        new_objs = _find_all(ir, Opcode.NEW_OBJECT)
+        assert len(new_objs) >= 1
+
+    def test_anonymous_object_stores_fields(self):
+        """Should emit STORE_FIELD for each property."""
+        ir = _parse_and_lower('var obj = new { Name = "foo", Age = 42 };')
+        stores = _find_all(ir, Opcode.STORE_FIELD)
+        field_names = [inst.operands[1] for inst in stores]
+        assert "Name" in field_names
+        assert "Age" in field_names
