@@ -1490,3 +1490,35 @@ class Foo {
         assert any(
             "__set_x__" in inst.operands for inst in call_methods
         ), f"Expected CALL_METHOD with __set_x__, got: {[(inst.operands) for inst in call_methods]}"
+
+
+class TestKotlinUnsignedLiteral:
+    def test_unsigned_int_suffix_stripped(self):
+        """val x = 42u should emit CONST '42', not '42u'."""
+        ir = _parse_kotlin("val x = 42u")
+        consts = _find_all(ir, Opcode.CONST)
+        const_values = [inst.operands[0] for inst in consts]
+        assert "42" in const_values
+        assert "42u" not in const_values
+
+    def test_unsigned_long_suffix_stripped(self):
+        """val x = 42UL should emit CONST '42', not '42UL'."""
+        ir = _parse_kotlin("val x = 42UL")
+        consts = _find_all(ir, Opcode.CONST)
+        const_values = [inst.operands[0] for inst in consts]
+        assert "42" in const_values
+        assert "42UL" not in const_values
+
+    def test_unsigned_lowercase_suffix(self):
+        """val x = 100uL should strip mixed-case suffix."""
+        ir = _parse_kotlin("val x = 100uL")
+        consts = _find_all(ir, Opcode.CONST)
+        const_values = [inst.operands[0] for inst in consts]
+        assert "100" in const_values
+
+    def test_unsigned_hex_literal(self):
+        """val x = 0xFFu should emit '0xFF', not '0xFFu'."""
+        ir = _parse_kotlin("val x = 0xFFu")
+        consts = _find_all(ir, Opcode.CONST)
+        const_values = [inst.operands[0] for inst in consts]
+        assert "0xFF" in const_values

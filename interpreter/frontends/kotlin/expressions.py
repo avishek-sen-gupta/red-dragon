@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import re
+
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
@@ -13,6 +15,8 @@ from interpreter.frontends.common.expressions import (
     lower_interpolated_string_parts,
     lower_update_expr,
 )
+
+_UNSIGNED_SUFFIX = re.compile(r"[uUlL]+$")
 from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
 
 logger = logging.getLogger(__name__)
@@ -1110,6 +1114,14 @@ def lower_callable_reference(ctx: TreeSitterEmitContext, node) -> str:
     )
     reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[func_name], node=node)
+    return reg
+
+
+def lower_unsigned_literal(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower Kotlin unsigned literal (42u, 10UL) by stripping the suffix."""
+    text = _UNSIGNED_SUFFIX.sub("", ctx.node_text(node))
+    reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=reg, operands=[text], node=node)
     return reg
 
 
