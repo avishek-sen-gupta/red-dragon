@@ -26,10 +26,13 @@ def _run_csharp(source: str, max_steps: int = 500) -> dict:
 
 
 class TestCSharpDefaultExpressionExecution:
+    @pytest.mark.xfail(
+        reason="C# default produces string passthrough, not type default (red-dragon-3k9f)"
+    )
     def test_default_assigned(self):
-        """int x = default; should store a value."""
+        """int x = default; should store 0 (the int default)."""
         vars_ = _run_csharp("int x = default;")
-        assert vars_["x"] == "default"  # passthrough — ideally 0 for int
+        assert vars_["x"] == 0
 
     def test_default_with_subsequent_code(self):
         """Code after default expression should execute normally."""
@@ -41,10 +44,13 @@ int y = 42;
 
 
 class TestCSharpSizeofExpressionExecution:
+    @pytest.mark.xfail(
+        reason="C# sizeof produces string passthrough, not numeric value (red-dragon-67bz)"
+    )
     def test_sizeof_assigned(self):
-        """int x = sizeof(int); should store a value."""
+        """int x = sizeof(int); should store 4."""
         vars_ = _run_csharp("int x = sizeof(int);")
-        assert vars_["x"] == "sizeof(int)"  # passthrough — ideally 4
+        assert vars_["x"] == 4
 
     def test_sizeof_with_subsequent_code(self):
         """Code after sizeof should execute normally."""
