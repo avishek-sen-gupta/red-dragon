@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from interpreter.class_ref import ClassRef
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.typed_value import unwrap_locals
@@ -75,5 +76,5 @@ class TestPHPEnumCaseExecution:
     def test_enum_declaration_stores_class_ref(self):
         """Enum declaration should store a class reference in local vars."""
         vars_ = _run_php("<?php enum Color { case Red; case Green; } ?>")
-        assert "Color" in vars_
-        assert "class_Color" in str(vars_["Color"])
+        assert isinstance(vars_["Color"], ClassRef)
+        assert vars_["Color"].name == "Color"
