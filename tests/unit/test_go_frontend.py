@@ -1179,3 +1179,31 @@ class TestGoIota:
         assert not any(
             "iota" in str(s.operands) for s in symbolics
         ), f"iota should not produce SYMBOLIC: {symbolics}"
+
+
+class TestGoMakeDesugaring:
+    def test_make_map_emits_new_object(self):
+        """make(map[string]int) should desugar to NEW_OBJECT."""
+        ir = _parse_and_lower("package main\nfunc main() { m := make(map[string]int) }")
+        new_objs = _find_all(ir, Opcode.NEW_OBJECT)
+        assert len(new_objs) >= 1
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("map_type" in str(s.operands) for s in symbolics)
+
+    def test_make_map_no_call_function(self):
+        """make(map[...]) should NOT emit CALL_FUNCTION make."""
+        ir = _parse_and_lower("package main\nfunc main() { m := make(map[string]int) }")
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert not any("make" in inst.operands for inst in calls)
+
+    def test_make_slice_emits_new_array(self):
+        """make([]int, 5) should desugar to NEW_ARRAY."""
+        ir = _parse_and_lower("package main\nfunc main() { s := make([]int, 5) }")
+        new_arrs = _find_all(ir, Opcode.NEW_ARRAY)
+        assert len(new_arrs) >= 1
+
+    def test_make_chan_emits_new_object(self):
+        """make(chan int) should desugar to NEW_OBJECT."""
+        ir = _parse_and_lower("package main\nfunc main() { c := make(chan int) }")
+        new_objs = _find_all(ir, Opcode.NEW_OBJECT)
+        assert len(new_objs) >= 1
