@@ -6,13 +6,13 @@ from interpreter.builtins import Builtins
 from interpreter.vm import VMState
 from interpreter.vm_types import BuiltinResult, HeapObject, Pointer
 from interpreter.typed_value import typed, typed_from_runtime
-from interpreter.type_expr import scalar
+from interpreter.type_expr import TypeExpr, scalar
 from interpreter.constants import TypeName
 
 
 class TestCloneBuiltin:
     def _make_vm_with_object(
-        self, type_hint: str, fields: dict
+        self, type_hint: TypeExpr, fields: dict
     ) -> tuple[VMState, Pointer]:
         vm = VMState()
         vm.heap["obj_0"] = HeapObject(type_hint=type_hint, fields=fields)
@@ -24,7 +24,7 @@ class TestCloneBuiltin:
     def test_clone_creates_new_object(self):
         """clone should return a new Pointer, not the original."""
         vm, ptr = self._make_vm_with_object(
-            "MyClass",
+            scalar("MyClass"),
             {"x": typed(42, scalar(TypeName.INT))},
         )
         result = Builtins.TABLE["clone"]([typed_from_runtime(ptr)], vm)
@@ -35,7 +35,7 @@ class TestCloneBuiltin:
     def test_clone_copies_all_fields(self):
         """clone should copy all fields from the original object."""
         vm, ptr = self._make_vm_with_object(
-            "MyClass",
+            scalar("MyClass"),
             {
                 "x": typed(42, scalar(TypeName.INT)),
                 "name": typed("hello", scalar(TypeName.STRING)),
@@ -49,9 +49,9 @@ class TestCloneBuiltin:
     def test_clone_preserves_type_hint(self):
         """clone should create a new object with the same type_hint."""
         vm, ptr = self._make_vm_with_object(
-            "Dog",
+            scalar("Dog"),
             {"breed": typed("labrador", scalar(TypeName.STRING))},
         )
         result = Builtins.TABLE["clone"]([typed_from_runtime(ptr)], vm)
         assert len(result.new_objects) == 1
-        assert result.new_objects[0].type_hint == "Dog"
+        assert result.new_objects[0].type_hint == scalar("Dog")

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from interpreter.constants import TypeName
 from interpreter.type_expr import TypeExpr, UNKNOWN, scalar
@@ -168,8 +168,9 @@ class HeapWrite(BaseModel):
 
 
 class NewObject(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
     addr: str
-    type_hint: str | None = None
+    type_hint: TypeExpr = UNKNOWN
 
 
 class RegionWrite(BaseModel):
