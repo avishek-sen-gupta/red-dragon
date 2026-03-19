@@ -42,6 +42,8 @@ except Exception as e:
     marker = 10
 """
         vars_ = _run_program(source)
+        # marker should be 10 (catch block), NOT 2 (code after raise)
+        assert vars_["marker"] != 2, "Code after raise should not have executed"
         assert vars_["marker"] == 10
 
     def test_no_exception_skips_catch(self):

@@ -42,6 +42,11 @@ class TestConditionLoweringBasic:
         assert result_reg.startswith("%r")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         assert any(i.operands[0] == ">" for i in binop_insts)
+        # Verify the comparison value 10 appears as a CONST
+        const_vals = [
+            i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
+        ]
+        assert 10 in const_vals
 
     def test_unknown_condition_defaults_to_true(self):
         fields = [
@@ -80,6 +85,11 @@ class TestConditionNameExpansion:
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
         assert len(eq_ops) == 1
+        # Verify the comparison value 'A' appears as a CONST
+        const_vals = [
+            i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
+        ]
+        assert "A" in const_vals
 
     def test_multi_value_or_expansion(self):
         """IF STATUS-VALID expands to WS-STATUS == 'A' OR WS-STATUS == 'B' OR WS-STATUS == 'C'."""
@@ -138,6 +148,12 @@ class TestConditionNameExpansion:
         assert len(ge_ops) == 1
         assert len(le_ops) == 1
         assert len(and_ops) == 1
+        # Verify the range boundary values 'A' and 'Z' appear as CONSTs
+        const_vals = [
+            i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
+        ]
+        assert "A" in const_vals
+        assert "Z" in const_vals
 
     def test_mixed_discrete_and_range(self):
         """Mixed: VALUE 'A' 'X' THRU 'Z' — produces 1 eq + 1 range, combined with OR."""
@@ -173,6 +189,13 @@ class TestConditionNameExpansion:
         assert len(le_ops) == 1
         assert len(and_ops) == 1
         assert len(or_ops) == 1
+        # Verify discrete 'A' and range boundaries 'X', 'Z' appear as CONSTs
+        const_vals = [
+            i.operands[0] for i in ctx.instructions if i.opcode == Opcode.CONST
+        ]
+        assert "A" in const_vals
+        assert "X" in const_vals
+        assert "Z" in const_vals
 
     def test_unknown_condition_passes_through(self):
         """A single token that is NOT a known condition name defaults to true
@@ -191,7 +214,11 @@ class TestConditionNameExpansion:
         assert len(expansion_ops) == 0, "Unknown condition should not expand"
 
     def test_regular_comparison_still_works_with_index(self):
-        """Normal 'field OP value' conditions still work when index is present."""
+        """Normal 'field OP value' conditions still work when index is present.
+
+        Having a condition index should not cause the comparator to expand
+        'WS-STATUS = A' as if it were a condition name lookup.
+        """
         fields = [
             CobolField(
                 name="WS-STATUS",
@@ -213,3 +240,6 @@ class TestConditionNameExpansion:
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
         assert len(eq_ops) == 1
+        # No condition-name expansion: no or/and BINOPs from expansion
+        or_ops = [i for i in binop_insts if i.operands[0] == "or"]
+        assert len(or_ops) == 0, "Regular comparison should not trigger expansion"
