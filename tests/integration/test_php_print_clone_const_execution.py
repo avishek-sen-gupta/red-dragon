@@ -36,11 +36,19 @@ class TestPhpPrintExecution:
 
 
 class TestPhpCloneExecution:
-    def test_clone_executes_without_error(self):
-        """clone $obj should execute through the VM."""
-        source = "<?php $obj = 'original'; $copy = clone $obj; ?>"
+    def test_clone_produces_independent_copy(self):
+        """clone $obj should produce a new object with the same fields."""
+        source = """\
+<?php
+class Dog {
+    public $name = "Rex";
+}
+$obj = new Dog();
+$copy = clone $obj;
+$answer = $copy->name;
+?>"""
         vars_ = _run(source)
-        assert "$copy" in vars_
+        assert vars_["$answer"] == "Rex"
 
 
 class TestPhpConstExecution:
