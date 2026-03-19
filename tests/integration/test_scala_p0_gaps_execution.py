@@ -41,7 +41,7 @@ class TestScalaPostfixExpressionExecution:
     """Verify postfix expressions execute correctly through VM."""
 
     def test_postfix_as_val_assignment(self):
-        """Postfix expression (x toString) lowers via CALL_METHOD and executes."""
+        """Postfix expression (x toString) should produce string '42'."""
         source = """\
 object M {
     val x = 42
@@ -49,9 +49,7 @@ object M {
 }
 """
         vm, stats = execute_for_language("scala", source)
-        # The VM executes the postfix call symbolically; verify it ran without error
-        answer = extract_answer(vm, "scala")
-        assert answer is not None
+        assert extract_answer(vm, "scala") == "42"
         assert stats.llm_calls == 0
 
 
