@@ -204,6 +204,30 @@ def _slice_heap_array(
     return _builtin_array_of(elements, vm)
 
 
+def _builtin_clone(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """clone(obj) — shallow-copy a heap object (PHP clone keyword)."""
+    if not args:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    addr = _heap_addr(args[0].value)
+    if not addr or addr not in vm.heap:
+        return BuiltinResult(value=_UNCOMPUTABLE)
+    source = vm.heap[addr]
+    clone_addr = f"{ARR_ADDR_PREFIX}{vm.symbolic_counter}"
+    vm.symbolic_counter += 1
+    hint = str(source.type_hint) if source.type_hint else "Object"
+    return BuiltinResult(
+        value=typed(
+            Pointer(base=clone_addr, offset=0),
+            pointer(scalar(hint)),
+        ),
+        new_objects=[NewObject(addr=clone_addr, type_hint=hint)],
+        heap_writes=[
+            HeapWrite(obj_addr=clone_addr, field=k, value=v)
+            for k, v in source.fields.items()
+        ],
+    )
+
+
 def _builtin_object_rest(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     """object_rest(obj, key1, key2, ...) — return new object without excluded keys."""
     if not args:
@@ -267,6 +291,7 @@ class Builtins:
         "mutableListOf": _builtin_array_of,
         "Array": _builtin_array_of,
         "slice": _builtin_slice,
+        "clone": _builtin_clone,
         "object_rest": _builtin_object_rest,
         **BYTE_BUILTINS,
     }
