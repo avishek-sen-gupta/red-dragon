@@ -16,11 +16,20 @@ def _run_pascal(source: str, max_steps: int = 300):
 
 class TestPascalForeachExecution:
     def test_foreach_executes(self):
-        """for-in loop should execute without errors."""
-        _, local_vars = _run_pascal(
-            "program M; var i: Integer; begin for i in arr do writeln(i); end."
-        )
-        assert "i" in local_vars
+        """for-in loop over a concrete array should produce a concrete loop variable."""
+        source = """\
+program M;
+var i: Integer;
+    arr: array[1..3] of Integer;
+begin
+  arr[1] := 10;
+  arr[2] := 20;
+  arr[3] := 30;
+  for i in arr do
+    writeln(i);
+end."""
+        _, local_vars = _run_pascal(source, max_steps=500)
+        assert isinstance(local_vars["i"], int)
 
     def test_foreach_accumulates_via_index(self):
         """for-in loop should iterate — verify the index counter advances."""
