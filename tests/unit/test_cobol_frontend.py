@@ -566,9 +566,20 @@ class TestComputeLowering:
 
         # Should have WRITE_REGION for initial values (3 fields) + 2 COMPUTE targets
         writes = _find_opcodes(instructions, Opcode.WRITE_REGION)
+        assert len(writes) >= 4
+        # Verify both target fields (WS-C at offset 3, WS-D at offset 6) are written
+        const_map = {
+            i.result_reg: i.operands[0]
+            for i in instructions
+            if i.opcode == Opcode.CONST
+        }
+        write_offsets = [const_map.get(w.operands[1]) for w in writes]
         assert (
-            len(writes) >= 4
-        )  # 3 initial values (WS-A="100", WS-C="0", WS-D="0") + 2 COMPUTE targets
+            3 in write_offsets
+        ), f"Expected write at offset 3 (WS-C), got offsets: {write_offsets}"
+        assert (
+            6 in write_offsets
+        ), f"Expected write at offset 6 (WS-D), got offsets: {write_offsets}"
 
     def test_compute_literal_expression(self):
         """COMPUTE with only literals (no field references)."""
