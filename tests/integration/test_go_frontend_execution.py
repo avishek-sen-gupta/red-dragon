@@ -192,3 +192,16 @@ func main() {
         assert locals_["b"] == 1
         assert locals_["x"] == 0
         assert locals_["y"] == 1
+
+
+class TestGoMakeExecution:
+    def test_make_map_stores_and_reads(self):
+        """make(map[string]int) should create a usable map."""
+        vars_ = _run_go("""\
+package main
+func main() {
+    m := make(map[string]int)
+    m["x"] = 42
+    answer := m["x"]
+}""")
+        assert vars_["answer"] == 42
