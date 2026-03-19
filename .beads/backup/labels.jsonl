@@ -1,3 +1,4 @@
+{"issue_id":"red-dragon-06e2","label":"frontend-gap"}
 {"issue_id":"red-dragon-07q","label":"builtin"}
 {"issue_id":"red-dragon-07q","label":"vm"}
 {"issue_id":"red-dragon-0ax","label":"frontend"}
@@ -68,6 +69,7 @@
 {"issue_id":"red-dragon-8og","label":"type-system"}
 {"issue_id":"red-dragon-8qn","label":"builtin"}
 {"issue_id":"red-dragon-8qn","label":"vm"}
+{"issue_id":"red-dragon-8rgk","label":"frontend-gap"}
 {"issue_id":"red-dragon-8s7z","label":"audit-asserts"}
 {"issue_id":"red-dragon-93w","label":"frontend"}
 {"issue_id":"red-dragon-93w","label":"pascal"}
