@@ -512,13 +512,14 @@ def _handle_new_object(
             break
     addr = f"{constants.OBJ_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
+    obj_type = scalar(type_hint or "Object")
     return ExecutionResult.success(
         StateUpdate(
-            new_objects=[NewObject(addr=addr, type_hint=type_hint or None)],
+            new_objects=[NewObject(addr=addr, type_hint=obj_type)],
             register_writes={
                 inst.result_reg: typed(
                     Pointer(base=addr, offset=0),
-                    pointer(scalar(type_hint or "Object")),
+                    pointer(obj_type),
                 )
             },
             reasoning=f"new {type_hint} → {addr}",
@@ -532,13 +533,14 @@ def _handle_new_array(
     type_hint = inst.operands[0] if inst.operands else ""
     addr = f"{constants.ARR_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
+    arr_type = scalar(type_hint or "Array")
     return ExecutionResult.success(
         StateUpdate(
-            new_objects=[NewObject(addr=addr, type_hint=type_hint or None)],
+            new_objects=[NewObject(addr=addr, type_hint=arr_type)],
             register_writes={
                 inst.result_reg: typed(
                     Pointer(base=addr, offset=0),
-                    pointer(scalar(type_hint or "Array")),
+                    pointer(arr_type),
                 )
             },
             reasoning=f"new {type_hint}[] → {addr}",
@@ -1270,7 +1272,7 @@ def _try_class_constructor_call(
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={inst.result_reg: ptr_tv},
-                new_objects=[NewObject(addr=addr, type_hint=str(type_hint) or None)],
+                new_objects=[NewObject(addr=addr, type_hint=type_hint)],
                 reasoning=f"new {class_name}() → {addr} (no __init__)",
             )
         )
