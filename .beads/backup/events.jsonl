@@ -1178,3 +1178,110 @@
 {"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T00:16:41Z","event_type":"updated","id":1178,"issue_id":"red-dragon-1c9k","new_value":"{\"description\":\"WONTFIX: Research showed no production VM uses a hybrid registers+arg-stack model. The SpreadArguments operand pattern already matches Ruby YARV (ARGS_SPLAT flag) and V8 (CallWithSpread opcode). No architectural change needed.\"}","old_value":"{\"id\":\"red-dragon-1c9k\",\"title\":\"Hybrid stack-based arg passing for CALL_FUNCTION/CALL_METHOD\",\"description\":\"Replace positional operands in CALL_FUNCTION/CALL_METHOD with a stack-based arg passing model. Add PUSH_ARG opcode that pushes values onto an arg stack in VMState. CALL_FUNCTION pops N args. Spread becomes trivial: PUSH_SPREAD iterates the heap array and pushes each element — no markers, no metadata, no heuristics. Keeps registers for everything else (hybrid approach). Requires updating all 15 frontend call emission sites and ~2 executor handlers. Follow-up to SpreadArguments approach.\",\"status\":\"closed\",\"priority\":2,\"issue_type\":\"feature\",\"owner\":\"asgupta@thoughtworks.com\",\"created_at\":\"2026-03-18T18:12:33Z\",\"created_by\":\"avishek-sen-gupta\",\"updated_at\":\"2026-03-18T18:46:42Z\",\"closed_at\":\"2026-03-18T18:46:42Z\",\"close_reason\":\"Closed\"}"}
 {"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T11:29:49Z","event_type":"closed","id":1179,"issue_id":"red-dragon-r0f1","new_value":"Closed","old_value":""}
 {"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T14:55:22Z","event_type":"closed","id":1180,"issue_id":"red-dragon-x0s0","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:08:21Z","event_type":"closed","id":1181,"issue_id":"red-dragon-ml39","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:18:31Z","event_type":"created","id":1182,"issue_id":"red-dragon-lzas","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:18:31Z","event_type":"label_added","id":1183,"issue_id":"red-dragon-lzas","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:18:32Z","event_type":"created","id":1184,"issue_id":"red-dragon-fdgp","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:18:32Z","event_type":"label_added","id":1185,"issue_id":"red-dragon-fdgp","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:18:35Z","event_type":"closed","id":1186,"issue_id":"red-dragon-lzas","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:18:35Z","event_type":"closed","id":1187,"issue_id":"red-dragon-fdgp","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:27:46Z","event_type":"created","id":1188,"issue_id":"red-dragon-jck3","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:27:46Z","event_type":"label_added","id":1189,"issue_id":"red-dragon-jck3","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:27:46Z","event_type":"created","id":1190,"issue_id":"red-dragon-je38","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:27:46Z","event_type":"label_added","id":1191,"issue_id":"red-dragon-je38","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:27:47Z","event_type":"created","id":1192,"issue_id":"red-dragon-3n0w","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:27:47Z","event_type":"label_added","id":1193,"issue_id":"red-dragon-3n0w","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:27:47Z","event_type":"created","id":1194,"issue_id":"red-dragon-5e13","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:27:47Z","event_type":"label_added","id":1195,"issue_id":"red-dragon-5e13","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:27:47Z","event_type":"created","id":1196,"issue_id":"red-dragon-8s7z","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:27:47Z","event_type":"label_added","id":1197,"issue_id":"red-dragon-8s7z","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:01Z","event_type":"created","id":1198,"issue_id":"red-dragon-c3dd","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:01Z","event_type":"label_added","id":1199,"issue_id":"red-dragon-c3dd","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:01Z","event_type":"created","id":1200,"issue_id":"red-dragon-k85m","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:01Z","event_type":"label_added","id":1201,"issue_id":"red-dragon-k85m","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:01Z","event_type":"created","id":1202,"issue_id":"red-dragon-1jl7","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:01Z","event_type":"label_added","id":1203,"issue_id":"red-dragon-1jl7","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:02Z","event_type":"created","id":1204,"issue_id":"red-dragon-41bw","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:02Z","event_type":"label_added","id":1205,"issue_id":"red-dragon-41bw","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:02Z","event_type":"created","id":1206,"issue_id":"red-dragon-icic","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:02Z","event_type":"label_added","id":1207,"issue_id":"red-dragon-icic","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:14Z","event_type":"created","id":1208,"issue_id":"red-dragon-yd8r","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:14Z","event_type":"label_added","id":1209,"issue_id":"red-dragon-yd8r","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:14Z","event_type":"created","id":1210,"issue_id":"red-dragon-4yuv","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:14Z","event_type":"label_added","id":1211,"issue_id":"red-dragon-4yuv","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:14Z","event_type":"created","id":1212,"issue_id":"red-dragon-mbr9","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:14Z","event_type":"label_added","id":1213,"issue_id":"red-dragon-mbr9","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:15Z","event_type":"created","id":1214,"issue_id":"red-dragon-4aaf","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:15Z","event_type":"label_added","id":1215,"issue_id":"red-dragon-4aaf","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:15Z","event_type":"created","id":1216,"issue_id":"red-dragon-3a3j","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:15Z","event_type":"label_added","id":1217,"issue_id":"red-dragon-3a3j","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:15Z","event_type":"created","id":1218,"issue_id":"red-dragon-tzss","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:15Z","event_type":"label_added","id":1219,"issue_id":"red-dragon-tzss","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:15Z","event_type":"created","id":1220,"issue_id":"red-dragon-qxxs","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:15Z","event_type":"label_added","id":1221,"issue_id":"red-dragon-qxxs","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:30Z","event_type":"created","id":1222,"issue_id":"red-dragon-auwz","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:30Z","event_type":"label_added","id":1223,"issue_id":"red-dragon-auwz","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:30Z","event_type":"created","id":1224,"issue_id":"red-dragon-hs26","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:30Z","event_type":"label_added","id":1225,"issue_id":"red-dragon-hs26","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:30Z","event_type":"created","id":1226,"issue_id":"red-dragon-enjk","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:30Z","event_type":"label_added","id":1227,"issue_id":"red-dragon-enjk","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:30Z","event_type":"created","id":1228,"issue_id":"red-dragon-sl0o","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:30Z","event_type":"label_added","id":1229,"issue_id":"red-dragon-sl0o","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:31Z","event_type":"created","id":1230,"issue_id":"red-dragon-qwsu","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:31Z","event_type":"label_added","id":1231,"issue_id":"red-dragon-qwsu","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:58Z","event_type":"created","id":1232,"issue_id":"red-dragon-fqgd","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:58Z","event_type":"label_added","id":1233,"issue_id":"red-dragon-fqgd","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:58Z","event_type":"created","id":1234,"issue_id":"red-dragon-ycex","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:58Z","event_type":"label_added","id":1235,"issue_id":"red-dragon-ycex","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:58Z","event_type":"created","id":1236,"issue_id":"red-dragon-bre9","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:58Z","event_type":"label_added","id":1237,"issue_id":"red-dragon-bre9","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:58Z","event_type":"created","id":1238,"issue_id":"red-dragon-ca2w","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:58Z","event_type":"label_added","id":1239,"issue_id":"red-dragon-ca2w","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:58Z","event_type":"created","id":1240,"issue_id":"red-dragon-6l0t","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:58Z","event_type":"label_added","id":1241,"issue_id":"red-dragon-6l0t","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:59Z","event_type":"created","id":1242,"issue_id":"red-dragon-j628","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:59Z","event_type":"label_added","id":1243,"issue_id":"red-dragon-j628","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:59Z","event_type":"created","id":1244,"issue_id":"red-dragon-ls2a","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:59Z","event_type":"label_added","id":1245,"issue_id":"red-dragon-ls2a","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:59Z","event_type":"created","id":1246,"issue_id":"red-dragon-xh20","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:59Z","event_type":"label_added","id":1247,"issue_id":"red-dragon-xh20","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:59Z","event_type":"created","id":1248,"issue_id":"red-dragon-9hq5","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:59Z","event_type":"label_added","id":1249,"issue_id":"red-dragon-9hq5","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:28:59Z","event_type":"created","id":1250,"issue_id":"red-dragon-435i","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:28:59Z","event_type":"label_added","id":1251,"issue_id":"red-dragon-435i","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:29:00Z","event_type":"created","id":1252,"issue_id":"red-dragon-6w25","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:29:00Z","event_type":"label_added","id":1253,"issue_id":"red-dragon-6w25","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T15:29:00Z","event_type":"created","id":1254,"issue_id":"red-dragon-slgt","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: audit-asserts","created_at":"2026-03-19T15:29:00Z","event_type":"label_added","id":1255,"issue_id":"red-dragon-slgt","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T17:42:54Z","event_type":"created","id":1256,"issue_id":"red-dragon-3k9f","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: frontend-gap","created_at":"2026-03-19T17:42:54Z","event_type":"label_added","id":1257,"issue_id":"red-dragon-3k9f","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T17:42:54Z","event_type":"created","id":1258,"issue_id":"red-dragon-67bz","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: frontend-gap","created_at":"2026-03-19T17:42:54Z","event_type":"label_added","id":1259,"issue_id":"red-dragon-67bz","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T17:42:55Z","event_type":"created","id":1260,"issue_id":"red-dragon-9815","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: frontend-gap","created_at":"2026-03-19T17:42:55Z","event_type":"label_added","id":1261,"issue_id":"red-dragon-9815","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T17:43:03Z","event_type":"closed","id":1262,"issue_id":"red-dragon-jck3","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T17:43:03Z","event_type":"closed","id":1263,"issue_id":"red-dragon-je38","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T17:43:03Z","event_type":"closed","id":1264,"issue_id":"red-dragon-3n0w","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T17:43:03Z","event_type":"closed","id":1265,"issue_id":"red-dragon-5e13","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T17:43:03Z","event_type":"closed","id":1266,"issue_id":"red-dragon-8s7z","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T17:43:03Z","event_type":"closed","id":1267,"issue_id":"red-dragon-c3dd","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T17:43:03Z","event_type":"closed","id":1268,"issue_id":"red-dragon-1jl7","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T17:43:03Z","event_type":"closed","id":1269,"issue_id":"red-dragon-icic","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T17:43:03Z","event_type":"closed","id":1270,"issue_id":"red-dragon-4yuv","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T17:43:03Z","event_type":"closed","id":1271,"issue_id":"red-dragon-mbr9","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T17:43:03Z","event_type":"closed","id":1272,"issue_id":"red-dragon-4aaf","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T20:15:40Z","event_type":"closed","id":1273,"issue_id":"red-dragon-fqgd","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T20:15:40Z","event_type":"closed","id":1274,"issue_id":"red-dragon-ycex","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T20:18:41Z","event_type":"closed","id":1275,"issue_id":"red-dragon-6w25","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T20:28:45Z","event_type":"closed","id":1276,"issue_id":"red-dragon-auwz","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T20:28:45Z","event_type":"closed","id":1277,"issue_id":"red-dragon-hs26","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T20:28:45Z","event_type":"closed","id":1278,"issue_id":"red-dragon-enjk","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T20:28:45Z","event_type":"closed","id":1279,"issue_id":"red-dragon-sl0o","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T20:28:45Z","event_type":"closed","id":1280,"issue_id":"red-dragon-qwsu","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T20:28:45Z","event_type":"closed","id":1281,"issue_id":"red-dragon-ls2a","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T20:28:45Z","event_type":"closed","id":1282,"issue_id":"red-dragon-bre9","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T20:28:45Z","event_type":"closed","id":1283,"issue_id":"red-dragon-ca2w","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T20:42:56Z","event_type":"closed","id":1284,"issue_id":"red-dragon-xh20","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T20:42:56Z","event_type":"closed","id":1285,"issue_id":"red-dragon-9hq5","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T20:42:56Z","event_type":"closed","id":1286,"issue_id":"red-dragon-435i","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-19T20:42:56Z","event_type":"closed","id":1287,"issue_id":"red-dragon-6l0t","new_value":"Closed","old_value":""}
