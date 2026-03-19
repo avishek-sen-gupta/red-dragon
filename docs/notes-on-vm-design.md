@@ -284,7 +284,7 @@ All VM state types live in `interpreter/vm_types.py`. The state model is designe
 VMState
 ├── heap: dict[str, HeapObject]
 │   └── HeapObject
-│       ├── type_hint: str         (e.g., "Point")
+│       ├── type_hint: TypeExpr    (e.g., scalar("Point"))
 │       └── fields: dict[str, Any] (field name → value)
 │
 ├── call_stack: list[StackFrame]
@@ -343,7 +343,7 @@ class StateUpdate(BaseModel):
     register_writes: dict[str, Any] = {}     # {"%0": 42}
     var_writes: dict[str, Any] = {}          # {"x": 42}
     heap_writes: list[HeapWrite] = []        # [{obj_addr, field, value}]
-    new_objects: list[NewObject] = []         # [{addr, type_hint}]
+    new_objects: list[NewObject] = []         # [{addr, type_hint: TypeExpr}]
     next_label: str | None = None            # branch target
     call_push: StackFramePush | None = None  # push new call frame
     call_pop: bool = False                   # pop current frame
