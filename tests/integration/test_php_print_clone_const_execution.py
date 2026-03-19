@@ -79,3 +79,16 @@ class TestPhpListDestructuringExecution:
         vars_ = _run(source)
         assert vars_["$a"] == 10
         assert vars_["$b"] == 20
+
+
+class TestPhpAnonymousClassExecution:
+    def test_anonymous_class_field_access(self):
+        """new class { public $x = 42; } — field should be accessible."""
+        vars_ = _run("""\
+<?php
+$obj = new class {
+    public $x = 42;
+};
+$answer = $obj->x;
+?>""")
+        assert vars_["$answer"] == 42
