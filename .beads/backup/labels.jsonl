@@ -12,6 +12,7 @@
 {"issue_id":"red-dragon-0sbx","label":"frontend-gap"}
 {"issue_id":"red-dragon-0xf","label":"typed-value"}
 {"issue_id":"red-dragon-132","label":"typed-value"}
+{"issue_id":"red-dragon-1c9k","label":"vm-architecture"}
 {"issue_id":"red-dragon-1qq","label":"typed-value"}
 {"issue_id":"red-dragon-2mdz","label":"audit-asserts"}
 {"issue_id":"red-dragon-2vi","label":"frontend"}
@@ -21,6 +22,7 @@
 {"issue_id":"red-dragon-3ie","label":"php"}
 {"issue_id":"red-dragon-3l0","label":"frontend"}
 {"issue_id":"red-dragon-3l0","label":"kotlin"}
+{"issue_id":"red-dragon-3m92","label":"testing"}
 {"issue_id":"red-dragon-3o7","label":"frontend"}
 {"issue_id":"red-dragon-3o7","label":"vm"}
 {"issue_id":"red-dragon-3pv","label":"frontend"}
