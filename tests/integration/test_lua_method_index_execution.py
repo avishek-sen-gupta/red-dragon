@@ -29,7 +29,6 @@ local r = t:greet()
 """)
         assert "r" in local_vars
 
-    @pytest.mark.xfail(reason="Lua colon-call method returns produce symbolic values")
     def test_method_call_with_args_executes(self):
         """obj:method(arg) should pass arguments correctly."""
         _, local_vars = _run_lua("""\
