@@ -675,6 +675,30 @@ def lower_implicit_object_creation(ctx: TreeSitterEmitContext, node) -> str:
     return result_reg
 
 
+def lower_anonymous_object_creation(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower `new { Name = expr, Age = expr }` as NEW_OBJECT + STORE_FIELD per property."""
+    obj_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.NEW_OBJECT,
+        result_reg=obj_reg,
+        operands=["__anon_object"],
+        node=node,
+    )
+    named = [c for c in node.children if c.is_named]
+    # Children alternate: identifier, value, identifier, value, ...
+    i = 0
+    while i + 1 < len(named):
+        field_name = ctx.node_text(named[i])
+        val_reg = ctx.lower_expr(named[i + 1])
+        ctx.emit(
+            Opcode.STORE_FIELD,
+            operands=[obj_reg, field_name, val_reg],
+            node=named[i],
+        )
+        i += 2
+    return obj_reg
+
+
 def lower_query_expression(ctx: TreeSitterEmitContext, node) -> str:
     """Lower LINQ `from n in nums where ... select ...` as CALL_FUNCTION chain."""
     named_children = [c for c in node.children if c.is_named]

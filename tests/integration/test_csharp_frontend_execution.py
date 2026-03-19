@@ -430,3 +430,13 @@ y = 99;
 int z = x;
 """)
         assert locals_["z"] == 99
+
+
+class TestCSharpAnonymousObjectExecution:
+    def test_anonymous_object_field_access(self):
+        """new { Name = 'foo', Age = 42 } — fields should be accessible."""
+        locals_ = _run_csharp("""\
+var obj = new { Name = "foo", Age = 42 };
+var answer = obj.Age;
+""")
+        assert locals_["answer"] == 42
