@@ -75,11 +75,12 @@ class TestScalaFunctions:
 
     def test_function_call(self):
         instructions = _parse_scala("object M { val r = add(1, 2) }")
-        # The call should produce either CALL_FUNCTION or CALL_UNKNOWN
         all_calls = _find_all(instructions, Opcode.CALL_FUNCTION) + _find_all(
             instructions, Opcode.CALL_UNKNOWN
         )
         assert len(all_calls) >= 1
+        # Verify the callee is 'add'
+        assert any("add" in inst.operands for inst in all_calls)
 
     def test_return_via_expression(self):
         instructions = _parse_scala("object M { def answer(): Int = { 42 } }")
@@ -226,13 +227,14 @@ class TestScalaSpecial:
 
     def test_method_call(self):
         instructions = _parse_scala("object M { val r = obj.doSomething(1) }")
-        # Should produce CALL_METHOD or at least some call-related opcode
         all_calls = (
             _find_all(instructions, Opcode.CALL_METHOD)
             + _find_all(instructions, Opcode.CALL_FUNCTION)
             + _find_all(instructions, Opcode.CALL_UNKNOWN)
         )
         assert len(all_calls) >= 1
+        # Verify the method name 'doSomething' appears in the call operands
+        assert any("doSomething" in inst.operands for inst in all_calls)
 
     def test_null_literal(self):
         instructions = _parse_scala("object M { val n = null }")
