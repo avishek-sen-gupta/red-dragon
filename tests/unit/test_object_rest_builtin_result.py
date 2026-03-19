@@ -3,6 +3,7 @@
 from interpreter.builtins import _builtin_object_rest
 from interpreter.vm import VMState, Operators
 from interpreter.vm_types import BuiltinResult, HeapObject, Pointer
+from interpreter.type_expr import scalar
 from interpreter.typed_value import TypedValue, typed_from_runtime
 
 
@@ -38,7 +39,7 @@ class TestObjectRestBuiltinResult:
         assert isinstance(result.value, TypedValue)
         assert isinstance(result.value.value, Pointer)
         assert result.new_objects[0].addr == result.value.value.base
-        assert result.new_objects[0].type_hint == "object"
+        assert result.new_objects[0].type_hint == scalar("Object")
 
     def test_heap_writes_contain_rest_fields(self):
         vm = VMState()
