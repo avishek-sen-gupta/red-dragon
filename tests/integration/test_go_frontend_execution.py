@@ -22,7 +22,7 @@ func main() {
 }
 """
         vars_ = _run_go(source)
-        assert "x" in vars_
+        assert vars_["x"] == "a"
 
     def test_rune_literal_in_comparison(self):
         """Rune literal should be usable in comparisons."""
@@ -97,8 +97,8 @@ func main() {
 """
         vars_ = _run_go(source)
         # Our VM processes switch cases independently; fallthrough is a no-op.
-        # The important thing is no crash.
-        assert "y" in vars_
+        # case 1 matched, set y=10, fallthrough is no-op, case 2 body skipped.
+        assert vars_["y"] == 10
 
     def test_switch_without_fallthrough_still_works(self):
         """Switch without fallthrough should still match correctly."""

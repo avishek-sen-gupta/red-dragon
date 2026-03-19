@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from interpreter.constants import Language
+from interpreter.func_ref import BoundFuncRef
 from interpreter.run import run
 from interpreter.typed_value import unwrap_locals
 
@@ -36,12 +37,13 @@ val z = x + 1
 
 class TestKotlinCallableReferenceExecution:
     def test_callable_reference_assigned(self):
-        """val f = ::someFunc should execute without errors."""
+        """val f = ::someFunc should store a BoundFuncRef."""
         vars_ = _run_kotlin("""\
 fun double(x: Int): Int { return x * 2 }
 val f = ::double
 """)
-        assert "f" in vars_
+        assert isinstance(vars_["f"], BoundFuncRef)
+        assert vars_["f"].func_ref.name == "double"
 
     def test_callable_reference_does_not_block_execution(self):
         """Callable reference should not prevent subsequent code from executing."""
