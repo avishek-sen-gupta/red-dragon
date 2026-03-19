@@ -86,7 +86,9 @@ class TestHeapFieldMethodCall:
             operands=["%obj", "greet", "%obj"],
         )
         result = LocalExecutor.execute(inst=inst, vm=vm, cfg=cfg, registry=registry)
-        assert result.handled  # falls back to symbolic, still handled
+        assert result.handled
+        assert result.update.call_push is None, "Should fall back, not dispatch"
+        assert isinstance(result.update.register_writes["%result"].value, SymbolicValue)
 
     def test_call_method_missing_field_falls_back(self):
         """CALL_METHOD for a method not in fields should fall back to resolver."""
@@ -97,4 +99,6 @@ class TestHeapFieldMethodCall:
             operands=["%obj", "nonexistent", "%obj"],
         )
         result = LocalExecutor.execute(inst=inst, vm=vm, cfg=cfg, registry=registry)
-        assert result.handled  # falls back to symbolic, still handled
+        assert result.handled
+        assert result.update.call_push is None, "Should fall back, not dispatch"
+        assert isinstance(result.update.register_writes["%result"].value, SymbolicValue)
