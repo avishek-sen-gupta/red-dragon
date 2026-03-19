@@ -250,6 +250,7 @@ class Builtins:
 
     TABLE: dict[str, Any] = {
         "len": _builtin_len,
+        "strlen": _builtin_len,
         "range": _builtin_range,
         "print": _builtin_print,
         "int": _builtin_int,

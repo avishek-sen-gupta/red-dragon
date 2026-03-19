@@ -22,7 +22,7 @@ class TestPhpErrorSuppressionExecution:
     def test_error_suppression_result_stored(self):
         """@expr result should be stored in the variable."""
         vars_ = _run_php("<?php $x = @strlen('hello'); ?>")
-        assert "$x" in vars_
+        assert vars_["$x"] == 5
 
 
 class TestPhpExitStatementExecution:
