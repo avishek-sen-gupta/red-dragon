@@ -70,3 +70,12 @@ class TestPhpConstExecution:
         source = "<?php const TAX = 10; $price = 100; $total = $price + TAX; ?>"
         vars_ = _run(source)
         assert vars_["$total"] == 110
+
+
+class TestPhpListDestructuringExecution:
+    def test_list_unpacks_array(self):
+        """list($a, $b) = $arr should unpack array elements into variables."""
+        source = "<?php $arr = [10, 20]; list($a, $b) = $arr; ?>"
+        vars_ = _run(source)
+        assert vars_["$a"] == 10
+        assert vars_["$b"] == 20
