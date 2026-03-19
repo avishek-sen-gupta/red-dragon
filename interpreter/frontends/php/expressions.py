@@ -260,6 +260,19 @@ def lower_php_store_target(
                 operands=[obj_reg, idx_reg, val_reg],
                 node=parent_node,
             )
+    elif target.type == PHPNodeType.LIST_LITERAL:
+        vars_ = [c for c in target.children if c.is_named]
+        for i, var_node in enumerate(vars_):
+            idx_reg = ctx.fresh_reg()
+            ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[i])
+            elem_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.LOAD_INDEX,
+                result_reg=elem_reg,
+                operands=[val_reg, idx_reg],
+                node=var_node,
+            )
+            lower_php_store_target(ctx, var_node, elem_reg, parent_node)
     else:
         ctx.emit(
             Opcode.STORE_VAR,

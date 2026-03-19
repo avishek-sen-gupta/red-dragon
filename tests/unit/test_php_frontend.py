@@ -1408,3 +1408,25 @@ class Counter {
             assert (
                 "self" not in sf.operands
             ), f"STORE_FIELD should not use bare 'self', got: {sf.operands}"
+
+
+class TestPhpListDestructuring:
+    def test_list_no_symbolic(self):
+        """list($a, $b) = $arr should not produce SYMBOLIC."""
+        ir = _parse_and_lower("<?php $arr = [10, 20]; list($a, $b) = $arr; ?>")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("list" in str(inst.operands) for inst in symbolics)
+
+    def test_list_emits_load_index_per_element(self):
+        """list($a, $b) should emit LOAD_INDEX for indices 0 and 1."""
+        ir = _parse_and_lower("<?php $arr = [10, 20]; list($a, $b) = $arr; ?>")
+        loads = _find_all(ir, Opcode.LOAD_INDEX)
+        assert len(loads) >= 2
+
+    def test_list_stores_each_variable(self):
+        """list($a, $b) should emit STORE_VAR for $a and $b."""
+        ir = _parse_and_lower("<?php $arr = [10, 20]; list($a, $b) = $arr; ?>")
+        stores = _find_all(ir, Opcode.STORE_VAR)
+        store_names = [inst.operands[0] for inst in stores]
+        assert "$a" in store_names
+        assert "$b" in store_names
