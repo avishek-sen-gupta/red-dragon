@@ -48,7 +48,7 @@ class TestArrowOperatorLowering:
         assert len(field_loads) == 1
 
     def test_arrow_write_lowers_to_store_field(self):
-        """p->x = 5 should lower to STORE_FIELD."""
+        """p->x = 5 should lower to STORE_FIELD with value 5."""
         source = (
             "struct S { int x; };\n"
             "void f() { struct S s; struct S *p = &s; p->x = 5; }"
@@ -57,6 +57,14 @@ class TestArrowOperatorLowering:
         stores = _find_all(ir, Opcode.STORE_FIELD)
         field_stores = [s for s in stores if "x" in s.operands]
         assert len(field_stores) == 2
+        # Verify the arrow write stores the value 5 (not the struct field init)
+        consts = {
+            inst.result_reg: inst.operands[0]
+            for inst in ir
+            if inst.opcode == Opcode.CONST
+        }
+        arrow_store = field_stores[-1]  # arrow write is the second STORE_FIELD
+        assert consts.get(arrow_store.operands[2]) == "5"
 
 
 # ── Executor: address-of on heap objects ─────────────────────────

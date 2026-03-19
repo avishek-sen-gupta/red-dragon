@@ -78,9 +78,13 @@ class TestCountOpcodes:
 
 class TestIrStats:
     def test_simple_assignment_has_const_and_store(self):
+        """x = 42 should produce exactly 1 CONST and 1 STORE_VAR."""
         result = ir_stats(SIMPLE_SOURCE)
         assert result["CONST"] == 1
         assert result["STORE_VAR"] == 1
+        # No other store opcodes should appear for a simple assignment
+        assert result.get("STORE_FIELD", 0) == 0
+        assert result.get("STORE_INDEX", 0) == 0
 
     def test_function_source_has_call_and_return(self):
         result = ir_stats(FUNCTION_SOURCE)

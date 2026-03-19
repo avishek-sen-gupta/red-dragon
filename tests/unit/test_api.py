@@ -237,6 +237,9 @@ class TestLowerAndInfer:
     def test_default_language_is_python(self):
         instructions, env = lower_and_infer("x = 42\n")
         assert env.var_types["x"] == "Int"
+        # Verify Python-specific lowering: top-level assignment uses STORE_VAR
+        store_vars = [i for i in instructions if i.opcode == Opcode.STORE_VAR]
+        assert any("x" in i.operands for i in store_vars)
 
     def test_propagates_java_type_seeds(self):
         instructions, env = lower_and_infer(JAVA_SOURCE, language="java")
