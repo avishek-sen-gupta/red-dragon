@@ -60,13 +60,11 @@ answer = add(*arr)
 
 
 class TestPHPSpread:
-    @pytest.mark.xfail(
-        reason="PHP function return values not captured in frame 0 locals"
-    )
     def test_splat_unpacks_array_into_args(self):
         """PHP ...$arr should unpack array elements as individual arguments."""
         vars_ = _run(
             """\
+<?php
 function add($a, $b, $c) { return $a + $b + $c; }
 $arr = [1, 2, 3];
 $answer = add(...$arr);
