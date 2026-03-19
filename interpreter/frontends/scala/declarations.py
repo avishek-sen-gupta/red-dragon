@@ -184,7 +184,16 @@ def lower_function_def(
     ctx: TreeSitterEmitContext, node, inject_this: bool = False
 ) -> None:
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
-    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    # Scala's grammar uses the same field "parameters" for both type_parameters
+    # and value parameters. Use children_by_field_name and pick by node type.
+    params_node = next(
+        (
+            c
+            for c in node.children_by_field_name(ctx.constants.func_params_field)
+            if c.type == "parameters"
+        ),
+        None,
+    )
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = ctx.node_text(name_node) if name_node else "__anon"
@@ -247,7 +256,14 @@ def _lower_auxiliary_constructor(
     Emits this as explicit first param, inlines field initializers,
     and lowers the delegation body as CALL_METHOD on this for __init__.
     """
-    params_node = node.child_by_field_name(ctx.constants.func_params_field)
+    params_node = next(
+        (
+            c
+            for c in node.children_by_field_name(ctx.constants.func_params_field)
+            if c.type == "parameters"
+        ),
+        None,
+    )
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
     func_name = "__init__"
