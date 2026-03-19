@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.typed_value import unwrap_locals
@@ -13,10 +15,13 @@ def _run_rust(source: str, max_steps: int = 200):
 
 
 class TestRustRawStringLiteralExecution:
+    @pytest.mark.xfail(
+        reason="Rust raw string keeps r-prefix in value (red-dragon-9815)"
+    )
     def test_raw_string_assigned(self):
-        """let x = r\"hello\"; should store the string value."""
+        """let x = r\"hello\"; should store \"hello\" with prefix stripped."""
         _, local_vars = _run_rust('let x = r"hello";')
-        assert local_vars["x"] == 'r"hello"'  # passthrough — ideally "hello"
+        assert local_vars["x"] == "hello"
 
     def test_raw_string_in_comparison(self):
         """Raw string should be usable in comparison without crashing."""
