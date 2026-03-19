@@ -21,7 +21,7 @@ class TestCLinkageSpecificationExecution:
             max_steps=200,
         )
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
-        assert "y" in local_vars
+        assert local_vars["y"] == 43
 
     def test_linkage_spec_function_decl(self):
         """Function declared in extern 'C' should be callable."""

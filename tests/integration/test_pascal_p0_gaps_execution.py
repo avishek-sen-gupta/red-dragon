@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from interpreter.class_ref import ClassRef
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.typed_value import unwrap_locals
@@ -62,4 +63,5 @@ type
 begin
 end."""
         _, local_vars = _run_pascal(source)
-        assert "TAnimal" in local_vars
+        assert isinstance(local_vars["TAnimal"], ClassRef)
+        assert local_vars["TAnimal"].name == "TAnimal"
