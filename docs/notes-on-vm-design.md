@@ -491,22 +491,49 @@ Function calls are the most complex part of the VM. The design supports user-def
 
 ### CALL_FUNCTION dispatch chain
 
-`_handle_call_function()` (`interpreter/executor.py:659`) tries four strategies in order:
+`_handle_call_function()` tries five strategies in order. Before dispatch, arguments are resolved via `_resolve_call_args()`, which expands any `SpreadArguments` operands by reading the heap array and inlining its elements as individual arguments.
 
 ```
+0. RESOLVE ARGS → _resolve_call_args()           (expand SpreadArguments)
+
 1. BUILTIN?     → _try_builtin_call()           (len, range, print, ...)
    └─ if handled: return computed result
 
 2. SCOPE LOOKUP → walk call_stack backwards for function variable
    └─ if not found: return symbolic result
 
-3. CLASS CTOR?  → _try_class_constructor_call()  (parse <class:Name@label>)
+3. CLASS CTOR?  → _try_class_constructor_call()  (parse ClassRef)
    └─ if matched: allocate heap object, dispatch __init__
 
-4. USER FUNC?   → _try_user_function_call()      (parse <function:Name@label>)
+4. USER FUNC?   → _try_user_function_call()      (parse BoundFuncRef)
    └─ if matched: push frame, jump to function entry
 
-5. UNKNOWN      → _symbolic_call_result()         (create symbolic value)
+5. UNKNOWN      → call_resolver.resolve_call()   (create symbolic value)
+```
+
+### CALL_METHOD dispatch chain
+
+`_handle_call_method()` resolves the object, then tries these strategies:
+
+```
+0. RESOLVE ARGS → _resolve_call_args()           (expand SpreadArguments)
+
+1. BOUND_FUNC?  → _try_user_function_call()      (obj is a BoundFuncRef)
+
+2. METHOD BUILTIN? → Builtins.METHOD_TABLE        (subList, toString, ...)
+
+3. HEAP FIELD?  → check heap_obj.fields[method_name] for BoundFuncRef
+   └─ if found: inject obj as self, dispatch function
+   └─ supports Lua table OOP (t:method()), JS/Python dynamic properties
+
+4. REGISTRY?    → registry.class_methods[type_hint]
+   └─ overload resolution via type signatures
+
+5. PARENT CHAIN → walk registry.class_parents for inherited methods
+
+6. DELEGATION   → __method_missing__ delegation chain
+
+7. UNKNOWN      → call_resolver.resolve_method()  (create symbolic value)
 ```
 
 ### How function references work
