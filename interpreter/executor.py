@@ -1549,6 +1549,21 @@ def _handle_call_method(
         type_hint = vm.heap[addr].type_hint or ""
 
     if not type_hint or type_hint not in registry.class_methods:
+        # Check if method exists as a callable field on the heap object
+        # (e.g., Lua table OOP: t.method = function(...) end)
+        # Inject obj as first arg (self) — mirrors colon-call convention.
+        if addr and addr in vm.heap:
+            field_tv = vm.heap[addr].fields.get(method_name)
+            if field_tv and isinstance(field_tv.value, BoundFuncRef):
+                return _try_user_function_call(
+                    field_tv.value,
+                    [obj_val] + args,
+                    inst,
+                    vm,
+                    cfg,
+                    registry,
+                    current_label,
+                )
         # Unknown object type — resolve via configured strategy
         obj_desc = _symbolic_name(obj_val.value)
         return call_resolver.resolve_method(
