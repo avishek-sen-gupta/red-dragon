@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.ir import Opcode
+
 
 @dataclass(frozen=True)
 class Pattern:
@@ -88,3 +91,45 @@ class MatchCase:
     pattern: Pattern
     guard_node: object  # tree-sitter node for guard expression, or NoGuard()
     body_node: object  # tree-sitter node for case body, or NoBody()
+
+
+def compile_pattern_test(
+    ctx: TreeSitterEmitContext, subject_reg: str, pattern: Pattern
+) -> str:
+    """Emit IR that tests whether subject matches pattern. Returns a boolean register."""
+    match pattern:
+        case LiteralPattern(value=v):
+            const_reg = ctx.fresh_reg()
+            ctx.emit(Opcode.CONST, result_reg=const_reg, operands=[str(v)])
+            cmp_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.BINOP,
+                result_reg=cmp_reg,
+                operands=["==", subject_reg, const_reg],
+            )
+            return cmp_reg
+        case WildcardPattern():
+            true_reg = ctx.fresh_reg()
+            ctx.emit(Opcode.CONST, result_reg=true_reg, operands=["True"])
+            return true_reg
+        case CapturePattern():
+            true_reg = ctx.fresh_reg()
+            ctx.emit(Opcode.CONST, result_reg=true_reg, operands=["True"])
+            return true_reg
+        case _:
+            raise NotImplementedError(f"compile_pattern_test: {type(pattern).__name__}")
+
+
+def compile_pattern_bindings(
+    ctx: TreeSitterEmitContext, subject_reg: str, pattern: Pattern
+) -> None:
+    """Emit IR that binds variables from a matched pattern."""
+    match pattern:
+        case CapturePattern(name=name):
+            ctx.emit(Opcode.STORE_VAR, operands=[name, subject_reg])
+        case LiteralPattern() | WildcardPattern():
+            pass  # no bindings
+        case _:
+            raise NotImplementedError(
+                f"compile_pattern_bindings: {type(pattern).__name__}"
+            )
