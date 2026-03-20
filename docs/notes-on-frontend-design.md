@@ -24,7 +24,7 @@ For exhaustive per-file documentation of the deterministic (tree-sitter) fronten
 
 ## 1. Overview
 
-The frontend subsystem converts source code in any language into a universal flattened three-address code IR ([27 opcodes](ir-reference.md)). There are three frontend strategies:
+The frontend subsystem converts source code in any language into a universal flattened three-address code IR ([32 opcodes](ir-reference.md)). There are three frontend strategies:
 
 | Strategy | Input | How | Speed | Languages |
 |---|---|---|---|---|
@@ -77,7 +77,7 @@ Returns a flat list of IR instructions, always starting with `LABEL "entry"`. An
 
 ## 3. IR — The Target Format
 
-The IR is defined in `interpreter/ir.py` — 27 opcodes covering value producers, control flow, stores, and special operations. Every frontend, regardless of source language, targets this same instruction set.
+The IR is defined in `interpreter/ir.py` — 32 opcodes covering value producers, control flow, stores, and special operations. Every frontend, regardless of source language, targets this same instruction set.
 
 See the [IR Reference](ir-reference.md) for the complete opcode specification, instruction format, and common IR patterns.
 
@@ -215,7 +215,7 @@ The `tree` parameter is **ignored** — the LLM works from raw source text only.
 `LLMFrontendPrompts.SYSTEM_PROMPT` (`interpreter/llm_frontend.py:23`) is a ~180-line prompt that includes:
 
 1. **Instruction format specification** — JSON schema for each instruction
-2. **Complete opcode reference** — all 27 opcodes with operand formats (see [IR Reference](ir-reference.md))
+2. **Complete opcode reference** — all 32 opcodes with operand formats (see [IR Reference](ir-reference.md))
 3. **Critical patterns** — exact templates for function definitions, class definitions, constructor calls, method calls, if/elif/else
 4. **Full worked example** — Fibonacci function lowered to 30+ IR instructions
 5. **Strict rules** — entry label mandatory, flattening required, literal formats
@@ -466,7 +466,7 @@ Every instruction from the deterministic frontend carries its source location, e
 
 | Principle | Manifestation |
 |---|---|
-| **Single IR for all languages** | 27 opcodes are enough to represent 15 languages + COBOL + LLM output |
+| **Single IR for all languages** | 32 opcodes are enough to represent 15 languages + COBOL + LLM output |
 | **Pure-function dispatch tables** | Extensible via dict lookup, not if/elif chains |
 | **GrammarConstants dataclass** | Same lowering logic handles different tree-sitter grammars |
 | **Graceful degradation** | Unknown constructs → `SYMBOLIC`, not crashes |
