@@ -7,6 +7,7 @@ import pytest
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.typed_value import unwrap_locals
+from interpreter.type_expr import scalar
 from interpreter.vm import _heap_addr
 
 
@@ -516,8 +517,8 @@ match points:
         rest_addr = _heap_addr(local_vars["rest"])
         r0_addr = _heap_addr(vm.heap[rest_addr].fields["0"].value)
         r1_addr = _heap_addr(vm.heap[rest_addr].fields["1"].value)
-        assert str(vm.heap[r0_addr].type_hint) == "Point"
-        assert str(vm.heap[r1_addr].type_hint) == "Point"
+        assert vm.heap[r0_addr].type_hint == scalar("Point")
+        assert vm.heap[r1_addr].type_hint == scalar("Point")
 
     def test_dict_inside_sequence_with_star(self):
         """Dict pattern inside list with star — verify extracted fields + rest element fields."""
@@ -593,7 +594,7 @@ match r:
         assert isinstance(local_vars["rh"], int) and local_vars["rh"] == 5
         # Verify r is a Rect via heap type_hint
         r_addr = _heap_addr(local_vars["r"])
-        assert str(vm.heap[r_addr].type_hint) == "Rect"
+        assert vm.heap[r_addr].type_hint == scalar("Rect")
 
     def test_mixed_pattern_types_across_cases(self):
         """Dict matches before list — verify each captured field individually."""
@@ -657,8 +658,8 @@ match cart:
         others_addr = _heap_addr(local_vars["others"])
         o0_addr = _heap_addr(vm.heap[others_addr].fields["0"].value)
         o1_addr = _heap_addr(vm.heap[others_addr].fields["1"].value)
-        assert str(vm.heap[o0_addr].type_hint) == "Item"
-        assert str(vm.heap[o1_addr].type_hint) == "Item"
+        assert vm.heap[o0_addr].type_hint == scalar("Item")
+        assert vm.heap[o1_addr].type_hint == scalar("Item")
 
     def test_guard_rejects_then_next_case_matches(self):
         """First case guard fails, second case (same pattern, different guard) matches."""
