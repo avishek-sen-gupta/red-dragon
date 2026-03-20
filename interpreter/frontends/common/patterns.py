@@ -76,6 +76,13 @@ class AsPattern(Pattern):
 
 
 @dataclass(frozen=True)
+class StarPattern(Pattern):
+    """Captures remaining elements in a sequence pattern. Python's ``*rest``."""
+
+    name: str
+
+
+@dataclass(frozen=True)
 class NoGuard:
     """Sentinel: this case has no guard clause."""
 
@@ -210,6 +217,8 @@ def compile_pattern_test(
             return _or_any(ctx, sub_results)
         case AsPattern(pattern=inner, name=_):
             return compile_pattern_test(ctx, subject_reg, inner)
+        case StarPattern():
+            return _const_true(ctx)
         case _:
             raise NotImplementedError(f"compile_pattern_test: {type(pattern).__name__}")
 
@@ -263,6 +272,9 @@ def compile_pattern_bindings(
         case AsPattern(pattern=inner, name=name):
             compile_pattern_bindings(ctx, subject_reg, inner)
             ctx.emit(Opcode.STORE_VAR, operands=[name, subject_reg])
+        case StarPattern(name=name):
+            if name != "_":
+                ctx.emit(Opcode.STORE_VAR, operands=[name, subject_reg])
         case _:
             raise NotImplementedError(
                 f"compile_pattern_bindings: {type(pattern).__name__}"
