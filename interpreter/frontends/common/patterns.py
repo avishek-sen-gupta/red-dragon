@@ -83,6 +83,13 @@ class StarPattern(Pattern):
 
 
 @dataclass(frozen=True)
+class ValuePattern(Pattern):
+    """Match against a named constant via dotted lookup. Python's ``Color.RED``."""
+
+    parts: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class NoGuard:
     """Sentinel: this case has no guard clause."""
 
@@ -273,6 +280,19 @@ def compile_pattern_test(
             return compile_pattern_test(ctx, subject_reg, inner)
         case StarPattern():
             return _const_true(ctx)
+        case ValuePattern(parts=parts):
+            # LOAD_VAR first part, then LOAD_FIELD for each remaining part
+            reg = ctx.fresh_reg()
+            ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[parts[0]])
+            for part in parts[1:]:
+                next_reg = ctx.fresh_reg()
+                ctx.emit(Opcode.LOAD_FIELD, result_reg=next_reg, operands=[reg, part])
+                reg = next_reg
+            cmp_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.BINOP, result_reg=cmp_reg, operands=["==", subject_reg, reg]
+            )
+            return cmp_reg
         case _:
             raise NotImplementedError(f"compile_pattern_test: {type(pattern).__name__}")
 
@@ -408,6 +428,8 @@ def compile_pattern_bindings(
         case StarPattern(name=name):
             if name != "_":
                 ctx.emit(Opcode.STORE_VAR, operands=[name, subject_reg])
+        case ValuePattern():
+            pass  # no bindings — it's a constant
         case _:
             raise NotImplementedError(
                 f"compile_pattern_bindings: {type(pattern).__name__}"
