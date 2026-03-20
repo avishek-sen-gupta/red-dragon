@@ -7,6 +7,7 @@ The compile_match function (below) emits IR from them.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import reduce
 
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode
@@ -93,6 +94,27 @@ class MatchCase:
     body_node: object  # tree-sitter node for case body, or NoBody()
 
 
+def _compile_indexed_element(
+    ctx: TreeSitterEmitContext, subject_reg: str, index: int, elem_pat: Pattern
+) -> str:
+    """Load element at index from subject and compile its pattern test."""
+    elem_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[subject_reg, str(index)])
+    return compile_pattern_test(ctx, elem_reg, elem_pat)
+
+
+def _emit_binop(ctx: TreeSitterEmitContext, op: str, left: str, right: str) -> str:
+    """Emit a single BINOP and return the result register."""
+    combined = ctx.fresh_reg()
+    ctx.emit(Opcode.BINOP, result_reg=combined, operands=[op, left, right])
+    return combined
+
+
+def _and_all(ctx: TreeSitterEmitContext, regs: list[str]) -> str:
+    """AND a list of boolean registers together with BINOP &&."""
+    return reduce(lambda acc, reg: _emit_binop(ctx, "&&", acc, reg), regs[1:], regs[0])
+
+
 def compile_pattern_test(
     ctx: TreeSitterEmitContext, subject_reg: str, pattern: Pattern
 ) -> str:
@@ -116,6 +138,26 @@ def compile_pattern_test(
             true_reg = ctx.fresh_reg()
             ctx.emit(Opcode.CONST, result_reg=true_reg, operands=["True"])
             return true_reg
+        case SequencePattern(elements=elems):
+            len_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", subject_reg]
+            )
+            expected_len_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.CONST, result_reg=expected_len_reg, operands=[str(len(elems))]
+            )
+            len_ok_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.BINOP,
+                result_reg=len_ok_reg,
+                operands=["==", len_reg, expected_len_reg],
+            )
+            sub_results = [len_ok_reg] + [
+                _compile_indexed_element(ctx, subject_reg, i, elem_pat)
+                for i, elem_pat in enumerate(elems)
+            ]
+            return _and_all(ctx, sub_results)
         case _:
             raise NotImplementedError(f"compile_pattern_test: {type(pattern).__name__}")
 
@@ -129,6 +171,15 @@ def compile_pattern_bindings(
             ctx.emit(Opcode.STORE_VAR, operands=[name, subject_reg])
         case LiteralPattern() | WildcardPattern():
             pass  # no bindings
+        case SequencePattern(elements=elems):
+            for i, elem_pat in enumerate(elems):
+                elem_reg = ctx.fresh_reg()
+                ctx.emit(
+                    Opcode.LOAD_INDEX,
+                    result_reg=elem_reg,
+                    operands=[subject_reg, str(i)],
+                )
+                compile_pattern_bindings(ctx, elem_reg, elem_pat)
         case _:
             raise NotImplementedError(
                 f"compile_pattern_bindings: {type(pattern).__name__}"
