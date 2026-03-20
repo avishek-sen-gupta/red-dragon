@@ -205,15 +205,11 @@ match p:
         )
         assert local_vars["result"] == 4
 
-    @pytest.mark.xfail(
-        reason="Positional class patterns require __match_args__ / index-based "
-        "field access on user-defined classes, which the VM does not support yet. "
-        "Filed as red-dragon issue for __match_args__ support."
-    )
     def test_class_positional(self):
         _, local_vars = _run_python(
             """\
 class Pair:
+    __match_args__ = ("a", "b")
     def __init__(self, a, b):
         self.a = a
         self.b = b
@@ -247,6 +243,74 @@ match p:
             max_steps=3000,
         )
         assert isinstance(local_vars["result"], int) and local_vars["result"] == 4
+
+    def test_class_positional_two_captures(self):
+        """Point(a, b) captures both fields via __match_args__."""
+        _, local_vars = _run_python(
+            """\
+class Point:
+    __match_args__ = ("x", "y")
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+p = Point(3, 4)
+match p:
+    case Point(a, b):
+        ra = a
+        rb = b
+""",
+            max_steps=3000,
+        )
+        assert isinstance(local_vars["ra"], int) and local_vars["ra"] == 3
+        assert isinstance(local_vars["rb"], int) and local_vars["rb"] == 4
+
+    def test_class_positional_literal_rejects(self):
+        """Point(99, b) with non-matching x — falls to default."""
+        _, local_vars = _run_python(
+            """\
+class Point:
+    __match_args__ = ("x", "y")
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+p = Point(3, 4)
+result = "default"
+match p:
+    case Point(99, b):
+        result = "matched"
+    case _:
+        result = "default"
+""",
+            max_steps=3000,
+        )
+        assert (
+            isinstance(local_vars["result"], str) and local_vars["result"] == "default"
+        )
+
+    def test_class_positional_in_sequence_with_star(self):
+        """Positional class patterns inside a list with star."""
+        vm, local_vars = _run_python(
+            """\
+class Point:
+    __match_args__ = ("x", "y")
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+points = [Point(1, 2), Point(3, 4), Point(5, 6)]
+match points:
+    case [Point(a, b), *rest]:
+        ra = a
+        rb = b
+        rest_len = len(rest)
+""",
+            max_steps=5000,
+        )
+        assert isinstance(local_vars["ra"], int) and local_vars["ra"] == 1
+        assert isinstance(local_vars["rb"], int) and local_vars["rb"] == 2
+        assert isinstance(local_vars["rest_len"], int) and local_vars["rest_len"] == 2
 
 
 class TestComplexLiteralPattern:
