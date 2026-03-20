@@ -287,9 +287,6 @@ match items:
         )
         assert local_vars["result"] == 1
 
-    @pytest.mark.xfail(
-        reason="Or-patterns with bindings not yet implemented (red-dragon-fv2p)"
-    )
     def test_or_pattern_with_captures(self):
         _, local_vars = _run_python(
             """\
@@ -873,3 +870,62 @@ match config:
         assert isinstance(local_vars["addr"], str) and local_vars["addr"] == "localhost"
         assert isinstance(local_vars["port"], int) and local_vars["port"] == 8080
         assert local_vars["is_debug"] is True
+
+
+class TestOrPatternWithBindings:
+    def test_or_pattern_tuple_with_captures(self):
+        """case (1, x) | (2, x): with (2, 99) — x bound to 99."""
+        _, local_vars = _run_python(
+            """\
+data = (2, 99)
+match data:
+    case (1, x) | (2, x):
+        result = x
+""",
+            max_steps=2000,
+        )
+        assert isinstance(local_vars["result"], int) and local_vars["result"] == 99
+
+    def test_or_pattern_first_alternative_binds(self):
+        """case (1, x) | (2, x): with (1, 77) — first alt matches, x bound to 77."""
+        _, local_vars = _run_python(
+            """\
+data = (1, 77)
+match data:
+    case (1, x) | (2, x):
+        result = x
+""",
+            max_steps=2000,
+        )
+        assert isinstance(local_vars["result"], int) and local_vars["result"] == 77
+
+    def test_or_pattern_list_with_captures(self):
+        """case [1, y] | [2, y]: with [2, 42] — y bound to 42."""
+        _, local_vars = _run_python(
+            """\
+data = [2, 42]
+match data:
+    case [1, y] | [2, y]:
+        result = y
+""",
+            max_steps=2000,
+        )
+        assert isinstance(local_vars["result"], int) and local_vars["result"] == 42
+
+    def test_or_pattern_no_match_falls_through(self):
+        """Neither alternative matches — falls to default."""
+        _, local_vars = _run_python(
+            """\
+data = (3, 50)
+result = "default"
+match data:
+    case (1, x) | (2, x):
+        result = x
+    case _:
+        result = "default"
+""",
+            max_steps=2000,
+        )
+        assert (
+            isinstance(local_vars["result"], str) and local_vars["result"] == "default"
+        )
