@@ -750,6 +750,50 @@ match m:
             and local_vars["direction"] == "horizontal"
         )
 
+    def test_value_pattern_head_with_star_of_typed_objects(self):
+        """Value pattern as list head + star rest of class instances — verify all fields and types."""
+        vm, local_vars = _run_python(
+            """\
+class Action:
+    MOVE = "move"
+    ATTACK = "attack"
+
+class Target:
+    __match_args__ = ("name", "hp")
+    def __init__(self, name, hp):
+        self.name = name
+        self.hp = hp
+
+commands = ["move", Target("goblin", 30), Target("dragon", 100)]
+match commands:
+    case [Action.MOVE, *targets]:
+        action = "move"
+        t_len = len(targets)
+        t0_name = targets[0].name
+        t0_hp = targets[0].hp
+        t1_name = targets[1].name
+        t1_hp = targets[1].hp
+    case _:
+        action = "unknown"
+""",
+            max_steps=5000,
+        )
+        assert isinstance(local_vars["action"], str) and local_vars["action"] == "move"
+        assert isinstance(local_vars["t_len"], int) and local_vars["t_len"] == 2
+        assert (
+            isinstance(local_vars["t0_name"], str) and local_vars["t0_name"] == "goblin"
+        )
+        assert isinstance(local_vars["t0_hp"], int) and local_vars["t0_hp"] == 30
+        assert (
+            isinstance(local_vars["t1_name"], str) and local_vars["t1_name"] == "dragon"
+        )
+        assert isinstance(local_vars["t1_hp"], int) and local_vars["t1_hp"] == 100
+        rest_addr = _heap_addr(local_vars["targets"])
+        t0_addr = _heap_addr(vm.heap[rest_addr].fields["0"].value)
+        t1_addr = _heap_addr(vm.heap[rest_addr].fields["1"].value)
+        assert vm.heap[t0_addr].type_hint == scalar("Target")
+        assert vm.heap[t1_addr].type_hint == scalar("Target")
+
 
 class TestOutOfScopePatterns:
     def test_star_pattern_in_list(self):
