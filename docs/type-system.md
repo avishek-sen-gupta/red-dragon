@@ -763,7 +763,7 @@ flowchart TD
 
 ### Per-Opcode Inference Rules
 
-The inference walk dispatches each instruction to a handler via the `_DISPATCH` table (18 opcodes handled). Each handler has the signature `(inst: IRInstruction, ctx: _InferenceContext, type_resolver: TypeResolver) → None`.
+The inference walk dispatches each instruction to a handler via the `_DISPATCH` table (22 opcodes handled). Each handler has the signature `(inst: IRInstruction, ctx: _InferenceContext, type_resolver: TypeResolver) → None`.
 
 #### LABEL — Scope Tracking
 
