@@ -349,6 +349,35 @@ class TestStarPattern:
         stores = [i for i in ctx.instructions if i.opcode == Opcode.STORE_VAR]
         assert len(stores) == 0, f"wildcard star should emit no STORE_VAR, got {stores}"
 
+    def test_star_pattern_binds_via_slice(self):
+        """Star binding emits CALL_FUNCTION slice + STORE_VAR."""
+        ctx = _make_ctx()
+        pattern = SequencePattern(elements=(CapturePattern("a"), StarPattern("rest")))
+        compile_pattern_bindings(ctx, "%subj", pattern)
+        instrs = ctx.instructions
+        calls = [i for i in instrs if i.opcode == Opcode.CALL_FUNCTION]
+        slice_calls = [c for c in calls if "slice" in str(c.operands)]
+        assert len(slice_calls) >= 1, f"expected slice call, got {calls}"
+        stores = [i for i in instrs if i.opcode == Opcode.STORE_VAR]
+        store_names = [s.operands[0] for s in stores]
+        assert "a" in store_names, "expected binding for 'a'"
+        assert "rest" in store_names, "expected binding for 'rest'"
+
+    def test_wildcard_star_skips_slice(self):
+        """StarPattern(name='_') should emit no slice or STORE_VAR."""
+        ctx = _make_ctx()
+        pattern = SequencePattern(elements=(CapturePattern("a"), StarPattern("_")))
+        compile_pattern_bindings(ctx, "%subj", pattern)
+        instrs = ctx.instructions
+        calls = [i for i in instrs if i.opcode == Opcode.CALL_FUNCTION]
+        slice_calls = [c for c in calls if "slice" in str(c.operands)]
+        assert (
+            len(slice_calls) == 0
+        ), f"wildcard star should skip slice, got {slice_calls}"
+        stores = [i for i in instrs if i.opcode == Opcode.STORE_VAR]
+        store_names = [s.operands[0] for s in stores]
+        assert "_" not in store_names, "wildcard star should not emit STORE_VAR _"
+
 
 class TestGuardedCase:
     def test_emits_guard_after_pattern_test(self):

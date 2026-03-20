@@ -277,6 +277,25 @@ def compile_pattern_test(
             raise NotImplementedError(f"compile_pattern_test: {type(pattern).__name__}")
 
 
+def _compile_after_star_element_binding(
+    ctx: TreeSitterEmitContext,
+    subject_reg: str,
+    len_reg: str,
+    after_count: int,
+    after_offset: int,
+    elem_pat: Pattern,
+) -> None:
+    """Bind an after-star element by computing index = len - (after_count - after_offset)."""
+    offset_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST, result_reg=offset_reg, operands=[str(after_count - after_offset)]
+    )
+    idx_reg = _emit_binop(ctx, "-", len_reg, offset_reg)
+    elem_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[subject_reg, idx_reg])
+    compile_pattern_bindings(ctx, elem_reg, elem_pat)
+
+
 def compile_pattern_bindings(
     ctx: TreeSitterEmitContext, subject_reg: str, pattern: Pattern
 ) -> None:
@@ -287,14 +306,59 @@ def compile_pattern_bindings(
         case LiteralPattern() | WildcardPattern():
             pass  # no bindings
         case SequencePattern(elements=elems):
-            for i, elem_pat in enumerate(elems):
-                elem_reg = ctx.fresh_reg()
+            if not _has_star(elems):
+                # No star — bind each element by literal index
+                for i, elem_pat in enumerate(elems):
+                    elem_reg = ctx.fresh_reg()
+                    ctx.emit(
+                        Opcode.LOAD_INDEX,
+                        result_reg=elem_reg,
+                        operands=[subject_reg, str(i)],
+                    )
+                    compile_pattern_bindings(ctx, elem_reg, elem_pat)
+            else:
+                # Star present — need length for after-star index computation
+                star_idx = _star_index(elems)
+                len_reg = ctx.fresh_reg()
                 ctx.emit(
-                    Opcode.LOAD_INDEX,
-                    result_reg=elem_reg,
-                    operands=[subject_reg, str(i)],
+                    Opcode.CALL_FUNCTION,
+                    result_reg=len_reg,
+                    operands=["len", subject_reg],
                 )
-                compile_pattern_bindings(ctx, elem_reg, elem_pat)
+                after_count = len(elems) - star_idx - 1
+                # Before star: literal indices
+                for i, elem_pat in enumerate(elems[:star_idx]):
+                    elem_reg = ctx.fresh_reg()
+                    ctx.emit(
+                        Opcode.LOAD_INDEX,
+                        result_reg=elem_reg,
+                        operands=[subject_reg, str(i)],
+                    )
+                    compile_pattern_bindings(ctx, elem_reg, elem_pat)
+                # Star element: slice(subject, star_idx, len - after_count)
+                star_pat = elems[star_idx]
+                if isinstance(star_pat, StarPattern) and star_pat.name != "_":
+                    start_reg = ctx.fresh_reg()
+                    ctx.emit(
+                        Opcode.CONST, result_reg=start_reg, operands=[str(star_idx)]
+                    )
+                    after_reg = ctx.fresh_reg()
+                    ctx.emit(
+                        Opcode.CONST, result_reg=after_reg, operands=[str(after_count)]
+                    )
+                    stop_reg = _emit_binop(ctx, "-", len_reg, after_reg)
+                    slice_reg = ctx.fresh_reg()
+                    ctx.emit(
+                        Opcode.CALL_FUNCTION,
+                        result_reg=slice_reg,
+                        operands=["slice", subject_reg, start_reg, stop_reg],
+                    )
+                    ctx.emit(Opcode.STORE_VAR, operands=[star_pat.name, slice_reg])
+                # After star: computed indices
+                for k, elem_pat in enumerate(elems[star_idx + 1 :]):
+                    _compile_after_star_element_binding(
+                        ctx, subject_reg, len_reg, after_count, k, elem_pat
+                    )
         case MappingPattern(entries=entries):
             for key, val_pat in entries:
                 field_reg = ctx.fresh_reg()
