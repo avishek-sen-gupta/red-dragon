@@ -198,6 +198,37 @@ class TestOrPattern:
         ]
         assert len(binops) >= 2, f"expected >=2 equality checks, got {binops}"
 
+    def test_or_pattern_binds_from_matched_alternative(self):
+        """OrPattern with captures should emit STORE_VAR (not just pass)."""
+        ctx = _make_ctx()
+        pattern = OrPattern(
+            alternatives=(
+                SequencePattern(elements=(LiteralPattern(1), CapturePattern("x"))),
+                SequencePattern(elements=(LiteralPattern(2), CapturePattern("x"))),
+            )
+        )
+        compile_pattern_bindings(ctx, "%subj", pattern)
+        instrs = ctx.instructions
+        stores = [i for i in instrs if i.opcode == Opcode.STORE_VAR]
+        store_names = [s.operands[0] for s in stores]
+        assert "x" in store_names, f"expected STORE_VAR for 'x', got {store_names}"
+
+    def test_or_pattern_bindings_use_branch_chain(self):
+        """OrPattern bindings should emit BRANCH_IF per alternative."""
+        ctx = _make_ctx()
+        pattern = OrPattern(
+            alternatives=(
+                SequencePattern(elements=(LiteralPattern(1), CapturePattern("x"))),
+                SequencePattern(elements=(LiteralPattern(2), CapturePattern("x"))),
+            )
+        )
+        compile_pattern_bindings(ctx, "%subj", pattern)
+        instrs = ctx.instructions
+        branch_ifs = [i for i in instrs if i.opcode == Opcode.BRANCH_IF]
+        assert (
+            len(branch_ifs) >= 2
+        ), f"expected >=2 BRANCH_IF (one per alt), got {len(branch_ifs)}"
+
 
 class TestAsPattern:
     def test_binds_after_inner_test(self):

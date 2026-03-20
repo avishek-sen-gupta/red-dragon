@@ -385,8 +385,23 @@ def compile_pattern_bindings(
                     operands=[subject_reg, name],
                 )
                 compile_pattern_bindings(ctx, field_reg, p)
-        case OrPattern():
-            pass  # no bindings for or-patterns
+        case OrPattern(alternatives=alts):
+            # Mini linear chain: re-test each alternative, bind from first match
+            or_done = ctx.fresh_label("or_bind_done")
+            for alt in alts:
+                test_reg = compile_pattern_test(ctx, subject_reg, alt)
+                bind_label = ctx.fresh_label("or_bind")
+                next_label = ctx.fresh_label("or_next")
+                ctx.emit(
+                    Opcode.BRANCH_IF,
+                    operands=[test_reg],
+                    label=f"{bind_label},{next_label}",
+                )
+                ctx.emit(Opcode.LABEL, label=bind_label)
+                compile_pattern_bindings(ctx, subject_reg, alt)
+                ctx.emit(Opcode.BRANCH, label=or_done)
+                ctx.emit(Opcode.LABEL, label=next_label)
+            ctx.emit(Opcode.LABEL, label=or_done)
         case AsPattern(pattern=inner, name=name):
             compile_pattern_bindings(ctx, subject_reg, inner)
             ctx.emit(Opcode.STORE_VAR, operands=[name, subject_reg])
