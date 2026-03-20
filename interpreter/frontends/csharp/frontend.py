@@ -99,6 +99,7 @@ class CSharpFrontend(BaseFrontend):
             NT.IMPLICIT_ARRAY_CREATION_EXPRESSION: csharp_expr.lower_array_creation,
             NT.IMPLICIT_OBJECT_CREATION_EXPRESSION: csharp_expr.lower_implicit_object_creation,
             NT.ANONYMOUS_OBJECT_CREATION_EXPRESSION: csharp_expr.lower_anonymous_object_creation,
+            NT.WITH_EXPRESSION: csharp_expr.lower_with_expression,
             NT.QUERY_EXPRESSION: csharp_expr.lower_query_expression,
             NT.FROM_CLAUSE: csharp_expr.lower_linq_clause,
             NT.SELECT_CLAUSE: csharp_expr.lower_linq_clause,
