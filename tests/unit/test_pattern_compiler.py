@@ -11,6 +11,7 @@ from interpreter.frontends.common.patterns import (
     ClassPattern,
     OrPattern,
     AsPattern,
+    StarPattern,
     MatchCase,
     compile_pattern_test,
     compile_pattern_bindings,
@@ -264,6 +265,34 @@ class TestCompileMatch:
         assert (
             len(stores_before) == 0
         ), f"bindings should not appear before BRANCH_IF: {stores_before}"
+
+
+class TestStarPattern:
+    def test_star_pattern_standalone_returns_true(self):
+        """StarPattern by itself always matches (no test IR needed)."""
+        ctx = _make_ctx()
+        pattern = StarPattern(name="rest")
+        result_reg = compile_pattern_test(ctx, "%subj", pattern)
+        binops = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
+        assert len(binops) == 0, f"star should emit no BINOP, got {binops}"
+
+    def test_star_pattern_bindings_emits_store_var(self):
+        """StarPattern with a real name emits STORE_VAR."""
+        ctx = _make_ctx()
+        pattern = StarPattern(name="rest")
+        compile_pattern_bindings(ctx, "%subj", pattern)
+        stores = [i for i in ctx.instructions if i.opcode == Opcode.STORE_VAR]
+        assert len(stores) == 1
+        assert stores[0].operands[0] == "rest"
+        assert stores[0].operands[1] == "%subj"
+
+    def test_star_pattern_wildcard_emits_no_store(self):
+        """StarPattern with name='_' must not emit STORE_VAR."""
+        ctx = _make_ctx()
+        pattern = StarPattern(name="_")
+        compile_pattern_bindings(ctx, "%subj", pattern)
+        stores = [i for i in ctx.instructions if i.opcode == Opcode.STORE_VAR]
+        assert len(stores) == 0, f"wildcard star should emit no STORE_VAR, got {stores}"
 
 
 class TestGuardedCase:
