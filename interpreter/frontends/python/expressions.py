@@ -907,17 +907,6 @@ def lower_dict_pattern(ctx: TreeSitterEmitContext, node) -> str:
     return obj_reg
 
 
-# ── case_pattern wrapper ─────────────────────────────────────
-
-
-def lower_case_pattern(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower a case_pattern wrapper node by lowering its inner child."""
-    named_children = [c for c in node.children if c.is_named]
-    if not named_children:
-        return lower_noop_expr(ctx, node)
-    return ctx.lower_expr(named_children[0])
-
-
 # ── f-string / interpolated string ────────────────────────────
 
 
