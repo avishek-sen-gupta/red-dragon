@@ -345,11 +345,17 @@ match items:
     case [first, *rest]:
         result_first = first
         rest_len = len(rest)
+        rest_0 = rest[0]
+        rest_1 = rest[1]
+        rest_2 = rest[2]
 """,
             max_steps=1000,
         )
         assert local_vars["result_first"] == 1
         assert local_vars["rest_len"] == 3
+        assert local_vars["rest_0"] == 2
+        assert local_vars["rest_1"] == 3
+        assert local_vars["rest_2"] == 4
 
     def test_star_at_beginning(self):
         _, local_vars = _run_python(
@@ -359,11 +365,15 @@ match items:
     case [*head, last]:
         result_last = last
         head_len = len(head)
+        head_0 = head[0]
+        head_1 = head[1]
 """,
             max_steps=1000,
         )
         assert local_vars["result_last"] == 3
         assert local_vars["head_len"] == 2
+        assert local_vars["head_0"] == 1
+        assert local_vars["head_1"] == 2
 
     def test_star_in_middle(self):
         _, local_vars = _run_python(
@@ -374,12 +384,18 @@ match items:
         result_a = a
         result_z = z
         mid_len = len(mid)
+        mid_0 = mid[0]
+        mid_1 = mid[1]
+        mid_2 = mid[2]
 """,
             max_steps=1000,
         )
         assert local_vars["result_a"] == 1
         assert local_vars["result_z"] == 5
         assert local_vars["mid_len"] == 3
+        assert local_vars["mid_0"] == 2
+        assert local_vars["mid_1"] == 3
+        assert local_vars["mid_2"] == 4
 
     def test_star_empty_rest(self):
         _, local_vars = _run_python(
@@ -404,10 +420,14 @@ data = (10, 20, 30)
 match data:
     case (first, *rest):
         result = first
+        rest_0 = rest[0]
+        rest_1 = rest[1]
 """,
             max_steps=1000,
         )
         assert local_vars["result"] == 10
+        assert local_vars["rest_0"] == 20
+        assert local_vars["rest_1"] == 30
 
     def test_star_minimum_length_rejects(self):
         _, local_vars = _run_python(
@@ -445,9 +465,15 @@ match data:
         result_a = a
         result_b = b
         result_c = c
+        inner_len = len(inner)
+        inner_0 = inner[0]
+        inner_1 = inner[1]
 """,
             max_steps=2000,
         )
         assert local_vars["result_a"] == 1
         assert local_vars["result_b"] == 2
         assert local_vars["result_c"] == 5
+        assert local_vars["inner_len"] == 2
+        assert local_vars["inner_0"] == 3
+        assert local_vars["inner_1"] == 4
