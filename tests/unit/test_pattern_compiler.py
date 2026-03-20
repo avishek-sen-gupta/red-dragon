@@ -7,6 +7,7 @@ from interpreter.frontends.common.patterns import (
     WildcardPattern,
     CapturePattern,
     SequencePattern,
+    MappingPattern,
     MatchCase,
     compile_pattern_test,
     compile_pattern_bindings,
@@ -124,3 +125,27 @@ class TestSequencePattern:
         stores = [i for i in ctx.instructions if i.opcode == Opcode.STORE_VAR]
         names = [s.operands[0] for s in stores]
         assert "a" in names and "b" in names
+
+
+class TestMappingPattern:
+    def test_emits_load_field_per_key(self):
+        ctx = _make_ctx()
+        pattern = MappingPattern(
+            entries=(
+                ("key1", LiteralPattern(10)),
+                ("key2", CapturePattern("val")),
+            )
+        )
+        result_reg = compile_pattern_test(ctx, "%subj", pattern)
+        instrs = ctx.instructions
+        load_fields = [i for i in instrs if i.opcode == Opcode.LOAD_FIELD]
+        assert len(load_fields) >= 2, f"expected 2 LOAD_FIELD, got {load_fields}"
+        field_names = [lf.operands[1] for lf in load_fields]
+        assert "key1" in field_names and "key2" in field_names
+
+    def test_bindings_from_mapping_values(self):
+        ctx = _make_ctx()
+        pattern = MappingPattern(entries=(("k", CapturePattern("val")),))
+        compile_pattern_bindings(ctx, "%subj", pattern)
+        stores = [i for i in ctx.instructions if i.opcode == Opcode.STORE_VAR]
+        assert any(s.operands[0] == "val" for s in stores)
