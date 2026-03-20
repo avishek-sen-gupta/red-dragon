@@ -290,7 +290,7 @@ match p:
         )
 
     def test_class_positional_in_sequence_with_star(self):
-        """Positional class patterns inside a list with star."""
+        """Positional class patterns inside a list with star — verify rest element fields+types."""
         vm, local_vars = _run_python(
             """\
 class Point:
@@ -305,12 +305,171 @@ match points:
         ra = a
         rb = b
         rest_len = len(rest)
+        r0x = rest[0].x
+        r0y = rest[0].y
+        r1x = rest[1].x
+        r1y = rest[1].y
 """,
             max_steps=5000,
         )
         assert isinstance(local_vars["ra"], int) and local_vars["ra"] == 1
         assert isinstance(local_vars["rb"], int) and local_vars["rb"] == 2
         assert isinstance(local_vars["rest_len"], int) and local_vars["rest_len"] == 2
+        assert isinstance(local_vars["r0x"], int) and local_vars["r0x"] == 3
+        assert isinstance(local_vars["r0y"], int) and local_vars["r0y"] == 4
+        assert isinstance(local_vars["r1x"], int) and local_vars["r1x"] == 5
+        assert isinstance(local_vars["r1y"], int) and local_vars["r1y"] == 6
+        rest_addr = _heap_addr(local_vars["rest"])
+        r0_addr = _heap_addr(vm.heap[rest_addr].fields["0"].value)
+        r1_addr = _heap_addr(vm.heap[rest_addr].fields["1"].value)
+        assert vm.heap[r0_addr].type_hint == scalar("Point")
+        assert vm.heap[r1_addr].type_hint == scalar("Point")
+
+    def test_nested_positional_line_of_points(self):
+        """Line(Point(x1,y1), Point(x2,y2)) — nested positional resolution."""
+        _, local_vars = _run_python(
+            """\
+class Point:
+    __match_args__ = ("x", "y")
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+class Line:
+    __match_args__ = ("start", "end")
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+
+line = Line(Point(0, 0), Point(3, 4))
+match line:
+    case Line(Point(x1, y1), Point(x2, y2)):
+        dx = x2 - x1
+        dy = y2 - y1
+""",
+            max_steps=5000,
+        )
+        assert isinstance(local_vars["dx"], int) and local_vars["dx"] == 3
+        assert isinstance(local_vars["dy"], int) and local_vars["dy"] == 4
+
+    def test_positional_with_guard_pythagorean(self):
+        """Positional capture + guard using x*x + y*y."""
+        _, local_vars = _run_python(
+            """\
+class Point:
+    __match_args__ = ("x", "y")
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+p = Point(3, 4)
+match p:
+    case Point(x, y) if x == 0 and y == 0:
+        result = "origin"
+    case Point(x, y) if x * x + y * y <= 25:
+        result = "near"
+    case Point(x, y):
+        result = "far"
+""",
+            max_steps=3000,
+        )
+        assert isinstance(local_vars["result"], str) and local_vars["result"] == "near"
+        assert isinstance(local_vars["x"], int) and local_vars["x"] == 3
+        assert isinstance(local_vars["y"], int) and local_vars["y"] == 4
+
+    def test_or_pattern_with_positional_class_alternatives(self):
+        """Or-pattern across Success(v) | Error(v) — positional on both."""
+        _, local_vars = _run_python(
+            """\
+class Success:
+    __match_args__ = ("value",)
+    def __init__(self, value):
+        self.value = value
+
+class Error:
+    __match_args__ = ("value",)
+    def __init__(self, value):
+        self.value = value
+
+result_obj = Error("not found")
+match result_obj:
+    case Success(v) | Error(v):
+        extracted = v
+""",
+            max_steps=3000,
+        )
+        assert (
+            isinstance(local_vars["extracted"], str)
+            and local_vars["extracted"] == "not found"
+        )
+
+    def test_positional_in_or_inside_list_with_star(self):
+        """Point(a,b) | Vec(a,b) as first element of list with star — verify rest contents."""
+        vm, local_vars = _run_python(
+            """\
+class Point:
+    __match_args__ = ("x", "y")
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+class Vec:
+    __match_args__ = ("x", "y")
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+items = [Vec(10, 20), Point(3, 4), Point(5, 6)]
+match items:
+    case [Point(a, b) | Vec(a, b), *rest]:
+        ra = a
+        rb = b
+        rest_len = len(rest)
+        r0x = rest[0].x
+        r0y = rest[0].y
+        r1x = rest[1].x
+        r1y = rest[1].y
+""",
+            max_steps=5000,
+        )
+        assert isinstance(local_vars["ra"], int) and local_vars["ra"] == 10
+        assert isinstance(local_vars["rb"], int) and local_vars["rb"] == 20
+        assert isinstance(local_vars["rest_len"], int) and local_vars["rest_len"] == 2
+        assert isinstance(local_vars["r0x"], int) and local_vars["r0x"] == 3
+        assert isinstance(local_vars["r0y"], int) and local_vars["r0y"] == 4
+        assert isinstance(local_vars["r1x"], int) and local_vars["r1x"] == 5
+        assert isinstance(local_vars["r1y"], int) and local_vars["r1y"] == 6
+        rest_addr = _heap_addr(local_vars["rest"])
+        r0_addr = _heap_addr(vm.heap[rest_addr].fields["0"].value)
+        r1_addr = _heap_addr(vm.heap[rest_addr].fields["1"].value)
+        assert vm.heap[r0_addr].type_hint == scalar("Point")
+        assert vm.heap[r1_addr].type_hint == scalar("Point")
+
+    def test_three_level_deep_tree_positional(self):
+        """Node(Node(Leaf(a), Leaf(b)), Leaf(c)) — 3 levels deep."""
+        vm, local_vars = _run_python(
+            """\
+class Leaf:
+    __match_args__ = ("val",)
+    def __init__(self, val):
+        self.val = val
+
+class Node:
+    __match_args__ = ("left", "right")
+    def __init__(self, left, right):
+        self.left = left
+        self.right = right
+
+tree = Node(Node(Leaf(1), Leaf(2)), Leaf(3))
+match tree:
+    case Node(Node(Leaf(a), Leaf(b)), Leaf(c)):
+        result = a + b + c
+""",
+            max_steps=5000,
+        )
+        assert isinstance(local_vars["result"], int) and local_vars["result"] == 6
+        tree_addr = _heap_addr(local_vars["tree"])
+        assert vm.heap[tree_addr].type_hint == scalar("Node")
 
 
 class TestComplexLiteralPattern:
