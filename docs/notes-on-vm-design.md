@@ -37,7 +37,7 @@ flowchart TD
     ts["tree-sitter\n15 languages"]
     llm["LLM Frontend\nany language"]
     chunked["Chunked LLM\nchunk→LLM×N"]
-    ir["Flattened IR\n(27 opcodes)"]
+    ir["Flattened IR\n(32 opcodes)"]
     cfg["Build CFG"]
     reg["Registry"]
     df["Dataflow Analysis"]
@@ -47,7 +47,7 @@ flowchart TD
     ir --> cfg & reg & df
 
     subgraph VM ["Symbolic VM"]
-        exec["Local Executor\n← handles all 27 opcodes"]
+        exec["Local Executor\n← handles all 32 opcodes"]
         oracle["LLM Oracle\n← fallback only"]
         exec -- "not handled" --> oracle
     end
@@ -107,14 +107,14 @@ The IR is a **flattened high-level three-address code** defined in `interpreter/
 
 ### Opcodes
 
-The `Opcode` enum (`interpreter/ir.py:11`) defines 28 opcodes in six categories:
+The `Opcode` enum (`interpreter/ir.py:11`) defines 32 opcodes in six categories:
 
 | Category | Opcodes | Description |
 |---|---|---|
 | **Value producers** | `CONST`, `LOAD_VAR`, `LOAD_FIELD`, `LOAD_INDEX`, `NEW_OBJECT`, `NEW_ARRAY`, `BINOP`, `UNOP`, `CALL_FUNCTION`, `CALL_METHOD`, `CALL_UNKNOWN` | Write result to a register (`result_reg`) |
-| **Consumers / Control** | `STORE_VAR`, `STORE_FIELD`, `STORE_INDEX`, `BRANCH_IF`, `BRANCH`, `RETURN`, `THROW`, `TRY_PUSH`, `TRY_POP` | Consume values, affect control flow |
+| **Consumers / Control** | `DECL_VAR`, `STORE_VAR`, `STORE_FIELD`, `STORE_INDEX`, `BRANCH_IF`, `BRANCH`, `RETURN`, `THROW`, `TRY_PUSH`, `TRY_POP` | Consume values, affect control flow |
 | **Special** | `SYMBOLIC`, `LABEL` | Parameters, block boundaries |
-| **Pointer ops** | `ADDRESS_OF` | Pointer creation (`&x`), promotes variable to heap-backed storage |
+| **Pointer ops** | `ADDRESS_OF`, `LOAD_INDIRECT`, `LOAD_FIELD_INDIRECT`, `STORE_INDIRECT` | Pointer creation/dereference (`&x`, `*ptr`, `*ptr = val`) |
 | **Region ops** | `ALLOC_REGION`, `WRITE_REGION`, `LOAD_REGION` | Byte-addressed memory (COBOL) |
 | **Continuation ops** | `SET_CONTINUATION`, `RESUME_CONTINUATION` | Named return points (COBOL PERFORM) |
 
@@ -477,7 +477,7 @@ class LocalExecutor:
         Opcode.ADDRESS_OF: _handle_address_of,
         Opcode.CALL_FUNCTION: _handle_call_function,
         Opcode.CALL_METHOD: _handle_call_method,
-        ... # all 28 opcodes covered
+        ... # all 32 opcodes covered
     }
 ```
 
@@ -954,7 +954,7 @@ if result is Operators.UNCOMPUTABLE:
 
 ## 12. LLM Backend (Oracle Fallback)
 
-The LLM backend (`interpreter/backend.py`) is the fallback for instructions the local executor can't handle. In practice, the local executor handles all 27 opcodes, so the LLM is only called when the local executor explicitly delegates (which currently doesn't happen — all opcodes have handlers).
+The LLM backend (`interpreter/backend.py`) is the fallback for instructions the local executor can't handle. In practice, the local executor handles all 32 opcodes, so the LLM is only called when the local executor explicitly delegates (which currently doesn't happen — all opcodes have handlers).
 
 ### Architecture
 
@@ -1126,7 +1126,7 @@ interpreter/
 ├── cfg.py                   build_cfg(), cfg_to_mermaid(), extract_function_instructions()
 ├── run_types.py             VMConfig, ExecutionStats, PipelineStats
 ├── run.py                   execute_cfg(), run() — orchestration and step loop
-├── executor.py              LocalExecutor dispatch table, all 27 opcode handlers
+├── executor.py              LocalExecutor dispatch table, all 31 opcode handlers
 ├── builtins.py              Built-in function table (len, range, print, ...)
 ├── registry.py              FunctionRegistry, function/class scanning
 ├── backend.py               LLMBackend ABC + LLMInterpreterBackend (via LiteLLM)
@@ -1285,7 +1285,7 @@ Final state:
 
 | Principle | Manifestation |
 |---|---|
-| **Deterministic first** | Local executor handles all 27 opcodes; LLM is pure fallback |
+| **Deterministic first** | Local executor handles all 32 opcodes; LLM is pure fallback |
 | **Functional core, imperative shell** | Pure data types in `*_types.py`, mutation only in `apply_update()` |
 | **Result types over exceptions** | `ExecutionResult.not_handled()` instead of raising or returning `None` |
 | **Sentinel over exception** | `Operators.UNCOMPUTABLE` instead of try/catch for arithmetic failures |
