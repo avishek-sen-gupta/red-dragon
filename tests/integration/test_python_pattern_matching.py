@@ -477,3 +477,155 @@ match data:
         assert local_vars["inner_len"] == 2
         assert local_vars["inner_0"] == 3
         assert local_vars["inner_1"] == 4
+
+
+class TestCompoundPatterns:
+    """Complex scenarios combining multiple pattern types."""
+
+    def test_array_of_points_with_star(self):
+        """Class patterns inside a list with star — verify first point fields + rest count."""
+        _, local_vars = _run_python(
+            """\
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+points = [Point(1, 2), Point(3, 4), Point(5, 6)]
+match points:
+    case [Point(x=first_x, y=first_y), *rest]:
+        rx = first_x
+        ry = first_y
+        rest_len = len(rest)
+""",
+            max_steps=3000,
+        )
+        assert local_vars["rx"] == 1
+        assert local_vars["ry"] == 2
+        assert local_vars["rest_len"] == 2
+
+    def test_dict_inside_sequence_with_star(self):
+        """Dict pattern inside list with star — verify extracted field + rest count."""
+        _, local_vars = _run_python(
+            """\
+data = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
+match data:
+    case [{"name": first_name, "age": first_age}, *rest]:
+        rn = first_name
+        ra = first_age
+        rest_len = len(rest)
+""",
+            max_steps=3000,
+        )
+        assert local_vars["rn"] == "Alice"
+        assert local_vars["ra"] == 30
+        assert local_vars["rest_len"] == 1
+
+    def test_guard_with_sequence_captures(self):
+        """Guard referencing captured variables from a tuple pattern."""
+        _, local_vars = _run_python(
+            """\
+data = (10, 20)
+match data:
+    case (a, b) if a + b > 50:
+        result = "big"
+        ra = a
+        rb = b
+    case (a, b) if a + b <= 50:
+        result = "small"
+        ra = a
+        rb = b
+""",
+            max_steps=2000,
+        )
+        assert local_vars["result"] == "small"
+        assert local_vars["ra"] == 10
+        assert local_vars["rb"] == 20
+
+    def test_class_pattern_with_guard(self):
+        """Class keyword pattern with guard on field product."""
+        _, local_vars = _run_python(
+            """\
+class Rect:
+    def __init__(self, w, h):
+        self.w = w
+        self.h = h
+
+r = Rect(10, 5)
+match r:
+    case Rect(w=w, h=h) if w * h > 100:
+        result = "large"
+        rw = w
+        rh = h
+    case Rect(w=w, h=h):
+        result = "small"
+        rw = w
+        rh = h
+""",
+            max_steps=3000,
+        )
+        assert local_vars["result"] == "small"
+        assert local_vars["rw"] == 10
+        assert local_vars["rh"] == 5
+
+    def test_mixed_pattern_types_across_cases(self):
+        """Dict matches before list — verify captured fields and computed result."""
+        _, local_vars = _run_python(
+            """\
+data = {"type": "point", "x": 3, "y": 4}
+match data:
+    case [a, b]:
+        result = "list"
+    case {"type": t, "x": x, "y": y}:
+        result = x + y
+        rt = t
+    case _:
+        result = "other"
+""",
+            max_steps=2000,
+        )
+        assert local_vars["result"] == 7
+        assert local_vars["rt"] == "point"
+
+    def test_star_with_class_field_access(self):
+        """Star captures rest of array after class-pattern head — verify all fields."""
+        _, local_vars = _run_python(
+            """\
+class Item:
+    def __init__(self, name, price):
+        self.name = name
+        self.price = price
+
+cart = [Item("apple", 1), Item("banana", 2), Item("cherry", 3)]
+match cart:
+    case [Item(name=first_name, price=first_price), *others]:
+        rn = first_name
+        rp = first_price
+        others_len = len(others)
+""",
+            max_steps=3000,
+        )
+        assert local_vars["rn"] == "apple"
+        assert local_vars["rp"] == 1
+        assert local_vars["others_len"] == 2
+
+    def test_guard_rejects_then_next_case_matches(self):
+        """First case guard fails, second case (same pattern, different guard) matches."""
+        _, local_vars = _run_python(
+            """\
+data = (3, 7)
+match data:
+    case (a, b) if a > b:
+        result = "a_bigger"
+    case (a, b) if b > a:
+        result = "b_bigger"
+        ra = a
+        rb = b
+    case _:
+        result = "equal"
+""",
+            max_steps=2000,
+        )
+        assert local_vars["result"] == "b_bigger"
+        assert local_vars["ra"] == 3
+        assert local_vars["rb"] == 7
