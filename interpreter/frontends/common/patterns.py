@@ -122,6 +122,11 @@ def _and_all(ctx: TreeSitterEmitContext, regs: list[str]) -> str:
     return reduce(lambda acc, reg: _emit_binop(ctx, "&&", acc, reg), regs[1:], regs[0])
 
 
+def _or_any(ctx: TreeSitterEmitContext, regs: list[str]) -> str:
+    """OR a list of boolean registers together with BINOP ||."""
+    return reduce(lambda acc, reg: _emit_binop(ctx, "||", acc, reg), regs[1:], regs[0])
+
+
 def compile_pattern_test(
     ctx: TreeSitterEmitContext, subject_reg: str, pattern: Pattern
 ) -> str:
@@ -200,6 +205,11 @@ def compile_pattern_test(
                 )
                 sub_results.append(compile_pattern_test(ctx, field_reg, p))
             return _and_all(ctx, sub_results)
+        case OrPattern(alternatives=alts):
+            sub_results = [compile_pattern_test(ctx, subject_reg, alt) for alt in alts]
+            return _or_any(ctx, sub_results)
+        case AsPattern(pattern=inner, name=_):
+            return compile_pattern_test(ctx, subject_reg, inner)
         case _:
             raise NotImplementedError(f"compile_pattern_test: {type(pattern).__name__}")
 
@@ -248,6 +258,11 @@ def compile_pattern_bindings(
                     operands=[subject_reg, name],
                 )
                 compile_pattern_bindings(ctx, field_reg, p)
+        case OrPattern():
+            pass  # no bindings for or-patterns
+        case AsPattern(pattern=inner, name=name):
+            compile_pattern_bindings(ctx, subject_reg, inner)
+            ctx.emit(Opcode.STORE_VAR, operands=[name, subject_reg])
         case _:
             raise NotImplementedError(
                 f"compile_pattern_bindings: {type(pattern).__name__}"
