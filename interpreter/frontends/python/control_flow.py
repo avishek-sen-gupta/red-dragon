@@ -413,10 +413,18 @@ def lower_import_from(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_match(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower match/case as if/elif/else chain."""
+    """Lower match/case as pattern-driven linear chain."""
+    from interpreter.frontends.common.patterns import (
+        MatchCase,
+        NoBody,
+        NoGuard,
+        WildcardPattern,
+        compile_match,
+    )
+    from interpreter.frontends.python.patterns import parse_pattern
+
     subject_node = node.child_by_field_name("subject")
     body_node = node.child_by_field_name("body")
-
     subject_reg = ctx.lower_expr(subject_node)
 
     case_clauses = (
@@ -425,8 +433,7 @@ def lower_match(ctx: TreeSitterEmitContext, node) -> None:
         else []
     )
 
-    end_label = ctx.fresh_label("match_end")
-
+    cases: list[MatchCase] = []
     for case_node in case_clauses:
         pattern_node = next(
             (c for c in case_node.children if c.type == PythonNodeType.CASE_PATTERN),
@@ -438,45 +445,24 @@ def lower_match(ctx: TreeSitterEmitContext, node) -> None:
             (c for c in case_node.children if c.type == PythonNodeType.BLOCK), None
         )
 
-        # Extract the inner pattern value from case_pattern
-        inner_pattern = (
-            next((c for c in pattern_node.children if c.is_named), None)
-            if pattern_node
-            else None
+        pattern = (
+            parse_pattern(ctx, pattern_node) if pattern_node else WildcardPattern()
         )
 
-        is_wildcard = (
-            inner_pattern is not None
-            and ctx.node_text(inner_pattern) == _WILDCARD_PATTERN
+        # Extract guard: Python uses "if_clause" inside case_clause
+        if_clauses = [c for c in case_node.children if c.type == "if_clause"]
+        guard_node: object = (
+            next(c for c in if_clauses[0].children if c.is_named)
+            if if_clauses
+            else NoGuard()
         )
 
-        if is_wildcard:
-            # Default case: unconditionally lower the body
-            if case_body:
-                ctx.lower_block(case_body)
-            ctx.emit(Opcode.BRANCH, label=end_label)
-        else:
-            pattern_reg = (
-                ctx.lower_expr(inner_pattern) if inner_pattern else subject_reg
+        cases.append(
+            MatchCase(
+                pattern=pattern,
+                guard_node=guard_node,
+                body_node=case_body if case_body else NoBody(),
             )
-            cmp_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.BINOP,
-                result_reg=cmp_reg,
-                operands=["==", subject_reg, pattern_reg],
-                node=case_node,
-            )
-            case_true_label = ctx.fresh_label("case_true")
-            case_next_label = ctx.fresh_label("case_next")
-            ctx.emit(
-                Opcode.BRANCH_IF,
-                operands=[cmp_reg],
-                label=f"{case_true_label},{case_next_label}",
-            )
-            ctx.emit(Opcode.LABEL, label=case_true_label)
-            if case_body:
-                ctx.lower_block(case_body)
-            ctx.emit(Opcode.BRANCH, label=end_label)
-            ctx.emit(Opcode.LABEL, label=case_next_label)
+        )
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    compile_match(ctx, subject_reg, cases)
