@@ -20,6 +20,65 @@ from interpreter.frontends.python.node_types import PythonNodeType
 _WILDCARD = "_"
 
 
+def _find_module_root(node) -> object:
+    """Walk up via .parent to reach the module root node."""
+    current = node
+    while current.parent:
+        current = current.parent
+    return current
+
+
+def _find_class_def(node, class_name: str):
+    """Recursively find a class_definition node with matching name."""
+    if node.type == "class_definition":
+        name_node = node.child_by_field_name("name")
+        if name_node and name_node.text.decode() == class_name:
+            return node
+    return next(
+        (
+            result
+            for child in node.children
+            if (result := _find_class_def(child, class_name))
+        ),
+        None,
+    )
+
+
+def _extract_match_args_from_body(body) -> list[str]:
+    """Extract field names from __match_args__ = ("x", "y") in a class body."""
+    for child in body.children:
+        if child.type != "assignment":
+            continue
+        left = child.child_by_field_name("left")
+        right = child.child_by_field_name("right")
+        if (
+            left
+            and left.text.decode() == "__match_args__"
+            and right
+            and right.type == "tuple"
+        ):
+            return [
+                sc.text.decode()
+                for s in right.children
+                if s.type == "string"
+                for sc in s.children
+                if sc.type == "string_content"
+            ]
+    return []
+
+
+def _resolve_match_args(node, class_name: str) -> list[str]:
+    """Find __match_args__ for class_name by walking the AST."""
+    root = _find_module_root(node)
+    class_def = _find_class_def(root, class_name)
+    if class_def is None:
+        return []
+    body = class_def.child_by_field_name("body")
+    if body is None:
+        return []
+    return _extract_match_args_from_body(body)
+
+
 def _parse_key_literal(
     ctx: TreeSitterEmitContext, node
 ) -> int | float | str | bool | None:
@@ -126,6 +185,16 @@ def parse_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
                 keyword.append((kw_name, kw_val))
             else:
                 positional.append(parse_pattern(ctx, child))
+        # Resolve positional args via __match_args__ if available
+        if positional:
+            match_args = _resolve_match_args(node, class_name)
+            if match_args:
+                keyword.extend(
+                    (match_args[i], pat)
+                    for i, pat in enumerate(positional)
+                    if i < len(match_args)
+                )
+                positional = []
         return ClassPattern(
             class_name=class_name,
             positional=tuple(positional),
