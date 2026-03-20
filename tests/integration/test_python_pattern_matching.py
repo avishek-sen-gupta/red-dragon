@@ -483,7 +483,7 @@ class TestCompoundPatterns:
     """Complex scenarios combining multiple pattern types."""
 
     def test_array_of_points_with_star(self):
-        """Class patterns inside a list with star — verify first point fields + rest count."""
+        """Class patterns inside a list with star — verify first point fields + rest contents."""
         _, local_vars = _run_python(
             """\
 class Point:
@@ -497,15 +497,23 @@ match points:
         rx = first_x
         ry = first_y
         rest_len = len(rest)
+        r0x = rest[0].x
+        r0y = rest[0].y
+        r1x = rest[1].x
+        r1y = rest[1].y
 """,
             max_steps=3000,
         )
         assert local_vars["rx"] == 1
         assert local_vars["ry"] == 2
         assert local_vars["rest_len"] == 2
+        assert local_vars["r0x"] == 3
+        assert local_vars["r0y"] == 4
+        assert local_vars["r1x"] == 5
+        assert local_vars["r1y"] == 6
 
     def test_dict_inside_sequence_with_star(self):
-        """Dict pattern inside list with star — verify extracted field + rest count."""
+        """Dict pattern inside list with star — verify extracted fields + rest element fields."""
         _, local_vars = _run_python(
             """\
 data = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
@@ -514,12 +522,16 @@ match data:
         rn = first_name
         ra = first_age
         rest_len = len(rest)
+        rest0_name = rest[0]["name"]
+        rest0_age = rest[0]["age"]
 """,
             max_steps=3000,
         )
         assert local_vars["rn"] == "Alice"
         assert local_vars["ra"] == 30
         assert local_vars["rest_len"] == 1
+        assert local_vars["rest0_name"] == "Bob"
+        assert local_vars["rest0_age"] == 25
 
     def test_guard_with_sequence_captures(self):
         """Guard referencing captured variables from a tuple pattern."""
@@ -569,7 +581,7 @@ match r:
         assert local_vars["rh"] == 5
 
     def test_mixed_pattern_types_across_cases(self):
-        """Dict matches before list — verify captured fields and computed result."""
+        """Dict matches before list — verify each captured field individually."""
         _, local_vars = _run_python(
             """\
 data = {"type": "point", "x": 3, "y": 4}
@@ -579,6 +591,8 @@ match data:
     case {"type": t, "x": x, "y": y}:
         result = x + y
         rt = t
+        rx = x
+        ry = y
     case _:
         result = "other"
 """,
@@ -586,9 +600,11 @@ match data:
         )
         assert local_vars["result"] == 7
         assert local_vars["rt"] == "point"
+        assert local_vars["rx"] == 3
+        assert local_vars["ry"] == 4
 
     def test_star_with_class_field_access(self):
-        """Star captures rest of array after class-pattern head — verify all fields."""
+        """Star captures rest of array after class-pattern head — verify all element fields."""
         _, local_vars = _run_python(
             """\
 class Item:
@@ -602,12 +618,20 @@ match cart:
         rn = first_name
         rp = first_price
         others_len = len(others)
+        o0_name = others[0].name
+        o0_price = others[0].price
+        o1_name = others[1].name
+        o1_price = others[1].price
 """,
             max_steps=3000,
         )
         assert local_vars["rn"] == "apple"
         assert local_vars["rp"] == 1
         assert local_vars["others_len"] == 2
+        assert local_vars["o0_name"] == "banana"
+        assert local_vars["o0_price"] == 2
+        assert local_vars["o1_name"] == "cherry"
+        assert local_vars["o1_price"] == 3
 
     def test_guard_rejects_then_next_case_matches(self):
         """First case guard fails, second case (same pattern, different guard) matches."""
