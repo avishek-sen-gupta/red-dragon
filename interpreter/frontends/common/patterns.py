@@ -400,13 +400,26 @@ def compile_pattern_bindings(
 
 
 def _needs_pre_guard_bindings(pattern: Pattern) -> bool:
-    """Return True if pattern variables must be bound before the guard is evaluated.
+    """Return True if pattern introduces variable bindings the guard may reference.
 
-    CapturePattern and AsPattern introduce variable bindings that the guard
-    expression may reference.  We must emit those bindings before lowering the
-    guard expression, even though we are still in the "test" phase.
+    Recursively checks sub-patterns: a SequencePattern containing CapturePatterns
+    also needs pre-guard bindings so the guard can reference the captured variables.
     """
-    return isinstance(pattern, (CapturePattern, AsPattern))
+    match pattern:
+        case CapturePattern() | AsPattern():
+            return True
+        case SequencePattern(elements=elems):
+            return any(_needs_pre_guard_bindings(e) for e in elems)
+        case MappingPattern(entries=entries):
+            return any(_needs_pre_guard_bindings(v) for _, v in entries)
+        case ClassPattern(positional=pos, keyword=kw):
+            return any(_needs_pre_guard_bindings(p) for p in pos) or any(
+                _needs_pre_guard_bindings(p) for _, p in kw
+            )
+        case OrPattern(alternatives=alts):
+            return any(_needs_pre_guard_bindings(a) for a in alts)
+        case _:
+            return False
 
 
 def _compile_refutable_case(
