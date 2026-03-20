@@ -641,6 +641,37 @@ def _resolve_method_delegation_target(
     return None
 
 
+def _resolve_class_static_field(
+    class_ref: ClassRef, field_name: str, cfg: CFG
+) -> TypedValue | None:
+    """Resolve a static field from a class body by scanning the class CFG block.
+
+    Looks for a CONST instruction immediately preceding STORE_VAR {field_name}
+    in the class body label block.  Returns a TypedValue for the constant, or
+    None if not found.
+    """
+    block = cfg.blocks.get(class_ref.label)
+    if block is None:
+        return None
+    instructions = block.instructions
+    for i, instr in enumerate(instructions):
+        if (
+            instr.opcode == Opcode.STORE_VAR
+            and instr.operands
+            and instr.operands[0] == field_name
+            and i > 0
+            and instructions[i - 1].opcode == Opcode.CONST
+        ):
+            raw = (
+                instructions[i - 1].operands[0]
+                if instructions[i - 1].operands
+                else "None"
+            )
+            val = _parse_const(raw)
+            return typed_from_runtime(val)
+    return None
+
+
 def _handle_load_field(
     inst: IRInstruction,
     vm: VMState,
@@ -651,6 +682,22 @@ def _handle_load_field(
 ) -> ExecutionResult:
     obj_val = _resolve_reg(vm, inst.operands[0]).value
     field_name = inst.operands[1]
+    # Static field access on a ClassRef: scan the class body for CONST + STORE_VAR
+    if isinstance(obj_val, ClassRef):
+        static_tv = _resolve_class_static_field(obj_val, field_name, cfg)
+        if static_tv is not None:
+            logger.debug(
+                "load_field ClassRef %s.%s = %r",
+                obj_val.name,
+                field_name,
+                static_tv.value,
+            )
+            return ExecutionResult.success(
+                StateUpdate(
+                    register_writes={inst.result_reg: static_tv},
+                    reasoning=f"load class static {obj_val.name}.{field_name} = {static_tv.value!r}",
+                )
+            )
     addr = _heap_addr(obj_val)
     if addr and addr not in vm.heap:
         # Materialise a synthetic heap entry for symbolic objects so that
