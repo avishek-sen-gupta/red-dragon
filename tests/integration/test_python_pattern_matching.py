@@ -7,6 +7,7 @@ import pytest
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.typed_value import unwrap_locals
+from interpreter.vm import _heap_addr
 
 
 def _run_python(source: str, max_steps: int = 500):
@@ -483,8 +484,8 @@ class TestCompoundPatterns:
     """Complex scenarios combining multiple pattern types."""
 
     def test_array_of_points_with_star(self):
-        """Class patterns inside a list with star — verify first point fields + rest contents."""
-        _, local_vars = _run_python(
+        """Class patterns inside a list with star — verify types + field values of rest."""
+        vm, local_vars = _run_python(
             """\
 class Point:
     def __init__(self, x, y):
@@ -504,13 +505,19 @@ match points:
 """,
             max_steps=3000,
         )
-        assert local_vars["rx"] == 1
-        assert local_vars["ry"] == 2
-        assert local_vars["rest_len"] == 2
-        assert local_vars["r0x"] == 3
-        assert local_vars["r0y"] == 4
-        assert local_vars["r1x"] == 5
-        assert local_vars["r1y"] == 6
+        assert isinstance(local_vars["rx"], int) and local_vars["rx"] == 1
+        assert isinstance(local_vars["ry"], int) and local_vars["ry"] == 2
+        assert isinstance(local_vars["rest_len"], int) and local_vars["rest_len"] == 2
+        assert isinstance(local_vars["r0x"], int) and local_vars["r0x"] == 3
+        assert isinstance(local_vars["r0y"], int) and local_vars["r0y"] == 4
+        assert isinstance(local_vars["r1x"], int) and local_vars["r1x"] == 5
+        assert isinstance(local_vars["r1y"], int) and local_vars["r1y"] == 6
+        # Verify rest elements are Point objects via heap type_hint
+        rest_addr = _heap_addr(local_vars["rest"])
+        r0_addr = _heap_addr(vm.heap[rest_addr].fields["0"].value)
+        r1_addr = _heap_addr(vm.heap[rest_addr].fields["1"].value)
+        assert str(vm.heap[r0_addr].type_hint) == "Point"
+        assert str(vm.heap[r1_addr].type_hint) == "Point"
 
     def test_dict_inside_sequence_with_star(self):
         """Dict pattern inside list with star — verify extracted fields + rest element fields."""
@@ -527,11 +534,16 @@ match data:
 """,
             max_steps=3000,
         )
-        assert local_vars["rn"] == "Alice"
-        assert local_vars["ra"] == 30
-        assert local_vars["rest_len"] == 1
-        assert local_vars["rest0_name"] == "Bob"
-        assert local_vars["rest0_age"] == 25
+        assert isinstance(local_vars["rn"], str) and local_vars["rn"] == "Alice"
+        assert isinstance(local_vars["ra"], int) and local_vars["ra"] == 30
+        assert isinstance(local_vars["rest_len"], int) and local_vars["rest_len"] == 1
+        assert (
+            isinstance(local_vars["rest0_name"], str)
+            and local_vars["rest0_name"] == "Bob"
+        )
+        assert (
+            isinstance(local_vars["rest0_age"], int) and local_vars["rest0_age"] == 25
+        )
 
     def test_guard_with_sequence_captures(self):
         """Guard referencing captured variables from a tuple pattern."""
@@ -550,13 +562,13 @@ match data:
 """,
             max_steps=2000,
         )
-        assert local_vars["result"] == "small"
-        assert local_vars["ra"] == 10
-        assert local_vars["rb"] == 20
+        assert isinstance(local_vars["result"], str) and local_vars["result"] == "small"
+        assert isinstance(local_vars["ra"], int) and local_vars["ra"] == 10
+        assert isinstance(local_vars["rb"], int) and local_vars["rb"] == 20
 
     def test_class_pattern_with_guard(self):
-        """Class keyword pattern with guard on field product."""
-        _, local_vars = _run_python(
+        """Class keyword pattern with guard on field product — verify matched object type."""
+        vm, local_vars = _run_python(
             """\
 class Rect:
     def __init__(self, w, h):
@@ -576,9 +588,12 @@ match r:
 """,
             max_steps=3000,
         )
-        assert local_vars["result"] == "small"
-        assert local_vars["rw"] == 10
-        assert local_vars["rh"] == 5
+        assert isinstance(local_vars["result"], str) and local_vars["result"] == "small"
+        assert isinstance(local_vars["rw"], int) and local_vars["rw"] == 10
+        assert isinstance(local_vars["rh"], int) and local_vars["rh"] == 5
+        # Verify r is a Rect via heap type_hint
+        r_addr = _heap_addr(local_vars["r"])
+        assert str(vm.heap[r_addr].type_hint) == "Rect"
 
     def test_mixed_pattern_types_across_cases(self):
         """Dict matches before list — verify each captured field individually."""
@@ -598,14 +613,14 @@ match data:
 """,
             max_steps=2000,
         )
-        assert local_vars["result"] == 7
-        assert local_vars["rt"] == "point"
-        assert local_vars["rx"] == 3
-        assert local_vars["ry"] == 4
+        assert isinstance(local_vars["result"], int) and local_vars["result"] == 7
+        assert isinstance(local_vars["rt"], str) and local_vars["rt"] == "point"
+        assert isinstance(local_vars["rx"], int) and local_vars["rx"] == 3
+        assert isinstance(local_vars["ry"], int) and local_vars["ry"] == 4
 
     def test_star_with_class_field_access(self):
-        """Star captures rest of array after class-pattern head — verify all element fields."""
-        _, local_vars = _run_python(
+        """Star captures rest of array after class-pattern head — verify types + all fields."""
+        vm, local_vars = _run_python(
             """\
 class Item:
     def __init__(self, name, price):
@@ -625,13 +640,25 @@ match cart:
 """,
             max_steps=3000,
         )
-        assert local_vars["rn"] == "apple"
-        assert local_vars["rp"] == 1
-        assert local_vars["others_len"] == 2
-        assert local_vars["o0_name"] == "banana"
-        assert local_vars["o0_price"] == 2
-        assert local_vars["o1_name"] == "cherry"
-        assert local_vars["o1_price"] == 3
+        assert isinstance(local_vars["rn"], str) and local_vars["rn"] == "apple"
+        assert isinstance(local_vars["rp"], int) and local_vars["rp"] == 1
+        assert (
+            isinstance(local_vars["others_len"], int) and local_vars["others_len"] == 2
+        )
+        assert (
+            isinstance(local_vars["o0_name"], str) and local_vars["o0_name"] == "banana"
+        )
+        assert isinstance(local_vars["o0_price"], int) and local_vars["o0_price"] == 2
+        assert (
+            isinstance(local_vars["o1_name"], str) and local_vars["o1_name"] == "cherry"
+        )
+        assert isinstance(local_vars["o1_price"], int) and local_vars["o1_price"] == 3
+        # Verify others elements are Item objects via heap type_hint
+        others_addr = _heap_addr(local_vars["others"])
+        o0_addr = _heap_addr(vm.heap[others_addr].fields["0"].value)
+        o1_addr = _heap_addr(vm.heap[others_addr].fields["1"].value)
+        assert str(vm.heap[o0_addr].type_hint) == "Item"
+        assert str(vm.heap[o1_addr].type_hint) == "Item"
 
     def test_guard_rejects_then_next_case_matches(self):
         """First case guard fails, second case (same pattern, different guard) matches."""
