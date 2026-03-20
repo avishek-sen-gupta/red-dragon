@@ -124,6 +124,35 @@ def _emit_binop(ctx: TreeSitterEmitContext, op: str, left: str, right: str) -> s
     return combined
 
 
+def _has_star(elems: tuple[Pattern, ...]) -> bool:
+    """Return True if elements contain a StarPattern."""
+    return any(isinstance(e, StarPattern) for e in elems)
+
+
+def _star_index(elems: tuple[Pattern, ...]) -> int:
+    """Return index of StarPattern in elements. Only call when _has_star is True."""
+    return next(i for i, e in enumerate(elems) if isinstance(e, StarPattern))
+
+
+def _compile_after_star_element_test(
+    ctx: TreeSitterEmitContext,
+    subject_reg: str,
+    len_reg: str,
+    after_count: int,
+    after_offset: int,
+    elem_pat: Pattern,
+) -> str:
+    """Load an after-star element by computing index = len - (after_count - after_offset)."""
+    offset_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CONST, result_reg=offset_reg, operands=[str(after_count - after_offset)]
+    )
+    idx_reg = _emit_binop(ctx, "-", len_reg, offset_reg)
+    elem_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[subject_reg, idx_reg])
+    return compile_pattern_test(ctx, elem_reg, elem_pat)
+
+
 def _and_all(ctx: TreeSitterEmitContext, regs: list[str]) -> str:
     """AND a list of boolean registers together with BINOP &&."""
     return reduce(lambda acc, reg: _emit_binop(ctx, "&&", acc, reg), regs[1:], regs[0])
@@ -154,24 +183,49 @@ def compile_pattern_test(
         case CapturePattern():
             return _const_true(ctx)
         case SequencePattern(elements=elems):
+            has_star = _has_star(elems)
             len_reg = ctx.fresh_reg()
             ctx.emit(
                 Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", subject_reg]
             )
-            expected_len_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CONST, result_reg=expected_len_reg, operands=[str(len(elems))]
-            )
-            len_ok_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.BINOP,
-                result_reg=len_ok_reg,
-                operands=["==", len_reg, expected_len_reg],
-            )
-            sub_results = [len_ok_reg] + [
-                _compile_indexed_element(ctx, subject_reg, i, elem_pat)
-                for i, elem_pat in enumerate(elems)
-            ]
+
+            if not has_star:
+                # No star — exact length match
+                expected_len_reg = ctx.fresh_reg()
+                ctx.emit(
+                    Opcode.CONST,
+                    result_reg=expected_len_reg,
+                    operands=[str(len(elems))],
+                )
+                len_ok_reg = _emit_binop(ctx, "==", len_reg, expected_len_reg)
+                sub_results = [len_ok_reg] + [
+                    _compile_indexed_element(ctx, subject_reg, i, elem_pat)
+                    for i, elem_pat in enumerate(elems)
+                ]
+            else:
+                # Star present — minimum length match
+                star_idx = _star_index(elems)
+                fixed_count = len(elems) - 1
+                min_len_reg = ctx.fresh_reg()
+                ctx.emit(
+                    Opcode.CONST, result_reg=min_len_reg, operands=[str(fixed_count)]
+                )
+                len_ok_reg = _emit_binop(ctx, ">=", len_reg, min_len_reg)
+                sub_results = [len_ok_reg]
+                # Before star: literal indices
+                sub_results.extend(
+                    _compile_indexed_element(ctx, subject_reg, i, elem_pat)
+                    for i, elem_pat in enumerate(elems[:star_idx])
+                )
+                # After star: computed indices
+                after_count = len(elems) - star_idx - 1
+                sub_results.extend(
+                    _compile_after_star_element_test(
+                        ctx, subject_reg, len_reg, after_count, k, elem_pat
+                    )
+                    for k, elem_pat in enumerate(elems[star_idx + 1 :])
+                )
+                # StarPattern itself: no test (skipped)
             return _and_all(ctx, sub_results)
         case MappingPattern(entries=entries):
             sub_results = []
