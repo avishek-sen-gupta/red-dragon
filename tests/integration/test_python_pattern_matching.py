@@ -226,6 +226,68 @@ match p:
         assert local_vars["result"] == 30
 
 
+class TestComplexLiteralPattern:
+    def test_complex_pattern(self):
+        _, local_vars = _run_python(
+            """\
+z = 1+2j
+match z:
+    case 1+2j:
+        result = "match"
+""",
+            max_steps=500,
+        )
+        assert local_vars["result"] == "match"
+
+
+class TestValuePattern:
+    def test_value_pattern(self):
+        _, local_vars = _run_python(
+            """\
+class Color:
+    RED = 0
+    GREEN = 1
+
+c = 0
+match c:
+    case Color.RED:
+        result = "red"
+""",
+            max_steps=1000,
+        )
+        assert local_vars["result"] == "red"
+
+
+class TestOutOfScopePatterns:
+    @pytest.mark.xfail(reason="Star patterns not yet implemented (red-dragon-2uke)")
+    def test_star_pattern_in_list(self):
+        _, local_vars = _run_python(
+            """\
+items = [1, 2, 3, 4]
+match items:
+    case [first, *rest]:
+        result = first
+""",
+            max_steps=1000,
+        )
+        assert local_vars["result"] == 1
+
+    @pytest.mark.xfail(
+        reason="Or-patterns with bindings not yet implemented (red-dragon-fv2p)"
+    )
+    def test_or_pattern_with_captures(self):
+        _, local_vars = _run_python(
+            """\
+data = (2, 99)
+match data:
+    case (1, x) | (2, x):
+        result = x
+""",
+            max_steps=1000,
+        )
+        assert local_vars["result"] == 99
+
+
 class TestNestedCrossPattern:
     def test_nested_class_in_sequence(self):
         _, local_vars = _run_python(
