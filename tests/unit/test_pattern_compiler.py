@@ -8,6 +8,7 @@ from interpreter.frontends.common.patterns import (
     CapturePattern,
     SequencePattern,
     MappingPattern,
+    ClassPattern,
     MatchCase,
     compile_pattern_test,
     compile_pattern_bindings,
@@ -149,3 +150,34 @@ class TestMappingPattern:
         compile_pattern_bindings(ctx, "%subj", pattern)
         stores = [i for i in ctx.instructions if i.opcode == Opcode.STORE_VAR]
         assert any(s.operands[0] == "val" for s in stores)
+
+
+class TestClassPattern:
+    def test_emits_isinstance_and_field_access(self):
+        ctx = _make_ctx()
+        pattern = ClassPattern(
+            class_name="Point",
+            positional=(LiteralPattern(1), LiteralPattern(2)),
+            keyword=(),
+        )
+        result_reg = compile_pattern_test(ctx, "%subj", pattern)
+        instrs = ctx.instructions
+        calls = [i for i in instrs if i.opcode == Opcode.CALL_FUNCTION]
+        assert any(
+            "isinstance" in str(c.operands) for c in calls
+        ), f"expected isinstance call, got {calls}"
+        load_idxs = [i for i in instrs if i.opcode == Opcode.LOAD_INDEX]
+        assert len(load_idxs) >= 2
+
+    def test_keyword_emits_load_field(self):
+        ctx = _make_ctx()
+        pattern = ClassPattern(
+            class_name="Point",
+            positional=(),
+            keyword=(("x", LiteralPattern(1)), ("y", LiteralPattern(2))),
+        )
+        result_reg = compile_pattern_test(ctx, "%subj", pattern)
+        instrs = ctx.instructions
+        load_fields = [i for i in instrs if i.opcode == Opcode.LOAD_FIELD]
+        field_names = [lf.operands[1] for lf in load_fields]
+        assert "x" in field_names and "y" in field_names

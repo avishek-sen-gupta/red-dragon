@@ -173,6 +173,33 @@ def compile_pattern_test(
                 val_test = compile_pattern_test(ctx, field_reg, val_pat)
                 sub_results.append(val_test)
             return _and_all(ctx, sub_results) if sub_results else _const_true(ctx)
+        case ClassPattern(class_name=cls, positional=pos, keyword=kw):
+            cls_reg = ctx.fresh_reg()
+            ctx.emit(Opcode.CONST, result_reg=cls_reg, operands=[cls])
+            isinstance_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.CALL_FUNCTION,
+                result_reg=isinstance_reg,
+                operands=["isinstance", subject_reg, cls_reg],
+            )
+            sub_results = [isinstance_reg]
+            for i, p in enumerate(pos):
+                elem_reg = ctx.fresh_reg()
+                ctx.emit(
+                    Opcode.LOAD_INDEX,
+                    result_reg=elem_reg,
+                    operands=[subject_reg, str(i)],
+                )
+                sub_results.append(compile_pattern_test(ctx, elem_reg, p))
+            for name, p in kw:
+                field_reg = ctx.fresh_reg()
+                ctx.emit(
+                    Opcode.LOAD_FIELD,
+                    result_reg=field_reg,
+                    operands=[subject_reg, name],
+                )
+                sub_results.append(compile_pattern_test(ctx, field_reg, p))
+            return _and_all(ctx, sub_results)
         case _:
             raise NotImplementedError(f"compile_pattern_test: {type(pattern).__name__}")
 
@@ -204,6 +231,23 @@ def compile_pattern_bindings(
                     operands=[subject_reg, str(key)],
                 )
                 compile_pattern_bindings(ctx, field_reg, val_pat)
+        case ClassPattern(class_name=_, positional=pos, keyword=kw):
+            for i, p in enumerate(pos):
+                elem_reg = ctx.fresh_reg()
+                ctx.emit(
+                    Opcode.LOAD_INDEX,
+                    result_reg=elem_reg,
+                    operands=[subject_reg, str(i)],
+                )
+                compile_pattern_bindings(ctx, elem_reg, p)
+            for name, p in kw:
+                field_reg = ctx.fresh_reg()
+                ctx.emit(
+                    Opcode.LOAD_FIELD,
+                    result_reg=field_reg,
+                    operands=[subject_reg, name],
+                )
+                compile_pattern_bindings(ctx, field_reg, p)
         case _:
             raise NotImplementedError(
                 f"compile_pattern_bindings: {type(pattern).__name__}"
