@@ -580,6 +580,176 @@ match c:
         )
         assert isinstance(local_vars["result"], str) and local_vars["result"] == "warm"
 
+    def test_value_pattern_inside_tuple(self):
+        """Value pattern as element of a tuple pattern."""
+        _, local_vars = _run_python(
+            """\
+class Direction:
+    UP = 1
+    DOWN = 2
+
+data = ("move", 1)
+match data:
+    case ("move", Direction.UP):
+        result = "moving up"
+    case ("move", Direction.DOWN):
+        result = "moving down"
+    case _:
+        result = "unknown"
+""",
+            max_steps=3000,
+        )
+        assert (
+            isinstance(local_vars["result"], str)
+            and local_vars["result"] == "moving up"
+        )
+
+    def test_value_pattern_with_guard(self):
+        """Value pattern combined with guard on a separate variable."""
+        _, local_vars = _run_python(
+            """\
+class Level:
+    WARN = 1
+    ERROR = 2
+    FATAL = 3
+
+severity = 2
+count = 5
+match severity:
+    case Level.ERROR if count > 10:
+        result = "escalate"
+    case Level.ERROR:
+        result = "log"
+    case _:
+        result = "ignore"
+""",
+            max_steps=3000,
+        )
+        assert isinstance(local_vars["result"], str) and local_vars["result"] == "log"
+
+    def test_value_pattern_in_list_with_star(self):
+        """Value pattern as first element of list with star capture."""
+        _, local_vars = _run_python(
+            """\
+class Op:
+    ADD = "add"
+    MUL = "mul"
+
+instructions = ["add", 1, 2, 3]
+match instructions:
+    case [Op.ADD, *operands]:
+        result = "addition"
+        op_len = len(operands)
+        op_0 = operands[0]
+        op_1 = operands[1]
+        op_2 = operands[2]
+    case [Op.MUL, *operands]:
+        result = "multiply"
+        op_len = len(operands)
+    case _:
+        result = "unknown"
+        op_len = 0
+""",
+            max_steps=3000,
+        )
+        assert (
+            isinstance(local_vars["result"], str) and local_vars["result"] == "addition"
+        )
+        assert isinstance(local_vars["op_len"], int) and local_vars["op_len"] == 3
+        assert isinstance(local_vars["op_0"], int) and local_vars["op_0"] == 1
+        assert isinstance(local_vars["op_1"], int) and local_vars["op_1"] == 2
+        assert isinstance(local_vars["op_2"], int) and local_vars["op_2"] == 3
+
+    def test_value_pattern_as_class_keyword(self):
+        """Value pattern used as keyword argument in class pattern."""
+        _, local_vars = _run_python(
+            """\
+class Color:
+    RED = 0
+    GREEN = 1
+
+class Shape:
+    __match_args__ = ("kind", "color")
+    def __init__(self, kind, color):
+        self.kind = kind
+        self.color = color
+
+s = Shape("circle", 0)
+match s:
+    case Shape(kind="circle", color=Color.RED):
+        result = "red circle"
+    case Shape(kind="circle", color=Color.GREEN):
+        result = "green circle"
+    case _:
+        result = "other"
+""",
+            max_steps=3000,
+        )
+        assert (
+            isinstance(local_vars["result"], str)
+            and local_vars["result"] == "red circle"
+        )
+
+    def test_value_or_pattern_http_status(self):
+        """Multiple value patterns in or-pattern across cases."""
+        _, local_vars = _run_python(
+            """\
+class Status:
+    OK = 200
+    CREATED = 201
+    BAD_REQUEST = 400
+    NOT_FOUND = 404
+    SERVER_ERROR = 500
+
+code = 404
+match code:
+    case Status.OK | Status.CREATED:
+        category = "success"
+    case Status.BAD_REQUEST | Status.NOT_FOUND:
+        category = "client_error"
+    case Status.SERVER_ERROR:
+        category = "server_error"
+    case _:
+        category = "unknown"
+""",
+            max_steps=3000,
+        )
+        assert (
+            isinstance(local_vars["category"], str)
+            and local_vars["category"] == "client_error"
+        )
+
+    def test_value_pattern_in_positional_class(self):
+        """Value pattern as positional arg in class pattern via __match_args__."""
+        _, local_vars = _run_python(
+            """\
+class Axis:
+    X = 0
+    Y = 1
+
+class Move:
+    __match_args__ = ("axis", "distance")
+    def __init__(self, axis, distance):
+        self.axis = axis
+        self.distance = distance
+
+m = Move(0, 42)
+match m:
+    case Move(Axis.X, d):
+        result = d
+        direction = "horizontal"
+    case Move(Axis.Y, d):
+        result = d
+        direction = "vertical"
+""",
+            max_steps=3000,
+        )
+        assert isinstance(local_vars["result"], int) and local_vars["result"] == 42
+        assert (
+            isinstance(local_vars["direction"], str)
+            and local_vars["direction"] == "horizontal"
+        )
+
 
 class TestOutOfScopePatterns:
     def test_star_pattern_in_list(self):
