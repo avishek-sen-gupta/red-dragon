@@ -228,6 +228,27 @@ match p:
         assert local_vars["result"] == 30
 
 
+class TestPositionalClassPattern:
+    def test_class_positional_with_match_args(self):
+        """Point(3, b) with __match_args__ — b bound to 4."""
+        _, local_vars = _run_python(
+            """\
+class Point:
+    __match_args__ = ("x", "y")
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+p = Point(3, 4)
+match p:
+    case Point(3, b):
+        result = b
+""",
+            max_steps=3000,
+        )
+        assert isinstance(local_vars["result"], int) and local_vars["result"] == 4
+
+
 class TestComplexLiteralPattern:
     @pytest.mark.xfail(
         reason="Complex literal patterns not yet implemented (red-dragon-2qem)"
