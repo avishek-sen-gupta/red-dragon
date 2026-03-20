@@ -267,3 +267,66 @@ def compile_pattern_bindings(
             raise NotImplementedError(
                 f"compile_pattern_bindings: {type(pattern).__name__}"
             )
+
+
+def _compile_refutable_case(
+    ctx: TreeSitterEmitContext,
+    subject_reg: str,
+    case: MatchCase,
+    end_label: str,
+) -> None:
+    """Emit IR for a refutable case (pattern has a test)."""
+    test_reg = compile_pattern_test(ctx, subject_reg, case.pattern)
+
+    if not isinstance(case.guard_node, NoGuard):
+        guard_reg = ctx.lower_expr(case.guard_node)
+        combined = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.BINOP, result_reg=combined, operands=["&&", test_reg, guard_reg]
+        )
+        test_reg = combined
+
+    case_true = ctx.fresh_label("case_true")
+    case_next = ctx.fresh_label("case_next")
+    ctx.emit(Opcode.BRANCH_IF, operands=[test_reg], label=f"{case_true},{case_next}")
+    ctx.emit(Opcode.LABEL, label=case_true)
+    compile_pattern_bindings(ctx, subject_reg, case.pattern)
+    if not isinstance(case.body_node, NoBody):
+        ctx.lower_block(case.body_node)
+    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit(Opcode.LABEL, label=case_next)
+
+
+def _compile_irrefutable_case(
+    ctx: TreeSitterEmitContext,
+    subject_reg: str,
+    case: MatchCase,
+    end_label: str,
+) -> None:
+    """Emit IR for an irrefutable case (wildcard or bare capture — always matches)."""
+    compile_pattern_bindings(ctx, subject_reg, case.pattern)
+    if not isinstance(case.body_node, NoBody):
+        ctx.lower_block(case.body_node)
+    ctx.emit(Opcode.BRANCH, label=end_label)
+
+
+def compile_match(
+    ctx: TreeSitterEmitContext, subject_reg: str, cases: list[MatchCase]
+) -> None:
+    """Emit IR for a match statement using CPython-style linear chain.
+
+    Two-pass design: all pattern tests (and guard tests) are emitted before
+    any bindings. Bindings only appear in the true-branch, after BRANCH_IF.
+    Irrefutable patterns (WildcardPattern, CapturePattern) skip the test and
+    branch unconditionally.
+    """
+    end_label = ctx.fresh_label("match_end")
+
+    for case in cases:
+        is_irrefutable = isinstance(case.pattern, (WildcardPattern, CapturePattern))
+        if is_irrefutable:
+            _compile_irrefutable_case(ctx, subject_reg, case, end_label)
+        else:
+            _compile_refutable_case(ctx, subject_reg, case, end_label)
+
+    ctx.emit(Opcode.LABEL, label=end_label)
