@@ -9,6 +9,8 @@ from interpreter.frontends.common.patterns import (
     SequencePattern,
     MappingPattern,
     ClassPattern,
+    OrPattern,
+    AsPattern,
     MatchCase,
     compile_pattern_test,
     compile_pattern_bindings,
@@ -181,3 +183,31 @@ class TestClassPattern:
         load_fields = [i for i in instrs if i.opcode == Opcode.LOAD_FIELD]
         field_names = [lf.operands[1] for lf in load_fields]
         assert "x" in field_names and "y" in field_names
+
+
+class TestOrPattern:
+    def test_short_circuits(self):
+        ctx = _make_ctx()
+        pattern = OrPattern(alternatives=(LiteralPattern(1), LiteralPattern(2)))
+        result_reg = compile_pattern_test(ctx, "%subj", pattern)
+        instrs = ctx.instructions
+        binops = [
+            i for i in instrs if i.opcode == Opcode.BINOP and i.operands[0] == "=="
+        ]
+        assert len(binops) >= 2, f"expected >=2 equality checks, got {binops}"
+
+
+class TestAsPattern:
+    def test_binds_after_inner_test(self):
+        ctx = _make_ctx()
+        pattern = AsPattern(pattern=LiteralPattern(42), name="x")
+        result_reg = compile_pattern_test(ctx, "%subj", pattern)
+        binops = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
+        assert len(binops) >= 1
+
+    def test_emits_store_var(self):
+        ctx = _make_ctx()
+        pattern = AsPattern(pattern=LiteralPattern(42), name="x")
+        compile_pattern_bindings(ctx, "%subj", pattern)
+        stores = [i for i in ctx.instructions if i.opcode == Opcode.STORE_VAR]
+        assert any(s.operands[0] == "x" for s in stores)
