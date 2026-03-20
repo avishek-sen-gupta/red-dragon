@@ -11,6 +11,7 @@ from interpreter.frontends.common.patterns import (
     OrPattern,
     Pattern,
     SequencePattern,
+    StarPattern,
     WildcardPattern,
 )
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -72,12 +73,18 @@ def parse_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
     if node_type in ("identifier", "dotted_name"):
         return CapturePattern(name=text)
 
+    # Splat/star pattern
+    if node_type == PythonNodeType.SPLAT_PATTERN:
+        named = [c for c in node.children if c.is_named]
+        name = ctx.node_text(named[0]) if named else "_"
+        return StarPattern(name=name)
+
     # Tuple pattern
     if node_type == PythonNodeType.TUPLE_PATTERN:
         elements = tuple(
             parse_pattern(ctx, c)
             for c in node.children
-            if c.type == PythonNodeType.CASE_PATTERN
+            if c.type in (PythonNodeType.CASE_PATTERN, PythonNodeType.SPLAT_PATTERN)
         )
         return SequencePattern(elements=elements)
 
@@ -86,7 +93,7 @@ def parse_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
         elements = tuple(
             parse_pattern(ctx, c)
             for c in node.children
-            if c.type == PythonNodeType.CASE_PATTERN
+            if c.type in (PythonNodeType.CASE_PATTERN, PythonNodeType.SPLAT_PATTERN)
         )
         return SequencePattern(elements=elements)
 
