@@ -269,6 +269,18 @@ def _method_to_string(
     return BuiltinResult(value=str(obj.value))
 
 
+def _builtin_isinstance(args: list[TypedValue], vm: VMState) -> BuiltinResult:
+    """isinstance(obj, class_name) — check heap object type_hint against class name."""
+    obj_val = args[0].value
+    class_name = str(args[1].value)
+    addr = _heap_addr(obj_val)
+    type_hint = vm.heap[addr].type_hint
+    from interpreter.type_expr import ScalarType
+
+    matches = isinstance(type_hint, ScalarType) and type_hint.name == class_name
+    return BuiltinResult(value=typed(matches, scalar("Boolean")))
+
+
 class Builtins:
     """Table of built-in function implementations."""
 
@@ -292,6 +304,7 @@ class Builtins:
         "Array": _builtin_array_of,
         "slice": _builtin_slice,
         "clone": _builtin_clone,
+        "isinstance": _builtin_isinstance,
         "object_rest": _builtin_object_rest,
         **BYTE_BUILTINS,
     }
