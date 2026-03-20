@@ -493,12 +493,31 @@ match z:
         assert local_vars["result"] == "no match"
 
 
-class TestValuePattern:
-    @pytest.mark.xfail(
-        reason="Value patterns (dotted constants) not yet implemented (red-dragon-zuyo)"
-    )
+class TestValuePatterns:
+    def test_value_pattern_class_constant(self):
+        """case Color.RED: with matching value."""
+        _, local_vars = _run_python(
+            """\
+class Color:
+    RED = 0
+    GREEN = 1
+    BLUE = 2
+
+c = 0
+match c:
+    case Color.RED:
+        result = "red"
+    case Color.GREEN:
+        result = "green"
+    case _:
+        result = "other"
+""",
+            max_steps=2000,
+        )
+        assert isinstance(local_vars["result"], str) and local_vars["result"] == "red"
+
     def test_value_pattern_rejects_mismatch(self):
-        """Color.RED pattern must reject non-matching value — currently captures anything."""
+        """case Color.RED: with non-matching value — falls to default."""
         _, local_vars = _run_python(
             """\
 class Color:
@@ -513,9 +532,53 @@ match c:
     case _:
         result = "no match"
 """,
-            max_steps=1000,
+            max_steps=2000,
         )
-        assert local_vars["result"] == "no match"
+        assert (
+            isinstance(local_vars["result"], str) and local_vars["result"] == "no match"
+        )
+
+    def test_value_pattern_multi_level(self):
+        """Three-level dotted lookup."""
+        _, local_vars = _run_python(
+            """\
+class HTTP:
+    class Status:
+        OK = 200
+        NOT_FOUND = 404
+
+code = 200
+match code:
+    case HTTP.Status.OK:
+        result = "ok"
+    case HTTP.Status.NOT_FOUND:
+        result = "not found"
+    case _:
+        result = "other"
+""",
+            max_steps=3000,
+        )
+        assert isinstance(local_vars["result"], str) and local_vars["result"] == "ok"
+
+    def test_value_pattern_in_or(self):
+        """case Color.RED | Color.GREEN: with matching value."""
+        _, local_vars = _run_python(
+            """\
+class Color:
+    RED = 0
+    GREEN = 1
+    BLUE = 2
+
+c = 1
+match c:
+    case Color.RED | Color.GREEN:
+        result = "warm"
+    case _:
+        result = "other"
+""",
+            max_steps=2000,
+        )
+        assert isinstance(local_vars["result"], str) and local_vars["result"] == "warm"
 
 
 class TestOutOfScopePatterns:

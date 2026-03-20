@@ -12,6 +12,7 @@ from interpreter.frontends.common.patterns import (
     Pattern,
     SequencePattern,
     StarPattern,
+    ValuePattern,
     WildcardPattern,
 )
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -128,8 +129,13 @@ def parse_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
     if node_type == "none":
         return LiteralPattern(value=None)
 
-    # Capture (identifier or dotted_name with single segment)
+    # Capture vs value pattern
     if node_type in ("identifier", "dotted_name"):
+        # Multi-segment dotted_name (e.g., Color.RED) = value pattern
+        if node_type == "dotted_name":
+            identifiers = [c for c in node.children if c.type == "identifier"]
+            if len(identifiers) > 1:
+                return ValuePattern(parts=tuple(ctx.node_text(c) for c in identifiers))
         return CapturePattern(name=text)
 
     # Splat/star pattern

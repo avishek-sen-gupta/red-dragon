@@ -12,6 +12,7 @@ from interpreter.frontends.common.patterns import (
     OrPattern,
     AsPattern,
     StarPattern,
+    ValuePattern,
     MatchCase,
     compile_pattern_test,
     compile_pattern_bindings,
@@ -408,6 +409,45 @@ class TestStarPattern:
         stores = [i for i in instrs if i.opcode == Opcode.STORE_VAR]
         store_names = [s.operands[0] for s in stores]
         assert "_" not in store_names, "wildcard star should not emit STORE_VAR _"
+
+
+class TestValuePattern:
+    def test_value_pattern_emits_load_var_and_load_field(self):
+        """ValuePattern(("Color", "RED")) emits LOAD_VAR + LOAD_FIELD + BINOP ==."""
+        ctx = _make_ctx()
+        pattern = ValuePattern(parts=("Color", "RED"))
+        result_reg = compile_pattern_test(ctx, "%subj", pattern)
+        instrs = ctx.instructions
+        load_vars = [i for i in instrs if i.opcode == Opcode.LOAD_VAR]
+        assert any(
+            "Color" in str(lv.operands) for lv in load_vars
+        ), f"expected LOAD_VAR Color, got {load_vars}"
+        load_fields = [i for i in instrs if i.opcode == Opcode.LOAD_FIELD]
+        assert any(
+            "RED" in str(lf.operands) for lf in load_fields
+        ), f"expected LOAD_FIELD RED, got {load_fields}"
+        binops = [
+            i for i in instrs if i.opcode == Opcode.BINOP and i.operands[0] == "=="
+        ]
+        assert len(binops) >= 1
+
+    def test_value_pattern_three_parts(self):
+        """ValuePattern(("a", "b", "c")) emits LOAD_VAR a + LOAD_FIELD b + LOAD_FIELD c."""
+        ctx = _make_ctx()
+        pattern = ValuePattern(parts=("a", "b", "c"))
+        result_reg = compile_pattern_test(ctx, "%subj", pattern)
+        instrs = ctx.instructions
+        load_fields = [i for i in instrs if i.opcode == Opcode.LOAD_FIELD]
+        field_names = [lf.operands[1] for lf in load_fields]
+        assert "b" in field_names and "c" in field_names
+
+    def test_value_pattern_bindings_emits_nothing(self):
+        """ValuePattern has no bindings — compile_pattern_bindings is a no-op."""
+        ctx = _make_ctx()
+        pattern = ValuePattern(parts=("Color", "RED"))
+        compile_pattern_bindings(ctx, "%subj", pattern)
+        stores = [i for i in ctx.instructions if i.opcode == Opcode.STORE_VAR]
+        assert len(stores) == 0, f"ValuePattern should emit no STORE_VAR, got {stores}"
 
 
 class TestGuardedCase:
