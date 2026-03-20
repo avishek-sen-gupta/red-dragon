@@ -227,35 +227,49 @@ match p:
 
 
 class TestComplexLiteralPattern:
-    def test_complex_pattern(self):
+    @pytest.mark.xfail(
+        reason="Complex literal patterns not yet implemented (red-dragon-2qem)"
+    )
+    def test_complex_pattern_rejects_mismatch(self):
+        """1+2j pattern must reject 3+4j — currently matches anything."""
         _, local_vars = _run_python(
             """\
-z = 1+2j
+z = 3+4j
+result = "no match"
 match z:
     case 1+2j:
         result = "match"
+    case _:
+        result = "no match"
 """,
             max_steps=500,
         )
-        assert local_vars["result"] == "match"
+        assert local_vars["result"] == "no match"
 
 
 class TestValuePattern:
-    def test_value_pattern(self):
+    @pytest.mark.xfail(
+        reason="Value patterns (dotted constants) not yet implemented (red-dragon-zuyo)"
+    )
+    def test_value_pattern_rejects_mismatch(self):
+        """Color.RED pattern must reject non-matching value — currently captures anything."""
         _, local_vars = _run_python(
             """\
 class Color:
     RED = 0
     GREEN = 1
 
-c = 0
+c = 999
+result = "no match"
 match c:
     case Color.RED:
         result = "red"
+    case _:
+        result = "no match"
 """,
             max_steps=1000,
         )
-        assert local_vars["result"] == "red"
+        assert local_vars["result"] == "no match"
 
 
 class TestOutOfScopePatterns:
