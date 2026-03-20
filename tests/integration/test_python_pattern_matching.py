@@ -681,3 +681,195 @@ match data:
         assert local_vars["result"] == "b_bigger"
         assert local_vars["ra"] == 3
         assert local_vars["rb"] == 7
+
+
+class TestStressPatterns:
+    """Complex compound scenarios that stress the pattern matching infrastructure."""
+
+    def test_class_containing_dict_containing_list_with_star(self):
+        """3-level nesting: Class -> dict -> list with star capture."""
+        vm, local_vars = _run_python(
+            """\
+class Response:
+    def __init__(self, data):
+        self.data = data
+
+resp = Response({"users": [10, 20, 30], "count": 3})
+match resp:
+    case Response(data={"users": [first, *rest], "count": n}):
+        rf = first
+        rn = n
+        rest_len = len(rest)
+        r0 = rest[0]
+        r1 = rest[1]
+""",
+            max_steps=5000,
+        )
+        assert isinstance(local_vars["rf"], int) and local_vars["rf"] == 10
+        assert isinstance(local_vars["rn"], int) and local_vars["rn"] == 3
+        assert isinstance(local_vars["rest_len"], int) and local_vars["rest_len"] == 2
+        assert isinstance(local_vars["r0"], int) and local_vars["r0"] == 20
+        assert isinstance(local_vars["r1"], int) and local_vars["r1"] == 30
+        r_addr = _heap_addr(local_vars["resp"])
+        assert vm.heap[r_addr].type_hint == scalar("Response")
+
+    def test_multi_case_dispatch_with_guards(self):
+        """Multiple cases with different pattern shapes + guards + fall-through."""
+        vm, local_vars = _run_python(
+            """\
+class Cmd:
+    def __init__(self, kind, args):
+        self.kind = kind
+        self.args = args
+
+cmd = Cmd("move", [1, 2, 3])
+match cmd:
+    case Cmd(kind="quit", args=[]):
+        action = "quit"
+        detail = 0
+    case Cmd(kind="move", args=[x, y, z]) if x + y + z > 100:
+        action = "big_move"
+        detail = x + y + z
+    case Cmd(kind="move", args=[x, y, z]):
+        action = "move"
+        detail = x + y + z
+    case _:
+        action = "unknown"
+        detail = -1
+""",
+            max_steps=5000,
+        )
+        assert isinstance(local_vars["action"], str) and local_vars["action"] == "move"
+        assert isinstance(local_vars["detail"], int) and local_vars["detail"] == 6
+        cmd_addr = _heap_addr(local_vars["cmd"])
+        assert vm.heap[cmd_addr].type_hint == scalar("Cmd")
+
+    def test_as_pattern_wrapping_sequence(self):
+        """As-pattern captures the whole subject after structural match succeeds."""
+        _, local_vars = _run_python(
+            """\
+data = (1, 2, 3)
+match data:
+    case (1, b, c) as whole:
+        rb = b
+        rc = c
+""",
+            max_steps=2000,
+        )
+        assert isinstance(local_vars["rb"], int) and local_vars["rb"] == 2
+        assert isinstance(local_vars["rc"], int) and local_vars["rc"] == 3
+
+    def test_many_alternative_or_pattern(self):
+        """Or-pattern with 4+ alternatives per case across multiple cases."""
+        _, local_vars = _run_python(
+            """\
+status = 404
+match status:
+    case 200 | 201 | 204:
+        category = "success"
+    case 301 | 302 | 307:
+        category = "redirect"
+    case 400 | 401 | 403 | 404:
+        category = "client_error"
+    case 500 | 502 | 503:
+        category = "server_error"
+    case _:
+        category = "unknown"
+""",
+            max_steps=2000,
+        )
+        assert isinstance(local_vars["category"], str)
+        assert local_vars["category"] == "client_error"
+
+    def test_binary_tree_nested_class_patterns(self):
+        """3-level deep nested class patterns on a binary tree."""
+        vm, local_vars = _run_python(
+            """\
+class Node:
+    def __init__(self, val, left, right):
+        self.val = val
+        self.left = left
+        self.right = right
+
+tree = Node(1, Node(2, Node(4, 0, 0), Node(5, 0, 0)), Node(3, 0, 0))
+match tree:
+    case Node(val=root_val, left=Node(val=left_val, left=Node(val=ll_val))):
+        rv = root_val
+        lv_val = left_val
+        llv = ll_val
+""",
+            max_steps=5000,
+        )
+        assert isinstance(local_vars["rv"], int) and local_vars["rv"] == 1
+        assert isinstance(local_vars["lv_val"], int) and local_vars["lv_val"] == 2
+        assert isinstance(local_vars["llv"], int) and local_vars["llv"] == 4
+        tree_addr = _heap_addr(local_vars["tree"])
+        assert vm.heap[tree_addr].type_hint == scalar("Node")
+        left_addr = _heap_addr(vm.heap[tree_addr].fields["left"].value)
+        assert vm.heap[left_addr].type_hint == scalar("Node")
+        ll_addr = _heap_addr(vm.heap[left_addr].fields["left"].value)
+        assert vm.heap[ll_addr].type_hint == scalar("Node")
+
+    def test_guard_with_pythagorean_computation(self):
+        """Guard uses x*x + y*y == 25 on destructured class fields."""
+        _, local_vars = _run_python(
+            """\
+class Vec:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+v = Vec(3, 4)
+match v:
+    case Vec(x=x, y=y) if x * x + y * y > 25:
+        label = "far"
+    case Vec(x=x, y=y) if x * x + y * y == 25:
+        label = "boundary"
+    case Vec(x=x, y=y):
+        label = "near"
+""",
+            max_steps=3000,
+        )
+        assert (
+            isinstance(local_vars["label"], str) and local_vars["label"] == "boundary"
+        )
+        assert isinstance(local_vars["x"], int) and local_vars["x"] == 3
+        assert isinstance(local_vars["y"], int) and local_vars["y"] == 4
+
+    def test_star_with_guard_on_rest_length(self):
+        """Star capture with guard checking len(rest) > threshold."""
+        _, local_vars = _run_python(
+            """\
+items = [1, 2, 3, 4, 5]
+match items:
+    case [first, *rest] if len(rest) > 3:
+        result = "long"
+        rf = first
+        rl = len(rest)
+    case [first, *rest]:
+        result = "short"
+        rf = first
+        rl = len(rest)
+""",
+            max_steps=2000,
+        )
+        assert isinstance(local_vars["result"], str) and local_vars["result"] == "long"
+        assert isinstance(local_vars["rf"], int) and local_vars["rf"] == 1
+        assert isinstance(local_vars["rl"], int) and local_vars["rl"] == 4
+
+    def test_dict_pattern_all_fields_extracted(self):
+        """Dict pattern matching and extracting all keys."""
+        _, local_vars = _run_python(
+            """\
+config = {"host": "localhost", "port": 8080, "debug": True}
+match config:
+    case {"host": h, "port": p, "debug": d}:
+        addr = h
+        port = p
+        is_debug = d
+""",
+            max_steps=2000,
+        )
+        assert isinstance(local_vars["addr"], str) and local_vars["addr"] == "localhost"
+        assert isinstance(local_vars["port"], int) and local_vars["port"] == 8080
+        assert local_vars["is_debug"] is True
