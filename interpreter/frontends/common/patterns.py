@@ -94,6 +94,13 @@ class MatchCase:
     body_node: object  # tree-sitter node for case body, or NoBody()
 
 
+def _const_true(ctx: TreeSitterEmitContext) -> str:
+    """Emit a CONST True and return the register."""
+    true_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=true_reg, operands=["True"])
+    return true_reg
+
+
 def _compile_indexed_element(
     ctx: TreeSitterEmitContext, subject_reg: str, index: int, elem_pat: Pattern
 ) -> str:
@@ -131,13 +138,9 @@ def compile_pattern_test(
             )
             return cmp_reg
         case WildcardPattern():
-            true_reg = ctx.fresh_reg()
-            ctx.emit(Opcode.CONST, result_reg=true_reg, operands=["True"])
-            return true_reg
+            return _const_true(ctx)
         case CapturePattern():
-            true_reg = ctx.fresh_reg()
-            ctx.emit(Opcode.CONST, result_reg=true_reg, operands=["True"])
-            return true_reg
+            return _const_true(ctx)
         case SequencePattern(elements=elems):
             len_reg = ctx.fresh_reg()
             ctx.emit(
@@ -158,6 +161,18 @@ def compile_pattern_test(
                 for i, elem_pat in enumerate(elems)
             ]
             return _and_all(ctx, sub_results)
+        case MappingPattern(entries=entries):
+            sub_results = []
+            for key, val_pat in entries:
+                field_reg = ctx.fresh_reg()
+                ctx.emit(
+                    Opcode.LOAD_FIELD,
+                    result_reg=field_reg,
+                    operands=[subject_reg, str(key)],
+                )
+                val_test = compile_pattern_test(ctx, field_reg, val_pat)
+                sub_results.append(val_test)
+            return _and_all(ctx, sub_results) if sub_results else _const_true(ctx)
         case _:
             raise NotImplementedError(f"compile_pattern_test: {type(pattern).__name__}")
 
@@ -180,6 +195,15 @@ def compile_pattern_bindings(
                     operands=[subject_reg, str(i)],
                 )
                 compile_pattern_bindings(ctx, elem_reg, elem_pat)
+        case MappingPattern(entries=entries):
+            for key, val_pat in entries:
+                field_reg = ctx.fresh_reg()
+                ctx.emit(
+                    Opcode.LOAD_FIELD,
+                    result_reg=field_reg,
+                    operands=[subject_reg, str(key)],
+                )
+                compile_pattern_bindings(ctx, field_reg, val_pat)
         case _:
             raise NotImplementedError(
                 f"compile_pattern_bindings: {type(pattern).__name__}"
