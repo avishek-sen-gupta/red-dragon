@@ -2133,4 +2133,14 @@ These are already dispatched to `_lower_ts_interface_method` in `lower_interface
 
 **Rationale:** Mirrors the SpreadArguments precedent — frontend decides (parses pattern), IR carries the decision (Pattern ADT), shared layer acts on it (emits IR). No new opcodes needed because pattern matching decomposes into existing primitives: `BINOP ==`, `CALL_FUNCTION len/isinstance`, `LOAD_INDEX`, `LOAD_FIELD`, `STORE_VAR`, `BRANCH_IF`.
 
-**Consequences:** Python pattern matching supports 8 pattern types (literal, wildcard, capture, sequence, mapping, class, or, as) plus guards. Other languages can add their own `parse_pattern` function to map into the same ADT. Out-of-scope: star patterns, or-patterns with bindings, exhaustiveness checking, custom extractors (all filed as issues).
+**Consequences:** Python pattern matching supports 8 pattern types (literal, wildcard, capture, sequence, mapping, class, or, as) plus guards. Other languages can add their own `parse_pattern` function to map into the same ADT. Out-of-scope: or-patterns with bindings, exhaustiveness checking, custom extractors (all filed as issues). Star patterns added in ADR-112.
+
+---
+
+### ADR-112: Star Patterns in Sequence Matching (2026-03-20)
+
+**Context:** Python's `case [first, *rest]:` star patterns were unsupported — `SequencePattern` only did exact-length matching.
+
+**Decision:** Add `StarPattern(name)` to the Pattern ADT. When present in a `SequencePattern`, the compiler switches from exact-length (`==`) to minimum-length (`>=`) matching. Fixed elements before/after the star use literal/computed indices. The star capture uses the existing `slice` builtin. Wildcard star (`*_`) skips the slice entirely.
+
+**Consequences:** Star patterns work in both list and tuple patterns, including star-at-start, star-at-end, star-in-middle, empty rest, and nested star patterns. No new opcodes or VM changes. The `_has_star`/`_star_index` helpers and `_compile_after_star_element_test`/`_binding` functions are reusable when other languages add star/rest patterns.
