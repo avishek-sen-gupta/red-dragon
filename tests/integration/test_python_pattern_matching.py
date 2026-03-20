@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.typed_value import unwrap_locals
@@ -144,3 +146,116 @@ match d:
             max_steps=1000,
         )
         assert local_vars["result"] == "Alice"
+
+
+class TestOrPattern:
+    def test_or_pattern(self):
+        _, local_vars = _run_python("""\
+x = 2
+match x:
+    case 1 | 2:
+        y = "yes"
+    case _:
+        y = "no"
+""")
+        assert local_vars["y"] == "yes"
+
+
+class TestAsPattern:
+    def test_as_pattern(self):
+        _, local_vars = _run_python("""\
+x = 42
+match x:
+    case val as name:
+        y = name
+""")
+        assert local_vars["y"] == 42
+
+
+class TestGuard:
+    def test_guard_filters(self):
+        _, local_vars = _run_python("""\
+x = -5
+match x:
+    case val if val > 0:
+        y = "positive"
+    case _:
+        y = "non-positive"
+""")
+        assert local_vars["y"] == "non-positive"
+
+
+class TestClassPattern:
+    def test_class_keyword(self):
+        _, local_vars = _run_python(
+            """\
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+p = Point(3, 4)
+match p:
+    case Point(x=3, y=y_val):
+        result = y_val
+""",
+            max_steps=2000,
+        )
+        assert local_vars["result"] == 4
+
+    @pytest.mark.xfail(
+        reason="Positional class patterns require __match_args__ / index-based "
+        "field access on user-defined classes, which the VM does not support yet. "
+        "Filed as red-dragon issue for __match_args__ support."
+    )
+    def test_class_positional(self):
+        _, local_vars = _run_python(
+            """\
+class Pair:
+    def __init__(self, a, b):
+        self.a = a
+        self.b = b
+
+p = Pair(10, 20)
+match p:
+    case Pair(a, b):
+        result = a + b
+""",
+            max_steps=2000,
+        )
+        assert local_vars["result"] == 30
+
+
+class TestNestedCrossPattern:
+    def test_nested_class_in_sequence(self):
+        _, local_vars = _run_python(
+            """\
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+data = (Point(1, 2), Point(3, 4))
+match data:
+    case (Point(x=1, y=a), Point(x=3, y=b)):
+        result = a + b
+""",
+            max_steps=3000,
+        )
+        assert local_vars["result"] == 6
+
+    def test_nested_mapping_in_class(self):
+        _, local_vars = _run_python(
+            """\
+class Config:
+    def __init__(self, settings):
+        self.settings = settings
+
+cfg = Config({"debug": True})
+match cfg:
+    case Config(settings={"debug": val}):
+        result = val
+""",
+            max_steps=3000,
+        )
+        assert local_vars["result"] is True

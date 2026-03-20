@@ -269,6 +269,16 @@ def compile_pattern_bindings(
             )
 
 
+def _needs_pre_guard_bindings(pattern: Pattern) -> bool:
+    """Return True if pattern variables must be bound before the guard is evaluated.
+
+    CapturePattern and AsPattern introduce variable bindings that the guard
+    expression may reference.  We must emit those bindings before lowering the
+    guard expression, even though we are still in the "test" phase.
+    """
+    return isinstance(pattern, (CapturePattern, AsPattern))
+
+
 def _compile_refutable_case(
     ctx: TreeSitterEmitContext,
     subject_reg: str,
@@ -279,6 +289,9 @@ def _compile_refutable_case(
     test_reg = compile_pattern_test(ctx, subject_reg, case.pattern)
 
     if not isinstance(case.guard_node, NoGuard):
+        # Capture/as-pattern variables must be available when the guard runs.
+        if _needs_pre_guard_bindings(case.pattern):
+            compile_pattern_bindings(ctx, subject_reg, case.pattern)
         guard_reg = ctx.lower_expr(case.guard_node)
         combined = ctx.fresh_reg()
         ctx.emit(
@@ -290,7 +303,12 @@ def _compile_refutable_case(
     case_next = ctx.fresh_label("case_next")
     ctx.emit(Opcode.BRANCH_IF, operands=[test_reg], label=f"{case_true},{case_next}")
     ctx.emit(Opcode.LABEL, label=case_true)
-    compile_pattern_bindings(ctx, subject_reg, case.pattern)
+    # Only emit bindings in the true-branch if not already emitted pre-guard.
+    if not (
+        not isinstance(case.guard_node, NoGuard)
+        and _needs_pre_guard_bindings(case.pattern)
+    ):
+        compile_pattern_bindings(ctx, subject_reg, case.pattern)
     if not isinstance(case.body_node, NoBody):
         ctx.lower_block(case.body_node)
     ctx.emit(Opcode.BRANCH, label=end_label)
@@ -323,7 +341,11 @@ def compile_match(
     end_label = ctx.fresh_label("match_end")
 
     for case in cases:
-        is_irrefutable = isinstance(case.pattern, (WildcardPattern, CapturePattern))
+        has_guard = not isinstance(case.guard_node, NoGuard)
+        is_irrefutable = (
+            isinstance(case.pattern, (WildcardPattern, CapturePattern))
+            and not has_guard
+        )
         if is_irrefutable:
             _compile_irrefutable_case(ctx, subject_reg, case, end_label)
         else:
