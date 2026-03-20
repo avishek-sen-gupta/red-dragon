@@ -83,7 +83,6 @@ class PythonFrontend(BaseFrontend):
             PythonNodeType.KEYWORD_SEPARATOR: py_expr.lower_noop_expr,
             PythonNodeType.POSITIONAL_SEPARATOR: py_expr.lower_noop_expr,
             PythonNodeType.LIST_PATTERN: py_expr.lower_list_pattern,
-            PythonNodeType.CASE_PATTERN: py_expr.lower_case_pattern,
             PythonNodeType.INTERPOLATION: py_expr.lower_interpolation,
             PythonNodeType.FORMAT_SPECIFIER: common_expr.lower_const_literal,
             PythonNodeType.STRING_CONTENT: common_expr.lower_const_literal,

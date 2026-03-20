@@ -1029,12 +1029,14 @@ class TestPythonParamSeparators:
 
 class TestPythonListPattern:
     def test_list_pattern_basic(self):
-        """match x: case [1, 2]: ... should use NEW_ARRAY for the pattern."""
+        """match x: case [1, 2]: ... should emit len check + LOAD_INDEX for each element."""
         source = "match x:\n    case [1, 2]:\n        pass"
         instructions = _parse_python(source)
-        new_arrs = _find_all(instructions, Opcode.NEW_ARRAY)
-        assert len(new_arrs) >= 1
-        assert any("list" in inst.operands for inst in new_arrs)
+        # New Pattern ADT: emits CALL_FUNCTION len + LOAD_INDEX per element
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("len" in str(inst.operands) for inst in calls)
+        load_idxs = _find_all(instructions, Opcode.LOAD_INDEX)
+        assert len(load_idxs) >= 2
 
     def test_list_pattern_no_symbolic(self):
         """list_pattern should not emit SYMBOLIC unsupported:list_pattern."""
@@ -1052,15 +1054,19 @@ class TestPythonListPattern:
         instructions = _parse_python(source)
         stores = _find_all(instructions, Opcode.STORE_VAR)
         assert any("y" in inst.operands for inst in stores)
-        new_arrs = _find_all(instructions, Opcode.NEW_ARRAY)
-        assert len(new_arrs) >= 1
+        # New Pattern ADT: emits CALL_FUNCTION len instead of NEW_ARRAY
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("len" in str(inst.operands) for inst in calls)
 
     def test_list_pattern_empty(self):
-        """match x: case []: ... should create empty array."""
+        """match x: case []: ... should check len == 0."""
         source = "match x:\n    case []:\n        pass"
         instructions = _parse_python(source)
-        new_arrs = _find_all(instructions, Opcode.NEW_ARRAY)
-        assert len(new_arrs) >= 1
+        # Empty SequencePattern: len == 0 check
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("len" in str(inst.operands) for inst in calls)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("0" in str(inst.operands) for inst in consts)
 
 
 class TestPythonInterpolation:
@@ -1252,11 +1258,12 @@ class TestPythonDictPattern:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("dict_pattern" in str(inst.operands) for inst in symbolics)
 
-    def test_dict_pattern_new_object(self):
+    def test_dict_pattern_load_field(self):
         source = 'match data:\n    case {"key": val}:\n        pass'
         instructions = _parse_python(source)
-        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
-        assert any("dict_pattern" in str(inst.operands) for inst in new_objs)
+        # New Pattern ADT: MappingPattern emits LOAD_FIELD per key
+        load_fields = _find_all(instructions, Opcode.LOAD_FIELD)
+        assert any("key" in str(inst.operands) for inst in load_fields)
 
 
 class TestPythonSplatPattern:
