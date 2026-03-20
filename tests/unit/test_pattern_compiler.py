@@ -14,6 +14,7 @@ from interpreter.frontends.common.patterns import (
     MatchCase,
     compile_pattern_test,
     compile_pattern_bindings,
+    compile_match,
     NoGuard,
     NoBody,
 )
@@ -211,3 +212,72 @@ class TestAsPattern:
         compile_pattern_bindings(ctx, "%subj", pattern)
         stores = [i for i in ctx.instructions if i.opcode == Opcode.STORE_VAR]
         assert any(s.operands[0] == "x" for s in stores)
+
+
+class TestCompileMatch:
+    def test_multiple_cases_linear_chain(self):
+        """Three literal cases produce a linear chain with labels."""
+        ctx = _make_ctx()
+        cases = [
+            MatchCase(
+                pattern=LiteralPattern(1), guard_node=NoGuard(), body_node=NoBody()
+            ),
+            MatchCase(
+                pattern=LiteralPattern(2), guard_node=NoGuard(), body_node=NoBody()
+            ),
+            MatchCase(
+                pattern=WildcardPattern(), guard_node=NoGuard(), body_node=NoBody()
+            ),
+        ]
+        compile_match(ctx, "%subj", cases)
+        instrs = ctx.instructions
+        labels = [i.label for i in instrs if i.opcode == Opcode.LABEL]
+        branches = [i for i in instrs if i.opcode == Opcode.BRANCH]
+        branch_ifs = [i for i in instrs if i.opcode == Opcode.BRANCH_IF]
+        assert len(branch_ifs) >= 2, f"expected >=2 BRANCH_IF, got {branch_ifs}"
+        assert any(
+            "match_end" in l for l in labels
+        ), f"expected match_end label, got {labels}"
+
+    def test_two_pass_no_partial_binding(self):
+        """Bindings should only appear after the BRANCH_IF test, not before."""
+        ctx = _make_ctx()
+        cases = [
+            MatchCase(
+                pattern=SequencePattern(
+                    elements=(CapturePattern("a"), CapturePattern("b"))
+                ),
+                guard_node=NoGuard(),
+                body_node=NoBody(),
+            ),
+        ]
+        compile_match(ctx, "%subj", cases)
+        instrs = ctx.instructions
+        branch_if_idx = next(
+            i for i, inst in enumerate(instrs) if inst.opcode == Opcode.BRANCH_IF
+        )
+        stores_before = [
+            inst
+            for inst in instrs[:branch_if_idx]
+            if inst.opcode == Opcode.STORE_VAR and inst.operands[0] in ("a", "b")
+        ]
+        assert (
+            len(stores_before) == 0
+        ), f"bindings should not appear before BRANCH_IF: {stores_before}"
+
+
+class TestGuardedCase:
+    def test_emits_guard_after_pattern_test(self):
+        """Guard test: no guard should produce just a BRANCH_IF from pattern test."""
+        # Unit test only verifies NoGuard path (no real tree-sitter guard node available).
+        # Guard AND logic is exercised in integration tests (TestGuard in Task 12).
+        ctx = _make_ctx()
+        cases = [
+            MatchCase(
+                pattern=LiteralPattern(1), guard_node=NoGuard(), body_node=NoBody()
+            ),
+        ]
+        compile_match(ctx, "%subj", cases)
+        instrs = ctx.instructions
+        branch_ifs = [i for i in instrs if i.opcode == Opcode.BRANCH_IF]
+        assert len(branch_ifs) >= 1
