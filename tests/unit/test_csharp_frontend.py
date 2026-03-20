@@ -1437,3 +1437,24 @@ class TestCSharpAnonymousObjectCreation:
         field_names = [inst.operands[1] for inst in stores]
         assert "Name" in field_names
         assert "Age" in field_names
+
+
+class TestCSharpWithExpression:
+    def test_with_no_symbolic(self):
+        """p1 with { Age = 31 } should not produce SYMBOLIC."""
+        ir = _parse_and_lower("var p1 = new Person(); var p2 = p1 with { Age = 31 };")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any("with_expression" in str(inst.operands) for inst in symbolics)
+
+    def test_with_emits_clone(self):
+        """with expression should emit CALL_FUNCTION clone."""
+        ir = _parse_and_lower("var p1 = new Person(); var p2 = p1 with { Age = 31 };")
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any("clone" in inst.operands for inst in calls)
+
+    def test_with_emits_store_field_for_overrides(self):
+        """with expression should emit STORE_FIELD for each property override."""
+        ir = _parse_and_lower("var p1 = new Person(); var p2 = p1 with { Age = 31 };")
+        stores = _find_all(ir, Opcode.STORE_FIELD)
+        field_names = [inst.operands[1] for inst in stores]
+        assert "Age" in field_names
