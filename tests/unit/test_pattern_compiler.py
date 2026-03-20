@@ -268,6 +268,61 @@ class TestCompileMatch:
 
 
 class TestStarPattern:
+    def test_star_pattern_emits_gte_length_check(self):
+        """SequencePattern with star uses >= instead of == for length."""
+        ctx = _make_ctx()
+        pattern = SequencePattern(elements=(LiteralPattern(1), StarPattern("rest")))
+        result_reg = compile_pattern_test(ctx, "%subj", pattern)
+        instrs = ctx.instructions
+        binops = [i for i in instrs if i.opcode == Opcode.BINOP]
+        gte_ops = [b for b in binops if b.operands[0] == ">="]
+        assert (
+            len(gte_ops) >= 1
+        ), f"expected >= length check, got {[b.operands[0] for b in binops]}"
+
+    def test_star_pattern_no_test_for_star_element(self):
+        """The star element itself should not produce any equality test."""
+        ctx = _make_ctx()
+        pattern = SequencePattern(elements=(LiteralPattern(1), StarPattern("rest")))
+        result_reg = compile_pattern_test(ctx, "%subj", pattern)
+        instrs = ctx.instructions
+        eq_binops = [
+            i for i in instrs if i.opcode == Opcode.BINOP and i.operands[0] == "=="
+        ]
+        assert (
+            len(eq_binops) == 1
+        ), f"expected 1 equality check (literal only), got {len(eq_binops)}"
+
+    def test_star_at_beginning_computes_tail_indices(self):
+        """[*head, last] — last element uses computed index from length."""
+        ctx = _make_ctx()
+        pattern = SequencePattern(elements=(StarPattern("head"), LiteralPattern(99)))
+        result_reg = compile_pattern_test(ctx, "%subj", pattern)
+        instrs = ctx.instructions
+        sub_binops = [
+            i for i in instrs if i.opcode == Opcode.BINOP and i.operands[0] == "-"
+        ]
+        assert (
+            len(sub_binops) >= 1
+        ), f"expected BINOP - for tail index, got {[b.operands for b in instrs if b.opcode == Opcode.BINOP]}"
+
+    def test_star_in_middle(self):
+        """[a, *mid, z] — elements before and after star, with star in between."""
+        ctx = _make_ctx()
+        pattern = SequencePattern(
+            elements=(CapturePattern("a"), StarPattern("mid"), CapturePattern("z"))
+        )
+        result_reg = compile_pattern_test(ctx, "%subj", pattern)
+        instrs = ctx.instructions
+        gte_ops = [
+            b for b in instrs if b.opcode == Opcode.BINOP and b.operands[0] == ">="
+        ]
+        assert len(gte_ops) >= 1, "expected >= length check for star-in-middle"
+        const_2 = [
+            c for c in instrs if c.opcode == Opcode.CONST and c.operands == ["2"]
+        ]
+        assert len(const_2) >= 1, "expected CONST 2 for fixed element count"
+
     def test_star_pattern_standalone_returns_true(self):
         """StarPattern by itself always matches (no test IR needed)."""
         ctx = _make_ctx()
