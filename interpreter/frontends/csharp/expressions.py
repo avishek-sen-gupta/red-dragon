@@ -675,6 +675,36 @@ def lower_implicit_object_creation(ctx: TreeSitterEmitContext, node) -> str:
     return result_reg
 
 
+def lower_with_expression(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower `p1 with { Age = 31 }` as clone(p1) + STORE_FIELD per override."""
+    named = [c for c in node.children if c.is_named]
+    obj_reg = ctx.lower_expr(named[0]) if named else ctx.fresh_reg()
+
+    # Clone the source object
+    clone_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_FUNCTION,
+        result_reg=clone_reg,
+        operands=["clone", obj_reg],
+        node=node,
+    )
+
+    # Apply property overrides from with_initializer children
+    for child in node.children:
+        if child.type == NT.WITH_INITIALIZER:
+            init_named = [c for c in child.children if c.is_named]
+            if len(init_named) >= 2:
+                field_name = ctx.node_text(init_named[0])
+                val_reg = ctx.lower_expr(init_named[1])
+                ctx.emit(
+                    Opcode.STORE_FIELD,
+                    operands=[clone_reg, field_name, val_reg],
+                    node=child,
+                )
+
+    return clone_reg
+
+
 def lower_anonymous_object_creation(ctx: TreeSitterEmitContext, node) -> str:
     """Lower `new { Name = expr, Age = expr }` as NEW_OBJECT + STORE_FIELD per property."""
     obj_reg = ctx.fresh_reg()

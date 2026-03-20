@@ -440,3 +440,23 @@ var obj = new { Name = "foo", Age = 42 };
 var answer = obj.Age;
 """)
         assert locals_["answer"] == 42
+
+
+class TestCSharpWithExpressionExecution:
+    def test_with_creates_copy_with_override(self):
+        """p1 with { Age = 31 } should clone and override Age."""
+        locals_ = _run_csharp("""\
+var p1 = new { Name = "Alice", Age = 30 };
+var p2 = p1 with { Age = 31 };
+var answer = p2.Age;
+""")
+        assert locals_["answer"] == 31
+
+    def test_with_preserves_unmodified_fields(self):
+        """with expression should preserve fields not overridden."""
+        locals_ = _run_csharp("""\
+var p1 = new { Name = "Alice", Age = 30 };
+var p2 = p1 with { Age = 31 };
+var answer = p2.Name;
+""")
+        assert locals_["answer"] == "Alice"
