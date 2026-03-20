@@ -2122,3 +2122,15 @@ These are already dispatched to `_lower_ts_interface_method` in `lower_interface
 **Rationale:** The method IS on the object — the VM just wasn't looking in the right place. This mirrors how `LOAD_FIELD` + `CALL_UNKNOWN` (dot-call syntax) already worked: load the function from the field, then call it. The fix makes `CALL_METHOD` (colon-call) follow the same path.
 
 **Consequences:** Lua colon-call syntax (`t:method(args)`) now produces concrete return values. Any language where methods are stored as object fields benefits. The check is positioned after method builtins but before registry lookup, so it doesn't affect class-based languages where methods are in the registry.
+
+---
+
+### ADR-111: Pattern Matching Infrastructure (2026-03-20)
+
+**Context:** The Python frontend's `lower_match` handled all patterns by lowering them as expressions and comparing with `BINOP ==`. This failed for structural patterns (tuple, list, dict, class, union, as) which cannot be meaningfully lowered as expressions.
+
+**Decision:** Introduce a shared Pattern ADT (`interpreter/frontends/common/patterns.py`) with a `compile_match` function that emits test+destructure IR using existing opcodes (no new opcodes, no VM changes). CPython linear chain model: sequential test-and-branch per case. Two-pass design: all pattern tests before any variable bindings, preventing partial binding on failed matches. Language frontends parse their tree-sitter AST into the Pattern ADT; Python is the first consumer.
+
+**Rationale:** Mirrors the SpreadArguments precedent — frontend decides (parses pattern), IR carries the decision (Pattern ADT), shared layer acts on it (emits IR). No new opcodes needed because pattern matching decomposes into existing primitives: `BINOP ==`, `CALL_FUNCTION len/isinstance`, `LOAD_INDEX`, `LOAD_FIELD`, `STORE_VAR`, `BRANCH_IF`.
+
+**Consequences:** Python pattern matching supports 8 pattern types (literal, wildcard, capture, sequence, mapping, class, or, as) plus guards. Other languages can add their own `parse_pattern` function to map into the same ADT. Out-of-scope: star patterns, or-patterns with bindings, exhaustiveness checking, custom extractors (all filed as issues).
