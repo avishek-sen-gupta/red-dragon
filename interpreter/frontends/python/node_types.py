@@ -130,6 +130,9 @@ class PythonNodeType:
     DICT_PATTERN = "dict_pattern"
     PATTERN_LIST = "pattern_list"
     TUPLE_PATTERN = "tuple_pattern"
+    CLASS_PATTERN = "class_pattern"
+    UNION_PATTERN = "union_pattern"
+    KEYWORD_PATTERN = "keyword_pattern"
 
     # ── Containers / structural ──────────────────────────────────────
     BLOCK = "block"
