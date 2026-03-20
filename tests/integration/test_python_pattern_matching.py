@@ -929,3 +929,108 @@ match data:
         assert (
             isinstance(local_vars["result"], str) and local_vars["result"] == "default"
         )
+
+    def test_or_pattern_with_class_alternatives(self):
+        """Or-pattern across different class types sharing a field name."""
+        _, local_vars = _run_python(
+            """\
+class Dog:
+    def __init__(self, name):
+        self.name = name
+
+class Cat:
+    def __init__(self, name):
+        self.name = name
+
+pet = Cat("Whiskers")
+match pet:
+    case Dog(name=n) | Cat(name=n):
+        result = n
+    case _:
+        result = "unknown"
+""",
+            max_steps=3000,
+        )
+        assert (
+            isinstance(local_vars["result"], str) and local_vars["result"] == "Whiskers"
+        )
+
+    def test_or_pattern_with_star_in_alternatives(self):
+        """Or-pattern where each alternative uses star capture."""
+        _, local_vars = _run_python(
+            """\
+data = [0, 10, 20, 30]
+match data:
+    case [1, *rest] | [0, *rest]:
+        first_rest = rest[0]
+        rest_len = len(rest)
+""",
+            max_steps=3000,
+        )
+        assert (
+            isinstance(local_vars["first_rest"], int) and local_vars["first_rest"] == 10
+        )
+        assert isinstance(local_vars["rest_len"], int) and local_vars["rest_len"] == 3
+
+    def test_or_pattern_nested_inside_sequence(self):
+        """Or-pattern as an element inside a tuple pattern."""
+        _, local_vars = _run_python(
+            """\
+data = ("error", 404)
+match data:
+    case ("error" | "fail", code):
+        result = code
+    case _:
+        result = 0
+""",
+            max_steps=2000,
+        )
+        assert isinstance(local_vars["result"], int) and local_vars["result"] == 404
+
+    def test_or_pattern_with_guard_on_capture(self):
+        """Or-pattern with guard referencing the captured variable."""
+        _, local_vars = _run_python(
+            """\
+data = (2, 100)
+match data:
+    case (1, x) | (2, x) if x > 50:
+        result = "big"
+        rv = x
+    case (1, x) | (2, x):
+        result = "small"
+        rv = x
+""",
+            max_steps=3000,
+        )
+        assert isinstance(local_vars["result"], str) and local_vars["result"] == "big"
+        assert isinstance(local_vars["rv"], int) and local_vars["rv"] == 100
+
+    def test_or_pattern_with_mapping_alternatives(self):
+        """Or-pattern across dict patterns sharing a key."""
+        _, local_vars = _run_python(
+            """\
+event = {"type": "click", "x": 42}
+match event:
+    case {"type": "click", "x": val} | {"type": "tap", "x": val}:
+        result = val
+    case _:
+        result = -1
+""",
+            max_steps=3000,
+        )
+        assert isinstance(local_vars["result"], int) and local_vars["result"] == 42
+
+    def test_three_way_or_pattern(self):
+        """Three alternatives in an or-pattern, third matches."""
+        _, local_vars = _run_python(
+            """\
+data = (3, 99)
+match data:
+    case (1, x) | (2, x) | (3, x):
+        result = x
+    case _:
+        result = 0
+""",
+            max_steps=3000,
+        )
+        assert isinstance(local_vars["result"], int) and local_vars["result"] == 99
