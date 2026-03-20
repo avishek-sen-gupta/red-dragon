@@ -6,6 +6,7 @@ from interpreter.frontends.common.patterns import (
     LiteralPattern,
     WildcardPattern,
     CapturePattern,
+    SequencePattern,
     MatchCase,
     compile_pattern_test,
     compile_pattern_bindings,
@@ -89,3 +90,37 @@ class TestCapturePattern:
         assert len(stores) >= 1
         assert stores[-1].operands[0] == "x"
         assert stores[-1].operands[1] == "%subj"
+
+
+class TestSequencePattern:
+    def test_emits_len_check_and_load_index(self):
+        ctx = _make_ctx()
+        pattern = SequencePattern(elements=(LiteralPattern(1), LiteralPattern(2)))
+        result_reg = compile_pattern_test(ctx, "%subj", pattern)
+        instrs = ctx.instructions
+        calls = [i for i in instrs if i.opcode == Opcode.CALL_FUNCTION]
+        assert any(
+            "len" in str(c.operands) for c in calls
+        ), f"expected len() call, got {calls}"
+        load_idxs = [i for i in instrs if i.opcode == Opcode.LOAD_INDEX]
+        assert len(load_idxs) >= 2, f"expected 2 LOAD_INDEX, got {load_idxs}"
+
+    def test_nested_literals(self):
+        ctx = _make_ctx()
+        inner = SequencePattern(elements=(LiteralPattern(3), LiteralPattern(4)))
+        outer = SequencePattern(elements=(LiteralPattern(1), inner))
+        result_reg = compile_pattern_test(ctx, "%subj", outer)
+        instrs = ctx.instructions
+        calls = [i for i in instrs if i.opcode == Opcode.CALL_FUNCTION]
+        len_calls = [c for c in calls if "len" in str(c.operands)]
+        assert (
+            len(len_calls) >= 2
+        ), f"expected 2 len() calls (outer+inner), got {len_calls}"
+
+    def test_bindings_from_captures_in_sequence(self):
+        ctx = _make_ctx()
+        pattern = SequencePattern(elements=(CapturePattern("a"), CapturePattern("b")))
+        compile_pattern_bindings(ctx, "%subj", pattern)
+        stores = [i for i in ctx.instructions if i.opcode == Opcode.STORE_VAR]
+        names = [s.operands[0] for s in stores]
+        assert "a" in names and "b" in names
