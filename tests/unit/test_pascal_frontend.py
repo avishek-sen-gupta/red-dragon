@@ -1401,3 +1401,45 @@ end."""
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         this_params = [s for s in symbolics if s.operands == ["param:this"]]
         assert len(this_params) == 0, "Plain procedure should not have param:this"
+
+
+class TestPascalEnumDeclaration:
+    def test_enum_creates_new_object(self):
+        """type TColor = (Red, Green, Blue) should emit NEW_OBJECT."""
+        ir = _parse_pascal("""\
+program M;
+type TColor = (Red, Green, Blue);
+begin end.""")
+        new_objs = _find_all(ir, Opcode.NEW_OBJECT)
+        assert len(new_objs) >= 1
+
+    def test_enum_stores_members_with_ordinals(self):
+        """Each enum member should be stored with STORE_INDEX and ordinal value."""
+        ir = _parse_pascal("""\
+program M;
+type TColor = (Red, Green, Blue);
+begin end.""")
+        stores = _find_all(ir, Opcode.STORE_INDEX)
+        assert len(stores) >= 3
+
+    def test_enum_declares_member_variables(self):
+        """Each enum member should be declared as a top-level variable."""
+        ir = _parse_pascal("""\
+program M;
+type TColor = (Red, Green, Blue);
+begin end.""")
+        decls = _find_all(ir, Opcode.DECL_VAR)
+        decl_names = [inst.operands[0] for inst in decls]
+        assert "Red" in decl_names
+        assert "Green" in decl_names
+        assert "Blue" in decl_names
+
+    def test_enum_declares_type_name(self):
+        """The enum type name TColor should be declared."""
+        ir = _parse_pascal("""\
+program M;
+type TColor = (Red, Green, Blue);
+begin end.""")
+        decls = _find_all(ir, Opcode.DECL_VAR)
+        decl_names = [inst.operands[0] for inst in decls]
+        assert "TColor" in decl_names

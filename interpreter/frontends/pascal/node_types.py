@@ -66,6 +66,8 @@ class PascalNodeType:
     DECL_ARG = "declArg"
     DECL_ARRAY = "declArray"
     DECL_CLASS = "declClass"
+    DECL_ENUM = "declEnum"
+    DECL_ENUM_VALUE = "declEnumValue"
     DEFAULT_VALUE = "defaultValue"
     MODULE_NAME = "moduleName"
     CASE_CASE = "caseCase"
