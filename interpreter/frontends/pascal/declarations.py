@@ -468,10 +468,29 @@ def lower_pascal_decl_type(ctx: TreeSitterEmitContext, node) -> None:
         (c for c in node.children if c.type == PascalNodeType.DECL_CLASS), None
     )
 
-    if id_node is None or class_node is None:
+    if id_node is None:
         return
 
     type_name = ctx.node_text(id_node)
+
+    # Enum type: type TColor = (Red, Green, Blue)
+    # AST: declType → type (wrapper) → declEnum
+    type_wrapper = next((c for c in node.children if c.type == "type"), None)
+    enum_node = (
+        next(
+            (c for c in type_wrapper.children if c.type == PascalNodeType.DECL_ENUM),
+            None,
+        )
+        if type_wrapper
+        else None
+    )
+
+    if enum_node is not None:
+        _lower_pascal_enum(ctx, type_name, enum_node, node)
+        return
+
+    if class_node is None:
+        return
     record_types: set[str] = getattr(ctx, "_pascal_record_types", set())
     record_types.add(type_name)
     ctx._pascal_record_types = record_types
@@ -774,3 +793,38 @@ def _emit_property_setter(
     ctx.emit(Opcode.DECL_VAR, operands=[setter_name, func_reg])
 
     register_property_accessor(ctx, class_name, prop_name, "set")
+
+
+def _lower_pascal_enum(
+    ctx: TreeSitterEmitContext,
+    type_name: str,
+    enum_node,
+    parent_node,
+) -> None:
+    """Lower Pascal enum: NEW_OBJECT + STORE_INDEX per member + DECL_VAR per member."""
+    obj_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.NEW_OBJECT,
+        result_reg=obj_reg,
+        operands=[f"enum:{type_name}"],
+        node=parent_node,
+    )
+    members = [
+        c for c in enum_node.children if c.type == PascalNodeType.DECL_ENUM_VALUE
+    ]
+    for i, member in enumerate(members):
+        member_id = next(
+            (c for c in member.children if c.type == PascalNodeType.IDENTIFIER),
+            None,
+        )
+        member_name = ctx.node_text(member_id) if member_id else ctx.node_text(member)
+        key_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.CONST, result_reg=key_reg, operands=[member_name])
+        val_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.CONST, result_reg=val_reg, operands=[i])
+        ctx.emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
+        # Declare each member as a top-level variable with ordinal value
+        ord_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.CONST, result_reg=ord_reg, operands=[i])
+        ctx.emit(Opcode.DECL_VAR, operands=[member_name, ord_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[type_name, obj_reg])

@@ -74,3 +74,16 @@ end."""
         _, local_vars = _run_pascal(source)
         assert isinstance(local_vars["TAnimal"], ClassRef)
         assert local_vars["TAnimal"].name == "TAnimal"
+
+
+class TestPascalEnumExecution:
+    def test_enum_member_has_ordinal_value(self):
+        """Enum member Red should resolve to ordinal 0."""
+        _, local_vars = _run_pascal("""\
+program M;
+type TColor = (Red, Green, Blue);
+var c: Integer;
+begin
+  c := Green;
+end.""")
+        assert local_vars["c"] == 1
