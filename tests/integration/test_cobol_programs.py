@@ -1761,3 +1761,100 @@ class TestRedefines:
         # zoned decimal 0042 = F0 F0 F4 F2.
         expected = [0xF0, 0xF0, 0xF4, 0xF2]
         assert list(region[0:4]) == expected
+
+    def test_redefines_with_occurs(self):
+        """OCCURS array redefined as flat field — MOVE flat reads all elements."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REDEF-OCC.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-TABLE.",
+                "   05 WS-ITEM PIC 9(2) OCCURS 4.",
+                "01 WS-FLAT REDEFINES WS-TABLE PIC 9(8).",
+                "01 WS-RESULT PIC 9(8) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE 10 TO WS-ITEM(1).",
+                "    MOVE 20 TO WS-ITEM(2).",
+                "    MOVE 30 TO WS-ITEM(3).",
+                "    MOVE 40 TO WS-ITEM(4).",
+                "    MOVE WS-FLAT TO WS-RESULT.",
+                "    STOP RUN.",
+            ],
+            max_steps=800,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 8, 8) == 10203040
+
+    def test_chained_redefines(self):
+        """Third field REDEFINES the original — group children read correct bytes."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-CHAIN.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-ORIG  PIC X(4) VALUE 'ABCD'.",
+                "01 WS-R1    REDEFINES WS-ORIG PIC 9(4).",
+                "01 WS-R2    REDEFINES WS-ORIG.",
+                "   05 WS-HI PIC X(2).",
+                "   05 WS-LO PIC X(2).",
+                "01 WS-OUT PIC X(2) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-HI TO WS-OUT.",
+                "    STOP RUN.",
+            ],
+        )
+        region = _first_region(vm)
+        # WS-OUT at offset 4: EBCDIC "AB" = 0xC1 0xC2
+        assert list(region[4:6]) == [0xC1, 0xC2]
+
+    def test_redefines_size_mismatch(self):
+        """REDEFINES field smaller than original — reads partial overlay."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-SIZE.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-BIG   PIC X(8) VALUE 'ABCDEFGH'.",
+                "01 WS-SMALL REDEFINES WS-BIG PIC X(4).",
+                "01 WS-OUT   PIC X(4) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-SMALL TO WS-OUT.",
+                "    STOP RUN.",
+            ],
+        )
+        region = _first_region(vm)
+        # WS-OUT at offset 8: first 4 bytes "ABCD" = C1 C2 C3 C4
+        assert list(region[8:12]) == [0xC1, 0xC2, 0xC3, 0xC4]
+
+    def test_redefines_arithmetic_then_move_composite(self):
+        """Modify group child, then MOVE composite REDEFINES to result."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-ARITH.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-DATE.",
+                "   05 WS-YEAR  PIC 9(4) VALUE 2026.",
+                "   05 WS-MONTH PIC 9(2) VALUE 03.",
+                "   05 WS-DAY   PIC 9(2) VALUE 22.",
+                "01 WS-DATE-NUM REDEFINES WS-DATE PIC 9(8).",
+                "01 WS-NEXT     PIC 9(8) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ADD 1 TO WS-DAY.",
+                "    MOVE WS-DATE-NUM TO WS-NEXT.",
+                "    STOP RUN.",
+            ],
+            max_steps=800,
+        )
+        region = _first_region(vm)
+        assert _decode_zoned_unsigned(region, 6, 2) == 23
+        assert _decode_zoned_unsigned(region, 8, 8) == 20260323
