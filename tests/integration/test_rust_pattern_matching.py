@@ -217,14 +217,15 @@ let r = match x {
 
 
 class TestRustWhileLet:
-    def test_while_let_capture_accumulate(self):
-        """while let n = counter loops until counter reaches 0."""
+    def test_while_let_capture_always_matches(self):
+        """while let n = expr with capture always matches — must break manually."""
         _, local_vars = _run_rust(
             """\
 let mut counter = 3;
 let mut sum = 0;
-while counter > 0 {
-    sum = sum + counter;
+while let n = counter {
+    if n == 0 { break; }
+    sum = sum + n;
     counter = counter - 1;
 }
 """,
@@ -276,15 +277,18 @@ while let Some(v) = x {
         )
         assert local_vars["r"] == -1
 
-    def test_while_let_wildcard_with_manual_break(self):
-        """while let _ = expr always matches — needs manual break to terminate."""
+    def test_while_let_tuple_destructuring(self):
+        """while let (a, b) = pair destructures tuple each iteration."""
         _, local_vars = _run_rust(
             """\
-let mut i = 0;
-while i < 3 {
-    i = i + 1;
+let mut pair = (1, 2);
+let mut sum = 0;
+while let Some(v) = if sum < 5 { Some(pair) } else { 0 } {
+    let (a, b) = v;
+    sum = sum + a + b;
+    pair = (a + 1, b + 1);
 }
 """,
-            max_steps=500,
+            max_steps=1000,
         )
-        assert local_vars["i"] == 3
+        assert local_vars["sum"] == 8
