@@ -8,6 +8,7 @@ from interpreter.constants import Language
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.frontends.common.patterns import (
     CapturePattern,
+    ClassPattern,
     LiteralPattern,
     OrPattern,
     SequencePattern,
@@ -212,6 +213,85 @@ class TestTuplePattern:
         _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
         result = parse_rust_pattern(ctx, inner)
         assert result == SequencePattern((LiteralPattern(0), CapturePattern("y")))
+
+
+class TestTupleStructPattern:
+    def test_some_with_capture(self):
+        snippet = "fn main() { match v { Some(x) => x, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert result == ClassPattern(
+            "Option", positional=(CapturePattern("x"),), keyword=()
+        )
+
+    def test_some_with_wildcard(self):
+        snippet = "fn main() { match v { Some(_) => 1, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert result == ClassPattern(
+            "Option", positional=(WildcardPattern(),), keyword=()
+        )
+
+    def test_some_with_tuple_inner(self):
+        snippet = "fn main() { match v { Some((a, b)) => a, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert result == ClassPattern(
+            "Option",
+            positional=(SequencePattern((CapturePattern("a"), CapturePattern("b"))),),
+            keyword=(),
+        )
+
+    def test_nested_some_some(self):
+        snippet = "fn main() { match v { Some(Some(x)) => x, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert result == ClassPattern(
+            "Option",
+            positional=(
+                ClassPattern("Option", positional=(CapturePattern("x"),), keyword=()),
+            ),
+            keyword=(),
+        )
+
+
+class TestStructPattern:
+    def test_point_shorthand_fields(self):
+        snippet = "fn main() { match p { Point { x, y } => x + y, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert result == ClassPattern(
+            "Point",
+            positional=(),
+            keyword=(("x", CapturePattern("x")), ("y", CapturePattern("y"))),
+        )
+
+    def test_struct_explicit_field(self):
+        snippet = "fn main() { match p { Point { x: a, y: b } => a + b, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert result == ClassPattern(
+            "Point",
+            positional=(),
+            keyword=(("x", CapturePattern("a")), ("y", CapturePattern("b"))),
+        )
+
+    def test_struct_single_shorthand_field(self):
+        snippet = "fn main() { match s { Foo { val } => val, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert result == ClassPattern(
+            "Foo",
+            positional=(),
+            keyword=(("val", CapturePattern("val")),),
+        )
 
 
 class TestScopedIdentifierPattern:
