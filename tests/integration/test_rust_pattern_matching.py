@@ -370,3 +370,61 @@ if let Some(x) = a && let Some(y) = b {
             max_steps=500,
         )
         assert local_vars["r"] == 30
+
+
+class TestRustReferencePattern:
+    def test_match_ref_capture(self):
+        """match &x { &val => val + 1 } should dereference and bind val."""
+        _, local_vars = _run_rust(
+            """\
+let x = 42;
+let r = &x;
+let result = match r {
+    &val => val + 1,
+    _ => 0,
+};
+""",
+            max_steps=300,
+        )
+        assert local_vars["result"] == 43
+
+    def test_if_let_ref_capture(self):
+        """if let &val = &x should dereference and bind val."""
+        _, local_vars = _run_rust(
+            """\
+let x = 10;
+let r = &x;
+let result = if let &val = r { val * 2 } else { 0 };
+""",
+            max_steps=300,
+        )
+        assert local_vars["result"] == 20
+
+    def test_match_ref_literal(self):
+        """match &x { &42 => 1, _ => 0 } should dereference and compare literal."""
+        _, local_vars = _run_rust(
+            """\
+let x = 42;
+let r = &x;
+let result = match r {
+    &42 => 1,
+    _ => 0,
+};
+""",
+            max_steps=300,
+        )
+        assert local_vars["result"] == 1
+
+    def test_match_ref_wildcard(self):
+        """match &x { &_ => 1 } should dereference and match wildcard."""
+        _, local_vars = _run_rust(
+            """\
+let x = 99;
+let r = &x;
+let result = match r {
+    &_ => 1,
+};
+""",
+            max_steps=300,
+        )
+        assert local_vars["result"] == 1
