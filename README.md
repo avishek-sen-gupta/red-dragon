@@ -552,6 +552,7 @@ The **Rosetta suite** (`tests/unit/rosetta/`) implements 25 cross-language test 
 - **closures-lambda** — 5 languages with lambda/arrow syntax (Python, JS, TS, Kotlin, Scala)
 - **destructuring** — 6 languages (Python, JS, TS, Rust, Scala, Kotlin) in variable declarations; for-loop destructuring in JS/TS (`for (const [k, v] of arr)`), Kotlin (`for ((a, b) in pairs)`), and C++ (`for (auto [a, b] : pairs)`); C++ declaration-level structured bindings (`auto [a, b] = expr;`)
 - **nested functions** — 12 languages (Python, JS, TS, Rust, Lua, Ruby, Go, Kotlin, Scala, PHP, C#, Pascal)
+- **structural pattern matching** (integration, `tests/integration/test_rosetta_structural_pattern_matching.py`) — 6 languages (Python, C#, Rust, Scala, Kotlin, Ruby) all classifying a number through `match`/`switch`/`case/in` and asserting `result == "small"`
 
 Each problem tests:
 

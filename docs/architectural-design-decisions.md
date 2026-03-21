@@ -2272,3 +2272,31 @@ Each language provides a module-level spec constant (`_RUST_MATCH_SPEC`,
 Excluded by design: Kotlin subjectless `when` (boolean dispatch, not
 patterns), C# switch statement (uses break_target_stack), Python
 statement-style `compile_match` (uses lower_block).
+
+---
+
+## ADR-121: Ruby `case/in` Pattern Matching (2026-03-21)
+
+**Status:** Accepted
+**Issue:** red-dragon-6n0u
+
+Ruby 3.0+ `case/in` pattern matching now uses the common Pattern ADT
+via `parse_ruby_pattern` (`interpreter/frontends/ruby/patterns.py`) +
+`lower_match_as_expr` from the unified match framework (ADR-120).
+Existing `case/when` (`lower_case`) unchanged.
+
+`lower_case_match` / `lower_case_match_stmt` are registered in the
+Ruby frontend dispatch tables for `CASE_MATCH` nodes. The subject
+expression is lowered first, then `lower_match_as_expr` drives the
+shared skeleton (irrefutability shortcut, BRANCH_IF chain, result_var).
+
+Supported patterns: literals (integer, float, string, boolean, nil),
+wildcards (`_`), captures (bare identifiers), alternative patterns
+(`1 | 2`, via `alternative_pattern` → `OrPattern`), array patterns
+(`[a, b]` → `SequencePattern`; `Point[x, y]` → `ClassPattern`),
+as-patterns (`pattern => name` → `AsPattern`), splat parameters
+(`*rest` → `StarPattern`), and hash patterns (`{name: n}` →
+`MappingPattern`).
+
+Guard patterns, pin patterns, and find patterns are out of scope
+(red-dragon-kysi, red-dragon-swlt, red-dragon-ocvm, red-dragon-3077).
