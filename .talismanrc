@@ -57,6 +57,6 @@ fileignoreconfig:
 - filename: scripts/paper-results-code/05_execution_equivalence.py
   checksum: 9afc1f1c5d20daf4d8d088b6093472339584ca4ca3c4a444f1400d107185513d
 - filename: .beads/backup/backup_state.json
-  checksum: 662b550ff7d3cee73a0269825467e50e50bdf172319bd7a006c64c8ea6ed9bff
+  checksum: 18a41d9dbcafc6a8f04d9301b030c32e629c3aab2c0002e0a804e528a12776b3
 - filename: .beads/backup/issues.jsonl
-  checksum: bcfca6824aa9bb3cf63451e9600f6451694fc5ebec1b0097652f6071ca5147fd
+  checksum: a5c4471e3d8be2c1a758320893321ea2a5311593b20dc62cd4ed798df0ed1462
