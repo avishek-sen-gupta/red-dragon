@@ -88,6 +88,9 @@ class RustNodeType:
     OR_PATTERN = "or_pattern"
     MUT_PATTERN = "mut_pattern"
     REFERENCE_PATTERN = "reference_pattern"
+    SLICE_PATTERN = "slice_pattern"
+    REMAINING_FIELD_PATTERN = "remaining_field_pattern"
+    CAPTURED_PATTERN = "captured_pattern"
 
     # ── Parameters ───────────────────────────────────────────────────
     PARAMETER = "parameter"
