@@ -20,6 +20,7 @@ class RustNodeType:
     CHAR_LITERAL = "char_literal"
     BOOLEAN_LITERAL = "boolean_literal"
     RAW_STRING_LITERAL = "raw_string_literal"
+    STRING_CONTENT = "string_content"
     NEGATIVE_LITERAL = "negative_literal"
     TRUE = "true"
     FALSE = "false"
