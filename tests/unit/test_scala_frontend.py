@@ -120,7 +120,7 @@ class TestScalaControlFlow:
             Opcode.BRANCH_IF in opcodes
         ), "match expression must produce BRANCH_IF for case dispatch"
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("case" in (inst.label or "") for inst in labels)
+        assert any("match" in (inst.label or "") for inst in labels)
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
@@ -264,10 +264,10 @@ object M {
             Opcode.BRANCH_IF in opcodes
         ), "match with cases must produce BRANCH_IF for dispatch"
         labels = _labels_in_order(instructions)
-        case_labels = [lbl for lbl in labels if "case" in lbl]
+        match_labels = [lbl for lbl in labels if "match" in lbl]
         assert (
-            len(case_labels) >= 3
-        ), "4 cases (3 concrete + 1 default) should produce >= 3 case labels"
+            len(match_labels) >= 3
+        ), "4 cases (3 concrete + 1 default) should produce >= 3 match labels"
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
         assert len(instructions) > 15

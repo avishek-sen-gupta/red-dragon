@@ -12,13 +12,7 @@ from interpreter.frontends.common.expressions import (
     lower_call_impl,
     extract_call_args,
 )
-from interpreter.frontends.common.patterns import (
-    CapturePattern,
-    WildcardPattern,
-    compile_pattern_bindings,
-    compile_pattern_test,
-    _needs_pre_guard_bindings,
-)
+from interpreter.frontends.common.match_expr import MatchArmSpec, lower_match_as_expr
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 from interpreter.frontends.scala.patterns import parse_scala_pattern
 from interpreter.type_expr import ScalarType
@@ -196,84 +190,35 @@ def _lower_body_as_expr(ctx: TreeSitterEmitContext, body_node) -> str:
     return ctx.lower_expr(body_node)
 
 
+def _scala_pattern_of(ctx: TreeSitterEmitContext, clause):
+    return parse_scala_pattern(ctx, clause.child_by_field_name("pattern"))
+
+
+def _scala_guard_of(ctx: TreeSitterEmitContext, clause):
+    guard = next((c for c in clause.children if c.type == NT.GUARD), None)
+    if guard is None:
+        return None
+    return next(c for c in guard.children if c.is_named)
+
+
+def _scala_body_of(ctx: TreeSitterEmitContext, clause):
+    return _lower_body_as_expr(ctx, clause.child_by_field_name("body"))
+
+
+_SCALA_MATCH_SPEC = MatchArmSpec(
+    extract_arms=lambda body: [c for c in body.children if c.type == NT.CASE_CLAUSE],
+    pattern_of=_scala_pattern_of,
+    guard_of=_scala_guard_of,
+    body_of=_scala_body_of,
+)
+
+
 def lower_match_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower Scala match expression using Pattern ADT."""
     value_node = node.child_by_field_name("value")
     body_node = node.child_by_field_name("body")
     subject_reg = ctx.lower_expr(value_node)
-
-    result_var = f"__match_result_{ctx.label_counter}"
-    end_label = ctx.fresh_label("match_end")
-    clauses = [c for c in body_node.children if c.type == NT.CASE_CLAUSE]
-
-    for clause in clauses:
-        _lower_case_clause(ctx, clause, subject_reg, result_var, end_label)
-
-    ctx.emit(Opcode.LABEL, label=end_label)
-    reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[result_var])
-    return reg
-
-
-def _lower_case_clause(
-    ctx: TreeSitterEmitContext,
-    clause,
-    subject_reg: str,
-    result_var: str,
-    end_label: str,
-) -> None:
-    """Lower a single case clause: test pattern, bind, evaluate body, store result."""
-    pattern_node = clause.child_by_field_name("pattern")
-    body_node = clause.child_by_field_name("body")
-
-    # Guard is a direct child of case_clause, NOT a field -- iterate by type
-    guard_node = next((c for c in clause.children if c.type == NT.GUARD), None)
-
-    pattern = parse_scala_pattern(ctx, pattern_node)
-
-    is_irrefutable = (
-        isinstance(pattern, (WildcardPattern, CapturePattern)) and guard_node is None
-    )
-
-    if is_irrefutable:
-        compile_pattern_bindings(ctx, subject_reg, pattern)
-        body_reg = _lower_body_as_expr(ctx, body_node)
-        ctx.emit(Opcode.DECL_VAR, operands=[result_var, body_reg])
-        ctx.emit(Opcode.BRANCH, label=end_label)
-        return
-
-    test_reg = compile_pattern_test(ctx, subject_reg, pattern)
-
-    if guard_node:
-        if _needs_pre_guard_bindings(pattern):
-            compile_pattern_bindings(ctx, subject_reg, pattern)
-        # Guard node wraps the condition -- extract the named child
-        guard_condition = next(c for c in guard_node.children if c.is_named)
-        guard_reg = ctx.lower_expr(guard_condition)
-        final_test = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.BINOP,
-            result_reg=final_test,
-            operands=["&&", test_reg, guard_reg],
-        )
-        test_reg = final_test
-
-    arm_label = ctx.fresh_label("case_arm")
-    next_label = ctx.fresh_label("case_next")
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[test_reg],
-        label=f"{arm_label},{next_label}",
-    )
-    ctx.emit(Opcode.LABEL, label=arm_label)
-
-    if not (guard_node and _needs_pre_guard_bindings(pattern)):
-        compile_pattern_bindings(ctx, subject_reg, pattern)
-
-    body_reg = _lower_body_as_expr(ctx, body_node)
-    ctx.emit(Opcode.DECL_VAR, operands=[result_var, body_reg])
-    ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=next_label)
+    return lower_match_as_expr(ctx, subject_reg, body_node, _SCALA_MATCH_SPEC)
 
 
 def lower_block_expr(ctx: TreeSitterEmitContext, node) -> str:
