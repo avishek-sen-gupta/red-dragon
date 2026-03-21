@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from interpreter.frontends.common.patterns import (
     CapturePattern,
+    ClassPattern,
     LiteralPattern,
     OrPattern,
     Pattern,
@@ -13,6 +14,13 @@ from interpreter.frontends.common.patterns import (
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.rust.node_types import RustNodeType
+
+# Rust enum variant → canonical class name mapping
+_VARIANT_TO_CLASS: dict[str, str] = {
+    "Some": "Option",
+    "Ok": "Result",
+    "Err": "Result",
+}
 
 _WILDCARD_TEXT = "_"
 
@@ -65,6 +73,12 @@ def parse_rust_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
         parts = tuple(text.split("::"))
         return ValuePattern(parts)
 
+    if node_type == RustNodeType.TUPLE_STRUCT_PATTERN:
+        return _parse_tuple_struct_pattern(ctx, node)
+
+    if node_type == RustNodeType.STRUCT_PATTERN:
+        return _parse_struct_pattern(ctx, node)
+
     raise ValueError(f"Unsupported Rust pattern node type: {node_type!r} ({text!r})")
 
 
@@ -74,6 +88,54 @@ def _parse_number(text: str) -> int | float:
     if "." in cleaned:
         return float(cleaned)
     return int(cleaned, 0)
+
+
+def _parse_tuple_struct_pattern(ctx: TreeSitterEmitContext, node) -> ClassPattern:
+    """Parse a tuple_struct_pattern node: Some(x), Message::Write(text)."""
+    name_node = next(
+        c
+        for c in node.children
+        if c.type in (RustNodeType.IDENTIFIER, RustNodeType.SCOPED_IDENTIFIER)
+    )
+    raw_name = ctx.node_text(name_node)
+    class_name = _VARIANT_TO_CLASS.get(raw_name, raw_name)
+    positional = tuple(
+        parse_rust_pattern(ctx, c)
+        for c in node.children
+        if (c.is_named or ctx.node_text(c) == _WILDCARD_TEXT) and c != name_node
+    )
+    return ClassPattern(class_name, positional=positional, keyword=())
+
+
+def _parse_struct_pattern(ctx: TreeSitterEmitContext, node) -> ClassPattern:
+    """Parse a struct_pattern node: Point { x, y }."""
+    type_node = next(
+        c
+        for c in node.children
+        if c.type in (RustNodeType.TYPE_IDENTIFIER, RustNodeType.SCOPED_TYPE_IDENTIFIER)
+    )
+    class_name = ctx.node_text(type_node)
+    field_patterns = [c for c in node.children if c.type == RustNodeType.FIELD_PATTERN]
+    keyword = tuple(_parse_field_pattern(ctx, fp) for fp in field_patterns)
+    return ClassPattern(class_name, positional=(), keyword=keyword)
+
+
+def _parse_field_pattern(ctx: TreeSitterEmitContext, fp) -> tuple[str, Pattern]:
+    """Parse a single field_pattern into a (name, Pattern) pair."""
+    # Shorthand: Point { x } — shorthand_field_identifier is both name and capture
+    shorthand = next(
+        (c for c in fp.children if c.type == RustNodeType.SHORTHAND_FIELD_IDENTIFIER),
+        None,
+    )
+    if shorthand:
+        name = ctx.node_text(shorthand)
+        return (name, CapturePattern(name))
+    # Explicit: Point { x: val }
+    field_name_node = next(
+        c for c in fp.children if c.type == RustNodeType.FIELD_IDENTIFIER
+    )
+    pattern_child = next(c for c in fp.children if c.is_named and c != field_name_node)
+    return (ctx.node_text(field_name_node), parse_rust_pattern(ctx, pattern_child))
 
 
 def _flatten_or_pattern(ctx: TreeSitterEmitContext, node) -> list[Pattern]:
