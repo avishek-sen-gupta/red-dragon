@@ -765,6 +765,9 @@
 {"issue_id":"red-dragon-xvn","label":"go"}
 {"issue_id":"red-dragon-y0df","label":"kotlin"}
 {"issue_id":"red-dragon-y0df","label":"pattern-matching"}
+{"issue_id":"red-dragon-y9s4","label":"enum"}
+{"issue_id":"red-dragon-y9s4","label":"p2"}
+{"issue_id":"red-dragon-y9s4","label":"scala"}
 {"issue_id":"red-dragon-ycex","label":"audit-asserts"}
 {"issue_id":"red-dragon-yd8r","label":"audit-asserts"}
 {"issue_id":"red-dragon-yedi","label":"audit-asserts"}
