@@ -17,11 +17,9 @@ from interpreter.frontends.common.expressions import (
 )
 
 _UNSIGNED_SUFFIX = re.compile(r"[uUlL]+$")
+from interpreter.frontends.common.match_expr import MatchArmSpec, lower_match_as_expr
 from interpreter.frontends.common.patterns import (
-    CapturePattern,
     WildcardPattern,
-    compile_pattern_bindings,
-    compile_pattern_test,
 )
 from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
 from interpreter.frontends.kotlin.patterns import parse_kotlin_pattern
@@ -312,11 +310,41 @@ def lower_if_expr(ctx: TreeSitterEmitContext, node) -> str:
 # -- when expression ---------------------------------------------------
 
 
+def _kotlin_pattern_of(ctx: TreeSitterEmitContext, entry):
+    """Extract the Pattern ADT for a when entry (subject-based when)."""
+    cond_node = next((c for c in entry.children if c.type == KNT.WHEN_CONDITION), None)
+    if cond_node is None:
+        return WildcardPattern()  # else branch
+    cond_inner = next((c for c in cond_node.children if c.is_named), None)
+    return parse_kotlin_pattern(ctx, cond_inner)
+
+
+def _kotlin_guard_of(ctx: TreeSitterEmitContext, entry):
+    """Kotlin when has no guard syntax — always returns None."""
+    return None
+
+
+def _kotlin_body_of(ctx: TreeSitterEmitContext, entry) -> str:
+    """Lower the body of a when entry, returning its result register."""
+    return _lower_when_body(ctx, entry)
+
+
+_KOTLIN_WHEN_SPEC = MatchArmSpec(
+    extract_arms=lambda node: [c for c in node.children if c.type == KNT.WHEN_ENTRY],
+    pattern_of=_kotlin_pattern_of,
+    guard_of=_kotlin_guard_of,
+    body_of=_kotlin_body_of,
+)
+
+
 def lower_when_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower when(subject) { entries } as an if/else chain.
 
     Kotlin allows ``when(val x = expr) { }`` where the subject variable
     is scoped to the when expression body.
+
+    Subject-based when uses the unified match framework (lower_match_as_expr).
+    Subjectless when (boolean dispatch) is handled separately.
     """
     subject_node = next(
         (c for c in node.children if c.type == KNT.WHEN_SUBJECT),
@@ -359,38 +387,35 @@ def lower_when_expr(ctx: TreeSitterEmitContext, node) -> str:
             if inner:
                 val_reg = ctx.lower_expr(inner)
 
+    has_subject = subject_node is not None
+
+    if has_subject:
+        reg = lower_match_as_expr(ctx, val_reg, node, _KOTLIN_WHEN_SPEC)
+        if scope_entered:
+            ctx.exit_block_scope()
+        return reg
+
+    # Subjectless when: boolean dispatch path (unchanged)
     result_var = f"__when_result_{ctx.label_counter}"
     end_label = ctx.fresh_label("when_end")
 
-    has_subject = subject_node is not None
     entries = [c for c in node.children if c.type == KNT.WHEN_ENTRY]
     for entry in entries:
-        _lower_when_entry(ctx, entry, val_reg, result_var, end_label, has_subject)
+        _lower_subjectless_when_entry(ctx, entry, result_var, end_label)
 
     ctx.emit(Opcode.LABEL, label=end_label)
     reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[result_var])
-
-    if scope_entered:
-        ctx.exit_block_scope()
-
     return reg
 
 
-def _lower_when_entry(
+def _lower_subjectless_when_entry(
     ctx: TreeSitterEmitContext,
     entry,
-    subject_reg: str,
     result_var: str,
     end_label: str,
-    has_subject: bool,
 ) -> None:
-    """Lower a single when entry.
-
-    When has_subject is True, the condition is a pattern matched against
-    subject_reg using the Pattern ADT. When False (subjectless when),
-    the condition is an arbitrary boolean expression evaluated directly.
-    """
+    """Lower a single subjectless when entry (boolean dispatch)."""
     cond_node = next((c for c in entry.children if c.type == KNT.WHEN_CONDITION), None)
 
     arm_label = ctx.fresh_label("when_arm")
@@ -398,35 +423,14 @@ def _lower_when_entry(
 
     if cond_node:
         cond_inner = next((c for c in cond_node.children if c.is_named), None)
-
-        if has_subject:
-            pattern = parse_kotlin_pattern(ctx, cond_inner)
-
-            is_irrefutable = isinstance(pattern, (WildcardPattern, CapturePattern))
-            if is_irrefutable:
-                compile_pattern_bindings(ctx, subject_reg, pattern)
-                arm_result = _lower_when_body(ctx, entry)
-                ctx.emit(Opcode.DECL_VAR, operands=[result_var, arm_result])
-                ctx.emit(Opcode.BRANCH, label=end_label)
-                return
-
-            test_reg = compile_pattern_test(ctx, subject_reg, pattern)
-            ctx.emit(
-                Opcode.BRANCH_IF,
-                operands=[test_reg],
-                label=f"{arm_label},{next_label}",
-            )
-            ctx.emit(Opcode.LABEL, label=arm_label)
-            compile_pattern_bindings(ctx, subject_reg, pattern)
-        else:
-            # Subjectless when: condition is an arbitrary boolean expression
-            test_reg = ctx.lower_expr(cond_inner)
-            ctx.emit(
-                Opcode.BRANCH_IF,
-                operands=[test_reg],
-                label=f"{arm_label},{next_label}",
-            )
-            ctx.emit(Opcode.LABEL, label=arm_label)
+        # Subjectless when: condition is an arbitrary boolean expression
+        test_reg = ctx.lower_expr(cond_inner)
+        ctx.emit(
+            Opcode.BRANCH_IF,
+            operands=[test_reg],
+            label=f"{arm_label},{next_label}",
+        )
+        ctx.emit(Opcode.LABEL, label=arm_label)
     else:
         # else branch — no condition, unconditional
         ctx.emit(Opcode.BRANCH, label=arm_label)

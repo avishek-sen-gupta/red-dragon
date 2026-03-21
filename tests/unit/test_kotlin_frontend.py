@@ -107,7 +107,10 @@ class TestKotlinControlFlow:
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("when" in (inst.label or "") for inst in labels)
+        assert any(
+            "match" in (inst.label or "") or "when" in (inst.label or "")
+            for inst in labels
+        )
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
@@ -234,7 +237,7 @@ fun main() {
         branches = _find_all(instructions, Opcode.BRANCH_IF)
         assert len(branches) >= 4
         labels = _labels_in_order(instructions)
-        assert any("when" in lbl for lbl in labels)
+        assert any("match" in lbl or "when" in lbl for lbl in labels)
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
         assert len(instructions) > 20
