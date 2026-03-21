@@ -122,10 +122,6 @@ int answer = x;
 
 
 class TestRustReferenceRead:
-    @pytest.mark.xfail(
-        reason="Rust *expr now emits LOAD_FIELD '__boxed__' for Box deref; "
-        "reference aliasing (&x / *ptr) needs separate handling"
-    )
     def test_read_through_reference(self):
         """let ptr = &x; *ptr should read x's value."""
         vm, local_vars = _run_rust("""\
@@ -147,10 +143,6 @@ let answer = x;
 """)
         assert local_vars["answer"] == 99
 
-    @pytest.mark.xfail(
-        reason="Rust *expr now emits LOAD_FIELD '__boxed__' for Box deref; "
-        "reference aliasing (&x / *ptr) needs separate handling"
-    )
     def test_modify_original_visible_through_reference(self):
         """Changing x after &x should be visible through *ptr."""
         vm, local_vars = _run_rust("""\
