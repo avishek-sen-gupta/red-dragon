@@ -2144,3 +2144,47 @@ These are already dispatched to `_lower_ts_interface_method` in `lower_interface
 **Decision:** Add `StarPattern(name)` to the Pattern ADT. When present in a `SequencePattern`, the compiler switches from exact-length (`==`) to minimum-length (`>=`) matching. Fixed elements before/after the star use literal/computed indices. The star capture uses the existing `slice` builtin. Wildcard star (`*_`) skips the slice entirely.
 
 **Consequences:** Star patterns work in both list and tuple patterns, including star-at-start, star-at-end, star-in-middle, empty rest, and nested star patterns. No new opcodes or VM changes. The `_has_star`/`_star_index` helpers and `_compile_after_star_element_test`/`_binding` functions are reusable when other languages add star/rest patterns.
+
+---
+
+### ADR-113: Symbol Table Pre-Pass on BaseFrontend (2026-03-20)
+
+**Context:** Frontends needed class field metadata at lowering time for implicit-this field resolution (ADR-114) and constructor field injection, but this metadata was not available during the lowering walk — it would require two AST passes if gathered inline with lowering.
+
+**Decision:** Add a `_extract_symbols(tree, source) -> SymbolTable` pre-pass hook on `BaseFrontend`. It runs between parse and lowering. The `SymbolTable` data model (`interpreter/frontends/symbol_table.py`) contains `ClassInfo` (fields: list[FieldInfo], methods: list[str], parents: list[str], constants: dict), `FieldInfo` (name, type_hint), and `FunctionInfo` (name, return_type, params). `resolve_field(class_name, field_name)` walks the parent chain and returns `FieldInfo` or `NULL_FIELD` (a null-object sentinel — never `None`). Per-language extractors run in all 15 tree-sitter frontends; COBOL uses `SymbolTable.from_data_layout()`. The symbol table is threaded through the lowering pass via `kwargs`.
+
+**Rationale:** A pre-pass is the simplest mechanism — it avoids forward references during lowering, keeps the lowering walk single-pass, and the symbol table is immutable once built (consistent with the project's preference for immutable data).
+
+**Consequences:** Implicit-this resolution, constructor field injection, and type seeding all have reliable field metadata at lowering time. Lua returns an empty symbol table (table-based OOP has no fixed syntax). Cross-class field resolution via `resolve_field` parent-chain walk enables subclass constructors to assign parent fields.
+
+---
+
+### ADR-114: Implicit-this Field Reads for Java, C#, and C++ (2026-03-20)
+
+**Context:** The existing implicit-this field *write* mechanism (bare `x = v` in constructors → `STORE_FIELD this`) was in place, but bare identifier *reads* (`return x` in a getter, `if (x > 0)` in a method) still emitted `LOAD_VAR x`, which resolves to symbolic values unless `x` was declared as a local. This was a correctness gap for any class with fields read inside instance methods.
+
+**Decision:** In `lower_identifier` for Java, C#, and C++ instance methods: check whether the identifier names a class field (via `resolve_field` on the symbol table) that is not shadowed by a parameter or local variable (tracked in `_method_declared_names`). If so, emit `LOAD_VAR this` + `LOAD_FIELD this_reg field_name` instead of `LOAD_VAR field_name`. `_method_declared_names` is reset by `reset_method_scope()` at method entry. The `emit()` hook updates `_method_declared_names` for every `DECL_VAR`/`STORE_VAR` emitted.
+
+**Alternatives considered:** Emitting `LOAD_FIELD` for all identifiers and falling back to `LOAD_VAR` on symbol table miss — rejected because it would change semantics for local variables and parameters. The shadowing check ensures that method parameters and `let`/`var` declarations take priority over class fields.
+
+**Consequences:** Java, C#, and C++ instance methods that read class fields via bare identifiers now produce concrete values at runtime. The mechanism is the read-side complement of the existing implicit-this write. `resolve_field` parent-chain walk means inherited fields are handled correctly.
+
+---
+
+### ADR-115: Static Method Dispatch via ClassRef in CALL_METHOD (2026-03-20)
+
+**Context:** Static method calls (`Util.square(5)` in Java/C#, `Util::square(5)` in C++, `Util::square(5)` in PHP, `MyClass.square(5)` in Ruby singleton methods) were dispatched through the regular instance method path, which injected `this`/`self` and attempted object-field dispatch — both wrong for static methods.
+
+**Decision:** At the start of `_handle_call_method`, check whether the resolved object is a `ClassRef`. If so, dispatch directly to `registry.class_methods[class_ref.name][method_name]` without injecting `this`/`self` and without any heap-object lookup. Frontend changes: C++ `lower_cpp_call` splits `qualified_identifier`/`scoped_identifier` (e.g., `Util::square`) into `LOAD_VAR Util` + `CALL_METHOD`. PHP `Class::method(args)` emits the same pattern. Ruby `def self.method` registers the method under its bare name (without `self.` prefix) so `CALL_METHOD` on a `ClassRef` resolves it. C++ static method declarations skip `_emit_this_param` emission.
+
+**Consequences:** Static methods produce correct results without accidental `self`/`this` injection. The `ClassRef` check is positioned before heap-field lookup and registry lookup, so it does not affect instance method dispatch. All four language frontends (Java/C# via `ClassName.method`, C++ via `Util::square`, PHP via `Class::method`, Ruby via `def self.method`) share the same VM-side dispatch path.
+
+---
+
+### ADR-116: Value Patterns and Or-Pattern Bindings in compile_match (2026-03-20)
+
+**Context:** Two pattern matching capabilities were not covered by ADR-111: (1) `ValuePattern` — dotted constant references like `case Color.RED:` that need to look up a constant from a class/enum rather than comparing with a literal; (2) `OrPattern` with capture bindings — `case Foo() | Bar() as x:` where each alternative may bind different variables that need to be unified.
+
+**Decision:** (1) `ValuePattern(dotted_name)` emits `LOAD_VAR base` + `LOAD_FIELD base_reg attr` for dotted names (or plain `LOAD_VAR` for simple names), then `BINOP == subject_reg loaded_reg`. This reuses existing IR primitives. (2) `OrPattern` with bindings uses a mini linear chain within the or-group: each alternative is tested in its own test+bind block; if any matches, a `BRANCH end_or` exits the chain with the bindings set. The mini chain follows the same two-pass test-before-bind discipline as the main `compile_match`. Wildcard `OrPattern` (no bindings) is the simpler fast path.
+
+**Consequences:** `ValuePattern` enables enum/constant matching (`case Status.OK:`, `case Color.RED | Color.GREEN:`). Or-patterns with mixed binding sets correctly unify variables across alternatives. Both features use only existing opcodes (`LOAD_VAR`, `LOAD_FIELD`, `BINOP`, `BRANCH_IF`, `STORE_VAR`, `BRANCH`). The `_has_bindings` helper distinguishes capturing vs. non-capturing or-patterns to select the appropriate compilation path.

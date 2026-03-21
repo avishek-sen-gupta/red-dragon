@@ -526,14 +526,19 @@ Function calls are the most complex part of the VM. The design supports user-def
    └─ if found: inject obj as self, dispatch function
    └─ supports Lua table OOP (t:method()), JS/Python dynamic properties
 
-4. REGISTRY?    → registry.class_methods[type_hint]
+4. CLASSREF?    → check if obj is a ClassRef (static method dispatch)
+   └─ dispatch directly to registry.class_methods[class_name][method]
+   └─ no this/self injection — static methods operate without an instance
+   └─ used by: Java/C# ClassName.method(), C++ Util::square(), PHP Class::method(), Ruby def self.method
+
+5. REGISTRY?    → registry.class_methods[type_hint]
    └─ overload resolution via type signatures
 
-5. PARENT CHAIN → walk registry.class_parents for inherited methods
+6. PARENT CHAIN → walk registry.class_parents for inherited methods
 
-6. DELEGATION   → __method_missing__ delegation chain
+7. DELEGATION   → __method_missing__ delegation chain
 
-7. UNKNOWN      → call_resolver.resolve_method()  (create symbolic value)
+8. UNKNOWN      → call_resolver.resolve_method()  (create symbolic value)
 ```
 
 ### How function references work
@@ -922,6 +927,24 @@ class Builtins:
         "min": _builtin_min,
     }
 ```
+
+### isinstance builtin
+
+The `isinstance` builtin supports both heap objects and primitive Python types:
+
+```python
+# Heap object: looks up type_hint from the object's TypedValue via the class registry
+isinstance(obj, Dog)   # → True if obj was allocated as NEW_OBJECT "Dog" or a subclass
+
+# Primitive types: maps names to native Python types
+isinstance(42, int)    # → True
+isinstance("hi", str)  # → True
+isinstance(3.14, float) # → True
+isinstance(True, bool) # → True
+isinstance([1,2], list) # → True
+```
+
+The primitive type map (`{"int": int, "str": str, "float": float, "bool": bool, "list": list}`) is checked before the registry lookup, enabling pattern matching class patterns against primitive arguments.
 
 ### Handling symbolic arguments
 
