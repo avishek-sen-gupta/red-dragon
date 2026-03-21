@@ -697,10 +697,12 @@ class TestRustTupleStructPattern:
         )
 
     def test_tuple_struct_pattern_const(self):
+        """Some(v) in match arm emits isinstance check with 'Option' class name."""
         source = "fn f(x: Option<i32>) { match x { Some(v) => v, None => 0 } }"
         instructions = _parse_rust(source)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("Some" in str(inst.operands) for inst in consts)
+        # Pattern ADT maps Some -> ClassPattern("Option"), so "Option" appears as CONST
+        assert any("Option" in str(inst.operands) for inst in consts)
 
 
 class TestRustGenericFunction:
