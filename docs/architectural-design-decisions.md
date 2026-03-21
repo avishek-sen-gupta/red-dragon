@@ -2248,3 +2248,27 @@ Subjectless `when { bool_expr -> ... }` handled separately (not pattern-based).
 
 Range patterns (`in 1..10`), destructuring, and smart casts are out
 of scope (red-dragon-1qcf, red-dragon-bijo, red-dragon-tq0m).
+
+---
+
+## ADR-120: Unified Match Expression Lowering Framework (2026-03-21)
+
+**Status:** Accepted
+**Issue:** red-dragon-lgsk
+
+Extracted the duplicated match/switch expression lowering skeleton from
+Rust, Scala, Kotlin, and C# into `interpreter/frontends/common/match_expr.py`.
+
+`MatchArmSpec` dataclass holds 4 language-specific callbacks:
+`extract_arms`, `pattern_of`, `guard_of`, `body_of`. `lower_match_as_expr`
+drives the shared skeleton: result_var allocation, irrefutability shortcut,
+pre-guard binding protocol, guard folding, BRANCH_IF chain, DECL_VAR
+result storage, and final LOAD_VAR.
+
+Each language provides a module-level spec constant (`_RUST_MATCH_SPEC`,
+`_SCALA_MATCH_SPEC`, `_KOTLIN_WHEN_SPEC`, C# inline spec) and a thin
+`lower_match_expr`/`lower_switch_expr` wrapper.
+
+Excluded by design: Kotlin subjectless `when` (boolean dispatch, not
+patterns), C# switch statement (uses break_target_stack), Python
+statement-style `compile_match` (uses lower_block).
