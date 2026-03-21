@@ -9,6 +9,7 @@ from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.frontends.common.patterns import (
     CapturePattern,
     ClassPattern,
+    DerefPattern,
     LiteralPattern,
     OrPattern,
     SequencePattern,
@@ -172,6 +173,32 @@ class TestCapturePattern:
         _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
         result = parse_rust_pattern(ctx, inner)
         assert result == CapturePattern("value")
+
+
+class TestReferencePattern:
+    def test_ref_capture(self):
+        """&val in match should produce DerefPattern(CapturePattern('val'))."""
+        snippet = "fn main() { match r { &val => 1, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert result == DerefPattern(CapturePattern("val"))
+
+    def test_ref_literal(self):
+        """&42 in match should produce DerefPattern(LiteralPattern(42))."""
+        snippet = "fn main() { match r { &42 => 1, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert result == DerefPattern(LiteralPattern(42))
+
+    def test_ref_wildcard(self):
+        """&_ in match should produce DerefPattern(WildcardPattern())."""
+        snippet = "fn main() { match r { &_ => 1, } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert result == DerefPattern(WildcardPattern())
 
 
 class TestOrPattern:
