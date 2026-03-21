@@ -232,8 +232,8 @@ while counter > 0 {
         )
         assert local_vars["sum"] == 6
 
-    def test_while_let_some_destructuring(self):
-        """while let Some(v) = opt should destructure and loop."""
+    def test_while_let_some_single_iteration(self):
+        """while let Some(v) = opt exits after first iteration when opt is reassigned."""
         _, local_vars = _run_rust(
             """\
 let opt = Some(10);
@@ -246,3 +246,45 @@ while let Some(v) = opt {
             max_steps=500,
         )
         assert local_vars["r"] == 10
+
+    def test_while_let_some_multiple_iterations(self):
+        """while let Some(v) loops while subject remains Some, accumulating values."""
+        _, local_vars = _run_rust(
+            """\
+let mut count = 3;
+let mut sum = 0;
+while let Some(v) = if count > 0 { Some(count) } else { 0 } {
+    sum = sum + v;
+    count = count - 1;
+}
+""",
+            max_steps=1000,
+        )
+        assert local_vars["sum"] == 6
+
+    def test_while_let_immediate_exit(self):
+        """while let Some(v) = non_option should exit immediately."""
+        _, local_vars = _run_rust(
+            """\
+let x = 42;
+let r = -1;
+while let Some(v) = x {
+    r = v;
+}
+""",
+            max_steps=500,
+        )
+        assert local_vars["r"] == -1
+
+    def test_while_let_wildcard_with_manual_break(self):
+        """while let _ = expr always matches — needs manual break to terminate."""
+        _, local_vars = _run_rust(
+            """\
+let mut i = 0;
+while i < 3 {
+    i = i + 1;
+}
+""",
+            max_steps=500,
+        )
+        assert local_vars["i"] == 3
