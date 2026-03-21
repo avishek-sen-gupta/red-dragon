@@ -34,7 +34,10 @@ from interpreter.executor import (
     _handle_store_indirect,
     _handle_binop,
     _handle_unop,
+    _default_handler_context,
 )
+
+_CTX = _default_handler_context()
 
 
 def _make_vm(**local_vars: object) -> VMState:
@@ -91,7 +94,7 @@ class TestAddressOfHandler:
         """ADDRESS_OF 'x' should move x=42 to a HeapObject and return a Pointer."""
         vm = _make_vm(x=42)
         inst = _make_inst(Opcode.ADDRESS_OF, result_reg="%0", operands=["x"])
-        result = _handle_address_of(inst, vm)
+        result = _handle_address_of(inst, vm, _CTX)
 
         assert result.handled
         _apply(vm, result)
@@ -112,11 +115,11 @@ class TestAddressOfHandler:
         """Taking &x twice should return the same Pointer (same heap object)."""
         vm = _make_vm(x=42)
         inst = _make_inst(Opcode.ADDRESS_OF, result_reg="%0", operands=["x"])
-        result1 = _handle_address_of(inst, vm)
+        result1 = _handle_address_of(inst, vm, _CTX)
         _apply(vm, result1)
 
         inst2 = _make_inst(Opcode.ADDRESS_OF, result_reg="%1", operands=["x"])
-        result2 = _handle_address_of(inst2, vm)
+        result2 = _handle_address_of(inst2, vm, _CTX)
         _apply(vm, result2)
 
         ptr1 = unwrap(vm.current_frame.registers["%0"])
@@ -131,7 +134,7 @@ class TestAddressOfHandler:
             fields={k: typed_from_runtime(v) for k, v in {"x": 10, "y": 20}.items()},
         )
         inst = _make_inst(Opcode.ADDRESS_OF, result_reg="%0", operands=["s"])
-        result = _handle_address_of(inst, vm)
+        result = _handle_address_of(inst, vm, _CTX)
         _apply(vm, result)
 
         ptr = unwrap(vm.current_frame.registers["%0"])
@@ -147,7 +150,7 @@ class TestAliasAwareLoadStore:
     def _promote(self, vm: VMState, var_name: str) -> Pointer:
         """Helper: promote a variable via ADDRESS_OF and return the Pointer."""
         inst = _make_inst(Opcode.ADDRESS_OF, result_reg="%ptr", operands=[var_name])
-        result = _handle_address_of(inst, vm)
+        result = _handle_address_of(inst, vm, _CTX)
         _apply(vm, result)
         return unwrap(vm.current_frame.registers["%ptr"])
 
@@ -161,7 +164,7 @@ class TestAliasAwareLoadStore:
         vm.heap[alias.base].fields["0"] = typed_from_runtime(99)
 
         inst = _make_inst(Opcode.LOAD_VAR, result_reg="%val", operands=["x"])
-        result = _handle_load_var(inst, vm)
+        result = _handle_load_var(inst, vm, _CTX)
         _apply(vm, result)
 
         assert unwrap(vm.current_frame.registers["%val"]) == 99
@@ -174,7 +177,7 @@ class TestAliasAwareLoadStore:
         # Store a new value into x
         vm.current_frame.registers["%newval"] = typed_from_runtime(77)
         inst = _make_inst(Opcode.STORE_VAR, operands=["x", "%newval"])
-        result = _handle_store_var(inst, vm)
+        result = _handle_store_var(inst, vm, _CTX)
         _apply(vm, result)
 
         # The heap should reflect the new value
@@ -189,12 +192,12 @@ class TestAliasAwareLoadStore:
         vm.current_frame.registers["%ptr"] = typed_from_runtime(ptr)
         vm.current_frame.registers["%99"] = typed_from_runtime(99)
         store_inst = _make_inst(Opcode.STORE_INDIRECT, operands=["%ptr", "%99"])
-        store_result = _handle_store_indirect(store_inst, vm)
+        store_result = _handle_store_indirect(store_inst, vm, _CTX)
         _apply(vm, store_result)
 
         # Now LOAD_VAR x should see 99
         load_inst = _make_inst(Opcode.LOAD_VAR, result_reg="%val", operands=["x"])
-        load_result = _handle_load_var(load_inst, vm)
+        load_result = _handle_load_var(load_inst, vm, _CTX)
         _apply(vm, load_result)
 
         assert unwrap(vm.current_frame.registers["%val"]) == 99
@@ -206,7 +209,7 @@ class TestAliasAwareLoadStore:
 class TestPointerDereference:
     def _promote(self, vm: VMState, var_name: str) -> Pointer:
         inst = _make_inst(Opcode.ADDRESS_OF, result_reg="%ptr", operands=[var_name])
-        result = _handle_address_of(inst, vm)
+        result = _handle_address_of(inst, vm, _CTX)
         _apply(vm, result)
         return unwrap(vm.current_frame.registers["%ptr"])
 
@@ -217,7 +220,7 @@ class TestPointerDereference:
         vm.current_frame.registers["%ptr"] = typed_from_runtime(ptr)
 
         inst = _make_inst(Opcode.LOAD_INDIRECT, result_reg="%val", operands=["%ptr"])
-        result = _handle_load_indirect(inst, vm)
+        result = _handle_load_indirect(inst, vm, _CTX)
         _apply(vm, result)
 
         assert unwrap(vm.current_frame.registers["%val"]) == 42
@@ -230,7 +233,7 @@ class TestPointerDereference:
         vm.current_frame.registers["%99"] = typed_from_runtime(99)
 
         inst = _make_inst(Opcode.STORE_INDIRECT, operands=["%ptr", "%99"])
-        result = _handle_store_indirect(inst, vm)
+        result = _handle_store_indirect(inst, vm, _CTX)
         _apply(vm, result)
 
         assert vm.heap[ptr.base].fields["0"].value == 99
@@ -250,7 +253,7 @@ class TestPointerArithmetic:
         inst = _make_inst(
             Opcode.BINOP, result_reg="%result", operands=["+", "%ptr", "%3"]
         )
-        result = _handle_binop(inst, vm)
+        result = _handle_binop(inst, vm, _CTX)
         _apply(vm, result)
 
         new_ptr = unwrap(vm.current_frame.registers["%result"])
@@ -268,7 +271,7 @@ class TestPointerArithmetic:
         inst = _make_inst(
             Opcode.BINOP, result_reg="%result", operands=["+", "%2", "%ptr"]
         )
-        result = _handle_binop(inst, vm)
+        result = _handle_binop(inst, vm, _CTX)
         _apply(vm, result)
 
         new_ptr = unwrap(vm.current_frame.registers["%result"])
@@ -286,7 +289,7 @@ class TestPointerArithmetic:
         inst = _make_inst(
             Opcode.BINOP, result_reg="%result", operands=["-", "%ptr", "%2"]
         )
-        result = _handle_binop(inst, vm)
+        result = _handle_binop(inst, vm, _CTX)
         _apply(vm, result)
 
         new_ptr = unwrap(vm.current_frame.registers["%result"])
@@ -312,14 +315,14 @@ class TestPointerArithmetic:
         add_inst = _make_inst(
             Opcode.BINOP, result_reg="%ptr1", operands=["+", "%ptr", "%1"]
         )
-        add_result = _handle_binop(add_inst, vm)
+        add_result = _handle_binop(add_inst, vm, _CTX)
         _apply(vm, add_result)
 
         # *(ptr + 1)
         deref_inst = _make_inst(
             Opcode.LOAD_INDIRECT, result_reg="%val", operands=["%ptr1"]
         )
-        deref_result = _handle_load_indirect(deref_inst, vm)
+        deref_result = _handle_load_indirect(deref_inst, vm, _CTX)
         _apply(vm, deref_result)
 
         assert unwrap(vm.current_frame.registers["%val"]) == 20
@@ -338,7 +341,7 @@ class TestPointerSubtraction:
         inst = _make_inst(
             Opcode.BINOP, result_reg="%diff", operands=["-", "%p2", "%p1"]
         )
-        result = _handle_binop(inst, vm)
+        result = _handle_binop(inst, vm, _CTX)
         _apply(vm, result)
 
         assert unwrap(vm.current_frame.registers["%diff"]) == 3
@@ -352,7 +355,7 @@ class TestPointerSubtraction:
         inst = _make_inst(
             Opcode.BINOP, result_reg="%diff", operands=["-", "%p2", "%p1"]
         )
-        result = _handle_binop(inst, vm)
+        result = _handle_binop(inst, vm, _CTX)
         _apply(vm, result)
 
         assert unwrap(vm.current_frame.registers["%diff"]) == -3
@@ -366,7 +369,7 @@ class TestPointerComparison:
         vm.current_frame.registers["%p2"] = Pointer("arr_0", 1)
 
         inst = _make_inst(Opcode.BINOP, result_reg="%r", operands=["<", "%p1", "%p2"])
-        result = _handle_binop(inst, vm)
+        result = _handle_binop(inst, vm, _CTX)
         _apply(vm, result)
 
         assert unwrap(vm.current_frame.registers["%r"]) is True
@@ -378,7 +381,7 @@ class TestPointerComparison:
         vm.current_frame.registers["%p2"] = Pointer("arr_0", 1)
 
         inst = _make_inst(Opcode.BINOP, result_reg="%r", operands=[">", "%p1", "%p2"])
-        result = _handle_binop(inst, vm)
+        result = _handle_binop(inst, vm, _CTX)
         _apply(vm, result)
 
         assert unwrap(vm.current_frame.registers["%r"]) is True
@@ -390,7 +393,7 @@ class TestPointerComparison:
         vm.current_frame.registers["%p2"] = Pointer("arr_0", 2)
 
         inst = _make_inst(Opcode.BINOP, result_reg="%r", operands=["<=", "%p1", "%p2"])
-        result = _handle_binop(inst, vm)
+        result = _handle_binop(inst, vm, _CTX)
         _apply(vm, result)
 
         assert unwrap(vm.current_frame.registers["%r"]) is True
@@ -402,7 +405,7 @@ class TestPointerComparison:
         vm.current_frame.registers["%p2"] = Pointer("arr_0", 3)
 
         inst = _make_inst(Opcode.BINOP, result_reg="%r", operands=["!=", "%p1", "%p2"])
-        result = _handle_binop(inst, vm)
+        result = _handle_binop(inst, vm, _CTX)
         _apply(vm, result)
 
         assert unwrap(vm.current_frame.registers["%r"]) is True
@@ -418,18 +421,18 @@ class TestNestedPointers:
 
         # ptr = &x
         inst1 = _make_inst(Opcode.ADDRESS_OF, result_reg="%ptr", operands=["x"])
-        _apply(vm, _handle_address_of(inst1, vm))
+        _apply(vm, _handle_address_of(inst1, vm, _CTX))
         # Store ptr as a local variable (keep as TypedValue)
         vm.current_frame.local_vars["ptr"] = vm.current_frame.registers["%ptr"]
 
         # pp = &ptr
         inst2 = _make_inst(Opcode.ADDRESS_OF, result_reg="%pp", operands=["ptr"])
-        _apply(vm, _handle_address_of(inst2, vm))
+        _apply(vm, _handle_address_of(inst2, vm, _CTX))
         pp = unwrap(vm.current_frame.registers["%pp"])
 
         # *pp should give us the Pointer to x
         deref1 = _make_inst(Opcode.LOAD_INDIRECT, result_reg="%inner", operands=["%pp"])
-        _apply(vm, _handle_load_indirect(deref1, vm))
+        _apply(vm, _handle_load_indirect(deref1, vm, _CTX))
         inner = unwrap(vm.current_frame.registers["%inner"])
         assert isinstance(inner, Pointer)
 
@@ -437,5 +440,5 @@ class TestNestedPointers:
         deref2 = _make_inst(
             Opcode.LOAD_INDIRECT, result_reg="%val", operands=["%inner"]
         )
-        _apply(vm, _handle_load_indirect(deref2, vm))
+        _apply(vm, _handle_load_indirect(deref2, vm, _CTX))
         assert unwrap(vm.current_frame.registers["%val"]) == 42

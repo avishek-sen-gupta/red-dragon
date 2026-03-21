@@ -10,7 +10,7 @@ from interpreter.ir import IRInstruction, Opcode
 from interpreter.typed_value import unwrap
 from interpreter.vm import VMState, apply_update
 from interpreter.vm_types import StackFrame
-from interpreter.executor import LocalExecutor
+from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
 
@@ -46,13 +46,12 @@ def _execute_ir(instructions: list[IRInstruction], registers: dict[str, Any]) ->
     """Execute straight-line IR and return the RETURN value."""
     vm = VMState()
     vm.call_stack.append(StackFrame(function_name="test", registers=dict(registers)))
-    cfg = CFG()
-    registry = FunctionRegistry()
+    ctx = _default_handler_context()
 
     for inst in instructions:
         if inst.opcode == Opcode.LABEL:
             continue
-        result = LocalExecutor.execute(inst=inst, vm=vm, cfg=cfg, registry=registry)
+        result = LocalExecutor.execute(inst=inst, vm=vm, ctx=ctx)
         assert result.handled, f"Instruction not handled: {inst}"
         apply_update(vm, result.update)
         if inst.opcode == Opcode.RETURN:

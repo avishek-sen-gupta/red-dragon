@@ -10,13 +10,20 @@ from __future__ import annotations
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.vm import VMState, SymbolicValue, apply_update
 from interpreter.vm_types import HeapObject, Pointer, StackFrame
-from interpreter.executor import LocalExecutor
+from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context
 from interpreter.cfg import CFG, build_cfg
 from interpreter.registry import FunctionRegistry, build_registry
 from interpreter.func_ref import FuncRef, BoundFuncRef
 from interpreter.typed_value import typed, typed_from_runtime, unwrap
 from interpreter.type_expr import scalar, UNKNOWN
 from interpreter.constants import TypeName
+
+
+from dataclasses import replace as _replace
+
+
+def _ctx(**overrides) -> HandlerContext:
+    return _replace(_default_handler_context(), **overrides)
 
 
 def _build_callable_field_vm():
@@ -68,7 +75,9 @@ class TestHeapFieldMethodCall:
             result_reg="%result",
             operands=["%obj", "greet", "%obj", "%arg"],
         )
-        result = LocalExecutor.execute(inst=inst, vm=vm, cfg=cfg, registry=registry)
+        result = LocalExecutor.execute(
+            inst=inst, vm=vm, ctx=_ctx(cfg=cfg, registry=registry)
+        )
         assert result.handled
         assert (
             result.update.call_push is not None
@@ -85,7 +94,9 @@ class TestHeapFieldMethodCall:
             result_reg="%result",
             operands=["%obj", "greet", "%obj"],
         )
-        result = LocalExecutor.execute(inst=inst, vm=vm, cfg=cfg, registry=registry)
+        result = LocalExecutor.execute(
+            inst=inst, vm=vm, ctx=_ctx(cfg=cfg, registry=registry)
+        )
         assert result.handled
         assert result.update.call_push is None, "Should fall back, not dispatch"
         assert isinstance(result.update.register_writes["%result"].value, SymbolicValue)
@@ -98,7 +109,9 @@ class TestHeapFieldMethodCall:
             result_reg="%result",
             operands=["%obj", "nonexistent", "%obj"],
         )
-        result = LocalExecutor.execute(inst=inst, vm=vm, cfg=cfg, registry=registry)
+        result = LocalExecutor.execute(
+            inst=inst, vm=vm, ctx=_ctx(cfg=cfg, registry=registry)
+        )
         assert result.handled
         assert result.update.call_push is None, "Should fall back, not dispatch"
         assert isinstance(result.update.register_writes["%result"].value, SymbolicValue)

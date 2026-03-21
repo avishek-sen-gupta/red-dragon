@@ -17,7 +17,7 @@ from interpreter.registry import build_registry
 from interpreter.run import VMConfig, execute_cfg
 from interpreter.vm import VMState, apply_update
 from interpreter.vm_types import StackFrame
-from interpreter.executor import LocalExecutor
+from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "cobol"
 
@@ -46,6 +46,9 @@ def _execute_straight_line(
     vm.call_stack.append(StackFrame(function_name="<main>"))
     cfg = build_cfg(instructions)
     registry = build_registry(instructions, cfg)
+    from dataclasses import replace
+
+    ctx = replace(_default_handler_context(), cfg=cfg, registry=registry)
 
     for inst in instructions:
         if inst.opcode == Opcode.LABEL:
@@ -54,7 +57,7 @@ def _execute_straight_line(
             break
         if inst.opcode in (Opcode.BRANCH, Opcode.BRANCH_IF):
             continue  # Skip branches for straight-line
-        result = LocalExecutor.execute(inst=inst, vm=vm, cfg=cfg, registry=registry)
+        result = LocalExecutor.execute(inst=inst, vm=vm, ctx=ctx)
         if result.handled:
             apply_update(vm, result.update)
 
