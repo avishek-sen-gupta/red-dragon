@@ -6,6 +6,7 @@
 {"issue_id":"red-dragon-0b1","label":"p1"}
 {"issue_id":"red-dragon-0b1","label":"pascal"}
 {"issue_id":"red-dragon-0b1","label":"property"}
+{"issue_id":"red-dragon-0jzc","label":"symbol-table"}
 {"issue_id":"red-dragon-0ln","label":"csharp"}
 {"issue_id":"red-dragon-0ln","label":"frontend"}
 {"issue_id":"red-dragon-0rx","label":"frontend"}
@@ -18,11 +19,13 @@
 {"issue_id":"red-dragon-1qq","label":"typed-value"}
 {"issue_id":"red-dragon-2mdz","label":"audit-asserts"}
 {"issue_id":"red-dragon-2qem","label":"pattern-matching"}
+{"issue_id":"red-dragon-2r6l","label":"symbol-table"}
 {"issue_id":"red-dragon-2uke","label":"pattern-matching"}
 {"issue_id":"red-dragon-2vi","label":"frontend"}
 {"issue_id":"red-dragon-2vi","label":"javascript"}
 {"issue_id":"red-dragon-2vi","label":"typescript"}
 {"issue_id":"red-dragon-3a3j","label":"audit-asserts"}
+{"issue_id":"red-dragon-3f4v","label":"symbol-table"}
 {"issue_id":"red-dragon-3ie","label":"frontend"}
 {"issue_id":"red-dragon-3ie","label":"php"}
 {"issue_id":"red-dragon-3k9f","label":"frontend-gap"}
@@ -56,6 +59,7 @@
 {"issue_id":"red-dragon-5jdr","label":"architecture"}
 {"issue_id":"red-dragon-5jdr","label":"symbol-table"}
 {"issue_id":"red-dragon-5lu","label":"typed-value"}
+{"issue_id":"red-dragon-5qfn","label":"symbol-table"}
 {"issue_id":"red-dragon-67bz","label":"frontend-gap"}
 {"issue_id":"red-dragon-6ar6","label":"frontend-gap"}
 {"issue_id":"red-dragon-6hd","label":"frontend"}
@@ -82,6 +86,7 @@
 {"issue_id":"red-dragon-8s7z","label":"audit-asserts"}
 {"issue_id":"red-dragon-93w","label":"frontend"}
 {"issue_id":"red-dragon-93w","label":"pascal"}
+{"issue_id":"red-dragon-96k5","label":"php"}
 {"issue_id":"red-dragon-9815","label":"frontend-gap"}
 {"issue_id":"red-dragon-988","label":"type-system"}
 {"issue_id":"red-dragon-9go","label":"audit"}
@@ -130,6 +135,7 @@
 {"issue_id":"red-dragon-enjk","label":"audit-asserts"}
 {"issue_id":"red-dragon-f6i","label":"typed-value"}
 {"issue_id":"red-dragon-fdgp","label":"audit-asserts"}
+{"issue_id":"red-dragon-fjh9","label":"ruby"}
 {"issue_id":"red-dragon-fqgd","label":"audit-asserts"}
 {"issue_id":"red-dragon-fre","label":"frontend"}
 {"issue_id":"red-dragon-fre","label":"scala"}
@@ -572,11 +578,15 @@
 {"issue_id":"red-dragon-hs26","label":"audit-asserts"}
 {"issue_id":"red-dragon-i3w","label":"frontend"}
 {"issue_id":"red-dragon-i3w","label":"rust"}
+{"issue_id":"red-dragon-i5ib","label":"cpp"}
+{"issue_id":"red-dragon-i8r0","label":"rust"}
 {"issue_id":"red-dragon-ia8","label":"csharp"}
 {"issue_id":"red-dragon-ia8","label":"vm"}
 {"issue_id":"red-dragon-icic","label":"audit-asserts"}
+{"issue_id":"red-dragon-ipdo","label":"symbol-table"}
 {"issue_id":"red-dragon-iyb","label":"p2"}
 {"issue_id":"red-dragon-iyb","label":"pascal"}
+{"issue_id":"red-dragon-izbh","label":"symbol-table"}
 {"issue_id":"red-dragon-j628","label":"audit-asserts"}
 {"issue_id":"red-dragon-j87f","label":"architecture"}
 {"issue_id":"red-dragon-j87f","label":"symbol-table"}
@@ -598,6 +608,7 @@
 {"issue_id":"red-dragon-ldr","label":"frontend"}
 {"issue_id":"red-dragon-ldr","label":"rust"}
 {"issue_id":"red-dragon-ls2a","label":"audit-asserts"}
+{"issue_id":"red-dragon-lsu8","label":"symbol-table"}
 {"issue_id":"red-dragon-ltv","label":"frontend"}
 {"issue_id":"red-dragon-ltv","label":"java"}
 {"issue_id":"red-dragon-lvj","label":"frontend"}
@@ -606,11 +617,13 @@
 {"issue_id":"red-dragon-m56","label":"frontend"}
 {"issue_id":"red-dragon-m56","label":"php"}
 {"issue_id":"red-dragon-mbr9","label":"audit-asserts"}
+{"issue_id":"red-dragon-mi7q","label":"symbol-table"}
 {"issue_id":"red-dragon-ml39","label":"frontend-gap"}
 {"issue_id":"red-dragon-n9m","label":"typed-value-migration"}
 {"issue_id":"red-dragon-nbu","label":"typed-value"}
 {"issue_id":"red-dragon-ne5","label":"frontend"}
 {"issue_id":"red-dragon-ne5","label":"kotlin"}
+{"issue_id":"red-dragon-nig4","label":"php"}
 {"issue_id":"red-dragon-nm6","label":"frontend"}
 {"issue_id":"red-dragon-nm6","label":"kotlin"}
 {"issue_id":"red-dragon-nzlv","label":"architecture"}
@@ -625,6 +638,7 @@
 {"issue_id":"red-dragon-qro","label":"p2"}
 {"issue_id":"red-dragon-qro","label":"pascal"}
 {"issue_id":"red-dragon-qro","label":"testing"}
+{"issue_id":"red-dragon-qtaa","label":"symbol-table"}
 {"issue_id":"red-dragon-qtx","label":"frontend"}
 {"issue_id":"red-dragon-qtx","label":"pascal"}
 {"issue_id":"red-dragon-qwsu","label":"audit-asserts"}
@@ -644,8 +658,10 @@
 {"issue_id":"red-dragon-rrb","label":"typed-value-migration"}
 {"issue_id":"red-dragon-sl0o","label":"audit-asserts"}
 {"issue_id":"red-dragon-slgt","label":"audit-asserts"}
+{"issue_id":"red-dragon-ta26","label":"c"}
 {"issue_id":"red-dragon-tkv","label":"frontend"}
 {"issue_id":"red-dragon-tkv","label":"scala"}
+{"issue_id":"red-dragon-tmop","label":"symbol-table"}
 {"issue_id":"red-dragon-tpz","label":"typed-value"}
 {"issue_id":"red-dragon-tzss","label":"audit-asserts"}
 {"issue_id":"red-dragon-u0gv","label":"csharp"}
@@ -686,6 +702,7 @@
 {"issue_id":"red-dragon-yhd","label":"frontend"}
 {"issue_id":"red-dragon-yhd","label":"go"}
 {"issue_id":"red-dragon-yk61","label":"audit-asserts"}
+{"issue_id":"red-dragon-ykcq","label":"symbol-table"}
 {"issue_id":"red-dragon-ymq","label":"typed-value"}
 {"issue_id":"red-dragon-yn17","label":"csharp"}
 {"issue_id":"red-dragon-z9o","label":"typed-value"}
