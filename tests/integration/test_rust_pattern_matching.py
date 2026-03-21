@@ -292,3 +292,41 @@ while let Some(v) = if sum < 5 { Some(pair) } else { 0 } {
             max_steps=1000,
         )
         assert local_vars["sum"] == 8
+
+
+class TestRustLetChain:
+    def test_let_chain_both_match(self):
+        """if let Some(x) = a && let Some(y) = b should bind both."""
+        _, local_vars = _run_rust(
+            """\
+let a = Some(3);
+let b = Some(4);
+let r = if let Some(x) = a && let Some(y) = b { x + y } else { 0 };
+""",
+            max_steps=500,
+        )
+        assert local_vars["r"] == 7
+
+    def test_let_chain_first_fails(self):
+        """If first let condition fails, take else branch."""
+        _, local_vars = _run_rust(
+            """\
+let a = 0;
+let b = Some(4);
+let r = if let Some(x) = a && let Some(y) = b { x + y } else { -1 };
+""",
+            max_steps=500,
+        )
+        assert local_vars["r"] == -1
+
+    def test_let_chain_second_fails(self):
+        """If second let condition fails, take else branch."""
+        _, local_vars = _run_rust(
+            """\
+let a = Some(3);
+let b = 0;
+let r = if let Some(x) = a && let Some(y) = b { x + y } else { -1 };
+""",
+            max_steps=500,
+        )
+        assert local_vars["r"] == -1

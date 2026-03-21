@@ -173,6 +173,10 @@ def lower_if_expr(ctx: TreeSitterEmitContext, node) -> str:
     if cond_node and cond_node.type == RustNodeType.LET_CONDITION:
         return _lower_if_let_expr(ctx, node, cond_node)
 
+    # if let chain: let A && let B
+    if cond_node and cond_node.type == RustNodeType.LET_CHAIN:
+        return _lower_if_let_chain_expr(ctx, node, cond_node)
+
     body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
     alt_node = node.child_by_field_name(ctx.constants.if_alternative_field)
 
@@ -254,6 +258,73 @@ def _lower_if_let_expr(ctx: TreeSitterEmitContext, node, let_cond_node) -> str:
     reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[result_var])
     return reg
+
+
+def _lower_if_let_chain_expr(ctx: TreeSitterEmitContext, node, let_chain_node) -> str:
+    """Lower `if let A && let B { body } else { alt }` as expression.
+
+    Extracts all let_condition children from the let_chain, tests each
+    pattern, ANDs the results, branches, then binds all patterns in
+    the true branch.
+    """
+    let_conditions = [
+        c for c in let_chain_node.children if c.type == RustNodeType.LET_CONDITION
+    ]
+
+    body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
+    alt_node = node.child_by_field_name(ctx.constants.if_alternative_field)
+
+    # Test each let condition and collect (test_reg, pattern, subject_reg)
+    arms = [_test_let_condition(ctx, lc) for lc in let_conditions]
+
+    # AND all test registers
+    combined = arms[0][0]
+    for test_reg, _, _ in arms[1:]:
+        and_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.BINOP, result_reg=and_reg, operands=["&&", combined, test_reg])
+        combined = and_reg
+
+    true_label = ctx.fresh_label("let_chain_true")
+    false_label = ctx.fresh_label("let_chain_false")
+    end_label = ctx.fresh_label("let_chain_end")
+    result_var = f"__let_chain_result_{ctx.label_counter}"
+
+    target_label = false_label if alt_node else end_label
+    ctx.emit(
+        Opcode.BRANCH_IF,
+        operands=[combined],
+        label=f"{true_label},{target_label}",
+        node=node,
+    )
+
+    # True branch: bind all patterns, lower body
+    ctx.emit(Opcode.LABEL, label=true_label)
+    for _, pattern, subject_reg in arms:
+        compile_pattern_bindings(ctx, subject_reg, pattern)
+    true_reg = lower_block_expr(ctx, body_node)
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, true_reg])
+    ctx.emit(Opcode.BRANCH, label=end_label)
+
+    if alt_node:
+        ctx.emit(Opcode.LABEL, label=false_label)
+        false_reg = ctx.lower_expr(alt_node)
+        ctx.emit(Opcode.DECL_VAR, operands=[result_var, false_reg])
+        ctx.emit(Opcode.BRANCH, label=end_label)
+
+    ctx.emit(Opcode.LABEL, label=end_label)
+    reg = ctx.fresh_reg()
+    ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[result_var])
+    return reg
+
+
+def _test_let_condition(ctx: TreeSitterEmitContext, let_cond_node):
+    """Test a single let_condition, returning (test_reg, pattern, subject_reg)."""
+    pattern_node = let_cond_node.child_by_field_name("pattern")
+    value_node = let_cond_node.child_by_field_name("value")
+    subject_reg = ctx.lower_expr(value_node)
+    pattern = parse_rust_pattern(ctx, pattern_node)
+    test_reg = compile_pattern_test(ctx, subject_reg, pattern)
+    return (test_reg, pattern, subject_reg)
 
 
 def lower_expr_stmt_as_expr(ctx: TreeSitterEmitContext, node) -> str:
