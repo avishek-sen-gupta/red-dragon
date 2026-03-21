@@ -559,3 +559,132 @@ def lower_function_declaration(ctx: TreeSitterEmitContext, node) -> None:
 def lower_function_def_stmt(ctx: TreeSitterEmitContext, node) -> None:
     """Statement-dispatch wrapper for function_definition."""
     lower_function_def(ctx, node)
+
+
+# ---------------------------------------------------------------------------
+# Symbol extraction (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+def _extract_scala_primary_ctor_fields(class_params_node) -> "dict[str, FieldInfo]":
+    """Extract val/var class parameters as fields from a class_parameters node."""
+    from interpreter.frontends.symbol_table import FieldInfo
+
+    fields: dict[str, FieldInfo] = {}
+    for child in class_params_node.children:
+        if child.type != NT.CLASS_PARAMETER:
+            continue
+        has_val_var = any(
+            c.text in (b"val", b"var") for c in child.children if not c.is_named
+        )
+        if not has_val_var:
+            continue
+        name_node = child.child_by_field_name("name")
+        type_node = child.child_by_field_name("type")
+        if name_node is None:
+            continue
+        fname = name_node.text.decode()
+        type_hint = type_node.text.decode() if type_node is not None else ""
+        fields[fname] = FieldInfo(
+            name=fname, type_hint=type_hint, has_initializer=False
+        )
+    return fields
+
+
+def _extract_scala_class(node) -> "tuple[str, ClassInfo] | None":
+    """Extract a ClassInfo from a Scala class_definition or case_class_definition node."""
+    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
+
+    name_node = node.child_by_field_name("name")
+    if name_node is None:
+        return None
+    class_name = name_node.text.decode()
+
+    # Extends clause for parents
+    extends_clause = next(
+        (c for c in node.children if c.type == NT.EXTENDS_CLAUSE), None
+    )
+    parents: tuple[str, ...] = ()
+    if extends_clause is not None:
+        parents = tuple(
+            c.text.decode().split("[")[0]
+            for c in extends_clause.children
+            if c.type in (NT.TYPE_IDENTIFIER, NT.IDENTIFIER)
+        )
+
+    fields: dict[str, FieldInfo] = {}
+
+    # Primary constructor parameters with val/var
+    class_params = node.child_by_field_name("class_parameters")
+    if class_params is not None:
+        fields.update(_extract_scala_primary_ctor_fields(class_params))
+
+    body = next((c for c in node.children if c.type == NT.TEMPLATE_BODY), None)
+    if body is None:
+        return class_name, ClassInfo(
+            name=class_name, fields=fields, methods={}, constants={}, parents=parents
+        )
+
+    methods: dict[str, FunctionInfo] = {}
+
+    for child in body.children:
+        if child.type in (NT.VAL_DEFINITION, NT.VAR_DEFINITION):
+            # val_definition: 'val' identifier ':' type_identifier '=' expr
+            pname_node = next(
+                (c for c in child.children if c.type == NT.IDENTIFIER), None
+            )
+            ptype_node = child.child_by_field_name("type")
+            if pname_node is not None:
+                fname = pname_node.text.decode()
+                type_hint = ptype_node.text.decode() if ptype_node is not None else ""
+                fields[fname] = FieldInfo(
+                    name=fname, type_hint=type_hint, has_initializer=True
+                )
+        elif child.type == NT.FUNCTION_DEFINITION:
+            mname_node = child.child_by_field_name("name")
+            if mname_node is None:
+                continue
+            mname = mname_node.text.decode()
+            # params are in nested parameter_clause children
+            params = tuple(
+                p.child_by_field_name("name").text.decode()
+                for grandchild in child.children
+                if grandchild.type == "parameters"
+                for p in grandchild.children
+                if p.type == NT.PARAMETER and p.child_by_field_name("name") is not None
+            )
+            ret_node = child.child_by_field_name("return_type")
+            return_type = ret_node.text.decode() if ret_node is not None else ""
+            methods[mname] = FunctionInfo(
+                name=mname, params=params, return_type=return_type
+            )
+
+    return class_name, ClassInfo(
+        name=class_name,
+        fields=fields,
+        methods=methods,
+        constants={},
+        parents=parents,
+    )
+
+
+def _collect_scala_classes(node, accumulator: "dict[str, ClassInfo]") -> None:
+    """Recursively walk the AST and collect all class/case class definition nodes."""
+    from interpreter.frontends.symbol_table import ClassInfo
+
+    if node.type in (NT.CLASS_DEFINITION, NT.CASE_CLASS_DEFINITION):
+        result = _extract_scala_class(node)
+        if result is not None:
+            class_name, class_info = result
+            accumulator[class_name] = class_info
+    for child in node.children:
+        _collect_scala_classes(child, accumulator)
+
+
+def extract_scala_symbols(root) -> "SymbolTable":
+    """Walk the Scala AST and return a SymbolTable of all class definitions."""
+    from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
+
+    classes: dict[str, ClassInfo] = {}
+    _collect_scala_classes(root, classes)
+    return SymbolTable(classes=classes)

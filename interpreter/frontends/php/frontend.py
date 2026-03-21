@@ -140,3 +140,9 @@ class PhpFrontend(BaseFrontend):
             PHPNodeType.DECLARE_STATEMENT: lambda ctx, node: None,
             PHPNodeType.UNSET_STATEMENT: lambda ctx, node: None,
         }
+
+    def _extract_symbols(self, root) -> "SymbolTable":
+        from interpreter.frontends.php.declarations import extract_php_symbols
+        from interpreter.frontends.symbol_table import SymbolTable
+
+        return extract_php_symbols(root)

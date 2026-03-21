@@ -124,3 +124,9 @@ class RubyFrontend(BaseFrontend):
             RubyNodeType.BEGIN_BLOCK: lambda ctx, node: None,
             RubyNodeType.END_BLOCK: lambda ctx, node: None,
         }
+
+    def _extract_symbols(self, root) -> "SymbolTable":
+        from interpreter.frontends.ruby.declarations import extract_ruby_symbols
+        from interpreter.frontends.symbol_table import SymbolTable
+
+        return extract_ruby_symbols(root)
