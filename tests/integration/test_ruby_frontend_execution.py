@@ -64,3 +64,59 @@ class TestRubyBeginEndBlockExecution:
         """Code after END block should execute normally."""
         locals_ = _run_ruby("END { x = 1 }\ny = 42")
         assert locals_["y"] == 42
+
+
+class TestRubySingletonMethodDispatch:
+    def test_class_method_returns_correct_value(self):
+        """Util.square(5) on a def self.square method should return 25."""
+        locals_ = _run_ruby(
+            """\
+class Util
+  def self.square(x)
+    x * x
+  end
+end
+result = Util.square(5)
+""",
+            max_steps=500,
+        )
+        assert locals_["result"] == 25
+
+    def test_class_method_with_multiple_args(self):
+        """Class method with multiple arguments should dispatch correctly."""
+        locals_ = _run_ruby(
+            """\
+class Math
+  def self.add(a, b)
+    a + b
+  end
+end
+result = Math.add(3, 4)
+""",
+            max_steps=500,
+        )
+        assert locals_["result"] == 7
+
+    def test_class_method_alongside_instance_method(self):
+        """Class and instance methods on same class should both dispatch."""
+        locals_ = _run_ruby(
+            """\
+class Calc
+  def self.square(x)
+    x * x
+  end
+  def initialize(val)
+    @val = val
+  end
+  def double
+    @val * 2
+  end
+end
+sq = Calc.square(4)
+c = Calc.new(3)
+dbl = c.double
+""",
+            max_steps=500,
+        )
+        assert locals_["sq"] == 16
+        assert locals_["dbl"] == 6
