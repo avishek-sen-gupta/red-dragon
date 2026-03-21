@@ -3,7 +3,9 @@
 from interpreter.vm import _heap_addr, HeapObject, VMState
 from interpreter.vm_types import Pointer, StackFrame, SymbolicValue
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.executor import _handle_address_of
+from interpreter.executor import _handle_address_of, _default_handler_context
+
+_CTX = _default_handler_context()
 from interpreter.typed_value import typed
 from interpreter.type_expr import pointer, scalar
 from interpreter.constants import TypeName
@@ -62,7 +64,7 @@ class TestAddressOfPointerGuard:
             operands=["ptr"],
         )
 
-        result = _handle_address_of(inst, vm)
+        result = _handle_address_of(inst, vm, _CTX)
 
         # The result must be a Pointer to a NEW heap slot (mem_*), not mem_0.
         result_ptr = result.update.register_writes["t0"].value
@@ -103,7 +105,7 @@ class TestAddressOfPointerGuard:
             operands=["arr"],
         )
 
-        result = _handle_address_of(inst, vm)
+        result = _handle_address_of(inst, vm, _CTX)
 
         result_ptr = result.update.register_writes["t0"].value
         assert isinstance(result_ptr, Pointer)
@@ -137,7 +139,7 @@ class TestAddressOfPointerGuard:
             operands=["pt"],
         )
 
-        result = _handle_address_of(inst, vm)
+        result = _handle_address_of(inst, vm, _CTX)
 
         result_ptr = result.update.register_writes["t0"].value
         assert isinstance(result_ptr, Pointer)

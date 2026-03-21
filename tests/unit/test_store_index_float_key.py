@@ -15,7 +15,7 @@ from interpreter.ir import IRInstruction, Opcode
 from interpreter.type_environment import TypeEnvironment
 from interpreter.vm import VMState, apply_update, _heap_addr
 from interpreter.vm_types import StackFrame, StateUpdate
-from interpreter.executor import LocalExecutor
+from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
 
@@ -56,8 +56,7 @@ def _execute(vm, inst, type_env=None, conversion_rules=None):
     result = LocalExecutor.execute(
         inst=inst,
         vm=vm,
-        cfg=_empty_cfg(),
-        registry=_empty_registry(),
+        ctx=_default_handler_context(),
     )
     assert result.handled
     kwargs = {}
