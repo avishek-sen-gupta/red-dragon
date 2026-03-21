@@ -71,7 +71,11 @@ def _flatten_field(
     accumulator: dict[str, FieldLayout],
 ) -> dict[str, FieldLayout]:
     """Recursively flatten a CobolField tree into FieldLayout entries."""
-    absolute_offset = base_offset + cobol_field.offset
+    # REDEFINES fields share the offset of the field they redefine
+    if cobol_field.redefines and cobol_field.redefines in accumulator:
+        absolute_offset = accumulator[cobol_field.redefines].offset
+    else:
+        absolute_offset = base_offset + cobol_field.offset
 
     if cobol_field.children:
         child_layouts = reduce(
@@ -220,6 +224,49 @@ def _resolve_renames(
     )
 
 
+def _fix_redefines_offsets(
+    layouts: dict[str, FieldLayout],
+) -> dict[str, FieldLayout]:
+    """Fix REDEFINES field offsets to share the offset of the redefined field.
+
+    ProLeap may assign sequential offsets to REDEFINES fields; COBOL semantics
+    require them to share the same byte position as the field they redefine.
+    """
+    return {
+        name: (
+            _with_offset(fl, layouts[fl.redefines].offset)
+            if fl.redefines
+            and fl.redefines in layouts
+            and fl.offset != layouts[fl.redefines].offset
+            else fl
+        )
+        for name, fl in layouts.items()
+    }
+
+
+def _with_offset(fl: FieldLayout, new_offset: int) -> FieldLayout:
+    """Return a copy of FieldLayout with a different offset."""
+    return FieldLayout(
+        name=fl.name,
+        type_descriptor=fl.type_descriptor,
+        offset=new_offset,
+        byte_length=fl.byte_length,
+        redefines=fl.redefines,
+        value=fl.value,
+        occurs_count=fl.occurs_count,
+        element_size=fl.element_size,
+        conditions=fl.conditions,
+        values=fl.values,
+        sign_separate=fl.sign_separate,
+        sign_leading=fl.sign_leading,
+        justified_right=fl.justified_right,
+        occurs_depending_on=fl.occurs_depending_on,
+        occurs_min=fl.occurs_min,
+        renames_from=fl.renames_from,
+        renames_thru=fl.renames_thru,
+    )
+
+
 def build_data_layout(fields: list[CobolField]) -> DataLayout:
     """Build a flat DataLayout from a list of top-level CobolField trees.
 
@@ -236,6 +283,9 @@ def build_data_layout(fields: list[CobolField]) -> DataLayout:
         non_renames_fields,
         {},
     )
+
+    # Pass 1.5: fix REDEFINES offsets — must share offset with redefined field
+    all_layouts = _fix_redefines_offsets(all_layouts)
 
     # Pass 2: resolve RENAMES fields (level 66)
     renames_fields = [f for f in fields if f.renames_from]
