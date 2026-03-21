@@ -642,6 +642,9 @@
 {"issue_id":"red-dragon-kmqo","label":"audit-asserts"}
 {"issue_id":"red-dragon-kw8","label":"builtin"}
 {"issue_id":"red-dragon-kw8","label":"vm"}
+{"issue_id":"red-dragon-kysi","label":"p2"}
+{"issue_id":"red-dragon-kysi","label":"pattern-matching"}
+{"issue_id":"red-dragon-kysi","label":"ruby"}
 {"issue_id":"red-dragon-lag","label":"builtin"}
 {"issue_id":"red-dragon-lag","label":"vm"}
 {"issue_id":"red-dragon-laz4","label":"p2"}

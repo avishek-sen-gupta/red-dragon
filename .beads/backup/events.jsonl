@@ -1520,3 +1520,8 @@
 {"actor":"avishek-sen-gupta","comment":"Added label: pattern-matching","created_at":"2026-03-21T21:44:36Z","event_type":"label_added","id":1520,"issue_id":"red-dragon-lgsk","new_value":null,"old_value":null}
 {"actor":"avishek-sen-gupta","comment":"Added label: architecture","created_at":"2026-03-21T21:44:36Z","event_type":"label_added","id":1521,"issue_id":"red-dragon-lgsk","new_value":null,"old_value":null}
 {"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-21T22:06:27Z","event_type":"closed","id":1522,"issue_id":"red-dragon-lgsk","new_value":"Closed","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-21T22:23:56Z","event_type":"closed","id":1523,"issue_id":"red-dragon-ldr","new_value":"Implemented as part of red-dragon-r06p (ADR-117). Rust or-patterns work via OrPattern in Pattern ADT.","old_value":""}
+{"actor":"avishek-sen-gupta","comment":null,"created_at":"2026-03-21T22:47:55Z","event_type":"created","id":1524,"issue_id":"red-dragon-kysi","new_value":"","old_value":""}
+{"actor":"avishek-sen-gupta","comment":"Added label: p2","created_at":"2026-03-21T22:47:55Z","event_type":"label_added","id":1525,"issue_id":"red-dragon-kysi","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":"Added label: ruby","created_at":"2026-03-21T22:47:55Z","event_type":"label_added","id":1526,"issue_id":"red-dragon-kysi","new_value":null,"old_value":null}
+{"actor":"avishek-sen-gupta","comment":"Added label: pattern-matching","created_at":"2026-03-21T22:47:55Z","event_type":"label_added","id":1527,"issue_id":"red-dragon-kysi","new_value":null,"old_value":null}
