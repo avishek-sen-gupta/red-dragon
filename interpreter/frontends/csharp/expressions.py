@@ -757,7 +757,15 @@ def lower_csharp_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
     if target.type == NT.IDENTIFIER:
-        emit_byref_store(ctx, ctx.node_text(target), val_reg, node=parent_node)
+        name = ctx.node_text(target)
+        if name in ctx._class_field_names:
+            this_reg = ctx.fresh_reg()
+            ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+            ctx.emit(
+                Opcode.STORE_FIELD, operands=[this_reg, name, val_reg], node=parent_node
+            )
+        else:
+            emit_byref_store(ctx, name, val_reg, node=parent_node)
     elif target.type == NT.MEMBER_ACCESS_EXPRESSION:
         obj_node = target.child_by_field_name("expression")
         name_node = target.child_by_field_name("name")
