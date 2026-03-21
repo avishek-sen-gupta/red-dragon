@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.frontends.common.patterns import (
     CapturePattern,
     ClassPattern,
+    DerefPattern,
     LiteralPattern,
     OrPattern,
     Pattern,
@@ -80,6 +81,12 @@ def parse_rust_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
 
     if node_type == RustNodeType.STRUCT_PATTERN:
         return _parse_struct_pattern(ctx, node)
+
+    if node_type == RustNodeType.REFERENCE_PATTERN:
+        # Children: '&' (anonymous) then the inner pattern (named or anonymous '_')
+        # Skip the '&' prefix and take the last child
+        inner_node = node.children[-1]
+        return DerefPattern(parse_rust_pattern(ctx, inner_node))
 
     raise ValueError(f"Unsupported Rust pattern node type: {node_type!r} ({text!r})")
 
