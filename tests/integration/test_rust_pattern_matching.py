@@ -97,10 +97,6 @@ let result = if let Some(v) = x { v } else { -1 };
 
 
 class TestRustPatternMatchingTuple:
-    @pytest.mark.xfail(
-        reason="Tuple construction not yet supported in Rust frontend",
-        strict=False,
-    )
     def test_tuple_destructuring(self):
         """match (3, 4) { (a, b) => a + b, _ => 0 } should produce 7."""
         _, local_vars = _run_rust("""\
@@ -114,10 +110,6 @@ let r = match pair {
 
 
 class TestRustPatternMatchingStruct:
-    @pytest.mark.xfail(
-        reason="Struct pattern destructuring needs struct class fields accessible via LOAD_FIELD",
-        strict=False,
-    )
     def test_struct_destructuring(self):
         """match p { Point { x, y } => x + y } should destructure struct fields."""
         _, local_vars = _run_rust("""\
@@ -148,10 +140,6 @@ let r = match opt {
 
 
 class TestRustPatternMatchingScopedIdentifier:
-    @pytest.mark.xfail(
-        reason="ValuePattern LOAD_VAR/LOAD_FIELD lookup for enum variants not yet wired",
-        strict=False,
-    )
     def test_scoped_identifier(self):
         """match Color::Red { Color::Red => 1, _ => 0 } should produce 1."""
         _, local_vars = _run_rust("""\
