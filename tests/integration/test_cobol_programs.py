@@ -1565,10 +1565,6 @@ class TestRedefines:
         expected_zoned = [0xF1, 0xF2, 0xF3, 0xF4]
         assert list(region[0:4]) == expected_zoned
 
-    @pytest.mark.xfail(
-        strict=False,
-        reason="REDEFINES offset sharing not yet reflected in data_layout",
-    )
     def test_simple_redefines_data_layout_offset(self):
         """REDEFINES field should share the same offset as the original in data_layout."""
         vm = _run_cobol(
@@ -1617,10 +1613,6 @@ class TestRedefines:
         # WS-DATE-NUM redefines the same 8 bytes — reading as one number.
         assert _decode_zoned_unsigned(region, 0, 8) == 20260322
 
-    @pytest.mark.xfail(
-        strict=False,
-        reason="MOVE from REDEFINES field not yet supported in IR lowering",
-    )
     def test_group_redefines_move_composite(self):
         """MOVE group REDEFINES composite to a separate result field."""
         vm = _run_cobol(
@@ -1645,10 +1637,6 @@ class TestRedefines:
         # WS-RESULT at offset 8 should hold 20260322 after MOVE.
         assert _decode_zoned_unsigned(region, 8, 8) == 20260322
 
-    @pytest.mark.xfail(
-        strict=False,
-        reason="MOVE from REDEFINES group children not yet supported in IR lowering",
-    )
     def test_multiple_redefines_move_through_children(self):
         """Multiple REDEFINES: MOVE through group REDEFINES children."""
         vm = _run_cobol(
@@ -1702,10 +1690,6 @@ class TestRedefines:
         expected = [0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8]
         assert list(region[0:8]) == expected
 
-    @pytest.mark.xfail(
-        strict=False,
-        reason="REDEFINES offset sharing not yet reflected in data_layout",
-    )
     def test_multiple_redefines_data_layout_offsets(self):
         """Multiple REDEFINES fields should all share offset 0 in data_layout."""
         vm = _run_cobol(
@@ -1732,10 +1716,6 @@ class TestRedefines:
         region = _first_region(vm)
         assert len(region) == 8
 
-    @pytest.mark.xfail(
-        strict=False,
-        reason="MOVE from REDEFINES field not yet supported in IR lowering",
-    )
     def test_redefines_numeric_as_alphanumeric_move(self):
         """Numeric VALUE init, MOVE through alphanumeric REDEFINES to output."""
         vm = _run_cobol(
