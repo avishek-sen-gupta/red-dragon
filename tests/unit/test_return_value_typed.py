@@ -5,7 +5,7 @@ from types import MappingProxyType
 from interpreter.constants import TypeName
 from interpreter.identity_conversion_rules import IdentityConversionRules
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.executor import _handle_return
+from interpreter.executor import _handle_return, _default_handler_context
 from interpreter.type_environment import TypeEnvironment
 from interpreter.type_expr import UNKNOWN, scalar
 from interpreter.typed_value import TypedValue, typed, typed_from_runtime
@@ -27,7 +27,7 @@ class TestHandleReturnTypedValue:
         vm.call_stack.append(StackFrame(function_name="main"))
         vm.current_frame.registers["%0"] = typed(42, scalar(TypeName.INT))
         inst = IRInstruction(opcode=Opcode.RETURN, operands=["%0"])
-        result = _handle_return(inst, vm)
+        result = _handle_return(inst, vm, _default_handler_context())
         rv = result.update.return_value
         assert isinstance(rv, TypedValue)
         assert rv.value == 42
@@ -38,7 +38,7 @@ class TestHandleReturnTypedValue:
         vm.call_stack.append(StackFrame(function_name="main"))
         vm.current_frame.registers["%0"] = typed(None, UNKNOWN)
         inst = IRInstruction(opcode=Opcode.RETURN, operands=["%0"])
-        result = _handle_return(inst, vm)
+        result = _handle_return(inst, vm, _default_handler_context())
         rv = result.update.return_value
         assert isinstance(rv, TypedValue)
         assert rv.value is None
@@ -50,7 +50,7 @@ class TestHandleReturnTypedValue:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         inst = IRInstruction(opcode=Opcode.RETURN, operands=[])
-        result = _handle_return(inst, vm)
+        result = _handle_return(inst, vm, _default_handler_context())
         rv = result.update.return_value
         assert isinstance(rv, TypedValue)
         assert rv.value is None
@@ -63,13 +63,13 @@ class TestHandleReturnTypedValue:
 
         # Void (no operands)
         void_inst = IRInstruction(opcode=Opcode.RETURN, operands=[])
-        void_result = _handle_return(void_inst, vm)
+        void_result = _handle_return(void_inst, vm, _default_handler_context())
         void_rv = void_result.update.return_value
 
         # None (explicit return None)
         vm.current_frame.registers["%0"] = typed(None, UNKNOWN)
         none_inst = IRInstruction(opcode=Opcode.RETURN, operands=["%0"])
-        none_result = _handle_return(none_inst, vm)
+        none_result = _handle_return(none_inst, vm, _default_handler_context())
         none_rv = none_result.update.return_value
 
         assert void_rv.type == scalar(TypeName.VOID)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
@@ -59,6 +60,44 @@ _EMPTY_TYPE_ENV = TypeEnvironment(
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class HandlerContext:
+    """Typed execution context passed to all instruction handlers."""
+
+    cfg: CFG
+    registry: FunctionRegistry
+    current_label: str
+    ip: int
+    call_resolver: UnresolvedCallResolver
+    overload_resolver: OverloadResolver
+    type_env: TypeEnvironment
+    binop_coercion: BinopCoercionStrategy
+    unop_coercion: UnopCoercionStrategy
+    func_symbol_table: dict[str, FuncRef]
+    class_symbol_table: dict[str, ClassRef]
+    field_fallback: FieldFallbackStrategy
+    symbol_table: SymbolTable
+
+
+def _default_handler_context() -> HandlerContext:
+    """Create a HandlerContext with default values for all fields."""
+    return HandlerContext(
+        cfg=CFG(),
+        registry=FunctionRegistry(),
+        current_label="",
+        ip=0,
+        call_resolver=_DEFAULT_RESOLVER,
+        overload_resolver=_DEFAULT_OVERLOAD_RESOLVER,
+        type_env=_EMPTY_TYPE_ENV,
+        binop_coercion=_DEFAULT_BINOP_COERCION,
+        unop_coercion=_DEFAULT_UNOP_COERCION,
+        func_symbol_table={},
+        class_symbol_table={},
+        field_fallback=_NO_FIELD_FALLBACK,
+        symbol_table=SymbolTable.empty(),
+    )
+
+
 # ── Call arg resolution ──────────────────────────────────────────
 
 
@@ -106,9 +145,11 @@ def _symbolic_type_hint(val: Any) -> TypeExpr:
 # ── Opcode handlers ─────────────────────────────────────────────
 
 
-def _handle_const(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
-    func_symbol_table = kwargs.get("func_symbol_table", {})
-    class_symbol_table = kwargs.get("class_symbol_table", {})
+def _handle_const(
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
+    func_symbol_table = ctx.func_symbol_table
+    class_symbol_table = ctx.class_symbol_table
     raw = inst.operands[0] if inst.operands else "None"
     val = _parse_const(raw)
 
@@ -159,7 +200,7 @@ def _handle_const(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
 
 
 def _handle_load_var(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     name = inst.operands[0]
     # Alias-aware: if variable is backed by a heap object, read from heap
@@ -182,8 +223,7 @@ def _handle_load_var(
                 )
             )
     # Variable not found — try field fallback strategy
-    fallback: FieldFallbackStrategy = kwargs.get("field_fallback", _NO_FIELD_FALLBACK)
-    this_field = fallback.resolve_load(vm, name)
+    this_field = ctx.field_fallback.resolve_load(vm, name)
     if this_field is not None:
         return ExecutionResult.success(
             StateUpdate(
@@ -202,7 +242,7 @@ def _handle_load_var(
 
 
 def _handle_decl_var(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     """DECL_VAR: always create/overwrite in the current frame (declaration)."""
     name = inst.operands[0]
@@ -231,7 +271,7 @@ def _write_var_to_frame(
 
 
 def _handle_store_var(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     """STORE_VAR: assignment — walk scope chain to find existing variable."""
     name = inst.operands[0]
@@ -244,7 +284,7 @@ def _handle_store_var(
                 StateUpdate(reasoning=f"store {name} = {tv.value!r} (scope chain)")
             )
     # Not found in any frame — try field fallback strategy
-    fallback: FieldFallbackStrategy = kwargs.get("field_fallback", _NO_FIELD_FALLBACK)
+    fallback = ctx.field_fallback
     this_addr = fallback.resolve_store(vm, name)
     if this_addr is not None:
         return ExecutionResult.success(
@@ -263,7 +303,7 @@ def _handle_store_var(
 
 
 def _handle_address_of(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     """ADDRESS_OF var_name: promote variable to heap and return a Pointer."""
     name = inst.operands[0]
@@ -342,7 +382,7 @@ def _handle_address_of(
 
 
 def _handle_load_indirect(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     """LOAD_INDIRECT %ptr: read through a Pointer (dereference)."""
     obj_val = _resolve_reg(vm, inst.operands[0]).value
@@ -385,10 +425,7 @@ def _handle_load_indirect(
 def _handle_load_field_indirect(
     inst: IRInstruction,
     vm: VMState,
-    cfg: CFG = CFG(),
-    registry: FunctionRegistry = FunctionRegistry(),
-    current_label: str = "",
-    **kwargs: Any,
+    ctx: HandlerContext,
 ) -> ExecutionResult:
     """LOAD_FIELD_INDIRECT %obj %name: load field whose name is in a register."""
     obj_val = _resolve_reg(vm, inst.operands[0]).value
@@ -412,7 +449,7 @@ def _handle_load_field_indirect(
             )
         )
     # Field not found — check for __method_missing__ on the object
-    mm_ref = _find_method_missing(heap_obj, registry, cfg)
+    mm_ref = _find_method_missing(heap_obj, ctx.registry, ctx.cfg)
     if mm_ref is not None:
         self_tv = typed(obj_val, heap_obj.type_hint)
         name_tv = typed(field_name, scalar("String"))
@@ -421,9 +458,9 @@ def _handle_load_field_indirect(
             [self_tv, name_tv],
             inst,
             vm,
-            cfg,
-            registry,
-            current_label,
+            ctx.cfg,
+            ctx.registry,
+            ctx.current_label,
         )
     # No __method_missing__ — return symbolic
     sym = vm.fresh_symbolic(hint=f"{addr}.{field_name}")
@@ -436,7 +473,7 @@ def _handle_load_field_indirect(
 
 
 def _handle_store_indirect(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     """STORE_INDIRECT %ptr %val: write through a Pointer (dereference)."""
     obj_val = _resolve_reg(vm, inst.operands[0]).value
@@ -464,7 +501,9 @@ def _handle_store_indirect(
     )
 
 
-def _handle_branch(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
+def _handle_branch(
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     return ExecutionResult.success(
         StateUpdate(
             next_label=inst.label,
@@ -474,7 +513,7 @@ def _handle_branch(inst: IRInstruction, vm: VMState, **kwargs: Any) -> Execution
 
 
 def _handle_symbolic(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     hint = inst.operands[0] if inst.operands else ""
     frame = vm.current_frame
@@ -500,7 +539,7 @@ def _handle_symbolic(
 
 
 def _handle_new_object(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     type_hint = inst.operands[0] if inst.operands else ""
     # Dereference: if type_hint is a variable holding a ClassRef,
@@ -529,7 +568,7 @@ def _handle_new_object(
 
 
 def _handle_new_array(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     type_hint = inst.operands[0] if inst.operands else ""
     addr = f"{constants.ARR_ADDR_PREFIX}{vm.symbolic_counter}"
@@ -550,7 +589,7 @@ def _handle_new_array(
 
 
 def _handle_store_field(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     obj_val = _resolve_reg(vm, inst.operands[0]).value
     field_name = inst.operands[1]
@@ -645,16 +684,13 @@ def _resolve_method_delegation_target(
 def _handle_load_field(
     inst: IRInstruction,
     vm: VMState,
-    cfg: CFG = CFG(),
-    registry: FunctionRegistry = FunctionRegistry(),
-    current_label: str = "",
-    **kwargs: Any,
+    ctx: HandlerContext,
 ) -> ExecutionResult:
     obj_val = _resolve_reg(vm, inst.operands[0]).value
     field_name = inst.operands[1]
     # Static field access on a ClassRef: look up via symbol table constants
     if isinstance(obj_val, ClassRef):
-        symbol_table: SymbolTable = kwargs.get("symbol_table", SymbolTable.empty())
+        symbol_table = ctx.symbol_table
         class_info = symbol_table.classes.get(obj_val.name)
         if class_info and field_name in class_info.constants:
             raw = class_info.constants[field_name]
@@ -696,7 +732,7 @@ def _handle_load_field(
             )
         )
     # Field not found — check for __method_missing__ on the object
-    mm_ref = _find_method_missing(heap_obj, registry, cfg)
+    mm_ref = _find_method_missing(heap_obj, ctx.registry, ctx.cfg)
     if mm_ref is not None:
         self_tv = typed(obj_val, heap_obj.type_hint)
         name_tv = typed(field_name, scalar("String"))
@@ -705,9 +741,9 @@ def _handle_load_field(
             [self_tv, name_tv],
             inst,
             vm,
-            cfg,
-            registry,
-            current_label,
+            ctx.cfg,
+            ctx.registry,
+            ctx.current_label,
         )
     # No __method_missing__ — create symbolic and cache it
     sym = vm.fresh_symbolic(hint=f"{addr}.{field_name}")
@@ -721,7 +757,7 @@ def _handle_load_field(
 
 
 def _handle_store_index(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     arr_val = _resolve_reg(vm, inst.operands[0]).value
     idx_val = _resolve_reg(vm, inst.operands[1]).value
@@ -754,7 +790,7 @@ def _handle_store_index(
 
 
 def _handle_load_index(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     arr_val = _resolve_reg(vm, inst.operands[0]).value
     idx_val = _resolve_reg(vm, inst.operands[1]).value
@@ -811,7 +847,9 @@ def _handle_load_index(
     )
 
 
-def _handle_return(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
+def _handle_return(
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     if vm.current_frame.is_ctor:
         tv = typed(None, scalar(constants.TypeName.VOID))
     elif inst.operands:
@@ -827,7 +865,9 @@ def _handle_return(inst: IRInstruction, vm: VMState, **kwargs: Any) -> Execution
     )
 
 
-def _handle_throw(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
+def _handle_throw(
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     val = _resolve_reg(vm, inst.operands[0]).value if inst.operands else None
     if vm.exception_stack:
         handler = vm.exception_stack.pop()
@@ -846,7 +886,7 @@ def _handle_throw(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
 
 
 def _handle_try_push(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     catch_labels_str, finally_label, end_label = (
         inst.operands[0],
@@ -866,13 +906,15 @@ def _handle_try_push(
     )
 
 
-def _handle_try_pop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
+def _handle_try_pop(
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
     vm.exception_stack.pop()
     return ExecutionResult.success(StateUpdate(reasoning="pop exception handler"))
 
 
 def _handle_branch_if(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     cond_val = _resolve_reg(vm, inst.operands[0]).value
     targets = inst.label.split(",")
@@ -902,8 +944,10 @@ def _handle_branch_if(
     )
 
 
-def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
-    binop_coercion = kwargs.get("binop_coercion", _DEFAULT_BINOP_COERCION)
+def _handle_binop(
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
+    binop_coercion = ctx.binop_coercion
     oper = inst.operands[0]
     lhs_typed = _resolve_reg(vm, inst.operands[1])
     rhs_typed = _resolve_reg(vm, inst.operands[2])
@@ -996,8 +1040,10 @@ def _handle_binop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionR
     )
 
 
-def _handle_unop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionResult:
-    unop_coercion = kwargs.get("unop_coercion", _DEFAULT_UNOP_COERCION)
+def _handle_unop(
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
+) -> ExecutionResult:
+    unop_coercion = ctx.unop_coercion
     oper = inst.operands[0]
     operand_typed = _resolve_reg(vm, inst.operands[1])
     operand = operand_typed.value
@@ -1054,7 +1100,7 @@ def _handle_unop(inst: IRInstruction, vm: VMState, **kwargs: Any) -> ExecutionRe
 
 
 def _handle_set_continuation(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     """SET_CONTINUATION: operands = [name, label]. Write name → label into continuation table."""
     name = inst.operands[0]
@@ -1068,7 +1114,7 @@ def _handle_set_continuation(
 
 
 def _handle_resume_continuation(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     """RESUME_CONTINUATION: operands = [name]. Branch to label if set, else fall through."""
     name = inst.operands[0]
@@ -1093,7 +1139,7 @@ def _handle_resume_continuation(
 
 
 def _handle_alloc_region(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     """ALLOC_REGION: operands[0] = size literal. Allocate a zeroed byte region."""
     size = _resolve_reg(vm, inst.operands[0]).value
@@ -1117,7 +1163,7 @@ def _handle_alloc_region(
 
 
 def _handle_write_region(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     """WRITE_REGION: operands = [region_reg, offset_reg, length_literal, value_reg].
 
@@ -1159,7 +1205,7 @@ def _handle_write_region(
 
 
 def _handle_load_region(
-    inst: IRInstruction, vm: VMState, **kwargs: Any
+    inst: IRInstruction, vm: VMState, ctx: HandlerContext
 ) -> ExecutionResult:
     """LOAD_REGION: operands = [region_reg, offset_reg, length_literal].
 
@@ -1400,13 +1446,7 @@ def _try_user_function_call(
 def _handle_call_function(
     inst: IRInstruction,
     vm: VMState,
-    cfg: CFG,
-    registry: FunctionRegistry,
-    current_label: str,
-    call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
-    overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
-    type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
-    **kwargs: Any,
+    ctx: HandlerContext,
 ) -> ExecutionResult:
     raw_func_name = inst.operands[0]
     # Extract base name for scope lookup: "Box[Node]" → "Box"
@@ -1454,7 +1494,9 @@ def _handle_call_function(
             break
     if not func_val:
         # Unknown function — resolve via configured strategy
-        return call_resolver.resolve_call(base_name, [a.value for a in args], inst, vm)
+        return ctx.call_resolver.resolve_call(
+            base_name, [a.value for a in args], inst, vm
+        )
 
     # 2b. Scala-style apply: arr(i) on heap-backed arrays → index into fields.
     if len(args) == 1 and isinstance(args[0].value, int):
@@ -1507,11 +1549,11 @@ def _handle_call_function(
         args,
         inst,
         vm,
-        cfg,
-        registry,
-        current_label,
-        overload_resolver=overload_resolver,
-        type_env=type_env,
+        ctx.cfg,
+        ctx.registry,
+        ctx.current_label,
+        overload_resolver=ctx.overload_resolver,
+        type_env=ctx.type_env,
         type_hint_source=raw_func_name,
     )
     if ctor_result.handled:
@@ -1519,25 +1561,19 @@ def _handle_call_function(
 
     # 4. User-defined function
     user_result = _try_user_function_call(
-        func_val, args, inst, vm, cfg, registry, current_label
+        func_val, args, inst, vm, ctx.cfg, ctx.registry, ctx.current_label
     )
     if user_result.handled:
         return user_result
 
     # 5. Not a recognized function ref — resolve via configured strategy
-    return call_resolver.resolve_call(base_name, [a.value for a in args], inst, vm)
+    return ctx.call_resolver.resolve_call(base_name, [a.value for a in args], inst, vm)
 
 
 def _handle_call_method(
     inst: IRInstruction,
     vm: VMState,
-    cfg: CFG,
-    registry: FunctionRegistry,
-    current_label: str,
-    call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
-    overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
-    type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
-    **kwargs: Any,
+    ctx: HandlerContext,
 ) -> ExecutionResult:
     obj_val = _resolve_reg(vm, inst.operands[0])
     method_name = inst.operands[1]
@@ -1547,13 +1583,13 @@ def _handle_call_method(
     # If the object is a FUNC_REF, invoke it directly (e.g. .call(), .apply())
     if isinstance(obj_val.value, BoundFuncRef):
         return _try_user_function_call(
-            obj_val.value, args, inst, vm, cfg, registry, current_label
+            obj_val.value, args, inst, vm, ctx.cfg, ctx.registry, ctx.current_label
         )
 
     # Static method dispatch: Class.method() where object is a ClassRef
     if isinstance(obj_val.value, ClassRef):
         class_name = obj_val.value.name
-        methods = registry.class_methods.get(class_name, {})
+        methods = ctx.registry.class_methods.get(class_name, {})
         func_labels = methods.get(method_name, [])
         if func_labels:
             func_label = func_labels[0]
@@ -1562,7 +1598,7 @@ def _handle_call_method(
                 closure_id="",
             )
             return _try_user_function_call(
-                bound_ref, args, inst, vm, cfg, registry, current_label
+                bound_ref, args, inst, vm, ctx.cfg, ctx.registry, ctx.current_label
             )
 
     # Method builtins: subList, substring, slice, etc.
@@ -1586,7 +1622,7 @@ def _handle_call_method(
     if addr and addr in vm.heap:
         type_hint = vm.heap[addr].type_hint or ""
 
-    if not type_hint or type_hint not in registry.class_methods:
+    if not type_hint or type_hint not in ctx.registry.class_methods:
         # Check if method exists as a callable field on the heap object
         # (e.g., Lua table OOP: t.method = function(...) end)
         # Inject obj as first arg (self) — mirrors colon-call convention.
@@ -1598,38 +1634,38 @@ def _handle_call_method(
                     [obj_val] + args,
                     inst,
                     vm,
-                    cfg,
-                    registry,
-                    current_label,
+                    ctx.cfg,
+                    ctx.registry,
+                    ctx.current_label,
                 )
         # Unknown object type — resolve via configured strategy
         obj_desc = _symbolic_name(obj_val.value)
-        return call_resolver.resolve_method(
+        return ctx.call_resolver.resolve_method(
             obj_desc, method_name, [a.value for a in args], inst, vm
         )
 
-    methods = registry.class_methods[type_hint]
+    methods = ctx.registry.class_methods[type_hint]
     func_labels = methods.get(method_name, [])
     if func_labels:
-        sigs = type_env.method_signatures.get(scalar(type_hint), {}).get(
+        sigs = ctx.type_env.method_signatures.get(scalar(type_hint), {}).get(
             method_name, []
         )
         if len(sigs) != len(func_labels):
             logger.warning("sig/label count mismatch for %s.%s", type_hint, method_name)
             func_label = func_labels[0]
         else:
-            winner = overload_resolver.resolve(sigs, args)
+            winner = ctx.overload_resolver.resolve(sigs, args)
             func_label = func_labels[winner]
     else:
         func_label = ""
     # Walk parent chain for inherited methods
-    if not func_label or func_label not in cfg.blocks:
-        for parent in registry.class_parents.get(type_hint, []):
-            parent_methods = registry.class_methods.get(parent, {})
+    if not func_label or func_label not in ctx.cfg.blocks:
+        for parent in ctx.registry.class_parents.get(type_hint, []):
+            parent_methods = ctx.registry.class_methods.get(parent, {})
             parent_labels = parent_methods.get(method_name, [])
             if not parent_labels:
                 continue
-            parent_sigs = type_env.method_signatures.get(scalar(parent), {}).get(
+            parent_sigs = ctx.type_env.method_signatures.get(scalar(parent), {}).get(
                 method_name, []
             )
             if len(parent_sigs) != len(parent_labels):
@@ -1638,25 +1674,25 @@ def _handle_call_method(
                 )
                 candidate = parent_labels[0]
             else:
-                winner = overload_resolver.resolve(parent_sigs, args)
+                winner = ctx.overload_resolver.resolve(parent_sigs, args)
                 candidate = parent_labels[winner]
-            if candidate and candidate in cfg.blocks:
+            if candidate and candidate in ctx.cfg.blocks:
                 func_label = candidate
                 break
-    if not func_label or func_label not in cfg.blocks:
+    if not func_label or func_label not in ctx.cfg.blocks:
         # Known type but unknown method — follow __method_missing__ delegation chain
         if addr:
             delegation = _resolve_method_delegation_target(
-                addr, method_name, vm, registry, cfg
+                addr, method_name, vm, ctx.registry, ctx.cfg
             )
             if delegation is not None:
                 inner_addr, inner_tv = delegation
                 inner_type = str(vm.heap[inner_addr].type_hint or "")
-                inner_methods = registry.class_methods.get(inner_type, {})
+                inner_methods = ctx.registry.class_methods.get(inner_type, {})
                 inner_labels = inner_methods[method_name]
-                inner_sigs = type_env.method_signatures.get(scalar(inner_type), {}).get(
-                    method_name, []
-                )
+                inner_sigs = ctx.type_env.method_signatures.get(
+                    scalar(inner_type), {}
+                ).get(method_name, [])
                 if len(inner_sigs) != len(inner_labels):
                     logger.warning(
                         "sig/label count mismatch for %s.%s",
@@ -1665,20 +1701,20 @@ def _handle_call_method(
                     )
                     target_label = inner_labels[0]
                 else:
-                    winner = overload_resolver.resolve(inner_sigs, args)
+                    winner = ctx.overload_resolver.resolve(inner_sigs, args)
                     target_label = inner_labels[winner]
-                if target_label in cfg.blocks:
+                if target_label in ctx.cfg.blocks:
                     func_label = target_label
                     # Re-bind obj_val to the inner object for correct 'self'
                     obj_val = inner_tv
                     addr = inner_addr
-        if not func_label or func_label not in cfg.blocks:
+        if not func_label or func_label not in ctx.cfg.blocks:
             # No delegation target found — resolve via configured strategy
-            return call_resolver.resolve_method(
+            return ctx.call_resolver.resolve_method(
                 type_hint, method_name, [a.value for a in args], inst, vm
             )
 
-    params = registry.func_params.get(func_label, [])
+    params = ctx.registry.func_params.get(func_label, [])
     new_vars: dict[str, Any] = {}
     if params:
         new_vars[params[0]] = obj_val
@@ -1693,7 +1729,7 @@ def _handle_call_method(
         StateUpdate(
             call_push=StackFramePush(
                 function_name=f"{type_hint}.{method_name}",
-                return_label=current_label,
+                return_label=ctx.current_label,
             ),
             next_label=func_label,
             reasoning=(
@@ -1711,11 +1747,7 @@ def _handle_call_method(
 def _handle_call_unknown(
     inst: IRInstruction,
     vm: VMState,
-    cfg: CFG,
-    registry: FunctionRegistry,
-    current_label: str,
-    call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
-    **kwargs: Any,
+    ctx: HandlerContext,
 ) -> ExecutionResult:
     """Handle CALL_UNKNOWN — dynamic call target, resolve via configured strategy."""
     target_val = _resolve_reg(vm, inst.operands[0])
@@ -1724,13 +1756,15 @@ def _handle_call_unknown(
 
     # If the target resolves to a FUNC_REF, invoke it directly
     user_result = _try_user_function_call(
-        target_val.value, args, inst, vm, cfg, registry, current_label
+        target_val.value, args, inst, vm, ctx.cfg, ctx.registry, ctx.current_label
     )
     if user_result.handled:
         return user_result
 
     target_desc = _symbolic_name(target_val.value)
-    return call_resolver.resolve_call(target_desc, [a.value for a in args], inst, vm)
+    return ctx.call_resolver.resolve_call(
+        target_desc, [a.value for a in args], inst, vm
+    )
 
 
 # ── Dispatch table and entry point ──────────────────────────────
@@ -1778,78 +1812,22 @@ class LocalExecutor:
         cls,
         inst: IRInstruction,
         vm: VMState,
-        cfg: CFG,
-        registry: FunctionRegistry,
-        current_label: str = "",
-        ip: int = 0,
-        call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
-        overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
-        type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
-        binop_coercion: BinopCoercionStrategy = _DEFAULT_BINOP_COERCION,
-        unop_coercion: UnopCoercionStrategy = _DEFAULT_UNOP_COERCION,
-        func_symbol_table: dict[str, FuncRef] = {},
-        class_symbol_table: dict[str, ClassRef] = {},
-        field_fallback: FieldFallbackStrategy = _NO_FIELD_FALLBACK,
-        symbol_table: SymbolTable = SymbolTable.empty(),
+        ctx: HandlerContext,
     ) -> ExecutionResult:
         handler = cls.DISPATCH.get(inst.opcode)
         if not handler:
             return ExecutionResult.not_handled()
-        return handler(
-            inst=inst,
-            vm=vm,
-            cfg=cfg,
-            registry=registry,
-            current_label=current_label,
-            ip=ip,
-            call_resolver=call_resolver,
-            overload_resolver=overload_resolver,
-            type_env=type_env,
-            binop_coercion=binop_coercion,
-            unop_coercion=unop_coercion,
-            func_symbol_table=func_symbol_table,
-            class_symbol_table=class_symbol_table,
-            field_fallback=field_fallback,
-            symbol_table=symbol_table,
-        )
+        return handler(inst=inst, vm=vm, ctx=ctx)
 
 
 def _try_execute_locally(
     inst: IRInstruction,
     vm: VMState,
-    cfg: CFG,
-    registry: FunctionRegistry,
-    current_label: str = "",
-    ip: int = 0,
-    call_resolver: UnresolvedCallResolver = _DEFAULT_RESOLVER,
-    overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
-    type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
-    binop_coercion: BinopCoercionStrategy = _DEFAULT_BINOP_COERCION,
-    unop_coercion: UnopCoercionStrategy = _DEFAULT_UNOP_COERCION,
-    func_symbol_table: dict[str, FuncRef] = {},
-    class_symbol_table: dict[str, ClassRef] = {},
-    field_fallback: FieldFallbackStrategy = _NO_FIELD_FALLBACK,
-    symbol_table: SymbolTable = SymbolTable.empty(),
+    ctx: HandlerContext,
 ) -> ExecutionResult:
     """Try to execute an instruction without the LLM.
 
     Returns an ExecutionResult indicating whether the instruction was
     handled locally, and the StateUpdate if so.
     """
-    return LocalExecutor.execute(
-        inst,
-        vm,
-        cfg,
-        registry,
-        current_label,
-        ip,
-        call_resolver,
-        overload_resolver=overload_resolver,
-        type_env=type_env,
-        binop_coercion=binop_coercion,
-        unop_coercion=unop_coercion,
-        func_symbol_table=func_symbol_table,
-        class_symbol_table=class_symbol_table,
-        field_fallback=field_fallback,
-        symbol_table=symbol_table,
-    )
+    return LocalExecutor.execute(inst, vm, ctx)

@@ -1,12 +1,19 @@
 """Tests that NEW_ARRAY produces a Pointer with correct parameterized type."""
 
 from interpreter.cfg import CFG
-from interpreter.executor import LocalExecutor
+from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import FunctionRegistry
 from interpreter.vm import VMState
 from interpreter.vm_types import Pointer, StackFrame
 from interpreter.type_expr import pointer, scalar
+
+
+from dataclasses import replace as _replace
+
+
+def _ctx(**overrides) -> HandlerContext:
+    return _replace(_default_handler_context(), **overrides)
 
 
 def _empty_cfg_and_registry() -> tuple[CFG, FunctionRegistry]:
@@ -23,7 +30,9 @@ class TestNewArrayPointer:
             result_reg="%arr",
             operands=["int"],
         )
-        result = LocalExecutor.execute(inst=inst, vm=vm, cfg=cfg, registry=registry)
+        result = LocalExecutor.execute(
+            inst=inst, vm=vm, ctx=_ctx(cfg=cfg, registry=registry)
+        )
         tv = result.update.register_writes["%arr"]
         assert isinstance(tv.value, Pointer)
         assert tv.value.base.startswith("arr_")
@@ -39,7 +48,9 @@ class TestNewArrayPointer:
             result_reg="%arr",
             operands=[],
         )
-        result = LocalExecutor.execute(inst=inst, vm=vm, cfg=cfg, registry=registry)
+        result = LocalExecutor.execute(
+            inst=inst, vm=vm, ctx=_ctx(cfg=cfg, registry=registry)
+        )
         tv = result.update.register_writes["%arr"]
         assert isinstance(tv.value, Pointer)
         assert tv.type == pointer(scalar("Array"))

@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import logging
 import time
+from dataclasses import replace
 from types import MappingProxyType
 from typing import Any
 
@@ -19,7 +20,7 @@ from interpreter.cfg import CFG, build_cfg
 from interpreter.registry import build_registry, FunctionRegistry
 from interpreter.func_ref import FuncRef, BoundFuncRef
 from interpreter.class_ref import ClassRef
-from interpreter.executor import _try_execute_locally
+from interpreter.executor import HandlerContext, _try_execute_locally
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.resolution_strategy import ArityThenTypeStrategy
@@ -271,6 +272,22 @@ def execute_cfg(
     llm_calls = 0
     step = 0
 
+    base_ctx = HandlerContext(
+        cfg=cfg,
+        registry=registry,
+        current_label="",
+        ip=0,
+        call_resolver=call_resolver,
+        overload_resolver=overload_resolver,
+        type_env=type_env,
+        binop_coercion=binop_coercion,
+        unop_coercion=unop_coercion,
+        func_symbol_table=func_symbol_table,
+        class_symbol_table=class_symbol_table,
+        field_fallback=field_fallback,
+        symbol_table=symbol_table,
+    )
+
     for step in range(config.max_steps):
         block = cfg.blocks[current_label]
 
@@ -296,23 +313,8 @@ def execute_cfg(
             ip += 1
             continue
 
-        result = _try_execute_locally(
-            instruction,
-            vm,
-            cfg=cfg,
-            registry=registry,
-            current_label=current_label,
-            ip=ip,
-            call_resolver=call_resolver,
-            overload_resolver=overload_resolver,
-            type_env=type_env,
-            binop_coercion=binop_coercion,
-            unop_coercion=unop_coercion,
-            func_symbol_table=func_symbol_table,
-            class_symbol_table=class_symbol_table,
-            field_fallback=field_fallback,
-            symbol_table=symbol_table,
-        )
+        step_ctx = replace(base_ctx, current_label=current_label, ip=ip)
+        result = _try_execute_locally(instruction, vm, step_ctx)
         used_llm = False
         if result.handled:
             update = coerce_local_update(result.update, type_env, conversion_rules)
@@ -426,6 +428,22 @@ def execute_cfg_traced(
     step = 0
     trace_steps: list[TraceStep] = []
 
+    base_ctx = HandlerContext(
+        cfg=cfg,
+        registry=registry,
+        current_label="",
+        ip=0,
+        call_resolver=call_resolver,
+        overload_resolver=overload_resolver,
+        type_env=type_env,
+        binop_coercion=binop_coercion,
+        unop_coercion=unop_coercion,
+        func_symbol_table=func_symbol_table,
+        class_symbol_table=class_symbol_table,
+        field_fallback=field_fallback,
+        symbol_table=symbol_table,
+    )
+
     for step in range(config.max_steps):
         block = cfg.blocks[current_label]
 
@@ -451,23 +469,8 @@ def execute_cfg_traced(
             ip += 1
             continue
 
-        result = _try_execute_locally(
-            instruction,
-            vm,
-            cfg=cfg,
-            registry=registry,
-            current_label=current_label,
-            ip=ip,
-            call_resolver=call_resolver,
-            overload_resolver=overload_resolver,
-            type_env=type_env,
-            binop_coercion=binop_coercion,
-            unop_coercion=unop_coercion,
-            func_symbol_table=func_symbol_table,
-            class_symbol_table=class_symbol_table,
-            field_fallback=field_fallback,
-            symbol_table=symbol_table,
-        )
+        step_ctx = replace(base_ctx, current_label=current_label, ip=ip)
+        result = _try_execute_locally(instruction, vm, step_ctx)
         used_llm = False
         if result.handled:
             update = coerce_local_update(result.update, type_env, conversion_rules)

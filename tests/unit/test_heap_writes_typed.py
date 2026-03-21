@@ -13,6 +13,7 @@ from interpreter.executor import (
     _handle_load_index,
     _handle_load_var,
     _handle_address_of,
+    _default_handler_context,
 )
 from interpreter.type_environment import TypeEnvironment
 from interpreter.type_expr import UNKNOWN, scalar
@@ -32,6 +33,7 @@ _EMPTY_TYPE_ENV = TypeEnvironment(
     var_types=MappingProxyType({}),
 )
 _IDENTITY_RULES = IdentityConversionRules()
+_CTX = _default_handler_context()
 
 
 class TestStoreFieldTypedValue:
@@ -44,7 +46,7 @@ class TestStoreFieldTypedValue:
         vm.current_frame.registers["%0"] = typed("obj_0", UNKNOWN)
         vm.current_frame.registers["%1"] = typed(42, scalar(TypeName.INT))
         inst = IRInstruction(opcode=Opcode.STORE_FIELD, operands=["%0", "x", "%1"])
-        result = _handle_store_field(inst, vm)
+        result = _handle_store_field(inst, vm, _CTX)
         hw = result.update.heap_writes[0]
         assert isinstance(hw.value, TypedValue)
         assert hw.value.value == 42
@@ -58,7 +60,7 @@ class TestStoreFieldTypedValue:
         )
         vm.current_frame.registers["%1"] = typed(99, scalar(TypeName.INT))
         inst = IRInstruction(opcode=Opcode.STORE_INDIRECT, operands=["%0", "%1"])
-        result = _handle_store_indirect(inst, vm)
+        result = _handle_store_indirect(inst, vm, _CTX)
         hw = result.update.heap_writes[0]
         assert isinstance(hw.value, TypedValue)
         assert hw.value.value == 99
@@ -70,7 +72,7 @@ class TestStoreFieldTypedValue:
         vm.current_frame.registers["%0"] = typed("obj_0", UNKNOWN)
         vm.current_frame.registers["%1"] = typed("Alice", scalar(TypeName.STRING))
         inst = IRInstruction(opcode=Opcode.STORE_FIELD, operands=["%0", "name", "%1"])
-        result = _handle_store_field(inst, vm)
+        result = _handle_store_field(inst, vm, _CTX)
         hw = result.update.heap_writes[0]
         assert isinstance(hw.value, TypedValue)
         assert hw.value.value == "Alice"
@@ -89,7 +91,7 @@ class TestStoreIndexTypedValue:
         inst = IRInstruction(
             opcode=Opcode.STORE_INDEX, operands=["%0", "%1", "%2"], result_reg="%3"
         )
-        result = _handle_store_index(inst, vm)
+        result = _handle_store_index(inst, vm, _CTX)
         hw = result.update.heap_writes[0]
         assert isinstance(hw.value, TypedValue)
         assert hw.value.value == 100
@@ -194,7 +196,7 @@ class TestHeapFieldsStoreTypedValue:
         inst = IRInstruction(
             opcode=Opcode.LOAD_FIELD, operands=["%0", "bar"], result_reg="%1"
         )
-        _handle_load_field(inst, vm)
+        _handle_load_field(inst, vm, _CTX)
         field_val = vm.heap["obj_0"].fields["bar"]
         assert isinstance(field_val, TypedValue)
 
@@ -204,7 +206,7 @@ class TestHeapFieldsStoreTypedValue:
         vm.call_stack.append(StackFrame(function_name="main"))
         vm.current_frame.local_vars["x"] = typed(42, scalar(TypeName.INT))
         inst = IRInstruction(opcode=Opcode.ADDRESS_OF, operands=["x"], result_reg="%0")
-        _handle_address_of(inst, vm)
+        _handle_address_of(inst, vm, _CTX)
         heap_objs = [obj for obj in vm.heap.values() if obj.fields.get("0") is not None]
         assert len(heap_objs) == 1
         field_val = heap_objs[0].fields["0"]
@@ -223,7 +225,7 @@ class TestHeapFieldsStoreTypedValue:
         inst = IRInstruction(
             opcode=Opcode.LOAD_FIELD, operands=["%0", "x"], result_reg="%1"
         )
-        result = _handle_load_field(inst, vm)
+        result = _handle_load_field(inst, vm, _CTX)
         loaded_tv = result.update.register_writes["%1"]
         assert loaded_tv is original_tv
 
@@ -244,7 +246,7 @@ class TestHeapFieldsStoreTypedValue:
         inst = IRInstruction(
             opcode=Opcode.LOAD_INDEX, operands=["%0", "%1"], result_reg="%2"
         )
-        result = _handle_load_index(inst, vm)
+        result = _handle_load_index(inst, vm, _CTX)
         loaded_tv = result.update.register_writes["%2"]
         assert loaded_tv is original_tv
 
@@ -257,6 +259,6 @@ class TestHeapFieldsStoreTypedValue:
         ptr = Pointer(base="mem_0", offset=0)
         vm.current_frame.var_heap_aliases["x"] = ptr
         inst = IRInstruction(opcode=Opcode.LOAD_VAR, operands=["x"], result_reg="%0")
-        result = _handle_load_var(inst, vm)
+        result = _handle_load_var(inst, vm, _CTX)
         loaded_tv = result.update.register_writes["%0"]
         assert loaded_tv is original_tv
