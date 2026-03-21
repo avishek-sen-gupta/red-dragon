@@ -1079,6 +1079,42 @@ The scope enter/exit is applied in `lower_try_catch()` (`interpreter/frontends/c
 
 ---
 
+## SymbolTable — Pre-lowering Class Metadata
+
+The `SymbolTable` (`interpreter/frontends/symbol_table.py`) is built by the `_extract_symbols` pre-pass on `BaseFrontend` before the IR lowering walk begins. It holds class and function metadata extracted directly from the tree-sitter AST.
+
+```python
+@dataclass(frozen=True)
+class FieldInfo:
+    name: str
+    type_hint: str = ""
+
+@dataclass(frozen=True)
+class ClassInfo:
+    name: str
+    fields: list[FieldInfo]
+    methods: list[str]
+    parents: list[str]
+    constants: dict[str, Any]
+
+@dataclass(frozen=True)
+class FunctionInfo:
+    name: str
+    return_type: str
+    params: list[str]
+
+@dataclass(frozen=True)
+class SymbolTable:
+    classes: dict[str, ClassInfo]
+    functions: dict[str, FunctionInfo]
+```
+
+**`resolve_field(class_name, field_name) -> FieldInfo`** walks the parent chain via `ClassInfo.parents` recursively and returns the matching `FieldInfo`. If no field is found at any level, it returns `NULL_FIELD` — a null-object sentinel with `name=""` and `type_hint=""`. Callers check `field_info is not NULL_FIELD` rather than checking for `None`.
+
+The `NULL_FIELD` sentinel follows the null-object pattern used throughout the codebase — it eliminates `None`-check defensive programming in the implicit-this resolution code.
+
+---
+
 ## TypedValue — Runtime Value+Type Wrapper
 
 All runtime values in the VM are wrapped in `TypedValue` (`interpreter/typed_value.py`), a frozen dataclass pairing a raw Python value with its `TypeExpr` type:
