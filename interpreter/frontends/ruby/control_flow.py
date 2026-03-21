@@ -632,6 +632,87 @@ def _lower_try_catch_ruby(
     ctx.emit(Opcode.LABEL, label=end_label)
 
 
+# ── case/in pattern matching ─────────────────────────────────────────
+
+
+def _extract_case_match_arms(node) -> list:
+    """Collect in_clause children, appending else as a synthetic wildcard arm."""
+    from interpreter.frontends.common.patterns import WildcardPattern
+
+    arms = [c for c in node.children if c.type == RubyNodeType.IN_CLAUSE]
+    else_node = next(
+        (c for c in node.children if c.type == RubyNodeType.ELSE),
+        None,
+    )
+    if else_node:
+        arms.append(("__else__", else_node))
+    return arms
+
+
+def _case_match_pattern_of(ctx: TreeSitterEmitContext, arm) -> "Pattern":
+    """Extract and parse the pattern from an in_clause or synthetic else arm."""
+    from interpreter.frontends.common.patterns import WildcardPattern
+    from interpreter.frontends.ruby.patterns import parse_ruby_pattern
+
+    if isinstance(arm, tuple) and arm[0] == "__else__":
+        return WildcardPattern()
+    pattern_node = arm.child_by_field_name("pattern")
+    return parse_ruby_pattern(ctx, pattern_node)
+
+
+def _case_match_guard_of(ctx: TreeSitterEmitContext, arm):
+    """Ruby case/in guards are out of scope — always None."""
+    return None
+
+
+def _case_match_body_of(ctx: TreeSitterEmitContext, arm) -> str:
+    """Lower the body of an in_clause or synthetic else arm as an expression."""
+    if isinstance(arm, tuple) and arm[0] == "__else__":
+        else_node = arm[1]
+        body_children = [c for c in else_node.children if c.is_named]
+        # Lower the last named child as the expression result
+        return ctx.lower_expr(body_children[-1]) if body_children else ctx.fresh_reg()
+
+    body_node = arm.child_by_field_name("body")
+    # body is a `then` node; its named children (excluding `then` keyword) are body exprs
+    body_exprs = [c for c in body_node.children if c.is_named]
+    # Lower all but the last as statements, return the last as expression
+    for expr in body_exprs[:-1]:
+        ctx.lower_stmt(expr)
+    return ctx.lower_expr(body_exprs[-1]) if body_exprs else ctx.fresh_reg()
+
+
+_RUBY_CASE_MATCH_SPEC = None  # lazy init to avoid circular imports
+
+
+def _get_case_match_spec():
+    global _RUBY_CASE_MATCH_SPEC
+    if _RUBY_CASE_MATCH_SPEC is None:
+        from interpreter.frontends.common.match_expr import MatchArmSpec
+
+        _RUBY_CASE_MATCH_SPEC = MatchArmSpec(
+            extract_arms=_extract_case_match_arms,
+            pattern_of=_case_match_pattern_of,
+            guard_of=_case_match_guard_of,
+            body_of=_case_match_body_of,
+        )
+    return _RUBY_CASE_MATCH_SPEC
+
+
+def lower_case_match(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower Ruby case/in using unified match framework."""
+    from interpreter.frontends.common.match_expr import lower_match_as_expr
+
+    subject_node = node.child_by_field_name("value")
+    subject_reg = ctx.lower_expr(subject_node)
+    return lower_match_as_expr(ctx, subject_reg, node, _get_case_match_spec())
+
+
+def lower_case_match_stmt(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower Ruby case/in at statement level."""
+    lower_case_match(ctx, node)
+
+
 # ── in clause (case/in pattern matching) ────────────────────────────
 
 
