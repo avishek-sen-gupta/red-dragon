@@ -17,6 +17,7 @@ from typing import Any
 from interpreter.cobol.condition_name_index import build_condition_index
 from interpreter.cobol.data_layout import DataLayout, build_data_layout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.cobol.field_resolution import (
     ResolvedFieldRef,
     parse_subscript_notation,
@@ -115,6 +116,7 @@ class CobolFrontend(Frontend):
         asg = self._parser.parse(source)
         layout = build_data_layout(asg.data_fields)
         self._layout = layout
+        self._symbol_table = SymbolTable.from_data_layout(layout)
         condition_index = build_condition_index(layout.fields)
 
         self._ctx = EmitContext(
