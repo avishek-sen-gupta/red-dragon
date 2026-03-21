@@ -16,6 +16,56 @@ def lower_if_stmt(ctx: TreeSitterEmitContext, node) -> None:
     lower_if_expr(ctx, node)
 
 
+def lower_while_stmt(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower while — detect while-let and delegate, else use common lower_while."""
+    from interpreter.frontends.common.control_flow import lower_while
+    from interpreter.frontends.rust.node_types import RustNodeType
+
+    cond_node = node.child_by_field_name(ctx.constants.while_condition_field)
+    if cond_node and cond_node.type == RustNodeType.LET_CONDITION:
+        _lower_while_let(ctx, node, cond_node)
+        return
+    lower_while(ctx, node)
+
+
+def _lower_while_let(ctx: TreeSitterEmitContext, node, let_cond_node) -> None:
+    """Lower `while let Pattern = expr { body }` as a loop with pattern test."""
+    from interpreter.frontends.common.patterns import (
+        compile_pattern_bindings,
+        compile_pattern_test,
+    )
+    from interpreter.frontends.rust.patterns import parse_rust_pattern
+
+    pattern_node = let_cond_node.child_by_field_name("pattern")
+    value_node = let_cond_node.child_by_field_name("value")
+    body_node = node.child_by_field_name(ctx.constants.while_body_field)
+
+    loop_label = ctx.fresh_label("while_let_cond")
+    body_label = ctx.fresh_label("while_let_body")
+    end_label = ctx.fresh_label("while_let_end")
+
+    pattern = parse_rust_pattern(ctx, pattern_node)
+
+    ctx.emit(Opcode.LABEL, label=loop_label)
+    subject_reg = ctx.lower_expr(value_node)
+    test_reg = compile_pattern_test(ctx, subject_reg, pattern)
+    ctx.emit(
+        Opcode.BRANCH_IF,
+        operands=[test_reg],
+        label=f"{body_label},{end_label}",
+        node=node,
+    )
+
+    ctx.emit(Opcode.LABEL, label=body_label)
+    compile_pattern_bindings(ctx, subject_reg, pattern)
+    ctx.push_loop(loop_label, end_label)
+    ctx.lower_block(body_node)
+    ctx.pop_loop()
+    ctx.emit(Opcode.BRANCH, label=loop_label)
+
+    ctx.emit(Opcode.LABEL, label=end_label)
+
+
 def lower_loop(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `loop { ... }` -- infinite loop."""
     body_node = node.child_by_field_name(ctx.constants.while_body_field)
