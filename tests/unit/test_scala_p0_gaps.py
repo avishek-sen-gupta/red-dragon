@@ -151,13 +151,15 @@ class TestScalaStableTypeIdentifier:
             for inst in symbolics
         )
 
-    def test_stable_type_id_in_case_class_pattern_produces_new_object(self):
-        """'case pkg.Foo(y) => y' should produce NEW_OBJECT with 'pattern:pkg.Foo'."""
+    def test_stable_type_id_in_case_class_pattern_isinstance_check(self):
+        """'case pkg.Foo(y) => y' should produce isinstance check with 'pkg.Foo'."""
         instructions = _parse_scala(
             "object M { val r = x match { case pkg.Foo(y) => y } }"
         )
-        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
-        assert any("pkg.Foo" in str(inst.operands) for inst in new_objs)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("isinstance" in inst.operands for inst in calls)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("pkg.Foo" in inst.operands for inst in consts)
 
     def test_stable_type_id_lowered_directly_produces_load_chain(self):
         """When stable_type_identifier appears in expression context, it produces
