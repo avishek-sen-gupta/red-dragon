@@ -96,6 +96,75 @@ let result = if let Some(v) = x { v } else { -1 };
         assert local_vars["result"] == -1
 
 
+class TestRustPatternMatchingTuple:
+    @pytest.mark.xfail(
+        reason="Tuple construction not yet supported in Rust frontend",
+        strict=False,
+    )
+    def test_tuple_destructuring(self):
+        """match (3, 4) { (a, b) => a + b, _ => 0 } should produce 7."""
+        _, local_vars = _run_rust("""\
+let pair = (3, 4);
+let r = match pair {
+    (a, b) => a + b,
+    _ => 0,
+};
+""")
+        assert local_vars["r"] == 7
+
+
+class TestRustPatternMatchingStruct:
+    @pytest.mark.xfail(
+        reason="Struct pattern destructuring needs struct class fields accessible via LOAD_FIELD",
+        strict=False,
+    )
+    def test_struct_destructuring(self):
+        """match p { Point { x, y } => x + y } should destructure struct fields."""
+        _, local_vars = _run_rust("""\
+struct Point { x: i32, y: i32 }
+let p = Point { x: 3, y: 4 };
+let r = match p {
+    Point { x, y } => x + y,
+};
+""")
+        assert local_vars["r"] == 7
+
+
+class TestRustPatternMatchingNested:
+    @pytest.mark.xfail(
+        reason="Depends on Some(v) destructuring (red-dragon-jpgb)",
+        strict=False,
+    )
+    def test_nested_some_tuple(self):
+        """match Some((1, 2)) { Some((a, b)) => a + b, _ => 0 } should produce 3."""
+        _, local_vars = _run_rust("""\
+let opt = Some((1, 2));
+let r = match opt {
+    Some((a, b)) => a + b,
+    _ => 0,
+};
+""")
+        assert local_vars["r"] == 3
+
+
+class TestRustPatternMatchingScopedIdentifier:
+    @pytest.mark.xfail(
+        reason="ValuePattern LOAD_VAR/LOAD_FIELD lookup for enum variants not yet wired",
+        strict=False,
+    )
+    def test_scoped_identifier(self):
+        """match Color::Red { Color::Red => 1, _ => 0 } should produce 1."""
+        _, local_vars = _run_rust("""\
+enum Color { Red, Green, Blue }
+let c = Color::Red;
+let r = match c {
+    Color::Red => 1,
+    _ => 0,
+};
+""")
+        assert local_vars["r"] == 1
+
+
 class TestRustPatternMatchingGuard:
     def test_guard_clause_matches(self):
         """match 5 { n if n > 0 => 1, _ => -1 } should produce 1."""
