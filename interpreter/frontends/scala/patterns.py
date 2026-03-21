@@ -59,6 +59,11 @@ def parse_scala_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
     if node_type in (NT.STABLE_IDENTIFIER, NT.STABLE_TYPE_IDENTIFIER):
         return ValuePattern(tuple(text.split(".")))
 
+    if node_type == NT.INFIX_PATTERN:
+        # Infix patterns like `head :: tail` — treat as wildcard (always matches).
+        # Proper cons-list destructuring requires VM support; for now, just match.
+        return WildcardPattern()
+
     raise ValueError(f"Unsupported Scala pattern node type: {node_type!r} ({text!r})")
 
 
