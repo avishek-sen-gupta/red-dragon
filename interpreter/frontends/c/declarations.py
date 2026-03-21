@@ -617,3 +617,98 @@ def lower_preproc_function_def(ctx: TreeSitterEmitContext, node) -> None:
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+
+
+# ---------------------------------------------------------------------------
+# Symbol extraction (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+def _extract_c_declarator_name_no_ctx(decl_node) -> "str | None":
+    """Extract variable/function name from a C declarator without a ctx object."""
+    if decl_node.type == CNodeType.IDENTIFIER:
+        return decl_node.text.decode()
+    inner = decl_node.child_by_field_name("declarator")
+    if inner is not None:
+        return _extract_c_declarator_name_no_ctx(inner)
+    if (
+        decl_node.type == CNodeType.PARENTHESIZED_DECLARATOR
+        and decl_node.named_child_count > 0
+    ):
+        return _extract_c_declarator_name_no_ctx(decl_node.named_children[0])
+    id_node = next(
+        (c for c in decl_node.children if c.type == CNodeType.IDENTIFIER), None
+    )
+    return id_node.text.decode() if id_node is not None else None
+
+
+def _extract_c_struct_fields(field_decl_list) -> "dict[str, FieldInfo]":
+    """Extract fields from a C struct field_declaration_list node."""
+    from interpreter.frontends.symbol_table import FieldInfo
+
+    fields: dict[str, FieldInfo] = {}
+    for child in field_decl_list.children:
+        if child.type != CNodeType.FIELD_DECLARATION:
+            continue
+        type_node = child.child_by_field_name("type")
+        type_hint = type_node.text.decode() if type_node is not None else ""
+        for sub in child.children:
+            if sub.type == CNodeType.FIELD_IDENTIFIER:
+                fname = sub.text.decode()
+                fields[fname] = FieldInfo(
+                    name=fname, type_hint=type_hint, has_initializer=False
+                )
+    return fields
+
+
+def _collect_c_structs_and_functions(
+    node,
+    classes: "dict[str, ClassInfo]",
+    functions: "dict[str, FunctionInfo]",
+) -> None:
+    """Walk AST to collect struct_specifier nodes as ClassInfo and top-level function_definition nodes."""
+    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
+
+    if node.type == CNodeType.STRUCT_SPECIFIER:
+        name_node = node.child_by_field_name("name")
+        if name_node is not None:
+            struct_name = name_node.text.decode()
+            body = node.child_by_field_name("body")
+            fields: dict[str, FieldInfo] = (
+                _extract_c_struct_fields(body) if body is not None else {}
+            )
+            classes[struct_name] = ClassInfo(
+                name=struct_name, fields=fields, methods={}, constants={}, parents=()
+            )
+    elif node.type == CNodeType.FUNCTION_DEFINITION:
+        declarator = node.child_by_field_name("declarator")
+        if declarator is not None:
+            fname = _extract_c_declarator_name_no_ctx(declarator)
+            if fname is not None:
+                ret_node = node.child_by_field_name("type")
+                return_type = ret_node.text.decode() if ret_node is not None else ""
+                params_node = declarator.child_by_field_name("parameters")
+                params: tuple[str, ...] = ()
+                if params_node is not None:
+                    params = tuple(
+                        sub.text.decode()
+                        for p in params_node.children
+                        if p.type == CNodeType.PARAMETER_DECLARATION
+                        for sub in p.children
+                        if sub.type == CNodeType.IDENTIFIER
+                    )
+                functions[fname] = FunctionInfo(
+                    name=fname, params=params, return_type=return_type
+                )
+    for child in node.children:
+        _collect_c_structs_and_functions(child, classes, functions)
+
+
+def extract_c_symbols(root) -> "SymbolTable":
+    """Walk the C AST and return a SymbolTable of all struct and function definitions."""
+    from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo, SymbolTable
+
+    classes: dict[str, ClassInfo] = {}
+    functions: dict[str, FunctionInfo] = {}
+    _collect_c_structs_and_functions(root, classes, functions)
+    return SymbolTable(classes=classes, functions=functions)

@@ -432,3 +432,127 @@ def _lower_const_spec(ctx: TreeSitterEmitContext, node, prev_value_node=None) ->
             operands=[ctx.node_text(name_node), val_reg],
             node=node,
         )
+
+
+# ---------------------------------------------------------------------------
+# Symbol extraction (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+def _extract_go_struct_fields(field_declaration_list) -> "dict[str, FieldInfo]":
+    """Extract fields from a Go struct field_declaration_list node."""
+    from interpreter.frontends.symbol_table import FieldInfo
+
+    fields: dict[str, FieldInfo] = {}
+    for child in field_declaration_list.children:
+        if child.type != "field_declaration":
+            continue
+        # A field_declaration can have multiple names before the type
+        type_node = child.child_by_field_name("type")
+        type_hint = type_node.text.decode() if type_node is not None else ""
+        for subchild in child.children:
+            if subchild.type == GoNodeType.FIELD_IDENTIFIER:
+                fname = subchild.text.decode()
+                fields[fname] = FieldInfo(
+                    name=fname, type_hint=type_hint, has_initializer=False
+                )
+    return fields
+
+
+def _extract_go_method_params(params_node) -> "tuple[str, ...]":
+    """Extract parameter names from a Go parameter_list node (skip receiver)."""
+    return tuple(
+        subchild.text.decode()
+        for child in params_node.children
+        if child.type == GoNodeType.PARAMETER_DECLARATION
+        for subchild in child.children
+        if subchild.type == GoNodeType.IDENTIFIER
+    )
+
+
+def _collect_go_structs(
+    node, classes: "dict[str, ClassInfo]", methods: "dict[str, FunctionInfo]"
+) -> None:
+    """Walk AST to collect structs (as ClassInfo) and top-level/method functions."""
+    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
+
+    if node.type == GoNodeType.TYPE_DECLARATION:
+        for child in node.children:
+            if child.type == GoNodeType.TYPE_SPEC:
+                name_node = child.child_by_field_name("name")
+                type_node = child.child_by_field_name("type")
+                if (
+                    name_node is not None
+                    and type_node is not None
+                    and type_node.type == GoNodeType.STRUCT_TYPE
+                ):
+                    struct_name = name_node.text.decode()
+                    field_list = next(
+                        (
+                            c
+                            for c in type_node.children
+                            if c.type == "field_declaration_list"
+                        ),
+                        None,
+                    )
+                    fields: dict[str, FieldInfo] = (
+                        _extract_go_struct_fields(field_list)
+                        if field_list is not None
+                        else {}
+                    )
+                    classes[struct_name] = ClassInfo(
+                        name=struct_name,
+                        fields=fields,
+                        methods={},
+                        constants={},
+                        parents=(),
+                    )
+    elif node.type == GoNodeType.FUNCTION_DECLARATION:
+        name_node = node.child_by_field_name("name")
+        params_node = node.child_by_field_name("parameters")
+        if name_node is not None:
+            fname = name_node.text.decode()
+            params = (
+                _extract_go_method_params(params_node)
+                if params_node is not None
+                else ()
+            )
+            methods[fname] = FunctionInfo(name=fname, params=params, return_type="")
+    elif node.type == GoNodeType.METHOD_DECLARATION:
+        # Attach method to its receiver type
+        name_node = node.child_by_field_name("name")
+        receiver = node.child_by_field_name("receiver")
+        params_node = node.child_by_field_name("parameters")
+        if name_node is not None and receiver is not None:
+            mname = name_node.text.decode()
+            params = (
+                _extract_go_method_params(params_node)
+                if params_node is not None
+                else ()
+            )
+            minfo = FunctionInfo(name=mname, params=params, return_type="")
+            # Find receiver type name from parameter_declaration > type_identifier
+            receiver_type = next(
+                (
+                    sub.text.decode().lstrip("*")
+                    for rchild in receiver.children
+                    if rchild.type == GoNodeType.PARAMETER_DECLARATION
+                    for sub in rchild.children
+                    if sub.type == GoNodeType.TYPE_IDENTIFIER
+                ),
+                None,
+            )
+            if receiver_type is not None and receiver_type in classes:
+                classes[receiver_type].methods[mname] = minfo
+    for child in node.children:
+        _collect_go_structs(child, classes, methods)
+
+
+def extract_go_symbols(root) -> "SymbolTable":
+    """Walk the Go AST and return a SymbolTable of all struct and function definitions."""
+    from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo, SymbolTable
+
+    classes: dict[str, ClassInfo] = {}
+    top_level_functions: dict[str, FunctionInfo] = {}
+    _collect_go_structs(root, classes, top_level_functions)
+    return SymbolTable(classes=classes, functions=top_level_functions)

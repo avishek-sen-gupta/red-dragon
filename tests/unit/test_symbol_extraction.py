@@ -228,3 +228,272 @@ class TestPythonSymbolExtraction:
         st = _extract(Language.PYTHON, src)
         assert "x" in st.classes["C"].fields
         assert "x" not in st.classes["C"].constants
+
+
+class TestJavaScriptSymbolExtraction:
+    def test_extracts_class_with_fields(self):
+        src = "class Circle { constructor() { this.radius = 0; } }"
+        st = _extract(Language.JAVASCRIPT, src)
+        assert "Circle" in st.classes
+        assert "radius" in st.classes["Circle"].fields
+
+    def test_extracts_methods(self):
+        src = "class C { area() { return 0; } }"
+        st = _extract(Language.JAVASCRIPT, src)
+        assert "area" in st.classes["C"].methods
+
+    def test_extracts_parents(self):
+        src = "class Shape {} class Circle extends Shape { area() {} }"
+        st = _extract(Language.JAVASCRIPT, src)
+        assert "Shape" in st.classes["Circle"].parents
+
+    def test_extracts_field_definition(self):
+        src = "class C { count = 0; }"
+        st = _extract(Language.JAVASCRIPT, src)
+        assert "count" in st.classes["C"].fields
+
+    def test_multiple_classes(self):
+        src = "class A {} class B {}"
+        st = _extract(Language.JAVASCRIPT, src)
+        assert "A" in st.classes
+        assert "B" in st.classes
+
+
+class TestTypeScriptSymbolExtraction:
+    def test_extracts_class_with_fields(self):
+        src = "class Circle { constructor() { this.radius = 0; } }"
+        st = _extract(Language.TYPESCRIPT, src)
+        assert "Circle" in st.classes
+        assert "radius" in st.classes["Circle"].fields
+
+    def test_extracts_methods(self):
+        src = "class C { area(): number { return 0; } }"
+        st = _extract(Language.TYPESCRIPT, src)
+        assert "area" in st.classes["C"].methods
+
+    def test_extracts_parents(self):
+        src = "class Shape {} class Circle extends Shape {}"
+        st = _extract(Language.TYPESCRIPT, src)
+        assert "Shape" in st.classes["Circle"].parents
+
+
+class TestRubySymbolExtraction:
+    def test_extracts_class_with_fields(self):
+        src = "class Circle\n  def initialize(r)\n    @radius = r\n  end\nend\n"
+        st = _extract(Language.RUBY, src)
+        assert "Circle" in st.classes
+        assert "radius" in st.classes["Circle"].fields
+
+    def test_extracts_methods(self):
+        src = "class C\n  def area\n    0\n  end\nend\n"
+        st = _extract(Language.RUBY, src)
+        assert "area" in st.classes["C"].methods
+
+    def test_extracts_parents(self):
+        src = "class Shape\nend\nclass Circle < Shape\nend\n"
+        st = _extract(Language.RUBY, src)
+        assert "Shape" in st.classes["Circle"].parents
+
+    def test_multiple_classes(self):
+        src = "class A\nend\nclass B\nend\n"
+        st = _extract(Language.RUBY, src)
+        assert "A" in st.classes
+        assert "B" in st.classes
+
+
+class TestGoSymbolExtraction:
+    def test_extracts_struct_with_fields(self):
+        src = "package main\ntype Circle struct { Radius int }"
+        st = _extract(Language.GO, src)
+        assert "Circle" in st.classes
+        assert "Radius" in st.classes["Circle"].fields
+
+    def test_extracts_top_level_function(self):
+        src = "package main\nfunc Area() int { return 0 }"
+        st = _extract(Language.GO, src)
+        assert "Area" in st.functions
+
+    def test_extracts_method_for_struct(self):
+        src = (
+            "package main\ntype C struct { X int }\nfunc (c C) Area() int { return 0 }"
+        )
+        st = _extract(Language.GO, src)
+        assert "Area" in st.classes["C"].methods
+
+    def test_multiple_structs(self):
+        src = "package main\ntype A struct { X int }\ntype B struct { Y int }"
+        st = _extract(Language.GO, src)
+        assert "A" in st.classes
+        assert "B" in st.classes
+
+
+class TestPHPSymbolExtraction:
+    def test_extracts_class_with_fields(self):
+        src = "<?php\nclass Circle {\n  public $radius;\n}"
+        st = _extract(Language.PHP, src)
+        assert "Circle" in st.classes
+        assert "radius" in st.classes["Circle"].fields
+
+    def test_extracts_methods(self):
+        src = "<?php\nclass C {\n  public function area() { return 0; }\n}"
+        st = _extract(Language.PHP, src)
+        assert "area" in st.classes["C"].methods
+
+    def test_extracts_parents(self):
+        src = "<?php\nclass Shape {}\nclass Circle extends Shape {}"
+        st = _extract(Language.PHP, src)
+        assert "Shape" in st.classes["Circle"].parents
+
+    def test_multiple_classes(self):
+        src = "<?php\nclass A {}\nclass B {}"
+        st = _extract(Language.PHP, src)
+        assert "A" in st.classes
+        assert "B" in st.classes
+
+
+class TestKotlinSymbolExtraction:
+    def test_extracts_class_with_primary_ctor_fields(self):
+        src = "class Circle(val radius: Int)"
+        st = _extract(Language.KOTLIN, src)
+        assert "Circle" in st.classes
+        assert "radius" in st.classes["Circle"].fields
+
+    def test_extracts_methods(self):
+        src = "class C {\n  fun area(): Int { return 0 }\n}"
+        st = _extract(Language.KOTLIN, src)
+        assert "area" in st.classes["C"].methods
+
+    def test_extracts_parents(self):
+        src = "open class Shape\nclass Circle : Shape()"
+        st = _extract(Language.KOTLIN, src)
+        assert "Shape" in st.classes["Circle"].parents
+
+    def test_extracts_property_field(self):
+        src = "class C {\n  val x: Int = 0\n}"
+        st = _extract(Language.KOTLIN, src)
+        assert "x" in st.classes["C"].fields
+
+    def test_multiple_classes(self):
+        src = "class A\nclass B"
+        st = _extract(Language.KOTLIN, src)
+        assert "A" in st.classes
+        assert "B" in st.classes
+
+
+class TestScalaSymbolExtraction:
+    def test_extracts_class_with_primary_ctor_fields(self):
+        src = "class Circle(val radius: Int)"
+        st = _extract(Language.SCALA, src)
+        assert "Circle" in st.classes
+        assert "radius" in st.classes["Circle"].fields
+
+    def test_extracts_methods(self):
+        src = "class C {\n  def area(): Int = 0\n}"
+        st = _extract(Language.SCALA, src)
+        assert "area" in st.classes["C"].methods
+
+    def test_extracts_parents(self):
+        src = "class Shape\nclass Circle extends Shape"
+        st = _extract(Language.SCALA, src)
+        assert "Shape" in st.classes["Circle"].parents
+
+    def test_extracts_val_field(self):
+        src = "class C {\n  val x: Int = 0\n}"
+        st = _extract(Language.SCALA, src)
+        assert "x" in st.classes["C"].fields
+
+    def test_multiple_classes(self):
+        src = "class A\nclass B"
+        st = _extract(Language.SCALA, src)
+        assert "A" in st.classes
+        assert "B" in st.classes
+
+
+class TestRustSymbolExtraction:
+    def test_extracts_struct_with_fields(self):
+        src = "struct Circle { radius: f64 }"
+        st = _extract(Language.RUST, src)
+        assert "Circle" in st.classes
+        assert "radius" in st.classes["Circle"].fields
+
+    def test_extracts_methods_from_impl(self):
+        src = "struct C { x: i32 }\nimpl C { fn area(&self) -> i32 { 0 } }"
+        st = _extract(Language.RUST, src)
+        assert "area" in st.classes["C"].methods
+
+    def test_extracts_top_level_function(self):
+        src = "fn greet(name: &str) -> i32 { 0 }"
+        st = _extract(Language.RUST, src)
+        assert "greet" in st.functions
+
+    def test_multiple_structs(self):
+        src = "struct A { x: i32 }\nstruct B { y: f64 }"
+        st = _extract(Language.RUST, src)
+        assert "A" in st.classes
+        assert "B" in st.classes
+
+
+class TestLuaSymbolExtraction:
+    def test_returns_empty_symbol_table(self):
+        src = "local x = 1"
+        st = _extract(Language.LUA, src)
+        assert st.classes == {}
+
+    def test_function_defined_lua(self):
+        src = "function greet() end"
+        st = _extract(Language.LUA, src)
+        # Lua extraction is minimal — just verify it doesn't crash
+        assert isinstance(st.classes, dict)
+
+
+class TestPascalSymbolExtraction:
+    def test_extracts_class_with_fields(self):
+        src = (
+            "program Test;\n"
+            "type\n"
+            "  TCircle = class\n"
+            "  private\n"
+            "    FRadius: Integer;\n"
+            "  end;\n"
+            "begin end.\n"
+        )
+        st = _extract(Language.PASCAL, src)
+        assert "TCircle" in st.classes
+        assert "FRadius" in st.classes["TCircle"].fields
+
+    def test_multiple_classes(self):
+        src = (
+            "program Test;\n"
+            "type\n"
+            "  TA = class\n"
+            "  private\n"
+            "    FX: Integer;\n"
+            "  end;\n"
+            "  TB = class\n"
+            "  private\n"
+            "    FY: Integer;\n"
+            "  end;\n"
+            "begin end.\n"
+        )
+        st = _extract(Language.PASCAL, src)
+        assert "TA" in st.classes
+        assert "TB" in st.classes
+
+
+class TestCSymbolExtraction:
+    def test_extracts_struct_with_fields(self):
+        src = "struct Circle { int radius; double area; };"
+        st = _extract(Language.C, src)
+        assert "Circle" in st.classes
+        assert "radius" in st.classes["Circle"].fields
+
+    def test_extracts_top_level_function(self):
+        src = "int add(int a, int b) { return a + b; }"
+        st = _extract(Language.C, src)
+        assert "add" in st.functions
+
+    def test_multiple_structs(self):
+        src = "struct A { int x; }; struct B { float y; };"
+        st = _extract(Language.C, src)
+        assert "A" in st.classes
+        assert "B" in st.classes

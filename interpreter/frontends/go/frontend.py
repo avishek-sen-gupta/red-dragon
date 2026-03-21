@@ -123,3 +123,9 @@ class GoFrontend(BaseFrontend):
             GoNodeType.FALLTHROUGH_STATEMENT: lambda ctx, node: None,
             GoNodeType.RECEIVE_STATEMENT: go_cf.lower_receive_stmt,
         }
+
+    def _extract_symbols(self, root) -> "SymbolTable":
+        from interpreter.frontends.go.declarations import extract_go_symbols
+        from interpreter.frontends.symbol_table import SymbolTable
+
+        return extract_go_symbols(root)
