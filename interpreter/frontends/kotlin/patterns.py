@@ -8,6 +8,7 @@ from interpreter.frontends.common.patterns import (
     LiteralPattern,
     Pattern,
 )
+from interpreter.frontends.common.pattern_utils import parse_number
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
 
@@ -20,7 +21,7 @@ def parse_kotlin_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
     text = ctx.node_text(node)
 
     if node_type in (KNT.INTEGER_LITERAL, KNT.LONG_LITERAL, KNT.HEX_LITERAL):
-        return LiteralPattern(_parse_number(text))
+        return LiteralPattern(parse_number(text, strip_suffixes="lLuU"))
 
     if node_type == KNT.REAL_LITERAL:
         return LiteralPattern(float(text.replace("_", "").rstrip("fFdD")))
@@ -64,13 +65,3 @@ def _parse_type_check(ctx: TreeSitterEmitContext, node) -> ClassPattern:
     )
     type_name = ctx.node_text(type_node) if type_node else ctx.node_text(node)
     return ClassPattern(type_name, positional=(), keyword=())
-
-
-def _parse_number(text: str) -> int | float:
-    """Parse numeric literal, stripping suffixes and _ separators."""
-    cleaned = text.replace("_", "").rstrip("lLuU")
-    if "." in cleaned:
-        return float(cleaned)
-    if cleaned.startswith("0x") or cleaned.startswith("0X"):
-        return int(cleaned, 16)
-    return int(cleaned, 0)
