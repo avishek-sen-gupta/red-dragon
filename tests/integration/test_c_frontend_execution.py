@@ -95,3 +95,39 @@ struct Point p = {.y = 10, .x = 42};
 int answer = p.x + p.y;
 """)
         assert vars_["answer"] == 52
+
+
+class TestCStructFieldStoreLoad:
+    """Plain struct declaration + explicit field assignment + field read."""
+
+    def test_struct_field_store_then_load(self):
+        """struct Circle c; c.radius = 5; int result = c.radius; should return 5."""
+        vars_ = _run_c("""\
+struct Circle { int radius; };
+struct Circle c;
+c.radius = 5;
+int result = c.radius;
+""")
+        assert isinstance(vars_["result"], int) and vars_["result"] == 5
+
+    def test_struct_two_fields_store_then_load(self):
+        """Storing two fields independently and reading both should return correct values."""
+        vars_ = _run_c("""\
+struct Point { int x; int y; };
+struct Point p;
+p.x = 10;
+p.y = 20;
+int sum = p.x + p.y;
+""")
+        assert isinstance(vars_["sum"], int) and vars_["sum"] == 30
+
+    def test_struct_field_overwrite(self):
+        """Overwriting a struct field should return the latest value."""
+        vars_ = _run_c("""\
+struct Box { int val; };
+struct Box b;
+b.val = 3;
+b.val = 7;
+int result = b.val;
+""")
+        assert isinstance(vars_["result"], int) and vars_["result"] == 7
