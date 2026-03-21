@@ -2229,3 +2229,22 @@ typed patterns (`i: Int` via `AsPattern(ClassPattern, name)`), and guards.
 
 Infix patterns (`head :: tail`), as-patterns (`x @ pat`), and extractor
 patterns are out of scope (red-dragon-hham, red-dragon-4s1a, red-dragon-loht).
+
+---
+
+### ADR-119: Kotlin `when` Pattern Matching (2026-03-21)
+
+**Status:** Accepted
+**Issue:** red-dragon-y0df
+
+Kotlin `when` expression now uses the common Pattern ADT via
+`compile_pattern_test` and `compile_pattern_bindings`, replacing
+hand-rolled `==` comparisons. Same architecture as Rust (ADR-117)
+and Scala (ADR-118).
+
+Supported: literals, `else` (wildcard), `is Type` (ClassPattern
+isinstance), captures. Subject binding (`when(val x = expr)`) preserved.
+Subjectless `when { bool_expr -> ... }` handled separately (not pattern-based).
+
+Range patterns (`in 1..10`), destructuring, and smart casts are out
+of scope (red-dragon-1qcf, red-dragon-bijo, red-dragon-tq0m).
