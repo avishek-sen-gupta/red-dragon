@@ -10,6 +10,7 @@ from interpreter.frontends.common.patterns import (
     OrPattern,
     Pattern,
     SequencePattern,
+    StarPattern,
     ValuePattern,
     WildcardPattern,
 )
@@ -84,11 +85,31 @@ def parse_rust_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
 
     if node_type == RustNodeType.REFERENCE_PATTERN:
         # Children: '&' (anonymous) then the inner pattern (named or anonymous '_')
-        # Skip the '&' prefix and take the last child
         inner_node = node.children[-1]
         return DerefPattern(parse_rust_pattern(ctx, inner_node))
 
+    if node_type == RustNodeType.SLICE_PATTERN:
+        return _parse_slice_pattern(ctx, node)
+
+    if node_type == RustNodeType.REMAINING_FIELD_PATTERN:
+        return StarPattern("_")
+
+    if node_type == RustNodeType.CAPTURED_PATTERN:
+        # rest @ .. — name is the identifier child, inner is remaining_field_pattern
+        name_node = next(c for c in node.children if c.type == RustNodeType.IDENTIFIER)
+        return StarPattern(ctx.node_text(name_node))
+
     raise ValueError(f"Unsupported Rust pattern node type: {node_type!r} ({text!r})")
+
+
+def _parse_slice_pattern(ctx: TreeSitterEmitContext, node) -> SequencePattern:
+    """Parse slice_pattern [a, b, ..] into SequencePattern with optional StarPattern."""
+    elements = tuple(
+        parse_rust_pattern(ctx, c)
+        for c in node.children
+        if c.is_named or ctx.node_text(c) == _WILDCARD_TEXT
+    )
+    return SequencePattern(elements)
 
 
 def _parse_number(text: str) -> int | float:

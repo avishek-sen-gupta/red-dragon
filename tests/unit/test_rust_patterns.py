@@ -13,6 +13,7 @@ from interpreter.frontends.common.patterns import (
     LiteralPattern,
     OrPattern,
     SequencePattern,
+    StarPattern,
     ValuePattern,
     WildcardPattern,
 )
@@ -204,6 +205,65 @@ class TestReferencePattern:
         result = parse_rust_pattern(ctx, inner)
         assert isinstance(result, DerefPattern)
         assert isinstance(result.inner, WildcardPattern)
+
+
+class TestSlicePattern:
+    def test_slice_two_captures(self):
+        """[a, b] should produce SequencePattern with two CapturePatterns."""
+        snippet = "fn main() { match arr { [a, b] => 1, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert isinstance(result, SequencePattern)
+        assert len(result.elements) == 2
+        assert result.elements[0] == CapturePattern("a")
+        assert result.elements[1] == CapturePattern("b")
+
+    def test_slice_with_rest(self):
+        """[a, b, ..] should produce SequencePattern with StarPattern('_')."""
+        snippet = "fn main() { match arr { [a, b, ..] => 1, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert isinstance(result, SequencePattern)
+        assert len(result.elements) == 3
+        assert result.elements[0] == CapturePattern("a")
+        assert result.elements[1] == CapturePattern("b")
+        assert isinstance(result.elements[2], StarPattern)
+        assert result.elements[2].name == "_"
+
+    def test_slice_with_named_rest(self):
+        """[first, rest @ ..] should produce SequencePattern with StarPattern('rest')."""
+        snippet = "fn main() { match arr { [first, rest @ ..] => 1, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert isinstance(result, SequencePattern)
+        assert len(result.elements) == 2
+        assert result.elements[0] == CapturePattern("first")
+        assert isinstance(result.elements[1], StarPattern)
+        assert result.elements[1].name == "rest"
+
+    def test_slice_empty(self):
+        """[] should produce SequencePattern with no elements."""
+        snippet = "fn main() { match arr { [] => 1, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert isinstance(result, SequencePattern)
+        assert len(result.elements) == 0
+
+    def test_slice_with_wildcards(self):
+        """[_, _, third] should have wildcards and capture."""
+        snippet = "fn main() { match arr { [_, _, third] => 1, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert isinstance(result, SequencePattern)
+        assert len(result.elements) == 3
+        assert isinstance(result.elements[0], WildcardPattern)
+        assert isinstance(result.elements[1], WildcardPattern)
+        assert result.elements[2] == CapturePattern("third")
 
 
 class TestOrPattern:
