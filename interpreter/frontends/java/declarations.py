@@ -218,6 +218,23 @@ def _extract_java_interfaces(ctx: TreeSitterEmitContext, node) -> list[str]:
     ]
 
 
+def _collect_java_all_field_names(
+    ctx: TreeSitterEmitContext, deferred: list
+) -> set[str]:
+    """Collect ALL instance field names from deferred class-body children."""
+    names: set[str] = set()
+    for child in deferred:
+        if child.type != JavaNodeType.FIELD_DECLARATION or _has_static_modifier(child):
+            continue
+        for decl in child.children:
+            if decl.type != JavaNodeType.VARIABLE_DECLARATOR:
+                continue
+            name_node = decl.child_by_field_name("name")
+            if name_node is not None:
+                names.add(ctx.node_text(name_node))
+    return names
+
+
 def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -240,7 +257,11 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
     saved_class = ctx._current_class_name
+    saved_field_names = ctx._class_field_names
     ctx._current_class_name = class_name
+
+    # Collect ALL instance field names for implicit-this detection in constructors
+    ctx._class_field_names = _collect_java_all_field_names(ctx, deferred)
 
     # Collect field initializers from non-static field declarations
     field_inits: list[FieldInit] = [
@@ -268,6 +289,7 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
         emit_synthetic_init(ctx, field_inits)
 
     ctx._current_class_name = saved_class
+    ctx._class_field_names = saved_field_names
 
 
 def lower_record_decl(ctx: TreeSitterEmitContext, node) -> None:
