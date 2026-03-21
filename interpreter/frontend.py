@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from interpreter.constants import Language
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
@@ -13,6 +13,9 @@ from interpreter.ir import IRInstruction
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter import constants
 from interpreter.constants import LLMProvider
+
+if TYPE_CHECKING:
+    from interpreter.frontends.symbol_table import SymbolTable
 
 _NO_REPAIR_CLIENT = object()  # sentinel — distinct from None
 
@@ -47,6 +50,13 @@ class Frontend(ABC):
     def class_symbol_table(self) -> dict[str, ClassRef]:
         """Class reference symbol table accumulated during lowering."""
         return {}
+
+    @property
+    def symbol_table(self) -> SymbolTable:
+        """Full symbol table accumulated during lowering."""
+        from interpreter.frontends.symbol_table import SymbolTable
+
+        return SymbolTable.empty()
 
 
 # Backward-compatibility re-export: code that imports PythonFrontend from here still works.
