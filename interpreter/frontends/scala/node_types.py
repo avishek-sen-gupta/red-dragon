@@ -61,6 +61,12 @@ class ScalaNodeType:
     CLASS_PARAMETERS = "class_parameters"
     CLASS_PARAMETER = "class_parameter"
 
+    # Enum definitions (Scala 3)
+    ENUM_DEFINITION = "enum_definition"
+    ENUM_BODY = "enum_body"
+    ENUM_CASE_DEFINITIONS = "enum_case_definitions"
+    SIMPLE_ENUM_CASE = "simple_enum_case"
+
     # Definitions and declarations
     VAL_DEFINITION = "val_definition"
     VAR_DEFINITION = "var_definition"

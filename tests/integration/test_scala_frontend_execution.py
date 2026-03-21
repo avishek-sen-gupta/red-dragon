@@ -208,3 +208,43 @@ val answer = obj.doubled
             max_steps=1000,
         )
         assert locals_["answer"] == 15
+
+
+class TestScalaEnumExecution:
+    def test_simple_enum_field_access(self):
+        """enum Color { case Red, Green, Blue }; Color.Red should resolve."""
+        locals_ = _run_scala("""\
+enum Color {
+  case Red, Green, Blue
+}
+val c = Color.Red
+""")
+        assert locals_["c"] == "Red"
+
+    def test_enum_all_variants_accessible(self):
+        """All enum variants should be accessible via dot notation."""
+        locals_ = _run_scala("""\
+enum Direction {
+  case North, South, East, West
+}
+val n = Direction.North
+val s = Direction.South
+val e = Direction.East
+val w = Direction.West
+""")
+        assert locals_["n"] == "North"
+        assert locals_["s"] == "South"
+        assert locals_["e"] == "East"
+        assert locals_["w"] == "West"
+
+    def test_enum_variant_equality(self):
+        """Two accesses to the same enum variant should be equal."""
+        locals_ = _run_scala("""\
+enum Color {
+  case Red, Green, Blue
+}
+val a = Color.Red
+val b = Color.Red
+val same = a == b
+""")
+        assert locals_["same"] is True
