@@ -62,11 +62,19 @@ def lower_c_store_target(
 ) -> None:
     """C-specific store target handling (field_expression, subscript, pointer)."""
     if target.type == CNodeType.IDENTIFIER:
-        ctx.emit(
-            Opcode.STORE_VAR,
-            operands=[ctx.node_text(target), val_reg],
-            node=parent_node,
-        )
+        name = ctx.node_text(target)
+        if name in ctx._class_field_names:
+            this_reg = ctx.fresh_reg()
+            ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+            ctx.emit(
+                Opcode.STORE_FIELD, operands=[this_reg, name, val_reg], node=parent_node
+            )
+        else:
+            ctx.emit(
+                Opcode.STORE_VAR,
+                operands=[name, val_reg],
+                node=parent_node,
+            )
     elif target.type == CNodeType.FIELD_EXPRESSION:
         obj_node = target.child_by_field_name("argument")
         field_node = target.child_by_field_name("field")
