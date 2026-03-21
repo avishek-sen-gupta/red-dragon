@@ -9,6 +9,9 @@ from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.frontends.common.patterns import (
     CapturePattern,
     LiteralPattern,
+    OrPattern,
+    SequencePattern,
+    ValuePattern,
     WildcardPattern,
 )
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -168,3 +171,60 @@ class TestCapturePattern:
         _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
         result = parse_rust_pattern(ctx, inner)
         assert result == CapturePattern("value")
+
+
+class TestOrPattern:
+    def test_or_pattern_three_literals(self):
+        snippet = "fn main() { match x { 1 | 2 | 3 => 1, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert result == OrPattern(
+            (LiteralPattern(1), LiteralPattern(2), LiteralPattern(3))
+        )
+
+    def test_or_pattern_two_literals(self):
+        snippet = "fn main() { match x { 0 | 1 => 1, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert result == OrPattern((LiteralPattern(0), LiteralPattern(1)))
+
+
+class TestTuplePattern:
+    def test_tuple_two_captures(self):
+        snippet = "fn main() { match p { (x, y) => x + y, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert result == SequencePattern((CapturePattern("x"), CapturePattern("y")))
+
+    def test_tuple_with_wildcard(self):
+        snippet = "fn main() { match p { (_, y) => y, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert result == SequencePattern((WildcardPattern(), CapturePattern("y")))
+
+    def test_tuple_with_literal(self):
+        snippet = "fn main() { match p { (0, y) => y, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert result == SequencePattern((LiteralPattern(0), CapturePattern("y")))
+
+
+class TestScopedIdentifierPattern:
+    def test_scoped_identifier_maps_to_value_pattern(self):
+        snippet = "fn main() { match c { Color::Red => 1, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert result == ValuePattern(("Color", "Red"))
+
+    def test_scoped_identifier_preserves_parts(self):
+        snippet = "fn main() { match s { Shape::Circle => 1, _ => 0 } }"
+        ctx = _make_rust_ctx(snippet)
+        _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_rust_pattern(ctx, inner)
+        assert result == ValuePattern(("Shape", "Circle"))
