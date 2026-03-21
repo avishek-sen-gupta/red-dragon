@@ -915,6 +915,7 @@ end
 
 class TestRubySingletonMethod:
     def test_singleton_method_basic(self):
+        """def self.class_method should register the function under just the method name."""
         source = """\
 def self.class_method
   "hello"
@@ -922,7 +923,9 @@ end
 """
         instructions = _parse_ruby(source)
         stores = _find_all(instructions, Opcode.DECL_VAR)
-        assert any("self.class_method" in inst.operands for inst in stores)
+        # Function is registered under its bare method name (not "self.class_method")
+        # so that class_methods registry lookup via CALL_METHOD resolves it correctly.
+        assert any("class_method" in inst.operands for inst in stores)
 
     def test_singleton_method_with_params(self):
         source = """\

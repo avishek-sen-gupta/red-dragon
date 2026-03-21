@@ -160,17 +160,20 @@ def lower_ruby_singleton_class(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_ruby_singleton_method(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower `def self.method_name(...) ... end` — like a regular method."""
+    """Lower `def self.method_name(...) ... end` as a class method.
+
+    The function is registered under just the method name (not
+    ``object.method_name``) so that static dispatch via
+    ``registry.class_methods[class_name][method_name]`` resolves correctly
+    when the receiver is a ClassRef.
+    """
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
-    object_node = node.child_by_field_name(ctx.constants.attr_object_field)
 
-    object_name = ctx.node_text(object_node) if object_node else "self"
     method_name = ctx.node_text(name_node) if name_node else "__anon"
-    func_name = f"{object_name}.{method_name}"
-    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
-    end_label = ctx.fresh_label(f"end_{func_name}")
+    func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{method_name}")
+    end_label = ctx.fresh_label(f"end_{method_name}")
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=func_label)
@@ -195,8 +198,8 @@ def lower_ruby_singleton_method(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+    ctx.emit_func_ref(method_name, func_label, result_reg=func_reg)
+    ctx.emit(Opcode.DECL_VAR, operands=[method_name, func_reg])
 
 
 def lower_ruby_module(ctx: TreeSitterEmitContext, node) -> None:
