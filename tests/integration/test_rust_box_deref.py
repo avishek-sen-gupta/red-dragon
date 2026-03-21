@@ -37,7 +37,7 @@ let answer = b.x;
         assert vm.heap[local_vars["p"].base].type_hint == "Point"
 
     def test_box_explicit_deref(self):
-        """*box_val returns the inner value via LOAD_FIELD '__boxed__'."""
+        """*box_val returns the inner value via LOAD_INDIRECT."""
         vm, local_vars = _run_rust(
             """\
 struct Point { x: i32, y: i32 }

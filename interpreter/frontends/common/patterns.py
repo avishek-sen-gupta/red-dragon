@@ -288,14 +288,12 @@ def compile_pattern_test(
         case StarPattern():
             return _const_true(ctx)
         case DerefPattern(inner=inner):
-            # Dereference subject (LOAD_INDEX 0), then test inner pattern
+            # Dereference subject via LOAD_INDIRECT, then test inner pattern
             deref_reg = ctx.fresh_reg()
-            idx_reg = ctx.fresh_reg()
-            ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
             ctx.emit(
-                Opcode.LOAD_INDEX,
+                Opcode.LOAD_INDIRECT,
                 result_reg=deref_reg,
-                operands=[subject_reg, idx_reg],
+                operands=[subject_reg],
             )
             return compile_pattern_test(ctx, deref_reg, inner)
         case ValuePattern(parts=parts):
@@ -447,14 +445,12 @@ def compile_pattern_bindings(
             if name != "_":
                 ctx.emit(Opcode.STORE_VAR, operands=[name, subject_reg])
         case DerefPattern(inner=inner):
-            # Dereference subject (LOAD_INDEX 0), then bind inner pattern
+            # Dereference subject via LOAD_INDIRECT, then bind inner pattern
             deref_reg = ctx.fresh_reg()
-            idx_reg = ctx.fresh_reg()
-            ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
             ctx.emit(
-                Opcode.LOAD_INDEX,
+                Opcode.LOAD_INDIRECT,
                 result_reg=deref_reg,
-                operands=[subject_reg, idx_reg],
+                operands=[subject_reg],
             )
             compile_pattern_bindings(ctx, deref_reg, inner)
         case ValuePattern():
