@@ -78,3 +78,68 @@ class TestPHPEnumCaseExecution:
         vars_ = _run_php("<?php enum Color { case Red; case Green; } ?>")
         assert isinstance(vars_["Color"], ClassRef)
         assert vars_["Color"].name == "Color"
+
+
+class TestPHPMemberAccessExecution:
+    def test_member_access_returns_field_value(self):
+        """$c->radius should return the value stored by the constructor."""
+        vars_ = _run_php("""\
+<?php
+class Circle {
+    public $radius;
+    function __construct($r) { $this->radius = $r; }
+}
+$c = new Circle(5);
+$result = $c->radius;
+?>""")
+        assert vars_["$result"] == 5
+
+    def test_member_access_with_property_initializer(self):
+        """$c->radius should return the default initializer value."""
+        vars_ = _run_php("""\
+<?php
+class Circle {
+    public $radius = 3;
+}
+$c = new Circle();
+$result = $c->radius;
+?>""")
+        assert vars_["$result"] == 3
+
+    def test_member_access_via_method_return(self):
+        """Method returning $this->field should return the stored value."""
+        vars_ = _run_php("""\
+<?php
+class Circle {
+    public $radius;
+    function __construct($r) { $this->radius = $r; }
+    function getRadius() { return $this->radius; }
+}
+$c = new Circle(7);
+$result = $c->getRadius();
+?>""")
+        assert vars_["$result"] == 7
+
+
+class TestPHPStaticMethodExecution:
+    def test_static_method_returns_correct_value(self):
+        """Util::square(5) should return 25."""
+        vars_ = _run_php("""\
+<?php
+class Util {
+    public static function square($x) { return $x * $x; }
+}
+$result = Util::square(5);
+?>""")
+        assert vars_["$result"] == 25
+
+    def test_static_method_multiple_args(self):
+        """Static method with multiple arguments should return correctly."""
+        vars_ = _run_php("""\
+<?php
+class Math {
+    public static function add($a, $b) { return $a + $b; }
+}
+$result = Math::add(3, 4);
+?>""")
+        assert vars_["$result"] == 7
