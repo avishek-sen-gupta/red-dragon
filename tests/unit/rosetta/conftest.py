@@ -12,7 +12,7 @@ from interpreter.frontends import (
 )
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import build_registry
-from interpreter.run import execute_cfg
+from interpreter.run import execute_cfg, ExecutionStrategies
 from interpreter.run_types import ExecutionStats, VMConfig
 from interpreter.vm_types import VMState
 
@@ -174,8 +174,10 @@ def execute_for_language(
         "entry",
         registry,
         config,
-        func_symbol_table=func_symbol_table,
-        class_symbol_table=class_symbol_table,
+        ExecutionStrategies(
+            func_symbol_table=func_symbol_table,
+            class_symbol_table=class_symbol_table,
+        ),
     )
     logger.info(
         "Execution complete for %s: %d steps, %d LLM calls",

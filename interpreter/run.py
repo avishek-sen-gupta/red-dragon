@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 import logging
 import time
-from dataclasses import replace
+from dataclasses import dataclass, field as dataclass_field, replace
 from types import MappingProxyType
 from typing import Any
 
@@ -81,6 +81,31 @@ _EMPTY_TYPE_ENV = TypeEnvironment(
 )
 _IDENTITY_RULES = IdentityConversionRules()
 _DEFAULT_OVERLOAD_RESOLVER = NullOverloadResolver()
+
+
+@dataclass(frozen=True)
+class ExecutionStrategies:
+    """Language-specific execution strategies bundled for execute_cfg."""
+
+    type_env: TypeEnvironment = dataclass_field(default_factory=lambda: _EMPTY_TYPE_ENV)
+    conversion_rules: TypeConversionRules = dataclass_field(
+        default_factory=IdentityConversionRules
+    )
+    overload_resolver: OverloadResolver = dataclass_field(
+        default_factory=NullOverloadResolver
+    )
+    binop_coercion: BinopCoercionStrategy = dataclass_field(
+        default_factory=DefaultBinopCoercion
+    )
+    unop_coercion: UnopCoercionStrategy = dataclass_field(
+        default_factory=DefaultUnopCoercion
+    )
+    func_symbol_table: dict[str, FuncRef] = dataclass_field(default_factory=dict)
+    class_symbol_table: dict[str, ClassRef] = dataclass_field(default_factory=dict)
+    field_fallback: FieldFallbackStrategy = dataclass_field(
+        default_factory=NoFieldFallback
+    )
+    symbol_table: SymbolTable = dataclass_field(default_factory=SymbolTable.empty)
 
 
 def _create_resolver(config: VMConfig) -> UnresolvedCallResolver:
@@ -233,15 +258,7 @@ def execute_cfg(
     entry_point: str,
     registry: FunctionRegistry,
     config: VMConfig = VMConfig(),
-    type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
-    conversion_rules: TypeConversionRules = _IDENTITY_RULES,
-    overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
-    binop_coercion: BinopCoercionStrategy = DefaultBinopCoercion(),
-    unop_coercion: UnopCoercionStrategy = DefaultUnopCoercion(),
-    func_symbol_table: dict[str, FuncRef] = {},
-    class_symbol_table: dict[str, ClassRef] = {},
-    field_fallback: FieldFallbackStrategy = NoFieldFallback(),
-    symbol_table: SymbolTable = SymbolTable.empty(),
+    strategies: ExecutionStrategies = ExecutionStrategies(),
 ) -> tuple[VMState, ExecutionStats]:
     """Execute a pre-built CFG from the given entry point.
 
@@ -253,8 +270,7 @@ def execute_cfg(
         entry_point: Label of the block to start execution from.
         registry: Pre-built function/class registry.
         config: Execution configuration (backend, max_steps, verbose).
-        type_env: Type environment from static inference (empty by default).
-        conversion_rules: Type coercion rules (identity by default).
+        strategies: Language-specific execution strategies (type env, coercion, etc.).
 
     Returns:
         Tuple of (final VMState, ExecutionStats).
@@ -272,20 +288,23 @@ def execute_cfg(
     llm_calls = 0
     step = 0
 
+    type_env = strategies.type_env
+    conversion_rules = strategies.conversion_rules
+
     base_ctx = HandlerContext(
         cfg=cfg,
         registry=registry,
         current_label="",
         ip=0,
         call_resolver=call_resolver,
-        overload_resolver=overload_resolver,
+        overload_resolver=strategies.overload_resolver,
         type_env=type_env,
-        binop_coercion=binop_coercion,
-        unop_coercion=unop_coercion,
-        func_symbol_table=func_symbol_table,
-        class_symbol_table=class_symbol_table,
-        field_fallback=field_fallback,
-        symbol_table=symbol_table,
+        binop_coercion=strategies.binop_coercion,
+        unop_coercion=strategies.unop_coercion,
+        func_symbol_table=strategies.func_symbol_table,
+        class_symbol_table=strategies.class_symbol_table,
+        field_fallback=strategies.field_fallback,
+        symbol_table=strategies.symbol_table,
     )
 
     for step in range(config.max_steps):
@@ -389,15 +408,7 @@ def execute_cfg_traced(
     entry_point: str,
     registry: FunctionRegistry,
     config: VMConfig = VMConfig(),
-    type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
-    conversion_rules: TypeConversionRules = _IDENTITY_RULES,
-    overload_resolver: OverloadResolver = _DEFAULT_OVERLOAD_RESOLVER,
-    binop_coercion: BinopCoercionStrategy = DefaultBinopCoercion(),
-    unop_coercion: UnopCoercionStrategy = DefaultUnopCoercion(),
-    func_symbol_table: dict[str, FuncRef] = {},
-    class_symbol_table: dict[str, ClassRef] = {},
-    field_fallback: FieldFallbackStrategy = NoFieldFallback(),
-    symbol_table: SymbolTable = SymbolTable.empty(),
+    strategies: ExecutionStrategies = ExecutionStrategies(),
 ) -> tuple[VMState, ExecutionTrace]:
     """Execute a pre-built CFG and record a trace of every step.
 
@@ -409,6 +420,7 @@ def execute_cfg_traced(
         entry_point: Label of the block to start execution from.
         registry: Pre-built function/class registry.
         config: Execution configuration (backend, max_steps, verbose).
+        strategies: Language-specific execution strategies (type env, coercion, etc.).
 
     Returns:
         Tuple of (final VMState, ExecutionTrace with per-step snapshots).
@@ -428,20 +440,23 @@ def execute_cfg_traced(
     step = 0
     trace_steps: list[TraceStep] = []
 
+    type_env = strategies.type_env
+    conversion_rules = strategies.conversion_rules
+
     base_ctx = HandlerContext(
         cfg=cfg,
         registry=registry,
         current_label="",
         ip=0,
         call_resolver=call_resolver,
-        overload_resolver=overload_resolver,
+        overload_resolver=strategies.overload_resolver,
         type_env=type_env,
-        binop_coercion=binop_coercion,
-        unop_coercion=unop_coercion,
-        func_symbol_table=func_symbol_table,
-        class_symbol_table=class_symbol_table,
-        field_fallback=field_fallback,
-        symbol_table=symbol_table,
+        binop_coercion=strategies.binop_coercion,
+        unop_coercion=strategies.unop_coercion,
+        func_symbol_table=strategies.func_symbol_table,
+        class_symbol_table=strategies.class_symbol_table,
+        field_fallback=strategies.field_fallback,
+        symbol_table=strategies.symbol_table,
     )
 
     for step in range(config.max_steps):
@@ -683,11 +698,7 @@ def run(
     binop_coercion = _binop_coercion_for_language(lang)
     field_fallback = _field_fallback_for_language(lang)
     exec_start = time.perf_counter()
-    vm, exec_stats = execute_cfg(
-        cfg,
-        entry,
-        registry,
-        vm_config,
+    strategies = ExecutionStrategies(
         type_env=type_env,
         conversion_rules=conversion_rules,
         overload_resolver=overload_resolver,
@@ -697,6 +708,7 @@ def run(
         field_fallback=field_fallback,
         symbol_table=frontend.symbol_table,
     )
+    vm, exec_stats = execute_cfg(cfg, entry, registry, vm_config, strategies)
     vm.data_layout = frontend.data_layout
     stats.execution_time = time.perf_counter() - exec_start
 

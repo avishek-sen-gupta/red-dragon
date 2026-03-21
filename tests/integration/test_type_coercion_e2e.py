@@ -13,7 +13,7 @@ from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import build_registry
-from interpreter.run import execute_cfg
+from interpreter.run import execute_cfg, ExecutionStrategies
 from interpreter.run_types import VMConfig
 from interpreter.type_environment import TypeEnvironment
 from interpreter.type_inference import infer_types
@@ -70,8 +70,10 @@ class TestTypeCoecionEndToEnd:
             "entry",
             registry,
             VMConfig(max_steps=50),
-            type_env=type_env,
-            conversion_rules=conversion_rules,
+            ExecutionStrategies(
+                type_env=type_env,
+                conversion_rules=conversion_rules,
+            ),
         )
 
         # The stored value should be retrievable via the integer key
