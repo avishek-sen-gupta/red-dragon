@@ -20,6 +20,9 @@ class FieldInfo:
     children: tuple[FieldInfo, ...] = ()
 
 
+NULL_FIELD = FieldInfo(name="", type_hint="", has_initializer=False)
+
+
 @dataclass(frozen=True)
 class FunctionInfo:
     """A function/method signature."""
@@ -53,11 +56,11 @@ class SymbolTable:
     def empty(cls) -> SymbolTable:
         return cls()
 
-    def resolve_field(self, class_name: str, field_name: str) -> FieldInfo | None:
-        """Find field in class or any ancestor via parents chain."""
+    def resolve_field(self, class_name: str, field_name: str) -> FieldInfo:
+        """Find field in class or any ancestor. Returns NULL_FIELD if not found."""
         class_info = self.classes.get(class_name)
         if class_info is None:
-            return None
+            return NULL_FIELD
         if field_name in class_info.fields:
             return class_info.fields[field_name]
         return next(
@@ -65,9 +68,9 @@ class SymbolTable:
                 result
                 for parent in class_info.parents
                 for result in [self.resolve_field(parent, field_name)]
-                if result is not None
+                if result.name
             ),
-            None,
+            NULL_FIELD,
         )
 
     @classmethod

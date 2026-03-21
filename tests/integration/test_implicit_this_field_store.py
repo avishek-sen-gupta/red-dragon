@@ -143,3 +143,80 @@ int result = c->radius;
             Language.CPP,
         )
         assert isinstance(local_vars["result"], int) and local_vars["result"] == 5
+
+
+class TestImplicitThisFieldReads:
+    def test_method_reads_field(self):
+        """getRadius() should return the field value concretely."""
+        local_vars = _run(
+            """\
+class Circle {
+    int radius;
+    Circle(int r) { radius = r; }
+    int getRadius() { return radius; }
+}
+class M {
+    static Circle c = new Circle(5);
+    static int result = c.getRadius();
+}
+""",
+            Language.JAVA,
+        )
+        assert isinstance(local_vars["result"], int) and local_vars["result"] == 5
+
+    def test_param_shadows_field(self):
+        """Parameter with same name as field — parameter wins."""
+        local_vars = _run(
+            """\
+class Foo {
+    int x;
+    Foo() { x = 10; }
+    int bar(int x) { return x; }
+}
+class M {
+    static Foo f = new Foo();
+    static int result = f.bar(99);
+}
+""",
+            Language.JAVA,
+        )
+        assert isinstance(local_vars["result"], int) and local_vars["result"] == 99
+
+    def test_local_shadows_field(self):
+        """Local variable with same name as field — local wins."""
+        local_vars = _run(
+            """\
+class Foo {
+    int x;
+    Foo() { x = 10; }
+    int bar() { int x = 99; return x; }
+}
+class M {
+    static Foo f = new Foo();
+    static int result = f.bar();
+}
+""",
+            Language.JAVA,
+        )
+        assert isinstance(local_vars["result"], int) and local_vars["result"] == 99
+
+    def test_cross_class_field_read(self):
+        """Method in subclass reads parent field."""
+        local_vars = _run(
+            """\
+class Animal {
+    String name;
+    Animal(String n) { name = n; }
+}
+class Dog extends Animal {
+    Dog(String n) { name = n; }
+    String getName() { return name; }
+}
+class M {
+    static Dog d = new Dog("Rex");
+    static String result = d.getName();
+}
+""",
+            Language.JAVA,
+        )
+        assert isinstance(local_vars["result"], str) and local_vars["result"] == "Rex"
