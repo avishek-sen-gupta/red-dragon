@@ -20,6 +20,7 @@ from interpreter.registry import build_registry, FunctionRegistry
 from interpreter.func_ref import FuncRef, BoundFuncRef
 from interpreter.class_ref import ClassRef
 from interpreter.executor import _try_execute_locally
+from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.resolution_strategy import ArityThenTypeStrategy
 from interpreter.type_compatibility import DefaultTypeCompatibility
@@ -239,6 +240,7 @@ def execute_cfg(
     func_symbol_table: dict[str, FuncRef] = {},
     class_symbol_table: dict[str, ClassRef] = {},
     field_fallback: FieldFallbackStrategy = NoFieldFallback(),
+    symbol_table: SymbolTable = SymbolTable.empty(),
 ) -> tuple[VMState, ExecutionStats]:
     """Execute a pre-built CFG from the given entry point.
 
@@ -309,6 +311,7 @@ def execute_cfg(
             func_symbol_table=func_symbol_table,
             class_symbol_table=class_symbol_table,
             field_fallback=field_fallback,
+            symbol_table=symbol_table,
         )
         used_llm = False
         if result.handled:
@@ -392,6 +395,7 @@ def execute_cfg_traced(
     func_symbol_table: dict[str, FuncRef] = {},
     class_symbol_table: dict[str, ClassRef] = {},
     field_fallback: FieldFallbackStrategy = NoFieldFallback(),
+    symbol_table: SymbolTable = SymbolTable.empty(),
 ) -> tuple[VMState, ExecutionTrace]:
     """Execute a pre-built CFG and record a trace of every step.
 
@@ -462,6 +466,7 @@ def execute_cfg_traced(
             func_symbol_table=func_symbol_table,
             class_symbol_table=class_symbol_table,
             field_fallback=field_fallback,
+            symbol_table=symbol_table,
         )
         used_llm = False
         if result.handled:
@@ -687,6 +692,7 @@ def run(
         func_symbol_table=frontend.func_symbol_table,
         class_symbol_table=frontend.class_symbol_table,
         field_fallback=field_fallback,
+        symbol_table=frontend.symbol_table,
     )
     vm.data_layout = frontend.data_layout
     stats.execution_time = time.perf_counter() - exec_start
