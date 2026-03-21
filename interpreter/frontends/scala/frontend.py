@@ -124,6 +124,7 @@ class ScalaFrontend(BaseFrontend):
             NT.TYPE_DEFINITION: lambda ctx, node: None,
             NT.FUNCTION_DECLARATION: scala_decl.lower_function_declaration,
             NT.VAL_DECLARATION: lambda ctx, node: None,
+            NT.ENUM_DEFINITION: scala_decl.lower_enum_def,
         }
 
     def _extract_symbols(self, root) -> "SymbolTable":
