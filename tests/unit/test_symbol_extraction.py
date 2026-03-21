@@ -356,6 +356,24 @@ class TestPHPSymbolExtraction:
         assert "A" in st.classes
         assert "B" in st.classes
 
+    def test_static_property_goes_to_constants_not_fields(self):
+        """Static properties should be in constants, not fields."""
+        src = "<?php\nclass Product {\n  public $name;\n  public static $tax_rate = 0.1;\n}"
+        st = _extract(Language.PHP, src)
+        assert "name" in st.classes["Product"].fields
+        assert "tax_rate" not in st.classes["Product"].fields
+        assert "tax_rate" in st.classes["Product"].constants
+
+    def test_instance_and_static_separated(self):
+        """Multiple properties — instance in fields, static in constants."""
+        src = "<?php\nclass Counter {\n  public $count;\n  public static $total = 0;\n  public static $max = 100;\n}"
+        st = _extract(Language.PHP, src)
+        assert "count" in st.classes["Counter"].fields
+        assert "total" in st.classes["Counter"].constants
+        assert "max" in st.classes["Counter"].constants
+        assert "total" not in st.classes["Counter"].fields
+        assert "max" not in st.classes["Counter"].fields
+
 
 class TestKotlinSymbolExtraction:
     def test_extracts_class_with_primary_ctor_fields(self):
