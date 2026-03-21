@@ -9,6 +9,14 @@ from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.common.expressions import lower_const_literal
 from interpreter.frontends.rust.node_types import RustNodeType
+from interpreter.frontends.common.patterns import (
+    CapturePattern,
+    WildcardPattern,
+    compile_pattern_bindings,
+    compile_pattern_test,
+    _needs_pre_guard_bindings,
+)
+from interpreter.frontends.rust.patterns import parse_rust_pattern
 
 logger = logging.getLogger(__name__)
 
@@ -209,12 +217,6 @@ def lower_if_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def _lower_if_let_expr(ctx: TreeSitterEmitContext, node, let_cond_node) -> str:
     """Lower `if let Pattern = expr { body } else { alt }` as expression."""
-    from interpreter.frontends.common.patterns import (
-        compile_pattern_bindings,
-        compile_pattern_test,
-    )
-    from interpreter.frontends.rust.patterns import parse_rust_pattern
-
     pattern_node = let_cond_node.child_by_field_name("pattern")
     value_node = let_cond_node.child_by_field_name("value")
     body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
@@ -305,26 +307,13 @@ def lower_return_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_match_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower Rust match expression using Pattern ADT."""
-    from interpreter.frontends.common.patterns import (
-        CapturePattern,
-        WildcardPattern,
-        compile_pattern_bindings,
-        compile_pattern_test,
-        _needs_pre_guard_bindings,
-    )
-    from interpreter.frontends.rust.patterns import parse_rust_pattern
-
     value_node = node.child_by_field_name("value")
     body_node = node.child_by_field_name("body")
-    subject_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
+    subject_reg = ctx.lower_expr(value_node)
 
     result_var = f"__match_result_{ctx.label_counter}"
     end_label = ctx.fresh_label("match_end")
-    arms = (
-        [c for c in body_node.children if c.type == RustNodeType.MATCH_ARM]
-        if body_node
-        else []
-    )
+    arms = [c for c in body_node.children if c.type == RustNodeType.MATCH_ARM]
 
     for arm in arms:
         _lower_match_arm(ctx, arm, subject_reg, result_var, end_label)
@@ -339,15 +328,6 @@ def _lower_match_arm(
     ctx: TreeSitterEmitContext, arm, subject_reg: str, result_var: str, end_label: str
 ) -> None:
     """Lower a single match arm: test pattern, bind, evaluate body, store result."""
-    from interpreter.frontends.common.patterns import (
-        CapturePattern,
-        WildcardPattern,
-        compile_pattern_bindings,
-        compile_pattern_test,
-        _needs_pre_guard_bindings,
-    )
-    from interpreter.frontends.rust.patterns import parse_rust_pattern
-
     match_pattern_node = next(
         c for c in arm.children if c.type == RustNodeType.MATCH_PATTERN
     )
@@ -876,12 +856,9 @@ def lower_generic_function(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_let_condition(ctx: TreeSitterEmitContext, node) -> str:
     """Lower `let Pattern = expr` — returns boolean test register."""
-    from interpreter.frontends.common.patterns import compile_pattern_test
-    from interpreter.frontends.rust.patterns import parse_rust_pattern
-
     pattern_node = node.child_by_field_name("pattern")
     value_node = node.child_by_field_name("value")
-    subject_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
+    subject_reg = ctx.lower_expr(value_node)
     pattern = parse_rust_pattern(ctx, pattern_node)
     return compile_pattern_test(ctx, subject_reg, pattern)
 
