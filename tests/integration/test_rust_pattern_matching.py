@@ -153,6 +153,58 @@ let r = match c {
         assert local_vars["r"] == 1
 
 
+class TestRustPatternMatchingMultipleLiteralArms:
+    def test_multiple_literal_arms(self):
+        """match 3 { 1 => 10, 2 => 20, 3 => 30, _ => 0 } should produce 30."""
+        _, local_vars = _run_rust("""\
+let x = 3;
+let r = match x {
+    1 => 10,
+    2 => 20,
+    3 => 30,
+    _ => 0,
+};
+""")
+        assert local_vars["r"] == 30
+
+
+class TestRustPatternMatchingNestedOrWithWildcard:
+    def test_nested_or_pattern_with_wildcard_fallback(self):
+        """match 7 { 1|2|3 => 1, 4|5|6 => 2, _ => 3 } should produce 3."""
+        _, local_vars = _run_rust("""\
+let x = 7;
+let r = match x {
+    1 | 2 | 3 => 1,
+    4 | 5 | 6 => 2,
+    _ => 3,
+};
+""")
+        assert local_vars["r"] == 3
+
+
+class TestRustPatternMatchingGuardWithCaptureBinding:
+    def test_guard_with_capture_binding(self):
+        """match 15 { n if n > 10 => n * 2, n => n } should produce 30."""
+        _, local_vars = _run_rust("""\
+let x = 15;
+let r = match x {
+    n if n > 10 => n * 2,
+    n => n,
+};
+""")
+        assert local_vars["r"] == 30
+
+
+class TestRustIfLetLiteralPattern:
+    def test_if_let_literal_pattern_always_matches(self):
+        """if let n = x { n + 1 } else { 0 } binds n to 42, result is 43."""
+        _, local_vars = _run_rust("""\
+let x = 42;
+let result = if let n = x { n + 1 } else { 0 };
+""")
+        assert local_vars["result"] == 43
+
+
 class TestRustPatternMatchingGuard:
     def test_guard_clause_matches(self):
         """match 5 { n if n > 0 => 1, _ => -1 } should produce 1."""

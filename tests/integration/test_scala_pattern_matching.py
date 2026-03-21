@@ -96,3 +96,40 @@ val r = x match {
   case _ => 0
 }""")
         assert locals_["r"] == 6
+
+
+class TestScalaTypedPatternWithGuard:
+    def test_typed_pattern_with_guard(self):
+        """Typed pattern combined with a guard: `case i: Int if i > 10 => i * 2`."""
+        locals_ = _run_scala("""\
+val x: Any = 15
+val r = x match {
+  case i: Int if i > 10 => i * 2
+  case i: Int => i
+  case _ => 0
+}""")
+        assert locals_["r"] == 30
+
+
+class TestScalaMultipleAlternativePatterns:
+    def test_multiple_alternatives_third_arm(self):
+        """Three-arm alternative pattern; subject 7 falls through to wildcard arm."""
+        locals_ = _run_scala("""\
+val x = 7
+val r = x match {
+  case 1 | 2 | 3 => 1
+  case 4 | 5 | 6 => 2
+  case _ => 3
+}""")
+        assert locals_["r"] == 3
+
+
+class TestScalaWildcardInTuple:
+    def test_wildcard_in_tuple(self):
+        """Wildcard `_` in tuple position discards first element, binds second."""
+        locals_ = _run_scala("""\
+val pair = (3, 4)
+val r = pair match {
+  case (_, b) => b
+}""")
+        assert locals_["r"] == 4
