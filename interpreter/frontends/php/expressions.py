@@ -650,22 +650,33 @@ def lower_php_arrow_function(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_php_scoped_call(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower ClassName::method(args) as CALL_FUNCTION with qualified name."""
+    """Lower ClassName::method(args) as CALL_METHOD on a ClassRef.
+
+    Emits LOAD_VAR for the class name (which resolves to a ClassRef),
+    then CALL_METHOD so that the static dispatch path in _handle_call_method
+    picks it up via registry.class_methods.
+    """
     scope_node = node.child_by_field_name("scope")
     name_node = node.child_by_field_name("name")
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
 
-    scope_name = ctx.node_text(scope_node) if scope_node else "Unknown"
     method_name = ctx.node_text(name_node) if name_node else "unknown"
-    qualified_name = f"{scope_name}::{method_name}"
-
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
+
+    class_reg = ctx.fresh_reg()
+    scope_name = ctx.node_text(scope_node) if scope_node else "Unknown"
+    ctx.emit(
+        Opcode.LOAD_VAR,
+        result_reg=class_reg,
+        operands=[scope_name],
+        node=node,
+    )
 
     reg = ctx.fresh_reg()
     ctx.emit(
-        Opcode.CALL_FUNCTION,
+        Opcode.CALL_METHOD,
         result_reg=reg,
-        operands=[qualified_name] + arg_regs,
+        operands=[class_reg, method_name] + arg_regs,
         node=node,
     )
     return reg
