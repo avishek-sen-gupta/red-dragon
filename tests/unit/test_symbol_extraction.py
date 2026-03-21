@@ -271,6 +271,12 @@ class TestTypeScriptSymbolExtraction:
         st = _extract(Language.TYPESCRIPT, src)
         assert "area" in st.classes["C"].methods
 
+    def test_extracts_method_params(self):
+        src = "class C { push(item: number): void {} add(a: number, b: number): number { return 0; } }"
+        st = _extract(Language.TYPESCRIPT, src)
+        assert st.classes["C"].methods["push"].params == ("item",)
+        assert st.classes["C"].methods["add"].params == ("a", "b")
+
     def test_extracts_parents(self):
         src = "class Shape {} class Circle extends Shape {}"
         st = _extract(Language.TYPESCRIPT, src)
@@ -485,6 +491,23 @@ class TestPascalSymbolExtraction:
         st = _extract(Language.PASCAL, src)
         assert "TA" in st.classes
         assert "TB" in st.classes
+
+    def test_extracts_direct_fields_and_methods(self):
+        """Fields and methods directly in declClass (no declSection wrapper)."""
+        src = (
+            "program M;\n"
+            "type\n"
+            "  TAnimal = class\n"
+            "    Name: string;\n"
+            "    Age: Integer;\n"
+            "    procedure Speak;\n"
+            "  end;\n"
+            "begin end.\n"
+        )
+        st = _extract(Language.PASCAL, src)
+        assert "Name" in st.classes["TAnimal"].fields
+        assert "Age" in st.classes["TAnimal"].fields
+        assert "Speak" in st.classes["TAnimal"].methods
 
 
 class TestCSymbolExtraction:
