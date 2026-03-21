@@ -18,6 +18,48 @@ from interpreter.frontends.common.declarations import (
 from interpreter.type_expr import ScalarType
 
 
+def lower_enum_def(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower Scala 3 enum definition: enum Color { case Red, Green, Blue }.
+
+    Emits NEW_OBJECT + STORE_FIELD per variant + DECL_VAR, following
+    the Rust enum pattern.
+    """
+    name_node = node.child_by_field_name("name")
+    body_node = node.child_by_field_name("body")
+    enum_name = ctx.node_text(name_node) if name_node else "__anon_enum"
+
+    obj_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.NEW_OBJECT,
+        result_reg=obj_reg,
+        operands=[f"enum:{enum_name}"],
+        node=node,
+    )
+
+    if body_node:
+        variant_names = [
+            ctx.node_text(child.child_by_field_name("name"))
+            for child in body_node.named_children
+            if child.type == NT.ENUM_CASE_DEFINITIONS
+            for child in child.named_children
+            if child.type == NT.SIMPLE_ENUM_CASE
+            and child.child_by_field_name("name") is not None
+        ]
+        for variant_name in variant_names:
+            variant_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.CONST,
+                result_reg=variant_reg,
+                operands=[variant_name],
+            )
+            ctx.emit(
+                Opcode.STORE_FIELD,
+                operands=[obj_reg, variant_name, variant_reg],
+            )
+
+    ctx.emit(Opcode.DECL_VAR, operands=[enum_name, obj_reg])
+
+
 def _extract_pattern_name(ctx: TreeSitterEmitContext, pattern_node) -> str:
     """Extract name from a pattern node (identifier, typed_pattern, etc.)."""
     if pattern_node is None:
