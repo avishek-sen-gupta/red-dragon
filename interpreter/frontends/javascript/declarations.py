@@ -391,11 +391,20 @@ def _extract_js_method(node) -> tuple[str, "FunctionInfo"] | None:
         return None
     name = name_node.text.decode()
     params_node = node.child_by_field_name("parameters")
-    params = (
-        tuple(p.text.decode() for p in params_node.children if p.type == JSN.IDENTIFIER)
-        if params_node is not None
-        else ()
-    )
+    params = _extract_param_names(params_node) if params_node is not None else ()
+    return name, FunctionInfo(name=name, params=params, return_type="")
+
+
+def _extract_param_names(params_node) -> tuple[str, ...]:
+    """Extract parameter names from formal_parameters — handles JS and TS param styles."""
+    names: list[str] = []
+    for p in params_node.children:
+        if p.type == JSN.IDENTIFIER:
+            names.append(p.text.decode())
+        elif p.type in ("required_parameter", "optional_parameter"):
+            id_node = next((c for c in p.children if c.type == "identifier"), p)
+            names.append(id_node.text.decode())
+    return tuple(names)
     return name, FunctionInfo(name=name, params=params, return_type="")
 
 
