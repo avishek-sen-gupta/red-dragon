@@ -142,6 +142,9 @@ class TreeSitterEmitContext:
     # Unified symbol table — populated by frontend pre-pass before lowering
     symbol_table: SymbolTable = field(default_factory=SymbolTable.empty)
 
+    # Tracks names declared in current method scope (params + locals), for implicit-this suppression
+    _method_declared_names: set[str] = field(default_factory=set)
+
     # Kotlin property accessors: class_name → {prop_name → {"get", "set"}}
     property_accessors: dict[str, dict[str, set[str]]] = field(default_factory=dict)
 
@@ -188,6 +191,8 @@ class TreeSitterEmitContext:
         )
         self._track_label(opcode, label)
         self.instructions.append(inst)
+        if opcode == Opcode.DECL_VAR and operands:
+            self._method_declared_names.add(operands[0])
         return inst
 
     def emit_decl_var(self, name: str, val_reg: str, *, node=None) -> IRInstruction:
@@ -448,3 +453,7 @@ class TreeSitterEmitContext:
         """Clear all block scopes (used at function boundaries)."""
         self._block_scope_stack.clear()
         self._base_declared_vars.clear()
+
+    def reset_method_scope(self) -> None:
+        """Clear method-level declared names. Call at function/method entry."""
+        self._method_declared_names = set()
