@@ -776,7 +776,10 @@ def _collect_rust_structs_and_impls(
                                 classes[impl_type].methods[mname] = minfo
                             else:
                                 functions[mname] = minfo
-    elif node.type == RustNodeType.FUNCTION_ITEM:
+    elif node.type == RustNodeType.FUNCTION_ITEM and (
+        node.parent is None or node.parent.type != "declaration_list"
+    ):
+        # Only top-level functions — impl methods are handled in the impl_item branch
         fname_node = node.child_by_field_name("name")
         if fname_node is not None:
             fname = fname_node.text.decode()

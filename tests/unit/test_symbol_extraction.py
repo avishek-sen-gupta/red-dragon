@@ -432,6 +432,13 @@ class TestRustSymbolExtraction:
         assert "A" in st.classes
         assert "B" in st.classes
 
+    def test_impl_methods_not_duplicated_as_functions(self):
+        src = "struct C { x: i32 }\nimpl C { fn area(&self) -> i32 { 0 } }\nfn standalone() -> i32 { 42 }"
+        st = _extract(Language.RUST, src)
+        assert "area" in st.classes["C"].methods
+        assert "area" not in st.functions
+        assert "standalone" in st.functions
+
 
 class TestLuaSymbolExtraction:
     def test_returns_empty_symbol_table(self):
