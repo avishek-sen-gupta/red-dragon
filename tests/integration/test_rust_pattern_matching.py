@@ -442,3 +442,61 @@ let result = match r {
             max_steps=300,
         )
         assert local_vars["result"] == 5
+
+
+class TestRustSlicePattern:
+    def test_slice_destructure_all(self):
+        """match [1,2,3] { [a, b, c] => a + b + c } should produce 6."""
+        _, local_vars = _run_rust(
+            """\
+let arr = [1, 2, 3];
+let r = match arr {
+    [a, b, c] => a + b + c,
+    _ => 0,
+};
+""",
+            max_steps=500,
+        )
+        assert local_vars["r"] == 6
+
+    def test_slice_first_with_rest(self):
+        """match [1,2,3] { [first, ..] => first } should produce 1."""
+        _, local_vars = _run_rust(
+            """\
+let arr = [1, 2, 3];
+let r = match arr {
+    [first, ..] => first,
+    _ => 0,
+};
+""",
+            max_steps=500,
+        )
+        assert local_vars["r"] == 1
+
+    def test_slice_empty(self):
+        """match [] { [] => 1, _ => 0 } should match empty array."""
+        _, local_vars = _run_rust(
+            """\
+let arr: [i32; 0] = [];
+let r = match arr {
+    [] => 1,
+    _ => 0,
+};
+""",
+            max_steps=500,
+        )
+        assert local_vars["r"] == 1
+
+    def test_slice_wildcards_and_capture(self):
+        """match [1,2,3] { [_, _, third] => third } should produce 3."""
+        _, local_vars = _run_rust(
+            """\
+let arr = [1, 2, 3];
+let r = match arr {
+    [_, _, third] => third,
+    _ => 0,
+};
+""",
+            max_steps=500,
+        )
+        assert local_vars["r"] == 3
