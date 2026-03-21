@@ -558,3 +558,194 @@ def lower_cpp_struct_def(ctx: TreeSitterEmitContext, node) -> None:
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(struct_name, class_label, parents, result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[struct_name, cls_reg])
+
+
+# ---------------------------------------------------------------------------
+# Symbol extraction (Phase 2)
+# ---------------------------------------------------------------------------
+from interpreter.frontends.symbol_table import (
+    ClassInfo,
+    FieldInfo,
+    FunctionInfo,
+    SymbolTable,
+)
+
+
+def _is_cpp_static(node) -> bool:
+    """Return True if the field_declaration has a storage_class_specifier 'static' child."""
+    return any(
+        c.type == CppNodeType.FIELD_DECLARATION
+        or (c.type == "storage_class_specifier" and c.text == b"static")
+        for c in node.children
+        if c.type == "storage_class_specifier" and c.text == b"static"
+    )
+
+
+def _extract_cpp_field(node) -> tuple[str, FieldInfo] | None:
+    """Extract a FieldInfo from a C++ field_declaration node."""
+    name_node = next(
+        (c for c in node.children if c.type == CppNodeType.FIELD_IDENTIFIER),
+        None,
+    )
+    if name_node is None:
+        return None
+    name = name_node.text.decode()
+    type_node = next(
+        (
+            c
+            for c in node.children
+            if c.type
+            not in (
+                ";",
+                CppNodeType.FIELD_IDENTIFIER,
+                "storage_class_specifier",
+            )
+            and c.is_named
+        ),
+        None,
+    )
+    type_hint = type_node.text.decode() if type_node else ""
+    return name, FieldInfo(name=name, type_hint=type_hint, has_initializer=False)
+
+
+def _extract_cpp_method(node) -> tuple[str, FunctionInfo] | None:
+    """Extract a FunctionInfo from a C++ function_definition node."""
+    func_declarator = next(
+        (c for c in node.children if c.type == CppNodeType.FUNCTION_DECLARATOR),
+        None,
+    )
+    if func_declarator is None:
+        return None
+    name_node = next(
+        (c for c in func_declarator.children if c.type == CppNodeType.FIELD_IDENTIFIER),
+        None,
+    )
+    if name_node is None:
+        return None
+    name = name_node.text.decode()
+    params_node = next(
+        (c for c in func_declarator.children if c.type == CppNodeType.PARAMETER_LIST),
+        None,
+    )
+    params = (
+        tuple(
+            _cpp_param_name(p)
+            for p in params_node.children
+            if p.type
+            in ("parameter_declaration", CppNodeType.OPTIONAL_PARAMETER_DECLARATION)
+            and _cpp_param_name(p) is not None
+        )
+        if params_node is not None
+        else ()
+    )
+    type_node = next(
+        (
+            c
+            for c in node.children
+            if c.type
+            not in (
+                CppNodeType.FUNCTION_DECLARATOR,
+                CppNodeType.COMPOUND_STATEMENT,
+            )
+            and c.is_named
+        ),
+        None,
+    )
+    return_type = type_node.text.decode() if type_node else ""
+    return name, FunctionInfo(name=name, params=params, return_type=return_type)
+
+
+def _cpp_param_name(node) -> str | None:
+    """Extract the identifier name from a C++ parameter_declaration node."""
+    id_node = next(
+        (
+            c
+            for c in node.children
+            if c.type in ("identifier", CppNodeType.FIELD_IDENTIFIER)
+        ),
+        None,
+    )
+    return id_node.text.decode() if id_node else None
+
+
+def _extract_cpp_parents(node) -> tuple[str, ...]:
+    """Extract parent class names from a C++ base_class_clause node."""
+    base_clause = next(
+        (c for c in node.children if c.type == CppNodeType.BASE_CLASS_CLAUSE),
+        None,
+    )
+    if base_clause is None:
+        return ()
+    return tuple(
+        c.text.decode()
+        for c in base_clause.children
+        if c.type == CppNodeType.TYPE_IDENTIFIER
+    )
+
+
+def _extract_cpp_class(node) -> tuple[str, ClassInfo] | None:
+    """Extract a ClassInfo from a C++ class_specifier node."""
+    name_node = next(
+        (c for c in node.children if c.type == CppNodeType.TYPE_IDENTIFIER),
+        None,
+    )
+    if name_node is None:
+        return None
+    class_name = name_node.text.decode()
+    parents = _extract_cpp_parents(node)
+
+    body = next(
+        (c for c in node.children if c.type == "field_declaration_list"),
+        None,
+    )
+    if body is None:
+        return class_name, ClassInfo(
+            name=class_name, fields={}, methods={}, constants={}, parents=parents
+        )
+
+    fields: dict[str, FieldInfo] = {}
+    constants_map: dict[str, str] = {}
+    methods: dict[str, FunctionInfo] = {}
+
+    for child in body.children:
+        if child.type == CppNodeType.FIELD_DECLARATION:
+            result = _extract_cpp_field(child)
+            if result is None:
+                continue
+            fname, finfo = result
+            if _is_cpp_static(child):
+                constants_map[fname] = finfo.type_hint
+            else:
+                fields[fname] = finfo
+        elif child.type == CppNodeType.FUNCTION_DEFINITION:
+            result = _extract_cpp_method(child)
+            if result is None:
+                continue
+            mname, minfo = result
+            methods[mname] = minfo
+
+    return class_name, ClassInfo(
+        name=class_name,
+        fields=fields,
+        methods=methods,
+        constants=constants_map,
+        parents=parents,
+    )
+
+
+def _collect_cpp_classes(node, accumulator: dict[str, ClassInfo]) -> None:
+    """Recursively walk the AST and collect all class_specifier nodes."""
+    if node.type == CppNodeType.CLASS_SPECIFIER:
+        result = _extract_cpp_class(node)
+        if result is not None:
+            class_name, class_info = result
+            accumulator[class_name] = class_info
+    for child in node.children:
+        _collect_cpp_classes(child, accumulator)
+
+
+def extract_cpp_symbols(root) -> SymbolTable:
+    """Walk the C++ AST and return a SymbolTable of all class definitions."""
+    classes: dict[str, ClassInfo] = {}
+    _collect_cpp_classes(root, classes)
+    return SymbolTable(classes=classes)
