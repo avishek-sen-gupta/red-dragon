@@ -43,6 +43,7 @@ from interpreter.field_fallback import (
     FieldFallbackStrategy,
     NoFieldFallback,
 )
+from interpreter.frontends.symbol_table import SymbolTable
 from interpreter import constants
 
 _DEFAULT_RESOLVER = SymbolicResolver()
@@ -641,37 +642,6 @@ def _resolve_method_delegation_target(
     return None
 
 
-def _resolve_class_static_field(
-    class_ref: ClassRef, field_name: str, cfg: CFG
-) -> TypedValue | None:
-    """Resolve a static field from a class body by scanning the class CFG block.
-
-    Looks for a CONST instruction immediately preceding STORE_VAR {field_name}
-    in the class body label block.  Returns a TypedValue for the constant, or
-    None if not found.
-    """
-    block = cfg.blocks.get(class_ref.label)
-    if block is None:
-        return None
-    instructions = block.instructions
-    for i, instr in enumerate(instructions):
-        if (
-            instr.opcode == Opcode.STORE_VAR
-            and instr.operands
-            and instr.operands[0] == field_name
-            and i > 0
-            and instructions[i - 1].opcode == Opcode.CONST
-        ):
-            raw = (
-                instructions[i - 1].operands[0]
-                if instructions[i - 1].operands
-                else "None"
-            )
-            val = _parse_const(raw)
-            return typed_from_runtime(val)
-    return None
-
-
 def _handle_load_field(
     inst: IRInstruction,
     vm: VMState,
@@ -682,10 +652,14 @@ def _handle_load_field(
 ) -> ExecutionResult:
     obj_val = _resolve_reg(vm, inst.operands[0]).value
     field_name = inst.operands[1]
-    # Static field access on a ClassRef: scan the class body for CONST + STORE_VAR
+    # Static field access on a ClassRef: look up via symbol table constants
     if isinstance(obj_val, ClassRef):
-        static_tv = _resolve_class_static_field(obj_val, field_name, cfg)
-        if static_tv is not None:
+        symbol_table: SymbolTable = kwargs.get("symbol_table", SymbolTable.empty())
+        class_info = symbol_table.classes.get(obj_val.name)
+        if class_info and field_name in class_info.constants:
+            raw = class_info.constants[field_name]
+            val = _parse_const(raw)
+            static_tv = typed_from_runtime(val)
             logger.debug(
                 "load_field ClassRef %s.%s = %r",
                 obj_val.name,
@@ -1801,6 +1775,7 @@ class LocalExecutor:
         func_symbol_table: dict[str, FuncRef] = {},
         class_symbol_table: dict[str, ClassRef] = {},
         field_fallback: FieldFallbackStrategy = _NO_FIELD_FALLBACK,
+        symbol_table: SymbolTable = SymbolTable.empty(),
     ) -> ExecutionResult:
         handler = cls.DISPATCH.get(inst.opcode)
         if not handler:
@@ -1820,6 +1795,7 @@ class LocalExecutor:
             func_symbol_table=func_symbol_table,
             class_symbol_table=class_symbol_table,
             field_fallback=field_fallback,
+            symbol_table=symbol_table,
         )
 
 
@@ -1838,6 +1814,7 @@ def _try_execute_locally(
     func_symbol_table: dict[str, FuncRef] = {},
     class_symbol_table: dict[str, ClassRef] = {},
     field_fallback: FieldFallbackStrategy = _NO_FIELD_FALLBACK,
+    symbol_table: SymbolTable = SymbolTable.empty(),
 ) -> ExecutionResult:
     """Try to execute an instruction without the LLM.
 
@@ -1859,4 +1836,5 @@ def _try_execute_locally(
         func_symbol_table=func_symbol_table,
         class_symbol_table=class_symbol_table,
         field_fallback=field_fallback,
+        symbol_table=symbol_table,
     )

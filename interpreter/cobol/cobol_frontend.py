@@ -56,6 +56,10 @@ class CobolFrontend(Frontend):
             observer=observer,
         )
 
+    @property
+    def symbol_table(self) -> SymbolTable:
+        return self._symbol_table
+
     # ── Test-compatibility property proxies ────────────────────────
 
     @property

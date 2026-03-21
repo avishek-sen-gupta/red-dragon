@@ -104,6 +104,7 @@ class BaseFrontend(Frontend):
         self._type_env_builder: TypeEnvironmentBuilder = TypeEnvironmentBuilder()
         self._func_symbol_table: dict[str, FuncRef] = {}
         self._class_symbol_table: dict[str, ClassRef] = {}
+        self._symbol_table: SymbolTable = SymbolTable.empty()
         # Legacy state (used only by unconverted frontends)
         self._reg_counter: int = 0
         self._label_counter: int = 0
@@ -174,6 +175,10 @@ class BaseFrontend(Frontend):
     @property
     def class_symbol_table(self) -> dict[str, ClassRef]:
         return self._class_symbol_table
+
+    @property
+    def symbol_table(self) -> SymbolTable:
+        return self._symbol_table
 
     def _emit_class_ref(
         self,
@@ -282,6 +287,7 @@ class BaseFrontend(Frontend):
         self._type_env_builder.var_scope_metadata = dict(ctx.var_scope_metadata)
         self._func_symbol_table = ctx.func_symbol_table
         self._class_symbol_table = ctx.class_symbol_table
+        self._symbol_table = ctx.symbol_table
         return ctx.instructions
 
     def _extract_symbols(self, root) -> SymbolTable:
