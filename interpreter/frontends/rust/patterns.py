@@ -106,7 +106,7 @@ def _parse_tuple_struct_pattern(ctx: TreeSitterEmitContext, node) -> ClassPatter
         for c in node.children
         if (c.is_named or ctx.node_text(c) == _WILDCARD_TEXT) and c != name_node
     )
-    return ClassPattern(class_name, positional=positional, keyword=())
+    return _resolve_positional_via_match_args(ctx, class_name, positional)
 
 
 def _parse_struct_pattern(ctx: TreeSitterEmitContext, node) -> ClassPattern:
@@ -156,3 +156,23 @@ def _flatten_or_pattern(ctx: TreeSitterEmitContext, node) -> list[Pattern]:
             else [parse_rust_pattern(ctx, c)]
         )
     ]
+
+
+def _resolve_positional_via_match_args(
+    ctx: TreeSitterEmitContext, class_name: str, positional: tuple[Pattern, ...]
+) -> ClassPattern:
+    """Convert positional args to keyword args via match_args if available.
+
+    If the class has match_args in the symbol table, positional patterns
+    are converted to keyword patterns using LOAD_FIELD instead of LOAD_INDEX.
+    """
+    class_info = ctx.symbol_table.classes.get(class_name)
+    match_args = list(class_info.match_args) if class_info else []
+    if positional and match_args:
+        keyword = tuple(
+            (match_args[i], pat)
+            for i, pat in enumerate(positional)
+            if i < len(match_args)
+        )
+        return ClassPattern(class_name, positional=(), keyword=keyword)
+    return ClassPattern(class_name, positional=positional, keyword=())

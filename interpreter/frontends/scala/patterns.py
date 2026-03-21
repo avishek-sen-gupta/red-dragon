@@ -98,7 +98,7 @@ def _parse_case_class_pattern(ctx: TreeSitterEmitContext, node) -> ClassPattern:
         for c in node.children
         if c.is_named and c != type_node
     )
-    return ClassPattern(class_name, positional=positional, keyword=())
+    return _resolve_positional_via_match_args(ctx, class_name, positional)
 
 
 def _parse_typed_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
@@ -114,6 +114,22 @@ def _parse_typed_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
     if var_node.type == NT.WILDCARD:
         return class_pat
     return AsPattern(class_pat, ctx.node_text(var_node))
+
+
+def _resolve_positional_via_match_args(
+    ctx: TreeSitterEmitContext, class_name: str, positional: tuple[Pattern, ...]
+) -> ClassPattern:
+    """Convert positional args to keyword args via match_args if available."""
+    class_info = ctx.symbol_table.classes.get(class_name)
+    match_args = list(class_info.match_args) if class_info else []
+    if positional and match_args:
+        keyword = tuple(
+            (match_args[i], pat)
+            for i, pat in enumerate(positional)
+            if i < len(match_args)
+        )
+        return ClassPattern(class_name, positional=(), keyword=keyword)
+    return ClassPattern(class_name, positional=positional, keyword=())
 
 
 def _parse_number(text: str) -> int | float:
