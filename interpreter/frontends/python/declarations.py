@@ -135,7 +135,9 @@ def _extract_python_class(node) -> tuple[str, ClassInfo] | None:
             if lhs_name == "__match_args__":
                 match_args = _extract_match_args_from_assignment(child)
             else:
-                constants_map[lhs_name] = ""
+                rhs_node = child.child_by_field_name("right")
+                rhs_text = rhs_node.text.decode() if rhs_node is not None else ""
+                constants_map[lhs_name] = rhs_text
         elif child.type == PythonNodeType.FUNCTION_DEFINITION:
             mname_node = child.child_by_field_name("name")
             if mname_node is None:
