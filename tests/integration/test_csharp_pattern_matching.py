@@ -105,13 +105,6 @@ class M {
         )
         assert isinstance(local_vars["result"], str) and local_vars["result"] == "point"
 
-    @pytest.mark.xfail(
-        reason=(
-            "Symbolic interpreter propagates constructor params as SymbolicValues; "
-            "field r=5 is stored as sym (param:r), so r is unresolvable at match time. "
-            "Concrete value propagation through constructor params is not supported."
-        )
-    )
     def test_switch_expr_recursive_with_capture(self):
         local_vars = _run_csharp(
             """\
