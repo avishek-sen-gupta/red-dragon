@@ -7,8 +7,13 @@ import tree_sitter_language_pack as tslp
 from interpreter.constants import Language
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.frontends.common.patterns import (
+    AsPattern,
     CapturePattern,
+    ClassPattern,
     LiteralPattern,
+    OrPattern,
+    SequencePattern,
+    ValuePattern,
     WildcardPattern,
 )
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -150,3 +155,143 @@ class TestCapturePattern:
         pattern = _parse_pattern_from_snippet(snippet, arm_index=0)
         result = parse_scala_pattern(ctx, pattern)
         assert result == CapturePattern("value")
+
+
+class TestAlternativePattern:
+    def test_two_alternatives(self):
+        snippet = (
+            "object M { def f(x: Any) = x match { case 1 | 2 => 1; case _ => 0 } }"
+        )
+        ctx = _make_scala_ctx(snippet)
+        pattern = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_scala_pattern(ctx, pattern)
+        assert result == OrPattern((LiteralPattern(1), LiteralPattern(2)))
+
+    def test_three_alternatives(self):
+        snippet = (
+            "object M { def f(x: Any) = x match { case 1 | 2 | 3 => 1; case _ => 0 } }"
+        )
+        ctx = _make_scala_ctx(snippet)
+        pattern = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_scala_pattern(ctx, pattern)
+        # tree-sitter may nest left-associatively — flatten to all literals
+        assert isinstance(result, OrPattern)
+
+        # collect all LiteralPattern values recursively
+        def collect_literals(p):
+            if isinstance(p, LiteralPattern):
+                return [p]
+            if isinstance(p, OrPattern):
+                return [lit for alt in p.alternatives for lit in collect_literals(alt)]
+            return []
+
+        literals = collect_literals(result)
+        assert set(lit.value for lit in literals) == {1, 2, 3}
+
+    def test_alternatives_with_captures(self):
+        snippet = (
+            'object M { def f(x: Any) = x match { case "a" | "b" => 1; case _ => 0 } }'
+        )
+        ctx = _make_scala_ctx(snippet)
+        pattern = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_scala_pattern(ctx, pattern)
+        assert isinstance(result, OrPattern)
+        assert LiteralPattern("a") in result.alternatives
+        assert LiteralPattern("b") in result.alternatives
+
+
+class TestTuplePattern:
+    def test_two_element_tuple(self):
+        snippet = (
+            "object M { def f(x: Any) = x match { case (a, b) => 1; case _ => 0 } }"
+        )
+        ctx = _make_scala_ctx(snippet)
+        pattern = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_scala_pattern(ctx, pattern)
+        assert result == SequencePattern((CapturePattern("a"), CapturePattern("b")))
+
+    def test_tuple_with_wildcard(self):
+        snippet = (
+            "object M { def f(x: Any) = x match { case (_, b) => 1; case _ => 0 } }"
+        )
+        ctx = _make_scala_ctx(snippet)
+        pattern = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_scala_pattern(ctx, pattern)
+        assert result == SequencePattern((WildcardPattern(), CapturePattern("b")))
+
+    def test_tuple_with_literals(self):
+        snippet = (
+            "object M { def f(x: Any) = x match { case (1, 2) => 1; case _ => 0 } }"
+        )
+        ctx = _make_scala_ctx(snippet)
+        pattern = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_scala_pattern(ctx, pattern)
+        assert result == SequencePattern((LiteralPattern(1), LiteralPattern(2)))
+
+
+class TestCaseClassPattern:
+    def test_single_arg_case_class(self):
+        snippet = (
+            "object M { def f(x: Any) = x match { case Circle(r) => 1; case _ => 0 } }"
+        )
+        ctx = _make_scala_ctx(snippet)
+        pattern = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_scala_pattern(ctx, pattern)
+        assert result == ClassPattern(
+            "Circle", positional=(CapturePattern("r"),), keyword=()
+        )
+
+    def test_two_arg_case_class(self):
+        snippet = "object M { def f(x: Any) = x match { case Point(x, y) => 1; case _ => 0 } }"
+        ctx = _make_scala_ctx(snippet)
+        pattern = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_scala_pattern(ctx, pattern)
+        assert result == ClassPattern(
+            "Point",
+            positional=(CapturePattern("x"), CapturePattern("y")),
+            keyword=(),
+        )
+
+    def test_nested_case_class(self):
+        snippet = "object M { def f(x: Any) = x match { case Some(Circle(r)) => 1; case _ => 0 } }"
+        ctx = _make_scala_ctx(snippet)
+        pattern = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_scala_pattern(ctx, pattern)
+        assert result == ClassPattern(
+            "Some",
+            positional=(
+                ClassPattern("Circle", positional=(CapturePattern("r"),), keyword=()),
+            ),
+            keyword=(),
+        )
+
+
+class TestTypedPattern:
+    def test_typed_with_identifier(self):
+        snippet = (
+            "object M { def f(x: Any) = x match { case i: Int => i; case _ => 0 } }"
+        )
+        ctx = _make_scala_ctx(snippet)
+        pattern = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_scala_pattern(ctx, pattern)
+        assert result == AsPattern(ClassPattern("Int", positional=(), keyword=()), "i")
+
+    def test_typed_with_wildcard(self):
+        snippet = (
+            "object M { def f(x: Any) = x match { case _: Int => 1; case _ => 0 } }"
+        )
+        ctx = _make_scala_ctx(snippet)
+        pattern = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_scala_pattern(ctx, pattern)
+        assert result == ClassPattern("Int", positional=(), keyword=())
+
+
+class TestValuePattern:
+    def test_stable_identifier_two_parts(self):
+        snippet = (
+            "object M { def f(x: Any) = x match { case Color.Red => 1; case _ => 0 } }"
+        )
+        ctx = _make_scala_ctx(snippet)
+        pattern = _parse_pattern_from_snippet(snippet, arm_index=0)
+        result = parse_scala_pattern(ctx, pattern)
+        assert result == ValuePattern(("Color", "Red"))

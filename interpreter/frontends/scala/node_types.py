@@ -41,6 +41,7 @@ class ScalaNodeType:
     GENERIC_FUNCTION = "generic_function"
     POSTFIX_EXPRESSION = "postfix_expression"
     STABLE_TYPE_IDENTIFIER = "stable_type_identifier"
+    STABLE_IDENTIFIER = "stable_identifier"
     OPERATOR_IDENTIFIER = "operator_identifier"
     TYPE_ARGUMENTS = "type_arguments"
 
