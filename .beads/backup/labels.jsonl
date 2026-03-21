@@ -688,6 +688,9 @@
 {"issue_id":"red-dragon-vjf","label":"rust"}
 {"issue_id":"red-dragon-vva","label":"typed-value-migration"}
 {"issue_id":"red-dragon-vw0e","label":"vm-gap"}
+{"issue_id":"red-dragon-vwqd","label":"enum"}
+{"issue_id":"red-dragon-vwqd","label":"p1"}
+{"issue_id":"red-dragon-vwqd","label":"rust"}
 {"issue_id":"red-dragon-wja","label":"frontend"}
 {"issue_id":"red-dragon-wja","label":"python"}
 {"issue_id":"red-dragon-ww3j","label":"architecture"}
