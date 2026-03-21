@@ -863,31 +863,32 @@ def _extract_pascal_class_from_decl_type(node) -> "tuple[str, ClassInfo] | None"
     fields: dict[str, FieldInfo] = {}
     methods: dict[str, FunctionInfo] = {}
 
+    # Collect fields/methods from both direct children and declSection children
+    members = list(class_node.children)
     for section in class_node.children:
-        if section.type != PascalNodeType.DECL_SECTION:
-            continue
-        for child in section.children:
-            if child.type == PascalNodeType.DECL_FIELD:
-                type_node = next(
-                    (c for c in child.children if c.type == PascalNodeType.TYPE),
-                    None,
-                )
-                type_hint = type_node.text.decode() if type_node is not None else ""
-                for sub in child.children:
-                    if sub.type == PascalNodeType.IDENTIFIER:
-                        fname = sub.text.decode()
-                        fields[fname] = FieldInfo(
-                            name=fname, type_hint=type_hint, has_initializer=False
-                        )
-            elif child.type in (PascalNodeType.DECL_PROC, PascalNodeType.DEF_PROC):
-                # Method declaration — extract name from first identifier
-                mname_node = next(
-                    (c for c in child.children if c.type == PascalNodeType.IDENTIFIER),
-                    None,
-                )
-                if mname_node is not None:
-                    mname = mname_node.text.decode()
-                    methods[mname] = FunctionInfo(name=mname, params=(), return_type="")
+        if section.type == PascalNodeType.DECL_SECTION:
+            members.extend(section.children)
+    for child in members:
+        if child.type == PascalNodeType.DECL_FIELD:
+            type_node = next(
+                (c for c in child.children if c.type == PascalNodeType.TYPE),
+                None,
+            )
+            type_hint = type_node.text.decode() if type_node is not None else ""
+            for sub in child.children:
+                if sub.type == PascalNodeType.IDENTIFIER:
+                    fname = sub.text.decode()
+                    fields[fname] = FieldInfo(
+                        name=fname, type_hint=type_hint, has_initializer=False
+                    )
+        elif child.type in (PascalNodeType.DECL_PROC, PascalNodeType.DEF_PROC):
+            mname_node = next(
+                (c for c in child.children if c.type == PascalNodeType.IDENTIFIER),
+                None,
+            )
+            if mname_node is not None:
+                mname = mname_node.text.decode()
+                methods[mname] = FunctionInfo(name=mname, params=(), return_type="")
 
     return class_name, ClassInfo(
         name=class_name,
