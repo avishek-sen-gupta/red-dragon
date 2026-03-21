@@ -57,6 +57,7 @@ class RustNodeType:
     BREAK_EXPRESSION = "break_expression"
     GENERIC_FUNCTION = "generic_function"
     LET_CONDITION = "let_condition"
+    LET_CHAIN = "let_chain"
 
     # ── Declarations / items ─────────────────────────────────────────
     FUNCTION_ITEM = "function_item"
