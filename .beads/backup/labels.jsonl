@@ -53,6 +53,8 @@
 {"issue_id":"red-dragon-562","label":"csharp"}
 {"issue_id":"red-dragon-562","label":"frontend"}
 {"issue_id":"red-dragon-5e13","label":"audit-asserts"}
+{"issue_id":"red-dragon-5jdr","label":"architecture"}
+{"issue_id":"red-dragon-5jdr","label":"symbol-table"}
 {"issue_id":"red-dragon-5lu","label":"typed-value"}
 {"issue_id":"red-dragon-67bz","label":"frontend-gap"}
 {"issue_id":"red-dragon-6ar6","label":"frontend-gap"}
@@ -611,6 +613,8 @@
 {"issue_id":"red-dragon-ne5","label":"kotlin"}
 {"issue_id":"red-dragon-nm6","label":"frontend"}
 {"issue_id":"red-dragon-nm6","label":"kotlin"}
+{"issue_id":"red-dragon-nzlv","label":"architecture"}
+{"issue_id":"red-dragon-nzlv","label":"symbol-table"}
 {"issue_id":"red-dragon-oej","label":"refactor"}
 {"issue_id":"red-dragon-oej","label":"vm"}
 {"issue_id":"red-dragon-q3yy","label":"audit-asserts"}
@@ -658,6 +662,8 @@
 {"issue_id":"red-dragon-vw0e","label":"vm-gap"}
 {"issue_id":"red-dragon-wja","label":"frontend"}
 {"issue_id":"red-dragon-wja","label":"python"}
+{"issue_id":"red-dragon-ww3j","label":"architecture"}
+{"issue_id":"red-dragon-ww3j","label":"symbol-table"}
 {"issue_id":"red-dragon-wxg","label":"frontend"}
 {"issue_id":"red-dragon-wxg","label":"lua"}
 {"issue_id":"red-dragon-wy8","label":"csharp"}
