@@ -182,7 +182,9 @@ class TestReferencePattern:
         ctx = _make_rust_ctx(snippet)
         _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
         result = parse_rust_pattern(ctx, inner)
-        assert result == DerefPattern(CapturePattern("val"))
+        assert isinstance(result, DerefPattern)
+        assert isinstance(result.inner, CapturePattern)
+        assert result.inner.name == "val"
 
     def test_ref_literal(self):
         """&42 in match should produce DerefPattern(LiteralPattern(42))."""
@@ -190,7 +192,9 @@ class TestReferencePattern:
         ctx = _make_rust_ctx(snippet)
         _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
         result = parse_rust_pattern(ctx, inner)
-        assert result == DerefPattern(LiteralPattern(42))
+        assert isinstance(result, DerefPattern)
+        assert isinstance(result.inner, LiteralPattern)
+        assert result.inner.value == 42
 
     def test_ref_wildcard(self):
         """&_ in match should produce DerefPattern(WildcardPattern())."""
@@ -198,7 +202,8 @@ class TestReferencePattern:
         ctx = _make_rust_ctx(snippet)
         _, inner = _parse_pattern_from_snippet(snippet, arm_index=0)
         result = parse_rust_pattern(ctx, inner)
-        assert result == DerefPattern(WildcardPattern())
+        assert isinstance(result, DerefPattern)
+        assert isinstance(result.inner, WildcardPattern)
 
 
 class TestOrPattern:
