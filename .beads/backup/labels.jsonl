@@ -650,6 +650,9 @@
 {"issue_id":"red-dragon-nig4","label":"php"}
 {"issue_id":"red-dragon-nm6","label":"frontend"}
 {"issue_id":"red-dragon-nm6","label":"kotlin"}
+{"issue_id":"red-dragon-nni2","label":"p2"}
+{"issue_id":"red-dragon-nni2","label":"pattern-matching"}
+{"issue_id":"red-dragon-nni2","label":"rust"}
 {"issue_id":"red-dragon-nzlv","label":"architecture"}
 {"issue_id":"red-dragon-nzlv","label":"symbol-table"}
 {"issue_id":"red-dragon-oej","label":"refactor"}

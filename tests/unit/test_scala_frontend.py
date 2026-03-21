@@ -728,11 +728,14 @@ class TestScalaCaseClassPattern:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("case_class_pattern" in str(inst.operands) for inst in symbolics)
 
-    def test_case_class_pattern_new_object(self):
+    def test_case_class_pattern_isinstance_check(self):
+        """Pattern ADT emits isinstance(subject, 'Circle') instead of NEW_OBJECT."""
         source = "object M { def f(s: Any) = s match { case Circle(r) => r } }"
         instructions = _parse_scala(source)
-        new_objs = _find_all(instructions, Opcode.NEW_OBJECT)
-        assert any("Circle" in str(inst.operands) for inst in new_objs)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        assert any("isinstance" in inst.operands for inst in calls)
+        consts = _find_all(instructions, Opcode.CONST)
+        assert any("Circle" in inst.operands for inst in consts)
 
 
 class TestScalaFunctionDeclaration:
