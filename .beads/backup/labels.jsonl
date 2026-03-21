@@ -754,6 +754,9 @@
 {"issue_id":"red-dragon-vzpw","label":"p1"}
 {"issue_id":"red-dragon-vzpw","label":"rust"}
 {"issue_id":"red-dragon-vzpw","label":"vm"}
+{"issue_id":"red-dragon-w358","label":"architecture"}
+{"issue_id":"red-dragon-w358","label":"refactor"}
+{"issue_id":"red-dragon-w358","label":"vm"}
 {"issue_id":"red-dragon-wja","label":"frontend"}
 {"issue_id":"red-dragon-wja","label":"python"}
 {"issue_id":"red-dragon-ww3j","label":"architecture"}
