@@ -126,3 +126,9 @@ class PythonFrontend(BaseFrontend):
             PythonNodeType.MATCH_STATEMENT: py_cf.lower_match,
             PythonNodeType.TYPE_ALIAS_STATEMENT: lambda ctx, node: None,
         }
+
+    def _extract_symbols(self, root) -> "SymbolTable":
+        from interpreter.frontends.python.declarations import extract_python_symbols
+        from interpreter.frontends.symbol_table import SymbolTable
+
+        return extract_python_symbols(root)
