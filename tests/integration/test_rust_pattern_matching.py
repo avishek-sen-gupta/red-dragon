@@ -428,3 +428,17 @@ let result = match r {
             max_steps=300,
         )
         assert local_vars["result"] == 1
+
+    def test_match_ref_deref_in_body(self):
+        """match &x { val => *val } should bind reference then deref in body."""
+        _, local_vars = _run_rust(
+            """\
+let x = 5;
+let r = &x;
+let result = match r {
+    val => *val,
+};
+""",
+            max_steps=300,
+        )
+        assert local_vars["result"] == 5
