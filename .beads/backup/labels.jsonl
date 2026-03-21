@@ -49,6 +49,9 @@
 {"issue_id":"red-dragon-4hz","label":"edge-case"}
 {"issue_id":"red-dragon-4hz","label":"javascript"}
 {"issue_id":"red-dragon-4hz","label":"low-priority"}
+{"issue_id":"red-dragon-4s1a","label":"p2"}
+{"issue_id":"red-dragon-4s1a","label":"pattern-matching"}
+{"issue_id":"red-dragon-4s1a","label":"scala"}
 {"issue_id":"red-dragon-4x78","label":"architecture"}
 {"issue_id":"red-dragon-4yuv","label":"audit-asserts"}
 {"issue_id":"red-dragon-4yz","label":"frontend"}
@@ -583,6 +586,9 @@
 {"issue_id":"red-dragon-h56","label":"frontend"}
 {"issue_id":"red-dragon-hgfq","label":"pattern-matching"}
 {"issue_id":"red-dragon-hgfq","label":"scala"}
+{"issue_id":"red-dragon-hham","label":"p2"}
+{"issue_id":"red-dragon-hham","label":"pattern-matching"}
+{"issue_id":"red-dragon-hham","label":"scala"}
 {"issue_id":"red-dragon-hme","label":"rust"}
 {"issue_id":"red-dragon-hme","label":"type-system"}
 {"issue_id":"red-dragon-hs26","label":"audit-asserts"}
@@ -631,6 +637,9 @@
 {"issue_id":"red-dragon-laz4","label":"symbol-table"}
 {"issue_id":"red-dragon-ldr","label":"frontend"}
 {"issue_id":"red-dragon-ldr","label":"rust"}
+{"issue_id":"red-dragon-loht","label":"p2"}
+{"issue_id":"red-dragon-loht","label":"pattern-matching"}
+{"issue_id":"red-dragon-loht","label":"scala"}
 {"issue_id":"red-dragon-ls2a","label":"audit-asserts"}
 {"issue_id":"red-dragon-lsu8","label":"symbol-table"}
 {"issue_id":"red-dragon-ltv","label":"frontend"}

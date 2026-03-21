@@ -358,17 +358,6 @@ def lower_return_expr(ctx: TreeSitterEmitContext, node) -> str:
     return val_reg
 
 
-def lower_wildcard(ctx: TreeSitterEmitContext, node) -> str:
-    reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.SYMBOLIC,
-        result_reg=reg,
-        operands=["wildcard:_"],
-        node=node,
-    )
-    return reg
-
-
 def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> str:
     elems = [c for c in node.children if c.type not in (NT.LPAREN, NT.RPAREN, NT.COMMA)]
     arr_reg = ctx.fresh_reg()
@@ -576,104 +565,6 @@ def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> str:
     return val_reg
 
 
-def lower_case_class_pattern(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower case class pattern like Circle(r) or pkg.Circle(r) in match arms."""
-    type_node = next(
-        (
-            c
-            for c in node.children
-            if c.type in (NT.TYPE_IDENTIFIER, NT.IDENTIFIER, NT.STABLE_TYPE_IDENTIFIER)
-        ),
-        None,
-    )
-    class_name = ctx.node_text(type_node) if type_node else ctx.node_text(node)
-
-    obj_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.NEW_OBJECT,
-        result_reg=obj_reg,
-        operands=[f"pattern:{class_name}"],
-        node=node,
-    )
-    # Extract inner bindings
-    inner_bindings = [
-        c
-        for c in node.children
-        if c.is_named
-        and c.type not in (NT.TYPE_IDENTIFIER, NT.IDENTIFIER, NT.STABLE_TYPE_IDENTIFIER)
-    ]
-    for i, child in enumerate(inner_bindings):
-        child_reg = ctx.lower_expr(child)
-        idx_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
-        ctx.emit(Opcode.STORE_INDEX, operands=[obj_reg, idx_reg, child_reg])
-    return obj_reg
-
-
-def lower_typed_pattern(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower typed pattern `i: Int` -> lower the identifier, ignore type."""
-    named_children = [c for c in node.children if c.is_named]
-    if named_children:
-        return ctx.lower_expr(named_children[0])
-    return lower_const_literal(ctx, node)
-
-
-def lower_guard(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower guard clause `if condition` in match -> lower the condition."""
-    named_children = [c for c in node.children if c.is_named]
-    if named_children:
-        return ctx.lower_expr(named_children[0])
-    return lower_const_literal(ctx, node)
-
-
-def lower_tuple_pattern_expr(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower (a, b) pattern in match as tuple literal."""
-    elems = [
-        c
-        for c in node.children
-        if c.type not in (NT.LPAREN, NT.RPAREN, NT.COMMA) and c.is_named
-    ]
-    arr_reg = ctx.fresh_reg()
-    size_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
-    ctx.emit(
-        Opcode.NEW_ARRAY,
-        result_reg=arr_reg,
-        operands=["tuple", size_reg],
-        node=node,
-    )
-    for i, elem in enumerate(elems):
-        val_reg = ctx.lower_expr(elem)
-        idx_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
-        ctx.emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
-    return arr_reg
-
-
-def lower_infix_pattern(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower `head :: tail` infix pattern as BINOP(::, head, tail)."""
-    named_children = [c for c in node.children if c.is_named]
-    if len(named_children) >= 2:
-        left_reg = ctx.lower_expr(named_children[0])
-        right_reg = ctx.lower_expr(named_children[-1])
-        op_node = next(
-            (c for c in node.children if c.type == NT.OPERATOR_IDENTIFIER),
-            None,
-        )
-        op = ctx.node_text(op_node) if op_node else "::"
-        reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.BINOP,
-            result_reg=reg,
-            operands=[op, left_reg, right_reg],
-            node=node,
-        )
-        return reg
-    if named_children:
-        return ctx.lower_expr(named_children[0])
-    return lower_const_literal(ctx, node)
-
-
 def lower_generic_function(ctx: TreeSitterEmitContext, node) -> str:
     """Lower generic_function: foo[Int] -> delegate to the inner function expression.
 
@@ -725,19 +616,3 @@ def lower_stable_type_identifier(ctx: TreeSitterEmitContext, node) -> str:
         )
         result = reg
     return result
-
-
-def lower_case_clause_expr(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower case_clause in expression context -- lower the body."""
-    body_node = node.child_by_field_name("body")
-    if body_node:
-        return _lower_body_as_expr(ctx, body_node)
-    return lower_const_literal(ctx, node)
-
-
-def lower_alternative_pattern(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower `A | B` pattern — lower first alternative as representative value."""
-    named_children = [c for c in node.children if c.is_named]
-    if named_children:
-        return ctx.lower_expr(named_children[0])
-    return lower_const_literal(ctx, node)

@@ -73,7 +73,6 @@ class ScalaFrontend(BaseFrontend):
             NT.RETURN_EXPRESSION: scala_expr.lower_return_expr,
             NT.THIS: common_expr.lower_identifier,
             NT.SUPER: common_expr.lower_identifier,
-            NT.WILDCARD: scala_expr.lower_wildcard,
             NT.TUPLE_EXPRESSION: scala_expr.lower_tuple_expr,
             NT.STRING_LITERAL: common_expr.lower_const_literal,
             NT.INTERPOLATED_STRING_EXPRESSION: scala_expr.lower_scala_interpolated_string,
@@ -91,17 +90,10 @@ class ScalaFrontend(BaseFrontend):
             NT.CONTINUE_EXPRESSION: scala_expr.lower_continue_as_expr,
             NT.OPERATOR_IDENTIFIER: common_expr.lower_const_literal,
             NT.ARGUMENTS: common_expr.lower_paren,
-            NT.CASE_CLASS_PATTERN: scala_expr.lower_case_class_pattern,
-            NT.TYPED_PATTERN: scala_expr.lower_typed_pattern,
-            NT.GUARD: scala_expr.lower_guard,
-            NT.TUPLE_PATTERN: scala_expr.lower_tuple_pattern_expr,
             NT.CASE_BLOCK: scala_expr.lower_block_expr,
-            NT.INFIX_PATTERN: scala_expr.lower_infix_pattern,
-            NT.CASE_CLAUSE: scala_expr.lower_case_clause_expr,
             NT.GENERIC_FUNCTION: scala_expr.lower_generic_function,
             NT.POSTFIX_EXPRESSION: scala_expr.lower_postfix_expression,
             NT.STABLE_TYPE_IDENTIFIER: scala_expr.lower_stable_type_identifier,
-            NT.ALTERNATIVE_PATTERN: scala_expr.lower_alternative_pattern,
         }
 
     def _build_stmt_dispatch(self) -> dict[str, Callable]:
