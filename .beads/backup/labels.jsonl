@@ -46,6 +46,7 @@
 {"issue_id":"red-dragon-4hz","label":"edge-case"}
 {"issue_id":"red-dragon-4hz","label":"javascript"}
 {"issue_id":"red-dragon-4hz","label":"low-priority"}
+{"issue_id":"red-dragon-4x78","label":"architecture"}
 {"issue_id":"red-dragon-4yuv","label":"audit-asserts"}
 {"issue_id":"red-dragon-4yz","label":"frontend"}
 {"issue_id":"red-dragon-4yz","label":"scala"}
@@ -74,6 +75,8 @@
 {"issue_id":"red-dragon-8qn","label":"builtin"}
 {"issue_id":"red-dragon-8qn","label":"vm"}
 {"issue_id":"red-dragon-8rgk","label":"frontend-gap"}
+{"issue_id":"red-dragon-8rvy","label":"architecture"}
+{"issue_id":"red-dragon-8rvy","label":"symbol-table"}
 {"issue_id":"red-dragon-8s7z","label":"audit-asserts"}
 {"issue_id":"red-dragon-93w","label":"frontend"}
 {"issue_id":"red-dragon-93w","label":"pascal"}
@@ -573,6 +576,8 @@
 {"issue_id":"red-dragon-iyb","label":"p2"}
 {"issue_id":"red-dragon-iyb","label":"pascal"}
 {"issue_id":"red-dragon-j628","label":"audit-asserts"}
+{"issue_id":"red-dragon-j87f","label":"architecture"}
+{"issue_id":"red-dragon-j87f","label":"symbol-table"}
 {"issue_id":"red-dragon-jck3","label":"audit-asserts"}
 {"issue_id":"red-dragon-je38","label":"audit-asserts"}
 {"issue_id":"red-dragon-jj3","label":"rosetta"}
@@ -663,6 +668,8 @@
 {"issue_id":"red-dragon-x3v","label":"frontend"}
 {"issue_id":"red-dragon-x9r","label":"typed-value"}
 {"issue_id":"red-dragon-xh20","label":"audit-asserts"}
+{"issue_id":"red-dragon-xhaq","label":"architecture"}
+{"issue_id":"red-dragon-xhaq","label":"symbol-table"}
 {"issue_id":"red-dragon-xvn","label":"frontend"}
 {"issue_id":"red-dragon-xvn","label":"go"}
 {"issue_id":"red-dragon-y0df","label":"kotlin"}
