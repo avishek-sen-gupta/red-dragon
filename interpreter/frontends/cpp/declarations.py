@@ -668,7 +668,7 @@ def _cpp_param_name(node) -> str | None:
     return id_node.text.decode() if id_node else None
 
 
-def _extract_cpp_parents(node) -> tuple[str, ...]:
+def _extract_cpp_class_parents(node) -> tuple[str, ...]:
     """Extract parent class names from a C++ base_class_clause node."""
     base_clause = next(
         (c for c in node.children if c.type == CppNodeType.BASE_CLASS_CLAUSE),
@@ -692,7 +692,7 @@ def _extract_cpp_class(node) -> tuple[str, ClassInfo] | None:
     if name_node is None:
         return None
     class_name = name_node.text.decode()
-    parents = _extract_cpp_parents(node)
+    parents = _extract_cpp_class_parents(node)
 
     body = next(
         (c for c in node.children if c.type == "field_declaration_list"),
