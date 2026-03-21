@@ -190,9 +190,8 @@ class TestRustExpressions:
 
     def test_dereference_expression(self):
         instructions = _parse_rust("fn main() { let v = *x; }")
-        load_fields = _find_all(instructions, Opcode.LOAD_FIELD)
-        boxed_fields = [f for f in load_fields if "__boxed__" in f.operands]
-        assert len(boxed_fields) >= 1
+        indirects = _find_all(instructions, Opcode.LOAD_INDIRECT)
+        assert len(indirects) >= 1
 
     def test_assignment_expression(self):
         instructions = _parse_rust("fn main() { x = 10; }")
@@ -358,10 +357,9 @@ fn main() {
         # &x now emits ADDRESS_OF instead of UNOP "&"
         addr_ofs = _find_all(instructions, Opcode.ADDRESS_OF)
         assert any("x" in inst.operands for inst in addr_ofs)
-        # *r now emits LOAD_FIELD '__boxed__' (Box unwrap / deref)
-        load_fields = _find_all(instructions, Opcode.LOAD_FIELD)
-        boxed_fields = [f for f in load_fields if "__boxed__" in f.operands]
-        assert len(boxed_fields) >= 1
+        # *r now emits LOAD_INDIRECT (unified Box unwrap / ref deref)
+        indirects = _find_all(instructions, Opcode.LOAD_INDIRECT)
+        assert len(indirects) >= 1
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         assert any("r" in inst.operands for inst in stores)

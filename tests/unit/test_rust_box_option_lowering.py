@@ -85,27 +85,25 @@ let opt = Some(n);
 
 
 class TestDerefLowering:
-    def test_deref_emits_load_field_boxed(self):
-        """*box_val should emit LOAD_FIELD with '__boxed__' field name."""
+    def test_deref_emits_load_indirect(self):
+        """*box_val should emit LOAD_INDIRECT (unified Box unwrap / ref deref)."""
         instructions = _parse_rust("""\
 struct Node { value: i32 }
 let n = Node { value: 42 };
 let b = Box::new(n);
 let inner = *b;
 """)
-        fields = _find_all(instructions, Opcode.LOAD_FIELD)
-        boxed_fields = [f for f in fields if "__boxed__" in f.operands]
-        assert (
-            len(boxed_fields) >= 1
-        ), f"Expected LOAD_FIELD with '__boxed__', got {[f.operands for f in fields]}"
+        indirects = _find_all(instructions, Opcode.LOAD_INDIRECT)
+        assert len(indirects) >= 1, f"Expected LOAD_INDIRECT for deref, got none"
 
-    def test_deref_does_not_emit_load_indirect(self):
-        """*expr should NOT produce LOAD_INDIRECT — Rust deref is Box unwrap."""
+    def test_deref_does_not_emit_load_field_boxed(self):
+        """*expr should NOT produce LOAD_FIELD for deref — uses LOAD_INDIRECT."""
         instructions = _parse_rust("""\
 let b = Box::new(42);
 let inner = *b;
 """)
-        indirects = _find_all(instructions, Opcode.LOAD_INDIRECT)
+        fields = _find_all(instructions, Opcode.LOAD_FIELD)
+        boxed_fields = [f for f in fields if "__boxed__" in f.operands]
         assert (
-            len(indirects) == 0
-        ), f"Rust deref should not produce LOAD_INDIRECT: {indirects}"
+            len(boxed_fields) == 0
+        ), f"Rust deref should not produce LOAD_FIELD '__boxed__': {boxed_fields}"
