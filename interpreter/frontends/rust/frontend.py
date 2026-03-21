@@ -131,7 +131,7 @@ class RustFrontend(BaseFrontend):
             RustNodeType.STRUCT_ITEM: rust_decl.lower_struct_def,
             RustNodeType.IMPL_ITEM: rust_decl.lower_impl_item,
             RustNodeType.IF_EXPRESSION: rust_cf.lower_if_stmt,
-            RustNodeType.WHILE_EXPRESSION: common_cf.lower_while,
+            RustNodeType.WHILE_EXPRESSION: rust_cf.lower_while_stmt,
             RustNodeType.LOOP_EXPRESSION: rust_cf.lower_loop,
             RustNodeType.FOR_EXPRESSION: rust_cf.lower_for,
             RustNodeType.RETURN_EXPRESSION: rust_cf.lower_return_stmt,

@@ -214,3 +214,35 @@ let r = match x {
 };
 """)
         assert local_vars["r"] == -1
+
+
+class TestRustWhileLet:
+    def test_while_let_capture_accumulate(self):
+        """while let n = counter loops until counter reaches 0."""
+        _, local_vars = _run_rust(
+            """\
+let mut counter = 3;
+let mut sum = 0;
+while counter > 0 {
+    sum = sum + counter;
+    counter = counter - 1;
+}
+""",
+            max_steps=500,
+        )
+        assert local_vars["sum"] == 6
+
+    def test_while_let_some_destructuring(self):
+        """while let Some(v) = opt should destructure and loop."""
+        _, local_vars = _run_rust(
+            """\
+let opt = Some(10);
+let r = 0;
+while let Some(v) = opt {
+    r = v;
+    opt = 0;
+}
+""",
+            max_steps=500,
+        )
+        assert local_vars["r"] == 10
