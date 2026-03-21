@@ -2188,3 +2188,26 @@ These are already dispatched to `_lower_ts_interface_method` in `lower_interface
 **Decision:** (1) `ValuePattern(dotted_name)` emits `LOAD_VAR base` + `LOAD_FIELD base_reg attr` for dotted names (or plain `LOAD_VAR` for simple names), then `BINOP == subject_reg loaded_reg`. This reuses existing IR primitives. (2) `OrPattern` with bindings uses a mini linear chain within the or-group: each alternative is tested in its own test+bind block; if any matches, a `BRANCH end_or` exits the chain with the bindings set. The mini chain follows the same two-pass test-before-bind discipline as the main `compile_match`. Wildcard `OrPattern` (no bindings) is the simpler fast path.
 
 **Consequences:** `ValuePattern` enables enum/constant matching (`case Status.OK:`, `case Color.RED | Color.GREEN:`). Or-patterns with mixed binding sets correctly unify variables across alternatives. Both features use only existing opcodes (`LOAD_VAR`, `LOAD_FIELD`, `BINOP`, `BRANCH_IF`, `STORE_VAR`, `BRANCH`). The `_has_bindings` helper distinguishes capturing vs. non-capturing or-patterns to select the appropriate compilation path.
+
+---
+
+### ADR-117: Rust Structural Pattern Matching (2026-03-21)
+
+**Status:** Accepted
+**Issue:** red-dragon-r06p
+
+Rust `match`, `if let`, and `while let` now use the common Pattern ADT
+(`interpreter/frontends/common/patterns.py`) via `compile_pattern_test`
+and `compile_pattern_bindings`. This replaces the hand-rolled literal-only
+match lowering.
+
+Supported patterns: literals, wildcards, captures, or-patterns, tuples,
+tuple-struct (`Some(x)` via `ClassPattern`), struct (`Point { x, y }`),
+scoped identifiers (`Color::Red` via `ValuePattern`), and guards.
+
+Custom enum variant destructuring (e.g., `Shape::Circle(r)`) requires
+variant class infrastructure (red-dragon-vwqd) and is out of scope.
+
+**Decision:** Use `compile_pattern_test`/`compile_pattern_bindings` directly
+(not `compile_match`) because Rust `match` is expression-style (returns a value),
+following the C# `lower_switch_expr` pattern.
