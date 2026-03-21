@@ -18,7 +18,9 @@ For exhaustive per-file documentation of the deterministic (tree-sitter) fronten
 8. [LLM Client Abstraction](#8-llm-client-abstraction)
 9. [Frontend Factory](#9-frontend-factory)
 10. [End-to-End Worked Example](#10-end-to-end-worked-example)
-11. [Design Principles Summary](#11-design-principles-summary)
+11. [Symbol Table Pre-Pass](#11-symbol-table-pre-pass)
+12. [Pattern Matching Infrastructure](#12-pattern-matching-infrastructure)
+13. [Design Principles Summary](#13-design-principles-summary)
 
 ---
 
@@ -462,7 +464,83 @@ Every instruction from the deterministic frontend carries its source location, e
 
 ---
 
-## 11. Design Principles Summary
+## 11. Symbol Table Pre-Pass
+
+All 15 deterministic frontends run a Phase 2 symbol extraction pass (`_extract_symbols`) before IR lowering. This produces a `SymbolTable` (`interpreter/frontends/symbol_table.py`) containing `ClassInfo` (fields, methods, constants, parents), `FieldInfo`, and `FunctionInfo` for every declaration in the source.
+
+The symbol table is available during lowering for:
+- **Field resolution** — `resolve_field(class_name, field_name)` walks the parent chain via inherited `ClassInfo.parents` and returns the `FieldInfo` or `NULL_FIELD` sentinel (never `None`).
+- **Implicit-this field reads** (Java, C#, C++) — bare identifier reads in instance methods check `resolve_field` against `_method_declared_names`; if the identifier names a class field not shadowed by a local, `LOAD_FIELD this` is emitted instead of `LOAD_VAR`.
+- **Implicit-this field writes** (Java, C#, C++) — bare identifier assignments in constructors check `resolve_field`; if the identifier names a class field, `LOAD_VAR this` + `STORE_FIELD` is emitted instead of `STORE_VAR`.
+- **Type seeding** — field types are seeded into the `TypeEnvironmentBuilder` at extraction time.
+
+```python
+# BaseFrontend lifecycle (simplified)
+def lower(self, source: bytes) -> list[IRInstruction]:
+    tree = self._parse(source)
+    symbol_table = self._extract_symbols(tree, source)  # Phase 2 pre-pass
+    return self._lower_with_context(tree, source, symbol_table=symbol_table)
+```
+
+**Per-language extractors:** OOP languages (JS, TS, Ruby, Kotlin, Scala, PHP) extract fields, methods, and parent chains. Struct languages (Go, C, Rust) extract struct fields and top-level functions. Java, C#, C++, Python, Pascal extract full class hierarchies. Lua returns an empty `SymbolTable`. COBOL uses `SymbolTable.from_data_layout()`.
+
+`_method_declared_names` is reset at each method entry via `reset_method_scope()`, and updated by the `emit()` hook for every `DECL_VAR`/`STORE_VAR` emitted, tracking which identifiers have been locally declared so far in the current method body.
+
+---
+
+## 12. Pattern Matching Infrastructure
+
+Pattern matching is implemented as a shared compiler layer (`interpreter/frontends/common/patterns.py`) that operates on a **Pattern ADT** and emits IR using existing opcodes — no new VM opcodes were introduced.
+
+### Pattern ADT
+
+| Type | Description | Example |
+|------|-------------|---------|
+| `LiteralPattern(value)` | Match a constant | `case 42:`, `case "ok":` |
+| `WildcardPattern()` | Always match, no binding | `case _:` |
+| `CapturePattern(name)` | Match and bind | `case x:` |
+| `SequencePattern(elements)` | Match list/tuple by structure | `case [a, b]:` |
+| `StarPattern(name)` | Rest capture in sequences | `case [first, *rest]:` |
+| `MappingPattern(keys, patterns)` | Match dict by keys | `case {"x": x}:` |
+| `ClassPattern(cls, args, kwargs)` | Match class instance | `case Point(x, y):` |
+| `OrPattern(alternatives)` | Match any alternative | `case 1 \| 2 \| 3:` |
+| `AsPattern(pattern, name)` | Match and bind whole subject | `case [_, _] as pair:` |
+| `ValuePattern(dotted_name)` | Dotted constant lookup | `case Color.RED:` |
+
+### compile_match compiler
+
+`compile_match(ctx, subject_reg, cases)` implements the CPython linear chain model:
+
+1. Each case becomes a sequence of `BRANCH_IF false → next_case` instructions (test chain)
+2. All tests for a case pass → fall through to the binding section
+3. Two-pass per case: all tests execute before any `STORE_VAR` bindings — prevents partial binding on failed matches
+4. Guards (`if condition`) emit an additional `BRANCH_IF` after the binding section
+5. After the case body, `BRANCH end_match` exits the chain
+
+**OrPattern** with capture bindings uses a mini linear chain: each alternative is tested in a sub-chain; if a match is found, bindings are unified via the shared `AsPattern`/`CapturePattern` logic.
+
+**StarPattern** in sequences:
+- Switches from exact-length test (`len == n`) to minimum-length test (`len >= n`)
+- Fixed elements before the star use literal indices; elements after use `len - distance_from_end`
+- The star capture uses the `slice` builtin: `slice(subject, star_idx, len - after_count)`
+- Wildcard star (`*_`) skips the slice emission entirely
+
+**ClassPattern** positional args resolve `__match_args__` from the AST symbol table to map position → field name.
+
+**ValuePattern** emits `LOAD_VAR` + `LOAD_FIELD` for dotted names (e.g. `Color.RED` → load `Color`, then field `RED`) and compares with `BINOP ==`.
+
+### Language consumers
+
+| Frontend | Parser | File |
+|----------|--------|------|
+| Python | `parse_pattern` | `interpreter/frontends/python/patterns.py` |
+| C# | `parse_csharp_pattern` | `interpreter/frontends/csharp/patterns.py` |
+
+Other languages can add their own `parse_pattern` function that maps their tree-sitter AST into the Pattern ADT. The `compile_match` compiler and all IR emission are shared.
+
+---
+
+## 13. Design Principles Summary
 
 | Principle | Manifestation |
 |---|---|
