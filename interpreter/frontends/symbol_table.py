@@ -53,6 +53,23 @@ class SymbolTable:
     def empty(cls) -> SymbolTable:
         return cls()
 
+    def resolve_field(self, class_name: str, field_name: str) -> FieldInfo | None:
+        """Find field in class or any ancestor via parents chain."""
+        class_info = self.classes.get(class_name)
+        if class_info is None:
+            return None
+        if field_name in class_info.fields:
+            return class_info.fields[field_name]
+        return next(
+            (
+                result
+                for parent in class_info.parents
+                for result in [self.resolve_field(parent, field_name)]
+                if result is not None
+            ),
+            None,
+        )
+
     @classmethod
     def from_data_layout(cls, layout) -> SymbolTable:
         """Convert COBOL DataLayout to a SymbolTable."""

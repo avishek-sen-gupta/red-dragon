@@ -117,6 +117,100 @@ class TestClassInfo:
             ci.name = "B"  # type: ignore[misc]
 
 
+class TestResolveField:
+    def test_finds_own_field(self):
+        st = SymbolTable(
+            classes={
+                "Circle": ClassInfo(
+                    name="Circle",
+                    fields={
+                        "radius": FieldInfo(
+                            name="radius", type_hint="int", has_initializer=False
+                        )
+                    },
+                    methods={},
+                    constants={},
+                    parents=(),
+                ),
+            }
+        )
+        result = st.resolve_field("Circle", "radius")
+        assert result is not None and result.name == "radius"
+
+    def test_finds_parent_field(self):
+        st = SymbolTable(
+            classes={
+                "Animal": ClassInfo(
+                    name="Animal",
+                    fields={
+                        "name": FieldInfo(
+                            name="name", type_hint="String", has_initializer=False
+                        )
+                    },
+                    methods={},
+                    constants={},
+                    parents=(),
+                ),
+                "Dog": ClassInfo(
+                    name="Dog",
+                    fields={},
+                    methods={},
+                    constants={},
+                    parents=("Animal",),
+                ),
+            }
+        )
+        result = st.resolve_field("Dog", "name")
+        assert result is not None and result.name == "name"
+
+    def test_finds_grandparent_field(self):
+        st = SymbolTable(
+            classes={
+                "A": ClassInfo(
+                    name="A",
+                    fields={
+                        "x": FieldInfo(name="x", type_hint="int", has_initializer=False)
+                    },
+                    methods={},
+                    constants={},
+                    parents=(),
+                ),
+                "B": ClassInfo(
+                    name="B",
+                    fields={},
+                    methods={},
+                    constants={},
+                    parents=("A",),
+                ),
+                "C": ClassInfo(
+                    name="C",
+                    fields={},
+                    methods={},
+                    constants={},
+                    parents=("B",),
+                ),
+            }
+        )
+        result = st.resolve_field("C", "x")
+        assert result is not None and result.name == "x"
+
+    def test_returns_none_for_unknown_field(self):
+        st = SymbolTable(
+            classes={
+                "Foo": ClassInfo(
+                    name="Foo", fields={}, methods={}, constants={}, parents=()
+                ),
+            }
+        )
+        result = st.resolve_field("Foo", "nonexistent")
+        assert result is None
+
+    def test_returns_none_for_unknown_class(self):
+        st = SymbolTable.empty()
+        result = st.resolve_field("Unknown", "x")
+        assert result is None
+
+
 class TestSymbolTableLookup:
     def test_lookup_class(self):
         ci = ClassInfo(
