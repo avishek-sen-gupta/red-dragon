@@ -94,8 +94,55 @@ def lower_rust_param(ctx: TreeSitterEmitContext, child) -> None:
 # ── Function definition ─────────────────────────────────────────────
 
 
+def _lower_rust_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> str:
+    """Lower a Rust block body, returning the last bare-expression register.
+
+    Rust uses expression-oriented semantics: a block ending with a bare
+    expression (no trailing ``;``) returns that expression's value.  A block
+    ending with a statement (``expression_statement``, which always carries a
+    ``;`` in tree-sitter) is lowered as a statement and an empty string is
+    returned — the caller should emit ``CONST () + RETURN`` as fallback.
+
+    This mirrors Ruby's ``_lower_body_with_implicit_return``.
+    """
+    children = [
+        c
+        for c in body_node.children
+        if c.is_named
+        and c.type
+        not in (
+            RustNodeType.OPEN_BRACE,
+            RustNodeType.CLOSE_BRACE,
+            RustNodeType.SEMICOLON,
+        )
+        and c.type not in ctx.constants.comment_types
+        and c.type not in ctx.constants.noise_types
+    ]
+    if not children:
+        return ""
+    *init, last = children
+    for child in init:
+        ctx.lower_stmt(child)
+    # expression_statement (ends with ;) is a statement, NOT an implicit return
+    is_stmt = (
+        ctx.stmt_dispatch.get(last.type) is not None
+        or last.type in ctx.constants.block_node_types
+        or last.type == RustNodeType.EXPRESSION_STATEMENT
+    )
+    if is_stmt:
+        ctx.lower_stmt(last)
+        return ""
+    return ctx.lower_expr(last)
+
+
 def lower_function_def(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower Rust function_item with Rust-specific param handling."""
+    """Lower Rust function_item with Rust-specific param handling.
+
+    Uses ``_lower_rust_body_with_implicit_return`` so that:
+    - a bare expression at the end of the block becomes the implicit return;
+    - an explicit ``return expr;`` (which is an ``expression_statement``) is
+      lowered as a statement and the existing ``RETURN`` it emits is used.
+    """
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
@@ -115,15 +162,25 @@ def lower_function_def(ctx: TreeSitterEmitContext, node) -> None:
         lower_rust_params(ctx, params_node)
 
     if body_node:
-        ctx.lower_block(body_node)
-
-    none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
+        expr_reg = _lower_rust_body_with_implicit_return(ctx, body_node)
+        if expr_reg:
+            ctx.emit(Opcode.RETURN, operands=[expr_reg])
+        else:
+            none_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.CONST,
+                result_reg=none_reg,
+                operands=[ctx.constants.default_return_value],
+            )
+            ctx.emit(Opcode.RETURN, operands=[none_reg])
+    else:
+        none_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[ctx.constants.default_return_value],
+        )
+        ctx.emit(Opcode.RETURN, operands=[none_reg])
 
     ctx.emit(Opcode.LABEL, label=end_label)
 
