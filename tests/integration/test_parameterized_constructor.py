@@ -8,7 +8,7 @@ from interpreter.constants import Language
 
 class TestParameterizedCallFunction:
     def test_box_new_creates_box_object(self):
-        """Box::new(n) creates a Box object wrapping n via __boxed__."""
+        """Box::new(n) creates a Box object wrapping n via field '0'."""
         source = """\
 struct Node { value: i32 }
 
@@ -25,9 +25,9 @@ let b = Box::new(n);
         assert b_ptr.base in vm.heap
         box_obj = vm.heap[b_ptr.base]
         assert box_obj.type_hint == ScalarType("Box")
-        # The Box stores the inner Node via __boxed__
-        assert "__boxed__" in box_obj.fields
-        inner_addr = box_obj.fields["__boxed__"]
+        # The Box stores the inner Node via field "0"
+        assert "0" in box_obj.fields
+        inner_addr = box_obj.fields["0"]
         inner_val = (
             inner_addr.value if isinstance(inner_addr, TypedValue) else inner_addr
         )

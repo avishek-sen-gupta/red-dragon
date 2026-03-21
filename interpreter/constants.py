@@ -88,7 +88,7 @@ PARAM_THIS = "this"
 PARAM_PHP_THIS = "$this"
 
 METHOD_MISSING = "__method_missing__"
-BOXED_FIELD = "__boxed__"
+BOXED_FIELD = "0"
 SELF_PARAM_NAMES: frozenset[str] = frozenset({PARAM_SELF, PARAM_THIS, PARAM_PHP_THIS})
 
 

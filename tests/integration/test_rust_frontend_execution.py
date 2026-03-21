@@ -126,7 +126,7 @@ class TestRustMutPatternExecution:
 
 class TestRustBoxExecution:
     def test_box_new_creates_box_object(self):
-        """Box::new(x) creates a Box wrapping x via __boxed__."""
+        """Box::new(x) creates a Box wrapping x via field '0'."""
         vm, local_vars = _run_rust(
             """\
 struct Node { value: i32 }
@@ -135,17 +135,17 @@ let b = Box::new(n);
 """,
             max_steps=300,
         )
-        # Box::new creates a Box heap object containing the Node via __boxed__
+        # Box::new creates a Box heap object containing the Node via field "0"
         b_ptr = local_vars["b"]
         assert b_ptr.base in vm.heap
         box_obj = vm.heap[b_ptr.base]
         from interpreter.type_expr import ScalarType
 
         assert box_obj.type_hint == ScalarType("Box")
-        assert "__boxed__" in box_obj.fields
+        assert "0" in box_obj.fields
         from interpreter.typed_value import TypedValue
 
-        inner = box_obj.fields["__boxed__"]
+        inner = box_obj.fields["0"]
         inner_val = inner.value if isinstance(inner, TypedValue) else inner
         assert inner_val == local_vars["n"]
 

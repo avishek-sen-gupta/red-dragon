@@ -29,7 +29,7 @@ def _make_vm_with_method_missing(
     inner_addr = "obj_0"
     vm.heap[inner_addr] = HeapObject(type_hint="Inner", fields=inner_fields)
 
-    # __method_missing__ function: takes (self, name) -> LOAD_FIELD_INDIRECT(self.__boxed__, name)
+    # __method_missing__ function: takes (self, name) -> LOAD_FIELD_INDIRECT(self.BOXED_FIELD, name)
     mm_label = "func_mm_0"
     cfg = CFG()
     cfg.blocks[mm_label] = BasicBlock(
@@ -59,7 +59,7 @@ def _make_vm_with_method_missing(
         func_ref=FuncRef(name=METHOD_MISSING, label=mm_label), closure_id=""
     )
 
-    # Outer object: __boxed__ -> inner_addr, __method_missing__ -> func_ref
+    # Outer object: BOXED_FIELD -> inner_addr, __method_missing__ -> func_ref
     outer_addr = "obj_1"
     vm.heap[outer_addr] = HeapObject(
         type_hint="Outer",
@@ -100,7 +100,7 @@ class TestMethodMissingLoadField:
         assert result.update.next_label == "func_mm_0"
 
     def test_existing_field_does_not_trigger_method_missing(self):
-        """LOAD_FIELD for __boxed__ (which exists) returns directly, no method_missing."""
+        """LOAD_FIELD for BOXED_FIELD (which exists) returns directly, no method_missing."""
         vm, cfg, registry = _make_vm_with_method_missing(
             inner_fields={"value": typed_from_runtime(42)}
         )
@@ -251,7 +251,7 @@ class TestFindMethodMissingRegistryPath:
 
 class TestMethodMissingCallMethod:
     def test_delegates_method_call_to_inner_object_method(self):
-        """CALL_METHOD for unknown method on Outer delegates to Inner's method via __boxed__."""
+        """CALL_METHOD for unknown method on Outer delegates to Inner's method via BOXED_FIELD."""
         vm, cfg, registry = _make_vm_with_method_missing(
             inner_fields={"value": typed_from_runtime(42)}
         )
