@@ -518,23 +518,31 @@ class TestPhpArrowFunction:
 
 
 class TestPhpScopedCallExpression:
-    def test_scoped_call_produces_call_function(self):
+    def test_scoped_call_produces_call_method(self):
+        """ClassName::method() should lower to LOAD_VAR(ClassName) + CALL_METHOD."""
         source = "<?php Math::sqrt(4); ?>"
         ir = _parse_and_lower(source)
-        calls = _find_all(ir, Opcode.CALL_FUNCTION)
-        assert any("Math::sqrt" in inst.operands for inst in calls)
+        # Expect a LOAD_VAR for the class and a CALL_METHOD for the method
+        loads = _find_all(ir, Opcode.LOAD_VAR)
+        assert any("Math" in inst.operands for inst in loads)
+        calls = _find_all(ir, Opcode.CALL_METHOD)
+        assert any("sqrt" in inst.operands for inst in calls)
 
     def test_scoped_call_with_multiple_args(self):
         source = "<?php MyClass::create(1, 2, 3); ?>"
         ir = _parse_and_lower(source)
-        calls = _find_all(ir, Opcode.CALL_FUNCTION)
-        assert any("MyClass::create" in inst.operands for inst in calls)
+        loads = _find_all(ir, Opcode.LOAD_VAR)
+        assert any("MyClass" in inst.operands for inst in loads)
+        calls = _find_all(ir, Opcode.CALL_METHOD)
+        assert any("create" in inst.operands for inst in calls)
 
     def test_scoped_call_result_stored(self):
         source = "<?php $r = Config::get('key'); ?>"
         ir = _parse_and_lower(source)
-        calls = _find_all(ir, Opcode.CALL_FUNCTION)
-        assert any("Config::get" in inst.operands for inst in calls)
+        loads = _find_all(ir, Opcode.LOAD_VAR)
+        assert any("Config" in inst.operands for inst in loads)
+        calls = _find_all(ir, Opcode.CALL_METHOD)
+        assert any("get" in inst.operands for inst in calls)
         stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("$r" in inst.operands for inst in stores)
 
