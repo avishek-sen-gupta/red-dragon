@@ -271,7 +271,7 @@ def lower_java_store_target(
 ) -> None:
     if target.type == JavaNodeType.IDENTIFIER:
         name = ctx.node_text(target)
-        if ctx.symbol_table.resolve_field(ctx._current_class_name, name):
+        if ctx.symbol_table.resolve_field(ctx._current_class_name, name).name:
             this_reg = ctx.fresh_reg()
             ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
             ctx.emit(

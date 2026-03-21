@@ -66,11 +66,29 @@ def lower_canonical_bool(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_identifier(ctx: TreeSitterEmitContext, node) -> str:
+    name = ctx.node_text(node)
+    resolved_name = ctx.resolve_var(name)
+    # Implicit this: bare identifier that's a class field and not a local/param
+    if (
+        resolved_name not in ctx._method_declared_names
+        and ctx._current_class_name
+        and ctx.symbol_table.resolve_field(ctx._current_class_name, resolved_name).name
+    ):
+        this_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"], node=node)
+        reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.LOAD_FIELD,
+            result_reg=reg,
+            operands=[this_reg, resolved_name],
+            node=node,
+        )
+        return reg
     reg = ctx.fresh_reg()
     ctx.emit(
         Opcode.LOAD_VAR,
         result_reg=reg,
-        operands=[ctx.resolve_var(ctx.node_text(node))],
+        operands=[resolved_name],
         node=node,
     )
     return reg

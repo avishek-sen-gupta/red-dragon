@@ -176,6 +176,7 @@ def _lower_cpp_constructor_with_field_inits(
 
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.reset_method_scope()
 
     # Do NOT emit this as a parameter — the VM injects 'this' implicitly
     # when calling constructors via _try_class_constructor_call().
@@ -355,6 +356,7 @@ def lower_cpp_method(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=func_label)
     ctx.seed_func_return_type(func_label, return_hint)
+    ctx.reset_method_scope()
 
     _emit_this_param(ctx)
 

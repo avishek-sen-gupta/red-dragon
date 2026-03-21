@@ -194,7 +194,7 @@ class TestResolveField:
         result = st.resolve_field("C", "x")
         assert result is not None and result.name == "x"
 
-    def test_returns_none_for_unknown_field(self):
+    def test_returns_null_field_for_unknown_field(self):
         st = SymbolTable(
             classes={
                 "Foo": ClassInfo(
@@ -203,12 +203,12 @@ class TestResolveField:
             }
         )
         result = st.resolve_field("Foo", "nonexistent")
-        assert result is None
+        assert not result.name
 
-    def test_returns_none_for_unknown_class(self):
+    def test_returns_null_field_for_unknown_class(self):
         st = SymbolTable.empty()
         result = st.resolve_field("Unknown", "x")
-        assert result is None
+        assert not result.name
 
 
 class TestSymbolTableLookup:

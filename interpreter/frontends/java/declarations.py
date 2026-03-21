@@ -93,6 +93,7 @@ def lower_method_decl(
     ctx.emit(Opcode.BRANCH, label=end_label, node=node)
     ctx.emit(Opcode.LABEL, label=func_label)
     ctx.seed_func_return_type(func_label, return_hint)
+    ctx.reset_method_scope()
 
     if inject_this:
         _emit_this_param(ctx)
@@ -367,6 +368,7 @@ def _emit_record_init(
 
     ctx.emit(Opcode.BRANCH, label=end_label)
     ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.reset_method_scope()
 
     _emit_this_param(ctx)
 
@@ -417,6 +419,7 @@ def _lower_constructor_decl(
 
     ctx.emit(Opcode.BRANCH, label=end_label)
     ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.reset_method_scope()
 
     _emit_this_param(ctx)
 
