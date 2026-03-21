@@ -215,3 +215,63 @@ let inner = opt.as_ref().unwrap();
             max_steps=500,
         )
         assert local_vars.get("inner") is not None
+
+
+class TestRustImplMethodReturn:
+    def test_impl_method_returns_field_value(self):
+        """c.get_radius() should return the struct field value, not ()."""
+        _, local_vars = _run_rust(
+            """\
+struct Circle {
+    radius: i32,
+}
+impl Circle {
+    fn get_radius(&self) -> i32 {
+        self.radius
+    }
+}
+let c = Circle { radius: 5 };
+let result = c.get_radius();
+""",
+            max_steps=500,
+        )
+        assert local_vars["result"] == 5
+
+    def test_impl_method_with_arithmetic(self):
+        """Method that computes from a field should return the computed value."""
+        _, local_vars = _run_rust(
+            """\
+struct Rectangle {
+    width: i32,
+    height: i32,
+}
+impl Rectangle {
+    fn area(&self) -> i32 {
+        self.width * self.height
+    }
+}
+let r = Rectangle { width: 4, height: 6 };
+let result = r.area();
+""",
+            max_steps=500,
+        )
+        assert local_vars["result"] == 24
+
+    def test_impl_method_explicit_return_still_works(self):
+        """Explicit return statement inside an impl method should still work."""
+        _, local_vars = _run_rust(
+            """\
+struct Foo {
+    x: i32,
+}
+impl Foo {
+    fn get(&self) -> i32 {
+        return self.x;
+    }
+}
+let f = Foo { x: 99 };
+let result = f.get();
+""",
+            max_steps=500,
+        )
+        assert local_vars["result"] == 99
