@@ -5,7 +5,10 @@ from __future__ import annotations
 from interpreter.frontends.common.patterns import (
     CapturePattern,
     LiteralPattern,
+    OrPattern,
     Pattern,
+    SequencePattern,
+    ValuePattern,
     WildcardPattern,
 )
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -47,6 +50,21 @@ def parse_rust_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
     if node_type == RustNodeType.IDENTIFIER:
         return CapturePattern(text)
 
+    if node_type == RustNodeType.OR_PATTERN:
+        return OrPattern(tuple(_flatten_or_pattern(ctx, node)))
+
+    if node_type == RustNodeType.TUPLE_PATTERN:
+        elements = tuple(
+            parse_rust_pattern(ctx, c)
+            for c in node.children
+            if c.is_named or ctx.node_text(c) == _WILDCARD_TEXT
+        )
+        return SequencePattern(elements)
+
+    if node_type == RustNodeType.SCOPED_IDENTIFIER:
+        parts = tuple(text.split("::"))
+        return ValuePattern(parts)
+
     raise ValueError(f"Unsupported Rust pattern node type: {node_type!r} ({text!r})")
 
 
@@ -56,3 +74,21 @@ def _parse_number(text: str) -> int | float:
     if "." in cleaned:
         return float(cleaned)
     return int(cleaned, 0)
+
+
+def _flatten_or_pattern(ctx: TreeSitterEmitContext, node) -> list[Pattern]:
+    """Flatten a left-associative or_pattern tree into a flat list of alternatives.
+
+    Tree-sitter parses `1 | 2 | 3` as `or_pattern(or_pattern(1, 2), 3)`.
+    This function recursively flattens nested or_pattern nodes.
+    """
+    named = [c for c in node.children if c.is_named]
+    return [
+        leaf
+        for c in named
+        for leaf in (
+            _flatten_or_pattern(ctx, c)
+            if c.type == RustNodeType.OR_PATTERN
+            else [parse_rust_pattern(ctx, c)]
+        )
+    ]
