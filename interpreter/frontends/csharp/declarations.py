@@ -17,6 +17,12 @@ from interpreter.frontends.common.declarations import (
     emit_synthetic_init,
 )
 from interpreter.type_expr import ScalarType
+from interpreter.frontends.symbol_table import (
+    ClassInfo,
+    FieldInfo,
+    FunctionInfo,
+    SymbolTable,
+)
 
 
 def lower_local_decl_stmt(ctx: TreeSitterEmitContext, node) -> None:
@@ -609,3 +615,132 @@ def lower_delegate_declaration(ctx: TreeSitterEmitContext, node) -> None:
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+
+
+# ---------------------------------------------------------------------------
+# Symbol extraction (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+def _is_csharp_static(node) -> bool:
+    """Return True if the declaration node has a 'static' modifier child."""
+    return any(
+        child.type == NT.MODIFIER and child.text == b"static" for child in node.children
+    )
+
+
+def _extract_csharp_field(node) -> tuple[str, FieldInfo] | None:
+    """Extract a FieldInfo from a C# field_declaration node."""
+    var_decl = next(
+        (c for c in node.children if c.type == NT.VARIABLE_DECLARATION),
+        None,
+    )
+    if var_decl is None:
+        return None
+    type_node = var_decl.child_by_field_name("type")
+    type_hint = type_node.text.decode() if type_node else ""
+    declarator = next(
+        (c for c in var_decl.children if c.type == NT.VARIABLE_DECLARATOR),
+        None,
+    )
+    if declarator is None:
+        return None
+    name_node = declarator.child_by_field_name("name")
+    if name_node is None:
+        return None
+    name = name_node.text.decode()
+    has_initializer = len(declarator.named_children) > 1
+    return name, FieldInfo(
+        name=name, type_hint=type_hint, has_initializer=has_initializer
+    )
+
+
+def _extract_csharp_method(node) -> tuple[str, FunctionInfo] | None:
+    """Extract a FunctionInfo from a C# method_declaration node."""
+    name_node = node.child_by_field_name("name")
+    if name_node is None:
+        return None
+    name = name_node.text.decode()
+    params_node = node.child_by_field_name("parameters")
+    params = (
+        tuple(
+            p.child_by_field_name("name").text.decode()
+            for p in params_node.children
+            if p.type == NT.PARAMETER and p.child_by_field_name("name") is not None
+        )
+        if params_node is not None
+        else ()
+    )
+    type_node = node.child_by_field_name("type")
+    return_type = type_node.text.decode() if type_node else ""
+    return name, FunctionInfo(name=name, params=params, return_type=return_type)
+
+
+def _extract_csharp_parents(node) -> tuple[str, ...]:
+    """Extract parent class/interface names from a C# base_list node."""
+    base_list = next((c for c in node.children if c.type == NT.BASE_LIST), None)
+    if base_list is None:
+        return ()
+    return tuple(c.text.decode() for c in base_list.children if c.type == NT.IDENTIFIER)
+
+
+def _extract_csharp_class(node) -> tuple[str, ClassInfo] | None:
+    """Extract a ClassInfo from a C# class_declaration node."""
+    name_node = node.child_by_field_name("name")
+    if name_node is None:
+        return None
+    class_name = name_node.text.decode()
+    parents = _extract_csharp_parents(node)
+
+    body = next((c for c in node.children if c.type == "declaration_list"), None)
+    if body is None:
+        return class_name, ClassInfo(
+            name=class_name, fields={}, methods={}, constants={}, parents=parents
+        )
+
+    fields: dict[str, FieldInfo] = {}
+    constants_map: dict[str, str] = {}
+    methods: dict[str, FunctionInfo] = {}
+
+    for child in body.children:
+        if child.type == NT.FIELD_DECLARATION:
+            result = _extract_csharp_field(child)
+            if result is None:
+                continue
+            fname, finfo = result
+            if _is_csharp_static(child):
+                constants_map[fname] = finfo.type_hint
+            else:
+                fields[fname] = finfo
+        elif child.type == NT.METHOD_DECLARATION:
+            result = _extract_csharp_method(child)
+            if result is None:
+                continue
+            mname, minfo = result
+            methods[mname] = minfo
+
+    return class_name, ClassInfo(
+        name=class_name,
+        fields=fields,
+        methods=methods,
+        constants=constants_map,
+        parents=parents,
+    )
+
+
+def _collect_csharp_classes(node, accumulator: dict[str, ClassInfo]) -> None:
+    """Recursively walk the AST and collect all class_declaration nodes."""
+    if node.type == NT.CLASS_DECLARATION:
+        result = _extract_csharp_class(node)
+        if result is not None:
+            class_name, class_info = result
+            accumulator[class_name] = class_info
+    for child in node.children:
+        _collect_csharp_classes(child, accumulator)
+
+
+def extract_csharp_symbols(root) -> SymbolTable:
+    """Walk the C# AST and return a SymbolTable of all class definitions."""
+    classes: dict[str, ClassInfo] = {}
+    _collect_csharp_classes(root, classes)
+    return SymbolTable(classes=classes)
