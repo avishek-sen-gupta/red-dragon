@@ -139,9 +139,6 @@ class TreeSitterEmitContext:
     # Byref parameter tracking (C# out/ref/in)
     byref_params: set[str] = field(default_factory=set)
 
-    # Field names for the current class — used to detect implicit this in constructors
-    _class_field_names: set[str] = field(default_factory=set)
-
     # Unified symbol table — populated by frontend pre-pass before lowering
     symbol_table: SymbolTable = field(default_factory=SymbolTable.empty)
 
