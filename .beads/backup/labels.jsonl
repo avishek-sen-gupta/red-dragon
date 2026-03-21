@@ -27,6 +27,9 @@
 {"issue_id":"red-dragon-2vi","label":"frontend"}
 {"issue_id":"red-dragon-2vi","label":"javascript"}
 {"issue_id":"red-dragon-2vi","label":"typescript"}
+{"issue_id":"red-dragon-3077","label":"p2"}
+{"issue_id":"red-dragon-3077","label":"pattern-matching"}
+{"issue_id":"red-dragon-3077","label":"ruby"}
 {"issue_id":"red-dragon-3a3j","label":"audit-asserts"}
 {"issue_id":"red-dragon-3f4v","label":"symbol-table"}
 {"issue_id":"red-dragon-3ie","label":"frontend"}
@@ -682,6 +685,9 @@
 {"issue_id":"red-dragon-nni2","label":"rust"}
 {"issue_id":"red-dragon-nzlv","label":"architecture"}
 {"issue_id":"red-dragon-nzlv","label":"symbol-table"}
+{"issue_id":"red-dragon-ocvm","label":"p2"}
+{"issue_id":"red-dragon-ocvm","label":"pattern-matching"}
+{"issue_id":"red-dragon-ocvm","label":"ruby"}
 {"issue_id":"red-dragon-oej","label":"refactor"}
 {"issue_id":"red-dragon-oej","label":"vm"}
 {"issue_id":"red-dragon-q3yy","label":"audit-asserts"}
@@ -712,6 +718,9 @@
 {"issue_id":"red-dragon-rrb","label":"typed-value-migration"}
 {"issue_id":"red-dragon-sl0o","label":"audit-asserts"}
 {"issue_id":"red-dragon-slgt","label":"audit-asserts"}
+{"issue_id":"red-dragon-swlt","label":"p2"}
+{"issue_id":"red-dragon-swlt","label":"pattern-matching"}
+{"issue_id":"red-dragon-swlt","label":"ruby"}
 {"issue_id":"red-dragon-ta26","label":"c"}
 {"issue_id":"red-dragon-tkv","label":"frontend"}
 {"issue_id":"red-dragon-tkv","label":"scala"}
