@@ -17,7 +17,14 @@ from interpreter.frontends.common.expressions import (
 )
 
 _UNSIGNED_SUFFIX = re.compile(r"[uUlL]+$")
+from interpreter.frontends.common.patterns import (
+    CapturePattern,
+    WildcardPattern,
+    compile_pattern_bindings,
+    compile_pattern_test,
+)
 from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
+from interpreter.frontends.kotlin.patterns import parse_kotlin_pattern
 
 logger = logging.getLogger(__name__)
 
@@ -355,65 +362,10 @@ def lower_when_expr(ctx: TreeSitterEmitContext, node) -> str:
     result_var = f"__when_result_{ctx.label_counter}"
     end_label = ctx.fresh_label("when_end")
 
+    has_subject = subject_node is not None
     entries = [c for c in node.children if c.type == KNT.WHEN_ENTRY]
     for entry in entries:
-        cond_node = next(
-            (c for c in entry.children if c.type == KNT.WHEN_CONDITION),
-            None,
-        )
-        body_children = [
-            c
-            for c in entry.children
-            if c.type not in (KNT.WHEN_CONDITION, "->", ",")
-            and c.is_named
-            and c.type != KNT.CONTROL_STRUCTURE_BODY
-        ]
-        body_node = next(
-            (c for c in entry.children if c.type == KNT.CONTROL_STRUCTURE_BODY),
-            None,
-        )
-
-        arm_label = ctx.fresh_label("when_arm")
-        next_label = ctx.fresh_label("when_next")
-
-        if cond_node:
-            cond_inner = next((c for c in cond_node.children if c.is_named), None)
-            if cond_inner:
-                pattern_reg = ctx.lower_expr(cond_inner)
-                eq_reg = ctx.fresh_reg()
-                ctx.emit(
-                    Opcode.BINOP,
-                    result_reg=eq_reg,
-                    operands=["==", val_reg, pattern_reg],
-                    node=entry,
-                )
-                ctx.emit(
-                    Opcode.BRANCH_IF,
-                    operands=[eq_reg],
-                    label=f"{arm_label},{next_label}",
-                )
-            else:
-                # else branch
-                ctx.emit(Opcode.BRANCH, label=arm_label)
-        else:
-            # else branch (no condition)
-            ctx.emit(Opcode.BRANCH, label=arm_label)
-
-        ctx.emit(Opcode.LABEL, label=arm_label)
-        if body_node:
-            arm_result = _lower_control_body(ctx, body_node)
-        elif body_children:
-            arm_result = ctx.lower_expr(body_children[0])
-        else:
-            arm_result = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CONST,
-                result_reg=arm_result,
-                operands=[ctx.constants.none_literal],
-            )
-        ctx.emit(Opcode.DECL_VAR, operands=[result_var, arm_result])
-        ctx.emit(Opcode.BRANCH, label=end_label)
-        ctx.emit(Opcode.LABEL, label=next_label)
+        _lower_when_entry(ctx, entry, val_reg, result_var, end_label, has_subject)
 
     ctx.emit(Opcode.LABEL, label=end_label)
     reg = ctx.fresh_reg()
@@ -423,6 +375,88 @@ def lower_when_expr(ctx: TreeSitterEmitContext, node) -> str:
         ctx.exit_block_scope()
 
     return reg
+
+
+def _lower_when_entry(
+    ctx: TreeSitterEmitContext,
+    entry,
+    subject_reg: str,
+    result_var: str,
+    end_label: str,
+    has_subject: bool,
+) -> None:
+    """Lower a single when entry.
+
+    When has_subject is True, the condition is a pattern matched against
+    subject_reg using the Pattern ADT. When False (subjectless when),
+    the condition is an arbitrary boolean expression evaluated directly.
+    """
+    cond_node = next((c for c in entry.children if c.type == KNT.WHEN_CONDITION), None)
+
+    arm_label = ctx.fresh_label("when_arm")
+    next_label = ctx.fresh_label("when_next")
+
+    if cond_node:
+        cond_inner = next((c for c in cond_node.children if c.is_named), None)
+
+        if has_subject:
+            pattern = parse_kotlin_pattern(ctx, cond_inner)
+
+            is_irrefutable = isinstance(pattern, (WildcardPattern, CapturePattern))
+            if is_irrefutable:
+                compile_pattern_bindings(ctx, subject_reg, pattern)
+                arm_result = _lower_when_body(ctx, entry)
+                ctx.emit(Opcode.DECL_VAR, operands=[result_var, arm_result])
+                ctx.emit(Opcode.BRANCH, label=end_label)
+                return
+
+            test_reg = compile_pattern_test(ctx, subject_reg, pattern)
+            ctx.emit(
+                Opcode.BRANCH_IF,
+                operands=[test_reg],
+                label=f"{arm_label},{next_label}",
+            )
+            ctx.emit(Opcode.LABEL, label=arm_label)
+            compile_pattern_bindings(ctx, subject_reg, pattern)
+        else:
+            # Subjectless when: condition is an arbitrary boolean expression
+            test_reg = ctx.lower_expr(cond_inner)
+            ctx.emit(
+                Opcode.BRANCH_IF,
+                operands=[test_reg],
+                label=f"{arm_label},{next_label}",
+            )
+            ctx.emit(Opcode.LABEL, label=arm_label)
+    else:
+        # else branch — no condition, unconditional
+        ctx.emit(Opcode.BRANCH, label=arm_label)
+        ctx.emit(Opcode.LABEL, label=arm_label)
+
+    arm_result = _lower_when_body(ctx, entry)
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, arm_result])
+    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit(Opcode.LABEL, label=next_label)
+
+
+def _lower_when_body(ctx: TreeSitterEmitContext, entry) -> str:
+    """Lower a when entry body, returning the result register."""
+    body_node = next(
+        (c for c in entry.children if c.type == KNT.CONTROL_STRUCTURE_BODY), None
+    )
+    if body_node:
+        return _lower_control_body(ctx, body_node)
+    body_children = [
+        c
+        for c in entry.children
+        if c.type not in (KNT.WHEN_CONDITION, "->", ",")
+        and c.is_named
+        and c.type != KNT.CONTROL_STRUCTURE_BODY
+    ]
+    if body_children:
+        return ctx.lower_expr(body_children[0])
+    arm_result = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=arm_result, operands=[ctx.constants.none_literal])
+    return arm_result
 
 
 # -- statements as expression ------------------------------------------
