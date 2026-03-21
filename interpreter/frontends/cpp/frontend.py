@@ -63,6 +63,7 @@ class CppFrontend(CFrontend):
                 CppNodeType.QUALIFIED_IDENTIFIER: cpp_expr.lower_qualified_id,
                 CppNodeType.SCOPED_IDENTIFIER: cpp_expr.lower_qualified_id,
                 CppNodeType.SCOPE_RESOLUTION: cpp_expr.lower_qualified_id,
+                CppNodeType.CALL_EXPRESSION: cpp_expr.lower_cpp_call,
                 CppNodeType.THIS: common_expr.lower_identifier,
                 CppNodeType.CONDITION_CLAUSE: cpp_expr.lower_condition_clause,
                 CppNodeType.NULLPTR: common_expr.lower_canonical_none,

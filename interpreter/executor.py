@@ -1550,6 +1550,21 @@ def _handle_call_method(
             obj_val.value, args, inst, vm, cfg, registry, current_label
         )
 
+    # Static method dispatch: Class.method() where object is a ClassRef
+    if isinstance(obj_val.value, ClassRef):
+        class_name = obj_val.value.name
+        methods = registry.class_methods.get(class_name, {})
+        func_labels = methods.get(method_name, [])
+        if func_labels:
+            func_label = func_labels[0]
+            bound_ref = BoundFuncRef(
+                func_ref=FuncRef(name=method_name, label=func_label),
+                closure_id="",
+            )
+            return _try_user_function_call(
+                bound_ref, args, inst, vm, cfg, registry, current_label
+            )
+
     # Method builtins: subList, substring, slice, etc.
     method_fn = Builtins.METHOD_TABLE.get(method_name)
     if method_fn is not None:
