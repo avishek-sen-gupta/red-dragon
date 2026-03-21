@@ -97,3 +97,17 @@ val result = when(x) {
 """
         local_vars = _run(source, Language.KOTLIN)
         assert local_vars["result"] == "small"
+
+    def test_ruby(self):
+        """Ruby case/in with separate arms for 2 and 3 (or-patterns not used)."""
+        source = """\
+x = 2
+result = case x
+  in 1 then "one"
+  in 2 then "small"
+  in 3 then "small"
+  else "other"
+end
+"""
+        local_vars = _run(source, Language.RUBY)
+        assert local_vars["result"] == "small"
