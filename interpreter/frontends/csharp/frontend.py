@@ -161,3 +161,9 @@ class CSharpFrontend(BaseFrontend):
             NT.GOTO_STATEMENT: csharp_cf.lower_goto,
             NT.LABELED_STATEMENT: csharp_cf.lower_labeled_stmt,
         }
+
+    def _extract_symbols(self, root) -> "SymbolTable":
+        from interpreter.frontends.csharp.declarations import extract_csharp_symbols
+        from interpreter.frontends.symbol_table import SymbolTable
+
+        return extract_csharp_symbols(root)
