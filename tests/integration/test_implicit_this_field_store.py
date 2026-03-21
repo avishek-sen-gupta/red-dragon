@@ -86,6 +86,49 @@ class M {
         assert isinstance(local_vars["ry"], int) and local_vars["ry"] == 4
 
 
+class TestCrossClassFieldResolution:
+    def test_subclass_constructor_assigns_parent_field(self):
+        """Dog extends Animal — name assigned in Dog constructor."""
+        local_vars = _run(
+            """\
+class Animal {
+    String name;
+}
+class Dog extends Animal {
+    Dog(String n) { name = n; }
+}
+class M {
+    static Dog d = new Dog("Rex");
+    static String result = d.name;
+}
+""",
+            Language.JAVA,
+        )
+        assert isinstance(local_vars["result"], str) and local_vars["result"] == "Rex"
+
+    def test_multi_level_inheritance(self):
+        """C extends B extends A — field from A assigned in C constructor."""
+        local_vars = _run(
+            """\
+class A {
+    int x;
+}
+class B extends A {
+}
+class C extends B {
+    C(int v) { x = v; }
+}
+class M {
+    static C c = new C(42);
+    static int result = c.x;
+}
+""",
+            Language.JAVA,
+            max_steps=3000,
+        )
+        assert isinstance(local_vars["result"], int) and local_vars["result"] == 42
+
+
 class TestCppImplicitThis:
     def test_constructor_field_assignment(self):
         local_vars = _run(
