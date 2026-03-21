@@ -9,12 +9,11 @@ from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.common.expressions import lower_const_literal
 from interpreter.frontends.rust.node_types import RustNodeType
+from interpreter.frontends.common.match_expr import MatchArmSpec, lower_match_as_expr
 from interpreter.frontends.common.patterns import (
-    CapturePattern,
-    WildcardPattern,
+    Pattern,
     compile_pattern_bindings,
     compile_pattern_test,
-    _needs_pre_guard_bindings,
 )
 from interpreter.frontends.rust.patterns import parse_rust_pattern
 
@@ -305,87 +304,47 @@ def lower_return_expr(ctx: TreeSitterEmitContext, node) -> str:
     return val_reg
 
 
-def lower_match_expr(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower Rust match expression using Pattern ADT."""
-    value_node = node.child_by_field_name("value")
-    body_node = node.child_by_field_name("body")
-    subject_reg = ctx.lower_expr(value_node)
-
-    result_var = f"__match_result_{ctx.label_counter}"
-    end_label = ctx.fresh_label("match_end")
-    arms = [c for c in body_node.children if c.type == RustNodeType.MATCH_ARM]
-
-    for arm in arms:
-        _lower_match_arm(ctx, arm, subject_reg, result_var, end_label)
-
-    ctx.emit(Opcode.LABEL, label=end_label)
-    reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[result_var])
-    return reg
-
-
-def _lower_match_arm(
-    ctx: TreeSitterEmitContext, arm, subject_reg: str, result_var: str, end_label: str
-) -> None:
-    """Lower a single match arm: test pattern, bind, evaluate body, store result."""
+def _rust_pattern_of(ctx: TreeSitterEmitContext, arm) -> Pattern:
+    """Extract and parse pattern from a Rust match_arm."""
     match_pattern_node = next(
         c for c in arm.children if c.type == RustNodeType.MATCH_PATTERN
     )
-
-    # Guard lives INSIDE match_pattern (after anonymous 'if' token), NOT a sibling.
-    # Named children: [pattern_node] or [pattern_node, guard_expr].
-    # Wildcard '_' is anonymous, so named_children may be empty.
     named_children = [c for c in match_pattern_node.children if c.is_named]
-    # For wildcard: no named children — pass the match_pattern node itself
     pattern_node = named_children[0] if named_children else match_pattern_node
-    guard_node = named_children[1] if len(named_children) > 1 else None
+    return parse_rust_pattern(ctx, pattern_node)
 
-    pattern = parse_rust_pattern(ctx, pattern_node)
+
+def _rust_guard_of(ctx: TreeSitterEmitContext, arm):
+    """Extract guard expression from a Rust match_arm (inside match_pattern)."""
+    match_pattern_node = next(
+        c for c in arm.children if c.type == RustNodeType.MATCH_PATTERN
+    )
+    named_children = [c for c in match_pattern_node.children if c.is_named]
+    return named_children[1] if len(named_children) > 1 else None
+
+
+def _rust_body_of(ctx: TreeSitterEmitContext, arm) -> str:
+    """Lower a Rust match_arm body as expression."""
     body_expr = _extract_arm_body(arm)
+    return ctx.lower_expr(body_expr)
 
-    is_irrefutable = (
-        isinstance(pattern, (WildcardPattern, CapturePattern)) and guard_node is None
-    )
 
-    if is_irrefutable:
-        compile_pattern_bindings(ctx, subject_reg, pattern)
-        body_reg = ctx.lower_expr(body_expr)
-        ctx.emit(Opcode.DECL_VAR, operands=[result_var, body_reg])
-        ctx.emit(Opcode.BRANCH, label=end_label)
-        return
+_RUST_MATCH_SPEC = MatchArmSpec(
+    extract_arms=lambda body: [
+        c for c in body.children if c.type == RustNodeType.MATCH_ARM
+    ],
+    pattern_of=_rust_pattern_of,
+    guard_of=_rust_guard_of,
+    body_of=_rust_body_of,
+)
 
-    test_reg = compile_pattern_test(ctx, subject_reg, pattern)
 
-    if guard_node:
-        # Pre-bind for guard evaluation if pattern introduces variables
-        if _needs_pre_guard_bindings(pattern):
-            compile_pattern_bindings(ctx, subject_reg, pattern)
-        guard_reg = ctx.lower_expr(guard_node)
-        final_test = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.BINOP,
-            result_reg=final_test,
-            operands=["&&", test_reg, guard_reg],
-        )
-        test_reg = final_test
-
-    arm_label = ctx.fresh_label("match_arm")
-    next_label = ctx.fresh_label("match_next")
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[test_reg],
-        label=f"{arm_label},{next_label}",
-    )
-    ctx.emit(Opcode.LABEL, label=arm_label)
-
-    # Only emit bindings if not already emitted pre-guard
-    if not (guard_node and _needs_pre_guard_bindings(pattern)):
-        compile_pattern_bindings(ctx, subject_reg, pattern)
-
-    body_reg = ctx.lower_expr(body_expr)
-    ctx.emit(Opcode.DECL_VAR, operands=[result_var, body_reg])
-    ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=next_label)
+def lower_match_expr(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower Rust match expression using unified framework."""
+    value_node = node.child_by_field_name("value")
+    body_node = node.child_by_field_name("body")
+    subject_reg = ctx.lower_expr(value_node)
+    return lower_match_as_expr(ctx, subject_reg, body_node, _RUST_MATCH_SPEC)
 
 
 def _extract_arm_body(arm):
