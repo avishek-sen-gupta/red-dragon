@@ -90,6 +90,13 @@ class ValuePattern(Pattern):
 
 
 @dataclass(frozen=True)
+class DerefPattern(Pattern):
+    """Dereference the subject, then match the inner pattern. Rust's ``&val``."""
+
+    inner: Pattern
+
+
+@dataclass(frozen=True)
 class NoGuard:
     """Sentinel: this case has no guard clause."""
 
@@ -280,6 +287,17 @@ def compile_pattern_test(
             return compile_pattern_test(ctx, subject_reg, inner)
         case StarPattern():
             return _const_true(ctx)
+        case DerefPattern(inner=inner):
+            # Dereference subject (LOAD_INDEX 0), then test inner pattern
+            deref_reg = ctx.fresh_reg()
+            idx_reg = ctx.fresh_reg()
+            ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
+            ctx.emit(
+                Opcode.LOAD_INDEX,
+                result_reg=deref_reg,
+                operands=[subject_reg, idx_reg],
+            )
+            return compile_pattern_test(ctx, deref_reg, inner)
         case ValuePattern(parts=parts):
             # LOAD_VAR first part, then LOAD_FIELD for each remaining part
             reg = ctx.fresh_reg()
@@ -428,6 +446,17 @@ def compile_pattern_bindings(
         case StarPattern(name=name):
             if name != "_":
                 ctx.emit(Opcode.STORE_VAR, operands=[name, subject_reg])
+        case DerefPattern(inner=inner):
+            # Dereference subject (LOAD_INDEX 0), then bind inner pattern
+            deref_reg = ctx.fresh_reg()
+            idx_reg = ctx.fresh_reg()
+            ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
+            ctx.emit(
+                Opcode.LOAD_INDEX,
+                result_reg=deref_reg,
+                operands=[subject_reg, idx_reg],
+            )
+            compile_pattern_bindings(ctx, deref_reg, inner)
         case ValuePattern():
             pass  # no bindings — it's a constant
         case _:
@@ -455,6 +484,8 @@ def _needs_pre_guard_bindings(pattern: Pattern) -> bool:
             )
         case OrPattern(alternatives=alts):
             return any(_needs_pre_guard_bindings(a) for a in alts)
+        case DerefPattern(inner=inner):
+            return _needs_pre_guard_bindings(inner)
         case _:
             return False
 
