@@ -92,6 +92,8 @@
 {"issue_id":"red-dragon-9go","label":"audit"}
 {"issue_id":"red-dragon-9go","label":"testing"}
 {"issue_id":"red-dragon-9hq5","label":"audit-asserts"}
+{"issue_id":"red-dragon-a59w","label":"symbol-table"}
+{"issue_id":"red-dragon-a59w","label":"typescript"}
 {"issue_id":"red-dragon-a7ba","label":"pattern-matching"}
 {"issue_id":"red-dragon-aiu","label":"refactor"}
 {"issue_id":"red-dragon-aiu","label":"vm"}
@@ -106,6 +108,8 @@
 {"issue_id":"red-dragon-bfv","label":"refactoring"}
 {"issue_id":"red-dragon-bkj0","label":"audit-asserts"}
 {"issue_id":"red-dragon-bre9","label":"audit-asserts"}
+{"issue_id":"red-dragon-bvpm","label":"rust"}
+{"issue_id":"red-dragon-bvpm","label":"symbol-table"}
 {"issue_id":"red-dragon-c3dd","label":"audit-asserts"}
 {"issue_id":"red-dragon-c4v","label":"csharp"}
 {"issue_id":"red-dragon-c4v","label":"frontend"}
@@ -126,6 +130,8 @@
 {"issue_id":"red-dragon-dp9","label":"php"}
 {"issue_id":"red-dragon-dqo","label":"frontend"}
 {"issue_id":"red-dragon-dqo","label":"pascal"}
+{"issue_id":"red-dragon-ds8s","label":"php"}
+{"issue_id":"red-dragon-ds8s","label":"symbol-table"}
 {"issue_id":"red-dragon-dt8","label":"frontend"}
 {"issue_id":"red-dragon-dt8","label":"go"}
 {"issue_id":"red-dragon-dwk","label":"frontend"}
@@ -578,6 +584,8 @@
 {"issue_id":"red-dragon-hs26","label":"audit-asserts"}
 {"issue_id":"red-dragon-i3w","label":"frontend"}
 {"issue_id":"red-dragon-i3w","label":"rust"}
+{"issue_id":"red-dragon-i48d","label":"pascal"}
+{"issue_id":"red-dragon-i48d","label":"symbol-table"}
 {"issue_id":"red-dragon-i5ib","label":"cpp"}
 {"issue_id":"red-dragon-i8r0","label":"rust"}
 {"issue_id":"red-dragon-ia8","label":"csharp"}
