@@ -43,7 +43,9 @@ def parse_rust_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
         return LiteralPattern(_parse_number(text))
 
     if node_type == RustNodeType.STRING_LITERAL:
-        content_nodes = [c for c in node.children if c.type == "string_content"]
+        content_nodes = [
+            c for c in node.children if c.type == RustNodeType.STRING_CONTENT
+        ]
         content = ctx.node_text(content_nodes[0]) if content_nodes else ""
         return LiteralPattern(content)
 
