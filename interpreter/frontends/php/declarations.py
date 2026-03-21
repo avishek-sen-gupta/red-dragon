@@ -677,6 +677,13 @@ def _extract_php_class(node) -> "tuple[str, ClassInfo] | None":
 
     for child in body.children:
         if child.type == PHPNodeType.PROPERTY_DECLARATION:
+            is_static = any(
+                c.type == "static_modifier"
+                or (c.type == "visibility_modifier" and False)
+                or c.text == b"static"
+                for c in child.children
+                if c.type == "static_modifier"
+            )
             for sub in child.children:
                 if sub.type == PHPNodeType.PROPERTY_ELEMENT:
                     var_node = sub.child_by_field_name("name")
@@ -691,10 +698,18 @@ def _extract_php_class(node) -> "tuple[str, ClassInfo] | None":
                         )
                     if var_node is not None:
                         fname = var_node.text.decode().lstrip("$")
-                        has_init = sub.child_by_field_name("default") is not None
-                        fields[fname] = FieldInfo(
-                            name=fname, type_hint="", has_initializer=has_init
-                        )
+                        if is_static:
+                            has_init = sub.child_by_field_name("default") is not None
+                            val = ""
+                            if has_init:
+                                default_node = sub.child_by_field_name("default")
+                                val = default_node.text.decode() if default_node else ""
+                            constants_map[fname] = val
+                        else:
+                            has_init = sub.child_by_field_name("default") is not None
+                            fields[fname] = FieldInfo(
+                                name=fname, type_hint="", has_initializer=has_init
+                            )
         elif child.type == PHPNodeType.METHOD_DECLARATION:
             result = _extract_php_method(child)
             if result is not None:
