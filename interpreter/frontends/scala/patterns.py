@@ -13,6 +13,10 @@ from interpreter.frontends.common.patterns import (
     ValuePattern,
     WildcardPattern,
 )
+from interpreter.frontends.common.pattern_utils import (
+    parse_number,
+    resolve_positional_via_match_args,
+)
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 
@@ -26,7 +30,7 @@ def parse_scala_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
         return WildcardPattern()
 
     if node_type == NT.INTEGER_LITERAL:
-        return LiteralPattern(_parse_number(text))
+        return LiteralPattern(parse_number(text))
 
     if node_type == NT.FLOATING_POINT_LITERAL:
         return LiteralPattern(float(text.replace("_", "")))
@@ -98,7 +102,7 @@ def _parse_case_class_pattern(ctx: TreeSitterEmitContext, node) -> ClassPattern:
         for c in node.children
         if c.is_named and c != type_node
     )
-    return _resolve_positional_via_match_args(ctx, class_name, positional)
+    return resolve_positional_via_match_args(ctx, class_name, positional)
 
 
 def _parse_typed_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
@@ -114,27 +118,3 @@ def _parse_typed_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
     if var_node.type == NT.WILDCARD:
         return class_pat
     return AsPattern(class_pat, ctx.node_text(var_node))
-
-
-def _resolve_positional_via_match_args(
-    ctx: TreeSitterEmitContext, class_name: str, positional: tuple[Pattern, ...]
-) -> ClassPattern:
-    """Convert positional args to keyword args via match_args if available."""
-    class_info = ctx.symbol_table.classes.get(class_name)
-    match_args = list(class_info.match_args) if class_info else []
-    if positional and match_args:
-        keyword = tuple(
-            (match_args[i], pat)
-            for i, pat in enumerate(positional)
-            if i < len(match_args)
-        )
-        return ClassPattern(class_name, positional=(), keyword=keyword)
-    return ClassPattern(class_name, positional=positional, keyword=())
-
-
-def _parse_number(text: str) -> int | float:
-    """Parse numeric literal text to int or float, stripping _ separators."""
-    cleaned = text.replace("_", "")
-    if "." in cleaned:
-        return float(cleaned)
-    return int(cleaned, 0)
