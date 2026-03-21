@@ -1,0 +1,82 @@
+"""Integration tests for Rust structural pattern matching — end-to-end execution."""
+
+from __future__ import annotations
+
+import pytest
+
+from interpreter.constants import Language
+from interpreter.run import run
+from interpreter.typed_value import unwrap_locals
+
+
+def _run_rust(source: str, max_steps: int = 300):
+    """Run a Rust program and return (vm, frame.local_vars)."""
+    vm = run(source, language=Language.RUST, max_steps=max_steps)
+    return vm, unwrap_locals(vm.call_stack[0].local_vars)
+
+
+class TestRustPatternMatchingCapture:
+    def test_capture_binding(self):
+        """match x { n => n + 1 } should bind n and evaluate body."""
+        _, local_vars = _run_rust("""\
+let x = 5;
+let r = match x {
+    n => n + 1,
+};
+""")
+        assert local_vars["r"] == 6
+
+
+class TestRustPatternMatchingOrPattern:
+    def test_or_pattern_regression(self):
+        """match 2 { 1 | 2 => 10, _ => 0 } should produce 10 (regression)."""
+        _, local_vars = _run_rust("""\
+let x = 2;
+let r = match x {
+    1 | 2 => 10,
+    _ => 0,
+};
+""")
+        assert local_vars["r"] == 10
+
+
+class TestRustPatternMatchingSomeDestructuring:
+    @pytest.mark.xfail(
+        reason="Option.__init__ sig/label mismatch — LOAD_INDEX on Option object "
+        "returns symbolic value instead of concrete",
+        strict=True,
+    )
+    def test_some_destructuring(self):
+        """match Some(5) { Some(v) => v, _ => 0 } should produce 5."""
+        _, local_vars = _run_rust("""\
+let opt = Some(5);
+let r = match opt {
+    Some(v) => v,
+    _ => 0,
+};
+""")
+        assert local_vars["r"] == 5
+
+
+class TestRustPatternMatchingGuard:
+    def test_guard_clause_matches(self):
+        """match 5 { n if n > 0 => 1, _ => -1 } should produce 1."""
+        _, local_vars = _run_rust("""\
+let x = 5;
+let r = match x {
+    n if n > 0 => 1,
+    _ => -1,
+};
+""")
+        assert local_vars["r"] == 1
+
+    def test_guard_clause_no_match(self):
+        """match -3 { n if n > 0 => 1, _ => -1 } should produce -1."""
+        _, local_vars = _run_rust("""\
+let x = -3;
+let r = match x {
+    n if n > 0 => 1,
+    _ => -1,
+};
+""")
+        assert local_vars["r"] == -1

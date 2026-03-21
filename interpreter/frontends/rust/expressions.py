@@ -250,108 +250,23 @@ def lower_return_expr(ctx: TreeSitterEmitContext, node) -> str:
     return val_reg
 
 
-def _unwrap_match_pattern(pattern_node) -> list:
-    """Unwrap match_pattern to get inner pattern node(s).
-
-    Returns a list of named children inside the match_pattern wrapper.
-    """
-    return [c for c in pattern_node.children if c.is_named]
-
-
-def _is_or_pattern(inner_node) -> bool:
-    """Check if a pattern node is an or_pattern (A | B | C)."""
-    return inner_node.type == RustNodeType.OR_PATTERN
-
-
-def _flatten_or_alternatives(or_node) -> list:
-    """Recursively flatten nested or_pattern nodes into leaf pattern nodes.
-
-    Tree-sitter may nest or_patterns for 3+ alternatives:
-    `1 | 2 | 3` -> or_pattern(or_pattern(1, 2), 3).
-    This flattens to [1, 2, 3].
-    """
-    named_children = [c for c in or_node.children if c.is_named]
-    result = []
-    for child in named_children:
-        if _is_or_pattern(child):
-            result.extend(_flatten_or_alternatives(child))
-        else:
-            result.append(child)
-    return result
-
-
-def _lower_or_pattern_condition(
-    ctx: TreeSitterEmitContext, or_node, val_reg: str, arm
-) -> str:
-    """Lower an or_pattern into a combined condition: (val == a) || (val == b) || ...
-
-    Generates == comparisons for each alternative and folds them with ||.
-    Handles nested or_patterns by flattening first.
-    """
-    alternatives = _flatten_or_alternatives(or_node)
-    comparison_regs = [
-        _lower_single_comparison(ctx, alt, val_reg, arm) for alt in alternatives
-    ]
-    return _fold_or(ctx, comparison_regs, arm)
-
-
-def _lower_single_comparison(
-    ctx: TreeSitterEmitContext, pattern_node, val_reg: str, arm
-) -> str:
-    """Lower a single pattern == val_reg comparison."""
-    pattern_reg = ctx.lower_expr(pattern_node)
-    cond_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=cond_reg,
-        operands=["==", val_reg, pattern_reg],
-        node=arm,
-    )
-    return cond_reg
-
-
-def _fold_or(ctx: TreeSitterEmitContext, regs: list[str], arm) -> str:
-    """Fold a list of boolean registers with || (left-associative)."""
-    from functools import reduce
-
-    def combine(left: str, right: str) -> str:
-        result = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.BINOP,
-            result_reg=result,
-            operands=["||", left, right],
-            node=arm,
-        )
-        return result
-
-    return reduce(combine, regs)
-
-
-def _lower_arm_condition(
-    ctx: TreeSitterEmitContext, arm_pattern, val_reg: str, arm
-) -> str:
-    """Lower a match arm pattern into a condition register.
-
-    Handles or_pattern (A | B) by generating combined || conditions,
-    and plain patterns by generating a single == comparison.
-    """
-    inner_nodes = _unwrap_match_pattern(arm_pattern)
-    inner_node = inner_nodes[0] if inner_nodes else arm_pattern
-
-    if _is_or_pattern(inner_node):
-        return _lower_or_pattern_condition(ctx, inner_node, val_reg, arm)
-    return _lower_single_comparison(ctx, inner_node, val_reg, arm)
-
-
 def lower_match_expr(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower match expression as if/else chain returning last arm value."""
+    """Lower Rust match expression using Pattern ADT."""
+    from interpreter.frontends.common.patterns import (
+        CapturePattern,
+        WildcardPattern,
+        compile_pattern_bindings,
+        compile_pattern_test,
+        _needs_pre_guard_bindings,
+    )
+    from interpreter.frontends.rust.patterns import parse_rust_pattern
+
     value_node = node.child_by_field_name("value")
     body_node = node.child_by_field_name("body")
+    subject_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
 
-    val_reg = ctx.lower_expr(value_node) if value_node else ctx.fresh_reg()
     result_var = f"__match_result_{ctx.label_counter}"
     end_label = ctx.fresh_label("match_end")
-
     arms = (
         [c for c in body_node.children if c.type == RustNodeType.MATCH_ARM]
         if body_node
@@ -359,52 +274,101 @@ def lower_match_expr(ctx: TreeSitterEmitContext, node) -> str:
     )
 
     for arm in arms:
-        arm_pattern = next(
-            (c for c in arm.children if c.type == RustNodeType.MATCH_PATTERN), None
-        )
-        arm_body_children = [
-            c
-            for c in arm.children
-            if c.type
-            not in (
-                RustNodeType.MATCH_PATTERN,
-                RustNodeType.FAT_ARROW,
-                RustNodeType.COMMA,
-                RustNodeType.FAT_ARROW_ALIAS,
-            )
-            and c.is_named
-        ]
-        arm_label = ctx.fresh_label("match_arm")
-        next_label = ctx.fresh_label("match_next")
-
-        if arm_pattern:
-            cond_reg = _lower_arm_condition(ctx, arm_pattern, val_reg, arm)
-            ctx.emit(
-                Opcode.BRANCH_IF,
-                operands=[cond_reg],
-                label=f"{arm_label},{next_label}",
-            )
-        else:
-            ctx.emit(Opcode.BRANCH, label=arm_label)
-
-        ctx.emit(Opcode.LABEL, label=arm_label)
-        arm_result = ctx.fresh_reg()
-        if arm_body_children:
-            arm_result = ctx.lower_expr(arm_body_children[0])
-        else:
-            ctx.emit(
-                Opcode.CONST,
-                result_reg=arm_result,
-                operands=[ctx.constants.none_literal],
-            )
-        ctx.emit(Opcode.DECL_VAR, operands=[result_var, arm_result])
-        ctx.emit(Opcode.BRANCH, label=end_label)
-        ctx.emit(Opcode.LABEL, label=next_label)
+        _lower_match_arm(ctx, arm, subject_reg, result_var, end_label)
 
     ctx.emit(Opcode.LABEL, label=end_label)
     reg = ctx.fresh_reg()
     ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[result_var])
     return reg
+
+
+def _lower_match_arm(
+    ctx: TreeSitterEmitContext, arm, subject_reg: str, result_var: str, end_label: str
+) -> None:
+    """Lower a single match arm: test pattern, bind, evaluate body, store result."""
+    from interpreter.frontends.common.patterns import (
+        CapturePattern,
+        WildcardPattern,
+        compile_pattern_bindings,
+        compile_pattern_test,
+        _needs_pre_guard_bindings,
+    )
+    from interpreter.frontends.rust.patterns import parse_rust_pattern
+
+    match_pattern_node = next(
+        c for c in arm.children if c.type == RustNodeType.MATCH_PATTERN
+    )
+
+    # Guard lives INSIDE match_pattern (after anonymous 'if' token), NOT a sibling.
+    # Named children: [pattern_node] or [pattern_node, guard_expr].
+    # Wildcard '_' is anonymous, so named_children may be empty.
+    named_children = [c for c in match_pattern_node.children if c.is_named]
+    # For wildcard: no named children — pass the match_pattern node itself
+    pattern_node = named_children[0] if named_children else match_pattern_node
+    guard_node = named_children[1] if len(named_children) > 1 else None
+
+    pattern = parse_rust_pattern(ctx, pattern_node)
+    body_expr = _extract_arm_body(arm)
+
+    is_irrefutable = (
+        isinstance(pattern, (WildcardPattern, CapturePattern)) and guard_node is None
+    )
+
+    if is_irrefutable:
+        compile_pattern_bindings(ctx, subject_reg, pattern)
+        body_reg = ctx.lower_expr(body_expr)
+        ctx.emit(Opcode.DECL_VAR, operands=[result_var, body_reg])
+        ctx.emit(Opcode.BRANCH, label=end_label)
+        return
+
+    test_reg = compile_pattern_test(ctx, subject_reg, pattern)
+
+    if guard_node:
+        # Pre-bind for guard evaluation if pattern introduces variables
+        if _needs_pre_guard_bindings(pattern):
+            compile_pattern_bindings(ctx, subject_reg, pattern)
+        guard_reg = ctx.lower_expr(guard_node)
+        final_test = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.BINOP,
+            result_reg=final_test,
+            operands=["&&", test_reg, guard_reg],
+        )
+        test_reg = final_test
+
+    arm_label = ctx.fresh_label("match_arm")
+    next_label = ctx.fresh_label("match_next")
+    ctx.emit(
+        Opcode.BRANCH_IF,
+        operands=[test_reg],
+        label=f"{arm_label},{next_label}",
+    )
+    ctx.emit(Opcode.LABEL, label=arm_label)
+
+    # Only emit bindings if not already emitted pre-guard
+    if not (guard_node and _needs_pre_guard_bindings(pattern)):
+        compile_pattern_bindings(ctx, subject_reg, pattern)
+
+    body_reg = ctx.lower_expr(body_expr)
+    ctx.emit(Opcode.DECL_VAR, operands=[result_var, body_reg])
+    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit(Opcode.LABEL, label=next_label)
+
+
+def _extract_arm_body(arm):
+    """Extract the body expression node from a match_arm."""
+    return [
+        c
+        for c in arm.children
+        if c.type
+        not in (
+            RustNodeType.MATCH_PATTERN,
+            RustNodeType.FAT_ARROW,
+            RustNodeType.COMMA,
+            RustNodeType.FAT_ARROW_ALIAS,
+        )
+        and c.is_named
+    ][0]
 
 
 def lower_block_expr(ctx: TreeSitterEmitContext, node) -> str:
