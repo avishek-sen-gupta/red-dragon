@@ -54,3 +54,46 @@ val r = when(x) {
 """
         local_vars = _run_kotlin(source)
         assert local_vars["r"] == 20
+
+    def test_three_literal_arms_selects_third(self):
+        """when(x) with three arms should return 30 when x == 3."""
+        source = """\
+val x = 3
+val r = when(x) {
+    1 -> 10
+    2 -> 20
+    3 -> 30
+    else -> 0
+}
+"""
+        local_vars = _run_kotlin(source)
+        assert local_vars["r"] == 30
+
+
+class TestKotlinWhenIsTypeMatch:
+    """when expression using is Type checks."""
+
+    def test_is_int_matches_integer_value(self):
+        """when(x) { is Int -> 1; is String -> 2; else -> 0 } should return 1 when x is an Int."""
+        source = """\
+val x: Any = 42
+val r = when(x) {
+    is Int -> 1
+    is String -> 2
+    else -> 0
+}
+"""
+        local_vars = _run_kotlin(source)
+        assert local_vars["r"] == 1
+
+    def test_is_int_no_match_falls_to_else(self):
+        """when(x) { is Int -> 1; else -> 0 } should return 0 when x is a String."""
+        source = """\
+val x: Any = "hello"
+val r = when(x) {
+    is Int -> 1
+    else -> 0
+}
+"""
+        local_vars = _run_kotlin(source)
+        assert local_vars["r"] == 0
