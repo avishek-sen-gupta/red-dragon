@@ -4,7 +4,10 @@ from interpreter.cfg import build_cfg
 from interpreter.executor import (
     _handle_resume_continuation,
     _handle_set_continuation,
+    _default_handler_context,
 )
+
+_CTX = _default_handler_context()
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.vm import VMState, apply_update
 from interpreter.vm_types import StackFrame, StateUpdate
@@ -23,7 +26,7 @@ class TestHandleSetContinuation:
             operands=["para_WORK_end", "perform_return_0"],
         )
         vm = _make_vm()
-        result = _handle_set_continuation(inst, vm)
+        result = _handle_set_continuation(inst, vm, _CTX)
 
         assert result.handled
         assert result.update.continuation_writes == {
@@ -38,7 +41,7 @@ class TestHandleSetContinuation:
             opcode=Opcode.SET_CONTINUATION,
             operands=["para_X_end", "return_A"],
         )
-        result1 = _handle_set_continuation(inst1, vm)
+        result1 = _handle_set_continuation(inst1, vm, _CTX)
         apply_update(vm, result1.update)
         assert vm.continuations["para_X_end"] == "return_A"
 
@@ -46,7 +49,7 @@ class TestHandleSetContinuation:
             opcode=Opcode.SET_CONTINUATION,
             operands=["para_X_end", "return_B"],
         )
-        result2 = _handle_set_continuation(inst2, vm)
+        result2 = _handle_set_continuation(inst2, vm, _CTX)
         apply_update(vm, result2.update)
         assert vm.continuations["para_X_end"] == "return_B"
 
@@ -60,7 +63,7 @@ class TestHandleResumeContinuation:
             opcode=Opcode.RESUME_CONTINUATION,
             operands=["para_WORK_end"],
         )
-        result = _handle_resume_continuation(inst, vm)
+        result = _handle_resume_continuation(inst, vm, _CTX)
 
         assert result.handled
         assert result.update.next_label == "perform_return_0"
@@ -73,7 +76,7 @@ class TestHandleResumeContinuation:
             opcode=Opcode.RESUME_CONTINUATION,
             operands=["para_WORK_end"],
         )
-        result = _handle_resume_continuation(inst, vm)
+        result = _handle_resume_continuation(inst, vm, _CTX)
 
         assert result.handled
         assert result.update.next_label is None

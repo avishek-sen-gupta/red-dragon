@@ -10,7 +10,7 @@ from interpreter.vm import VMState, apply_update
 from interpreter.vm_types import HeapObject, StackFrame, StateUpdate, StackFramePush
 from interpreter.type_expr import UNKNOWN
 from interpreter.field_fallback import ImplicitThisFieldFallback
-from interpreter.executor import LocalExecutor
+from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
 
@@ -22,9 +22,12 @@ def _make_vm() -> VMState:
 
 
 def _execute(vm, inst, **kwargs):
-    result = LocalExecutor.execute(
-        inst=inst, vm=vm, cfg=CFG(), registry=FunctionRegistry(), **kwargs
-    )
+    from dataclasses import replace
+
+    ctx = _default_handler_context()
+    if kwargs:
+        ctx = replace(ctx, **kwargs)
+    result = LocalExecutor.execute(inst=inst, vm=vm, ctx=ctx)
     assert result.handled
     apply_update(vm, result.update)
     return result

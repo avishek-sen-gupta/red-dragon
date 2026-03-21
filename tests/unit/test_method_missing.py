@@ -8,7 +8,7 @@ a symbolic value.
 from interpreter.cfg import CFG
 from interpreter.cfg_types import BasicBlock
 from interpreter.constants import BOXED_FIELD, METHOD_MISSING
-from interpreter.executor import LocalExecutor
+from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context
 from interpreter.func_ref import BoundFuncRef, FuncRef
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import FunctionRegistry
@@ -16,6 +16,13 @@ from interpreter.typed_value import TypedValue, typed, typed_from_runtime, unwra
 from interpreter.type_expr import UNKNOWN, scalar
 from interpreter.vm import HeapObject, VMState
 from interpreter.vm_types import StackFrame, StateUpdate, SymbolicValue
+
+
+from dataclasses import replace as _replace
+
+
+def _ctx(**overrides) -> HandlerContext:
+    return _replace(_default_handler_context(), **overrides)
 
 
 def _make_vm_with_method_missing(
@@ -91,8 +98,7 @@ class TestMethodMissingLoadField:
         result = LocalExecutor.execute(
             inst=inst,
             vm=vm,
-            cfg=cfg,
-            registry=registry,
+            ctx=_ctx(cfg=cfg, registry=registry),
         )
 
         assert result.handled
@@ -113,8 +119,7 @@ class TestMethodMissingLoadField:
         result = LocalExecutor.execute(
             inst=inst,
             vm=vm,
-            cfg=cfg,
-            registry=registry,
+            ctx=_ctx(cfg=cfg, registry=registry),
         )
 
         assert result.handled
@@ -141,8 +146,7 @@ class TestMethodMissingLoadField:
         result = LocalExecutor.execute(
             inst=inst,
             vm=vm,
-            cfg=CFG(),
-            registry=FunctionRegistry(),
+            ctx=_default_handler_context(),
         )
 
         assert result.handled
@@ -188,8 +192,7 @@ class TestFindMethodMissingRegistryPath:
         result = LocalExecutor.execute(
             inst=inst,
             vm=vm,
-            cfg=cfg,
-            registry=registry,
+            ctx=_ctx(cfg=cfg, registry=registry),
         )
 
         assert result.handled
@@ -240,8 +243,7 @@ class TestFindMethodMissingRegistryPath:
         result = LocalExecutor.execute(
             inst=inst,
             vm=vm,
-            cfg=cfg,
-            registry=registry,
+            ctx=_ctx(cfg=cfg, registry=registry),
         )
 
         assert result.handled
@@ -277,8 +279,7 @@ class TestMethodMissingCallMethod:
         result = LocalExecutor.execute(
             inst=inst,
             vm=vm,
-            cfg=cfg,
-            registry=registry,
+            ctx=_ctx(cfg=cfg, registry=registry),
         )
 
         assert result.handled
@@ -302,8 +303,7 @@ class TestMethodMissingCallMethod:
         result = LocalExecutor.execute(
             inst=inst,
             vm=vm,
-            cfg=cfg,
-            registry=registry,
+            ctx=_ctx(cfg=cfg, registry=registry),
         )
 
         assert result.handled
@@ -336,8 +336,7 @@ class TestMethodMissingCallMethod:
         result = LocalExecutor.execute(
             inst=inst,
             vm=vm,
-            cfg=cfg,
-            registry=registry,
+            ctx=_ctx(cfg=cfg, registry=registry),
         )
 
         assert result.handled
