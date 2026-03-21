@@ -58,6 +58,44 @@ let r = match opt {
         assert local_vars["r"] == 5
 
 
+class TestRustIfLet:
+    def test_if_let_capture_match(self):
+        """if let n = x { n + 1 } else { 0 } should bind n and evaluate body."""
+        _, local_vars = _run_rust("""\
+let x = 42;
+let result = if let n = x { n + 1 } else { 0 };
+""")
+        assert local_vars["result"] == 43
+
+    def test_if_let_capture_no_else(self):
+        """if let n = x { n + 1 } with no else branch — result is n+1."""
+        _, local_vars = _run_rust("""\
+let x = 7;
+let result = if let n = x { n * 2 } else { 0 };
+""")
+        assert local_vars["result"] == 14
+
+    @pytest.mark.xfail(
+        reason="Option LOAD_INDEX on Option object returns symbolic value — red-dragon-jpgb",
+        strict=True,
+    )
+    def test_if_let_some_match(self):
+        """if let Some(v) = Some(5) should bind v to 5."""
+        _, local_vars = _run_rust("""\
+let opt = Some(5);
+let result = if let Some(v) = opt { v } else { 0 };
+""")
+        assert local_vars["result"] == 5
+
+    def test_if_let_no_match(self):
+        """if let Some(v) = expr where expr is not Some should take else branch."""
+        _, local_vars = _run_rust("""\
+let x = 42;
+let result = if let Some(v) = x { v } else { -1 };
+""")
+        assert local_vars["result"] == -1
+
+
 class TestRustPatternMatchingGuard:
     def test_guard_clause_matches(self):
         """match 5 { n if n > 0 => 1, _ => -1 } should produce 1."""
