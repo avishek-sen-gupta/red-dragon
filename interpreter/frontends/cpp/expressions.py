@@ -103,6 +103,74 @@ def lower_qualified_id(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
+def _extract_scoped_parts(node) -> tuple[str, str] | None:
+    """Extract (namespace, member) from a qualified_identifier/scoped_identifier node.
+
+    Returns None if the node is not a recognizable Class::method pattern.
+    """
+    ns_node = next(
+        (c for c in node.children if c.type == CppNodeType.NAMESPACE_IDENTIFIER),
+        None,
+    )
+    member_node = next(
+        (c for c in node.children if c.type == CppNodeType.IDENTIFIER),
+        None,
+    )
+    if ns_node is None or member_node is None:
+        return None
+    return ns_node.text.decode("utf-8"), member_node.text.decode("utf-8")
+
+
+def lower_cpp_call(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower call_expression, promoting Class::method(args) to CALL_METHOD.
+
+    For ``Util::square(5)``, tree-sitter produces::
+
+        call_expression
+          qualified_identifier
+            namespace_identifier  ← "Util"
+            identifier            ← "square"
+          argument_list
+
+    We emit ``LOAD_VAR Util`` + ``CALL_METHOD %obj method args``, exactly as
+    Java/C# do for ``MathUtil.square(5)``.  All other calls fall through to the
+    common ``lower_call`` implementation.
+    """
+    from interpreter.frontends.common.expressions import (
+        lower_call_impl,
+        extract_call_args,
+    )
+
+    func_node = node.child_by_field_name(ctx.constants.call_function_field)
+    args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
+
+    if func_node and func_node.type in (
+        CppNodeType.QUALIFIED_IDENTIFIER,
+        CppNodeType.SCOPED_IDENTIFIER,
+    ):
+        parts = _extract_scoped_parts(func_node)
+        if parts is not None:
+            class_name, method_name = parts
+            obj_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.LOAD_VAR,
+                result_reg=obj_reg,
+                operands=[class_name],
+                node=func_node,
+            )
+            arg_regs = extract_call_args(ctx, args_node)
+            result_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.CALL_METHOD,
+                result_reg=result_reg,
+                operands=[obj_reg, method_name] + arg_regs,
+                node=node,
+            )
+            return result_reg
+
+    return lower_call_impl(ctx, func_node, args_node, node)
+
+
 def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower throw as an expression (C++ throw can appear in expressions)."""
     children = [
