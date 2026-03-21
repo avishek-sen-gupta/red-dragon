@@ -358,7 +358,8 @@ def lower_cpp_method(ctx: TreeSitterEmitContext, node) -> None:
     ctx.seed_func_return_type(func_label, return_hint)
     ctx.reset_method_scope()
 
-    _emit_this_param(ctx)
+    if not _is_cpp_static(node):
+        _emit_this_param(ctx)
 
     if params_node:
         lower_c_params(ctx, params_node)

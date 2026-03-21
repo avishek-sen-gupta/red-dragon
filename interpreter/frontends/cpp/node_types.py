@@ -6,12 +6,16 @@ class CppNodeType:
 
     # Identifiers and names
     IDENTIFIER = "identifier"
+    NAMESPACE_IDENTIFIER = "namespace_identifier"
     TYPE_IDENTIFIER = "type_identifier"
     FIELD_IDENTIFIER = "field_identifier"
     QUALIFIED_IDENTIFIER = "qualified_identifier"
     SCOPED_IDENTIFIER = "scoped_identifier"
     SCOPE_RESOLUTION = "scope_resolution"
     THIS = "this"
+
+    # Expressions (call)
+    CALL_EXPRESSION = "call_expression"
 
     # Literals
     NULLPTR = "nullptr"
