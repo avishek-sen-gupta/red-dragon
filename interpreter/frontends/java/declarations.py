@@ -590,3 +590,164 @@ def lower_annotation_type_decl(ctx: TreeSitterEmitContext, node) -> None:
             ctx.emit(Opcode.CONST, result_reg=val_reg, operands=[str(i)])
             ctx.emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
     ctx.emit(Opcode.DECL_VAR, operands=[annot_name, obj_reg])
+
+
+# ---------------------------------------------------------------------------
+# Symbol extraction (Phase 2)
+# ---------------------------------------------------------------------------
+from interpreter.frontends.symbol_table import (
+    ClassInfo,
+    FieldInfo,
+    FunctionInfo,
+    SymbolTable,
+)
+
+
+def _is_java_static(node) -> bool:
+    """Return True if the node has a modifiers child containing 'static'."""
+    modifiers = next(
+        (c for c in node.children if c.type == JavaNodeType.MODIFIERS),
+        None,
+    )
+    if modifiers is None:
+        return False
+    return any(c.type == JavaNodeType.STATIC for c in modifiers.children)
+
+
+def _extract_java_field_type(node) -> str:
+    """Extract type hint text from a Java field_declaration node."""
+    type_child = next(
+        (
+            c
+            for c in node.children
+            if c.type
+            not in (";", ",", JavaNodeType.MODIFIERS, JavaNodeType.VARIABLE_DECLARATOR)
+            and c.is_named
+        ),
+        None,
+    )
+    return type_child.text.decode() if type_child else ""
+
+
+def _extract_java_field(node) -> tuple[str, FieldInfo] | None:
+    """Extract a FieldInfo from a Java field_declaration node."""
+    declarator = next(
+        (c for c in node.children if c.type == JavaNodeType.VARIABLE_DECLARATOR),
+        None,
+    )
+    if declarator is None:
+        return None
+    name_node = declarator.child_by_field_name("name")
+    if name_node is None:
+        return None
+    name = name_node.text.decode()
+    type_hint = _extract_java_field_type(node)
+    value_node = declarator.child_by_field_name("value")
+    has_initializer = value_node is not None
+    return name, FieldInfo(
+        name=name, type_hint=type_hint, has_initializer=has_initializer
+    )
+
+
+def _extract_java_method(node) -> tuple[str, FunctionInfo] | None:
+    """Extract a FunctionInfo from a Java method_declaration node."""
+    name_node = node.child_by_field_name("name")
+    if name_node is None:
+        return None
+    name = name_node.text.decode()
+    params_node = node.child_by_field_name("parameters")
+    params = (
+        tuple(
+            p.child_by_field_name("name").text.decode()
+            for p in params_node.children
+            if p.type == JavaNodeType.FORMAL_PARAMETER
+            and p.child_by_field_name("name") is not None
+        )
+        if params_node is not None
+        else ()
+    )
+    type_node = node.child_by_field_name("type")
+    return_type = type_node.text.decode() if type_node else ""
+    return name, FunctionInfo(name=name, params=params, return_type=return_type)
+
+
+def _extract_java_parents(node) -> tuple[str, ...]:
+    """Extract parent class name from a Java class_declaration's superclass node."""
+    superclass = next(
+        (c for c in node.children if c.type == JavaNodeType.SUPERCLASS),
+        None,
+    )
+    if superclass is None:
+        return ()
+    type_id = next(
+        (c for c in superclass.children if c.type == JavaNodeType.TYPE_IDENTIFIER),
+        None,
+    )
+    if type_id is None:
+        return ()
+    return (type_id.text.decode(),)
+
+
+def _extract_java_class(node) -> tuple[str, ClassInfo] | None:
+    """Extract a ClassInfo from a Java class_declaration node."""
+    name_node = node.child_by_field_name("name")
+    if name_node is None:
+        return None
+    class_name = name_node.text.decode()
+    parents = _extract_java_parents(node)
+
+    body = next(
+        (c for c in node.children if c.type == "class_body"),
+        None,
+    )
+    if body is None:
+        return class_name, ClassInfo(
+            name=class_name, fields={}, methods={}, constants={}, parents=parents
+        )
+
+    fields: dict[str, FieldInfo] = {}
+    constants_map: dict[str, str] = {}
+    methods: dict[str, FunctionInfo] = {}
+
+    for child in body.children:
+        if child.type == JavaNodeType.FIELD_DECLARATION:
+            result = _extract_java_field(child)
+            if result is None:
+                continue
+            fname, finfo = result
+            if _is_java_static(child):
+                constants_map[fname] = finfo.type_hint
+            else:
+                fields[fname] = finfo
+        elif child.type == JavaNodeType.METHOD_DECLARATION:
+            result = _extract_java_method(child)
+            if result is None:
+                continue
+            mname, minfo = result
+            methods[mname] = minfo
+
+    return class_name, ClassInfo(
+        name=class_name,
+        fields=fields,
+        methods=methods,
+        constants=constants_map,
+        parents=parents,
+    )
+
+
+def _collect_java_classes(node, accumulator: dict[str, ClassInfo]) -> None:
+    """Recursively walk the AST and collect all class_declaration nodes."""
+    if node.type == JavaNodeType.CLASS_DECLARATION:
+        result = _extract_java_class(node)
+        if result is not None:
+            class_name, class_info = result
+            accumulator[class_name] = class_info
+    for child in node.children:
+        _collect_java_classes(child, accumulator)
+
+
+def extract_java_symbols(root) -> SymbolTable:
+    """Walk the Java AST and return a SymbolTable of all class definitions."""
+    classes: dict[str, ClassInfo] = {}
+    _collect_java_classes(root, classes)
+    return SymbolTable(classes=classes)
