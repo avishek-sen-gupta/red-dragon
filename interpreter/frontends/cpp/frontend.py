@@ -107,3 +107,9 @@ class CppFrontend(CFrontend):
             }
         )
         return dispatch
+
+    def _extract_symbols(self, root) -> "SymbolTable":
+        from interpreter.frontends.cpp.declarations import extract_cpp_symbols
+        from interpreter.frontends.symbol_table import SymbolTable
+
+        return extract_cpp_symbols(root)
