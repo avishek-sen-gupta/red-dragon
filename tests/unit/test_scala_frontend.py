@@ -1270,3 +1270,44 @@ class TestScalaGenericFunctionParams:
             if inst.operands and str(inst.operands[0]).startswith("param:")
         ]
         assert "x" in param_names, f"Expected param:x, got: {param_names}"
+
+
+class TestScalaEnumDefinition:
+    def test_simple_enum_emits_new_object_and_store_fields(self):
+        """enum Color { case Red, Green, Blue } should emit NEW_OBJECT + STORE_FIELD per variant."""
+        ir = _parse_scala("""\
+enum Color {
+  case Red, Green, Blue
+}
+""")
+        new_objs = _find_all(ir, Opcode.NEW_OBJECT)
+        assert any(
+            "enum:Color" in [str(o) for o in inst.operands] for inst in new_objs
+        ), f"Expected NEW_OBJECT with enum:Color, got: {new_objs}"
+
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        stored_names = [str(inst.operands[1]) for inst in store_fields]
+        assert "Red" in stored_names
+        assert "Green" in stored_names
+        assert "Blue" in stored_names
+
+    def test_simple_enum_emits_decl_var(self):
+        """enum Color { ... } should emit DECL_VAR Color."""
+        ir = _parse_scala("""\
+enum Color {
+  case Red, Green, Blue
+}
+""")
+        decl_vars = _find_all(ir, Opcode.DECL_VAR)
+        decl_names = [str(inst.operands[0]) for inst in decl_vars]
+        assert "Color" in decl_names
+
+    def test_enum_variant_count_matches(self):
+        """Three variants should produce exactly three STORE_FIELD instructions."""
+        ir = _parse_scala("""\
+enum Color {
+  case Red, Green, Blue
+}
+""")
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        assert len(store_fields) == 3
