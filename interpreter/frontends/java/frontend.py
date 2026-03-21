@@ -129,3 +129,9 @@ class JavaFrontend(BaseFrontend):
             JavaNodeType.RECORD_DECLARATION: java_decl.lower_record_decl,
             JavaNodeType.YIELD_STATEMENT: java_cf.lower_yield_statement,
         }
+
+    def _extract_symbols(self, root) -> "SymbolTable":
+        from interpreter.frontends.java.declarations import extract_java_symbols
+        from interpreter.frontends.symbol_table import SymbolTable
+
+        return extract_java_symbols(root)
