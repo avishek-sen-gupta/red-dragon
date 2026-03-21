@@ -206,6 +206,18 @@ def _lower_cpp_constructor_with_field_inits(
     ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
 
 
+def _collect_cpp_all_field_names(ctx: TreeSitterEmitContext, body_node) -> set[str]:
+    """Collect ALL instance field names from a C++ class body node."""
+    names: set[str] = set()
+    for child in body_node.children:
+        if child.type != CppNodeType.FIELD_DECLARATION:
+            continue
+        for fc in child.children:
+            if fc.type == "field_identifier":
+                names.add(ctx.node_text(fc))
+    return names
+
+
 def lower_class_specifier(ctx: TreeSitterEmitContext, node) -> None:
     """Lower class_specifier (C++ class with field_declaration_list body)."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
@@ -229,6 +241,11 @@ def lower_class_specifier(ctx: TreeSitterEmitContext, node) -> None:
             for init in _collect_cpp_field_init(ctx, child)
         ]
 
+    # Collect ALL instance field names for implicit-this detection in constructors
+    saved_field_names = ctx._class_field_names
+    if body_node:
+        ctx._class_field_names = _collect_cpp_all_field_names(ctx, body_node)
+
     has_constructor = body_node is not None and any(
         _is_cpp_constructor(ctx, child, class_name) for child in body_node.children
     )
@@ -239,6 +256,7 @@ def lower_class_specifier(ctx: TreeSitterEmitContext, node) -> None:
     if not has_constructor and field_inits:
         emit_synthetic_init(ctx, field_inits)
 
+    ctx._class_field_names = saved_field_names
     ctx.emit(Opcode.LABEL, label=end_label)
 
     cls_reg = ctx.fresh_reg()
