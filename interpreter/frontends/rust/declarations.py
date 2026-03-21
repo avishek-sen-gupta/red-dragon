@@ -630,3 +630,120 @@ def _emit_option_class(ctx: TreeSitterEmitContext) -> None:
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
+
+
+# ---------------------------------------------------------------------------
+# Symbol extraction (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+def _extract_rust_struct_fields(field_declaration_list) -> "dict[str, FieldInfo]":
+    """Extract fields from a Rust field_declaration_list node."""
+    from interpreter.frontends.symbol_table import FieldInfo
+
+    fields: dict[str, FieldInfo] = {}
+    for child in field_declaration_list.children:
+        if child.type != "field_declaration":
+            continue
+        name_node = child.child_by_field_name("name")
+        type_node = child.child_by_field_name("type")
+        if name_node is not None:
+            fname = name_node.text.decode()
+            type_hint = type_node.text.decode() if type_node is not None else ""
+            fields[fname] = FieldInfo(
+                name=fname, type_hint=type_hint, has_initializer=False
+            )
+    return fields
+
+
+def _extract_rust_struct(node) -> "tuple[str, ClassInfo] | None":
+    """Extract a ClassInfo from a Rust struct_item node."""
+    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo
+
+    name_node = node.child_by_field_name("name")
+    if name_node is None:
+        return None
+    struct_name = name_node.text.decode()
+
+    field_list = next(
+        (c for c in node.children if c.type == "field_declaration_list"),
+        None,
+    )
+    fields: dict[str, FieldInfo] = (
+        _extract_rust_struct_fields(field_list) if field_list is not None else {}
+    )
+    return struct_name, ClassInfo(
+        name=struct_name, fields=fields, methods={}, constants={}, parents=()
+    )
+
+
+def _collect_rust_structs_and_impls(
+    node,
+    classes: "dict[str, ClassInfo]",
+    functions: "dict[str, FunctionInfo]",
+) -> None:
+    """Walk AST to collect struct definitions and impl blocks (methods)."""
+    from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo
+
+    if node.type == RustNodeType.STRUCT_ITEM:
+        result = _extract_rust_struct(node)
+        if result is not None:
+            sname, sinfo = result
+            classes[sname] = sinfo
+    elif node.type == RustNodeType.IMPL_ITEM:
+        type_node = node.child_by_field_name("type")
+        if type_node is not None:
+            impl_type = type_node.text.decode().split("<")[0]
+            body = node.child_by_field_name("body")
+            if body is not None:
+                for child in body.children:
+                    if child.type == RustNodeType.FUNCTION_ITEM:
+                        fname_node = child.child_by_field_name("name")
+                        params_node = child.child_by_field_name("parameters")
+                        if fname_node is not None:
+                            mname = fname_node.text.decode()
+                            params = (
+                                tuple(
+                                    p.child_by_field_name("pattern").text.decode()
+                                    for p in params_node.children
+                                    if p.type == RustNodeType.PARAMETER
+                                    and p.child_by_field_name("pattern") is not None
+                                )
+                                if params_node is not None
+                                else ()
+                            )
+                            minfo = FunctionInfo(
+                                name=mname, params=params, return_type=""
+                            )
+                            if impl_type in classes:
+                                classes[impl_type].methods[mname] = minfo
+                            else:
+                                functions[mname] = minfo
+    elif node.type == RustNodeType.FUNCTION_ITEM:
+        fname_node = node.child_by_field_name("name")
+        if fname_node is not None:
+            fname = fname_node.text.decode()
+            params_node = node.child_by_field_name("parameters")
+            params = (
+                tuple(
+                    p.child_by_field_name("pattern").text.decode()
+                    for p in params_node.children
+                    if p.type == RustNodeType.PARAMETER
+                    and p.child_by_field_name("pattern") is not None
+                )
+                if params_node is not None
+                else ()
+            )
+            functions[fname] = FunctionInfo(name=fname, params=params, return_type="")
+    for child in node.children:
+        _collect_rust_structs_and_impls(child, classes, functions)
+
+
+def extract_rust_symbols(root) -> "SymbolTable":
+    """Walk the Rust AST and return a SymbolTable of all struct definitions."""
+    from interpreter.frontends.symbol_table import ClassInfo, FunctionInfo, SymbolTable
+
+    classes: dict[str, ClassInfo] = {}
+    functions: dict[str, FunctionInfo] = {}
+    _collect_rust_structs_and_impls(root, classes, functions)
+    return SymbolTable(classes=classes, functions=functions)

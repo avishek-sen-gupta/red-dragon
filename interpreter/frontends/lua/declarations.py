@@ -187,3 +187,17 @@ def lower_lua_return(ctx: TreeSitterEmitContext, node) -> None:
         operands=[val_reg],
         node=node,
     )
+
+
+# ---------------------------------------------------------------------------
+# Symbol extraction (Phase 2)
+# ---------------------------------------------------------------------------
+# Lua uses table-based OOP with no fixed class syntax; extraction is not
+# straightforward without heuristic analysis. Return an empty SymbolTable.
+
+
+def extract_lua_symbols(root) -> "SymbolTable":
+    """Return an empty SymbolTable — Lua table-based OOP has no extractable class syntax."""
+    from interpreter.frontends.symbol_table import SymbolTable
+
+    return SymbolTable.empty()

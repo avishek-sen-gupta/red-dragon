@@ -375,3 +375,135 @@ def lower_class_static_block(ctx: TreeSitterEmitContext, node) -> None:
     for child in node.children:
         if child.is_named and child.type not in (JSN.STATIC,):
             ctx.lower_stmt(child)
+
+
+# ---------------------------------------------------------------------------
+# Symbol extraction (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+def _extract_js_method(node) -> tuple[str, "FunctionInfo"] | None:
+    """Extract a FunctionInfo from a JS method_definition node."""
+    from interpreter.frontends.symbol_table import FunctionInfo
+
+    name_node = node.child_by_field_name("name")
+    if name_node is None:
+        return None
+    name = name_node.text.decode()
+    params_node = node.child_by_field_name("parameters")
+    params = (
+        tuple(p.text.decode() for p in params_node.children if p.type == JSN.IDENTIFIER)
+        if params_node is not None
+        else ()
+    )
+    return name, FunctionInfo(name=name, params=params, return_type="")
+
+
+def _extract_js_self_fields(body) -> "dict[str, FieldInfo]":
+    """Walk a constructor body and collect this.x = ... assignments."""
+    from interpreter.frontends.symbol_table import FieldInfo
+
+    fields: dict[str, FieldInfo] = {}
+    for stmt in body.children:
+        # expression_statement > assignment_expression
+        if stmt.type != JSN.EXPRESSION_STATEMENT:
+            continue
+        assign = next(
+            (c for c in stmt.children if c.type == JSN.ASSIGNMENT_EXPRESSION), None
+        )
+        if assign is None:
+            continue
+        lhs = assign.child_by_field_name("left")
+        if lhs is None or lhs.type != JSN.MEMBER_EXPRESSION:
+            continue
+        obj_node = lhs.child_by_field_name("object")
+        prop_node = lhs.child_by_field_name("property")
+        if obj_node is None or prop_node is None:
+            continue
+        if obj_node.text != b"this":
+            continue
+        field_name = prop_node.text.decode()
+        fields[field_name] = FieldInfo(
+            name=field_name, type_hint="", has_initializer=True
+        )
+    return fields
+
+
+def _extract_js_class(node) -> "tuple[str, ClassInfo] | None":
+    """Extract a ClassInfo from a JS class_declaration or class node."""
+    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
+
+    name_node = node.child_by_field_name("name")
+    if name_node is None:
+        return None
+    class_name = name_node.text.decode()
+
+    heritage = next((c for c in node.children if c.type == JSN.CLASS_HERITAGE), None)
+    parents: tuple[str, ...] = ()
+    if heritage is not None:
+        # JS: identifier directly in class_heritage
+        # TS: extends_clause > identifier
+        direct_ids = [c for c in heritage.children if c.type == JSN.IDENTIFIER]
+        nested_ids = [
+            sub
+            for c in heritage.children
+            if c.type == "extends_clause"
+            for sub in c.children
+            if sub.type == JSN.IDENTIFIER
+        ]
+        parents = tuple(c.text.decode() for c in (direct_ids or nested_ids))
+
+    body = node.child_by_field_name("body")
+    if body is None:
+        return class_name, ClassInfo(
+            name=class_name, fields={}, methods={}, constants={}, parents=parents
+        )
+
+    fields: dict[str, FieldInfo] = {}
+    methods: dict[str, FunctionInfo] = {}
+
+    for child in body.children:
+        if child.type == JSN.METHOD_DEFINITION:
+            result = _extract_js_method(child)
+            if result is None:
+                continue
+            mname, minfo = result
+            methods[mname] = minfo
+            if mname == "constructor":
+                ctor_body = child.child_by_field_name("body")
+                if ctor_body is not None:
+                    fields.update(_extract_js_self_fields(ctor_body))
+        elif child.type == JSN.FIELD_DEFINITION:
+            prop_node = child.child_by_field_name("property")
+            if prop_node is not None:
+                fname = prop_node.text.decode()
+                has_init = child.child_by_field_name("value") is not None
+                fields[fname] = FieldInfo(
+                    name=fname, type_hint="", has_initializer=has_init
+                )
+
+    return class_name, ClassInfo(
+        name=class_name, fields=fields, methods=methods, constants={}, parents=parents
+    )
+
+
+def _collect_js_classes(node, accumulator: "dict[str, ClassInfo]") -> None:
+    """Recursively walk the AST and collect all class nodes."""
+    from interpreter.frontends.symbol_table import ClassInfo
+
+    if node.type in (JSN.CLASS_DECLARATION, JSN.CLASS):
+        result = _extract_js_class(node)
+        if result is not None:
+            class_name, class_info = result
+            accumulator[class_name] = class_info
+    for child in node.children:
+        _collect_js_classes(child, accumulator)
+
+
+def extract_javascript_symbols(root) -> "SymbolTable":
+    """Walk the JS AST and return a SymbolTable of all class definitions."""
+    from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
+
+    classes: dict[str, ClassInfo] = {}
+    _collect_js_classes(root, classes)
+    return SymbolTable(classes=classes)

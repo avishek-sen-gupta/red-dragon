@@ -615,3 +615,124 @@ def lower_php_global_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 operands=[var_name, reg],
                 node=node,
             )
+
+
+# ---------------------------------------------------------------------------
+# Symbol extraction (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+def _extract_php_method(node) -> "tuple[str, FunctionInfo] | None":
+    """Extract a FunctionInfo from a PHP method_declaration node."""
+    from interpreter.frontends.symbol_table import FunctionInfo
+
+    name_node = node.child_by_field_name("name")
+    if name_node is None:
+        return None
+    name = name_node.text.decode()
+    params_node = node.child_by_field_name("parameters")
+    params = (
+        tuple(
+            p.child_by_field_name("name").text.decode().lstrip("$")
+            for p in params_node.children
+            if p.type in (PHPNodeType.SIMPLE_PARAMETER, PHPNodeType.VARIADIC_PARAMETER)
+            and p.child_by_field_name("name") is not None
+        )
+        if params_node is not None
+        else ()
+    )
+    return name, FunctionInfo(name=name, params=params, return_type="")
+
+
+def _extract_php_class(node) -> "tuple[str, ClassInfo] | None":
+    """Extract a ClassInfo from a PHP class_declaration node."""
+    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
+
+    name_node = node.child_by_field_name("name")
+    if name_node is None:
+        return None
+    class_name = name_node.text.decode()
+
+    base_clause = next(
+        (c for c in node.children if c.type == PHPNodeType.BASE_CLAUSE), None
+    )
+    parents: tuple[str, ...] = ()
+    if base_clause is not None:
+        parent_node = next(
+            (c for c in base_clause.children if c.type == PHPNodeType.NAME),
+            None,
+        )
+        if parent_node is not None:
+            parents = (parent_node.text.decode(),)
+
+    body = node.child_by_field_name("body")
+    if body is None:
+        return class_name, ClassInfo(
+            name=class_name, fields={}, methods={}, constants={}, parents=parents
+        )
+
+    fields: dict[str, FieldInfo] = {}
+    methods: dict[str, FunctionInfo] = {}
+    constants_map: dict[str, str] = {}
+
+    for child in body.children:
+        if child.type == PHPNodeType.PROPERTY_DECLARATION:
+            for sub in child.children:
+                if sub.type == PHPNodeType.PROPERTY_ELEMENT:
+                    var_node = sub.child_by_field_name("name")
+                    if var_node is None:
+                        var_node = next(
+                            (
+                                c
+                                for c in sub.children
+                                if c.type == PHPNodeType.VARIABLE_NAME
+                            ),
+                            None,
+                        )
+                    if var_node is not None:
+                        fname = var_node.text.decode().lstrip("$")
+                        has_init = sub.child_by_field_name("default") is not None
+                        fields[fname] = FieldInfo(
+                            name=fname, type_hint="", has_initializer=has_init
+                        )
+        elif child.type == PHPNodeType.METHOD_DECLARATION:
+            result = _extract_php_method(child)
+            if result is not None:
+                mname, minfo = result
+                methods[mname] = minfo
+        elif child.type == PHPNodeType.CONST_DECLARATION:
+            for sub in child.children:
+                if sub.type == PHPNodeType.CONST_ELEMENT:
+                    cname_node = sub.child_by_field_name("name")
+                    if cname_node is not None:
+                        constants_map[cname_node.text.decode()] = ""
+
+    return class_name, ClassInfo(
+        name=class_name,
+        fields=fields,
+        methods=methods,
+        constants=constants_map,
+        parents=parents,
+    )
+
+
+def _collect_php_classes(node, accumulator: "dict[str, ClassInfo]") -> None:
+    """Recursively walk the AST and collect all class_declaration nodes."""
+    from interpreter.frontends.symbol_table import ClassInfo
+
+    if node.type == PHPNodeType.CLASS_DECLARATION:
+        result = _extract_php_class(node)
+        if result is not None:
+            class_name, class_info = result
+            accumulator[class_name] = class_info
+    for child in node.children:
+        _collect_php_classes(child, accumulator)
+
+
+def extract_php_symbols(root) -> "SymbolTable":
+    """Walk the PHP AST and return a SymbolTable of all class definitions."""
+    from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
+
+    classes: dict[str, ClassInfo] = {}
+    _collect_php_classes(root, classes)
+    return SymbolTable(classes=classes)

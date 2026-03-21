@@ -742,3 +742,204 @@ def lower_object_decl(ctx: TreeSitterEmitContext, node) -> None:
         node=node,
     )
     ctx.emit(Opcode.DECL_VAR, operands=[obj_name, inst_reg])
+
+
+# ---------------------------------------------------------------------------
+# Symbol extraction (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+def _extract_kotlin_primary_ctor_fields(primary_ctor) -> "dict[str, FieldInfo]":
+    """Extract val/var params from a Kotlin primary_constructor as fields."""
+    from interpreter.frontends.symbol_table import FieldInfo
+
+    fields: dict[str, FieldInfo] = {}
+    for child in primary_ctor.children:
+        if child.type != KNT.CLASS_PARAMETER:
+            continue
+        # A class_parameter is a val/var param if it has binding_pattern_kind (val/var)
+        has_val_var = any(c.type == KNT.BINDING_PATTERN_KIND for c in child.children)
+        if not has_val_var:
+            continue
+        name_node = next(
+            (c for c in child.children if c.type == KNT.SIMPLE_IDENTIFIER), None
+        )
+        type_node = next(
+            (c for c in child.children if c.type in (KNT.USER_TYPE, KNT.NULLABLE_TYPE)),
+            None,
+        )
+        if name_node is None:
+            continue
+        fname = name_node.text.decode()
+        type_hint = type_node.text.decode() if type_node is not None else ""
+        has_default = any(c.type == "=" for c in child.children)
+        fields[fname] = FieldInfo(
+            name=fname, type_hint=type_hint, has_initializer=has_default
+        )
+    return fields
+
+
+def _extract_kotlin_class(node) -> "tuple[str, ClassInfo] | None":
+    """Extract a ClassInfo from a Kotlin class_declaration node."""
+    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
+
+    # Kotlin class_declaration uses type_identifier for name, not a "name" field
+    name_node = next((c for c in node.children if c.type == KNT.TYPE_IDENTIFIER), None)
+    if name_node is None:
+        return None
+    class_name = name_node.text.decode()
+
+    # Parents from delegation_specifier > constructor_invocation > user_type > type_identifier
+    def _kotlin_delegation_parent_name(ds_node) -> "str | None":
+        for sub in ds_node.children:
+            if sub.type == "constructor_invocation":
+                user_type = next(
+                    (c for c in sub.children if c.type == KNT.USER_TYPE), None
+                )
+                if user_type is not None:
+                    tid = next(
+                        (
+                            c
+                            for c in user_type.children
+                            if c.type == KNT.TYPE_IDENTIFIER
+                        ),
+                        None,
+                    )
+                    if tid is not None:
+                        return tid.text.decode()
+            # direct user_type (interface delegation)
+            if sub.type == KNT.USER_TYPE:
+                tid = next(
+                    (c for c in sub.children if c.type == KNT.TYPE_IDENTIFIER), None
+                )
+                if tid is not None:
+                    return tid.text.decode()
+        return None
+
+    parents = tuple(
+        name
+        for child in node.children
+        if child.type == KNT.DELEGATION_SPECIFIER
+        for name in [_kotlin_delegation_parent_name(child)]
+        if name is not None
+    )
+
+    fields: dict[str, FieldInfo] = {}
+
+    # Extract primary constructor val/var params as fields
+    primary_ctor = next(
+        (c for c in node.children if c.type == KNT.PRIMARY_CONSTRUCTOR), None
+    )
+    if primary_ctor is not None:
+        fields.update(_extract_kotlin_primary_ctor_fields(primary_ctor))
+
+    body = next((c for c in node.children if c.type == KNT.CLASS_BODY), None)
+    if body is None:
+        return class_name, ClassInfo(
+            name=class_name, fields=fields, methods={}, constants={}, parents=parents
+        )
+
+    methods: dict[str, FunctionInfo] = {}
+    constants_map: dict[str, str] = {}
+
+    for child in body.children:
+        if child.type == KNT.PROPERTY_DECLARATION:
+            # property_declaration: binding_pattern_kind variable_declaration [= expr]
+            decl = next(
+                (c for c in child.children if c.type == KNT.VARIABLE_DECLARATION), None
+            )
+            if decl is not None:
+                pname_node = next(
+                    (c for c in decl.children if c.type == KNT.SIMPLE_IDENTIFIER), None
+                )
+                ptype_node = next(
+                    (
+                        c
+                        for c in decl.children
+                        if c.type in (KNT.USER_TYPE, KNT.NULLABLE_TYPE)
+                    ),
+                    None,
+                )
+                if pname_node is not None:
+                    fname = pname_node.text.decode()
+                    type_hint = (
+                        ptype_node.text.decode() if ptype_node is not None else ""
+                    )
+                    has_init = any(
+                        not c.is_named and c.text == b"=" for c in child.children
+                    )
+                    fields[fname] = FieldInfo(
+                        name=fname, type_hint=type_hint, has_initializer=has_init
+                    )
+        elif child.type == KNT.FUNCTION_DECLARATION:
+            mname_node = next(
+                (c for c in child.children if c.type == KNT.SIMPLE_IDENTIFIER), None
+            )
+            params_node = next(
+                (c for c in child.children if c.type == KNT.FUNCTION_VALUE_PARAMETERS),
+                None,
+            )
+            if mname_node is not None:
+                mname = mname_node.text.decode()
+                params = (
+                    tuple(
+                        pname.text.decode()
+                        for p in params_node.children
+                        if p.type == KNT.PARAMETER
+                        for pname in [
+                            next(
+                                (
+                                    c
+                                    for c in p.children
+                                    if c.type == KNT.SIMPLE_IDENTIFIER
+                                ),
+                                None,
+                            )
+                        ]
+                        if pname is not None
+                    )
+                    if params_node is not None
+                    else ()
+                )
+                ret_node = next(
+                    (
+                        c
+                        for c in child.children
+                        if c.type in (KNT.USER_TYPE, KNT.NULLABLE_TYPE)
+                    ),
+                    None,
+                )
+                return_type = ret_node.text.decode() if ret_node is not None else ""
+                methods[mname] = FunctionInfo(
+                    name=mname, params=params, return_type=return_type
+                )
+
+    return class_name, ClassInfo(
+        name=class_name,
+        fields=fields,
+        methods=methods,
+        constants=constants_map,
+        parents=parents,
+    )
+
+
+def _collect_kotlin_classes(node, accumulator: "dict[str, ClassInfo]") -> None:
+    """Recursively walk the AST and collect all class_declaration nodes."""
+    from interpreter.frontends.symbol_table import ClassInfo
+
+    if node.type == KNT.CLASS_DECLARATION:
+        result = _extract_kotlin_class(node)
+        if result is not None:
+            class_name, class_info = result
+            accumulator[class_name] = class_info
+    for child in node.children:
+        _collect_kotlin_classes(child, accumulator)
+
+
+def extract_kotlin_symbols(root) -> "SymbolTable":
+    """Walk the Kotlin AST and return a SymbolTable of all class definitions."""
+    from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
+
+    classes: dict[str, ClassInfo] = {}
+    _collect_kotlin_classes(root, classes)
+    return SymbolTable(classes=classes)

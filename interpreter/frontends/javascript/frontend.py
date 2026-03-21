@@ -104,3 +104,11 @@ class JavaScriptFrontend(BaseFrontend):
             JSN.EXPORT_STATEMENT: js_decl.lower_export_statement,
             JSN.WITH_STATEMENT: js_cf.lower_with_statement,
         }
+
+    def _extract_symbols(self, root) -> "SymbolTable":
+        from interpreter.frontends.javascript.declarations import (
+            extract_javascript_symbols,
+        )
+        from interpreter.frontends.symbol_table import SymbolTable
+
+        return extract_javascript_symbols(root)
