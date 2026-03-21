@@ -676,7 +676,7 @@ def _extract_csharp_method(node) -> tuple[str, FunctionInfo] | None:
     return name, FunctionInfo(name=name, params=params, return_type=return_type)
 
 
-def _extract_csharp_parents(node) -> tuple[str, ...]:
+def _extract_csharp_class_parents(node) -> tuple[str, ...]:
     """Extract parent class/interface names from a C# base_list node."""
     base_list = next((c for c in node.children if c.type == NT.BASE_LIST), None)
     if base_list is None:
@@ -690,7 +690,7 @@ def _extract_csharp_class(node) -> tuple[str, ClassInfo] | None:
     if name_node is None:
         return None
     class_name = name_node.text.decode()
-    parents = _extract_csharp_parents(node)
+    parents = _extract_csharp_class_parents(node)
 
     body = next((c for c in node.children if c.type == "declaration_list"), None)
     if body is None:

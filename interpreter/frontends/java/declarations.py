@@ -671,7 +671,7 @@ def _extract_java_method(node) -> tuple[str, FunctionInfo] | None:
     return name, FunctionInfo(name=name, params=params, return_type=return_type)
 
 
-def _extract_java_parents(node) -> tuple[str, ...]:
+def _extract_java_class_parents(node) -> tuple[str, ...]:
     """Extract parent class name from a Java class_declaration's superclass node."""
     superclass = next(
         (c for c in node.children if c.type == JavaNodeType.SUPERCLASS),
@@ -694,7 +694,7 @@ def _extract_java_class(node) -> tuple[str, ClassInfo] | None:
     if name_node is None:
         return None
     class_name = name_node.text.decode()
-    parents = _extract_java_parents(node)
+    parents = _extract_java_class_parents(node)
 
     body = next(
         (c for c in node.children if c.type == "class_body"),
