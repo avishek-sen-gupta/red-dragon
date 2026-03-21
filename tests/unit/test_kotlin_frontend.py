@@ -821,11 +821,14 @@ class TestKotlinTypeTest:
         symbolics = _find_all(instructions, Opcode.SYMBOLIC)
         assert not any("type_test" in str(inst.operands) for inst in symbolics)
 
-    def test_type_test_const(self):
+    def test_type_test_isinstance_call(self):
+        """is String in subject-when compiles to CALL_FUNCTION isinstance with type name."""
         source = "fun f(x: Any) = when (x) {\n    is String -> 1\n    else -> 0\n}"
         instructions = _parse_kotlin(source)
+        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         consts = _find_all(instructions, Opcode.CONST)
-        assert any("is:String" in str(inst.operands) for inst in consts)
+        assert any("isinstance" in inst.operands for inst in calls)
+        assert any("String" in str(inst.operands) for inst in consts)
 
 
 class TestKotlinLineComment:
