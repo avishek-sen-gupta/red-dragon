@@ -69,6 +69,14 @@ class RubyNodeType:
     # ── Pattern matching ─────────────────────────────────────────────
     PATTERN = "pattern"
     IN = "in"
+    CASE_MATCH = "case_match"
+    IN_CLAUSE = "in_clause"
+    ALTERNATIVE_PATTERN = "alternative_pattern"
+    ARRAY_PATTERN = "array_pattern"
+    HASH_PATTERN = "hash_pattern"
+    KEYWORD_PATTERN = "keyword_pattern"
+    AS_PATTERN = "as_pattern"
+    SPLAT_PARAMETER = "splat_parameter"
 
     # ── Statements ───────────────────────────────────────────────────
     EXPRESSION_STATEMENT = "expression_statement"
