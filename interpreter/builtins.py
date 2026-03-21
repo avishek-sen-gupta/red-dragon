@@ -269,16 +269,42 @@ def _method_to_string(
     return BuiltinResult(value=str(obj.value))
 
 
+_PRIMITIVE_TYPE_MAP: dict[str, type] = {
+    "int": int,
+    "Int": int,
+    "Integer": int,
+    "string": str,
+    "String": str,
+    "float": float,
+    "Float": float,
+    "Double": float,
+    "bool": bool,
+    "Boolean": bool,
+}
+
+
 def _builtin_isinstance(args: list[TypedValue], vm: VMState) -> BuiltinResult:
-    """isinstance(obj, class_name) — check heap object type_hint against class name."""
+    """isinstance(obj, class_name) — check type against class name.
+
+    Works for both heap objects (checks type_hint) and native primitives
+    (checks Python type against _PRIMITIVE_TYPE_MAP).
+    """
     obj_val = args[0].value
     class_name = str(args[1].value)
+    # Try heap object first
     addr = _heap_addr(obj_val)
-    type_hint = vm.heap[addr].type_hint
-    from interpreter.type_expr import ScalarType
+    if addr and addr in vm.heap:
+        from interpreter.type_expr import ScalarType
 
-    matches = isinstance(type_hint, ScalarType) and type_hint.name == class_name
-    return BuiltinResult(value=typed(matches, scalar("Boolean")))
+        type_hint = vm.heap[addr].type_hint
+        matches = isinstance(type_hint, ScalarType) and type_hint.name == class_name
+        return BuiltinResult(value=typed(matches, scalar("Boolean")))
+    # Fall back to primitive type check
+    py_type = _PRIMITIVE_TYPE_MAP.get(class_name)
+    if py_type is not None:
+        matches = isinstance(obj_val, py_type)
+        return BuiltinResult(value=typed(matches, scalar("Boolean")))
+    return BuiltinResult(value=typed(False, scalar("Boolean")))
 
 
 class Builtins:
