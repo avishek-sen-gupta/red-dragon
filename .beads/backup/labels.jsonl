@@ -93,6 +93,9 @@
 {"issue_id":"red-dragon-8rvy","label":"architecture"}
 {"issue_id":"red-dragon-8rvy","label":"symbol-table"}
 {"issue_id":"red-dragon-8s7z","label":"audit-asserts"}
+{"issue_id":"red-dragon-92ho","label":"architecture"}
+{"issue_id":"red-dragon-92ho","label":"refactor"}
+{"issue_id":"red-dragon-92ho","label":"vm"}
 {"issue_id":"red-dragon-93w","label":"frontend"}
 {"issue_id":"red-dragon-93w","label":"pascal"}
 {"issue_id":"red-dragon-96k5","label":"php"}
@@ -170,6 +173,9 @@
 {"issue_id":"red-dragon-fv2p","label":"pattern-matching"}
 {"issue_id":"red-dragon-g5u","label":"builtin"}
 {"issue_id":"red-dragon-g5u","label":"vm"}
+{"issue_id":"red-dragon-g85o","label":"architecture"}
+{"issue_id":"red-dragon-g85o","label":"refactor"}
+{"issue_id":"red-dragon-g85o","label":"vm"}
 {"issue_id":"red-dragon-ggb","label":"typed-value"}
 {"issue_id":"red-dragon-gny","label":"typed-value-migration"}
 {"issue_id":"red-dragon-gsl","label":"cross-language"}
