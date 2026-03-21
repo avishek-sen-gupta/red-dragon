@@ -95,7 +95,7 @@ def lower_declaration(ctx: TreeSitterEmitContext, node) -> None:
             if struct_type:
                 val_reg = ctx.fresh_reg()
                 ctx.emit(
-                    Opcode.CALL_FUNCTION,
+                    Opcode.NEW_OBJECT,
                     result_reg=val_reg,
                     operands=[struct_type],
                     node=node,
@@ -149,12 +149,23 @@ def _lower_init_declarator(
         val_reg = _lower_struct_initializer_list(
             ctx, value_node, struct_type, var_name, node
         )
+    elif value_node and struct_type and value_node.type == "argument_list":
+        # C++ constructor call: Circle c(5) → CALL_FUNCTION Circle(args)
+        # Let the VM's constructor dispatch handle NEW_OBJECT + this injection
+        arg_regs = [ctx.lower_expr(a) for a in value_node.children if a.is_named]
+        val_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.CALL_FUNCTION,
+            result_reg=val_reg,
+            operands=[struct_type] + arg_regs,
+            node=node,
+        )
     elif value_node:
         val_reg = ctx.lower_expr(value_node)
     elif struct_type:
         val_reg = ctx.fresh_reg()
         ctx.emit(
-            Opcode.CALL_FUNCTION,
+            Opcode.NEW_OBJECT,
             result_reg=val_reg,
             operands=[struct_type],
             node=node,
