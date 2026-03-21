@@ -183,7 +183,15 @@ def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
 
 
 def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower switch as if/else chain."""
+    """Lower switch statement with pattern matching."""
+    from interpreter.frontends.common.patterns import (
+        WildcardPattern,
+        CapturePattern,
+        compile_pattern_test,
+        compile_pattern_bindings,
+    )
+    from interpreter.frontends.csharp.patterns import parse_csharp_pattern
+
     value_node = node.child_by_field_name("value")
     body_node = node.child_by_field_name("body")
 
@@ -200,37 +208,50 @@ def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
 
     for section in sections:
         pattern_node = next(
-            (c for c in section.children if c.type == NT.CONSTANT_PATTERN), None
+            (
+                c
+                for c in section.children
+                if c.type
+                in (
+                    NT.CONSTANT_PATTERN,
+                    NT.DECLARATION_PATTERN,
+                    NT.RECURSIVE_PATTERN,
+                )
+            ),
+            None,
+        )
+        is_default = any(
+            not c.is_named and c.text == b"default" for c in section.children
         )
         body_stmts = [
-            c for c in section.children if c.is_named and c.type != NT.CONSTANT_PATTERN
+            c
+            for c in section.children
+            if c.is_named
+            and c.type
+            not in (
+                NT.CONSTANT_PATTERN,
+                NT.DECLARATION_PATTERN,
+                NT.RECURSIVE_PATTERN,
+            )
         ]
 
         arm_label = ctx.fresh_label("case_arm")
         next_label = ctx.fresh_label("case_next")
 
-        if pattern_node:
-            # Extract the literal from constant_pattern
-            inner = next((c for c in pattern_node.children if c.is_named), None)
-            if inner:
-                case_reg = ctx.lower_expr(inner)
-            else:
-                case_reg = ctx.lower_expr(pattern_node)
-            cmp_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.BINOP,
-                result_reg=cmp_reg,
-                operands=["==", subject_reg, case_reg],
-                node=section,
-            )
-            ctx.emit(
-                Opcode.BRANCH_IF,
-                operands=[cmp_reg],
-                label=f"{arm_label},{next_label}",
-            )
-        else:
-            # default case
+        if is_default or pattern_node is None:
             ctx.emit(Opcode.BRANCH, label=arm_label)
+        else:
+            pattern = parse_csharp_pattern(ctx, pattern_node)
+            if isinstance(pattern, (WildcardPattern, CapturePattern)):
+                compile_pattern_bindings(ctx, subject_reg, pattern)
+                ctx.emit(Opcode.BRANCH, label=arm_label)
+            else:
+                test_reg = compile_pattern_test(ctx, subject_reg, pattern)
+                ctx.emit(
+                    Opcode.BRANCH_IF,
+                    operands=[test_reg],
+                    label=f"{arm_label},{next_label}",
+                )
 
         ctx.emit(Opcode.LABEL, label=arm_label)
         for stmt in body_stmts:
@@ -244,10 +265,17 @@ def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
 
 def lower_switch_expr(ctx: TreeSitterEmitContext, node) -> str:
     """Lower C# 8 switch expression: subject switch { pattern => expr, ... }."""
-    # First named child is the subject expression
+    from interpreter.frontends.common.patterns import (
+        WildcardPattern,
+        CapturePattern,
+        compile_pattern_test,
+        compile_pattern_bindings,
+    )
+    from interpreter.frontends.csharp.patterns import parse_csharp_pattern
+
     named_children = [c for c in node.children if c.is_named]
-    subject_node = named_children[0] if named_children else None
-    subject_reg = ctx.lower_expr(subject_node) if subject_node else ctx.fresh_reg()
+    subject_node = named_children[0] if named_children else node
+    subject_reg = ctx.lower_expr(subject_node)
 
     result_var = f"__switch_expr_{ctx.label_counter}"
     end_label = ctx.fresh_label("switch_expr_end")
@@ -261,36 +289,29 @@ def lower_switch_expr(ctx: TreeSitterEmitContext, node) -> str:
         pattern_node = arm_children[0]
         value_node = arm_children[-1]
 
+        pattern = parse_csharp_pattern(ctx, pattern_node)
+
         arm_label = ctx.fresh_label("switch_arm")
         next_label = ctx.fresh_label("switch_arm_next")
 
-        # Discard pattern _ as default
-        is_default = pattern_node.type == NT.DISCARD or (
-            pattern_node.type == NT.IDENTIFIER and ctx.node_text(pattern_node) == "_"
-        )
-
-        if is_default:
-            ctx.emit(Opcode.BRANCH, label=arm_label)
+        if isinstance(pattern, (WildcardPattern, CapturePattern)):
+            compile_pattern_bindings(ctx, subject_reg, pattern)
+            val_reg = ctx.lower_expr(value_node)
+            ctx.emit(Opcode.DECL_VAR, operands=[result_var, val_reg])
+            ctx.emit(Opcode.BRANCH, label=end_label)
         else:
-            pattern_reg = ctx.lower_expr(pattern_node)
-            cmp_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.BINOP,
-                result_reg=cmp_reg,
-                operands=["==", subject_reg, pattern_reg],
-                node=arm,
-            )
+            test_reg = compile_pattern_test(ctx, subject_reg, pattern)
             ctx.emit(
                 Opcode.BRANCH_IF,
-                operands=[cmp_reg],
+                operands=[test_reg],
                 label=f"{arm_label},{next_label}",
             )
-
-        ctx.emit(Opcode.LABEL, label=arm_label)
-        val_reg = ctx.lower_expr(value_node)
-        ctx.emit(Opcode.DECL_VAR, operands=[result_var, val_reg])
-        ctx.emit(Opcode.BRANCH, label=end_label)
-        ctx.emit(Opcode.LABEL, label=next_label)
+            ctx.emit(Opcode.LABEL, label=arm_label)
+            compile_pattern_bindings(ctx, subject_reg, pattern)
+            val_reg = ctx.lower_expr(value_node)
+            ctx.emit(Opcode.DECL_VAR, operands=[result_var, val_reg])
+            ctx.emit(Opcode.BRANCH, label=end_label)
+            ctx.emit(Opcode.LABEL, label=next_label)
 
     ctx.emit(Opcode.LABEL, label=end_label)
     reg = ctx.fresh_reg()
