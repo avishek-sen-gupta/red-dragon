@@ -210,6 +210,33 @@ struct Point {
         load_vars = _find_all(ir, Opcode.LOAD_VAR)
         assert any("this" in inst.operands for inst in load_vars)
 
+    def test_plain_struct_var_decl_emits_new_object(self):
+        """struct Circle c; should emit NEW_OBJECT to create a heap-backed instance."""
+        source = """
+struct Circle { int radius; };
+struct Circle c;
+"""
+        ir = _parse_and_lower(source)
+        new_objects = _find_all(ir, Opcode.NEW_OBJECT)
+        assert len(new_objects) >= 1
+        assert any("Circle" in str(inst.operands) for inst in new_objects)
+
+    def test_struct_field_store_load_emits_correct_opcodes(self):
+        """c.radius = 5; int result = c.radius; should emit STORE_FIELD then LOAD_FIELD."""
+        source = """
+struct Circle { int radius; };
+struct Circle c;
+c.radius = 5;
+int result = c.radius;
+"""
+        ir = _parse_and_lower(source)
+        store_fields = _find_all(ir, Opcode.STORE_FIELD)
+        load_fields = _find_all(ir, Opcode.LOAD_FIELD)
+        radius_stores = [s for s in store_fields if "radius" in s.operands]
+        radius_loads = [l for l in load_fields if "radius" in l.operands]
+        assert len(radius_stores) >= 1
+        assert len(radius_loads) >= 1
+
 
 class TestCFrontendAssignmentExpression:
     def test_assignment_expression(self):
