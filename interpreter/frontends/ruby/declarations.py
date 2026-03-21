@@ -217,3 +217,106 @@ def lower_ruby_module(ctx: TreeSitterEmitContext, node) -> None:
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(module_name, class_label, [], result_reg=cls_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[module_name, cls_reg])
+
+
+# ---------------------------------------------------------------------------
+# Symbol extraction (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+def _extract_ruby_initialize_fields(body) -> "dict[str, FieldInfo]":
+    """Walk initialize body and collect @x = ... instance variable assignments."""
+    from interpreter.frontends.symbol_table import FieldInfo
+
+    fields: dict[str, FieldInfo] = {}
+    for stmt in body.children:
+        # Look for assignment nodes: @var = value
+        if stmt.type != RubyNodeType.ASSIGNMENT:
+            continue
+        lhs = stmt.children[0] if stmt.children else None
+        if lhs is None or lhs.type != RubyNodeType.INSTANCE_VARIABLE:
+            continue
+        field_name = lhs.text.decode().lstrip("@")
+        fields[field_name] = FieldInfo(
+            name=field_name, type_hint="", has_initializer=True
+        )
+    return fields
+
+
+def _extract_ruby_class(node) -> "tuple[str, ClassInfo] | None":
+    """Extract a ClassInfo from a Ruby class node."""
+    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
+
+    name_node = node.child_by_field_name("name")
+    if name_node is None:
+        return None
+    class_name = name_node.text.decode()
+
+    superclass_node = next(
+        (c for c in node.children if c.type == RubyNodeType.SUPERCLASS), None
+    )
+    parents: tuple[str, ...] = ()
+    if superclass_node is not None:
+        parent_name_node = next(
+            (c for c in superclass_node.children if c.type == RubyNodeType.CONSTANT),
+            None,
+        )
+        if parent_name_node is not None:
+            parents = (parent_name_node.text.decode(),)
+
+    body = node.child_by_field_name("body")
+    if body is None:
+        return class_name, ClassInfo(
+            name=class_name, fields={}, methods={}, constants={}, parents=parents
+        )
+
+    fields: dict[str, FieldInfo] = {}
+    methods: dict[str, FunctionInfo] = {}
+
+    for child in body.children:
+        if child.type == RubyNodeType.METHOD:
+            mname_node = child.child_by_field_name("name")
+            if mname_node is None:
+                continue
+            mname = mname_node.text.decode()
+            params_node = child.child_by_field_name("parameters")
+            params = (
+                tuple(
+                    p.text.decode()
+                    for p in params_node.children
+                    if p.type == RubyNodeType.IDENTIFIER
+                )
+                if params_node is not None
+                else ()
+            )
+            methods[mname] = FunctionInfo(name=mname, params=params, return_type="")
+            if mname == "initialize":
+                mbody = child.child_by_field_name("body")
+                if mbody is not None:
+                    fields.update(_extract_ruby_initialize_fields(mbody))
+
+    return class_name, ClassInfo(
+        name=class_name, fields=fields, methods=methods, constants={}, parents=parents
+    )
+
+
+def _collect_ruby_classes(node, accumulator: "dict[str, ClassInfo]") -> None:
+    """Recursively walk the AST and collect all class nodes."""
+    from interpreter.frontends.symbol_table import ClassInfo
+
+    if node.type == RubyNodeType.CLASS:
+        result = _extract_ruby_class(node)
+        if result is not None:
+            class_name, class_info = result
+            accumulator[class_name] = class_info
+    for child in node.children:
+        _collect_ruby_classes(child, accumulator)
+
+
+def extract_ruby_symbols(root) -> "SymbolTable":
+    """Walk the Ruby AST and return a SymbolTable of all class definitions."""
+    from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
+
+    classes: dict[str, ClassInfo] = {}
+    _collect_ruby_classes(root, classes)
+    return SymbolTable(classes=classes)

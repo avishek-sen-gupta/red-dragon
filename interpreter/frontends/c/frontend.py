@@ -129,3 +129,9 @@ class CFrontend(BaseFrontend):
             CNodeType.LINKAGE_SPECIFICATION: c_cf.lower_linkage_spec,
             CNodeType.DECLARATION_LIST: lambda ctx, node: ctx.lower_block(node),
         }
+
+    def _extract_symbols(self, root) -> "SymbolTable":
+        from interpreter.frontends.c.declarations import extract_c_symbols
+        from interpreter.frontends.symbol_table import SymbolTable
+
+        return extract_c_symbols(root)

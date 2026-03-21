@@ -67,3 +67,9 @@ class LuaFrontend(BaseFrontend):
             LuaNodeType.GOTO_STATEMENT: lua_cf.lower_lua_goto,
             LuaNodeType.LABEL_STATEMENT: lua_cf.lower_lua_label,
         }
+
+    def _extract_symbols(self, root) -> "SymbolTable":
+        from interpreter.frontends.lua.declarations import extract_lua_symbols
+        from interpreter.frontends.symbol_table import SymbolTable
+
+        return extract_lua_symbols(root)

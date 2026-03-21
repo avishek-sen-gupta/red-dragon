@@ -133,3 +133,9 @@ class ScalaFrontend(BaseFrontend):
             NT.FUNCTION_DECLARATION: scala_decl.lower_function_declaration,
             NT.VAL_DECLARATION: lambda ctx, node: None,
         }
+
+    def _extract_symbols(self, root) -> "SymbolTable":
+        from interpreter.frontends.scala.declarations import extract_scala_symbols
+        from interpreter.frontends.symbol_table import SymbolTable
+
+        return extract_scala_symbols(root)

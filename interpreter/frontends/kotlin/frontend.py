@@ -116,3 +116,9 @@ class KotlinFrontend(BaseFrontend):
             KNT.SETTER: lambda ctx, node: None,
             KNT.GETTER: lambda ctx, node: None,
         }
+
+    def _extract_symbols(self, root) -> "SymbolTable":
+        from interpreter.frontends.kotlin.declarations import extract_kotlin_symbols
+        from interpreter.frontends.symbol_table import SymbolTable
+
+        return extract_kotlin_symbols(root)

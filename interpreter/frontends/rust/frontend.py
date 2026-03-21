@@ -154,3 +154,9 @@ class RustFrontend(BaseFrontend):
             RustNodeType.UNION_ITEM: rust_decl.lower_struct_def,
             RustNodeType.MACRO_DEFINITION: lambda ctx, node: None,
         }
+
+    def _extract_symbols(self, root) -> "SymbolTable":
+        from interpreter.frontends.rust.declarations import extract_rust_symbols
+        from interpreter.frontends.symbol_table import SymbolTable
+
+        return extract_rust_symbols(root)

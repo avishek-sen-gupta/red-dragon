@@ -95,6 +95,14 @@ class TypeScriptFrontend(JavaScriptFrontend):
         )
         return dispatch
 
+    def _extract_symbols(self, root) -> "SymbolTable":
+        from interpreter.frontends.javascript.declarations import (
+            extract_javascript_symbols,
+        )
+        from interpreter.frontends.symbol_table import SymbolTable
+
+        return extract_javascript_symbols(root)
+
 
 # ── TS-specific expression lowerers (pure functions) ─────────────
 

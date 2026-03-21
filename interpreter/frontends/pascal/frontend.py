@@ -114,3 +114,9 @@ class PascalFrontend(BaseFrontend):
             PascalNodeType.LABEL: pascal_cf.lower_pascal_label,
             PascalNodeType.DECL_LABELS: pascal_cf.lower_pascal_noop,
         }
+
+    def _extract_symbols(self, root) -> "SymbolTable":
+        from interpreter.frontends.pascal.declarations import extract_pascal_symbols
+        from interpreter.frontends.symbol_table import SymbolTable
+
+        return extract_pascal_symbols(root)

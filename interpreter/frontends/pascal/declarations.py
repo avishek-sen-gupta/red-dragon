@@ -828,3 +828,93 @@ def _lower_pascal_enum(
         ctx.emit(Opcode.CONST, result_reg=ord_reg, operands=[i])
         ctx.emit(Opcode.DECL_VAR, operands=[member_name, ord_reg])
     ctx.emit(Opcode.DECL_VAR, operands=[type_name, obj_reg])
+
+
+# ---------------------------------------------------------------------------
+# Symbol extraction (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+def _extract_pascal_class_from_decl_type(node) -> "tuple[str, ClassInfo] | None":
+    """Extract a ClassInfo from a Pascal declType node that contains a declClass."""
+    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo, FunctionInfo
+
+    id_node = next(
+        (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
+    )
+    class_node = next(
+        (c for c in node.children if c.type == PascalNodeType.DECL_CLASS), None
+    )
+    if id_node is None or class_node is None:
+        return None
+
+    class_name = id_node.text.decode()
+
+    # Extract parent from class definition (first type identifier after kClass)
+    parents: tuple[str, ...] = ()
+    found_class_kw = False
+    for child in class_node.children:
+        if child.type == PascalNodeType.K_CLASS:
+            found_class_kw = True
+        elif found_class_kw and child.type in (PascalNodeType.IDENTIFIER, "typeref"):
+            parents = (child.text.decode(),)
+            break
+
+    fields: dict[str, FieldInfo] = {}
+    methods: dict[str, FunctionInfo] = {}
+
+    for section in class_node.children:
+        if section.type != PascalNodeType.DECL_SECTION:
+            continue
+        for child in section.children:
+            if child.type == PascalNodeType.DECL_FIELD:
+                type_node = next(
+                    (c for c in child.children if c.type == PascalNodeType.TYPE),
+                    None,
+                )
+                type_hint = type_node.text.decode() if type_node is not None else ""
+                for sub in child.children:
+                    if sub.type == PascalNodeType.IDENTIFIER:
+                        fname = sub.text.decode()
+                        fields[fname] = FieldInfo(
+                            name=fname, type_hint=type_hint, has_initializer=False
+                        )
+            elif child.type in (PascalNodeType.DECL_PROC, PascalNodeType.DEF_PROC):
+                # Method declaration — extract name from first identifier
+                mname_node = next(
+                    (c for c in child.children if c.type == PascalNodeType.IDENTIFIER),
+                    None,
+                )
+                if mname_node is not None:
+                    mname = mname_node.text.decode()
+                    methods[mname] = FunctionInfo(name=mname, params=(), return_type="")
+
+    return class_name, ClassInfo(
+        name=class_name,
+        fields=fields,
+        methods=methods,
+        constants={},
+        parents=parents,
+    )
+
+
+def _collect_pascal_classes(node, accumulator: "dict[str, ClassInfo]") -> None:
+    """Recursively walk the AST and collect all declType nodes containing declClass."""
+    from interpreter.frontends.symbol_table import ClassInfo
+
+    if node.type == PascalNodeType.DECL_TYPE:
+        result = _extract_pascal_class_from_decl_type(node)
+        if result is not None:
+            class_name, class_info = result
+            accumulator[class_name] = class_info
+    for child in node.children:
+        _collect_pascal_classes(child, accumulator)
+
+
+def extract_pascal_symbols(root) -> "SymbolTable":
+    """Walk the Pascal AST and return a SymbolTable of all class definitions."""
+    from interpreter.frontends.symbol_table import ClassInfo, SymbolTable
+
+    classes: dict[str, ClassInfo] = {}
+    _collect_pascal_classes(root, classes)
+    return SymbolTable(classes=classes)
