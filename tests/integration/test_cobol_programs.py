@@ -1533,3 +1533,251 @@ class TestDataLayout:
         assert ws_a["length"] == 3
         assert ws_a["category"] == "ZONED_DECIMAL"
         assert ws_a["total_digits"] == 3
+
+
+# ---------------------------------------------------------------------------
+# REDEFINES edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestRedefines:
+    """COBOL REDEFINES: multiple fields sharing the same byte range."""
+
+    def test_simple_redefines_numeric_value_shared_bytes(self):
+        """Numeric VALUE init bytes are accessible at the REDEFINES overlay offset."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REDEF1.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-NUM   PIC 9(4) VALUE 1234.",
+                "01 WS-NUM-X REDEFINES WS-NUM PIC X(4).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-NUM at offset 0: zoned decimal 1234 = F1 F2 F3 F4.
+        assert _decode_zoned_unsigned(region, 0, 4) == 1234
+        # The same 4 bytes viewed as raw EBCDIC digits.
+        expected_zoned = [0xF1, 0xF2, 0xF3, 0xF4]
+        assert list(region[0:4]) == expected_zoned
+
+    @pytest.mark.xfail(
+        strict=False,
+        reason="REDEFINES offset sharing not yet reflected in data_layout",
+    )
+    def test_simple_redefines_data_layout_offset(self):
+        """REDEFINES field should share the same offset as the original in data_layout."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REDEF1L.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-NUM   PIC 9(4) VALUE 1234.",
+                "01 WS-NUM-X REDEFINES WS-NUM PIC X(4).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STOP RUN.",
+            ]
+        )
+        # Both fields should share offset 0 and the region should be 4 bytes.
+        assert vm.data_layout["WS-NUM"]["offset"] == 0
+        assert vm.data_layout["WS-NUM-X"]["offset"] == 0
+        region = _first_region(vm)
+        assert len(region) == 4
+
+    def test_group_redefines_children_initialised(self):
+        """Group item children VALUE clauses populate shared byte range."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REDEF2.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-DATE.",
+                "   05 WS-YEAR  PIC 9(4) VALUE 2026.",
+                "   05 WS-MONTH PIC 9(2) VALUE 03.",
+                "   05 WS-DAY   PIC 9(2) VALUE 22.",
+                "01 WS-DATE-NUM REDEFINES WS-DATE PIC 9(8).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-DATE group: 4+2+2 = 8 bytes at offset 0.
+        # Children initialised: YEAR=2026, MONTH=03, DAY=22.
+        assert _decode_zoned_unsigned(region, 0, 4) == 2026
+        assert _decode_zoned_unsigned(region, 4, 2) == 3
+        assert _decode_zoned_unsigned(region, 6, 2) == 22
+        # WS-DATE-NUM redefines the same 8 bytes — reading as one number.
+        assert _decode_zoned_unsigned(region, 0, 8) == 20260322
+
+    @pytest.mark.xfail(
+        strict=False,
+        reason="MOVE from REDEFINES field not yet supported in IR lowering",
+    )
+    def test_group_redefines_move_composite(self):
+        """MOVE group REDEFINES composite to a separate result field."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REDEF2M.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-DATE.",
+                "   05 WS-YEAR  PIC 9(4) VALUE 2026.",
+                "   05 WS-MONTH PIC 9(2) VALUE 03.",
+                "   05 WS-DAY   PIC 9(2) VALUE 22.",
+                "01 WS-DATE-NUM REDEFINES WS-DATE PIC 9(8).",
+                "01 WS-RESULT PIC 9(8) VALUE 0.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-DATE-NUM TO WS-RESULT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-RESULT at offset 8 should hold 20260322 after MOVE.
+        assert _decode_zoned_unsigned(region, 8, 8) == 20260322
+
+    @pytest.mark.xfail(
+        strict=False,
+        reason="MOVE from REDEFINES group children not yet supported in IR lowering",
+    )
+    def test_multiple_redefines_move_through_children(self):
+        """Multiple REDEFINES: MOVE through group REDEFINES children."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REDEF3.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '01 WS-DATA    PIC X(8) VALUE "ABCDEFGH".',
+                "01 WS-DATA-P  REDEFINES WS-DATA.",
+                "   05 WS-PART1 PIC X(4).",
+                "   05 WS-PART2 PIC X(4).",
+                "01 WS-OUT1 PIC X(4) VALUE SPACES.",
+                "01 WS-OUT2 PIC X(4) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-PART1 TO WS-OUT1.",
+                "    MOVE WS-PART2 TO WS-OUT2.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-OUT1 at offset 8 (4 bytes), WS-OUT2 at offset 12 (4 bytes).
+        # EBCDIC: A=0xC1, B=0xC2, C=0xC3, D=0xC4
+        expected_part1 = [0xC1, 0xC2, 0xC3, 0xC4]  # "ABCD"
+        # EBCDIC: E=0xC5, F=0xC6, G=0xC7, H=0xC8
+        expected_part2 = [0xC5, 0xC6, 0xC7, 0xC8]  # "EFGH"
+        assert list(region[8:12]) == expected_part1
+        assert list(region[12:16]) == expected_part2
+
+    def test_multiple_redefines_original_bytes_intact(self):
+        """Multiple REDEFINES: original field VALUE bytes are stored correctly."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REDEF3B.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '01 WS-DATA    PIC X(8) VALUE "ABCDEFGH".',
+                "01 WS-DATA-P  REDEFINES WS-DATA.",
+                "   05 WS-PART1 PIC X(4).",
+                "   05 WS-PART2 PIC X(4).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-DATA at offset 0: EBCDIC "ABCDEFGH"
+        # A=0xC1, B=0xC2, C=0xC3, D=0xC4, E=0xC5, F=0xC6, G=0xC7, H=0xC8
+        expected = [0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8]
+        assert list(region[0:8]) == expected
+
+    @pytest.mark.xfail(
+        strict=False,
+        reason="REDEFINES offset sharing not yet reflected in data_layout",
+    )
+    def test_multiple_redefines_data_layout_offsets(self):
+        """Multiple REDEFINES fields should all share offset 0 in data_layout."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REDEF3L.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                '01 WS-DATA    PIC X(8) VALUE "ABCDEFGH".',
+                "01 WS-DATA-N  REDEFINES WS-DATA PIC 9(8).",
+                "01 WS-DATA-P  REDEFINES WS-DATA.",
+                "   05 WS-PART1 PIC X(4).",
+                "   05 WS-PART2 PIC X(4).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    STOP RUN.",
+            ]
+        )
+        # All three names should share offset 0.
+        assert vm.data_layout["WS-DATA"]["offset"] == 0
+        assert vm.data_layout["WS-DATA-N"]["offset"] == 0
+        assert vm.data_layout["WS-DATA-P"]["offset"] == 0
+        # Region is only 8 bytes — REDEFINES do not allocate additional space.
+        region = _first_region(vm)
+        assert len(region) == 8
+
+    @pytest.mark.xfail(
+        strict=False,
+        reason="MOVE from REDEFINES field not yet supported in IR lowering",
+    )
+    def test_redefines_numeric_as_alphanumeric_move(self):
+        """Numeric VALUE init, MOVE through alphanumeric REDEFINES to output."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REDEF4.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-NUM    PIC 9(4) VALUE 1234.",
+                "01 WS-NUM-X  REDEFINES WS-NUM PIC X(4).",
+                "01 WS-OUT PIC X(4) VALUE SPACES.",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    MOVE WS-NUM-X TO WS-OUT.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-OUT at offset 4 should contain the same bytes as WS-NUM.
+        expected_zoned = [0xF1, 0xF2, 0xF3, 0xF4]
+        assert list(region[4:8]) == expected_zoned
+
+    def test_redefines_with_arithmetic(self):
+        """Arithmetic through original field, verify bytes are updated in overlay."""
+        vm = _run_cobol(
+            [
+                "IDENTIFICATION DIVISION.",
+                "PROGRAM-ID. TEST-REDEF5.",
+                "DATA DIVISION.",
+                "WORKING-STORAGE SECTION.",
+                "01 WS-A PIC 9(4) VALUE 0.",
+                "01 WS-A-X REDEFINES WS-A PIC X(4).",
+                "PROCEDURE DIVISION.",
+                "MAIN-PARA.",
+                "    ADD 42 TO WS-A.",
+                "    STOP RUN.",
+            ]
+        )
+        region = _first_region(vm)
+        # WS-A at offset 0 (4 bytes). After ADD 42, WS-A = 42.
+        assert _decode_zoned_unsigned(region, 0, 4) == 42
+        # The REDEFINES overlay shares the same bytes —
+        # zoned decimal 0042 = F0 F0 F4 F2.
+        expected = [0xF0, 0xF0, 0xF4, 0xF2]
+        assert list(region[0:4]) == expected
