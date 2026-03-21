@@ -137,9 +137,8 @@ def _parse_array_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
     ]
     elements = tuple(parse_ruby_pattern(ctx, c) for c in element_nodes)
     if leading_constant:
-        return ClassPattern(
-            ctx.node_text(leading_constant), positional=elements, keyword=()
-        )
+        class_name = ctx.node_text(leading_constant)
+        return _resolve_positional_via_match_args(ctx, class_name, elements)
     return SequencePattern(elements)
 
 
@@ -185,3 +184,19 @@ def _parse_keyword_pattern(ctx: TreeSitterEmitContext, node) -> tuple[str, Patte
         parse_ruby_pattern(ctx, value_node) if value_node else CapturePattern(key)
     )
     return (key, value_pattern)
+
+
+def _resolve_positional_via_match_args(
+    ctx: TreeSitterEmitContext, class_name: str, positional: tuple[Pattern, ...]
+) -> ClassPattern:
+    """Convert positional args to keyword args via match_args if available."""
+    class_info = ctx.symbol_table.classes.get(class_name)
+    match_args = list(class_info.match_args) if class_info else []
+    if positional and match_args:
+        keyword = tuple(
+            (match_args[i], pat)
+            for i, pat in enumerate(positional)
+            if i < len(match_args)
+        )
+        return ClassPattern(class_name, positional=(), keyword=keyword)
+    return ClassPattern(class_name, positional=positional, keyword=())

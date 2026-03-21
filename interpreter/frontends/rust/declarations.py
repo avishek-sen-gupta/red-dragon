@@ -540,6 +540,35 @@ def emit_prelude(ctx: TreeSitterEmitContext) -> None:
     """Emit Box and Option class definitions as IR prelude."""
     _emit_box_class(ctx)
     _emit_option_class(ctx)
+    _register_prelude_in_symbol_table(ctx)
+
+
+def _register_prelude_in_symbol_table(ctx: TreeSitterEmitContext) -> None:
+    """Register Option and Box in symbol table with match_args for pattern matching."""
+    from interpreter.frontends.symbol_table import ClassInfo, FieldInfo
+
+    ctx.symbol_table.classes["Option"] = ClassInfo(
+        name="Option",
+        fields={
+            "value": FieldInfo(name="value", type_hint="Any", has_initializer=True)
+        },
+        methods={},
+        constants={},
+        parents=(),
+        match_args=("value",),
+    )
+    ctx.symbol_table.classes["Box"] = ClassInfo(
+        name="Box",
+        fields={
+            constants.BOXED_FIELD: FieldInfo(
+                name=constants.BOXED_FIELD, type_hint="Any", has_initializer=True
+            )
+        },
+        methods={},
+        constants={},
+        parents=(),
+        match_args=(constants.BOXED_FIELD,),
+    )
 
 
 def _emit_method_params(ctx: TreeSitterEmitContext, param_names: list[str]) -> None:

@@ -41,11 +41,6 @@ let r = match x {
 
 
 class TestRustPatternMatchingSomeDestructuring:
-    @pytest.mark.xfail(
-        reason="Option.__init__ sig/label mismatch — LOAD_INDEX on Option object "
-        "returns symbolic value instead of concrete",
-        strict=True,
-    )
     def test_some_destructuring(self):
         """match Some(5) { Some(v) => v, _ => 0 } should produce 5."""
         _, local_vars = _run_rust("""\
@@ -75,10 +70,6 @@ let result = if let n = x { n * 2 } else { 0 };
 """)
         assert local_vars["result"] == 14
 
-    @pytest.mark.xfail(
-        reason="Option LOAD_INDEX on Option object returns symbolic value — red-dragon-jpgb",
-        strict=True,
-    )
     def test_if_let_some_match(self):
         """if let Some(v) = Some(5) should bind v to 5."""
         _, local_vars = _run_rust("""\
@@ -123,10 +114,6 @@ let r = match p {
 
 
 class TestRustPatternMatchingNested:
-    @pytest.mark.xfail(
-        reason="Depends on Some(v) destructuring (red-dragon-jpgb)",
-        strict=False,
-    )
     def test_nested_some_tuple(self):
         """match Some((1, 2)) { Some((a, b)) => a + b, _ => 0 } should produce 3."""
         _, local_vars = _run_rust("""\
