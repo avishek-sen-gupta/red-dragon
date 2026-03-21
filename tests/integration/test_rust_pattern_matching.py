@@ -330,3 +330,43 @@ let r = if let Some(x) = a && let Some(y) = b { x + y } else { -1 };
             max_steps=500,
         )
         assert local_vars["r"] == -1
+
+    def test_let_chain_both_fail(self):
+        """If both conditions fail, take else branch."""
+        _, local_vars = _run_rust(
+            """\
+let a = 0;
+let b = 0;
+let r = if let Some(x) = a && let Some(y) = b { x + y } else { -1 };
+""",
+            max_steps=500,
+        )
+        assert local_vars["r"] == -1
+
+    def test_let_chain_three_conditions(self):
+        """Three-way let chain: all must match."""
+        _, local_vars = _run_rust(
+            """\
+let a = Some(1);
+let b = Some(2);
+let c = Some(3);
+let r = if let Some(x) = a && let Some(y) = b && let Some(z) = c { x + y + z } else { 0 };
+""",
+            max_steps=500,
+        )
+        assert local_vars["r"] == 6
+
+    def test_let_chain_no_else(self):
+        """Let chain with no else branch — result is body value when matched."""
+        _, local_vars = _run_rust(
+            """\
+let a = Some(10);
+let b = Some(20);
+let r = 0;
+if let Some(x) = a && let Some(y) = b {
+    r = x + y;
+}
+""",
+            max_steps=500,
+        )
+        assert local_vars["r"] == 30
