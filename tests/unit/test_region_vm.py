@@ -7,7 +7,7 @@ from interpreter.ir import IRInstruction, Opcode
 from interpreter.vm import VMState, apply_update
 from interpreter.typed_value import unwrap
 from interpreter.vm_types import StackFrame, SymbolicValue
-from interpreter.executor import LocalExecutor
+from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
 
@@ -30,8 +30,7 @@ def _execute(vm, inst):
     result = LocalExecutor.execute(
         inst=inst,
         vm=vm,
-        cfg=_empty_cfg(),
-        registry=_empty_registry(),
+        ctx=_default_handler_context(),
     )
     assert result.handled
     apply_update(vm, result.update)

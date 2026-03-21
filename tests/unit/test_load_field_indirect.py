@@ -8,7 +8,7 @@ needed by __method_missing__ to forward field access by dynamic name.
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.vm import VMState, HeapObject, apply_update
 from interpreter.vm_types import StackFrame, StateUpdate, SymbolicValue
-from interpreter.executor import LocalExecutor
+from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context
 from interpreter.cfg import CFG
 from interpreter.cfg_types import BasicBlock
 from interpreter.registry import FunctionRegistry
@@ -16,6 +16,13 @@ from interpreter.func_ref import FuncRef, BoundFuncRef
 from interpreter.typed_value import TypedValue, typed_from_runtime, typed, unwrap
 from interpreter.type_expr import UNKNOWN, scalar
 from interpreter.constants import METHOD_MISSING
+
+
+from dataclasses import replace as _replace
+
+
+def _ctx(**overrides) -> HandlerContext:
+    return _replace(_default_handler_context(), **overrides)
 
 
 def _make_vm() -> VMState:
@@ -41,8 +48,7 @@ def _execute(vm: VMState, inst: IRInstruction):
     result = LocalExecutor.execute(
         inst=inst,
         vm=vm,
-        cfg=_empty_cfg(),
-        registry=_empty_registry(),
+        ctx=_default_handler_context(),
     )
     assert result.handled
     apply_update(vm, result.update)
@@ -134,8 +140,7 @@ class TestLoadFieldIndirect:
         result = LocalExecutor.execute(
             inst=inst,
             vm=vm,
-            cfg=cfg,
-            registry=registry,
+            ctx=_ctx(cfg=cfg, registry=registry),
         )
 
         assert result.handled

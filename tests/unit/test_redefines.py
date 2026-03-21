@@ -11,7 +11,7 @@ from interpreter.ir import IRInstruction, Opcode
 from interpreter.typed_value import unwrap
 from interpreter.vm import VMState, apply_update
 from interpreter.vm_types import StackFrame
-from interpreter.executor import LocalExecutor
+from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
 
@@ -32,9 +32,7 @@ def _make_vm() -> VMState:
 
 def _execute(vm: VMState, inst: IRInstruction) -> Any:
     """Execute a single instruction and apply its update."""
-    result = LocalExecutor.execute(
-        inst=inst, vm=vm, cfg=CFG(), registry=FunctionRegistry()
-    )
+    result = LocalExecutor.execute(inst=inst, vm=vm, ctx=_default_handler_context())
     assert result.handled, f"Instruction not handled: {inst}"
     apply_update(vm, result.update)
     return result
@@ -45,9 +43,7 @@ def _execute_ir_sequence(vm: VMState, instructions: list[IRInstruction]) -> Any:
     for inst in instructions:
         if inst.opcode == Opcode.LABEL:
             continue
-        result = LocalExecutor.execute(
-            inst=inst, vm=vm, cfg=CFG(), registry=FunctionRegistry()
-        )
+        result = LocalExecutor.execute(inst=inst, vm=vm, ctx=_default_handler_context())
         assert result.handled, f"Instruction not handled: {inst}"
         apply_update(vm, result.update)
         if inst.opcode == Opcode.RETURN:
