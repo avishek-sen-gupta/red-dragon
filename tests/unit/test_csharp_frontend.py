@@ -1021,7 +1021,8 @@ class TestCSharpDeclarationPattern:
 
     def test_declaration_pattern_stores_var(self):
         ir = _parse_and_lower("var r = x switch { int n => n, _ => 0 };")
-        stores = _find_all(ir, Opcode.DECL_VAR)
+        # compile_pattern_bindings emits STORE_VAR for captured variables
+        stores = _find_all(ir, Opcode.STORE_VAR)
         assert any("n" in inst.operands for inst in stores)
 
 
