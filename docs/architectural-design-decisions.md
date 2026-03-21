@@ -2211,3 +2211,21 @@ variant class infrastructure (red-dragon-vwqd) and is out of scope.
 **Decision:** Use `compile_pattern_test`/`compile_pattern_bindings` directly
 (not `compile_match`) because Rust `match` is expression-style (returns a value),
 following the C# `lower_switch_expr` pattern.
+
+---
+
+### ADR-118: Scala Structural Pattern Matching (2026-03-21)
+
+**Status:** Accepted
+**Issue:** red-dragon-hgfq
+
+Scala `match` now uses the common Pattern ADT via `compile_pattern_test`
+and `compile_pattern_bindings`, replacing the hand-rolled expression-based
+match lowering. Same architecture as Rust (ADR-117).
+
+Supported patterns: literals, wildcards, captures, alternatives (or),
+tuples, case class destructuring (`Circle(r)` via `ClassPattern`),
+typed patterns (`i: Int` via `AsPattern(ClassPattern, name)`), and guards.
+
+Infix patterns (`head :: tail`), as-patterns (`x @ pat`), and extractor
+patterns are out of scope (red-dragon-hham, red-dragon-4s1a, red-dragon-loht).
