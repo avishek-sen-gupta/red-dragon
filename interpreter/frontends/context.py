@@ -17,6 +17,7 @@ from interpreter.frontend_observer import FrontendObserver
 from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
 from interpreter.class_ref import ClassRef
 from interpreter.func_ref import FuncRef
+from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.var_scope_info import VarScopeInfo
 from interpreter.type_expr import TypeExpr
@@ -140,6 +141,9 @@ class TreeSitterEmitContext:
 
     # Field names for the current class — used to detect implicit this in constructors
     _class_field_names: set[str] = field(default_factory=set)
+
+    # Unified symbol table — populated by frontend pre-pass before lowering
+    symbol_table: SymbolTable = field(default_factory=SymbolTable.empty)
 
     # Kotlin property accessors: class_name → {prop_name → {"get", "set"}}
     property_accessors: dict[str, dict[str, set[str]]] = field(default_factory=dict)

@@ -20,6 +20,7 @@ from interpreter.frontend import Frontend
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends.base_node_types import BaseNodeType
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
+from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
 from interpreter.parser import ParserFactory
 from interpreter.class_ref import ClassRef
@@ -262,6 +263,7 @@ class BaseFrontend(Frontend):
     def _lower_with_context(self, source: bytes, root) -> list[IRInstruction]:
         """Context-mode lowering using TreeSitterEmitContext and pure functions."""
         grammar_constants = self._build_constants()
+        symbol_table = self._extract_symbols(root)
         ctx = TreeSitterEmitContext(
             source=source,
             language=self._language,
@@ -271,6 +273,7 @@ class BaseFrontend(Frontend):
             stmt_dispatch=self._build_stmt_dispatch(),
             expr_dispatch=self._build_expr_dispatch(),
             block_scoped=self.BLOCK_SCOPED,
+            symbol_table=symbol_table,
         )
         ctx.emit(Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)
         self._emit_prelude(ctx)
@@ -280,6 +283,10 @@ class BaseFrontend(Frontend):
         self._func_symbol_table = ctx.func_symbol_table
         self._class_symbol_table = ctx.class_symbol_table
         return ctx.instructions
+
+    def _extract_symbols(self, root) -> SymbolTable:
+        """Override in subclasses to extract symbols before lowering."""
+        return SymbolTable.empty()
 
     def _emit_prelude(self, ctx: TreeSitterEmitContext) -> None:
         """Override in subclasses to emit prelude type definitions."""
