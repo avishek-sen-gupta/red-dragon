@@ -248,3 +248,71 @@ val b = Color.Red
 val same = a == b
 """)
         assert locals_["same"] is True
+
+    def test_enum_match_expression(self):
+        """Match on enum values using pattern matching."""
+        locals_ = _run_scala(
+            """\
+enum Color {
+  case Red, Green, Blue
+}
+val c = Color.Green
+val r = c match {
+  case Color.Red => 1
+  case Color.Green => 2
+  case Color.Blue => 3
+}
+""",
+            max_steps=500,
+        )
+        assert locals_["r"] == 2
+
+    def test_enum_equality_comparison(self):
+        """Enum values can be compared with == in if expressions."""
+        locals_ = _run_scala(
+            """\
+enum Direction {
+  case North, South, East, West
+}
+val d = Direction.North
+val r = if (d == Direction.North) 1 else 0
+""",
+            max_steps=500,
+        )
+        assert locals_["r"] == 1
+
+    def test_enum_as_function_argument(self):
+        """Enum values can be passed to functions and matched inside."""
+        locals_ = _run_scala(
+            """\
+enum Color {
+  case Red, Green, Blue
+}
+def colorToInt(c: Int): Int = c match {
+  case Color.Red => 1
+  case Color.Green => 2
+  case Color.Blue => 3
+  case _ => 0
+}
+val result = colorToInt(Color.Green)
+""",
+            max_steps=500,
+        )
+        assert locals_["result"] == 2
+
+    def test_enum_match_wildcard_fallback(self):
+        """Enum match with wildcard catches unmatched variants."""
+        locals_ = _run_scala(
+            """\
+enum Color {
+  case Red, Green, Blue
+}
+val c = Color.Blue
+val r = c match {
+  case Color.Red => 1
+  case _ => 99
+}
+""",
+            max_steps=500,
+        )
+        assert locals_["r"] == 99
