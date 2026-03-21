@@ -16,6 +16,9 @@
 {"issue_id":"red-dragon-132","label":"typed-value"}
 {"issue_id":"red-dragon-1c9k","label":"vm-architecture"}
 {"issue_id":"red-dragon-1jl7","label":"audit-asserts"}
+{"issue_id":"red-dragon-1qcf","label":"kotlin"}
+{"issue_id":"red-dragon-1qcf","label":"p2"}
+{"issue_id":"red-dragon-1qcf","label":"pattern-matching"}
 {"issue_id":"red-dragon-1qq","label":"typed-value"}
 {"issue_id":"red-dragon-2mdz","label":"audit-asserts"}
 {"issue_id":"red-dragon-2qem","label":"pattern-matching"}
@@ -109,10 +112,16 @@
 {"issue_id":"red-dragon-b8k","label":"pascal"}
 {"issue_id":"red-dragon-bfv","label":"code-quality"}
 {"issue_id":"red-dragon-bfv","label":"refactoring"}
+{"issue_id":"red-dragon-bijo","label":"kotlin"}
+{"issue_id":"red-dragon-bijo","label":"p2"}
+{"issue_id":"red-dragon-bijo","label":"pattern-matching"}
 {"issue_id":"red-dragon-bkj0","label":"audit-asserts"}
 {"issue_id":"red-dragon-bre9","label":"audit-asserts"}
 {"issue_id":"red-dragon-bvpm","label":"rust"}
 {"issue_id":"red-dragon-bvpm","label":"symbol-table"}
+{"issue_id":"red-dragon-c1fh","label":"go"}
+{"issue_id":"red-dragon-c1fh","label":"p2"}
+{"issue_id":"red-dragon-c1fh","label":"pattern-matching"}
 {"issue_id":"red-dragon-c3dd","label":"audit-asserts"}
 {"issue_id":"red-dragon-c4v","label":"csharp"}
 {"issue_id":"red-dragon-c4v","label":"frontend"}
@@ -146,6 +155,9 @@
 {"issue_id":"red-dragon-e2k","label":"frontend"}
 {"issue_id":"red-dragon-e2k","label":"lua"}
 {"issue_id":"red-dragon-enjk","label":"audit-asserts"}
+{"issue_id":"red-dragon-f3m0","label":"java"}
+{"issue_id":"red-dragon-f3m0","label":"p2"}
+{"issue_id":"red-dragon-f3m0","label":"pattern-matching"}
 {"issue_id":"red-dragon-f6i","label":"typed-value"}
 {"issue_id":"red-dragon-fdgp","label":"audit-asserts"}
 {"issue_id":"red-dragon-fjh9","label":"ruby"}
@@ -699,6 +711,9 @@
 {"issue_id":"red-dragon-tkv","label":"scala"}
 {"issue_id":"red-dragon-tmop","label":"symbol-table"}
 {"issue_id":"red-dragon-tpz","label":"typed-value"}
+{"issue_id":"red-dragon-tq0m","label":"kotlin"}
+{"issue_id":"red-dragon-tq0m","label":"p2"}
+{"issue_id":"red-dragon-tq0m","label":"pattern-matching"}
 {"issue_id":"red-dragon-tzss","label":"audit-asserts"}
 {"issue_id":"red-dragon-u0gv","label":"csharp"}
 {"issue_id":"red-dragon-u0gv","label":"pattern-matching"}
