@@ -674,5 +674,6 @@
 {"issue_id":"red-dragon-yhd","label":"go"}
 {"issue_id":"red-dragon-yk61","label":"audit-asserts"}
 {"issue_id":"red-dragon-ymq","label":"typed-value"}
+{"issue_id":"red-dragon-yn17","label":"csharp"}
 {"issue_id":"red-dragon-z9o","label":"typed-value"}
 {"issue_id":"red-dragon-zuyo","label":"pattern-matching"}
