@@ -116,11 +116,15 @@
 {"issue_id":"red-dragon-ca2w","label":"audit-asserts"}
 {"issue_id":"red-dragon-cb2","label":"cross-language"}
 {"issue_id":"red-dragon-cb2","label":"vm"}
+{"issue_id":"red-dragon-cb2l","label":"kotlin"}
+{"issue_id":"red-dragon-cb2l","label":"symbol-table"}
 {"issue_id":"red-dragon-cha","label":"csharp"}
 {"issue_id":"red-dragon-cha","label":"frontend"}
 {"issue_id":"red-dragon-cj0","label":"typed-value"}
 {"issue_id":"red-dragon-cjl","label":"cpp"}
 {"issue_id":"red-dragon-cjl","label":"frontend"}
+{"issue_id":"red-dragon-cnwl","label":"scala"}
+{"issue_id":"red-dragon-cnwl","label":"symbol-table"}
 {"issue_id":"red-dragon-cq8","label":"cpp"}
 {"issue_id":"red-dragon-cq8","label":"frontend"}
 {"issue_id":"red-dragon-d5c","label":"typed-value-migration"}
