@@ -284,3 +284,39 @@ result = quadruple(5)
         )
         total = len(_collect_labels(nodes))
         assert total == 9, f"Expected 9 nodes in quadruple chain, got {total}"
+
+
+class TestIRSourceLocations:
+    """All IR instructions should have source location mappings."""
+
+    SOURCE = """\
+def add(a, b):
+    return a + b
+
+def double(x):
+    return add(x, x)
+
+result = double(5)
+"""
+
+    def test_all_instructions_have_source_locations(self):
+        """Every IR instruction should map back to a source location."""
+        from interpreter.cfg import build_cfg
+        from interpreter.constants import Language
+        from interpreter.frontend import get_frontend
+
+        frontend = get_frontend(Language.PYTHON)
+        ir = frontend.lower(self.SOURCE.encode())
+        cfg = build_cfg(ir)
+
+        missing = [
+            (label, str(inst))
+            for label, block in cfg.blocks.items()
+            for inst in block.instructions
+            if inst.source_location.is_unknown()
+        ]
+        assert (
+            missing == []
+        ), f"{len(missing)} instructions missing source locations:\n" + "\n".join(
+            f"  {label}: {inst}" for label, inst in missing
+        )

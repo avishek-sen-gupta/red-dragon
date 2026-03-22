@@ -522,6 +522,7 @@ def _lower_python_param(ctx: TreeSitterEmitContext, child, param_index: int) -> 
     ctx.emit(
         Opcode.DECL_VAR,
         operands=[pname, f"%{ctx.reg_counter - 1}"],
+        node=child,
     )
     ctx.seed_var_type(pname, type_hint)
 
