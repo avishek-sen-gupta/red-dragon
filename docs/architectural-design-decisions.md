@@ -2323,3 +2323,25 @@ separate pass.
 
 6 modules in interpreter/interprocedural/: types, call_graph, summaries,
 propagation, queries, analyze.
+
+## ADR-123: Fix DECL_VAR Handling in Dataflow and Interprocedural Analysis (2026-03-22)
+
+**Status:** Accepted
+**Issue:** red-dragon-5mnk
+
+After the DECL_VAR/STORE_VAR split (ADR, 2026-03-15), real frontends emit
+`DECL_VAR` for parameter declarations. The intraprocedural dataflow analysis
+and interprocedural summary extraction only checked `Opcode.STORE_VAR`,
+causing `build_summary` to produce empty flows for all functions.
+
+**Fix:** Introduced `VAR_DEFINITION_OPCODES` constant in `ir.py` — a
+`frozenset({Opcode.DECL_VAR, Opcode.STORE_VAR})` used everywhere that
+needs to identify variable-defining opcodes. Updated 6 call sites:
+- `dataflow.py`: `_VAR_DEFINERS`, `_defs_of`, `_uses_of`,
+  `_build_raw_dependency_graph`
+- `summaries.py`: `_find_param_names`, `_add_field_to_return_flows`
+
+Also added `_trace_register_to_source_vars` in `summaries.py` to trace
+return operands backward through computations (BINOP, CALL, etc.) to
+find param-connected named variables — previously only direct
+`LOAD_VAR → RETURN` chains were detected.
