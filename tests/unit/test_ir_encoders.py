@@ -10,7 +10,11 @@ from interpreter.ir import IRInstruction, Opcode
 from interpreter.types.typed_value import unwrap
 from interpreter.vm.vm import VMState, apply_update
 from interpreter.vm.vm_types import StackFrame
-from interpreter.vm.executor import LocalExecutor, HandlerContext, _default_handler_context
+from interpreter.vm.executor import (
+    LocalExecutor,
+    HandlerContext,
+    _default_handler_context,
+)
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
 

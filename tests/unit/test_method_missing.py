@@ -8,7 +8,11 @@ a symbolic value.
 from interpreter.cfg import CFG
 from interpreter.cfg_types import BasicBlock
 from interpreter.constants import BOXED_FIELD, METHOD_MISSING
-from interpreter.vm.executor import LocalExecutor, HandlerContext, _default_handler_context
+from interpreter.vm.executor import (
+    LocalExecutor,
+    HandlerContext,
+    _default_handler_context,
+)
 from interpreter.refs.func_ref import BoundFuncRef, FuncRef
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import FunctionRegistry

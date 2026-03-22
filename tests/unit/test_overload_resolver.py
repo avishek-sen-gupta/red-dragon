@@ -9,7 +9,10 @@ from interpreter.overload.ambiguity_handler import (
 )
 from interpreter.constants import TypeName
 from interpreter.types.function_signature import FunctionSignature
-from interpreter.overload.overload_resolver import NullOverloadResolver, OverloadResolver
+from interpreter.overload.overload_resolver import (
+    NullOverloadResolver,
+    OverloadResolver,
+)
 from interpreter.overload.resolution_strategy import ArityThenTypeStrategy
 from interpreter.types.coercion.type_compatibility import DefaultTypeCompatibility
 from interpreter.types.type_expr import scalar, UNKNOWN
