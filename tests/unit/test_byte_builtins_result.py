@@ -12,7 +12,7 @@ from interpreter.cobol.byte_builtins import (
     _builtin_int_to_binary_bytes,
     _builtin_cobol_blank_when_zero,
 )
-from interpreter.typed_value import typed_from_runtime
+from interpreter.types.typed_value import typed_from_runtime
 from interpreter.vm import Operators
 from interpreter.vm_types import BuiltinResult
 

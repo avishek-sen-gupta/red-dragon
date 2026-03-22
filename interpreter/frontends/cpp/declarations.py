@@ -18,7 +18,7 @@ from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
 from interpreter.frontends.cpp.node_types import CppNodeType
-from interpreter.type_expr import ScalarType
+from interpreter.types.type_expr import ScalarType
 from interpreter.frontends.common.declarations import (
     FieldInit,
     emit_field_initializers,

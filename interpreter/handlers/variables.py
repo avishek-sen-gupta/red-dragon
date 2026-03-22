@@ -17,8 +17,8 @@ from interpreter.vm import (
 from interpreter.vm_types import HeapWrite
 from interpreter.refs.func_ref import FuncRef, BoundFuncRef
 from interpreter.refs.class_ref import ClassRef
-from interpreter.type_expr import UNKNOWN, scalar
-from interpreter.typed_value import typed, typed_from_runtime
+from interpreter.types.type_expr import UNKNOWN, scalar
+from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter import constants
 from interpreter.handlers._common import _write_var_to_frame
 

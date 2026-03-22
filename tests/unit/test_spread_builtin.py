@@ -6,8 +6,8 @@ from interpreter.executor import _resolve_call_args
 from interpreter.ir import SpreadArguments
 from interpreter.vm import VMState
 from interpreter.vm_types import HeapObject, Pointer, StackFrame
-from interpreter.typed_value import typed, typed_from_runtime
-from interpreter.type_expr import scalar
+from interpreter.types.typed_value import typed, typed_from_runtime
+from interpreter.types.type_expr import scalar
 from interpreter.constants import TypeName
 
 

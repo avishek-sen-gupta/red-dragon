@@ -12,8 +12,8 @@ from interpreter.executor import LocalExecutor, HandlerContext, _default_handler
 from interpreter.refs.func_ref import BoundFuncRef, FuncRef
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import FunctionRegistry
-from interpreter.typed_value import TypedValue, typed, typed_from_runtime, unwrap
-from interpreter.type_expr import UNKNOWN, scalar
+from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime, unwrap
+from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.vm import HeapObject, VMState
 from interpreter.vm_types import StackFrame, StateUpdate, SymbolicValue
 

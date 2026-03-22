@@ -15,8 +15,8 @@ from interpreter.vm_types import (
     Pointer,
 )
 from interpreter.cobol.byte_builtins import BYTE_BUILTINS
-from interpreter.typed_value import TypedValue, typed, typed_from_runtime
-from interpreter.type_expr import pointer, scalar
+from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
+from interpreter.types.type_expr import pointer, scalar
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 
@@ -294,7 +294,7 @@ def _builtin_isinstance(args: list[TypedValue], vm: VMState) -> BuiltinResult:
     # Try heap object first
     addr = _heap_addr(obj_val)
     if addr and addr in vm.heap:
-        from interpreter.type_expr import ScalarType
+        from interpreter.types.type_expr import ScalarType
 
         type_hint = vm.heap[addr].type_hint
         matches = isinstance(type_hint, ScalarType) and type_hint.name == class_name

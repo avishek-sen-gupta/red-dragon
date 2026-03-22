@@ -8,8 +8,8 @@ from interpreter.builtins import (
 )
 from interpreter.vm import Operators
 from interpreter.vm_types import BuiltinResult, HeapObject, VMState
-from interpreter.typed_value import TypedValue, typed, typed_from_runtime
-from interpreter.type_expr import scalar
+from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
+from interpreter.types.type_expr import scalar
 from interpreter.constants import TypeName
 from interpreter.vm_types import Pointer
 

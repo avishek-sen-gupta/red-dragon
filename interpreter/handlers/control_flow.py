@@ -14,8 +14,8 @@ from interpreter.vm import (
     _resolve_reg,
     _is_symbolic,
 )
-from interpreter.type_expr import scalar
-from interpreter.typed_value import typed
+from interpreter.types.type_expr import scalar
+from interpreter.types.typed_value import typed
 from interpreter import constants
 from interpreter.handlers._common import _symbolic_name
 

@@ -28,7 +28,7 @@ from interpreter.cobol.byte_builtins import (
     _builtin_string_concat_pair,
     BYTE_BUILTINS,
 )
-from interpreter.typed_value import typed_from_runtime
+from interpreter.types.typed_value import typed_from_runtime
 from interpreter.vm import Operators
 from interpreter.vm_types import SymbolicValue
 

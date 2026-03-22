@@ -13,8 +13,8 @@ from interpreter.vm import (
     _resolve_reg,
     _is_symbolic,
 )
-from interpreter.type_expr import UNKNOWN
-from interpreter.typed_value import typed
+from interpreter.types.type_expr import UNKNOWN
+from interpreter.types.typed_value import typed
 from interpreter import constants
 
 

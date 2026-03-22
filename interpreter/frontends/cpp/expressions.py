@@ -14,7 +14,7 @@ from interpreter.frontends.common.expressions import (
 )
 from interpreter.frontends.c.expressions import lower_c_store_target
 from interpreter.frontends.cpp.node_types import CppNodeType
-from interpreter.type_expr import ScalarType
+from interpreter.types.type_expr import ScalarType
 
 
 def lower_new_expr(ctx: TreeSitterEmitContext, node) -> str:

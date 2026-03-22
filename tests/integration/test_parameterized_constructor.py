@@ -1,7 +1,7 @@
 """Tests for parameterized CALL_FUNCTION operand handling."""
 
-from interpreter.type_expr import ScalarType
-from interpreter.typed_value import TypedValue
+from interpreter.types.type_expr import ScalarType
+from interpreter.types.typed_value import TypedValue
 from interpreter.run import run
 from interpreter.constants import Language
 

@@ -6,7 +6,7 @@ from interpreter.constants import Language, TypeName
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.frontend import get_frontend
 from interpreter.ir import Opcode
-from interpreter.type_expr import (
+from interpreter.types.type_expr import (
     FunctionType,
     ParameterizedType,
     UNBOUND,
@@ -14,8 +14,8 @@ from interpreter.type_expr import (
     fn_type,
     tuple_of,
 )
-from interpreter.type_inference import infer_types
-from interpreter.type_resolver import TypeResolver
+from interpreter.types.type_inference import infer_types
+from interpreter.types.type_resolver import TypeResolver
 
 
 def _resolver():
@@ -2633,7 +2633,7 @@ typedef int* IntPtr;
 IntPtr p;
 """
         _, env = _lower_and_infer(source, "c")
-        from interpreter.type_expr import pointer
+        from interpreter.types.type_expr import pointer
 
         assert env.var_types["p"] == pointer(scalar("Int"))
         assert "IntPtr" in env.type_aliases
@@ -2679,7 +2679,7 @@ class TestVarianceIntegration:
 
     def test_java_list_inferred_type_with_invariant_variance(self):
         """Java List<String> inferred type checked against invariant variance rules."""
-        from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+        from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
         from interpreter.constants import Variance
 
         _, env = _lower_and_infer(
@@ -2702,7 +2702,7 @@ class TestVarianceIntegration:
 
     def test_java_map_inferred_type_with_mixed_variance(self):
         """Java Map<String, Integer> checked with invariant key, covariant value."""
-        from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+        from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
         from interpreter.constants import Variance
 
         _, env = _lower_and_infer(
@@ -2729,7 +2729,7 @@ class TestVarianceIntegration:
 
     def test_kotlin_list_inferred_type_covariant_default(self):
         """Kotlin List<String> with default covariant variance allows widening."""
-        from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+        from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
 
         _, env = _lower_and_infer(
             'fun main() { val items: List<String> = listOf("a") }',
@@ -2750,8 +2750,8 @@ class TestBoundedTypeVarIntegration:
 
     def test_java_inferred_int_satisfies_number_bound(self):
         """Java int var inferred as Int satisfies TypeVar bounded by Number."""
-        from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
-        from interpreter.type_expr import typevar, scalar
+        from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+        from interpreter.types.type_expr import typevar, scalar
         from interpreter.constants import TypeName
 
         _, env = _lower_and_infer(
@@ -2768,8 +2768,8 @@ class TestBoundedTypeVarIntegration:
 
     def test_java_inferred_string_fails_number_bound(self):
         """Java String var does NOT satisfy TypeVar bounded by Number."""
-        from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
-        from interpreter.type_expr import typevar, scalar
+        from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+        from interpreter.types.type_expr import typevar, scalar
         from interpreter.constants import TypeName
 
         _, env = _lower_and_infer(
@@ -2786,8 +2786,8 @@ class TestBoundedTypeVarIntegration:
 
     def test_java_generic_list_satisfies_typevar_container_bound(self):
         """Java List[Int] checked against List[T: Number] with TypeVar argument."""
-        from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
-        from interpreter.type_expr import typevar, scalar, array_of
+        from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+        from interpreter.types.type_expr import typevar, scalar, array_of
         from interpreter.constants import TypeName
 
         _, env = _lower_and_infer(
@@ -2968,7 +2968,7 @@ class TestClassScopedMethodSignatures:
 
     def test_java_overloaded_methods_in_method_signatures(self):
         """Java class with overloaded add() should have both in method_signatures."""
-        from interpreter.type_expr import scalar
+        from interpreter.types.type_expr import scalar
 
         _instructions, env = _lower_and_infer(
             """\
@@ -2990,7 +2990,7 @@ class Calc {
 
     def test_different_classes_dont_collide(self):
         """Dog.speak and Animal.speak should be in separate class scopes."""
-        from interpreter.type_expr import scalar
+        from interpreter.types.type_expr import scalar
 
         _instructions, env = _lower_and_infer(
             """\
@@ -3014,7 +3014,7 @@ class Dog extends Animal {
         # Dog.fetch has 2 params (this, toy)
         assert len(dog_fetch.params) == 2
         # Animal should NOT have fetch
-        from interpreter.type_environment import _NULL_SIGNATURE
+        from interpreter.types.type_environment import _NULL_SIGNATURE
 
         assert (
             env.get_func_signature("fetch", class_name=scalar("Animal"))

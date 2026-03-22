@@ -5,7 +5,7 @@ from __future__ import annotations
 from interpreter.frontends.kotlin import KotlinFrontend
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 

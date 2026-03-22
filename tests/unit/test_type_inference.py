@@ -6,11 +6,11 @@ from interpreter.constants import TypeName
 from interpreter.conversion_result import IDENTITY_CONVERSION
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.null_type_resolver import NullTypeResolver
-from interpreter.function_kind import FunctionKind
-from interpreter.function_signature import FunctionSignature
-from interpreter.type_environment_builder import TypeEnvironmentBuilder
-from interpreter.type_expr import (
+from interpreter.types.null_type_resolver import NullTypeResolver
+from interpreter.types.function_kind import FunctionKind
+from interpreter.types.function_signature import FunctionSignature
+from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.types.type_expr import (
     TypeExpr,
     ScalarType,
     ParameterizedType,
@@ -27,8 +27,8 @@ from interpreter.type_expr import (
 )
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
-from interpreter.type_inference import infer_types, _infer_const_type
-from interpreter.type_resolver import TypeResolver
+from interpreter.types.type_inference import infer_types, _infer_const_type
+from interpreter.types.type_resolver import TypeResolver
 
 
 def _make_inst(opcode, result_reg="", operands=None, label=""):
@@ -2969,7 +2969,7 @@ class TestTypeAliasInference:
 
     def test_alias_resolves_parameterized(self):
         """Alias to parameterized type: StringMap → Map[String, String]."""
-        from interpreter.type_expr import map_of
+        from interpreter.types.type_expr import map_of
 
         instructions = [
             _make_inst(Opcode.LABEL, label="entry"),

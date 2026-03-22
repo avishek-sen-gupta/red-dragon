@@ -8,8 +8,8 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from interpreter.constants import TypeName
-from interpreter.type_expr import TypeExpr, UNKNOWN, scalar
-from interpreter.typed_value import TypedValue, typed
+from interpreter.types.type_expr import TypeExpr, UNKNOWN, scalar
+from interpreter.types.typed_value import TypedValue, typed
 
 # ── Data types ───────────────────────────────────────────────────
 
@@ -99,7 +99,7 @@ class StackFrame:
 
 
 def _serialize_value(v: Any) -> Any:
-    from interpreter.typed_value import TypedValue
+    from interpreter.types.typed_value import TypedValue
 
     if isinstance(v, TypedValue):
         return _serialize_value(v.value)

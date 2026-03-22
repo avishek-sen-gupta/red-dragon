@@ -8,7 +8,7 @@ from interpreter.ir import IRInstruction, Opcode
 from interpreter.cfg import CFG, BasicBlock, build_cfg
 from interpreter.registry import FunctionRegistry, build_registry
 from interpreter.run import execute_cfg, VMConfig, ExecutionStats
-from interpreter.typed_value import unwrap
+from interpreter.types.typed_value import unwrap
 
 
 def _make_instructions(*specs):

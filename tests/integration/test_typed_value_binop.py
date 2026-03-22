@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from interpreter.constants import Language
 from interpreter.run import run
-from interpreter.typed_value import unwrap, unwrap_locals
+from interpreter.types.typed_value import unwrap, unwrap_locals
 from interpreter.vm_types import SymbolicValue
 
 

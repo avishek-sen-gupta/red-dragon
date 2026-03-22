@@ -7,7 +7,7 @@ from textual.reactive import reactive
 from textual.widgets import Static
 
 from interpreter.trace_types import TraceStep
-from interpreter.typed_value import TypedValue
+from interpreter.types.typed_value import TypedValue
 from interpreter.vm_types import HeapObject, Pointer, SymbolicValue
 
 

@@ -12,7 +12,7 @@ from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
 )
-from interpreter.type_expr import ScalarType, metatype
+from interpreter.types.type_expr import ScalarType, metatype
 
 
 def lower_js_var_declaration(ctx: TreeSitterEmitContext, node) -> None:

@@ -16,7 +16,7 @@ from interpreter.frontends.common.declarations import (
     emit_field_initializers,
     emit_synthetic_init,
 )
-from interpreter.type_expr import ScalarType
+from interpreter.types.type_expr import ScalarType
 
 
 def lower_local_var_decl(ctx: TreeSitterEmitContext, node) -> None:

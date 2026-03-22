@@ -10,15 +10,15 @@ from types import MappingProxyType
 from interpreter.cfg import build_cfg
 from interpreter.constants import TypeName
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
-from interpreter.function_signature import FunctionSignature
+from interpreter.types.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg, ExecutionStrategies
 from interpreter.run_types import VMConfig
-from interpreter.type_environment import TypeEnvironment
-from interpreter.type_inference import infer_types
-from interpreter.type_resolver import TypeResolver
-from interpreter.typed_value import unwrap
+from interpreter.types.type_environment import TypeEnvironment
+from interpreter.types.type_inference import infer_types
+from interpreter.types.type_resolver import TypeResolver
+from interpreter.types.typed_value import unwrap
 
 
 def _build_division_index_program() -> list[IRInstruction]:

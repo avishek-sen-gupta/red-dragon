@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Protocol
 
-from interpreter.function_signature import FunctionSignature
-from interpreter.typed_value import TypedValue
+from interpreter.types.function_signature import FunctionSignature
+from interpreter.types.typed_value import TypedValue
 
 logger = logging.getLogger(__name__)
 

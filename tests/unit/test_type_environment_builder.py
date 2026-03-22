@@ -2,9 +2,9 @@
 
 from types import MappingProxyType
 
-from interpreter.function_signature import FunctionSignature
-from interpreter.type_environment_builder import TypeEnvironmentBuilder
-from interpreter.type_expr import (
+from interpreter.types.function_signature import FunctionSignature
+from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.types.type_expr import (
     TypeExpr,
     ScalarType,
     ParameterizedType,

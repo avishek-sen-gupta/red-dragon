@@ -6,7 +6,7 @@ import pytest
 
 from interpreter.constants import Language
 from interpreter.run import run
-from interpreter.typed_value import unwrap_locals
+from interpreter.types.typed_value import unwrap_locals
 
 
 def _run_scala(source: str, max_steps: int = 500):

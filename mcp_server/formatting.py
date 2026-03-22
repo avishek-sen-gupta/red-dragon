@@ -10,7 +10,7 @@ from interpreter.interprocedural.types import (
     ReturnEndpoint,
     VariableEndpoint,
 )
-from interpreter.typed_value import TypedValue
+from interpreter.types.typed_value import TypedValue
 from interpreter.vm_types import StateUpdate
 
 

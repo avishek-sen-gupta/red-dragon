@@ -6,7 +6,7 @@ import pytest
 
 from interpreter.ir import Opcode
 from interpreter.run import run
-from interpreter.typed_value import unwrap_locals
+from interpreter.types.typed_value import unwrap_locals
 
 
 def _run_program(source: str, language: str = "python", max_steps: int = 300) -> dict:

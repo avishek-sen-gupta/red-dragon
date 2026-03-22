@@ -7,7 +7,7 @@ independent — add/remove without affecting others.
 
 from __future__ import annotations
 
-from interpreter.typed_value import unwrap
+from interpreter.types.typed_value import unwrap
 from tests.unit.rosetta.conftest import (
     execute_for_language,
     extract_answer,

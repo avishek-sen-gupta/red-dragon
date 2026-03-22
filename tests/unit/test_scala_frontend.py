@@ -7,7 +7,7 @@ import pytest
 from interpreter.frontends.scala import ScalaFrontend
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 
 
 def _parse_scala(source: str) -> list[IRInstruction]:
