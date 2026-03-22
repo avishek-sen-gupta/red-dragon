@@ -6,8 +6,8 @@ from interpreter.ir import IRInstruction, Opcode
 from interpreter.executor import _handle_address_of, _default_handler_context
 
 _CTX = _default_handler_context()
-from interpreter.typed_value import typed
-from interpreter.type_expr import pointer, scalar
+from interpreter.types.typed_value import typed
+from interpreter.types.type_expr import pointer, scalar
 from interpreter.constants import TypeName
 
 

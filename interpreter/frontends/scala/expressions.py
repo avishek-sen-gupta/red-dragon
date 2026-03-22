@@ -15,7 +15,7 @@ from interpreter.frontends.common.expressions import (
 from interpreter.frontends.common.match_expr import MatchArmSpec, lower_match_as_expr
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 from interpreter.frontends.scala.patterns import parse_scala_pattern
-from interpreter.type_expr import ScalarType
+from interpreter.types.type_expr import ScalarType
 
 
 def lower_scala_call(ctx: TreeSitterEmitContext, node) -> str:

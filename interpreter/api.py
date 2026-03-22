@@ -27,9 +27,9 @@ from interpreter.registry import build_registry
 from interpreter.run import execute_cfg_traced
 from interpreter.run_types import VMConfig
 from interpreter.trace_types import ExecutionTrace
-from interpreter.type_environment import TypeEnvironment
-from interpreter.type_inference import infer_types
-from interpreter.type_resolver import TypeResolver
+from interpreter.types.type_environment import TypeEnvironment
+from interpreter.types.type_inference import infer_types
+from interpreter.types.type_resolver import TypeResolver
 from interpreter import constants
 from interpreter.constants import LLMProvider
 

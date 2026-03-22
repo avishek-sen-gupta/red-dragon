@@ -22,7 +22,7 @@ Program:
 import pytest
 
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.typed_value import unwrap
+from interpreter.types.typed_value import unwrap
 from interpreter.vm_types import SymbolicValue, VMState
 
 from tests.unit.rosetta.conftest import (

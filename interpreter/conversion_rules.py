@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable
 
 from interpreter.conversion_result import ConversionResult
-from interpreter.type_expr import TypeExpr
+from interpreter.types.type_expr import TypeExpr
 
 
 class TypeConversionRules(ABC):

@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
-from interpreter.function_signature import FunctionSignature
-from interpreter.type_expr import TypeExpr, UNBOUND, UNKNOWN
-from interpreter.var_scope_info import VarScopeInfo
+from interpreter.types.function_signature import FunctionSignature
+from interpreter.types.type_expr import TypeExpr, UNBOUND, UNKNOWN
+from interpreter.types.var_scope_info import VarScopeInfo
 
 _NULL_SIGNATURE = FunctionSignature(params=(), return_type=UNKNOWN)
 

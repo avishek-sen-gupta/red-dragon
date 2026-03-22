@@ -5,8 +5,8 @@ from interpreter.binop_coercion import (
     JavaBinopCoercion,
     _java_stringify,
 )
-from interpreter.type_expr import UNKNOWN, scalar
-from interpreter.typed_value import TypedValue, typed
+from interpreter.types.type_expr import UNKNOWN, scalar
+from interpreter.types.typed_value import TypedValue, typed
 
 
 class TestDefaultBinopCoercion:

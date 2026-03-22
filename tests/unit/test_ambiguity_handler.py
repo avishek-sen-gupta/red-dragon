@@ -9,9 +9,9 @@ from interpreter.ambiguity_handler import (
     FallbackFirstWithWarning,
     StrictAmbiguityHandler,
 )
-from interpreter.function_signature import FunctionSignature
-from interpreter.type_expr import UNKNOWN
-from interpreter.typed_value import typed
+from interpreter.types.function_signature import FunctionSignature
+from interpreter.types.type_expr import UNKNOWN
+from interpreter.types.typed_value import typed
 
 
 def _sig(n_params: int) -> FunctionSignature:

@@ -15,7 +15,7 @@ from interpreter.frontends.type_extraction import (
     extract_normalized_type,
 )
 from interpreter.frontends.java.node_types import JavaNodeType
-from interpreter.type_expr import ScalarType
+from interpreter.types.type_expr import ScalarType
 
 
 def lower_method_invocation(ctx: TreeSitterEmitContext, node) -> str:

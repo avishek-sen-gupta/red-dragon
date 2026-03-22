@@ -15,9 +15,9 @@ from interpreter.executor import (
     _handle_address_of,
     _default_handler_context,
 )
-from interpreter.type_environment import TypeEnvironment
-from interpreter.type_expr import UNKNOWN, scalar
-from interpreter.typed_value import TypedValue, typed, typed_from_runtime
+from interpreter.types.type_environment import TypeEnvironment
+from interpreter.types.type_expr import UNKNOWN, scalar
+from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.vm import apply_update, materialize_raw_update
 from interpreter.vm_types import (
     HeapObject,

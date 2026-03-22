@@ -3,8 +3,8 @@
 from interpreter.builtins import _builtin_array_of
 from interpreter.vm import VMState
 from interpreter.vm_types import BuiltinResult, Pointer
-from interpreter.type_expr import scalar
-from interpreter.typed_value import TypedValue, typed_from_runtime
+from interpreter.types.type_expr import scalar
+from interpreter.types.typed_value import TypedValue, typed_from_runtime
 
 
 class TestArrayOfBuiltinResult:

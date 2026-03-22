@@ -12,7 +12,7 @@ from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
 from interpreter.frontends.c.node_types import CNodeType
-from interpreter.type_expr import UNKNOWN, TypeExpr, scalar, pointer
+from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar, pointer
 
 logger = logging.getLogger(__name__)
 

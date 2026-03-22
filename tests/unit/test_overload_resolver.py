@@ -8,14 +8,14 @@ from interpreter.ambiguity_handler import (
     StrictAmbiguityHandler,
 )
 from interpreter.constants import TypeName
-from interpreter.function_signature import FunctionSignature
+from interpreter.types.function_signature import FunctionSignature
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.resolution_strategy import ArityThenTypeStrategy
 from interpreter.type_compatibility import DefaultTypeCompatibility
-from interpreter.type_expr import scalar, UNKNOWN
-from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
-from interpreter.type_node import TypeNode
-from interpreter.typed_value import typed
+from interpreter.types.type_expr import scalar, UNKNOWN
+from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+from interpreter.types.type_node import TypeNode
+from interpreter.types.typed_value import typed
 
 
 def _sig(*param_types: str) -> FunctionSignature:

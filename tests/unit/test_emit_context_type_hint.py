@@ -9,7 +9,7 @@ from interpreter.constants import Language
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.ir import Opcode
-from interpreter.type_expr import ScalarType, ParameterizedType, UNKNOWN
+from interpreter.types.type_expr import ScalarType, ParameterizedType, UNKNOWN
 
 
 def _make_ctx() -> TreeSitterEmitContext:

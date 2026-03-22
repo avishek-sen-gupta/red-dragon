@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from interpreter.type_expr import TypeExpr, UNKNOWN
+from interpreter.types.type_expr import TypeExpr, UNKNOWN
 
 
 def _identity(x: Any) -> Any:

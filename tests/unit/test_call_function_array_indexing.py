@@ -6,7 +6,7 @@ not crash by falling through to native string indexing.
 """
 
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.typed_value import typed_from_runtime, unwrap
+from interpreter.types.typed_value import typed_from_runtime, unwrap
 from interpreter.vm import VMState, _is_symbolic, apply_update
 from interpreter.vm_types import HeapObject, StackFrame, StateUpdate
 from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context

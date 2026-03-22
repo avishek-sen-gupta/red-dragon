@@ -15,7 +15,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from interpreter import constants
-from interpreter.typed_value import TypedValue
+from interpreter.types.typed_value import TypedValue
 from interpreter.vm import VMState, _heap_addr as shared_heap_addr
 
 

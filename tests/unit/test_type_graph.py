@@ -1,9 +1,9 @@
 """Tests for TypeGraph — DAG with subtype queries and LUB."""
 
-from interpreter.type_node import TypeNode
-from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+from interpreter.types.type_node import TypeNode
+from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
 from interpreter.constants import TypeName, Variance
-from interpreter.type_expr import (
+from interpreter.types.type_expr import (
     ScalarType,
     ParameterizedType,
     UnionType,

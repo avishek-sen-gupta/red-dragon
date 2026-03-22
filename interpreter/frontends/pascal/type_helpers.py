@@ -5,7 +5,7 @@ from __future__ import annotations
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.type_extraction import normalize_type_hint
 from interpreter.frontends.pascal.node_types import PascalNodeType
-from interpreter.type_expr import UNKNOWN, TypeExpr
+from interpreter.types.type_expr import UNKNOWN, TypeExpr
 
 
 def extract_pascal_return_type(ctx: TreeSitterEmitContext, search_node) -> TypeExpr:

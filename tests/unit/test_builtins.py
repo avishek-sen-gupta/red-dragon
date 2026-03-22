@@ -16,7 +16,7 @@ from interpreter.vm_types import (
     StateUpdate,
     VMState,
 )
-from interpreter.typed_value import TypedValue, typed_from_runtime
+from interpreter.types.typed_value import TypedValue, typed_from_runtime
 from interpreter.vm_types import Pointer
 
 

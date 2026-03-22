@@ -4,7 +4,7 @@ import logging
 import statistics
 
 from interpreter.cfg import build_cfg
-from interpreter.typed_value import TypedValue
+from interpreter.types.typed_value import TypedValue
 from interpreter.vm import _heap_addr
 from interpreter.frontends import (
     get_deterministic_frontend,

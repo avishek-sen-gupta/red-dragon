@@ -6,9 +6,9 @@ from interpreter.constants import TypeName
 from interpreter.conversion_result import _identity
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.identity_conversion_rules import IdentityConversionRules
-from interpreter.null_type_resolver import NullTypeResolver
-from interpreter.type_expr import UNKNOWN, scalar
-from interpreter.type_resolver import TypeResolver
+from interpreter.types.null_type_resolver import NullTypeResolver
+from interpreter.types.type_expr import UNKNOWN, scalar
+from interpreter.types.type_resolver import TypeResolver
 
 
 def _rules() -> DefaultTypeConversionRules:

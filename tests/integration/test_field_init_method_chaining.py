@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.typed_value import TypedValue
+from interpreter.types.typed_value import TypedValue
 from tests.unit.rosetta.conftest import execute_for_language, extract_answer
 
 PROGRAMS: dict[str, str] = {

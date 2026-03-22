@@ -15,7 +15,7 @@ from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
 from interpreter.frontends.type_extraction import (
     extract_normalized_type,
 )
-from interpreter.type_expr import ScalarType
+from interpreter.types.type_expr import ScalarType
 
 _BYREF_KEYWORDS = frozenset({"out", "ref", "in"})
 

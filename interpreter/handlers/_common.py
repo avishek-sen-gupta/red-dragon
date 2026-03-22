@@ -6,8 +6,8 @@ from typing import Any
 
 from interpreter.vm import VMState, SymbolicValue, _heap_addr, _is_symbolic
 from interpreter.vm_types import StackFrame
-from interpreter.type_expr import UNKNOWN, TypeExpr, scalar
-from interpreter.typed_value import TypedValue, typed
+from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
+from interpreter.types.typed_value import TypedValue, typed
 from interpreter.ir import SpreadArguments
 
 

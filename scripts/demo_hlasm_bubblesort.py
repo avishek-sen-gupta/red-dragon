@@ -23,9 +23,9 @@ from interpreter.llm_frontend import LLMFrontend
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg
 from interpreter.run_types import VMConfig
-from interpreter.type_inference import infer_types
-from interpreter.type_resolver import TypeResolver
-from interpreter.typed_value import TypedValue
+from interpreter.types.type_inference import infer_types
+from interpreter.types.type_resolver import TypeResolver
+from interpreter.types.typed_value import TypedValue
 from interpreter.vm_types import SymbolicValue
 
 logger = logging.getLogger(__name__)
@@ -175,7 +175,7 @@ def main():
     for var, typ in sorted(env.var_types.items()):
         print(f"    {var:8s} : {typ}")
 
-    from interpreter.type_expr import UNBOUND
+    from interpreter.types.type_expr import UNBOUND
 
     unbound_sigs = env.method_signatures.get(UNBOUND, {})
     if unbound_sigs:

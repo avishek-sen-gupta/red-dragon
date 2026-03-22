@@ -19,7 +19,7 @@ from interpreter.frontends.type_extraction import (
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.typescript_node_types import TypeScriptNodeType
-from interpreter.type_expr import UNKNOWN, ScalarType, TypeExpr, metatype
+from interpreter.types.type_expr import UNKNOWN, ScalarType, TypeExpr, metatype
 
 
 class TypeScriptFrontend(JavaScriptFrontend):

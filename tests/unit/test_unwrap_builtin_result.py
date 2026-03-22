@@ -1,8 +1,8 @@
 """Tests for _unwrap_builtin_result helper."""
 
 from interpreter.executor import _unwrap_builtin_result
-from interpreter.typed_value import TypedValue, typed, typed_from_runtime
-from interpreter.type_expr import pointer, scalar
+from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
+from interpreter.types.type_expr import pointer, scalar
 from interpreter.vm_types import BuiltinResult, Pointer
 
 

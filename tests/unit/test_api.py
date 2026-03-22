@@ -13,8 +13,8 @@ from interpreter.api import (
 )
 from interpreter.cfg import CFG
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.type_environment import TypeEnvironment
-from interpreter.type_expr import scalar
+from interpreter.types.type_environment import TypeEnvironment
+from interpreter.types.type_expr import scalar
 
 SIMPLE_SOURCE = "x = 42\n"
 

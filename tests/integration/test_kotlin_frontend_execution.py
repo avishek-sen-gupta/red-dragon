@@ -7,7 +7,7 @@ import pytest
 from interpreter.constants import Language
 from interpreter.refs.func_ref import BoundFuncRef
 from interpreter.run import run
-from interpreter.typed_value import unwrap_locals
+from interpreter.types.typed_value import unwrap_locals
 
 
 def _run_kotlin(source: str, max_steps: int = 500) -> dict:

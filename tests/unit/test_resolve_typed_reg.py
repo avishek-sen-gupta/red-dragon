@@ -4,9 +4,9 @@ from types import MappingProxyType
 
 from interpreter.constants import TypeName
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
-from interpreter.function_signature import FunctionSignature
+from interpreter.types.function_signature import FunctionSignature
 from interpreter.identity_conversion_rules import IdentityConversionRules
-from interpreter.type_environment import TypeEnvironment
+from interpreter.types.type_environment import TypeEnvironment
 from interpreter.vm import VMState, _resolve_typed_reg, runtime_type_name
 from interpreter.vm_types import StackFrame
 

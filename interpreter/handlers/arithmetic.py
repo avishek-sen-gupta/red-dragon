@@ -16,8 +16,8 @@ from interpreter.vm import (
     _is_symbolic,
 )
 from interpreter.refs.func_ref import BoundFuncRef
-from interpreter.type_expr import UNKNOWN, scalar
-from interpreter.typed_value import typed, typed_from_runtime
+from interpreter.types.type_expr import UNKNOWN, scalar
+from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter import constants
 from interpreter.handlers._common import _symbolic_name
 

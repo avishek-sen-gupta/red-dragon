@@ -25,8 +25,8 @@ from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.resolution_strategy import ArityThenTypeStrategy
 from interpreter.type_compatibility import DefaultTypeCompatibility
-from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
-from interpreter.type_node import TypeNode
+from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+from interpreter.types.type_node import TypeNode
 from interpreter.ambiguity_handler import FallbackFirstWithWarning
 from interpreter.binop_coercion import (
     BinopCoercionStrategy,
@@ -42,11 +42,11 @@ from interpreter.field_fallback import (
     NoFieldFallback,
     ImplicitThisFieldFallback,
 )
-from interpreter.type_environment import TypeEnvironment
-from interpreter.type_expr import scalar
-from interpreter.typed_value import TypedValue
-from interpreter.type_inference import infer_types
-from interpreter.type_resolver import TypeResolver
+from interpreter.types.type_environment import TypeEnvironment
+from interpreter.types.type_expr import scalar
+from interpreter.types.typed_value import TypedValue
+from interpreter.types.type_inference import infer_types
+from interpreter.types.type_resolver import TypeResolver
 from interpreter.unresolved_call import (
     SymbolicResolver,
     LLMPlausibleResolver,

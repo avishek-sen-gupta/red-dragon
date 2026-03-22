@@ -2,8 +2,8 @@
 
 from interpreter.constants import Language, TypeName
 from interpreter.run import run
-from interpreter.typed_value import TypedValue
-from interpreter.type_expr import ParameterizedType, pointer, scalar
+from interpreter.types.typed_value import TypedValue
+from interpreter.types.type_expr import ParameterizedType, pointer, scalar
 from interpreter.vm_types import Pointer
 
 

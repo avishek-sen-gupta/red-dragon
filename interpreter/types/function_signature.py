@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from interpreter.function_kind import FunctionKind
-from interpreter.type_expr import TypeExpr
+from interpreter.types.function_kind import FunctionKind
+from interpreter.types.type_expr import TypeExpr
 
 _THIS_NAMES = frozenset(("this", "$this"))
 

@@ -2,10 +2,10 @@
 
 from interpreter.constants import TypeName
 from interpreter.type_compatibility import DefaultTypeCompatibility
-from interpreter.type_expr import scalar, UNKNOWN
-from interpreter.typed_value import typed
-from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
-from interpreter.type_node import TypeNode
+from interpreter.types.type_expr import scalar, UNKNOWN
+from interpreter.types.typed_value import typed
+from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+from interpreter.types.type_node import TypeNode
 
 
 def _default_graph() -> TypeGraph:

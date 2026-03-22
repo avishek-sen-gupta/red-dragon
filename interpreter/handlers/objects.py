@@ -13,8 +13,8 @@ from interpreter.vm import (
     NewObject,
 )
 from interpreter.refs.class_ref import ClassRef
-from interpreter.type_expr import pointer, scalar
-from interpreter.typed_value import typed
+from interpreter.types.type_expr import pointer, scalar
+from interpreter.types.typed_value import typed
 from interpreter import constants
 
 
