@@ -639,6 +639,9 @@
 {"issue_id":"red-dragon-iyb","label":"pascal"}
 {"issue_id":"red-dragon-izbh","label":"symbol-table"}
 {"issue_id":"red-dragon-j628","label":"audit-asserts"}
+{"issue_id":"red-dragon-j7f4","label":"architecture"}
+{"issue_id":"red-dragon-j7f4","label":"dataflow"}
+{"issue_id":"red-dragon-j7f4","label":"p1"}
 {"issue_id":"red-dragon-j87f","label":"architecture"}
 {"issue_id":"red-dragon-j87f","label":"symbol-table"}
 {"issue_id":"red-dragon-jasm","label":"p2"}
