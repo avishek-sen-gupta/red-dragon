@@ -7,8 +7,8 @@ import json
 import pytest
 
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.llm_client import LLMClient
-from interpreter.llm_frontend import (
+from interpreter.llm.llm_client import LLMClient
+from interpreter.llm.llm_frontend import (
     IRParsingError,
     LLMFrontend,
     LLMFrontendPrompts,

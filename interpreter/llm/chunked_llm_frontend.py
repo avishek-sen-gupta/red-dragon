@@ -12,7 +12,7 @@ from interpreter.frontend import Frontend
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.llm_frontend import (
+from interpreter.llm.llm_frontend import (
     IRParsingError,
     LLMFrontend,
     _convert_llm_class_refs,

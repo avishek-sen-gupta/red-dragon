@@ -13,7 +13,7 @@ from interpreter.ast_repair.repairing_frontend_decorator import (
 from interpreter.constants import Language
 from interpreter.frontends import get_deterministic_frontend
 from interpreter.ir import Opcode
-from interpreter.llm_client import LLMClient
+from interpreter.llm.llm_client import LLMClient
 from interpreter.parser import TreeSitterParserFactory
 
 
