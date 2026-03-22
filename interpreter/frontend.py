@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 from interpreter.constants import Language
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
-from interpreter.class_ref import ClassRef
-from interpreter.func_ref import FuncRef
+from interpreter.refs.class_ref import ClassRef
+from interpreter.refs.func_ref import FuncRef
 from interpreter.ir import IRInstruction
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter import constants

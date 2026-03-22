@@ -19,8 +19,8 @@ from types import MappingProxyType
 
 from interpreter import constants
 from interpreter.constants import CanonicalLiteral, TypeName
-from interpreter.class_ref import ClassRef
-from interpreter.func_ref import FuncRef
+from interpreter.refs.class_ref import ClassRef
+from interpreter.refs.func_ref import FuncRef
 from interpreter.function_kind import FunctionKind
 from interpreter.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
