@@ -94,14 +94,6 @@ def countdown(n):
 r = countdown(5)
 """
 
-    @pytest.mark.xfail(
-        strict=False,
-        reason=(
-            "CALL_FUNCTION operand is the function name (e.g. 'countdown') "
-            "but call_graph.build_function_entries keys by CFG label (e.g. 'func_countdown_0'). "
-            "Callee resolution needs a name-to-label mapping."
-        ),
-    )
     def test_call_graph_has_recursive_edge(self):
         result = _analyze_source(self.SOURCE, Language.PYTHON)
         countdown_entries = [
@@ -160,14 +152,6 @@ def g(y):
 result = g(10)
 """
 
-    @pytest.mark.xfail(
-        strict=False,
-        reason=(
-            "CALL_FUNCTION operand is the function name (e.g. 'f') "
-            "but call_graph.build_function_entries keys by CFG label (e.g. 'func_f_1'). "
-            "Callee resolution needs a name-to-label mapping."
-        ),
-    )
     def test_call_graph_has_g_to_f_edge(self):
         result = _analyze_source(self.SOURCE, Language.PYTHON)
         g_calls_f = any(
