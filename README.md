@@ -101,6 +101,37 @@ The **lowering trace** mode shows four panels: source with highlighted spans, a 
 
 The **coverage matrix** mode displays a cross-language grid showing which AST node types each frontend handles, distinguishing language-specific handlers (`✓`) from shared/common handlers (`✓*`). Supports filtering by node type name.
 
+### MCP Server
+
+RedDragon exposes its compilation pipeline, VM execution, and interprocedural dataflow analysis as an [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server, allowing LLMs to analyze and execute programs across all 15 supported languages.
+
+**8 tools:**
+- `analyze_program(source, language)` — full pipeline analysis: functions, call graph, flow counts
+- `get_function_summary(source, language, function_name)` — param→return/field flows for one function
+- `get_call_chain(source, language, function_name?)` — nested call-chain tree showing data flow through calls
+- `load_program(source, language, max_steps?)` — load and execute a program, record step-by-step trace
+- `step(count?)` — advance through execution trace, get instructions and state deltas
+- `run_to_end()` — skip to final state with all variable values
+- `get_state()` — current VM state: call stack, variables, registers, heap
+- `get_ir(function_name?)` — IR instructions, optionally filtered to one function
+
+**3 resources:** `reddragon://source`, `reddragon://ir`, `reddragon://cfg`
+
+**Run:** `poetry run python -m mcp_server`
+
+**Configure in Claude Code** (`.claude/settings.json`):
+```json
+{
+  "mcpServers": {
+    "red-dragon": {
+      "command": "poetry",
+      "args": ["run", "python", "-m", "mcp_server"],
+      "cwd": "/path/to/red-dragon"
+    }
+  }
+}
+```
+
 ## Setup
 
 ### Prerequisites
