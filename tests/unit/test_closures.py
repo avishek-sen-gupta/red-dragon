@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from interpreter.run import run
-from interpreter.typed_value import unwrap, unwrap_locals
+from interpreter.types.typed_value import unwrap, unwrap_locals
 
 
 def _run_program(source: str, max_steps: int = 200) -> dict:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.type_expr import (
+from interpreter.types.type_expr import (
     TypeExpr,
     ScalarType,
     ParameterizedType,

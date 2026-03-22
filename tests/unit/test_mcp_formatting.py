@@ -12,9 +12,9 @@ from interpreter.interprocedural.types import (
     VariableEndpoint,
 )
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.typed_value import TypedValue
+from interpreter.types.typed_value import TypedValue
 from interpreter.constants import TypeName
-from interpreter.type_expr import ScalarType
+from interpreter.types.type_expr import ScalarType
 
 from mcp_server.formatting import (
     format_typed_value,

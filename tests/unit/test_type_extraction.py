@@ -1,7 +1,7 @@
 """Unit tests for interpreter.frontends.type_extraction — normalize_type_hint."""
 
 from interpreter.frontends.type_extraction import normalize_type_hint
-from interpreter.type_expr import UNKNOWN, ScalarType
+from interpreter.types.type_expr import UNKNOWN, ScalarType
 
 JAVA_TYPE_MAP = {
     "int": "Int",

@@ -6,7 +6,7 @@ import pytest
 
 from interpreter.constants import Language
 from interpreter.run import run
-from interpreter.typed_value import unwrap_locals
+from interpreter.types.typed_value import unwrap_locals
 
 
 def _run_rust(source: str, max_steps: int = 200):
@@ -139,11 +139,11 @@ let b = Box::new(n);
         b_ptr = local_vars["b"]
         assert b_ptr.base in vm.heap
         box_obj = vm.heap[b_ptr.base]
-        from interpreter.type_expr import ScalarType
+        from interpreter.types.type_expr import ScalarType
 
         assert box_obj.type_hint == ScalarType("Box")
         assert "0" in box_obj.fields
-        from interpreter.typed_value import TypedValue
+        from interpreter.types.typed_value import TypedValue
 
         inner = box_obj.fields["0"]
         inner_val = inner.value if isinstance(inner, TypedValue) else inner
@@ -158,7 +158,7 @@ class TestRustOptionExecution:
         assert opt_ptr is not None
         assert opt_ptr.base in vm.heap
         assert "value" in vm.heap[opt_ptr.base].fields
-        from interpreter.typed_value import TypedValue
+        from interpreter.types.typed_value import TypedValue
 
         tv = vm.heap[opt_ptr.base].fields["value"]
         assert isinstance(tv, TypedValue)
@@ -199,7 +199,7 @@ let inner = opt.unwrap();
         # unwrap returns the Box object; auto-deref to 42 is a separate concern
         inner_ptr = local_vars["inner"]
         assert inner_ptr.base in vm.heap
-        from interpreter.type_expr import ScalarType
+        from interpreter.types.type_expr import ScalarType
 
         assert vm.heap[inner_ptr.base].type_hint == ScalarType("Box")
 

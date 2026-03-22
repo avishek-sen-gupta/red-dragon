@@ -23,7 +23,7 @@ from interpreter.vm_types import (
     StateUpdate,
 )
 from interpreter.vm import apply_update
-from interpreter.typed_value import TypedValue, typed_from_runtime, unwrap
+from interpreter.types.typed_value import TypedValue, typed_from_runtime, unwrap
 from interpreter.executor import (
     _handle_address_of,
     _handle_load_var,

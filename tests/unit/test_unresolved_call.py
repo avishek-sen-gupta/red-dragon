@@ -11,8 +11,8 @@ from interpreter.unresolved_call import (
     SymbolicResolver,
     UnresolvedCallResolver,
 )
-from interpreter.type_expr import scalar
-from interpreter.typed_value import TypedValue
+from interpreter.types.type_expr import scalar
+from interpreter.types.typed_value import TypedValue
 from interpreter.vm_types import (
     ExecutionResult,
     StackFrame,

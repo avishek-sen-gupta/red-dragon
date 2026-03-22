@@ -13,7 +13,7 @@ from interpreter.frontend import Frontend
 from interpreter.ir import IRInstruction
 from interpreter.llm_client import LLMClient
 from interpreter.parser import ParserFactory
-from interpreter.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 
 logger = logging.getLogger(__name__)
 

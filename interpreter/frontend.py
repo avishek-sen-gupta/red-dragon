@@ -10,7 +10,7 @@ from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.ir import IRInstruction
-from interpreter.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter import constants
 from interpreter.constants import LLMProvider
 

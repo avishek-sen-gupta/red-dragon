@@ -13,7 +13,7 @@ from interpreter.conversion_result import (
     IDENTITY_CONVERSION,
     _identity,
 )
-from interpreter.type_expr import TypeExpr, scalar
+from interpreter.types.type_expr import TypeExpr, scalar
 
 logger = logging.getLogger(__name__)
 

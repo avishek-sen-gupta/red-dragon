@@ -11,10 +11,10 @@ import logging
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
-from interpreter.function_signature import FunctionSignature
-from interpreter.type_environment import TypeEnvironment
-from interpreter.type_expr import TypeExpr, UNBOUND, UNKNOWN
-from interpreter.var_scope_info import VarScopeInfo
+from interpreter.types.function_signature import FunctionSignature
+from interpreter.types.type_environment import TypeEnvironment
+from interpreter.types.type_expr import TypeExpr, UNBOUND, UNKNOWN
+from interpreter.types.var_scope_info import VarScopeInfo
 
 logger = logging.getLogger(__name__)
 

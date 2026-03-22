@@ -6,7 +6,7 @@ from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import FunctionRegistry
 from interpreter.vm import VMState
 from interpreter.vm_types import Pointer, StackFrame
-from interpreter.type_expr import pointer, scalar
+from interpreter.types.type_expr import pointer, scalar
 
 
 from dataclasses import replace as _replace

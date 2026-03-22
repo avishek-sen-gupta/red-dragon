@@ -14,8 +14,8 @@ from interpreter.builtins import (
 )
 from interpreter.vm import VMState, Operators
 from interpreter.vm_types import BuiltinResult, HeapObject
-from interpreter.typed_value import typed, typed_from_runtime
-from interpreter.type_expr import scalar
+from interpreter.types.typed_value import typed, typed_from_runtime
+from interpreter.types.type_expr import scalar
 from interpreter.constants import TypeName
 
 

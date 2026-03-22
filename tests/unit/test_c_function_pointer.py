@@ -17,7 +17,7 @@ from interpreter.frontends.c import CFrontend
 from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.run import run
-from interpreter.typed_value import unwrap_locals
+from interpreter.types.typed_value import unwrap_locals
 
 
 def _parse_and_lower(source: str):

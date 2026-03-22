@@ -27,7 +27,7 @@ from interpreter.llm_frontend import LLMFrontend
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg
 from interpreter.run_types import VMConfig
-from interpreter.typed_value import TypedValue
+from interpreter.types.typed_value import TypedValue
 from interpreter.vm_types import SymbolicValue
 
 logger = logging.getLogger(__name__)

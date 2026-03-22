@@ -5,7 +5,7 @@ from __future__ import annotations
 from interpreter.frontends.c import CFrontend
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 
 
 def _parse_and_lower(source: str) -> list[IRInstruction]:

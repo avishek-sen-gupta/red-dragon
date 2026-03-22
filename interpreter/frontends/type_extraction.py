@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 
 from interpreter.frontends.context import TreeSitterEmitContext
-from interpreter.type_expr import UNKNOWN, ParameterizedType, ScalarType, TypeExpr
+from interpreter.types.type_expr import UNKNOWN, ParameterizedType, ScalarType, TypeExpr
 
 logger = logging.getLogger(__name__)
 

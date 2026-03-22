@@ -4,7 +4,7 @@ from interpreter.constants import TypeName
 from interpreter.conversion_result import IDENTITY_CONVERSION
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.identity_conversion_rules import IdentityConversionRules
-from interpreter.type_expr import ScalarType, TypeExpr, UNKNOWN, scalar
+from interpreter.types.type_expr import ScalarType, TypeExpr, UNKNOWN, scalar
 
 
 def _rules() -> DefaultTypeConversionRules:

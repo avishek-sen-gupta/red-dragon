@@ -7,7 +7,7 @@ at emission time, storing original name + scope metadata separately.
 from interpreter.constants import Language
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
-from interpreter.var_scope_info import VarScopeInfo
+from interpreter.types.var_scope_info import VarScopeInfo
 
 
 def _make_ctx() -> TreeSitterEmitContext:
@@ -193,8 +193,8 @@ class TestScopeTrackerNested:
 class TestFlatVarTypesUnionMerge:
     def test_same_name_different_scopes_produces_union(self):
         """x: Int in func_f and x: String in func_g → flat x: Union[Int, String]."""
-        from interpreter.type_inference import _InferenceContext
-        from interpreter.type_expr import scalar, union_of
+        from interpreter.types.type_inference import _InferenceContext
+        from interpreter.types.type_expr import scalar, union_of
 
         ctx = _InferenceContext()
         ctx.scoped_var_types = {
@@ -206,8 +206,8 @@ class TestFlatVarTypesUnionMerge:
 
     def test_same_type_same_name_no_union(self):
         """x: Int in both scopes → flat x: Int (no union)."""
-        from interpreter.type_inference import _InferenceContext
-        from interpreter.type_expr import scalar
+        from interpreter.types.type_inference import _InferenceContext
+        from interpreter.types.type_expr import scalar
 
         ctx = _InferenceContext()
         ctx.scoped_var_types = {
@@ -219,8 +219,8 @@ class TestFlatVarTypesUnionMerge:
 
     def test_disjoint_names_both_present(self):
         """x in func_f, y in func_g → flat has both."""
-        from interpreter.type_inference import _InferenceContext
-        from interpreter.type_expr import scalar
+        from interpreter.types.type_inference import _InferenceContext
+        from interpreter.types.type_expr import scalar
 
         ctx = _InferenceContext()
         ctx.scoped_var_types = {
@@ -242,8 +242,8 @@ class TestTypeEnvironmentScopedVarTypes:
         """TypeEnvironment should expose per-function scoped variable types."""
         from types import MappingProxyType
 
-        from interpreter.type_environment import TypeEnvironment
-        from interpreter.type_expr import scalar
+        from interpreter.types.type_environment import TypeEnvironment
+        from interpreter.types.type_expr import scalar
 
         scoped = MappingProxyType(
             {
@@ -263,7 +263,7 @@ class TestTypeEnvironmentScopedVarTypes:
         """TypeEnvironment should expose mangled→original name metadata."""
         from types import MappingProxyType
 
-        from interpreter.type_environment import TypeEnvironment
+        from interpreter.types.type_environment import TypeEnvironment
 
         metadata = MappingProxyType(
             {"x$1": VarScopeInfo(original_name="x", scope_depth=1)}

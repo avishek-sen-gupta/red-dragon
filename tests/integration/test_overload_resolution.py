@@ -5,7 +5,7 @@ the correct overload based on call-site argument arity and types.
 """
 
 from interpreter.run import run
-from interpreter.typed_value import unwrap
+from interpreter.types.typed_value import unwrap
 
 
 class TestJavaOverloadResolutionByArity:

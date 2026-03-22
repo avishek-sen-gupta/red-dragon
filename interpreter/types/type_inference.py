@@ -21,12 +21,12 @@ from interpreter import constants
 from interpreter.constants import CanonicalLiteral, TypeName
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
-from interpreter.function_kind import FunctionKind
-from interpreter.function_signature import FunctionSignature
+from interpreter.types.function_kind import FunctionKind
+from interpreter.types.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.type_environment import TypeEnvironment
-from interpreter.type_environment_builder import TypeEnvironmentBuilder
-from interpreter.type_expr import (
+from interpreter.types.type_environment import TypeEnvironment
+from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.types.type_expr import (
     TypeExpr,
     ScalarType,
     ParameterizedType,
@@ -39,7 +39,7 @@ from interpreter.type_expr import (
     fn_type,
     tuple_of,
 )
-from interpreter.type_resolver import TypeResolver
+from interpreter.types.type_resolver import TypeResolver
 
 logger = logging.getLogger(__name__)
 
