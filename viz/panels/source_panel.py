@@ -9,7 +9,7 @@ from textual.widgets import Static
 from interpreter.ir import IRInstruction
 
 
-class SourcePanel(Static, can_focus=True):
+class SourcePanel(Static):
     """Displays source code with the current instruction's source span highlighted."""
 
     current_instruction: reactive[IRInstruction | None] = reactive(None)
