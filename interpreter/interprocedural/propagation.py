@@ -11,6 +11,7 @@ from collections import defaultdict
 
 from interpreter import constants
 from interpreter.cfg_types import CFG
+from interpreter.ir import Opcode
 from interpreter.interprocedural.summaries import build_summary
 from interpreter.interprocedural.types import (
     CallContext,
@@ -147,20 +148,47 @@ def _dfs_collect_sccs(
 # ---------------------------------------------------------------------------
 
 
+def _trace_reg_to_var(reg: str, cfg: CFG, block_label: str) -> str:
+    """Trace a register back to its named variable by scanning the block for LOAD_VAR/STORE_VAR.
+
+    If the register was produced by LOAD_VAR x → %reg, return "x".
+    If the register is the result_reg of a CALL_*, scan for STORE_VAR/DECL_VAR that consumes it.
+    Falls back to the register name itself if no named variable found.
+    """
+    block = cfg.blocks.get(block_label)
+    if block is None:
+        return reg
+    # Scan for LOAD_VAR that produces this register
+    for inst in block.instructions:
+        if inst.opcode == Opcode.LOAD_VAR and inst.result_reg == reg:
+            return str(inst.operands[0])
+    # Scan for DECL_VAR/STORE_VAR that consumes this register
+    for inst in block.instructions:
+        if (
+            inst.opcode in (Opcode.DECL_VAR, Opcode.STORE_VAR)
+            and len(inst.operands) >= 2
+        ):
+            if str(inst.operands[1]) == reg:
+                return str(inst.operands[0])
+    return reg
+
+
 def _substitute_endpoint(
     endpoint: FlowEndpoint,
     param_to_actual: dict[str, str],
     callee: FunctionEntry,
     call_site: CallSite,
+    cfg: CFG,
 ) -> FlowEndpoint:
-    """Substitute formal parameter names with actual argument register names."""
+    """Substitute formal parameter names with actual argument names (traced to variables)."""
     if isinstance(endpoint, VariableEndpoint):
-        substituted_name = param_to_actual.get(endpoint.name, endpoint.name)
-        return VariableEndpoint(name=substituted_name, definition=NO_DEFINITION)
+        raw_reg = param_to_actual.get(endpoint.name, endpoint.name)
+        traced_name = _trace_reg_to_var(raw_reg, cfg, call_site.location.block_label)
+        return VariableEndpoint(name=traced_name, definition=NO_DEFINITION)
 
     if isinstance(endpoint, FieldEndpoint):
         new_base = _substitute_endpoint(
-            endpoint.base, param_to_actual, callee, call_site
+            endpoint.base, param_to_actual, callee, call_site, cfg
         )
         assert isinstance(new_base, VariableEndpoint)
         return FieldEndpoint(
@@ -170,21 +198,26 @@ def _substitute_endpoint(
         )
 
     if isinstance(endpoint, ReturnEndpoint):
-        # Return endpoint maps to the call site's result register
-        result_reg = _call_site_result_reg(call_site)
-        return VariableEndpoint(name=result_reg, definition=NO_DEFINITION)
+        # Return endpoint maps to the variable that receives the call result
+        result_reg = _call_site_result_reg(call_site, cfg)
+        traced_name = _trace_reg_to_var(result_reg, cfg, call_site.location.block_label)
+        return VariableEndpoint(name=traced_name, definition=NO_DEFINITION)
 
     # Exhaustive — all FlowEndpoint variants handled
     raise TypeError(f"Unknown endpoint type: {type(endpoint)}")
 
 
-def _call_site_result_reg(call_site: CallSite) -> str:
-    """Derive the result register name for a call site.
-
-    The result register is the call instruction's result_reg. Since CallSite
-    stores location but not the instruction directly, we use a convention:
-    the result is named after the call site location.
-    """
+def _call_site_result_reg(
+    call_site: CallSite, cfg: CFG = CFG(blocks={}, entry="")
+) -> str:
+    """Get the result register for a call site from the actual instruction."""
+    block = cfg.blocks.get(call_site.location.block_label)
+    if block is not None and call_site.location.instruction_index < len(
+        block.instructions
+    ):
+        inst = block.instructions[call_site.location.instruction_index]
+        if inst.result_reg:
+            return str(inst.result_reg)
     loc = call_site.location
     return f"%call_{loc.block_label}_{loc.instruction_index}"
 
@@ -193,11 +226,12 @@ def apply_summary_at_call_site(
     call_site: CallSite,
     summary: FunctionSummary,
     callee: FunctionEntry,
+    cfg: CFG = CFG(blocks={}, entry=""),
 ) -> frozenset[tuple[FlowEndpoint, FlowEndpoint]]:
     """Substitute formal params with actual args in a summary's flows.
 
     Given a call site where caller passes arg_operands mapping to callee params,
-    rewrite each flow endpoint to use the caller's register names.
+    rewrite each flow endpoint to use the caller's named variables (traced from registers).
     """
     params = callee.params
     actuals = call_site.arg_operands
@@ -207,8 +241,8 @@ def apply_summary_at_call_site(
 
     return frozenset(
         (
-            _substitute_endpoint(src, param_to_actual, callee, call_site),
-            _substitute_endpoint(dst, param_to_actual, callee, call_site),
+            _substitute_endpoint(src, param_to_actual, callee, call_site, cfg),
+            _substitute_endpoint(dst, param_to_actual, callee, call_site, cfg),
         )
         for src, dst in summary.flows
     )
@@ -305,6 +339,7 @@ def _root_context() -> CallContext:
 def build_whole_program_graph(
     summaries: dict[SummaryKey, FunctionSummary],
     call_graph: CallGraph,
+    cfg: CFG = CFG(blocks={}, entry=""),
 ) -> tuple[
     dict[FlowEndpoint, frozenset[FlowEndpoint]],
     dict[FlowEndpoint, frozenset[FlowEndpoint]],
@@ -326,7 +361,7 @@ def build_whole_program_graph(
         for callee in site.callees:
             callee_summaries = [s for s in summaries.values() if s.function == callee]
             for summary in callee_summaries:
-                propagated = apply_summary_at_call_site(site, summary, callee)
+                propagated = apply_summary_at_call_site(site, summary, callee, cfg)
                 for src, dst in propagated:
                     raw_edges[src].add(dst)
 
