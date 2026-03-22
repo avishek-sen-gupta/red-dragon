@@ -22,12 +22,12 @@ from interpreter.refs.func_ref import FuncRef, BoundFuncRef
 from interpreter.refs.class_ref import ClassRef
 from interpreter.executor import HandlerContext, _try_execute_locally
 from interpreter.frontends.symbol_table import SymbolTable
-from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
-from interpreter.resolution_strategy import ArityThenTypeStrategy
+from interpreter.overload.overload_resolver import NullOverloadResolver, OverloadResolver
+from interpreter.overload.resolution_strategy import ArityThenTypeStrategy
 from interpreter.types.coercion.type_compatibility import DefaultTypeCompatibility
 from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
 from interpreter.types.type_node import TypeNode
-from interpreter.ambiguity_handler import FallbackFirstWithWarning
+from interpreter.overload.ambiguity_handler import FallbackFirstWithWarning
 from interpreter.types.coercion.binop_coercion import (
     BinopCoercionStrategy,
     DefaultBinopCoercion,
