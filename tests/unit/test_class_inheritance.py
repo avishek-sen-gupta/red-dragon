@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from interpreter.refs.class_ref import ClassRef
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.llm_frontend import _convert_llm_class_refs
+from interpreter.llm.llm_frontend import _convert_llm_class_refs
 from interpreter.registry import (
     _expand_parent_chains,
     build_registry,

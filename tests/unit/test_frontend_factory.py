@@ -6,8 +6,8 @@ import pytest
 
 from interpreter import constants
 from interpreter.frontend import PythonFrontend, get_frontend
-from interpreter.llm_client import LLMClient
-from interpreter.llm_frontend import LLMFrontend
+from interpreter.llm.llm_client import LLMClient
+from interpreter.llm.llm_frontend import LLMFrontend
 
 
 class FakeLLMClient(LLMClient):

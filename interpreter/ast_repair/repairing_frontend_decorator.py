@@ -11,7 +11,7 @@ from interpreter.ast_repair.source_patcher import patch
 from interpreter.constants import Language
 from interpreter.frontend import Frontend
 from interpreter.ir import IRInstruction
-from interpreter.llm_client import LLMClient
+from interpreter.llm.llm_client import LLMClient
 from interpreter.parser import ParserFactory
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 

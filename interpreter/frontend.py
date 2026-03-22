@@ -112,7 +112,7 @@ def get_frontend(
             from interpreter.ast_repair.repairing_frontend_decorator import (
                 RepairingFrontendDecorator,
             )
-            from interpreter.llm_client import LLMClient
+            from interpreter.llm.llm_client import LLMClient
             from interpreter.parser import TreeSitterParserFactory
 
             if isinstance(repair_client, LLMClient):
@@ -125,8 +125,8 @@ def get_frontend(
         return frontend
 
     if frontend_type in (constants.FRONTEND_LLM, constants.FRONTEND_CHUNKED_LLM):
-        from interpreter.llm_client import LLMClient, get_llm_client
-        from interpreter.llm_frontend import LLMFrontend
+        from interpreter.llm.llm_client import LLMClient, get_llm_client
+        from interpreter.llm.llm_frontend import LLMFrontend
 
         if llm_client is None:
             resolved_client = get_llm_client(provider=llm_provider)
@@ -149,7 +149,7 @@ def get_frontend(
         )
 
         if frontend_type == constants.FRONTEND_CHUNKED_LLM:
-            from interpreter.chunked_llm_frontend import ChunkedLLMFrontend
+            from interpreter.llm.chunked_llm_frontend import ChunkedLLMFrontend
             from interpreter.parser import TreeSitterParserFactory
 
             return ChunkedLLMFrontend(
