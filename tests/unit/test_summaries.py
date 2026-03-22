@@ -124,6 +124,59 @@ class TestBuildSummary:
         assert isinstance(dst, ReturnEndpoint)
         assert dst.function == entry
 
+    def test_passthrough_param_to_return_with_decl_var(self):
+        """SYMBOLIC param:x; DECL_VAR x; LOAD_VAR x; RETURN → (Variable(x), Return).
+
+        Real frontends emit DECL_VAR (not STORE_VAR) for parameter declarations.
+        """
+        ir = [
+            _inst(Opcode.LABEL, label="func__id"),
+            _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
+            _inst(Opcode.DECL_VAR, operands=["x", "%0"]),
+            _inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"]),
+            _inst(Opcode.RETURN, operands=["%1"]),
+        ]
+        cfg = build_cfg(ir)
+        entry = FunctionEntry(label="func__id", params=("x",))
+        ctx = _make_context()
+
+        summary = build_summary(cfg, entry, ctx)
+
+        assert len(summary.flows) == 1
+        src, dst = next(iter(summary.flows))
+        assert isinstance(src, VariableEndpoint)
+        assert src.name == "x"
+        assert isinstance(dst, ReturnEndpoint)
+        assert dst.function == entry
+
+    def test_param_through_computation_to_return(self):
+        """SYMBOLIC param:x; DECL_VAR x; LOAD_VAR x; BINOP + x 1; RETURN → x flows to return.
+
+        Tests the case where the return operand is from a computation (BINOP), not
+        a direct LOAD_VAR. The register trace must walk backward through BINOP to
+        find the LOAD_VAR source.
+        """
+        ir = [
+            _inst(Opcode.LABEL, label="func__inc"),
+            _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
+            _inst(Opcode.DECL_VAR, operands=["x", "%0"]),
+            _inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"]),
+            _inst(Opcode.CONST, result_reg="%2", operands=["1"]),
+            _inst(Opcode.BINOP, result_reg="%3", operands=["+", "%1", "%2"]),
+            _inst(Opcode.RETURN, operands=["%3"]),
+        ]
+        cfg = build_cfg(ir)
+        entry = FunctionEntry(label="func__inc", params=("x",))
+        ctx = _make_context()
+
+        summary = build_summary(cfg, entry, ctx)
+
+        assert len(summary.flows) == 1
+        src, dst = next(iter(summary.flows))
+        assert isinstance(src, VariableEndpoint)
+        assert src.name == "x"
+        assert isinstance(dst, ReturnEndpoint)
+
     def test_two_params_to_return(self):
         """a + b → return: both params flow to return."""
         ir = [

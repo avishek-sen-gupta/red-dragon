@@ -9,7 +9,7 @@ from functools import reduce
 
 from interpreter import constants
 from interpreter.cfg import BasicBlock, CFG
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, VAR_DEFINITION_OPCODES
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ _VALUE_PRODUCERS: frozenset[Opcode] = frozenset(
 )
 
 # Opcodes that define a named variable (not just a register)
-_VAR_DEFINERS: frozenset[Opcode] = frozenset({Opcode.STORE_VAR})
+_VAR_DEFINERS: frozenset[Opcode] = VAR_DEFINITION_OPCODES
 
 
 @dataclass(frozen=True)
@@ -112,7 +112,7 @@ class DataflowResult:
 
 def _defs_of(instruction: IRInstruction) -> list[str]:
     """Return variable/register names defined by an instruction."""
-    if instruction.opcode == Opcode.STORE_VAR and len(instruction.operands) >= 1:
+    if instruction.opcode in VAR_DEFINITION_OPCODES and len(instruction.operands) >= 1:
         return [instruction.operands[0]]
     if instruction.opcode in _VALUE_PRODUCERS and instruction.result_reg is not None:
         return [instruction.result_reg]
@@ -130,7 +130,7 @@ def _uses_of(instruction: IRInstruction) -> list[str]:
         return []
     if op == Opcode.LOAD_VAR and len(operands) >= 1:
         return [operands[0]]
-    if op == Opcode.STORE_VAR and len(operands) >= 2:
+    if op in VAR_DEFINITION_OPCODES and len(operands) >= 2:
         return [operands[1]]
     if op == Opcode.LOAD_FIELD and len(operands) >= 1:
         return [operands[0]]
@@ -345,11 +345,11 @@ def _build_raw_dependency_graph(
         {},
     )
 
-    # Collect all STORE_VAR definitions
+    # Collect all variable definitions (DECL_VAR + STORE_VAR)
     store_var_defs: set[tuple[str, str]] = {
         (use_inst.operands[0], use_inst.operands[1])
         for link in def_use_chains
-        if (use_inst := link.use.instruction).opcode == Opcode.STORE_VAR
+        if (use_inst := link.use.instruction).opcode in VAR_DEFINITION_OPCODES
         and len(use_inst.operands) >= 2
     }
 
