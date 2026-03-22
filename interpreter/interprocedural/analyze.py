@@ -19,7 +19,7 @@ def analyze_interprocedural(
     """Build call graph, compute 1-CFA summaries, produce whole-program dependency graph."""
     call_graph = build_call_graph(cfg, registry)
     summaries = whole_program_fixpoint(cfg, call_graph, registry)
-    raw_graph, transitive_graph = build_whole_program_graph(summaries, call_graph)
+    raw_graph, transitive_graph = build_whole_program_graph(summaries, call_graph, cfg)
     return InterproceduralResult(
         call_graph=call_graph,
         summaries=summaries,
