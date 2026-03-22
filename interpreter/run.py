@@ -18,8 +18,8 @@ from interpreter.frontend import get_frontend
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.cfg import CFG, build_cfg
 from interpreter.registry import build_registry, FunctionRegistry
-from interpreter.func_ref import FuncRef, BoundFuncRef
-from interpreter.class_ref import ClassRef
+from interpreter.refs.func_ref import FuncRef, BoundFuncRef
+from interpreter.refs.class_ref import ClassRef
 from interpreter.executor import HandlerContext, _try_execute_locally
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver

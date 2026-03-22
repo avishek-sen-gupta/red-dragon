@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from interpreter.class_ref import ClassRef
+from interpreter.refs.class_ref import ClassRef
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.typed_value import unwrap_locals

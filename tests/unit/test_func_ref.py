@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from interpreter.func_ref import FuncRef, BoundFuncRef
+from interpreter.refs.func_ref import FuncRef, BoundFuncRef
 
 
 class TestFuncRef:

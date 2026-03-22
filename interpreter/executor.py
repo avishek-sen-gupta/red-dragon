@@ -30,8 +30,8 @@ from interpreter.vm import (
 )
 from interpreter.vm_types import BuiltinResult, HeapWrite, StackFrame
 from interpreter.registry import FunctionRegistry
-from interpreter.func_ref import FuncRef, BoundFuncRef
-from interpreter.class_ref import ClassRef
+from interpreter.refs.func_ref import FuncRef, BoundFuncRef
+from interpreter.refs.class_ref import ClassRef
 from interpreter.builtins import Builtins, _builtin_array_of
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.type_environment import TypeEnvironment

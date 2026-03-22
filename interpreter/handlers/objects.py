@@ -12,7 +12,7 @@ from interpreter.vm import (
     StateUpdate,
     NewObject,
 )
-from interpreter.class_ref import ClassRef
+from interpreter.refs.class_ref import ClassRef
 from interpreter.type_expr import pointer, scalar
 from interpreter.typed_value import typed
 from interpreter import constants

@@ -13,7 +13,7 @@ from interpreter.vm_types import HeapObject, Pointer, StackFrame
 from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context
 from interpreter.cfg import CFG, build_cfg
 from interpreter.registry import FunctionRegistry, build_registry
-from interpreter.func_ref import FuncRef, BoundFuncRef
+from interpreter.refs.func_ref import FuncRef, BoundFuncRef
 from interpreter.typed_value import typed, typed_from_runtime, unwrap
 from interpreter.type_expr import scalar, UNKNOWN
 from interpreter.constants import TypeName

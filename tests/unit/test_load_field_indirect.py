@@ -12,7 +12,7 @@ from interpreter.executor import LocalExecutor, HandlerContext, _default_handler
 from interpreter.cfg import CFG
 from interpreter.cfg_types import BasicBlock
 from interpreter.registry import FunctionRegistry
-from interpreter.func_ref import FuncRef, BoundFuncRef
+from interpreter.refs.func_ref import FuncRef, BoundFuncRef
 from interpreter.typed_value import TypedValue, typed_from_runtime, typed, unwrap
 from interpreter.type_expr import UNKNOWN, scalar
 from interpreter.constants import METHOD_MISSING

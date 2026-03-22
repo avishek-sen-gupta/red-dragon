@@ -23,8 +23,8 @@ from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContex
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
 from interpreter.parser import ParserFactory
-from interpreter.class_ref import ClassRef
-from interpreter.func_ref import FuncRef
+from interpreter.refs.class_ref import ClassRef
+from interpreter.refs.func_ref import FuncRef
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter import constants
 from interpreter.constants import CanonicalLiteral, DEFAULT_EXCEPTION_TYPE, Language
