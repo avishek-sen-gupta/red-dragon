@@ -6,7 +6,7 @@ import logging
 from typing import Protocol
 
 from interpreter.types.function_signature import FunctionSignature
-from interpreter.type_compatibility import TypeCompatibility
+from interpreter.types.coercion.type_compatibility import TypeCompatibility
 from interpreter.types.typed_value import TypedValue
 
 logger = logging.getLogger(__name__)

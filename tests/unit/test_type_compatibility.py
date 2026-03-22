@@ -1,7 +1,7 @@
 """Unit tests for TypeCompatibility — runtime arg vs declared type scoring."""
 
 from interpreter.constants import TypeName
-from interpreter.type_compatibility import DefaultTypeCompatibility
+from interpreter.types.coercion.type_compatibility import DefaultTypeCompatibility
 from interpreter.types.type_expr import scalar, UNKNOWN
 from interpreter.types.typed_value import typed
 from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES

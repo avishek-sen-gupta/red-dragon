@@ -9,7 +9,7 @@ from types import MappingProxyType
 
 from interpreter.cfg import build_cfg
 from interpreter.constants import TypeName
-from interpreter.default_conversion_rules import DefaultTypeConversionRules
+from interpreter.types.coercion.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import build_registry

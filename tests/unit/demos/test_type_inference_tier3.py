@@ -8,7 +8,7 @@ Exercises 3 features:
 """
 
 from interpreter.api import lower_and_infer
-from interpreter.default_conversion_rules import DefaultTypeConversionRules
+from interpreter.types.coercion.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.refs.func_ref import FuncRef
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder

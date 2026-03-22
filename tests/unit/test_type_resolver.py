@@ -1,8 +1,8 @@
 """Tests for TypeResolver and NullTypeResolver."""
 
 from interpreter.constants import TypeName
-from interpreter.conversion_result import IDENTITY_CONVERSION
-from interpreter.default_conversion_rules import DefaultTypeConversionRules
+from interpreter.types.coercion.conversion_result import IDENTITY_CONVERSION
+from interpreter.types.coercion.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.types.null_type_resolver import NullTypeResolver
 from interpreter.types.type_expr import ScalarType, UNKNOWN, scalar
 from interpreter.types.type_resolver import TypeResolver
@@ -56,7 +56,7 @@ class TestTypeResolverPartialHints:
 
 class TestTypeResolverWithIdentityRules:
     def test_always_returns_identity_regardless_of_hints(self):
-        from interpreter.identity_conversion_rules import IdentityConversionRules
+        from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 
         resolver = TypeResolver(IdentityConversionRules())
         result = resolver.resolve_binop("/", TypeName.INT, TypeName.INT)
@@ -110,7 +110,7 @@ class TestTypeResolverTypeExpr:
         assert coercer(3.7) == 3
 
     def test_resolve_assignment_with_unknown_returns_identity(self):
-        from interpreter.conversion_result import _identity
+        from interpreter.types.coercion.conversion_result import _identity
 
         coercer = _resolver().resolve_assignment(UNKNOWN, UNKNOWN)
         assert coercer is _identity
