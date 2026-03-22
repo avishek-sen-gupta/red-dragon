@@ -31,7 +31,7 @@ from interpreter.ast_repair.repairing_frontend_decorator import (
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.ir import Opcode
-from interpreter.llm_client import get_llm_client
+from interpreter.llm.llm_client import get_llm_client
 from interpreter.parser import TreeSitterParserFactory
 
 BROKEN_SAMPLES: dict[Language, bytes] = {

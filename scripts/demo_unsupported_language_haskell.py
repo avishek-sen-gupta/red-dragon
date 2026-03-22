@@ -28,8 +28,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from interpreter.cfg import build_cfg
-from interpreter.llm_client import get_llm_client
-from interpreter.llm_frontend import LLMFrontend
+from interpreter.llm.llm_client import get_llm_client
+from interpreter.llm.llm_frontend import LLMFrontend
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg
 from interpreter.run_types import UnresolvedCallStrategy, VMConfig

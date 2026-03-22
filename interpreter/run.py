@@ -69,7 +69,7 @@ from interpreter.run_types import (
     UnresolvedCallStrategy,
 )  # noqa: F401 — re-exported for backwards compatibility
 from interpreter.trace_types import TraceStep, ExecutionTrace
-from interpreter.backend import get_backend
+from interpreter.llm.backend import get_backend
 from interpreter import constants
 from interpreter.constants import LLMProvider
 
@@ -111,7 +111,7 @@ class ExecutionStrategies:
 def _create_resolver(config: VMConfig) -> UnresolvedCallResolver:
     """Create the appropriate call resolver based on config."""
     if config.unresolved_call_strategy == UnresolvedCallStrategy.LLM:
-        from interpreter.llm_client import get_llm_client
+        from interpreter.llm.llm_client import get_llm_client
 
         llm_client = get_llm_client(provider=config.backend)
         return LLMPlausibleResolver(
