@@ -22,7 +22,7 @@ Concretely, RedDragon does the following:
 - **Produces** a universal flattened three-address code [IR (32 opcodes)](docs/ir-reference.md) with structured source location traceability
 - **Extracts and infers types** — see [Type system](#type-system) below
 - **Builds** control flow graphs from IR instructions
-- **Analyses** data flow via iterative reaching definitions, def-use chains, and variable dependency graphs
+- **Analyses** data flow via iterative reaching definitions, def-use chains, and variable dependency graphs. An **interprocedural analysis** module (`interpreter/interprocedural/`) extends this with call graph construction, per-function summaries (1-CFA context-sensitive), depth-1 field-sensitive heap flow tracking, and query interfaces for impact analysis, taint tracking, and program slicing
 - **Executes** programs via a deterministic VM with **write-time type coercion** and a configurable **LLM plausible-value resolver** for unresolved calls — see [VM features](#vm-features) below
 
 ### Type system
