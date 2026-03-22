@@ -7,7 +7,7 @@ from interpreter.cobol.io_provider import (
     StubFile,
 )
 from interpreter.types.typed_value import typed_from_runtime
-from interpreter.vm import Operators
+from interpreter.vm.vm import Operators
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 

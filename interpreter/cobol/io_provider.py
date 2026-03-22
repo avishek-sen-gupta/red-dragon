@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from interpreter.types.typed_value import TypedValue
-from interpreter.vm import Operators
+from interpreter.vm.vm import Operators
 
 logger = logging.getLogger(__name__)
 

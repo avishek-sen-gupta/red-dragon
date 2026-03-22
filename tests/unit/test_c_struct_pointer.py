@@ -82,7 +82,7 @@ class TestAddressOfHeapObject:
         )
         vars_ = _run_c(source)
         assert vars_["val"] == 42
-        from interpreter.vm_types import Pointer
+        from interpreter.vm.vm_types import Pointer
 
         assert isinstance(vars_["p"], Pointer)
         assert vars_["p"].offset == 0

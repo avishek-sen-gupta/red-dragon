@@ -13,9 +13,9 @@ from interpreter.types.coercion.default_conversion_rules import DefaultTypeConve
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.types.type_environment import TypeEnvironment
-from interpreter.vm import VMState, apply_update, _heap_addr
-from interpreter.vm_types import StackFrame, StateUpdate
-from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context
+from interpreter.vm.vm import VMState, apply_update, _heap_addr
+from interpreter.vm.vm_types import StackFrame, StateUpdate
+from interpreter.vm.executor import LocalExecutor, HandlerContext, _default_handler_context
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
 

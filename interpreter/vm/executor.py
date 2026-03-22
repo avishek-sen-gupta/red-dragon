@@ -9,7 +9,7 @@ from typing import Any
 
 from interpreter.ir import IRInstruction, Opcode, SpreadArguments
 from interpreter.cfg import CFG
-from interpreter.vm import (
+from interpreter.vm.vm import (
     VMState,
     SymbolicValue,
     HeapObject,
@@ -28,19 +28,19 @@ from interpreter.vm import (
     _heap_addr,
     _parse_const,
 )
-from interpreter.vm_types import BuiltinResult, HeapWrite, StackFrame
+from interpreter.vm.vm_types import BuiltinResult, HeapWrite, StackFrame
 from interpreter.registry import FunctionRegistry
 from interpreter.refs.func_ref import FuncRef, BoundFuncRef
 from interpreter.refs.class_ref import ClassRef
-from interpreter.builtins import Builtins, _builtin_array_of
+from interpreter.vm.builtins import Builtins, _builtin_array_of
 from interpreter.overload.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, parse_type, pointer, scalar
-from interpreter.unresolved_call import UnresolvedCallResolver, SymbolicResolver
+from interpreter.vm.unresolved_call import UnresolvedCallResolver, SymbolicResolver
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.types.coercion.binop_coercion import BinopCoercionStrategy, DefaultBinopCoercion
 from interpreter.types.coercion.unop_coercion import UnopCoercionStrategy, DefaultUnopCoercion
-from interpreter.field_fallback import (
+from interpreter.vm.field_fallback import (
     FieldFallbackStrategy,
     NoFieldFallback,
 )

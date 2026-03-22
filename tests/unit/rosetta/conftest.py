@@ -5,7 +5,7 @@ import statistics
 
 from interpreter.cfg import build_cfg
 from interpreter.types.typed_value import TypedValue
-from interpreter.vm import _heap_addr
+from interpreter.vm.vm import _heap_addr
 from interpreter.frontends import (
     get_deterministic_frontend,
     SUPPORTED_DETERMINISTIC_LANGUAGES,
@@ -14,7 +14,7 @@ from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg, ExecutionStrategies
 from interpreter.run_types import ExecutionStats, VMConfig
-from interpreter.vm_types import VMState
+from interpreter.vm.vm_types import VMState
 
 logger = logging.getLogger(__name__)
 

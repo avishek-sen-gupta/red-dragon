@@ -84,28 +84,28 @@ class TestFormatChainNode:
 
 class TestFormatStateUpdate:
     def test_empty_update(self):
-        from interpreter.vm_types import StateUpdate
+        from interpreter.vm.vm_types import StateUpdate
 
         update = StateUpdate()
         result = format_state_update(update)
         assert result == {}
 
     def test_register_write(self):
-        from interpreter.vm_types import StateUpdate
+        from interpreter.vm.vm_types import StateUpdate
 
         update = StateUpdate(register_writes={"%0": 42})
         result = format_state_update(update)
         assert result["registers"] == {"%0": 42}
 
     def test_var_write(self):
-        from interpreter.vm_types import StateUpdate
+        from interpreter.vm.vm_types import StateUpdate
 
         update = StateUpdate(var_writes={"x": 10})
         result = format_state_update(update)
         assert result["variables"] == {"x": 10}
 
     def test_next_label(self):
-        from interpreter.vm_types import StateUpdate
+        from interpreter.vm.vm_types import StateUpdate
 
         update = StateUpdate(next_label="func_f_0")
         result = format_state_update(update)

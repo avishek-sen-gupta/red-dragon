@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from interpreter.ir import IRInstruction
-from interpreter.vm import (
+from interpreter.vm.vm import (
     VMState,
     HeapObject,
     Pointer,
@@ -18,7 +18,7 @@ from interpreter.vm import (
     _is_symbolic,
     _parse_const,
 )
-from interpreter.vm_types import HeapWrite
+from interpreter.vm.vm_types import HeapWrite
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
 from interpreter.refs.func_ref import FuncRef, BoundFuncRef
