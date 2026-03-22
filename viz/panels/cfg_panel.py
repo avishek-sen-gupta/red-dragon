@@ -11,7 +11,7 @@ from interpreter.ir import Opcode
 from interpreter.trace_types import TraceStep
 
 
-class CFGPanel(Static, can_focus=True):
+class CFGPanel(Static):
     """Displays CFG blocks as a graph with box-drawing edges."""
 
     current_step: reactive[TraceStep | None] = reactive(None)
