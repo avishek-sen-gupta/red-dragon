@@ -64,6 +64,7 @@ def lower_param(ctx: TreeSitterEmitContext, child) -> None:
     ctx.emit(
         Opcode.DECL_VAR,
         operands=[pname, f"%{ctx.reg_counter - 1}"],
+        node=child,
     )
     ctx.seed_var_type(pname, type_hint)
 
@@ -106,14 +107,15 @@ def lower_function_def(
         Opcode.CONST,
         result_reg=none_reg,
         operands=[ctx.constants.default_return_value],
+        node=node,
     )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit(Opcode.RETURN, operands=[none_reg], node=node)
 
     ctx.emit(Opcode.LABEL, label=end_label)
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+    ctx.emit_func_ref(func_name, func_label, result_reg=func_reg, node=node)
+    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg], node=node)
 
 
 FieldInit = tuple  # (field_name: str, value_node)
@@ -197,7 +199,7 @@ def lower_class_def(ctx: TreeSitterEmitContext, node, parents: list[str] = []) -
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
+    ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg], node=node)
 
 
 def lower_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
