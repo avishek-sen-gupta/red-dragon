@@ -38,8 +38,8 @@ from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, parse_type, pointer, scalar
 from interpreter.unresolved_call import UnresolvedCallResolver, SymbolicResolver
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
-from interpreter.binop_coercion import BinopCoercionStrategy, DefaultBinopCoercion
-from interpreter.unop_coercion import UnopCoercionStrategy, DefaultUnopCoercion
+from interpreter.types.coercion.binop_coercion import BinopCoercionStrategy, DefaultBinopCoercion
+from interpreter.types.coercion.unop_coercion import UnopCoercionStrategy, DefaultUnopCoercion
 from interpreter.field_fallback import (
     FieldFallbackStrategy,
     NoFieldFallback,
