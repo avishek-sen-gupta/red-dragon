@@ -99,6 +99,42 @@ class TestExtractSubCfg:
         assert "func__bar_if_false_1" in sub.blocks
         assert "entry" not in sub.blocks
 
+    def test_extracts_unprefixed_branch_targets(self):
+        """Real frontends emit unprefixed branch targets (if_true_2, if_end_3).
+
+        extract_sub_cfg must follow successors reachably, not just prefix-match.
+        """
+        ir = [
+            _inst(Opcode.LABEL, label="entry"),
+            _inst(Opcode.BRANCH, label="end_foo_1"),
+            _inst(Opcode.LABEL, label="func_foo_0"),
+            _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:n"]),
+            _inst(Opcode.DECL_VAR, operands=["n", "%0"]),
+            _inst(Opcode.LOAD_VAR, result_reg="%1", operands=["n"]),
+            _inst(Opcode.BRANCH_IF, operands=["%1"], label="if_true_2,if_end_3"),
+            _inst(Opcode.LABEL, label="if_true_2"),
+            _inst(Opcode.CONST, result_reg="%2", operands=["1"]),
+            _inst(Opcode.RETURN, operands=["%2"]),
+            _inst(Opcode.LABEL, label="if_end_3"),
+            _inst(Opcode.LOAD_VAR, result_reg="%3", operands=["n"]),
+            _inst(Opcode.RETURN, operands=["%3"]),
+            _inst(Opcode.LABEL, label="end_foo_1"),
+            _inst(Opcode.CONST, result_reg="%4", operands=["5"]),
+            _inst(Opcode.RETURN, operands=["%4"]),
+        ]
+        full_cfg = build_cfg(ir)
+        entry = FunctionEntry(label="func_foo_0", params=("n",))
+
+        sub = extract_sub_cfg(full_cfg, entry)
+
+        assert "func_foo_0" in sub.blocks
+        assert (
+            "if_true_2" in sub.blocks
+        ), f"Unprefixed branch target missing. Got: {list(sub.blocks.keys())}"
+        assert "if_end_3" in sub.blocks
+        assert "entry" not in sub.blocks
+        assert "end_foo_1" not in sub.blocks
+
 
 class TestBuildSummary:
     def test_passthrough_param_to_return(self):
