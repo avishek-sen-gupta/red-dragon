@@ -19,6 +19,12 @@ class IRPanel(Static):
     def __init__(self, cfg: CFG | None = None, **kwargs) -> None:
         super().__init__(**kwargs)
         self._cfg = cfg
+        self._highlighted_block: str | None = None
+
+    def highlight_block(self, label: str | None) -> None:
+        """Highlight a named block (used by dataflow mode). Pass None to clear."""
+        self._highlighted_block = label
+        self._render_ir()
 
     def set_cfg(self, cfg: CFG) -> None:
         self._cfg = cfg
@@ -35,6 +41,11 @@ class IRPanel(Static):
         step = self.current_step
         current_block = step.block_label if step else ""
         current_idx = step.instruction_index if step else -1
+
+        # In dataflow mode, current_step is not set; use highlighted block instead
+        if not current_block and self._highlighted_block:
+            current_block = self._highlighted_block
+            current_idx = -1  # highlight block header only, not a specific instruction
 
         text = Text()
         for label, block in self._cfg.blocks.items():
