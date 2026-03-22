@@ -21,8 +21,8 @@ from interpreter.vm import (
 from interpreter.vm_types import HeapWrite
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
-from interpreter.func_ref import FuncRef, BoundFuncRef
-from interpreter.class_ref import ClassRef
+from interpreter.refs.func_ref import FuncRef, BoundFuncRef
+from interpreter.refs.class_ref import ClassRef
 from interpreter.type_expr import UNKNOWN, scalar
 from interpreter.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter import constants

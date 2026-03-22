@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from interpreter.constants import Language
-from interpreter.func_ref import BoundFuncRef
+from interpreter.refs.func_ref import BoundFuncRef
 from interpreter.run import run
 from interpreter.typed_value import unwrap_locals
 

@@ -12,7 +12,7 @@ Covers:
 from __future__ import annotations
 
 from interpreter.constants import Language
-from interpreter.func_ref import BoundFuncRef
+from interpreter.refs.func_ref import BoundFuncRef
 from interpreter.frontends.c import CFrontend
 from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory

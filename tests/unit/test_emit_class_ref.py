@@ -5,7 +5,7 @@ from __future__ import annotations
 from interpreter.frontends.context import TreeSitterEmitContext, GrammarConstants
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.constants import Language
-from interpreter.class_ref import ClassRef
+from interpreter.refs.class_ref import ClassRef
 from interpreter.ir import Opcode
 
 

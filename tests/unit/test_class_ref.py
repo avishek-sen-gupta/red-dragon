@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.class_ref import ClassRef, NO_CLASS_REF
+from interpreter.refs.class_ref import ClassRef, NO_CLASS_REF
 
 
 class TestClassRef:

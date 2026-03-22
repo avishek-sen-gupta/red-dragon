@@ -9,7 +9,7 @@ Exercises 3 features:
 
 from interpreter.api import lower_and_infer
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
-from interpreter.func_ref import FuncRef
+from interpreter.refs.func_ref import FuncRef
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.type_expr import parse_type, scalar
