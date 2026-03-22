@@ -38,3 +38,4 @@ proleap-bridge/.settings/
 
 # Git worktrees
 .worktrees/
+.superpowers/
