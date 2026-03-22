@@ -69,6 +69,9 @@
 {"issue_id":"red-dragon-5jdr","label":"architecture"}
 {"issue_id":"red-dragon-5jdr","label":"symbol-table"}
 {"issue_id":"red-dragon-5lu","label":"typed-value"}
+{"issue_id":"red-dragon-5mnk","label":"bug"}
+{"issue_id":"red-dragon-5mnk","label":"dataflow"}
+{"issue_id":"red-dragon-5mnk","label":"p1"}
 {"issue_id":"red-dragon-5qfn","label":"symbol-table"}
 {"issue_id":"red-dragon-5xlj","label":"p1"}
 {"issue_id":"red-dragon-5xlj","label":"pattern-matching"}
@@ -750,6 +753,9 @@
 {"issue_id":"red-dragon-swlt","label":"pattern-matching"}
 {"issue_id":"red-dragon-swlt","label":"ruby"}
 {"issue_id":"red-dragon-ta26","label":"c"}
+{"issue_id":"red-dragon-tdh2","label":"bug"}
+{"issue_id":"red-dragon-tdh2","label":"dataflow"}
+{"issue_id":"red-dragon-tdh2","label":"p1"}
 {"issue_id":"red-dragon-tkv","label":"frontend"}
 {"issue_id":"red-dragon-tkv","label":"scala"}
 {"issue_id":"red-dragon-tmop","label":"symbol-table"}
