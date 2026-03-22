@@ -8,7 +8,7 @@ from collections import deque
 import pytest
 
 from interpreter import constants
-from interpreter.chunked_llm_frontend import (
+from interpreter.llm.chunked_llm_frontend import (
     ChunkedLLMFrontend,
     ChunkExtractor,
     IRRenumberer,
@@ -16,8 +16,8 @@ from interpreter.chunked_llm_frontend import (
 )
 from interpreter.frontend import get_frontend
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.llm_client import LLMClient
-from interpreter.llm_frontend import LLMFrontend
+from interpreter.llm.llm_client import LLMClient
+from interpreter.llm.llm_frontend import LLMFrontend
 from interpreter.parser import Parser, ParserFactory, TreeSitterParserFactory
 
 

@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from interpreter.ir import IRInstruction
-from interpreter.llm_client import LLMClient, get_llm_client
+from interpreter.llm.llm_client import LLMClient, get_llm_client
 from interpreter.vm.vm import VMState, StateUpdate, _resolve_reg, _serialize_value
 
 

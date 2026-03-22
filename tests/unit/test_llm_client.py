@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from interpreter.llm_client import (
+from interpreter.llm.llm_client import (
     LiteLLMClient,
     LLMClient,
     get_llm_client,

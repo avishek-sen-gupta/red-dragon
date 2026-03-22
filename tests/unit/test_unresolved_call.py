@@ -5,7 +5,7 @@ import json
 import pytest
 
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.llm_client import LLMClient
+from interpreter.llm.llm_client import LLMClient
 from interpreter.vm.unresolved_call import (
     LLMPlausibleResolver,
     SymbolicResolver,

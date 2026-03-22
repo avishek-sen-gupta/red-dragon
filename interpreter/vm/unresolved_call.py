@@ -10,7 +10,7 @@ from typing import Any
 from litellm.exceptions import OpenAIError
 
 from interpreter.ir import IRInstruction
-from interpreter.llm_client import LLMClient
+from interpreter.llm.llm_client import LLMClient
 from interpreter.types.type_expr import UNKNOWN
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.vm.vm_types import (
