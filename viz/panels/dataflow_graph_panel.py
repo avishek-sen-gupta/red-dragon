@@ -3,21 +3,131 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 
 from rich.text import Text
 from textual.widgets import Static
 
 from interpreter.cfg_types import CFG
+from interpreter.interprocedural.call_graph import (
+    CALL_OPCODES,
+    _build_block_to_function,
+)
 from interpreter.interprocedural.types import (
+    CallGraph,
     FlowEndpoint,
+    FunctionEntry,
+    FunctionSummary,
     InterproceduralResult,
     NO_DEFINITION,
+    SummaryKey,
     VariableEndpoint,
 )
-from interpreter.ir import Opcode
+from interpreter.ir import IRInstruction, Opcode, VAR_DEFINITION_OPCODES
 from viz.panels.dataflow_summary_panel import render_endpoint
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class TopLevelCall:
+    """A call instruction in top-level code (not inside any function)."""
+
+    callee_label: str
+    arg_operands: tuple[str, ...]
+    result_var: str
+    block_label: str
+    instruction_index: int
+
+
+@dataclass
+class ChainNode:
+    """Intermediate tree node for call-chain rendering."""
+
+    label: str
+    children: list[ChainNode] = field(default_factory=list)
+
+
+def trace_reg_to_var(reg: str, cfg: CFG, block_label: str) -> str:
+    """Trace a register back to its named variable by scanning the block."""
+    block = cfg.blocks[block_label]
+    load_match = next(
+        (
+            str(inst.operands[0])
+            for inst in block.instructions
+            if inst.opcode == Opcode.LOAD_VAR and inst.result_reg == reg
+        ),
+        "",
+    )
+    if load_match:
+        return load_match
+    store_match = next(
+        (
+            str(inst.operands[0])
+            for inst in block.instructions
+            if inst.opcode in VAR_DEFINITION_OPCODES
+            and len(inst.operands) >= 2
+            and str(inst.operands[1]) == reg
+        ),
+        "",
+    )
+    return store_match if store_match else reg
+
+
+def find_top_level_call_sites(cfg: CFG, call_graph: CallGraph) -> list[TopLevelCall]:
+    """Find CALL_FUNCTION/CALL_METHOD instructions in top-level code.
+
+    Scans all blocks NOT owned by any function (using block-to-function mapping).
+    These calls are not in call_graph.call_sites because build_call_graph skips
+    non-function blocks.
+    """
+    # Build function-name -> label lookup
+    func_by_name: dict[str, str] = {f.label: f.label for f in call_graph.functions}
+    func_by_name.update(
+        {
+            (
+                f.label.split("_")[1]
+                if f.label.startswith("func_") and "_" in f.label[5:]
+                else f.label
+            ): f.label
+            for f in call_graph.functions
+        }
+    )
+
+    # Identify top-level blocks: entry block + end_* blocks
+    non_func_blocks = {
+        label for label in cfg.blocks if label.startswith("end_") or label == "entry"
+    }
+
+    return [
+        TopLevelCall(
+            callee_label=func_by_name.get(
+                (
+                    str(inst.operands[0])
+                    if inst.opcode == Opcode.CALL_FUNCTION
+                    else str(inst.operands[1])
+                ),
+                (
+                    str(inst.operands[0])
+                    if inst.opcode == Opcode.CALL_FUNCTION
+                    else str(inst.operands[1])
+                ),
+            ),
+            arg_operands=(
+                tuple(str(op) for op in inst.operands[1:])
+                if inst.opcode == Opcode.CALL_FUNCTION
+                else tuple(str(op) for op in inst.operands[2:])
+            ),
+            result_var=(
+                trace_reg_to_var(inst.result_reg, cfg, label) if inst.result_reg else ""
+            ),
+            block_label=label,
+            instruction_index=idx,
+        )
+        for label in non_func_blocks
+        for idx, inst in enumerate(cfg.blocks[label].instructions)
+        if inst.opcode in (Opcode.CALL_FUNCTION, Opcode.CALL_METHOD)
+    ]
 
 
 def annotate_endpoint(ep: FlowEndpoint, cfg: CFG | None) -> str:
