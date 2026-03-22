@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from interpreter.builtins import Builtins
-from interpreter.vm import VMState
-from interpreter.vm_types import BuiltinResult, HeapObject, Pointer
+from interpreter.vm.builtins import Builtins
+from interpreter.vm.vm import VMState
+from interpreter.vm.vm_types import BuiltinResult, HeapObject, Pointer
 from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter.types.type_expr import TypeExpr, scalar
 from interpreter.constants import TypeName

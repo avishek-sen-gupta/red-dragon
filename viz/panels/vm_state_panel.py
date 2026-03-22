@@ -8,7 +8,7 @@ from textual.widgets import Static
 
 from interpreter.trace_types import TraceStep
 from interpreter.types.typed_value import TypedValue
-from interpreter.vm_types import HeapObject, Pointer, SymbolicValue
+from interpreter.vm.vm_types import HeapObject, Pointer, SymbolicValue
 
 
 def _format_value(val: object) -> str:

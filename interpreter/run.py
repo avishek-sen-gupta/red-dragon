@@ -20,7 +20,7 @@ from interpreter.cfg import CFG, build_cfg
 from interpreter.registry import build_registry, FunctionRegistry
 from interpreter.refs.func_ref import FuncRef, BoundFuncRef
 from interpreter.refs.class_ref import ClassRef
-from interpreter.executor import HandlerContext, _try_execute_locally
+from interpreter.vm.executor import HandlerContext, _try_execute_locally
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.overload.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.overload.resolution_strategy import ArityThenTypeStrategy
@@ -37,7 +37,7 @@ from interpreter.types.coercion.unop_coercion import (
     UnopCoercionStrategy,
     DefaultUnopCoercion,
 )
-from interpreter.field_fallback import (
+from interpreter.vm.field_fallback import (
     FieldFallbackStrategy,
     NoFieldFallback,
     ImplicitThisFieldFallback,
@@ -47,12 +47,12 @@ from interpreter.types.type_expr import scalar
 from interpreter.types.typed_value import TypedValue
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
-from interpreter.unresolved_call import (
+from interpreter.vm.unresolved_call import (
     SymbolicResolver,
     LLMPlausibleResolver,
     UnresolvedCallResolver,
 )
-from interpreter.vm import (
+from interpreter.vm.vm import (
     VMState,
     SymbolicValue,
     StackFrame,

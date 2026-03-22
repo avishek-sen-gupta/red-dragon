@@ -2,7 +2,7 @@
 
 from interpreter.constants import Language
 from interpreter.run import run
-from interpreter.vm_types import Pointer
+from interpreter.vm.vm_types import Pointer
 
 
 def _typed_locals(vm):

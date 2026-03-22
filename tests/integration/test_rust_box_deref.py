@@ -6,7 +6,7 @@ from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.type_expr import scalar
 from interpreter.types.typed_value import unwrap_locals
-from interpreter.vm_types import Pointer, SymbolicValue
+from interpreter.vm.vm_types import Pointer, SymbolicValue
 
 
 def _run_rust(source: str, max_steps: int = 200):

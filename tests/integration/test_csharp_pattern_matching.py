@@ -159,10 +159,10 @@ class M {
 
 class TestIsinstancePrimitive:
     def test_isinstance_int(self):
-        from interpreter.builtins import _builtin_isinstance
+        from interpreter.vm.builtins import _builtin_isinstance
         from interpreter.types.typed_value import typed
         from interpreter.types.type_expr import scalar
-        from interpreter.vm import VMState
+        from interpreter.vm.vm import VMState
 
         vm = VMState()
         args = [typed(42, scalar("Int")), typed("int", scalar("String"))]
@@ -170,10 +170,10 @@ class TestIsinstancePrimitive:
         assert result.value.value is True
 
     def test_isinstance_string(self):
-        from interpreter.builtins import _builtin_isinstance
+        from interpreter.vm.builtins import _builtin_isinstance
         from interpreter.types.typed_value import typed
         from interpreter.types.type_expr import scalar
-        from interpreter.vm import VMState
+        from interpreter.vm.vm import VMState
 
         vm = VMState()
         args = [typed("hello", scalar("String")), typed("string", scalar("String"))]
@@ -181,10 +181,10 @@ class TestIsinstancePrimitive:
         assert result.value.value is True
 
     def test_isinstance_mismatch(self):
-        from interpreter.builtins import _builtin_isinstance
+        from interpreter.vm.builtins import _builtin_isinstance
         from interpreter.types.typed_value import typed
         from interpreter.types.type_expr import scalar
-        from interpreter.vm import VMState
+        from interpreter.vm.vm import VMState
 
         vm = VMState()
         args = [typed(42, scalar("Int")), typed("string", scalar("String"))]

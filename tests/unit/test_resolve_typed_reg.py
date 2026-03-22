@@ -7,8 +7,8 @@ from interpreter.types.coercion.default_conversion_rules import DefaultTypeConve
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.types.type_environment import TypeEnvironment
-from interpreter.vm import VMState, _resolve_typed_reg, runtime_type_name
-from interpreter.vm_types import StackFrame
+from interpreter.vm.vm import VMState, _resolve_typed_reg, runtime_type_name
+from interpreter.vm.vm_types import StackFrame
 
 
 def _make_vm() -> VMState:

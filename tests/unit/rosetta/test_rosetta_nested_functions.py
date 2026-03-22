@@ -23,7 +23,7 @@ import pytest
 
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.types.typed_value import unwrap
-from interpreter.vm_types import SymbolicValue, VMState
+from interpreter.vm.vm_types import SymbolicValue, VMState
 
 from tests.unit.rosetta.conftest import (
     parse_for_language,

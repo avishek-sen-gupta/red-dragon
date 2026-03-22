@@ -1,7 +1,7 @@
 """Unit tests for BuiltinResult dataclass."""
 
 from interpreter.types.type_expr import scalar
-from interpreter.vm_types import BuiltinResult, NewObject, HeapWrite
+from interpreter.vm.vm_types import BuiltinResult, NewObject, HeapWrite
 
 
 class TestBuiltinResult:

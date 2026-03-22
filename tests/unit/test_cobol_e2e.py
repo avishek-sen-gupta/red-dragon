@@ -15,9 +15,9 @@ from interpreter.cobol.subprocess_runner import SubprocessRunner
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import build_registry
 from interpreter.run import VMConfig, execute_cfg
-from interpreter.vm import VMState, apply_update
-from interpreter.vm_types import StackFrame
-from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context
+from interpreter.vm.vm import VMState, apply_update
+from interpreter.vm.vm_types import StackFrame
+from interpreter.vm.executor import LocalExecutor, HandlerContext, _default_handler_context
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "cobol"
 

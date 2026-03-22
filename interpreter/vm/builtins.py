@@ -6,8 +6,8 @@ import logging
 from typing import Any
 
 from interpreter.constants import ARR_ADDR_PREFIX, TypeName
-from interpreter.vm import VMState, Operators, _is_symbolic, _heap_addr
-from interpreter.vm_types import (
+from interpreter.vm.vm import VMState, Operators, _is_symbolic, _heap_addr
+from interpreter.vm.vm_types import (
     HeapObject,
     BuiltinResult,
     NewObject,

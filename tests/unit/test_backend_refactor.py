@@ -9,7 +9,7 @@ import pytest
 from interpreter.backend import LLMInterpreterBackend, get_backend
 from interpreter.llm_client import LLMClient
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.vm import VMState, StackFrame
+from interpreter.vm.vm import VMState, StackFrame
 
 
 class FakeLLMClient(LLMClient):

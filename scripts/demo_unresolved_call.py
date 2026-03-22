@@ -7,7 +7,7 @@ from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.run_types import UnresolvedCallStrategy
 from interpreter.types.typed_value import TypedValue
-from interpreter.vm_types import SymbolicValue, _serialize_value
+from interpreter.vm.vm_types import SymbolicValue, _serialize_value
 
 SOURCE = """\
 import math

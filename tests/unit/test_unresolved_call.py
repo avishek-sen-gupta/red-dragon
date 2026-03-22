@@ -6,14 +6,14 @@ import pytest
 
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.llm_client import LLMClient
-from interpreter.unresolved_call import (
+from interpreter.vm.unresolved_call import (
     LLMPlausibleResolver,
     SymbolicResolver,
     UnresolvedCallResolver,
 )
 from interpreter.types.type_expr import scalar
 from interpreter.types.typed_value import TypedValue
-from interpreter.vm_types import (
+from interpreter.vm.vm_types import (
     ExecutionResult,
     StackFrame,
     HeapObject,

@@ -1,6 +1,6 @@
 """Tests for VMState — data_layout field and serialization."""
 
-from interpreter.vm_types import VMState
+from interpreter.vm.vm_types import VMState
 
 
 class TestVMStateDataLayout:

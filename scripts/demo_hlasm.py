@@ -28,7 +28,7 @@ from interpreter.registry import build_registry
 from interpreter.run import execute_cfg
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
-from interpreter.vm_types import SymbolicValue
+from interpreter.vm.vm_types import SymbolicValue
 
 logger = logging.getLogger(__name__)
 

@@ -26,7 +26,7 @@ from interpreter.run_types import VMConfig
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
 from interpreter.types.typed_value import TypedValue
-from interpreter.vm_types import SymbolicValue
+from interpreter.vm.vm_types import SymbolicValue
 
 logger = logging.getLogger(__name__)
 

@@ -1,8 +1,8 @@
 """Unit tests for _builtin_object_rest returning BuiltinResult."""
 
-from interpreter.builtins import _builtin_object_rest
-from interpreter.vm import VMState, Operators
-from interpreter.vm_types import BuiltinResult, HeapObject, Pointer
+from interpreter.vm.builtins import _builtin_object_rest
+from interpreter.vm.vm import VMState, Operators
+from interpreter.vm.vm_types import BuiltinResult, HeapObject, Pointer
 from interpreter.types.type_expr import scalar
 from interpreter.types.typed_value import TypedValue, typed_from_runtime
 

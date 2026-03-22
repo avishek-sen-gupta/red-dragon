@@ -2,7 +2,7 @@
 
 from interpreter.cfg import build_cfg
 from interpreter.cobol.io_provider import NullIOProvider, StubIOProvider
-from interpreter.vm_types import SymbolicValue
+from interpreter.vm.vm_types import SymbolicValue
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg
