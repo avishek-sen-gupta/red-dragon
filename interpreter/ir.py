@@ -61,6 +61,13 @@ class Opcode(str, Enum):
     LABEL = "LABEL"
 
 
+# Opcodes that define a named variable (declaration or assignment).
+# Used by dataflow analysis and interprocedural summary extraction.
+VAR_DEFINITION_OPCODES: frozenset[Opcode] = frozenset(
+    {Opcode.DECL_VAR, Opcode.STORE_VAR}
+)
+
+
 class SourceLocation(BaseModel):
     """Structured source span from tree-sitter AST nodes."""
 

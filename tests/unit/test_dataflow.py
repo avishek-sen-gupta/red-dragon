@@ -247,6 +247,21 @@ class TestDefUseChains:
         x_chains = [c for c in chains if c.use.variable == "x"]
         assert len(x_chains) == 1
 
+    def test_decl_var_params_are_definitions(self):
+        """SYMBOLIC param:x → DECL_VAR x %0: x is a definition (real frontend pattern)."""
+        ir = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.SYMBOLIC, result_reg="t0", operands=["param:x"]),
+            _make_inst(Opcode.DECL_VAR, operands=["x", "t0"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
+        ]
+        cfg = _build_simple_cfg(ir)
+        facts = solve_reaching_definitions(cfg)
+        chains = extract_def_use_chains(cfg, facts)
+
+        x_chains = [c for c in chains if c.use.variable == "x"]
+        assert len(x_chains) == 1
+
 
 class TestDependencyGraph:
     def test_direct_dependency(self):
@@ -255,6 +270,23 @@ class TestDependencyGraph:
             _make_inst(Opcode.LABEL, label="entry"),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["10"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
+            _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
+            _make_inst(Opcode.CONST, result_reg="t2", operands=["1"]),
+            _make_inst(Opcode.BINOP, result_reg="t3", operands=["+", "t1", "t2"]),
+            _make_inst(Opcode.STORE_VAR, operands=["y", "t3"]),
+        ]
+        cfg = _build_simple_cfg(ir)
+        result = analyze(cfg)
+
+        assert "y" in result.dependency_graph
+        assert "x" in result.dependency_graph["y"]
+
+    def test_decl_var_dependency(self):
+        """DECL_VAR x t0; y = x + 1 → y depends on x (DECL_VAR is a variable definition)."""
+        ir = [
+            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.CONST, result_reg="t0", operands=["10"]),
+            _make_inst(Opcode.DECL_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
             _make_inst(Opcode.CONST, result_reg="t2", operands=["1"]),
             _make_inst(Opcode.BINOP, result_reg="t3", operands=["+", "t1", "t2"]),
