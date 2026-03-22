@@ -3,9 +3,9 @@
 from interpreter.constants import TypeName
 from interpreter.conversion_result import IDENTITY_CONVERSION
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
-from interpreter.null_type_resolver import NullTypeResolver
-from interpreter.type_expr import ScalarType, UNKNOWN, scalar
-from interpreter.type_resolver import TypeResolver
+from interpreter.types.null_type_resolver import NullTypeResolver
+from interpreter.types.type_expr import ScalarType, UNKNOWN, scalar
+from interpreter.types.type_resolver import TypeResolver
 
 
 def _resolver() -> TypeResolver:

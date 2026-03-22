@@ -26,7 +26,7 @@ from interpreter import constants
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.run_types import UnresolvedCallStrategy
-from interpreter.typed_value import TypedValue
+from interpreter.types.typed_value import TypedValue
 from interpreter.vm_types import SymbolicValue
 
 SAMPLE_SOURCE = """\

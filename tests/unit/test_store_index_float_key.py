@@ -7,12 +7,12 @@ write time — so str(2) == "2" matches on both store and load.
 
 from types import MappingProxyType
 
-from interpreter.typed_value import TypedValue, typed_from_runtime, unwrap
+from interpreter.types.typed_value import TypedValue, typed_from_runtime, unwrap
 
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
-from interpreter.function_signature import FunctionSignature
+from interpreter.types.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.type_environment import TypeEnvironment
+from interpreter.types.type_environment import TypeEnvironment
 from interpreter.vm import VMState, apply_update, _heap_addr
 from interpreter.vm_types import StackFrame, StateUpdate
 from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context

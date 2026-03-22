@@ -6,8 +6,8 @@ import pytest
 
 from interpreter.constants import Language
 from interpreter.run import run
-from interpreter.typed_value import unwrap_locals
-from interpreter.type_expr import scalar
+from interpreter.types.typed_value import unwrap_locals
+from interpreter.types.type_expr import scalar
 from interpreter.vm import _heap_addr
 
 

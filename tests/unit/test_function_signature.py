@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from interpreter.function_kind import FunctionKind
-from interpreter.function_signature import FunctionSignature
-from interpreter.type_expr import scalar
+from interpreter.types.function_kind import FunctionKind
+from interpreter.types.function_signature import FunctionSignature
+from interpreter.types.type_expr import scalar
 
 
 class TestFunctionKindDefault:

@@ -1,7 +1,7 @@
 """Unit tests for string identity builtins: to_string, String::from."""
 
 from interpreter.builtins import Builtins
-from interpreter.typed_value import typed
+from interpreter.types.typed_value import typed
 
 
 class TestToStringBuiltin:

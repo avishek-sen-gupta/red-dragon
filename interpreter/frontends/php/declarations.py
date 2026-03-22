@@ -16,7 +16,7 @@ from interpreter.frontends.common.declarations import (
     FieldInit,
     emit_field_initializers,
 )
-from interpreter.type_expr import ScalarType
+from interpreter.types.type_expr import ScalarType
 
 
 def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:

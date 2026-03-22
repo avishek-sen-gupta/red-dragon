@@ -7,7 +7,7 @@ from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg
 from interpreter.run_types import VMConfig
-from interpreter.typed_value import unwrap
+from interpreter.types.typed_value import unwrap
 
 
 def _build_call_function_ir(func_name: str, *arg_literals) -> list[IRInstruction]:

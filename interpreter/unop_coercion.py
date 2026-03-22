@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from interpreter.type_expr import UNKNOWN, ScalarType, TypeExpr, scalar
-from interpreter.typed_value import TypedValue
+from interpreter.types.type_expr import UNKNOWN, ScalarType, TypeExpr, scalar
+from interpreter.types.typed_value import TypedValue
 
 
 class UnopCoercionStrategy(Protocol):

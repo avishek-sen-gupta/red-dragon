@@ -7,8 +7,8 @@ from interpreter.frontends.javascript import JavaScriptFrontend
 from interpreter.frontends.typescript import TypeScriptFrontend
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.run import run
-from interpreter.type_expr import ParameterizedType, ScalarType, metatype
-from interpreter.typed_value import unwrap_locals
+from interpreter.types.type_expr import ParameterizedType, ScalarType, metatype
+from interpreter.types.typed_value import unwrap_locals
 from interpreter.vm_types import Pointer
 
 

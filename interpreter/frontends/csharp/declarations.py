@@ -16,7 +16,7 @@ from interpreter.frontends.common.declarations import (
     emit_field_initializers,
     emit_synthetic_init,
 )
-from interpreter.type_expr import ScalarType
+from interpreter.types.type_expr import ScalarType
 from interpreter.frontends.symbol_table import (
     ClassInfo,
     FieldInfo,

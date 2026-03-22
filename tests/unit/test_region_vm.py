@@ -5,7 +5,7 @@ Hand-crafted IR that allocates a region, writes bytes, reads them back.
 
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.vm import VMState, apply_update
-from interpreter.typed_value import unwrap
+from interpreter.types.typed_value import unwrap
 from interpreter.vm_types import StackFrame, SymbolicValue
 from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context
 from interpreter.cfg import CFG

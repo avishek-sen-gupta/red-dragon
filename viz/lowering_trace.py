@@ -14,7 +14,7 @@ from interpreter.frontends.context import TreeSitterEmitContext, GrammarConstant
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.ir import IRInstruction, Opcode, SourceLocation, NO_SOURCE_LOCATION
 from interpreter.parser import TreeSitterParserFactory
-from interpreter.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 
 logger = logging.getLogger(__name__)
 

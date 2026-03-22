@@ -23,8 +23,8 @@ from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
 from interpreter.refs.func_ref import FuncRef, BoundFuncRef
 from interpreter.refs.class_ref import ClassRef
-from interpreter.type_expr import UNKNOWN, scalar
-from interpreter.typed_value import TypedValue, typed, typed_from_runtime
+from interpreter.types.type_expr import UNKNOWN, scalar
+from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter import constants
 from interpreter.handlers._common import _symbolic_name, _symbolic_type_hint
 

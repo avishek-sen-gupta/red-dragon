@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from interpreter.constants import TypeName
-from interpreter.type_expr import UNKNOWN, TypeExpr, scalar
+from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
 
 _PYTHON_TYPE_TO_TYPE_NAME: dict[type, str] = {
     bool: TypeName.BOOL,
