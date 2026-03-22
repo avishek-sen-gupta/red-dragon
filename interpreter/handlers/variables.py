@@ -15,8 +15,8 @@ from interpreter.vm import (
     _parse_const,
 )
 from interpreter.vm_types import HeapWrite
-from interpreter.func_ref import FuncRef, BoundFuncRef
-from interpreter.class_ref import ClassRef
+from interpreter.refs.func_ref import FuncRef, BoundFuncRef
+from interpreter.refs.class_ref import ClassRef
 from interpreter.type_expr import UNKNOWN, scalar
 from interpreter.typed_value import typed, typed_from_runtime
 from interpreter import constants

@@ -9,8 +9,8 @@ from typing import Any
 
 from interpreter.constants import Language
 from interpreter.frontend import Frontend
-from interpreter.class_ref import ClassRef
-from interpreter.func_ref import FuncRef
+from interpreter.refs.class_ref import ClassRef
+from interpreter.refs.func_ref import FuncRef
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.llm_frontend import (
     IRParsingError,
