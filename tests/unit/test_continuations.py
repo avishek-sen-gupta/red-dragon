@@ -1,7 +1,7 @@
 """Tests for continuation opcodes — SET_CONTINUATION and RESUME_CONTINUATION."""
 
 from interpreter.cfg import build_cfg
-from interpreter.executor import (
+from interpreter.vm.executor import (
     _handle_resume_continuation,
     _handle_set_continuation,
     _default_handler_context,
@@ -9,8 +9,8 @@ from interpreter.executor import (
 
 _CTX = _default_handler_context()
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.vm import VMState, apply_update
-from interpreter.vm_types import StackFrame, StateUpdate
+from interpreter.vm.vm import VMState, apply_update
+from interpreter.vm.vm_types import StackFrame, StateUpdate
 
 
 def _make_vm() -> VMState:

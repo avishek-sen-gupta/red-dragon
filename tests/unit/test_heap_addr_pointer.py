@@ -1,9 +1,9 @@
 """Tests for _heap_addr() Pointer support and ADDRESS_OF guard."""
 
-from interpreter.vm import _heap_addr, HeapObject, VMState
-from interpreter.vm_types import Pointer, StackFrame, SymbolicValue
+from interpreter.vm.vm import _heap_addr, HeapObject, VMState
+from interpreter.vm.vm_types import Pointer, StackFrame, SymbolicValue
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.executor import _handle_address_of, _default_handler_context
+from interpreter.vm.executor import _handle_address_of, _default_handler_context
 
 _CTX = _default_handler_context()
 from interpreter.types.typed_value import typed

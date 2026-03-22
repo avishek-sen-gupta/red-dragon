@@ -11,7 +11,7 @@ from interpreter.types.coercion.identity_conversion_rules import IdentityConvers
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, ScalarType, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
-from interpreter.vm_types import (  # noqa: F401 — re-exported for backwards compatibility
+from interpreter.vm.vm_types import (  # noqa: F401 — re-exported for backwards compatibility
     SymbolicValue,
     HeapObject,
     ClosureEnvironment,

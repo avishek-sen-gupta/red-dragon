@@ -29,8 +29,8 @@ from interpreter.cobol.byte_builtins import (
     BYTE_BUILTINS,
 )
 from interpreter.types.typed_value import typed_from_runtime
-from interpreter.vm import Operators
-from interpreter.vm_types import SymbolicValue
+from interpreter.vm.vm import Operators
+from interpreter.vm.vm_types import SymbolicValue
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 
@@ -370,7 +370,7 @@ class TestByteBuiltinsRegistration:
         )
 
     def test_builtins_merged_into_table(self):
-        from interpreter.builtins import Builtins
+        from interpreter.vm.builtins import Builtins
 
         for name in BYTE_BUILTINS:
             assert name in Builtins.TABLE, f"{name} not in Builtins.TABLE"

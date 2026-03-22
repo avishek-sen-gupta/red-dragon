@@ -1,7 +1,7 @@
 """Tests for Operators.eval_binop and eval_unop — verifying UNCOMPUTABLE on type errors."""
 
-from interpreter.vm import Operators
-from interpreter.vm_types import SymbolicValue
+from interpreter.vm.vm import Operators
+from interpreter.vm.vm_types import SymbolicValue
 
 _UNCOMPUTABLE = Operators.UNCOMPUTABLE
 

@@ -13,8 +13,8 @@ from interpreter.cobol.byte_builtins import (
     _builtin_cobol_blank_when_zero,
 )
 from interpreter.types.typed_value import typed_from_runtime
-from interpreter.vm import Operators
-from interpreter.vm_types import BuiltinResult
+from interpreter.vm.vm import Operators
+from interpreter.vm.vm_types import BuiltinResult
 
 
 class TestByteBuiltinsReturnBuiltinResult:

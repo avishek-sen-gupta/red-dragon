@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from interpreter.ir import IRInstruction
-from interpreter.vm import (
+from interpreter.vm.vm import (
     VMState,
     ClosureEnvironment,
     ExecutionResult,
@@ -14,7 +14,7 @@ from interpreter.vm import (
     _resolve_reg,
     _parse_const,
 )
-from interpreter.vm_types import HeapWrite
+from interpreter.vm.vm_types import HeapWrite
 from interpreter.refs.func_ref import FuncRef, BoundFuncRef
 from interpreter.refs.class_ref import ClassRef
 from interpreter.types.type_expr import UNKNOWN, scalar

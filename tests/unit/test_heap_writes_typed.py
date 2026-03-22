@@ -5,7 +5,7 @@ from types import MappingProxyType
 from interpreter.constants import TypeName
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.executor import (
+from interpreter.vm.executor import (
     _handle_store_field,
     _handle_store_indirect,
     _handle_store_index,
@@ -18,8 +18,8 @@ from interpreter.executor import (
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
-from interpreter.vm import apply_update, materialize_raw_update
-from interpreter.vm_types import (
+from interpreter.vm.vm import apply_update, materialize_raw_update
+from interpreter.vm.vm_types import (
     HeapObject,
     HeapWrite,
     Pointer,
@@ -114,7 +114,7 @@ class TestMaterializeHeapWrites:
         assert hw.value.type == scalar(TypeName.INT)
 
     def test_symbolic_dict_heap_write_materialized(self):
-        from interpreter.vm_types import SymbolicValue
+        from interpreter.vm.vm_types import SymbolicValue
 
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))

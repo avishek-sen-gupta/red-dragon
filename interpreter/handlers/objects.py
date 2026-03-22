@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from interpreter.ir import IRInstruction
-from interpreter.vm import (
+from interpreter.vm.vm import (
     VMState,
     Pointer,
     ExecutionResult,

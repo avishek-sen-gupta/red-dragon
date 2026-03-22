@@ -9,7 +9,7 @@ from interpreter.parser import TreeSitterParserFactory
 from interpreter.run import run
 from interpreter.types.type_expr import ParameterizedType, ScalarType, metatype
 from interpreter.types.typed_value import unwrap_locals
-from interpreter.vm_types import Pointer
+from interpreter.vm.vm_types import Pointer
 
 
 def _run_js(source: str, max_steps: int = 200):

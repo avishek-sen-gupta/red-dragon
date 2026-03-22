@@ -21,7 +21,7 @@ from interpreter.registry import FunctionRegistry, build_registry
 from interpreter.run import build_execution_strategies, execute_cfg_traced
 from interpreter.run_types import VMConfig
 from interpreter.trace_types import ExecutionTrace
-from interpreter.vm_types import VMState
+from interpreter.vm.vm_types import VMState
 
 logger = logging.getLogger(__name__)
 

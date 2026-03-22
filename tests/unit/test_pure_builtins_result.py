@@ -1,6 +1,6 @@
 """Unit tests verifying pure builtins return BuiltinResult with empty side-effect lists."""
 
-from interpreter.builtins import (
+from interpreter.vm.builtins import (
     _builtin_len,
     _builtin_range,
     _builtin_print,
@@ -12,8 +12,8 @@ from interpreter.builtins import (
     _builtin_max,
     _builtin_min,
 )
-from interpreter.vm import VMState, Operators
-from interpreter.vm_types import BuiltinResult, HeapObject
+from interpreter.vm.vm import VMState, Operators
+from interpreter.vm.vm_types import BuiltinResult, HeapObject
 from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter.types.type_expr import scalar
 from interpreter.constants import TypeName
