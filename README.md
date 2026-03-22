@@ -93,7 +93,7 @@ poetry run python -m viz coverage
 poetry run python -m viz coverage -l python,javascript,rust
 ```
 
-Six synchronized panels: **Source** (span-highlighted), **AST** (collapsible tree, toggle `a`), **IR** (grouped by CFG block), **VM State** (heap/stack/registers with diff highlighting), **CFG** (box-drawing graph, toggle `g`), and **Step** (delta summary). Arrow keys step forward/backward, space toggles auto-play, `q` quits.
+Six synchronized panels: **Source** (span-highlighted), **AST** (collapsible tree, toggle `a`), **IR** (grouped by CFG block), **VM State** (heap/stack/registers with diff highlighting), **CFG** (box-drawing graph, toggle `g`), and **Step** (delta summary). Arrow keys step forward/backward, space toggles auto-play, `d` toggles **Dataflow mode** (replaces AST/VM/CFG with call-graph summaries and whole-program dependency graph, cross-highlights source and IR on function selection), `q` quits.
 
 The pipeline result also includes **interprocedural analysis** (call graph, function summaries, and whole-program dependency graph) when the source contains function definitions. The **Dataflow Summary** panel (`viz/panels/dataflow_summary_panel.py`) renders this as a collapsible tree: each function shows its callers, callees, and merged data-flow summaries across call contexts. The **Dataflow Graph** panel (`viz/panels/dataflow_graph_panel.py`) renders the whole-program flow graph as annotated edges grouped by source endpoint, with register-to-call-result annotations for improved readability.
 
