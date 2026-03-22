@@ -8,14 +8,14 @@ a symbolic value.
 from interpreter.cfg import CFG
 from interpreter.cfg_types import BasicBlock
 from interpreter.constants import BOXED_FIELD, METHOD_MISSING
-from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context
+from interpreter.vm.executor import LocalExecutor, HandlerContext, _default_handler_context
 from interpreter.refs.func_ref import BoundFuncRef, FuncRef
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import FunctionRegistry
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime, unwrap
 from interpreter.types.type_expr import UNKNOWN, scalar
-from interpreter.vm import HeapObject, VMState
-from interpreter.vm_types import StackFrame, StateUpdate, SymbolicValue
+from interpreter.vm.vm import HeapObject, VMState
+from interpreter.vm.vm_types import StackFrame, StateUpdate, SymbolicValue
 
 
 from dataclasses import replace as _replace

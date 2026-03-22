@@ -5,12 +5,12 @@ from types import MappingProxyType
 from interpreter.constants import TypeName
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.executor import _handle_return, _default_handler_context
+from interpreter.vm.executor import _handle_return, _default_handler_context
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
-from interpreter.vm import materialize_raw_update
-from interpreter.vm_types import StateUpdate, SymbolicValue, VMState, StackFrame
+from interpreter.vm.vm import materialize_raw_update
+from interpreter.vm.vm_types import StateUpdate, SymbolicValue, VMState, StackFrame
 
 _EMPTY_TYPE_ENV = TypeEnvironment(
     register_types=MappingProxyType({}),

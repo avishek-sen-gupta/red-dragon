@@ -8,7 +8,7 @@ from typing import Any
 
 from interpreter.ir import IRInstruction
 from interpreter.llm_client import LLMClient, get_llm_client
-from interpreter.vm import VMState, StateUpdate, _resolve_reg, _serialize_value
+from interpreter.vm.vm import VMState, StateUpdate, _resolve_reg, _serialize_value
 
 
 class LLMBackend(ABC):

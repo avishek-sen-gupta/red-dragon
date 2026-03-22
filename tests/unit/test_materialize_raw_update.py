@@ -6,8 +6,8 @@ from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
-from interpreter.vm import materialize_raw_update, apply_update
-from interpreter.vm_types import (
+from interpreter.vm.vm import materialize_raw_update, apply_update
+from interpreter.vm.vm_types import (
     StateUpdate,
     VMState,
     StackFrame,
@@ -153,7 +153,7 @@ class TestApplyUpdateTypedPath:
         assert vm.current_frame.local_vars["x"] is tv
 
     def test_heap_alias_unwraps_value(self):
-        from interpreter.vm_types import HeapObject
+        from interpreter.vm.vm_types import HeapObject
 
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
@@ -169,7 +169,7 @@ class TestApplyUpdateTypedPath:
         assert field_val.value == 42
 
     def test_closure_binding_unwraps_value(self):
-        from interpreter.vm_types import ClosureEnvironment
+        from interpreter.vm.vm_types import ClosureEnvironment
 
         vm = VMState()
         env = ClosureEnvironment(bindings={})

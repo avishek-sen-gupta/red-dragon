@@ -7,12 +7,12 @@ len() and index-based iteration work correctly.
 
 from __future__ import annotations
 
-from interpreter.builtins import Builtins, _builtin_len
+from interpreter.vm.builtins import Builtins, _builtin_len
 from interpreter.types.type_expr import scalar
-from interpreter.vm import VMState, apply_update
-from interpreter.vm_types import BuiltinResult, HeapObject, StackFrame, StateUpdate
+from interpreter.vm.vm import VMState, apply_update
+from interpreter.vm.vm_types import BuiltinResult, HeapObject, StackFrame, StateUpdate
 from interpreter.types.typed_value import TypedValue, typed_from_runtime
-from interpreter.vm_types import Pointer
+from interpreter.vm.vm_types import Pointer
 
 
 def _result_addr(result: BuiltinResult) -> str:

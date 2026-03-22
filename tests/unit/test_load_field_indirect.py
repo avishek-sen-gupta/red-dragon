@@ -6,9 +6,9 @@ needed by __method_missing__ to forward field access by dynamic name.
 """
 
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.vm import VMState, HeapObject, apply_update
-from interpreter.vm_types import StackFrame, StateUpdate, SymbolicValue
-from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context
+from interpreter.vm.vm import VMState, HeapObject, apply_update
+from interpreter.vm.vm_types import StackFrame, StateUpdate, SymbolicValue
+from interpreter.vm.executor import LocalExecutor, HandlerContext, _default_handler_context
 from interpreter.cfg import CFG
 from interpreter.cfg_types import BasicBlock
 from interpreter.registry import FunctionRegistry

@@ -13,7 +13,7 @@ from interpreter.ir import IRInstruction
 from interpreter.llm_client import LLMClient
 from interpreter.types.type_expr import UNKNOWN
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
-from interpreter.vm_types import (
+from interpreter.vm.vm_types import (
     ExecutionResult,
     HeapWrite,
     StateUpdate,

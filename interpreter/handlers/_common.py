@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from interpreter.vm import VMState, SymbolicValue, _heap_addr, _is_symbolic
-from interpreter.vm_types import StackFrame
+from interpreter.vm.vm import VMState, SymbolicValue, _heap_addr, _is_symbolic
+from interpreter.vm.vm_types import StackFrame
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
 from interpreter.types.typed_value import TypedValue, typed
 from interpreter.ir import SpreadArguments
@@ -13,7 +13,7 @@ from interpreter.ir import SpreadArguments
 
 def _resolve_call_args(vm: VMState, arg_operands: list) -> list[TypedValue]:
     """Resolve call arguments, expanding SpreadArguments from the heap."""
-    from interpreter.vm import _resolve_reg
+    from interpreter.vm.vm import _resolve_reg
 
     args: list[TypedValue] = []
     for op in arg_operands:

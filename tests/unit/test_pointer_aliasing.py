@@ -14,7 +14,7 @@ from __future__ import annotations
 import pytest
 
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.vm_types import (
+from interpreter.vm.vm_types import (
     HeapObject,
     Pointer,
     StackFrame,
@@ -22,9 +22,9 @@ from interpreter.vm_types import (
     ExecutionResult,
     StateUpdate,
 )
-from interpreter.vm import apply_update
+from interpreter.vm.vm import apply_update
 from interpreter.types.typed_value import TypedValue, typed_from_runtime, unwrap
-from interpreter.executor import (
+from interpreter.vm.executor import (
     _handle_address_of,
     _handle_load_var,
     _handle_store_var,

@@ -7,7 +7,7 @@ from interpreter.types.type_expr import (
     scalar,
     parse_type,
 )
-from interpreter.vm_types import HeapObject
+from interpreter.vm.vm_types import HeapObject
 
 
 class TestHeapObjectTypeHint:
