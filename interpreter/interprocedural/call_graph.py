@@ -54,12 +54,25 @@ def _build_block_to_function(
 
 
 def _resolve_call_function_callees(
-    target_label: str, function_entries: dict[str, FunctionEntry]
+    target: str,
+    function_entries: dict[str, FunctionEntry],
+    registry: FunctionRegistry,
 ) -> frozenset[FunctionEntry]:
-    """Resolve a CALL_FUNCTION target to its callee set (0 or 1)."""
-    entry = function_entries.get(target_label)
+    """Resolve a CALL_FUNCTION target to its callee set (0 or 1).
+
+    The target may be a CFG label ('func_add_0') or a bare function name ('add').
+    Try direct label lookup first, then consult registry.func_refs for name→label.
+    """
+    # Direct label match (e.g., target is already "func_add_0")
+    entry = function_entries.get(target)
     if entry is not None:
         return frozenset({entry})
+    # Name-based lookup via FuncRef (e.g., target is "add", label is "func_add_0")
+    func_ref = registry.func_refs.get(target)
+    if func_ref is not None:
+        entry = function_entries.get(func_ref.label)
+        if entry is not None:
+            return frozenset({entry})
     return frozenset()
 
 
@@ -99,7 +112,9 @@ def build_call_graph(cfg: CFG, registry: FunctionRegistry) -> CallGraph:
 
             if inst.opcode == Opcode.CALL_FUNCTION:
                 target_label = str(inst.operands[0])
-                callees = _resolve_call_function_callees(target_label, function_entries)
+                callees = _resolve_call_function_callees(
+                    target_label, function_entries, registry
+                )
                 arg_operands = tuple(str(op) for op in inst.operands[1:])
 
             elif inst.opcode == Opcode.CALL_METHOD:

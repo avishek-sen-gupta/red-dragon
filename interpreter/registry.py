@@ -23,6 +23,8 @@ class FunctionRegistry:
     classes: dict[str, str] = field(default_factory=dict)
     # class_name → linearized parent chain (MRO, excluding self)
     class_parents: dict[str, list[str]] = field(default_factory=dict)
+    # function_name → FuncRef (name→label mapping for call resolution)
+    func_refs: dict[str, FuncRef] = field(default_factory=dict)
 
 
 def _scan_func_params(cfg: CFG) -> dict[str, list[str]]:
@@ -140,4 +142,5 @@ def build_registry(
         instructions, func_symbol_table, class_symbol_table
     )
     reg.class_parents = _expand_parent_chains(direct_parents)
+    reg.func_refs = {ref.name: ref for ref in func_symbol_table.values()}
     return reg
