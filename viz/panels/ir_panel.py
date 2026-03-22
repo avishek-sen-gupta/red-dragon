@@ -11,7 +11,7 @@ from interpreter.ir import Opcode
 from interpreter.trace_types import TraceStep
 
 
-class IRPanel(Static):
+class IRPanel(Static, can_focus=True):
     """Displays IR instructions grouped by CFG block, highlighting the current step."""
 
     current_step: reactive[TraceStep | None] = reactive(None)
