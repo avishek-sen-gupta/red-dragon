@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from interpreter.cfg import build_cfg
-from interpreter.class_ref import ClassRef
-from interpreter.func_ref import FuncRef
+from interpreter.refs.class_ref import ClassRef
+from interpreter.refs.func_ref import FuncRef
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import build_registry, _scan_classes
 
