@@ -327,6 +327,173 @@ class TestParamToReturnFlowsJavaScript:
         assert "n" in param_names
 
 
+class TestCrossFunctionFlowPropagation:
+    """Assert that param→return flows propagate ACROSS function boundaries via the whole-program graph."""
+
+    def test_caller_arg_flows_through_callee_to_call_result(self):
+        """g(y) calls f(y): y in g should flow to f's call-result register in the whole-program graph.
+
+        f's summary says x→Return(f). Propagation substitutes x→y and Return(f)→%call_result.
+        So the whole-program graph should have Var(y) flowing to more than just Return(g).
+        """
+        source = """\
+def f(x):
+    return x + 1
+
+def g(y):
+    return f(y) + 2
+
+result = g(10)
+"""
+        result = _analyze_source(source, Language.PYTHON)
+
+        # Var(y) should appear as a source with call-result destination (cross-function propagation)
+        y_destinations = set()
+        for src, dsts in result.whole_program_graph.items():
+            if isinstance(src, VariableEndpoint) and src.name == "y":
+                y_destinations.update(dsts)
+
+        # y should reach at least 2 destinations: Return(g) [intraprocedural] + call result [cross-function]
+        assert len(y_destinations) >= 2, (
+            f"Expected y to flow to both Return(g) and f's call result, "
+            f"got {len(y_destinations)} destinations: "
+            f"{[type(d).__name__ for d in y_destinations]}"
+        )
+
+        # One destination should be Return(g) — intraprocedural
+        return_dsts = [
+            d
+            for d in y_destinations
+            if isinstance(d, ReturnEndpoint) and "g" in d.function.label
+        ]
+        assert len(return_dsts) == 1, "y should flow to Return(g)"
+
+        # Another destination should be a VariableEndpoint — the cross-function call result
+        var_dsts = [d for d in y_destinations if isinstance(d, VariableEndpoint)]
+        assert (
+            len(var_dsts) >= 1
+        ), "y should flow through f's summary to f's call-result register"
+
+    def test_whole_program_graph_has_propagated_edges_beyond_summaries(self):
+        """The whole-program graph should have MORE edges than just the per-function summaries.
+
+        Per-function summaries only capture intraprocedural flows.
+        The whole-program graph adds cross-function propagated flows.
+        """
+        source = """\
+def f(x):
+    return x + 1
+
+def g(y):
+    return f(y) + 2
+
+result = g(10)
+"""
+        result = _analyze_source(source, Language.PYTHON)
+
+        summary_edge_count = sum(len(s.flows) for s in result.summaries.values())
+        wpg_edge_count = sum(len(dsts) for dsts in result.whole_program_graph.values())
+
+        assert wpg_edge_count > summary_edge_count, (
+            f"Whole-program graph should have more edges ({wpg_edge_count}) "
+            f"than intraprocedural summaries alone ({summary_edge_count})"
+        )
+
+    def test_top_level_arg_propagated_to_result_variable(self):
+        """Top-level call g(10): the arg operand should flow to the result variable."""
+        source = """\
+def g(y):
+    return y + 1
+
+result = g(10)
+"""
+        result = _analyze_source(source, Language.PYTHON)
+
+        # Find edge where destination is Var(result)
+        result_sources = [
+            src
+            for src, dsts in result.whole_program_graph.items()
+            if any(isinstance(d, VariableEndpoint) and d.name == "result" for d in dsts)
+        ]
+        assert (
+            len(result_sources) >= 1
+        ), "Expected at least one flow ending at Var(result) from call-site propagation"
+
+    def test_cross_function_field_flow_propagation(self):
+        """set_name(dog, "Rex") propagates: the arg flows to field write on the object."""
+        source = """\
+class Dog:
+    def set_name(self, name):
+        self.name = name
+
+d = Dog()
+d.set_name("Rex")
+"""
+        result = _analyze_source(source, Language.PYTHON)
+
+        # The summary for set_name should have field flows
+        field_flows_in_summaries = [
+            (src, dst)
+            for summary in result.summaries.values()
+            if "set_name" in summary.function.label
+            for src, dst in summary.flows
+            if isinstance(dst, FieldEndpoint)
+        ]
+        assert (
+            len(field_flows_in_summaries) >= 1
+        ), "set_name summary should have param→field flows"
+
+        # The whole-program graph should propagate those field flows
+        wpg_edge_count = sum(len(dsts) for dsts in result.whole_program_graph.values())
+        assert wpg_edge_count > 0, "Whole-program graph should have propagated edges"
+
+    def test_chained_calls_propagate_transitively(self):
+        """h calls g calls f: whole-program graph should have edges from h's scope."""
+        source = """\
+def f(x):
+    return x
+
+def g(y):
+    return f(y)
+
+def h(z):
+    return g(z)
+
+result = h(42)
+"""
+        result = _analyze_source(source, Language.PYTHON)
+
+        # z in h should be a source in the whole-program graph
+        z_is_source = any(
+            isinstance(src, VariableEndpoint) and src.name == "z"
+            for src in result.whole_program_graph
+        )
+        assert z_is_source, (
+            "z from h should appear as a source in whole-program graph "
+            "(propagated through g and f)"
+        )
+
+    def test_js_cross_function_propagation(self):
+        """JavaScript: cross-function flow from caller arg through callee summary."""
+        source = """\
+function inc(x) { return x + 1; }
+function apply(n) { return inc(n); }
+var r = apply(5);
+"""
+        result = _analyze_source(source, Language.JAVASCRIPT)
+
+        # n in apply should flow to more than just Return(apply)
+        n_destinations = set()
+        for src, dsts in result.whole_program_graph.items():
+            if isinstance(src, VariableEndpoint) and src.name == "n":
+                n_destinations.update(dsts)
+
+        assert len(n_destinations) >= 2, (
+            f"n should flow to both Return(apply) and inc's call result, "
+            f"got {len(n_destinations)} destinations"
+        )
+
+
 class TestParamToReturnFlowsRust:
     """Assert specific param→return flows from real Rust programs."""
 
