@@ -65,6 +65,7 @@
 {"issue_id":"red-dragon-562","label":"csharp"}
 {"issue_id":"red-dragon-562","label":"frontend"}
 {"issue_id":"red-dragon-5e13","label":"audit-asserts"}
+{"issue_id":"red-dragon-5iez","label":"bug"}
 {"issue_id":"red-dragon-5jdr","label":"architecture"}
 {"issue_id":"red-dragon-5jdr","label":"symbol-table"}
 {"issue_id":"red-dragon-5lu","label":"typed-value"}
