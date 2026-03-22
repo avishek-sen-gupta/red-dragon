@@ -2,8 +2,40 @@
 
 from __future__ import annotations
 
-from interpreter.interprocedural.types import InterproceduralResult
+from interpreter.interprocedural.types import (
+    InterproceduralResult,
+    ReturnEndpoint,
+    VariableEndpoint,
+)
+from viz.panels.dataflow_graph_panel import (
+    ChainNode,
+    build_call_chain,
+    find_top_level_call_sites,
+)
 from viz.pipeline import run_pipeline
+
+
+def _collect_labels(nodes: list[ChainNode]) -> list[str]:
+    """Collect all labels from a ChainNode tree."""
+    return [lbl for n in nodes for lbl in [n.label] + _collect_labels(n.children)]
+
+
+def _resolve_callee(callee_label: str, interprocedural):
+    """Resolve a callee label to a FunctionEntry (label or name-based)."""
+    func_by_label = {f.label: f for f in interprocedural.call_graph.functions}
+    entry = func_by_label.get(callee_label)
+    if entry:
+        return entry
+    return next(
+        (
+            f
+            for f in interprocedural.call_graph.functions
+            if f.label.startswith("func_")
+            and "_" in f.label[5:]
+            and f.label.split("_")[1] == callee_label
+        ),
+        func_by_label.get(callee_label),
+    )
 
 
 class TestPipelineInterproceduralResult:
@@ -118,3 +150,102 @@ result = double(5)
             set(),
         )
         assert len(nodes) > 0, "Call chain should have at least one node"
+
+
+class TestMultiFunctionCallChain:
+    """End-to-end: quadruple → double → add call chain with correctness assertions."""
+
+    SOURCE = """\
+def add(a, b):
+    return a + b
+
+def double(x):
+    return add(x, x)
+
+def quadruple(n):
+    return double(double(n))
+
+result = quadruple(5)
+"""
+
+    def test_top_level_call_is_quadruple(self):
+        result = run_pipeline(self.SOURCE, language="python", max_steps=50)
+        top_calls = find_top_level_call_sites(
+            result.cfg, result.interprocedural.call_graph
+        )
+        assert len(top_calls) == 1
+        assert "quadruple" in top_calls[0].callee_label
+        assert top_calls[0].result_var == "result"
+
+    def test_quadruple_chain_has_correct_structure(self):
+        """quadruple(n) should show n flowing into double, then into add."""
+        result = run_pipeline(self.SOURCE, language="python", max_steps=50)
+        top_calls = find_top_level_call_sites(
+            result.cfg, result.interprocedural.call_graph
+        )
+        callee = _resolve_callee(top_calls[0].callee_label, result.interprocedural)
+        nodes = build_call_chain(
+            callee,
+            result.interprocedural.call_graph,
+            result.interprocedural.summaries,
+            result.cfg,
+            set(),
+        )
+        labels = _collect_labels(nodes)
+
+        # n flows to double
+        assert any(
+            "n" in lbl and "double" in lbl for lbl in labels
+        ), f"Expected n → double(...) in chain, got: {labels}"
+        # x flows to add
+        assert any(
+            "x" in lbl and "add" in lbl for lbl in labels
+        ), f"Expected x → add(...) in chain, got: {labels}"
+        # a and b reach return(add)
+        assert any(
+            "a" in lbl and "return" in lbl for lbl in labels
+        ), f"Expected a → return(add) leaf, got: {labels}"
+        assert any(
+            "b" in lbl and "return" in lbl for lbl in labels
+        ), f"Expected b → return(add) leaf, got: {labels}"
+        # n reaches return(quadruple)
+        assert any(
+            "n" in lbl and "return" in lbl and "quadruple" in lbl for lbl in labels
+        ), f"Expected n → return(quadruple) leaf, got: {labels}"
+
+    def test_add_is_leaf_level(self):
+        """add(a, b) has no inner calls — its chain nodes should be leaves."""
+        result = run_pipeline(self.SOURCE, language="python", max_steps=50)
+        add_entry = next(
+            f for f in result.interprocedural.call_graph.functions if "add" in f.label
+        )
+        nodes = build_call_chain(
+            add_entry,
+            result.interprocedural.call_graph,
+            result.interprocedural.summaries,
+            result.cfg,
+            set(),
+        )
+        # All nodes for add should be leaves (no children)
+        assert all(
+            len(n.children) == 0 for n in nodes
+        ), f"add() nodes should be leaves, got children: {[n.label for n in nodes if n.children]}"
+        # Should have exactly 2 flows: a→return, b→return
+        assert len(nodes) == 2, f"Expected 2 flows for add(a,b), got {len(nodes)}"
+
+    def test_chain_node_count(self):
+        """The full chain should have 9 nodes (verified from debug output)."""
+        result = run_pipeline(self.SOURCE, language="python", max_steps=50)
+        top_calls = find_top_level_call_sites(
+            result.cfg, result.interprocedural.call_graph
+        )
+        callee = _resolve_callee(top_calls[0].callee_label, result.interprocedural)
+        nodes = build_call_chain(
+            callee,
+            result.interprocedural.call_graph,
+            result.interprocedural.summaries,
+            result.cfg,
+            set(),
+        )
+        total = len(_collect_labels(nodes))
+        assert total == 9, f"Expected 9 nodes in quadruple chain, got {total}"
