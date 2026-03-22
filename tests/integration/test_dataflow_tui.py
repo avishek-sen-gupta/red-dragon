@@ -233,6 +233,41 @@ result = quadruple(5)
         # Should have exactly 2 flows: a→return, b→return
         assert len(nodes) == 2, f"Expected 2 flows for add(a,b), got {len(nodes)}"
 
+    def test_execution_result_matches_dataflow_chain(self):
+        """quadruple(5) == 20, AND the dataflow chain traces the correct path.
+
+        Combines runtime execution (via run()) with static dataflow analysis
+        (via run_pipeline) to verify both agree.
+        """
+        from interpreter.run import run
+
+        # Runtime: result == 20 (5 * 2 * 2)
+        vm = run(self.SOURCE, language="python")
+        runtime_result = vm.current_frame.local_vars["result"]
+        assert (
+            runtime_result.value == 20
+        ), f"Expected quadruple(5) == 20, got {runtime_result.value}"
+
+        # Static: the dataflow chain traces n through double and add
+        pipeline = run_pipeline(self.SOURCE, language="python", max_steps=50)
+        top_calls = find_top_level_call_sites(
+            pipeline.cfg, pipeline.interprocedural.call_graph
+        )
+        callee = _resolve_callee(top_calls[0].callee_label, pipeline.interprocedural)
+        nodes = build_call_chain(
+            callee,
+            pipeline.interprocedural.call_graph,
+            pipeline.interprocedural.summaries,
+            pipeline.cfg,
+            set(),
+        )
+        labels = _collect_labels(nodes)
+
+        # The value 5 flows through n → x → a,b → return chain
+        assert any("n" in lbl and "double" in lbl for lbl in labels)
+        assert any("x" in lbl and "add" in lbl for lbl in labels)
+        assert any("a" in lbl and "return" in lbl for lbl in labels)
+
     def test_chain_node_count(self):
         """The full chain should have 9 nodes (verified from debug output)."""
         result = run_pipeline(self.SOURCE, language="python", max_steps=50)
