@@ -1,7 +1,7 @@
 """Tests for _resolve_reg returning TypedValue."""
 
-from interpreter.vm import _resolve_reg
-from interpreter.vm_types import Pointer, StackFrame, VMState
+from interpreter.vm.vm import _resolve_reg
+from interpreter.vm.vm_types import Pointer, StackFrame, VMState
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.types.type_expr import pointer, scalar, UNKNOWN
 

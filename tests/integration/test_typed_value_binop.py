@@ -9,7 +9,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap, unwrap_locals
-from interpreter.vm_types import SymbolicValue
+from interpreter.vm.vm_types import SymbolicValue
 
 
 def _run_java(source: str, max_steps: int = 2000) -> dict:

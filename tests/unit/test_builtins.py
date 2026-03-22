@@ -2,14 +2,14 @@
 
 import logging
 
-from interpreter.builtins import (
+from interpreter.vm.builtins import (
     _builtin_print,
     _builtin_slice,
     _builtin_object_rest,
     Builtins,
 )
-from interpreter.vm import Operators, apply_update
-from interpreter.vm_types import (
+from interpreter.vm.vm import Operators, apply_update
+from interpreter.vm.vm_types import (
     BuiltinResult,
     HeapObject,
     StackFrame,
@@ -17,7 +17,7 @@ from interpreter.vm_types import (
     VMState,
 )
 from interpreter.types.typed_value import TypedValue, typed_from_runtime
-from interpreter.vm_types import Pointer
+from interpreter.vm.vm_types import Pointer
 
 
 def _apply_builtin_result(vm: VMState, result: BuiltinResult) -> None:
@@ -51,13 +51,13 @@ class TestBuiltinPrint:
 
     def test_logs_arguments(self, caplog):
         vm = VMState()
-        with caplog.at_level(logging.INFO, logger="interpreter.builtins"):
+        with caplog.at_level(logging.INFO, logger="interpreter.vm.builtins"):
             _builtin_print([typed_from_runtime("hello"), typed_from_runtime(42)], vm)
         assert "[VM print] hello 42" in caplog.text
 
     def test_logs_empty_args(self, caplog):
         vm = VMState()
-        with caplog.at_level(logging.INFO, logger="interpreter.builtins"):
+        with caplog.at_level(logging.INFO, logger="interpreter.vm.builtins"):
             _builtin_print([], vm)
         assert "[VM print] " in caplog.text
 

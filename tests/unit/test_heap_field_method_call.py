@@ -8,9 +8,9 @@ rather than falling back to symbolic resolution.
 from __future__ import annotations
 
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.vm import VMState, SymbolicValue, apply_update
-from interpreter.vm_types import HeapObject, Pointer, StackFrame
-from interpreter.executor import LocalExecutor, HandlerContext, _default_handler_context
+from interpreter.vm.vm import VMState, SymbolicValue, apply_update
+from interpreter.vm.vm_types import HeapObject, Pointer, StackFrame
+from interpreter.vm.executor import LocalExecutor, HandlerContext, _default_handler_context
 from interpreter.cfg import CFG, build_cfg
 from interpreter.registry import FunctionRegistry, build_registry
 from interpreter.refs.func_ref import FuncRef, BoundFuncRef

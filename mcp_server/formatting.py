@@ -11,7 +11,7 @@ from interpreter.interprocedural.types import (
     VariableEndpoint,
 )
 from interpreter.types.typed_value import TypedValue
-from interpreter.vm_types import StateUpdate
+from interpreter.vm.vm_types import StateUpdate
 
 
 def format_typed_value(tv: Any) -> Any:

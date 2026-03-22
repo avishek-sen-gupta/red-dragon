@@ -5,7 +5,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
-from interpreter.vm_types import Pointer
+from interpreter.vm.vm_types import Pointer
 
 
 def _run_lua(source: str, max_steps: int = 500):
