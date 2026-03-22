@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from interpreter.conversion_rules import TypeConversionRules
-from interpreter.conversion_result import (
+from interpreter.types.coercion.conversion_rules import TypeConversionRules
+from interpreter.types.coercion.conversion_result import (
     ConversionResult,
     IDENTITY_CONVERSION,
     _identity,

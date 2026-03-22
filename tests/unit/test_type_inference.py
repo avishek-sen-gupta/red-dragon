@@ -3,8 +3,8 @@
 import pytest
 
 from interpreter.constants import TypeName
-from interpreter.conversion_result import IDENTITY_CONVERSION
-from interpreter.default_conversion_rules import DefaultTypeConversionRules
+from interpreter.types.coercion.conversion_result import IDENTITY_CONVERSION
+from interpreter.types.coercion.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.types.null_type_resolver import NullTypeResolver
 from interpreter.types.function_kind import FunctionKind

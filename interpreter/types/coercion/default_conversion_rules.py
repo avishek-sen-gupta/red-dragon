@@ -7,8 +7,8 @@ import math
 from typing import Any, Callable
 
 from interpreter.constants import TypeName
-from interpreter.conversion_rules import TypeConversionRules
-from interpreter.conversion_result import (
+from interpreter.types.coercion.conversion_rules import TypeConversionRules
+from interpreter.types.coercion.conversion_result import (
     ConversionResult,
     IDENTITY_CONVERSION,
     _identity,
