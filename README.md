@@ -95,6 +95,8 @@ poetry run python -m viz coverage -l python,javascript,rust
 
 Six synchronized panels: **Source** (span-highlighted), **AST** (collapsible tree, toggle `a`), **IR** (grouped by CFG block), **VM State** (heap/stack/registers with diff highlighting), **CFG** (box-drawing graph, toggle `g`), and **Step** (delta summary). Arrow keys step forward/backward, space toggles auto-play, `q` quits.
 
+The pipeline result also includes **interprocedural analysis** (call graph, function summaries, and whole-program dependency graph) when the source contains function definitions.
+
 The **lowering trace** mode shows four panels: source with highlighted spans, a collapsible tree of handler invocations (which handler processed which AST node), handler details (emitted IR, dispatch type, module), and the full IR output. Click any node in the trace tree to see its handler, emitted instructions, and source location.
 
 The **coverage matrix** mode displays a cross-language grid showing which AST node types each frontend handles, distinguishing language-specific handlers (`✓`) from shared/common handlers (`✓*`). Supports filtering by node type name.
