@@ -11,7 +11,7 @@ from functools import reduce
 
 from interpreter.cfg_types import BasicBlock, CFG
 from interpreter.dataflow import DataflowResult, Definition, analyze
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, VAR_DEFINITION_OPCODES
 from interpreter import constants
 from interpreter.interprocedural.types import (
     CallContext,
@@ -58,19 +58,19 @@ def extract_sub_cfg(cfg: CFG, function_entry: FunctionEntry) -> CFG:
 
 
 def _find_param_names(cfg: CFG) -> frozenset[str]:
-    """Find all parameter names declared via SYMBOLIC param:x → STORE_VAR x patterns."""
+    """Find all parameter names declared via SYMBOLIC param:x → DECL_VAR/STORE_VAR x patterns."""
     return frozenset(
         inst.operands[0]
         for block in cfg.blocks.values()
         for inst in block.instructions
-        if inst.opcode == Opcode.STORE_VAR
+        if inst.opcode in VAR_DEFINITION_OPCODES
         and len(inst.operands) >= 2
         and _is_param_store(cfg, block, inst)
     )
 
 
 def _is_param_store(cfg: CFG, block: BasicBlock, store_inst) -> bool:
-    """Check if a STORE_VAR's RHS register was produced by a SYMBOLIC param: instruction."""
+    """Check if a DECL_VAR/STORE_VAR's RHS register was produced by a SYMBOLIC param: instruction."""
     rhs_reg = store_inst.operands[1]
     return any(
         inst.opcode == Opcode.SYMBOLIC
@@ -181,6 +181,38 @@ def _find_register_source_var(
     return None
 
 
+def _trace_register_to_source_vars(register: str, cfg: CFG) -> frozenset[str]:
+    """Trace a register backward through computations to find all named variable sources.
+
+    Walks backward from the register through IR instructions (BINOP, CALL, etc.)
+    until reaching LOAD_VAR instructions, collecting the variable names.
+    """
+    visited: set[str] = set()
+    worklist = [register]
+    source_vars: set[str] = set()
+
+    while worklist:
+        reg = worklist.pop()
+        if reg in visited:
+            continue
+        visited.add(reg)
+
+        for block in cfg.blocks.values():
+            for inst in block.instructions:
+                if inst.result_reg != reg:
+                    continue
+                if inst.opcode == Opcode.LOAD_VAR and len(inst.operands) >= 1:
+                    source_vars.add(str(inst.operands[0]))
+                else:
+                    worklist.extend(
+                        str(op)
+                        for op in inst.operands
+                        if isinstance(op, str) and str(op).startswith("%")
+                    )
+
+    return frozenset(source_vars)
+
+
 def _make_var_endpoint(name: str, dataflow: DataflowResult) -> VariableEndpoint:
     """Create a VariableEndpoint for a named variable using its definition from dataflow."""
     matching_defs = [d for d in dataflow.definitions if d.variable == name]
@@ -228,6 +260,13 @@ def _build_return_flows(
             _add_field_to_return_flows(
                 source_var, cfg, dataflow, param_names, ret_endpoint, load_fields, flows
             )
+        else:
+            # Return operand is from a computation (BINOP, CALL, etc.) — trace through registers
+            all_source_vars = _trace_register_to_source_vars(ret_operand, cfg)
+            param_sources = all_source_vars & param_names
+            flows.extend(
+                (_make_var_endpoint(p, dataflow), ret_endpoint) for p in param_sources
+            )
 
     return flows
 
@@ -242,11 +281,11 @@ def _add_field_to_return_flows(
     flows: list[tuple[FlowEndpoint, FlowEndpoint]],
 ) -> None:
     """Check if a variable was defined by a LOAD_FIELD and add field→return flows."""
-    # Find STORE_VAR instructions for this variable where the RHS comes from a LOAD_FIELD
+    # Find DECL_VAR/STORE_VAR instructions for this variable where the RHS comes from a LOAD_FIELD
     for block in cfg.blocks.values():
         for inst in block.instructions:
             if (
-                inst.opcode == Opcode.STORE_VAR
+                inst.opcode in VAR_DEFINITION_OPCODES
                 and len(inst.operands) >= 2
                 and inst.operands[0] == var_name
             ):

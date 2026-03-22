@@ -167,14 +167,6 @@ result = g(10)
         result = _analyze_source(self.SOURCE, Language.PYTHON)
         assert len(result.summaries) > 0, "Expected non-empty summaries"
 
-    @pytest.mark.xfail(
-        strict=False,
-        reason=(
-            "Whole-program flow graph is empty because callee resolution fails: "
-            "CALL_FUNCTION uses function names but function_entries is keyed by CFG labels. "
-            "Without resolved callees, no cross-function flows are propagated."
-        ),
-    )
     def test_program_graphs_non_empty(self):
         result = _analyze_source(self.SOURCE, Language.PYTHON)
         has_flows = (
