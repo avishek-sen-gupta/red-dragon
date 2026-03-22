@@ -4,7 +4,9 @@ import math
 
 from interpreter.constants import TypeName
 from interpreter.types.coercion.conversion_result import _identity
-from interpreter.types.coercion.default_conversion_rules import DefaultTypeConversionRules
+from interpreter.types.coercion.default_conversion_rules import (
+    DefaultTypeConversionRules,
+)
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.types.null_type_resolver import NullTypeResolver
 from interpreter.types.type_expr import UNKNOWN, scalar

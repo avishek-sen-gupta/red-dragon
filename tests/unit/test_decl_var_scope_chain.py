@@ -10,7 +10,11 @@ from interpreter.vm.vm import VMState, apply_update
 from interpreter.vm.vm_types import HeapObject, StackFrame, StateUpdate, StackFramePush
 from interpreter.types.type_expr import UNKNOWN
 from interpreter.vm.field_fallback import ImplicitThisFieldFallback
-from interpreter.vm.executor import LocalExecutor, HandlerContext, _default_handler_context
+from interpreter.vm.executor import (
+    LocalExecutor,
+    HandlerContext,
+    _default_handler_context,
+)
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
 

@@ -11,7 +11,9 @@ from typing import Any
 
 from interpreter.constants import Language, TypeName
 from interpreter.types.coercion.conversion_rules import TypeConversionRules
-from interpreter.types.coercion.default_conversion_rules import DefaultTypeConversionRules
+from interpreter.types.coercion.default_conversion_rules import (
+    DefaultTypeConversionRules,
+)
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.frontend import get_frontend
@@ -22,7 +24,10 @@ from interpreter.refs.func_ref import FuncRef, BoundFuncRef
 from interpreter.refs.class_ref import ClassRef
 from interpreter.vm.executor import HandlerContext, _try_execute_locally
 from interpreter.frontends.symbol_table import SymbolTable
-from interpreter.overload.overload_resolver import NullOverloadResolver, OverloadResolver
+from interpreter.overload.overload_resolver import (
+    NullOverloadResolver,
+    OverloadResolver,
+)
 from interpreter.overload.resolution_strategy import ArityThenTypeStrategy
 from interpreter.types.coercion.type_compatibility import DefaultTypeCompatibility
 from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES

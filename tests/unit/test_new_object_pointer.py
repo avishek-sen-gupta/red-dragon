@@ -1,7 +1,11 @@
 """Tests that NEW_OBJECT produces a Pointer with correct parameterized type."""
 
 from interpreter.cfg import CFG
-from interpreter.vm.executor import LocalExecutor, HandlerContext, _default_handler_context
+from interpreter.vm.executor import (
+    LocalExecutor,
+    HandlerContext,
+    _default_handler_context,
+)
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import FunctionRegistry
 from interpreter.vm.vm import VMState

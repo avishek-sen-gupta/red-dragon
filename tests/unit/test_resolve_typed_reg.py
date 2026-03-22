@@ -3,7 +3,9 @@
 from types import MappingProxyType
 
 from interpreter.constants import TypeName
-from interpreter.types.coercion.default_conversion_rules import DefaultTypeConversionRules
+from interpreter.types.coercion.default_conversion_rules import (
+    DefaultTypeConversionRules,
+)
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.types.type_environment import TypeEnvironment
