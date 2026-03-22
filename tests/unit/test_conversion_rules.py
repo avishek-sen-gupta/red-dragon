@@ -2,7 +2,9 @@
 
 from interpreter.constants import TypeName
 from interpreter.types.coercion.conversion_result import IDENTITY_CONVERSION
-from interpreter.types.coercion.default_conversion_rules import DefaultTypeConversionRules
+from interpreter.types.coercion.default_conversion_rules import (
+    DefaultTypeConversionRules,
+)
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.types.type_expr import ScalarType, TypeExpr, UNKNOWN, scalar
 

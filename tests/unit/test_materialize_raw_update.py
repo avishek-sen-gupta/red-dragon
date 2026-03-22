@@ -104,7 +104,9 @@ class TestMaterializeRawUpdate:
 
     def test_register_coercion_applied(self):
         """Register values get coerced via _coerce_value during materialization."""
-        from interpreter.types.coercion.default_conversion_rules import DefaultTypeConversionRules
+        from interpreter.types.coercion.default_conversion_rules import (
+            DefaultTypeConversionRules,
+        )
 
         type_env = TypeEnvironment(
             register_types=MappingProxyType({"%0": scalar("Float")}),
@@ -190,7 +192,9 @@ class TestApplyUpdateTypedPath:
         assert vm.current_frame.local_vars["x"] is tv
 
     def test_register_coercion_when_declared_type_differs(self):
-        from interpreter.types.coercion.default_conversion_rules import DefaultTypeConversionRules
+        from interpreter.types.coercion.default_conversion_rules import (
+            DefaultTypeConversionRules,
+        )
 
         type_env = TypeEnvironment(
             register_types=MappingProxyType({"%0": scalar("Float")}),

@@ -27,7 +27,10 @@ from interpreter.registry import FunctionRegistry
 from interpreter.refs.func_ref import FuncRef, BoundFuncRef
 from interpreter.refs.class_ref import ClassRef
 from interpreter.vm.builtins import Builtins, _builtin_array_of
-from interpreter.overload.overload_resolver import NullOverloadResolver, OverloadResolver
+from interpreter.overload.overload_resolver import (
+    NullOverloadResolver,
+    OverloadResolver,
+)
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, parse_type, pointer, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
