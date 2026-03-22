@@ -4,7 +4,7 @@ import logging
 
 import pytest
 
-from interpreter.ambiguity_handler import (
+from interpreter.overload.ambiguity_handler import (
     AmbiguousOverloadError,
     FallbackFirstWithWarning,
     StrictAmbiguityHandler,
