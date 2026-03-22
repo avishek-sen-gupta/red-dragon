@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass, field
 
 from rich.text import Text
-from textual.widgets import Static
+from textual.widgets import Static, Tree
 
 from interpreter.cfg_types import CFG
 from interpreter.interprocedural.call_graph import (
@@ -235,8 +235,8 @@ def render_graph_lines(
     return lines
 
 
-class DataflowGraphPanel(Static):
-    """Displays the whole-program flow graph with annotated edges."""
+class DataflowGraphPanel(Tree):
+    """Displays interprocedural call chains as a collapsible tree."""
 
     def __init__(
         self,
@@ -244,34 +244,63 @@ class DataflowGraphPanel(Static):
         cfg: CFG | None = None,
         **kwargs,
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__("Call Chains", **kwargs)
         self._result = result
         self._cfg = cfg
 
     def on_mount(self) -> None:
-        self._render_graph()
-
-    def _render_graph(self) -> None:
         if self._result is None:
-            self.update("[dim]No dataflow analysis available[/dim]")
+            self.root.add_leaf("[dim]No dataflow analysis available[/dim]")
             return
+        self._populate_tree()
+        self.root.expand()
 
-        graph = self._result.whole_program_graph
-        edge_count = sum(len(dsts) for dsts in graph.values())
-        lines = render_graph_lines(graph, self._cfg)
+    def _populate_tree(self) -> None:
+        cfg = self._cfg
+        result = self._result
+        top_calls = find_top_level_call_sites(cfg, result.call_graph)
+        func_by_label = {f.label: f for f in result.call_graph.functions}
 
-        text = Text()
-        text.append(
-            f"WHOLE-PROGRAM GRAPH ({edge_count} edges)\n\n",
-            style="bold magenta",
-        )
+        for call in top_calls:
+            callee_entry = func_by_label.get(call.callee_label)
+            if callee_entry is None:
+                # callee_label may be a name; try name-based lookup
+                callee_entry = next(
+                    (
+                        f
+                        for f in result.call_graph.functions
+                        if f.label.split("_")[1] == call.callee_label
+                        if f.label.startswith("func_") and "_" in f.label[5:]
+                    ),
+                    None,
+                )
+            if callee_entry is None:
+                self.root.add_leaf(
+                    f"{call.callee_label}({', '.join(call.arg_operands)}) → {call.result_var} [unresolved]"
+                )
+                continue
+            root_label = f"{call.callee_label}({', '.join(call.arg_operands)}) → {call.result_var}"
+            root_node = self.root.add(root_label)
 
-        for line in lines:
-            arrow_idx = line.index("→")
-            src_part = line[:arrow_idx]
-            dst_part = line[arrow_idx + 1 :].strip()
-            text.append(src_part, style="cyan")
-            text.append("→ ", style="dim")
-            text.append(f"{dst_part}\n", style="yellow")
+            chain_nodes = build_call_chain(
+                callee_entry, result.call_graph, result.summaries, cfg, set()
+            )
+            self._add_chain_nodes(root_node, chain_nodes)
 
-        self.update(text)
+        if not top_calls:
+            # Fallback: show per-function chains for all functions
+            for func in sorted(result.call_graph.functions, key=lambda f: f.label):
+                func_node = self.root.add(f"{func.label}({', '.join(func.params)})")
+                chain_nodes = build_call_chain(
+                    func, result.call_graph, result.summaries, cfg, set()
+                )
+                self._add_chain_nodes(func_node, chain_nodes)
+
+    def _add_chain_nodes(self, parent, chain_nodes: list[ChainNode]) -> None:
+        """Recursively convert ChainNode tree into Textual TreeNode widgets."""
+        for node in chain_nodes:
+            if node.children:
+                tree_node = parent.add(node.label)
+                self._add_chain_nodes(tree_node, node.children)
+            else:
+                parent.add_leaf(node.label)
