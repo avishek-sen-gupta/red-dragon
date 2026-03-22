@@ -2300,3 +2300,26 @@ as-patterns (`pattern => name` → `AsPattern`), splat parameters
 
 Guard patterns, pin patterns, and find patterns are out of scope
 (red-dragon-kysi, red-dragon-swlt, red-dragon-ocvm, red-dragon-3077).
+
+---
+
+## ADR-122: Interprocedural Dataflow Analysis (2026-03-22)
+
+**Status:** Accepted
+**Issue:** red-dragon-j7f4
+
+Whole-program interprocedural dataflow analysis extending intraprocedural
+infrastructure (ADR-009). Pure analysis over CFG + FunctionRegistry.
+
+4 phases: call graph construction (CHA for virtual dispatch), function
+summary extraction (1-CFA context sensitivity), whole-program fixpoint
+propagation (SCC-based, Kosaraju's algorithm), query interface
+(impact analysis, taint tracking, program slicing).
+
+Depth-1 field-sensitive (CodeQL-style store/read). All data types are
+frozen dataclasses with InstructionLocation indirection for hashability.
+No modification to existing dataflow.py — field flows extracted in
+separate pass.
+
+6 modules in interpreter/interprocedural/: types, call_graph, summaries,
+propagation, queries, analyze.
