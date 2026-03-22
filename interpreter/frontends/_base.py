@@ -928,15 +928,18 @@ class BaseFrontend(Frontend):
         # Implicit return at end of function
         none_reg = self._fresh_reg()
         self._emit(
-            Opcode.CONST, result_reg=none_reg, operands=[self.DEFAULT_RETURN_VALUE]
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[self.DEFAULT_RETURN_VALUE],
+            node=node,
         )
-        self._emit(Opcode.RETURN, operands=[none_reg])
+        self._emit(Opcode.RETURN, operands=[none_reg], node=node)
 
         self._emit(Opcode.LABEL, label=end_label)
 
         func_reg = self._fresh_reg()
-        self._emit_func_ref(func_name, func_label, result_reg=func_reg)
-        self._emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+        self._emit_func_ref(func_name, func_label, result_reg=func_reg, node=node)
+        self._emit(Opcode.DECL_VAR, operands=[func_name, func_reg], node=node)
 
     def _lower_params(self, params_node):
         """Lower function parameters. Override for language-specific param shapes."""
@@ -965,6 +968,7 @@ class BaseFrontend(Frontend):
         self._emit(
             Opcode.DECL_VAR,
             operands=[pname, f"%{self._reg_counter - 1}"],
+            node=child,
         )
 
     def _extract_param_name(self, child) -> str | None:
