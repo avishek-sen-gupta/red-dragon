@@ -111,15 +111,15 @@ class PipelineApp(App):
     """
 
     BINDINGS = [
-        Binding("right,l", "step_forward", "Step →", show=True),
-        Binding("left,h", "step_backward", "Step ←", show=True),
-        Binding("space", "toggle_play", "Play/Pause", show=True),
-        Binding("home", "step_first", "First", show=True),
-        Binding("end", "step_last", "Last", show=True),
-        Binding("a", "toggle_ast", "AST", show=True),
-        Binding("g", "toggle_cfg", "CFG", show=True),
-        Binding("d", "toggle_dataflow", "Dataflow", show=True),
-        Binding("q", "quit", "Quit", show=True),
+        Binding("right,l", "step_forward", "Step →", show=True, priority=True),
+        Binding("left,h", "step_backward", "Step ←", show=True, priority=True),
+        Binding("space", "toggle_play", "Play/Pause", show=True, priority=True),
+        Binding("home", "step_first", "First", show=True, priority=True),
+        Binding("end", "step_last", "Last", show=True, priority=True),
+        Binding("a", "toggle_ast", "AST", show=True, priority=True),
+        Binding("g", "toggle_cfg", "CFG", show=True, priority=True),
+        Binding("d", "toggle_dataflow", "Dataflow", show=True, priority=True),
+        Binding("q", "quit", "Quit", show=True, priority=True),
     ]
 
     def __init__(self, result: PipelineResult) -> None:
