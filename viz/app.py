@@ -80,6 +80,16 @@ class PipelineApp(App):
         display: none;
     }
 
+    /* Focus: brighten border on focused container, dim on unfocused */
+    Vertical:focus-within {
+        border: solid rgb(200,200,255);
+    }
+
+    /* Override Tree's built-in focus styling to match container approach */
+    Tree:focus {
+        border: none;
+    }
+
     #dataflow-summary-container {
         border: solid rgb(80,120,140);
         overflow-y: auto;
