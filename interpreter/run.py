@@ -569,6 +569,46 @@ def execute_cfg_traced(
     return (vm, trace)
 
 
+def build_execution_strategies(
+    frontend,
+    instructions: list,
+    registry: FunctionRegistry,
+    lang: Language,
+) -> ExecutionStrategies:
+    """Build ExecutionStrategies with type inference, overload resolution, and symbol tables.
+
+    Shared by run() and the TUI pipeline to ensure identical execution behaviour.
+    """
+    conversion_rules = DefaultTypeConversionRules()
+    type_resolver = TypeResolver(conversion_rules)
+    type_env = infer_types(
+        instructions,
+        type_resolver,
+        type_env_builder=frontend.type_env_builder,
+        func_symbol_table=frontend.func_symbol_table,
+        class_symbol_table=frontend.class_symbol_table,
+    )
+    class_nodes = tuple(
+        TypeNode(name=cls, parents=tuple(parents))
+        for cls, parents in registry.class_parents.items()
+    )
+    type_graph = TypeGraph(DEFAULT_TYPE_NODES + class_nodes)
+    overload_resolver = OverloadResolver(
+        ArityThenTypeStrategy(DefaultTypeCompatibility(type_graph)),
+        FallbackFirstWithWarning(),
+    )
+    return ExecutionStrategies(
+        type_env=type_env,
+        conversion_rules=conversion_rules,
+        overload_resolver=overload_resolver,
+        binop_coercion=_binop_coercion_for_language(lang),
+        func_symbol_table=frontend.func_symbol_table,
+        class_symbol_table=frontend.class_symbol_table,
+        field_fallback=_field_fallback_for_language(lang),
+        symbol_table=frontend.symbol_table,
+    )
+
+
 def run(
     source: str,
     language: str | Language = Language.PYTHON,
@@ -667,18 +707,10 @@ def run(
     stats.registry_functions = len(registry.func_params)
     stats.registry_classes = len(registry.classes)
 
-    # 4c. Type inference
-    conversion_rules = DefaultTypeConversionRules()
-    type_resolver = TypeResolver(conversion_rules)
-    type_env = infer_types(
-        instructions,
-        type_resolver,
-        type_env_builder=frontend.type_env_builder,
-        func_symbol_table=frontend.func_symbol_table,
-        class_symbol_table=frontend.class_symbol_table,
-    )
+    # 4c. Type inference + execution strategies
+    strategies = build_execution_strategies(frontend, instructions, registry, lang)
 
-    # 5. Execute via extract
+    # 5. Execute
     vm_config = VMConfig(
         backend=backend,
         max_steps=max_steps,
@@ -686,28 +718,7 @@ def run(
         source_language=lang,
         unresolved_call_strategy=unresolved_call_strategy,
     )
-    class_nodes = tuple(
-        TypeNode(name=cls, parents=tuple(parents))
-        for cls, parents in registry.class_parents.items()
-    )
-    type_graph = TypeGraph(DEFAULT_TYPE_NODES + class_nodes)
-    overload_resolver = OverloadResolver(
-        ArityThenTypeStrategy(DefaultTypeCompatibility(type_graph)),
-        FallbackFirstWithWarning(),
-    )
-    binop_coercion = _binop_coercion_for_language(lang)
-    field_fallback = _field_fallback_for_language(lang)
     exec_start = time.perf_counter()
-    strategies = ExecutionStrategies(
-        type_env=type_env,
-        conversion_rules=conversion_rules,
-        overload_resolver=overload_resolver,
-        binop_coercion=binop_coercion,
-        func_symbol_table=frontend.func_symbol_table,
-        class_symbol_table=frontend.class_symbol_table,
-        field_fallback=field_fallback,
-        symbol_table=frontend.symbol_table,
-    )
     vm, exec_stats = execute_cfg(cfg, entry, registry, vm_config, strategies)
     vm.data_layout = frontend.data_layout
     stats.execution_time = time.perf_counter() - exec_start
