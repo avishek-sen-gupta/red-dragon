@@ -6,8 +6,8 @@ from types import MappingProxyType
 from typing import Any
 
 from interpreter.constants import CanonicalLiteral, TypeName
-from interpreter.conversion_rules import TypeConversionRules
-from interpreter.identity_conversion_rules import IdentityConversionRules
+from interpreter.types.coercion.conversion_rules import TypeConversionRules
+from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, ScalarType, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime

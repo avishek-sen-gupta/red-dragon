@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Callable
 
-from interpreter.conversion_result import ConversionResult
+from interpreter.types.coercion.conversion_result import ConversionResult
 from interpreter.types.type_expr import TypeExpr
 
 

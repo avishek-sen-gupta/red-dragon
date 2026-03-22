@@ -11,7 +11,7 @@ from interpreter.types.type_expr import scalar, UNKNOWN
 from interpreter.types.type_inference import _InferenceContext, _infer_call_method
 from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
 from interpreter.types.type_resolver import TypeResolver
-from interpreter.default_conversion_rules import DefaultTypeConversionRules
+from interpreter.types.coercion.default_conversion_rules import DefaultTypeConversionRules
 
 
 def _resolver():

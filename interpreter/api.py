@@ -18,7 +18,7 @@ from interpreter.cfg import (
     extract_function_instructions,
 )
 from interpreter.constants import Language
-from interpreter.default_conversion_rules import DefaultTypeConversionRules
+from interpreter.types.coercion.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.frontend import get_frontend
 from interpreter.ir import IRInstruction
 from interpreter.ir_stats import count_opcodes

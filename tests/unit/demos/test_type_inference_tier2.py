@@ -11,7 +11,7 @@ Exercises 6 features:
 """
 
 from interpreter.api import lower_and_infer
-from interpreter.default_conversion_rules import DefaultTypeConversionRules
+from interpreter.types.coercion.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver

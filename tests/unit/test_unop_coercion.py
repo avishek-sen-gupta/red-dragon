@@ -2,7 +2,7 @@
 
 from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.types.typed_value import TypedValue, typed
-from interpreter.unop_coercion import DefaultUnopCoercion
+from interpreter.types.coercion.unop_coercion import DefaultUnopCoercion
 
 
 class TestDefaultUnopCoercion:

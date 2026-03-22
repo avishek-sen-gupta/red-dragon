@@ -3,7 +3,7 @@
 import pytest
 
 from interpreter.constants import Language, TypeName
-from interpreter.default_conversion_rules import DefaultTypeConversionRules
+from interpreter.types.coercion.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.frontend import get_frontend
 from interpreter.ir import Opcode
 from interpreter.types.type_expr import (
