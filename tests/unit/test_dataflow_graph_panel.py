@@ -14,6 +14,33 @@ from interpreter.interprocedural.types import (
 from interpreter.ir import IRInstruction, Opcode
 from viz.panels.dataflow_graph_panel import annotate_endpoint, render_graph_lines
 
+from interpreter.cfg import build_cfg
+from interpreter.constants import Language
+from interpreter.frontend import get_frontend
+from interpreter.interprocedural.analyze import analyze_interprocedural
+from interpreter.registry import build_registry
+from viz.panels.dataflow_graph_panel import (
+    TopLevelCall,
+    ChainNode,
+    find_top_level_call_sites,
+    trace_reg_to_var,
+)
+
+
+def _analyze(source: str, language: Language = Language.PYTHON):
+    """Helper: run full pipeline and return (cfg, result)."""
+    frontend = get_frontend(language)
+    ir = frontend.lower(source.encode())
+    cfg = build_cfg(ir)
+    registry = build_registry(
+        ir,
+        cfg,
+        func_symbol_table=frontend.func_symbol_table,
+        class_symbol_table=frontend.class_symbol_table,
+    )
+    result = analyze_interprocedural(cfg, registry)
+    return cfg, result
+
 
 class TestAnnotateEndpoint:
     def test_named_variable_no_annotation(self):
@@ -76,3 +103,48 @@ class TestRenderGraphLines:
     def test_empty_graph(self):
         lines = render_graph_lines({}, None)
         assert len(lines) == 0
+
+
+class TestFindTopLevelCallSites:
+    def test_single_top_level_call(self):
+        source = "def f(x):\n    return x\nresult = f(5)\n"
+        cfg, result = _analyze(source)
+        top_calls = find_top_level_call_sites(cfg, result.call_graph)
+        assert len(top_calls) >= 1
+        call = top_calls[0]
+        assert "f" in call.callee_label or "func_f" in call.callee_label
+        assert call.result_var == "result"
+
+    def test_no_functions_no_top_level_calls(self):
+        source = "x = 1\ny = x + 1\n"
+        cfg, result = _analyze(source)
+        top_calls = find_top_level_call_sites(cfg, result.call_graph)
+        assert len(top_calls) == 0
+
+    def test_multi_function_finds_outermost_call(self):
+        source = (
+            "def add(a, b):\n    return a + b\n"
+            "def double(x):\n    return add(x, x)\n"
+            "result = double(5)\n"
+        )
+        cfg, result = _analyze(source)
+        top_calls = find_top_level_call_sites(cfg, result.call_graph)
+        assert len(top_calls) >= 1
+        assert any("double" in c.callee_label for c in top_calls)
+
+
+class TestTraceRegToVar:
+    def test_traces_load_var(self):
+        source = "def f(x):\n    return x\nresult = f(5)\n"
+        cfg, _ = _analyze(source)
+        found = False
+        for label, block in cfg.blocks.items():
+            for inst in block.instructions:
+                if inst.opcode == Opcode.LOAD_VAR and inst.result_reg:
+                    traced = trace_reg_to_var(inst.result_reg, cfg, label)
+                    assert traced == str(inst.operands[0])
+                    found = True
+                    break
+            if found:
+                break
+        assert found, "No LOAD_VAR found in test program"
