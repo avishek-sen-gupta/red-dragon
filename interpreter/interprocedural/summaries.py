@@ -28,20 +28,51 @@ from interpreter.interprocedural.types import (
 logger = logging.getLogger(__name__)
 
 
+def _collect_boundary_labels(cfg: CFG) -> frozenset[str]:
+    """Collect labels that mark function boundaries (other function entries and end blocks).
+
+    A function entry block starts with 'func_' and contains a SYMBOLIC param: instruction.
+    End blocks start with 'end_'. These are the boundaries where reachability walks stop.
+    """
+    boundaries: set[str] = set()
+    for label, block in cfg.blocks.items():
+        if label.startswith("end_"):
+            boundaries.add(label)
+        elif label.startswith("func_") and any(
+            inst.opcode == Opcode.SYMBOLIC
+            and len(inst.operands) >= 1
+            and str(inst.operands[0]).startswith(constants.PARAM_PREFIX)
+            for inst in block.instructions
+        ):
+            boundaries.add(label)
+    return frozenset(boundaries)
+
+
 def extract_sub_cfg(cfg: CFG, function_entry: FunctionEntry) -> CFG:
     """Extract the sub-CFG for a single function.
 
-    Collects all blocks whose labels start with the function's entry label
-    (e.g., func__foo, func__foo_if_true_1, etc.).
+    Walks successors reachably from the function's entry block, stopping at
+    other function entries or end blocks. This correctly handles unprefixed
+    branch targets (e.g., if_true_2, if_end_3) that real frontends emit.
     """
-    prefix = function_entry.label
+    entry_label = function_entry.label
+    boundary_labels = _collect_boundary_labels(cfg) - {entry_label}
+
+    visited: set[str] = set()
+    worklist = [entry_label]
+    while worklist:
+        label = worklist.pop()
+        if label in visited or label in boundary_labels:
+            continue
+        visited.add(label)
+        block = cfg.blocks.get(label)
+        if block:
+            worklist.extend(s for s in block.successors if s not in visited)
+
     matching_blocks = {
-        label: block
-        for label, block in cfg.blocks.items()
-        if label == prefix or label.startswith(prefix + "_")
+        label: cfg.blocks[label] for label in visited if label in cfg.blocks
     }
 
-    # Rebuild with predecessors/successors filtered to only included blocks
     filtered_blocks = {
         label: BasicBlock(
             label=block.label,
@@ -52,9 +83,11 @@ def extract_sub_cfg(cfg: CFG, function_entry: FunctionEntry) -> CFG:
         for label, block in matching_blocks.items()
     }
 
-    logger.info("Extracted sub-CFG for %s: %d blocks", prefix, len(filtered_blocks))
+    logger.info(
+        "Extracted sub-CFG for %s: %d blocks", entry_label, len(filtered_blocks)
+    )
 
-    return CFG(blocks=filtered_blocks, entry=prefix)
+    return CFG(blocks=filtered_blocks, entry=entry_label)
 
 
 def _find_param_names(cfg: CFG) -> frozenset[str]:
