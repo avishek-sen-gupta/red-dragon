@@ -80,15 +80,6 @@ class PipelineApp(App):
         display: none;
     }
 
-    /* Focus: brighten border on focused container when a child has focus */
-    Vertical:focus-within {
-        border: solid rgb(200,200,255);
-    }
-
-    /* Override Tree's built-in focus border to use container-level indication */
-    Tree:focus {
-        border: none;
-    }
 
     #dataflow-summary-container {
         border: solid rgb(80,120,140);
@@ -123,7 +114,7 @@ class PipelineApp(App):
     BINDINGS = [
         Binding("right,l", "step_forward", "Step →", show=True, priority=True),
         Binding("left,h", "step_backward", "Step ←", show=True, priority=True),
-        Binding("space", "toggle_play", "Play/Pause", show=True, priority=True),
+        Binding("f5", "toggle_play", "Play/Pause", show=True, priority=True),
         Binding("home", "step_first", "First", show=True, priority=True),
         Binding("end", "step_last", "Last", show=True, priority=True),
         Binding("a", "toggle_ast", "AST", show=True, priority=True),
