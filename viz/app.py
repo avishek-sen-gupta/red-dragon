@@ -80,12 +80,12 @@ class PipelineApp(App):
         display: none;
     }
 
-    /* Focus: brighten border on focused container, dim on unfocused */
+    /* Focus: brighten border on focused container when a child has focus */
     Vertical:focus-within {
         border: solid rgb(200,200,255);
     }
 
-    /* Override Tree's built-in focus styling to match container approach */
+    /* Override Tree's built-in focus border to use container-level indication */
     Tree:focus {
         border: none;
     }

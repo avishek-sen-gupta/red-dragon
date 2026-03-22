@@ -9,7 +9,7 @@ from textual.widgets import Static
 from interpreter.trace_types import TraceStep
 
 
-class StepPanel(Static):
+class StepPanel(Static, can_focus=True):
     """Displays the current step index, instruction delta, and reasoning."""
 
     current_step: reactive[TraceStep | None] = reactive(None)

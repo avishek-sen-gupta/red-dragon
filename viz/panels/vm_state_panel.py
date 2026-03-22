@@ -28,7 +28,7 @@ def _format_value(val: object) -> str:
     return repr(val)
 
 
-class VMStatePanel(Static):
+class VMStatePanel(Static, can_focus=True):
     """Displays the VM state (stack frames, heap) with diff highlighting."""
 
     current_step: reactive[TraceStep | None] = reactive(None)
