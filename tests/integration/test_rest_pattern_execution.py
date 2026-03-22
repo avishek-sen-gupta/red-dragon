@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.typed_value import unwrap
+from interpreter.types.typed_value import unwrap
 from interpreter.vm import _heap_addr
 from tests.unit.rosetta.conftest import (
     execute_for_language,

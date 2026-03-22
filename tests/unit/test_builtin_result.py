@@ -1,6 +1,6 @@
 """Unit tests for BuiltinResult dataclass."""
 
-from interpreter.type_expr import scalar
+from interpreter.types.type_expr import scalar
 from interpreter.vm_types import BuiltinResult, NewObject, HeapWrite
 
 
@@ -18,14 +18,14 @@ class TestBuiltinResult:
         assert result.heap_writes == []
 
     def test_result_with_heap_writes(self):
-        from interpreter.typed_value import typed_from_runtime
+        from interpreter.types.typed_value import typed_from_runtime
 
         hw = HeapWrite(obj_addr="arr_0", field="0", value=typed_from_runtime(10))
         result = BuiltinResult(value="arr_0", heap_writes=[hw])
         assert result.heap_writes[0].field == "0"
 
     def test_result_with_all_fields(self):
-        from interpreter.typed_value import typed_from_runtime
+        from interpreter.types.typed_value import typed_from_runtime
 
         obj = NewObject(addr="arr_0", type_hint=scalar("Array"))
         hw = HeapWrite(obj_addr="arr_0", field="length", value=typed_from_runtime(1))

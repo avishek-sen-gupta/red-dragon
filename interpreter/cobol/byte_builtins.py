@@ -18,7 +18,7 @@ from interpreter.cobol.cobol_constants import (
     TallyMode,
 )
 from interpreter.cobol.ebcdic_table import EbcdicTable
-from interpreter.typed_value import TypedValue
+from interpreter.types.typed_value import TypedValue
 from interpreter.vm import Operators, _is_symbolic
 from interpreter.vm_types import BuiltinResult
 

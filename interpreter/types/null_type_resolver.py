@@ -10,8 +10,8 @@ from interpreter.conversion_result import (
     _identity,
 )
 from interpreter.identity_conversion_rules import IdentityConversionRules
-from interpreter.type_expr import TypeExpr
-from interpreter.type_resolver import TypeResolver
+from interpreter.types.type_expr import TypeExpr
+from interpreter.types.type_resolver import TypeResolver
 
 
 class NullTypeResolver(TypeResolver):

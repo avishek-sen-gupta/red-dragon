@@ -6,9 +6,9 @@ import logging
 from typing import Protocol
 
 from interpreter.constants import TypeName
-from interpreter.type_expr import ScalarType, TypeExpr, UnknownType
-from interpreter.type_graph import TypeGraph
-from interpreter.typed_value import TypedValue
+from interpreter.types.type_expr import ScalarType, TypeExpr, UnknownType
+from interpreter.types.type_graph import TypeGraph
+from interpreter.types.typed_value import TypedValue
 
 logger = logging.getLogger(__name__)
 

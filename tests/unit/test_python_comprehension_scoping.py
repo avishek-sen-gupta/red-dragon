@@ -9,7 +9,7 @@ should use enter_block_scope/exit_block_scope to declare loop variables.
 from __future__ import annotations
 
 from interpreter.ir import Opcode
-from interpreter.typed_value import unwrap
+from interpreter.types.typed_value import unwrap
 from tests.unit.rosetta.conftest import parse_for_language, execute_for_language
 
 

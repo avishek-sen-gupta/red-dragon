@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from interpreter.builtins import _builtin_len, _builtin_array_of
 from interpreter.constants import TypeName
-from interpreter.type_expr import scalar
-from interpreter.typed_value import typed, typed_from_runtime
+from interpreter.types.type_expr import scalar
+from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter.vm import VMState, apply_update
 from interpreter.vm_types import BuiltinResult, HeapObject, StackFrame, StateUpdate
 

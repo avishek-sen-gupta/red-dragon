@@ -6,9 +6,9 @@ import logging
 from collections import deque
 from functools import reduce
 
-from interpreter.type_node import TypeNode
+from interpreter.types.type_node import TypeNode
 from interpreter.constants import TypeName, Variance
-from interpreter.type_expr import (
+from interpreter.types.type_expr import (
     TypeExpr,
     ScalarType,
     ParameterizedType,

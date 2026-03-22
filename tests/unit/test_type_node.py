@@ -2,7 +2,7 @@
 
 import pytest
 
-from interpreter.type_node import TypeNode
+from interpreter.types.type_node import TypeNode
 
 
 class TestTypeNode:

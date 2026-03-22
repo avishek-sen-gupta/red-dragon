@@ -5,7 +5,7 @@ from interpreter.cfg import build_cfg
 from interpreter.registry import FunctionRegistry, build_registry
 from interpreter.run import execute_cfg_traced, VMConfig
 from interpreter.trace_types import TraceStep, ExecutionTrace
-from interpreter.typed_value import unwrap
+from interpreter.types.typed_value import unwrap
 
 
 def _make_instructions(*specs):

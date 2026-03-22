@@ -1,6 +1,6 @@
 """Tests for HeapObject.type_hint migration from str to TypeExpr."""
 
-from interpreter.type_expr import (
+from interpreter.types.type_expr import (
     ScalarType,
     ParameterizedType,
     UNKNOWN,

@@ -7,10 +7,10 @@ when the concrete class's class_method_types lacks the method.
 from __future__ import annotations
 
 from interpreter.ir import IRInstruction, Opcode
-from interpreter.type_expr import scalar, UNKNOWN
-from interpreter.type_inference import _InferenceContext, _infer_call_method
-from interpreter.type_graph import TypeGraph, DEFAULT_TYPE_NODES
-from interpreter.type_resolver import TypeResolver
+from interpreter.types.type_expr import scalar, UNKNOWN
+from interpreter.types.type_inference import _InferenceContext, _infer_call_method
+from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
+from interpreter.types.type_resolver import TypeResolver
 from interpreter.default_conversion_rules import DefaultTypeConversionRules
 
 

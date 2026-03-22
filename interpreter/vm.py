@@ -8,9 +8,9 @@ from typing import Any
 from interpreter.constants import CanonicalLiteral, TypeName
 from interpreter.conversion_rules import TypeConversionRules
 from interpreter.identity_conversion_rules import IdentityConversionRules
-from interpreter.type_environment import TypeEnvironment
-from interpreter.type_expr import UNKNOWN, ScalarType, scalar
-from interpreter.typed_value import TypedValue, typed, typed_from_runtime
+from interpreter.types.type_environment import TypeEnvironment
+from interpreter.types.type_expr import UNKNOWN, ScalarType, scalar
+from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.vm_types import (  # noqa: F401 — re-exported for backwards compatibility
     SymbolicValue,
     HeapObject,
@@ -361,7 +361,7 @@ def _parse_const(raw: str) -> Any:
     return raw
 
 
-from interpreter.typed_value import runtime_type_name  # noqa: F401 — re-exported
+from interpreter.types.typed_value import runtime_type_name  # noqa: F401 — re-exported
 
 
 def _resolve_typed_reg(
