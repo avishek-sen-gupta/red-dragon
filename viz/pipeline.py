@@ -4,18 +4,18 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any
-
-from interpreter.api import lower_source, build_cfg_from_source, execute_traced
 from interpreter.cfg import build_cfg
 from interpreter.cfg_types import CFG
 from interpreter.constants import Language
+from interpreter.frontend import get_frontend
+from interpreter.interprocedural.analyze import analyze_interprocedural
+from interpreter.interprocedural.types import InterproceduralResult
 from interpreter.ir import IRInstruction
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg_traced
 from interpreter.run_types import VMConfig
-from interpreter.trace_types import ExecutionTrace, TraceStep
+from interpreter.trace_types import ExecutionTrace
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +66,7 @@ class PipelineResult:
     ir: list[IRInstruction] = field(default_factory=list)
     cfg: CFG = field(default_factory=CFG)
     trace: ExecutionTrace = field(default_factory=ExecutionTrace)
+    interprocedural: InterproceduralResult | None = None
 
 
 def run_pipeline(
@@ -82,11 +83,23 @@ def run_pipeline(
     tree = parser.parse(source_bytes)
     ast = _ast_from_ts_node(tree.root_node, source_bytes)
 
-    ir = lower_source(source, language=language)
+    frontend = get_frontend(Language(language))
+    ir = frontend.lower(source_bytes)
     cfg = build_cfg(ir)
-    registry = build_registry(ir, cfg)
+    registry = build_registry(
+        ir,
+        cfg,
+        func_symbol_table=frontend.func_symbol_table,
+        class_symbol_table=frontend.class_symbol_table,
+    )
     config = VMConfig(max_steps=max_steps)
     _vm, trace = execute_cfg_traced(cfg, "", registry, config)
+
+    try:
+        interprocedural = analyze_interprocedural(cfg, registry)
+    except Exception:
+        logger.warning("Interprocedural analysis failed", exc_info=True)
+        interprocedural = None
 
     return PipelineResult(
         source=source,
@@ -95,4 +108,5 @@ def run_pipeline(
         ir=ir,
         cfg=cfg,
         trace=trace,
+        interprocedural=interprocedural,
     )
