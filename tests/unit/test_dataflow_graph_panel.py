@@ -22,6 +22,7 @@ from interpreter.registry import build_registry
 from viz.panels.dataflow_graph_panel import (
     TopLevelCall,
     ChainNode,
+    build_call_chain,
     find_top_level_call_sites,
     trace_reg_to_var,
 )
@@ -148,3 +149,79 @@ class TestTraceRegToVar:
             if found:
                 break
         assert found, "No LOAD_VAR found in test program"
+
+
+def _collect_labels(nodes: list) -> list[str]:
+    """Collect all labels from a ChainNode tree."""
+    result = []
+    for n in nodes:
+        result.append(n.label)
+        result.extend(_collect_labels(n.children))
+    return result
+
+
+class TestBuildCallChain:
+    def test_simple_function_shows_param_to_return(self):
+        """f(x) -> return x+1: chain should show x -> return(f)."""
+        source = "def f(x):\n    return x + 1\nf(5)\n"
+        cfg, result = _analyze(source)
+        f_entry = [f for f in result.call_graph.functions if "f" in f.label][0]
+        nodes = build_call_chain(
+            f_entry, result.call_graph, result.summaries, cfg, set()
+        )
+        assert len(nodes) >= 1
+        all_labels = _collect_labels(nodes)
+        assert any("x" in lbl and "return" in lbl.lower() for lbl in all_labels)
+
+    def test_caller_callee_chain_has_nested_nodes(self):
+        """double(x) calls add(x, x): chain should have nested subtree."""
+        source = (
+            "def add(a, b):\n    return a + b\n"
+            "def double(x):\n    return add(x, x)\n"
+            "double(5)\n"
+        )
+        cfg, result = _analyze(source)
+        double_entry = [f for f in result.call_graph.functions if "double" in f.label][
+            0
+        ]
+        nodes = build_call_chain(
+            double_entry, result.call_graph, result.summaries, cfg, set()
+        )
+        has_nested = any(len(n.children) > 0 for n in nodes)
+        assert has_nested, f"Expected nested nodes, got: {[n.label for n in nodes]}"
+
+    def test_recursive_function_stops_at_guard(self):
+        """factorial(n) calls factorial(n-1): should not infinite-loop.
+
+        The recursive call passes n-1 (a BINOP result), not n directly,
+        so _param_inner_calls won't match. The key invariant is that
+        build_call_chain terminates and produces a finite tree.
+        """
+        source = (
+            "def factorial(n):\n"
+            "    if n <= 1:\n"
+            "        return 1\n"
+            "    return n * factorial(n - 1)\n"
+            "factorial(5)\n"
+        )
+        cfg, result = _analyze(source)
+        f_entry = [f for f in result.call_graph.functions if "factorial" in f.label][0]
+        nodes = build_call_chain(
+            f_entry, result.call_graph, result.summaries, cfg, set()
+        )
+        all_labels = _collect_labels(nodes)
+        # Must terminate and produce at least the return flow
+        assert len(all_labels) >= 1
+
+    def test_direct_passthrough_recursion_hits_guard(self):
+        """g(x) calls g(x) directly: chain should hit the recursion guard."""
+        source = "def g(x):\n" "    return g(x)\n" "g(5)\n"
+        cfg, result = _analyze(source)
+        g_entry = [f for f in result.call_graph.functions if "g" in f.label][0]
+        nodes = build_call_chain(
+            g_entry, result.call_graph, result.summaries, cfg, set()
+        )
+        all_labels = _collect_labels(nodes)
+        assert any(
+            "recursive" in lbl.lower() for lbl in all_labels
+        ), f"Expected recursion guard, got: {all_labels}"

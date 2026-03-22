@@ -15,16 +15,18 @@ from interpreter.interprocedural.call_graph import (
 )
 from interpreter.interprocedural.types import (
     CallGraph,
+    FieldEndpoint,
     FlowEndpoint,
     FunctionEntry,
     FunctionSummary,
     InterproceduralResult,
     NO_DEFINITION,
+    ReturnEndpoint,
     SummaryKey,
     VariableEndpoint,
 )
 from interpreter.ir import IRInstruction, Opcode, VAR_DEFINITION_OPCODES
-from viz.panels.dataflow_summary_panel import render_endpoint
+from viz.panels.dataflow_summary_panel import merge_flows_for_function, render_endpoint
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +130,77 @@ def find_top_level_call_sites(cfg: CFG, call_graph: CallGraph) -> list[TopLevelC
         for idx, inst in enumerate(cfg.blocks[label].instructions)
         if inst.opcode in (Opcode.CALL_FUNCTION, Opcode.CALL_METHOD)
     ]
+
+
+def _build_param_map(site, callee: FunctionEntry, cfg: CFG) -> dict[str, str]:
+    """Map callee formal params to caller actual arg names."""
+    block_label = site.location.block_label
+    return {
+        formal: trace_reg_to_var(actual_reg, cfg, block_label)
+        for formal, actual_reg in zip(callee.params, site.arg_operands)
+    }
+
+
+def _param_inner_calls(
+    param: str,
+    inner_sites: list,
+    cfg: CFG,
+) -> list[tuple]:
+    """Find inner call sites where this param flows as an argument."""
+    return [
+        (site, arg_op)
+        for site in inner_sites
+        for arg_op in site.arg_operands
+        if trace_reg_to_var(arg_op, cfg, site.location.block_label) == param
+    ]
+
+
+def build_call_chain(
+    func_entry: FunctionEntry,
+    call_graph: CallGraph,
+    summaries: dict[SummaryKey, FunctionSummary],
+    cfg: CFG,
+    visited: set[str],
+) -> list[ChainNode]:
+    """Recursively build a call-chain tree for a function.
+
+    Shows per-param flows: to return (leaf), to field writes (leaf),
+    or through inner call sites (recursive subtree).
+    """
+    if func_entry.label in visited:
+        return [ChainNode(label="[recursive — see above]")]
+    visited = visited | {func_entry.label}
+
+    flows = merge_flows_for_function(func_entry, summaries)
+    inner_sites = [s for s in call_graph.call_sites if s.caller == func_entry]
+
+    def _nodes_for_param(param: str) -> list[ChainNode]:
+        inner_calls = _param_inner_calls(param, inner_sites, cfg)
+        call_nodes = [
+            ChainNode(
+                label=f"{param} → {callee.label}({', '.join(f'{p}={v}' for p, v in _build_param_map(site, callee, cfg).items())})",
+                children=build_call_chain(callee, call_graph, summaries, cfg, visited),
+            )
+            for site, arg_op in inner_calls
+            for callee in site.callees
+        ]
+        return_nodes = [
+            ChainNode(label=f"{param} → return({func_entry.label})")
+            for src, dst in flows
+            if isinstance(src, VariableEndpoint)
+            and src.name == param
+            and isinstance(dst, ReturnEndpoint)
+        ]
+        field_nodes = [
+            ChainNode(label=f"{param} → Field({dst.base.name}.{dst.field})")
+            for src, dst in flows
+            if isinstance(src, VariableEndpoint)
+            and src.name == param
+            and isinstance(dst, FieldEndpoint)
+        ]
+        return call_nodes + return_nodes + field_nodes
+
+    return [node for param in func_entry.params for node in _nodes_for_param(param)]
 
 
 def annotate_endpoint(ep: FlowEndpoint, cfg: CFG | None) -> str:
