@@ -3,7 +3,7 @@
 from types import MappingProxyType
 
 from interpreter.constants import TypeName
-from interpreter.identity_conversion_rules import IdentityConversionRules
+from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.executor import (
     _handle_store_field,

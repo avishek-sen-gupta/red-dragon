@@ -1,6 +1,6 @@
 """Unit tests for BinopCoercionStrategy implementations."""
 
-from interpreter.binop_coercion import (
+from interpreter.types.coercion.binop_coercion import (
     DefaultBinopCoercion,
     JavaBinopCoercion,
     _java_stringify,

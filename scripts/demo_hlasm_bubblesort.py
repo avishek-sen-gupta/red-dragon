@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from interpreter.cfg import build_cfg
-from interpreter.default_conversion_rules import DefaultTypeConversionRules
+from interpreter.types.coercion.default_conversion_rules import DefaultTypeConversionRules
 from interpreter.llm_client import get_llm_client
 from interpreter.llm_frontend import LLMFrontend
 from interpreter.registry import build_registry

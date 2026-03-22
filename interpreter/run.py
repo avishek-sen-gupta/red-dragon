@@ -10,9 +10,9 @@ from types import MappingProxyType
 from typing import Any
 
 from interpreter.constants import Language, TypeName
-from interpreter.conversion_rules import TypeConversionRules
-from interpreter.default_conversion_rules import DefaultTypeConversionRules
-from interpreter.identity_conversion_rules import IdentityConversionRules
+from interpreter.types.coercion.conversion_rules import TypeConversionRules
+from interpreter.types.coercion.default_conversion_rules import DefaultTypeConversionRules
+from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.frontend import get_frontend
 from interpreter.frontend_observer import FrontendObserver
@@ -24,16 +24,16 @@ from interpreter.executor import HandlerContext, _try_execute_locally
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.overload_resolver import NullOverloadResolver, OverloadResolver
 from interpreter.resolution_strategy import ArityThenTypeStrategy
-from interpreter.type_compatibility import DefaultTypeCompatibility
+from interpreter.types.coercion.type_compatibility import DefaultTypeCompatibility
 from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
 from interpreter.types.type_node import TypeNode
 from interpreter.ambiguity_handler import FallbackFirstWithWarning
-from interpreter.binop_coercion import (
+from interpreter.types.coercion.binop_coercion import (
     BinopCoercionStrategy,
     DefaultBinopCoercion,
     JavaBinopCoercion,
 )
-from interpreter.unop_coercion import (
+from interpreter.types.coercion.unop_coercion import (
     UnopCoercionStrategy,
     DefaultUnopCoercion,
 )
