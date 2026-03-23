@@ -117,7 +117,7 @@ def _scan_classes(
             is_class_end = inst.label.is_end_class()
             if is_class_start:
                 for cname, clabel in classes.items():
-                    if str(inst.label) == clabel:
+                    if inst.label == clabel:
                         in_class = cname
                         if cname not in class_methods:
                             class_methods[cname] = {}

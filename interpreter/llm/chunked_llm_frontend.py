@@ -230,7 +230,7 @@ class IRRenumberer:
         if isinstance(label, NoCodeLabel):
             return None
         if opcode == Opcode.BRANCH_IF:
-            parts = [part.strip() + suffix for part in label.branch_targets()]
+            parts = [str(part) + suffix for part in label.branch_targets()]
             return ",".join(parts)
         return str(label) + suffix
 
