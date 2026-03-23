@@ -103,7 +103,9 @@ def _transform_instruction(
 
     # ── Result register ──
     new_result_reg = (
-        rebase_register(inst.result_reg, reg_offset) if inst.result_reg else None
+        rebase_register(inst.result_reg, reg_offset)
+        if inst.result_reg.is_present()
+        else None
     )
 
     # ── Operands ──
@@ -181,7 +183,7 @@ def _transform_module(
             continue
 
         # Drop import stubs for resolved names
-        if _is_import_call(inst) and inst.result_reg:
+        if _is_import_call(inst) and inst.result_reg.is_present():
             # Peek: the next DECL_VAR will tell us the name. We can't peek
             # here, so mark the register and decide at the DECL_VAR.
             skip_next_decl_for_reg = rebase_register(inst.result_reg, reg_offset)
