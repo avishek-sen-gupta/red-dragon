@@ -25,3 +25,55 @@ forbidden_modules =
     interpreter.frontends
     interpreter.run
     interpreter.llm
+
+[importlinter:contract:project-no-vm-internals]
+name = Project module must not import VM internals
+type = forbidden
+source_modules =
+    interpreter.project
+forbidden_modules =
+    interpreter.vm
+    interpreter.handlers
+
+[importlinter:contract:frontend-independence]
+name = Language frontends must not import each other
+type = independence
+modules =
+    interpreter.frontends.python
+    interpreter.frontends.java
+    interpreter.frontends.go
+    interpreter.frontends.rust
+    interpreter.frontends.csharp
+    interpreter.frontends.kotlin
+    interpreter.frontends.scala
+    interpreter.frontends.ruby
+    interpreter.frontends.php
+    interpreter.frontends.lua
+    interpreter.frontends.pascal
+ignore_imports =
+    interpreter.frontends.cpp.frontend -> interpreter.frontends.c.frontend
+    interpreter.frontends.cpp.expressions -> interpreter.frontends.c.expressions
+    interpreter.frontends.cpp.expressions -> interpreter.frontends.c.declarations
+    interpreter.frontends.cpp.control_flow -> interpreter.frontends.c.declarations
+    interpreter.frontends.cpp.declarations -> interpreter.frontends.c.declarations
+    interpreter.frontends.c.declarations -> interpreter.frontends.cpp.node_types
+    interpreter.frontends.c.declarations -> interpreter.frontends.cpp.control_flow
+    interpreter.frontends.typescript -> interpreter.frontends.javascript
+    interpreter.frontend -> interpreter.frontends.python
+
+[importlinter:contract:cobol-isolation]
+name = COBOL module only imported by frontend factory
+type = forbidden
+source_modules =
+    interpreter.vm
+    interpreter.handlers
+    interpreter.project
+    interpreter.interprocedural
+    interpreter.run
+forbidden_modules =
+    interpreter.cobol
+ignore_imports =
+    interpreter.vm.builtins -> interpreter.cobol.byte_builtins
+    interpreter.frontend -> interpreter.cobol.cobol_frontend
+    interpreter.frontend -> interpreter.cobol.cobol_parser
+    interpreter.frontend -> interpreter.cobol.subprocess_runner
