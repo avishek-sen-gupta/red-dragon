@@ -868,3 +868,39 @@ class TestOptionalChain:
         assert (
             len(branches) >= 2
         ), f"Expected 2 BRANCH_IFs for chained guards, got {len(branches)}"
+
+
+class TestTypeScriptImportAlias:
+    def test_import_alias_no_symbolic(self):
+        """import Foo = Bar.Baz should not produce SYMBOLIC."""
+        ir = _parse_ts("import Foo = Bar.Baz;")
+        symbolics = [
+            inst
+            for inst in ir
+            if inst.opcode == Opcode.SYMBOLIC and "unsupported" in str(inst.operands)
+        ]
+        assert not symbolics, f"import_alias produced SYMBOLIC: {symbolics}"
+
+    def test_import_alias_stores_var(self):
+        """import Foo = Bar.Baz should emit STORE_VAR Foo."""
+        ir = _parse_ts("import Foo = Bar.Baz;")
+        stores = [
+            inst
+            for inst in ir
+            if inst.opcode in (Opcode.STORE_VAR, Opcode.DECL_VAR)
+            and len(inst.operands) >= 1
+            and str(inst.operands[0]) == "Foo"
+        ]
+        assert len(stores) >= 1
+
+    def test_import_alias_simple_identifier(self):
+        """import Foo = Bar should emit LOAD_VAR Bar + STORE_VAR Foo."""
+        ir = _parse_ts("import Foo = Bar;")
+        loads = [
+            inst
+            for inst in ir
+            if inst.opcode == Opcode.LOAD_VAR
+            and len(inst.operands) >= 1
+            and str(inst.operands[0]) == "Bar"
+        ]
+        assert len(loads) >= 1
