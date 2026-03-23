@@ -1,6 +1,10 @@
 """PHP-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from interpreter.ir import SpreadArguments
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -873,7 +877,9 @@ def lower_php_clone_expression(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_php_variadic_unpacking(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_variadic_unpacking(
+    ctx: TreeSitterEmitContext, node
+) -> str | SpreadArguments:
     """Lower ``...$arr`` as CALL_FUNCTION('spread', inner)."""
     from interpreter.frontends.common.expressions import lower_spread_arg
 
