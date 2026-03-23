@@ -31,8 +31,13 @@ class TestGetResolver:
 
     def test_unknown_language_returns_null(self):
         """Languages without a specific resolver get the null resolver."""
-        resolver = get_resolver(Language.COBOL)
-        assert isinstance(resolver, NullImportResolver)
+        # COBOL now has its own resolver, so we need a truly unsupported language.
+        # Since all Language enum members are covered, test with NullImportResolver directly.
+        resolver = NullImportResolver()
+        ref = ImportRef(source_file=Path("main.txt"), module_path="utils")
+        result = resolver.resolve(ref, Path("/project"))
+        assert result.resolved_path is None
+        assert result.is_external is True
 
 
 class TestPythonImportResolver:
