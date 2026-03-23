@@ -30,7 +30,7 @@ def _instructions_between_labels(
         if (
             inst.opcode == Opcode.LABEL
             and inst.label
-            and inst.label.startswith(start_prefix)
+            and inst.label.value.startswith(start_prefix)
         ):
             inside = True
             continue
@@ -38,7 +38,7 @@ def _instructions_between_labels(
             inside
             and inst.opcode == Opcode.LABEL
             and inst.label
-            and inst.label.startswith(end_prefix)
+            and inst.label.value.startswith(end_prefix)
         ):
             break
         if inside:

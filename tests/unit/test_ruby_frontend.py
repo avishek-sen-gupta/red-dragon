@@ -115,7 +115,7 @@ end
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BRANCH in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("while" in (inst.label or "") for inst in labels)
+        assert any("while" in inst.label.value for inst in labels)
 
     def test_until_loop(self):
         source = """
@@ -128,7 +128,7 @@ end
         assert Opcode.UNOP in opcodes
         assert Opcode.BRANCH_IF in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("until" in (inst.label or "") for inst in labels)
+        assert any("until" in inst.label.value for inst in labels)
 
 
 class TestRubyMethods:
@@ -312,7 +312,7 @@ class TestRubySpecial:
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
-    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+    return [inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL]
 
 
 class TestNonTrivialRuby:

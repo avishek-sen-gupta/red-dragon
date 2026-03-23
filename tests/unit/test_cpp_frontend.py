@@ -78,7 +78,7 @@ class TestCppControlFlow:
         assert Opcode.LABEL in opcodes
         assert Opcode.BRANCH in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("if_true" in (inst.label or "") for inst in labels)
+        assert any("if_true" in inst.label.value for inst in labels)
 
     def test_while_with_condition_clause(self):
         instructions = _parse_cpp("int main() { while (x > 0) { x--; } }")
@@ -86,7 +86,7 @@ class TestCppControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BRANCH in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("while" in (inst.label or "") for inst in labels)
+        assert any("while" in inst.label.value for inst in labels)
 
     def test_c_style_for_loop(self):
         instructions = _parse_cpp(
@@ -119,7 +119,7 @@ class TestCppControlFlow:
 
         labels = _labels_in_order(instructions)
         branch_targets = {
-            target for inst in branch_ifs for target in inst.label.split(",")
+            target for inst in branch_ifs for target in inst.label.branch_targets()
         }
         label_set = set(labels)
         assert branch_targets.issubset(
@@ -199,7 +199,7 @@ class TestCppSpecial:
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
-    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+    return [inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL]
 
 
 class TestNonTrivialCpp:
@@ -310,7 +310,7 @@ int main() {
 """
         instructions = _parse_cpp(source)
         opcodes = _opcodes(instructions)
-        labels = [i.label for i in instructions if i.opcode == Opcode.LABEL]
+        labels = [i.label.value for i in instructions if i.opcode == Opcode.LABEL]
         # try/catch body and catch block are lowered with LABEL/BRANCH
         assert any("try_body" in l for l in labels)
         assert any("catch_0" in l for l in labels)
@@ -563,7 +563,7 @@ public:
 """)
         # Find the __init__ label
         labels = _find_all(ir, Opcode.LABEL)
-        init_labels = [l for l in labels if "init" in (l.label or "")]
+        init_labels = [l for l in labels if "init" in l.label.value]
         assert len(init_labels) >= 1, "Expected __init__ label"
 
         # STORE_FIELD for 'x' should exist inside the __init__ function
@@ -584,7 +584,7 @@ public:
             (
                 i
                 for i, inst in enumerate(ir)
-                if inst.opcode == Opcode.LABEL and "init" in (inst.label or "")
+                if inst.opcode == Opcode.LABEL and "init" in inst.label.value
             ),
             None,
         )
@@ -651,7 +651,7 @@ public:
         in_init = False
         init_params = []
         for inst in ir:
-            if inst.opcode == Opcode.LABEL and "init" in (inst.label or ""):
+            if inst.opcode == Opcode.LABEL and "init" in inst.label.value:
                 in_init = True
             elif inst.opcode == Opcode.LABEL and in_init:
                 break

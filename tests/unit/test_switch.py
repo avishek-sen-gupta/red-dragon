@@ -19,7 +19,7 @@ def _find_all(instructions: list[IRInstruction], opcode: Opcode) -> list[IRInstr
 
 
 def _labels(instructions: list[IRInstruction]) -> list[str]:
-    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+    return [inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL]
 
 
 def _branches(instructions: list[IRInstruction]) -> list[str]:

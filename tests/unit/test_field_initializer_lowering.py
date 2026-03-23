@@ -45,16 +45,16 @@ def _instructions_between_labels(
     for inst in instructions:
         if (
             inst.opcode == Opcode.LABEL
-            and inst.label
-            and inst.label.startswith(start_prefix)
+            and inst.label.is_present()
+            and inst.label.value.startswith(start_prefix)
         ):
             capturing = True
             continue
         if (
             capturing
             and inst.opcode == Opcode.LABEL
-            and inst.label
-            and inst.label.startswith(end_prefix)
+            and inst.label.is_present()
+            and inst.label.value.startswith(end_prefix)
         ):
             break
         if capturing:
@@ -85,9 +85,9 @@ def _has_store_var_at_top_level_for_field(
     in_func = False
     for inst in instructions:
         if inst.opcode == Opcode.LABEL and inst.label:
-            if inst.label.startswith("func_"):
+            if inst.label.value.startswith("func_"):
                 in_func = True
-            elif inst.label.startswith("end_"):
+            elif inst.label.value.startswith("end_"):
                 in_func = False
         if (
             not in_func

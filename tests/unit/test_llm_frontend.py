@@ -118,7 +118,7 @@ class TestParseSingleInstruction:
         assert inst.opcode == Opcode.CONST
         assert inst.result_reg == "%0"
         assert inst.operands == ["42"]
-        assert inst.label is None
+        assert not inst.label.is_present()
 
     def test_label_instruction(self):
         raw = {"opcode": "LABEL", "result_reg": None, "operands": [], "label": "entry"}

@@ -29,9 +29,7 @@ class TestEmitResolveDefaultFunc:
         ctx = _make_ctx()
         emit_resolve_default_func(ctx)
         labels = [i for i in ctx.instructions if i.opcode == Opcode.LABEL]
-        func_labels = [
-            l for l in labels if "func___resolve_default__" in (l.label or "")
-        ]
+        func_labels = [l for l in labels if "func___resolve_default__" in l.label.value]
         assert len(func_labels) == 1, f"Expected 1 func label, got {func_labels}"
 
     def test_emits_three_symbolic_params(self):

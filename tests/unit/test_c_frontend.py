@@ -133,7 +133,7 @@ void f() {
 
         labels = _labels_in_order(ir)
         branch_targets = {
-            target for inst in branch_ifs for target in inst.label.split(",")
+            target for inst in branch_ifs for target in inst.label.branch_targets()
         }
         label_set = set(labels)
         assert branch_targets.issubset(
@@ -170,7 +170,7 @@ void f() {
         opcodes = _opcodes(ir)
         assert Opcode.BRANCH_IF in opcodes
         labels = _find_all(ir, Opcode.LABEL)
-        label_names = [lbl.label for lbl in labels]
+        label_names = [lbl.label.value for lbl in labels]
         for_labels = [l for l in label_names if l and "for_" in l]
         assert len(for_labels) >= 2
 
@@ -373,7 +373,7 @@ class TestCFrontendFallback:
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
-    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+    return [inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL]
 
 
 class TestNonTrivialC:
@@ -575,9 +575,9 @@ void f() {
 """
         ir = _parse_and_lower(source)
         labels = _find_all(ir, Opcode.LABEL)
-        assert any("user_start" in (inst.label or "") for inst in labels)
+        assert any("user_start" in inst.label.value for inst in labels)
         branches = _find_all(ir, Opcode.BRANCH)
-        assert any("user_start" in (inst.label or "") for inst in branches)
+        assert any("user_start" in inst.label.value for inst in branches)
 
     def test_goto_with_different_label(self):
         source = """\
@@ -589,7 +589,7 @@ void f() {
 """
         ir = _parse_and_lower(source)
         branches = _find_all(ir, Opcode.BRANCH)
-        assert any("user_done" in (inst.label or "") for inst in branches)
+        assert any("user_done" in inst.label.value for inst in branches)
 
 
 class TestCFrontendTypedef:

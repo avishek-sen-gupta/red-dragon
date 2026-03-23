@@ -82,8 +82,8 @@ class TestRustControlFlow:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("y" in inst.operands for inst in stores)
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("if_true" in (inst.label or "") for inst in labels)
-        assert any("if_false" in (inst.label or "") for inst in labels)
+        assert any("if_true" in inst.label.value for inst in labels)
+        assert any("if_false" in inst.label.value for inst in labels)
 
     def test_while_loop_produces_ir(self):
         """While loop should produce condition label, body label, back-edge, and conditional branch."""
@@ -91,7 +91,7 @@ class TestRustControlFlow:
             "fn main() { let mut x: i32 = 10; while x > 0 { x = x - 1; } }"
         )
         labels = _find_all(instructions, Opcode.LABEL)
-        label_names = [inst.label for inst in labels]
+        label_names = [inst.label.value for inst in labels]
         assert any(
             "while_cond" in n for n in label_names
         ), f"Missing while_cond label: {label_names}"
@@ -106,7 +106,7 @@ class TestRustControlFlow:
         assert any(">" in inst.operands for inst in binops)
         # Back-edge: unconditional BRANCH to while_cond
         branches = _find_all(instructions, Opcode.BRANCH)
-        assert any("while_cond" in (inst.label or "") for inst in branches)
+        assert any("while_cond" in inst.label.value for inst in branches)
         # Conditional branch to body/end
         assert Opcode.BRANCH_IF in _opcodes(instructions)
 
@@ -117,7 +117,7 @@ class TestRustControlFlow:
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("match" in (inst.label or "") for inst in labels)
+        assert any("match" in inst.label.value for inst in labels)
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
@@ -141,7 +141,7 @@ class TestRustControlFlow:
 
         labels = _labels_in_order(instructions)
         branch_targets = {
-            target for inst in branch_ifs for target in inst.label.split(",")
+            target for inst in branch_ifs for target in inst.label.branch_targets()
         }
         label_set = set(labels)
         assert branch_targets.issubset(
@@ -240,7 +240,7 @@ class TestRustSpecial:
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
-    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+    return [inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL]
 
 
 class TestNonTrivialRust:

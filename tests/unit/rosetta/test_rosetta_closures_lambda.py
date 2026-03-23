@@ -117,7 +117,9 @@ class TestClosuresLambdaLowering:
         labels = [
             inst.label
             for inst in ir
-            if inst.opcode == Opcode.LABEL and inst.label and "func_" in inst.label
+            if inst.opcode == Opcode.LABEL
+            and inst.label.is_present()
+            and "func_" in inst.label.value
         ]
         assert (
             len(labels) == 2

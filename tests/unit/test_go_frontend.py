@@ -135,7 +135,7 @@ func f() {
 
         labels = _labels_in_order(ir)
         branch_targets = {
-            target for inst in branch_ifs for target in inst.label.split(",")
+            target for inst in branch_ifs for target in inst.label.branch_targets()
         }
         label_set = set(labels)
         assert branch_targets.issubset(
@@ -156,7 +156,7 @@ func main() {
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BRANCH in opcodes
         labels = _find_all(ir, Opcode.LABEL)
-        label_names = [lbl.label for lbl in labels]
+        label_names = [lbl.label.value for lbl in labels]
         for_labels = [l for l in label_names if l and "for_" in l]
         assert len(for_labels) >= 2
 
@@ -276,7 +276,7 @@ class TestGoFrontendFallback:
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
-    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+    return [inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL]
 
 
 class TestNonTrivialGo:
@@ -1107,7 +1107,7 @@ type Shape interface {
 }
 """)
         labels = _find_all(ir, Opcode.LABEL)
-        func_labels = [i.label for i in labels if "func_" in (i.label or "")]
+        func_labels = [i.label.value for i in labels if "func_" in i.label.value]
         assert any("Area" in lbl for lbl in func_labels)
         assert any("Perimeter" in lbl for lbl in func_labels)
 

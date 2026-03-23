@@ -2455,9 +2455,9 @@ def add(a, b):
                 for i in instructions
                 if i.opcode == Opcode.LABEL
                 and i.label
-                and i.label.startswith("func_add")
+                and i.label.value.startswith("func_add")
             ]
-            func_label = labels[0] if labels else "func_add_0"
+            func_label = labels[0].value if labels else "func_add_0"
             builder.func_param_types[func_label] = [
                 ("a", scalar("Int")),
                 ("b", scalar("Int")),
@@ -2536,9 +2536,11 @@ f = add
         labels = [
             i.label
             for i in instructions
-            if i.opcode == Opcode.LABEL and i.label and i.label.startswith("func_add")
+            if i.opcode == Opcode.LABEL
+            and i.label.is_present()
+            and i.label.value.startswith("func_add")
         ]
-        func_label = labels[0] if labels else "func_add_0"
+        func_label = labels[0].value if labels else "func_add_0"
         builder.func_param_types[func_label] = [
             ("a", scalar("Int")),
             ("b", scalar("Int")),

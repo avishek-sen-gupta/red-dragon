@@ -27,7 +27,7 @@ def _find_all(instructions: list[IRInstruction], opcode: Opcode) -> list[IRInstr
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
-    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+    return [inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL]
 
 
 class TestPythonSmoke:
@@ -107,7 +107,7 @@ class TestPythonControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BRANCH in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("while" in (inst.label or "") for inst in labels)
+        assert any("while" in inst.label.value for inst in labels)
 
     def test_for_loop(self):
         instructions = _parse_python("for x in items:\n    y = x")
@@ -155,7 +155,7 @@ class TestPythonControlFlow:
         labels = _labels_in_order(instructions)
         # Each BRANCH_IF target label must appear as a LABEL instruction
         branch_targets = {
-            target for inst in branch_ifs for target in inst.label.split(",")
+            target for inst in branch_ifs for target in inst.label.branch_targets()
         }
         label_set = set(labels)
         assert branch_targets.issubset(
@@ -629,7 +629,7 @@ class TestPythonNestedComprehension:
         assert Opcode.STORE_INDEX in opcodes
         assert Opcode.LOAD_INDEX in opcodes
         # Should have multiple loop labels (at least 2 comp_cond)
-        labels = [i.label for i in instructions if i.opcode == Opcode.LABEL]
+        labels = [i.label.value for i in instructions if i.opcode == Opcode.LABEL]
         comp_labels = [lbl for lbl in labels if "comp_cond" in lbl]
         assert len(comp_labels) >= 2
 
@@ -640,7 +640,7 @@ class TestPythonNestedComprehension:
         assert Opcode.NEW_ARRAY in opcodes
         assert Opcode.BRANCH_IF in opcodes
         # filter branch
-        labels = [i.label for i in instructions if i.opcode == Opcode.LABEL]
+        labels = [i.label.value for i in instructions if i.opcode == Opcode.LABEL]
         assert any("comp_store" in lbl for lbl in labels)
 
     def test_single_comprehension_regression(self):

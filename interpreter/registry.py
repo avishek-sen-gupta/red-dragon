@@ -109,14 +109,14 @@ def _scan_classes(
     # *different* class will reset it.
     in_class: str = ""
     for inst in instructions:
-        if inst.opcode == Opcode.LABEL and inst.label:
-            is_class_start = _is_class_label(inst.label) and not _is_end_class_label(
-                inst.label
-            )
-            is_class_end = _is_end_class_label(inst.label)
+        if inst.opcode == Opcode.LABEL and inst.label.is_present():
+            is_class_start = _is_class_label(
+                inst.label.value
+            ) and not _is_end_class_label(inst.label.value)
+            is_class_end = _is_end_class_label(inst.label.value)
             if is_class_start:
                 for cname, clabel in classes.items():
-                    if inst.label == clabel:
+                    if inst.label.value == clabel:
                         in_class = cname
                         if cname not in class_methods:
                             class_methods[cname] = {}

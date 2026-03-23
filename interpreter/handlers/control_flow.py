@@ -23,7 +23,7 @@ from interpreter.handlers._common import _symbolic_name
 def _handle_branch(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
     return ExecutionResult.success(
         StateUpdate(
-            next_label=inst.label,
+            next_label=inst.label.value,
             reasoning=f"branch → {inst.label}",
         )
     )
@@ -31,7 +31,7 @@ def _handle_branch(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResul
 
 def _handle_branch_if(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
     cond_val = _resolve_reg(vm, inst.operands[0]).value
-    targets = inst.label.split(",")
+    targets = inst.label.branch_targets()
     true_label = targets[0].strip()
     false_label = targets[1].strip() if len(targets) > 1 else None
 
