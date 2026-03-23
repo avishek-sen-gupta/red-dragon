@@ -7,6 +7,7 @@ data model for the multi-file pipeline.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Sequence
 
@@ -25,6 +26,20 @@ class CyclicImportError(Exception):
         self.cycle = cycle
         path_str = " → ".join(str(p) for p in cycle)
         super().__init__(f"Cyclic import detected: {path_str}")
+
+
+# ── Import kind ──────────────────────────────────────────────────
+
+
+class ImportKind(Enum):
+    """The mechanism used by an import statement."""
+
+    IMPORT = "import"
+    INCLUDE = "include"
+    USE = "use"
+    REQUIRE = "require"
+    MOD = "mod"
+    USING = "using"
 
 
 # ── ImportRef ────────────────────────────────────────────────────
@@ -59,7 +74,7 @@ class ImportRef:
     is_relative: bool = False
     relative_level: int = 0
     is_system: bool = False
-    kind: str = "import"
+    kind: ImportKind = ImportKind.IMPORT
     alias: str | None = None
 
 
