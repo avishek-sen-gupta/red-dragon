@@ -411,7 +411,9 @@ def handle_load_project(
             },
             "unresolved_imports": len(linked.unresolved_imports),
             "cfg_blocks": len(linked.merged_cfg.blocks),
-            "functions": sorted(str(f.label) for f in interprocedural.call_graph.functions),
+            "functions": sorted(
+                str(f.label) for f in interprocedural.call_graph.functions
+            ),
             "classes": sorted(str(k) for k in linked.merged_registry.classes.keys()),
         }
     except Exception as e:

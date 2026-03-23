@@ -7,7 +7,14 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
-from interpreter.ir import IRInstruction, Opcode, SpreadArguments, CodeLabel, NoCodeLabel, NO_LABEL
+from interpreter.ir import (
+    IRInstruction,
+    Opcode,
+    SpreadArguments,
+    CodeLabel,
+    NoCodeLabel,
+    NO_LABEL,
+)
 from interpreter.cfg import CFG
 from interpreter.vm.vm import (
     VMState,

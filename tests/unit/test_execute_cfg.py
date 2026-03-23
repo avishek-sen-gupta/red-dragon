@@ -138,7 +138,16 @@ class TestExecuteCfgBasic:
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "%0", "operands": [True]}),
-            (Opcode.BRANCH_IF, {"operands": ["%0"], "branch_targets": [CodeLabel("then_block"), CodeLabel("else_block")]}),
+            (
+                Opcode.BRANCH_IF,
+                {
+                    "operands": ["%0"],
+                    "branch_targets": [
+                        CodeLabel("then_block"),
+                        CodeLabel("else_block"),
+                    ],
+                },
+            ),
             (Opcode.LABEL, {"label": CodeLabel("then_block")}),
             (Opcode.CONST, {"result_reg": "%1", "operands": [10]}),
             (Opcode.STORE_VAR, {"operands": ["result", "%1"]}),

@@ -24,7 +24,13 @@ from interpreter.interprocedural.types import (
 )
 
 
-def _make_inst(opcode: Opcode, result_reg=None, operands=None, label: CodeLabel = NO_LABEL, branch_targets: list[CodeLabel] = []):
+def _make_inst(
+    opcode: Opcode,
+    result_reg=None,
+    operands=None,
+    label: CodeLabel = NO_LABEL,
+    branch_targets: list[CodeLabel] = [],
+):
     """Helper to build an IRInstruction concisely."""
     return IRInstruction(
         opcode=opcode,
@@ -135,7 +141,10 @@ class TestFlowEndpoints:
     def test_variable_endpoint_with_real_definition(self):
         inst = _make_inst(Opcode.STORE_VAR, operands=["x", "%0"])
         defn = Definition(
-            variable="x", block_label=CodeLabel("entry"), instruction_index=2, instruction=inst
+            variable="x",
+            block_label=CodeLabel("entry"),
+            instruction_index=2,
+            instruction=inst,
         )
         ve = VariableEndpoint(name="x", definition=defn)
         assert ve.definition.variable == "x"
@@ -178,11 +187,15 @@ class TestFlowEndpoints:
         fe: FlowEndpoint = FieldEndpoint(
             base=VariableEndpoint(name="obj", definition=NO_DEFINITION),
             field="f",
-            location=InstructionLocation(block_label=CodeLabel("b"), instruction_index=0),
+            location=InstructionLocation(
+                block_label=CodeLabel("b"), instruction_index=0
+            ),
         )
         re: FlowEndpoint = ReturnEndpoint(
             function=FunctionEntry(label=CodeLabel("fn"), params=()),
-            location=InstructionLocation(block_label=CodeLabel("b"), instruction_index=1),
+            location=InstructionLocation(
+                block_label=CodeLabel("b"), instruction_index=1
+            ),
         )
         assert isinstance(ve, VariableEndpoint)
         assert isinstance(fe, FieldEndpoint)
@@ -290,7 +303,9 @@ class TestFunctionSummary:
         src = VariableEndpoint(name="x", definition=NO_DEFINITION)
         sink = ReturnEndpoint(
             function=func,
-            location=InstructionLocation(block_label=CodeLabel("f"), instruction_index=2),
+            location=InstructionLocation(
+                block_label=CodeLabel("f"), instruction_index=2
+            ),
         )
         summary = FunctionSummary(
             function=func,

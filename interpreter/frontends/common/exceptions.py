@@ -84,7 +84,10 @@ def lower_try_catch(
     if else_node:
         ctx.emit(Opcode.LABEL, label=else_label)
         ctx.lower_block(else_node)
-        ctx.emit(Opcode.BRANCH, label=finally_label if finally_label.is_present() else end_label)
+        ctx.emit(
+            Opcode.BRANCH,
+            label=finally_label if finally_label.is_present() else end_label,
+        )
 
     # ── finally clause ──
     if finally_node:
