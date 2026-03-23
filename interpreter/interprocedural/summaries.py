@@ -159,7 +159,7 @@ def _find_load_fields(cfg: CFG) -> list[tuple[str, int, str, str, str]]:
         for idx, inst in enumerate(block.instructions)
         if inst.opcode == Opcode.LOAD_FIELD
         and len(inst.operands) >= 2
-        and inst.result_reg is not None
+        and inst.result_reg.is_present()
     ]
 
 

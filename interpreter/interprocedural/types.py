@@ -199,7 +199,7 @@ class InterproceduralResult:
 # 10. NO_DEFINITION sentinel
 # ---------------------------------------------------------------------------
 
-_SENTINEL_INSTRUCTION = IRInstruction(opcode=Opcode.CONST, operands=[], result_reg="")
+_SENTINEL_INSTRUCTION = IRInstruction(opcode=Opcode.CONST, operands=[])
 
 NO_DEFINITION = Definition(
     variable="",

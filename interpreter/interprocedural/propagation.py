@@ -216,7 +216,7 @@ def _call_site_result_reg(
         block.instructions
     ):
         inst = block.instructions[call_site.location.instruction_index]
-        if inst.result_reg:
+        if inst.result_reg.is_present():
             return str(inst.result_reg)
     loc = call_site.location
     return f"%call_{loc.block_label}_{loc.instruction_index}"

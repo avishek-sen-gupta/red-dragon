@@ -482,7 +482,7 @@ def _infer_const(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if not inst.result_reg:
+    if not inst.result_reg.is_present():
         return
     raw = str(inst.operands[0]) if inst.operands else "None"
     # If this is a function reference, extract name→return-type and name→param-types mappings
@@ -586,7 +586,7 @@ def _infer_binop(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if not inst.result_reg or len(inst.operands) < 3:
+    if not inst.result_reg.is_present() or len(inst.operands) < 3:
         return
     operator = str(inst.operands[0])
     left_hint = ctx.register_types.get(str(inst.operands[1]), UNKNOWN)
@@ -609,7 +609,7 @@ def _infer_unop(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if not inst.result_reg or len(inst.operands) < 2:
+    if not inst.result_reg.is_present() or len(inst.operands) < 2:
         return
     operator = str(inst.operands[0])
     fixed = _UNOP_FIXED_TYPES.get(operator)
@@ -637,7 +637,7 @@ def _infer_new_array(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if not inst.result_reg:
+    if not inst.result_reg.is_present():
         return
     is_tuple = inst.operands and str(inst.operands[0]) == "tuple"
     if is_tuple:
@@ -652,7 +652,7 @@ def _infer_call_function(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if not inst.result_reg:
+    if not inst.result_reg.is_present():
         return
     # register_types may be pre-seeded by the builder (e.g., constructor type_hint)
     if inst.result_reg in ctx.register_types:
@@ -679,7 +679,7 @@ def _infer_alloc_region(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if inst.result_reg:
+    if inst.result_reg.is_present():
         ctx.register_types[inst.result_reg] = scalar("Region")
 
 
@@ -688,7 +688,7 @@ def _infer_load_region(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if inst.result_reg:
+    if inst.result_reg.is_present():
         ctx.register_types[inst.result_reg] = scalar(TypeName.ARRAY)
 
 
@@ -713,7 +713,7 @@ def _infer_load_field(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if not inst.result_reg or len(inst.operands) < 2:
+    if not inst.result_reg.is_present() or len(inst.operands) < 2:
         return
     obj_reg = str(inst.operands[0])
     field_name = str(inst.operands[1])
@@ -729,7 +729,7 @@ def _infer_call_method(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if not inst.result_reg or len(inst.operands) < 2:
+    if not inst.result_reg.is_present() or len(inst.operands) < 2:
         return
     obj_reg = str(inst.operands[0])
     method_name = str(inst.operands[1])
@@ -772,7 +772,7 @@ def _infer_call_unknown(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if not inst.result_reg or not inst.operands:
+    if not inst.result_reg.is_present() or not inst.operands:
         return
     target_reg = str(inst.operands[0])
     # Check if the target register has a FunctionType directly
@@ -816,7 +816,7 @@ def _infer_load_index(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if not inst.result_reg or len(inst.operands) < 2:
+    if not inst.result_reg.is_present() or len(inst.operands) < 2:
         return
     arr_reg = str(inst.operands[0])
     # Tuple: resolve per-index element type
@@ -855,7 +855,7 @@ def _infer_load_indirect(
     type_resolver: TypeResolver,
 ) -> None:
     """LOAD_INDIRECT produces UNKNOWN — no field-type lookup for dereferences."""
-    if inst.result_reg:
+    if inst.result_reg.is_present():
         ctx.register_types[inst.result_reg] = UNKNOWN
 
 

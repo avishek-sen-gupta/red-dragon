@@ -176,7 +176,7 @@ class LLMPlausibleResolver(UnresolvedCallResolver):
         reasoning = data.get("reasoning", "LLM plausible value")
 
         register_writes: dict[str, TypedValue] = {}
-        if inst.result_reg:
+        if inst.result_reg.is_present():
             register_writes[inst.result_reg] = typed_from_runtime(value)
 
         heap_writes = [

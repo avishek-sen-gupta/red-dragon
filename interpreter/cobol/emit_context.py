@@ -38,6 +38,7 @@ from interpreter.cobol.ir_encoders import (
     build_decode_float_ir,
 )
 from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
+from interpreter.register import Register, NO_REGISTER
 
 logger = logging.getLogger(__name__)
 
@@ -78,8 +79,8 @@ class EmitContext:
 
     # ── Core Primitives ───────────────────────────────────────────
 
-    def fresh_reg(self) -> str:
-        name = f"%r{self._reg_counter}"
+    def fresh_reg(self) -> Register:
+        name = Register(f"%r{self._reg_counter}")
         self._reg_counter += 1
         return name
 
@@ -98,15 +99,15 @@ class EmitContext:
         self,
         opcode: Opcode,
         *,
-        result_reg: str = "",
+        result_reg: Register = NO_REGISTER,
         operands: list[Any] = [],
         label: CodeLabel = NO_LABEL,
         branch_targets: list[CodeLabel] = [],
     ) -> None:
         inst = IRInstruction(
             opcode=opcode,
-            result_reg=result_reg or None,
-            operands=operands,
+            result_reg=result_reg,
+            operands=[str(op) if isinstance(op, Register) else op for op in operands],
             label=label,
             branch_targets=branch_targets,
         )
@@ -135,10 +136,10 @@ class EmitContext:
                 resolved_operand = self.resolve_inline_operand(
                     inst.operands[0], reg_map
                 )
+                resolved_str = str(resolved_operand)
                 return_reg = (
-                    resolved_operand
-                    if isinstance(resolved_operand, str)
-                    and resolved_operand.startswith("%")
+                    resolved_str
+                    if resolved_str.startswith("%")
                     else self.const_to_reg(resolved_operand)
                 )
                 continue
@@ -147,9 +148,9 @@ class EmitContext:
                 self.resolve_inline_operand(op, reg_map) for op in inst.operands
             ]
 
-            new_result = self.fresh_reg() if inst.result_reg else ""
-            if inst.result_reg:
-                reg_map[inst.result_reg] = new_result
+            new_result = self.fresh_reg() if inst.result_reg else NO_REGISTER
+            if inst.result_reg.is_present():
+                reg_map[str(inst.result_reg)] = str(new_result)
 
             self.emit(
                 inst.opcode,
@@ -162,8 +163,9 @@ class EmitContext:
 
     def resolve_inline_operand(self, operand: Any, reg_map: dict[str, str]) -> Any:
         """Resolve an operand through the register mapping."""
-        if isinstance(operand, str) and operand.startswith("%"):
-            return reg_map.get(operand, operand)
+        key = str(operand) if isinstance(operand, Register) else operand
+        if isinstance(key, str) and key.startswith("%"):
+            return reg_map.get(key, key)
         return operand
 
     # ── Statement Dispatch ────────────────────────────────────────
