@@ -181,3 +181,19 @@ Report findings only. Do not fix code during review — present findings and let
 - COBOL frontend requires JDK 17+ and the ProLeap bridge JAR.
 - Neo4j is optional (for graph persistence).
 - Universal CTags is external (for code symbol extraction).
+
+## Refactoring Principles
+
+### Type propagation
+
+When replacing a primitive (`str`) with a domain type (`CodeLabel`) across a codebase:
+
+- **No coercion validators.** Do not add Pydantic `field_validator` or `__post_init__` hacks that auto-convert strings to the domain type. These mask call sites that should be explicitly updated. If Pydantic rejects a value, the caller is wrong — fix the caller.
+- **Push wrapping to the origin.** Wrap at the point the value is created (`fresh_label()`, JSON parse boundary, LLM response), not at every intermediate consumer. If a factory returns the domain type, downstream code should never need to re-wrap.
+- **No defensive `isinstance` checks.** Code like `label if isinstance(label, CodeLabel) else CodeLabel(label)` is a symptom of inconsistent callers. Fix the callers to always pass the right type. The handler should just read the value.
+- **Domain methods over string extraction.** Add methods to the type (`starts_with`, `contains`, `namespace`, `extract_name`, `branch_targets`) instead of extracting `.value` and calling string methods. If you need `startswith`, add `starts_with` to the type.
+- **`__contains__` and `__str__` make the type ergonomic.** `"x" in label` and f-string formatting should work naturally. Add `__contains__` and `__str__` to the domain type.
+- **Validate at construction, not at use.** Add `__post_init__` to reject invalid values (e.g., `CodeLabel(value=CodeLabel(...))` double-wrapping) so bugs surface immediately at the construction site, not at some distant consumer.
+- **Separate name generation from label generation.** If a factory (`fresh_label`) is used for both labels and non-label unique names (e.g., variable names), split it into `fresh_label() -> CodeLabel` and `fresh_name() -> str`. Don't let a label factory produce non-labels.
+- **Serialization at the boundary.** Use `str(label)` only at JSON serialization, display, and string-keyed dict boundaries (e.g., `FuncRef.label` which is still `str`). Never `str()` in the middle of a pipeline just to feed it back into `CodeLabel(...)`.
+- **File issues for the next ring.** After propagating the type into the immediate adjacents, file issues for the next ring of types that still use strings (e.g., `FuncRef.label`, `ClassRef.label`). Don't try to do everything in one session.
