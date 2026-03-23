@@ -367,3 +367,56 @@ def handle_get_ir(function_name: str | None = None) -> dict[str, Any]:
             for label, block in cfg.blocks.items()
         ],
     }
+
+
+def handle_load_project(
+    entry_file: str,
+    language: str,
+) -> dict[str, Any]:
+    """Load and analyze a multi-file project.
+
+    Discovers imports from the entry file, resolves dependencies,
+    compiles all modules, links them, and runs interprocedural analysis.
+
+    Args:
+        entry_file: Path to the entry point file (e.g. main.py).
+        language: Source language (e.g. "python", "javascript").
+
+    Returns:
+        Summary of the loaded project: modules, import graph, functions, classes.
+    """
+    from pathlib import Path
+
+    from interpreter.project.compiler import compile_project
+    from interpreter.interprocedural.analyze import analyze_interprocedural
+
+    try:
+        lang = Language(language)
+        entry_path = Path(entry_file)
+
+        linked = compile_project(entry_path, lang)
+
+        interprocedural = analyze_interprocedural(
+            linked.merged_cfg, linked.merged_registry
+        )
+
+        # Store key data — note: for project mode we don't run execution,
+        # so we skip trace/vm session storage and just return the analysis.
+
+        return {
+            "modules": len(linked.modules),
+            "entry": str(linked.entry_module),
+            "import_graph": {
+                str(k): [str(v) for v in vs]
+                for k, vs in linked.import_graph.items()
+            },
+            "unresolved_imports": len(linked.unresolved_imports),
+            "cfg_blocks": len(linked.merged_cfg.blocks),
+            "functions": sorted(
+                f.label for f in interprocedural.call_graph.functions
+            ),
+            "classes": sorted(linked.merged_registry.classes.keys()),
+        }
+    except Exception as e:
+        logger.exception("handle_load_project failed")
+        return {"error": str(e)}

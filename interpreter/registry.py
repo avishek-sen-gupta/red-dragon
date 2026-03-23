@@ -27,11 +27,46 @@ class FunctionRegistry:
     func_refs: dict[str, FuncRef] = field(default_factory=dict)
 
 
+def _is_func_label(label: str) -> bool:
+    """Check if a label is a function entry label, possibly namespaced.
+
+    Matches: ``func_foo_0``, ``utils.func_foo_0``, ``src.utils.func_foo_0``.
+    """
+    return (
+        label.startswith(constants.FUNC_LABEL_PREFIX)
+        or f".{constants.FUNC_LABEL_PREFIX}" in label
+    )
+
+
+def _is_class_label(label: str) -> bool:
+    """Check if a label is a class entry label, possibly namespaced."""
+    return (
+        (
+            label.startswith(constants.CLASS_LABEL_PREFIX)
+            or f".{constants.CLASS_LABEL_PREFIX}" in label
+        )
+        or (
+            label.startswith(constants.PRELUDE_CLASS_LABEL_PREFIX)
+            or f".{constants.PRELUDE_CLASS_LABEL_PREFIX}" in label
+        )
+    ) and not _is_end_class_label(label)
+
+
+def _is_end_class_label(label: str) -> bool:
+    """Check if a label is an end-class label, possibly namespaced."""
+    return (
+        label.startswith(constants.END_CLASS_LABEL_PREFIX)
+        or f".{constants.END_CLASS_LABEL_PREFIX}" in label
+        or label.startswith(constants.PRELUDE_END_CLASS_LABEL_PREFIX)
+        or f".{constants.PRELUDE_END_CLASS_LABEL_PREFIX}" in label
+    )
+
+
 def _scan_func_params(cfg: CFG) -> dict[str, list[str]]:
     """Extract parameter names from function blocks in the CFG."""
     result: dict[str, list[str]] = {}
     for label, block in cfg.blocks.items():
-        if not label.startswith(constants.FUNC_LABEL_PREFIX):
+        if not _is_func_label(label):
             continue
         params = [
             str(inst.operands[0])[len(constants.PARAM_PREFIX) :]
@@ -75,16 +110,8 @@ def _scan_classes(
     in_class: str = ""
     for inst in instructions:
         if inst.opcode == Opcode.LABEL and inst.label:
-            is_class_start = (
-                inst.label.startswith(constants.CLASS_LABEL_PREFIX)
-                and not inst.label.startswith(constants.END_CLASS_LABEL_PREFIX)
-            ) or (
-                inst.label.startswith(constants.PRELUDE_CLASS_LABEL_PREFIX)
-                and not inst.label.startswith(constants.PRELUDE_END_CLASS_LABEL_PREFIX)
-            )
-            is_class_end = inst.label.startswith(
-                constants.END_CLASS_LABEL_PREFIX
-            ) or inst.label.startswith(constants.PRELUDE_END_CLASS_LABEL_PREFIX)
+            is_class_start = _is_class_label(inst.label) and not _is_end_class_label(inst.label)
+            is_class_end = _is_end_class_label(inst.label)
             if is_class_start:
                 for cname, clabel in classes.items():
                     if inst.label == clabel:
