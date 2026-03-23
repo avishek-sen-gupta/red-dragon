@@ -396,10 +396,20 @@ def run_project(
     )
 
     config = VMConfig(max_steps=max_steps, verbose=verbose)
+
+    # Build execution strategies with the merged symbol tables
+    from interpreter.run import ExecutionStrategies
+
+    strategies = ExecutionStrategies(
+        func_symbol_table=linked.func_symbol_table,
+        class_symbol_table=linked.class_symbol_table,
+    )
+
     vm, stats = execute_cfg(
         linked.merged_cfg,
         linked.merged_cfg.entry,
         linked.merged_registry,
         config,
+        strategies,
     )
     return vm
