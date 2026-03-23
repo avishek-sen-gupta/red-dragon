@@ -33,12 +33,13 @@ from interpreter.types.type_inference import infer_types, _infer_const_type
 from interpreter.types.type_resolver import TypeResolver
 
 
-def _make_inst(opcode, result_reg="", operands=None, label=NO_LABEL):
+def _make_inst(opcode, result_reg="", operands=None, label=NO_LABEL, branch_targets: list[CodeLabel] = []):
     return IRInstruction(
         opcode=opcode,
         result_reg=result_reg or None,
         operands=operands or [],
         label=label,
+        branch_targets=branch_targets,
     )
 
 

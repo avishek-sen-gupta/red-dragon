@@ -32,7 +32,7 @@ def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{body_label},{end_label}"),
+            branch_targets=[body_label, end_label],
             node=node,
         )
     else:
@@ -82,7 +82,7 @@ def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
             ctx.emit(
                 Opcode.BRANCH_IF,
                 operands=[cmp_reg],
-                label=CodeLabel(f"{arm_label},{next_label}"),
+                branch_targets=[arm_label, next_label],
             )
         else:
             # default case

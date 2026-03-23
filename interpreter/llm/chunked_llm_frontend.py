@@ -186,7 +186,10 @@ class IRRenumberer:
                 opcode=inst.opcode,
                 result_reg=self._renumber_reg(inst.result_reg, reg_offset),
                 operands=new_operands,
-                label=self._renumber_label(inst.label, label_suffix, inst.opcode),
+                label=self._renumber_label(inst.label, label_suffix),
+                branch_targets=[
+                    t.with_suffix(label_suffix) for t in inst.branch_targets
+                ],
                 source_location=inst.source_location,
             )
 
@@ -225,14 +228,11 @@ class IRRenumberer:
         return operand
 
     def _renumber_label(
-        self, label: CodeLabel, suffix: str, opcode: Opcode
+        self, label: CodeLabel, suffix: str
     ) -> CodeLabel:
         if isinstance(label, NoCodeLabel):
             return NO_LABEL
-        if opcode == Opcode.BRANCH_IF:
-            parts = [str(part) + suffix for part in label.branch_targets()]
-            return CodeLabel(",".join(parts))
-        return CodeLabel(str(label) + suffix)
+        return label.with_suffix(suffix)
 
     def _extract_reg_number(self, value: Any) -> int:
         if not isinstance(value, str):

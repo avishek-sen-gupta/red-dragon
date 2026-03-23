@@ -99,7 +99,7 @@ def _lower_arm(
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[test_reg],
-        label=CodeLabel(f"{arm_label},{next_label}"),
+        branch_targets=[arm_label, next_label],
     )
     ctx.emit(Opcode.LABEL, label=arm_label)
 

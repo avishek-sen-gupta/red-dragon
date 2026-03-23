@@ -78,14 +78,14 @@ def lower_php_if(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{true_label},{false_label}"),
+            branch_targets=[true_label, false_label],
             node=node,
         )
     else:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{true_label},{end_label}"),
+            branch_targets=[true_label, end_label],
             node=node,
         )
 
@@ -115,7 +115,7 @@ def _lower_php_else_clause(ctx: TreeSitterEmitContext, node, end_label: str) -> 
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{true_label},{false_label}"),
+            branch_targets=[true_label, false_label],
             node=node,
         )
 
@@ -178,7 +178,7 @@ def lower_php_foreach(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=CodeLabel(f"{body_label},{end_label}"),
+        branch_targets=[body_label, end_label],
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
@@ -299,7 +299,7 @@ def lower_php_switch(ctx: TreeSitterEmitContext, node) -> None:
             ctx.emit(
                 Opcode.BRANCH_IF,
                 operands=[cmp_reg],
-                label=CodeLabel(f"{arm_label},{next_label}"),
+                branch_targets=[arm_label, next_label],
             )
         else:
             ctx.emit(Opcode.BRANCH, label=arm_label)
@@ -335,7 +335,7 @@ def lower_php_do(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{body_label},{end_label}"),
+            branch_targets=[body_label, end_label],
             node=node,
         )
     else:

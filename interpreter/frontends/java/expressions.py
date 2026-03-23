@@ -384,7 +384,7 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=CodeLabel(f"{true_label},{false_label}"),
+        branch_targets=[true_label, false_label],
     )
     ctx.emit(Opcode.LABEL, label=true_label)
     true_reg = ctx.lower_expr(true_node)
