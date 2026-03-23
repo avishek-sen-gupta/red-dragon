@@ -1459,3 +1459,84 @@ class TestCSharpWithExpression:
         stores = _find_all(ir, Opcode.STORE_FIELD)
         field_names = [inst.operands[1] for inst in stores]
         assert "Age" in field_names
+
+
+class TestCSharpParenthesizedPattern:
+    def test_parenthesized_pattern_no_symbolic(self):
+        """(pattern) should not produce SYMBOLIC."""
+        ir = _parse_and_lower(
+            'int x = 5; var r = x switch { (> 0) => "pos", _ => "neg" };'
+        )
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "parenthesized_pattern" in str(inst.operands) for inst in symbolics
+        ), f"parenthesized_pattern produced SYMBOLIC: {symbolics}"
+
+    def test_parenthesized_pattern_unwraps_inner(self):
+        """(constant) should produce same IR as the constant alone."""
+        ir_bare = _parse_and_lower(
+            'int x = 5; var r = x switch { 42 => "yes", _ => "no" };'
+        )
+        ir_paren = _parse_and_lower(
+            'int x = 5; var r = x switch { (42) => "yes", _ => "no" };'
+        )
+        # Both should produce a BINOP == comparing x against 42
+        bare_binops = [
+            inst
+            for inst in ir_bare
+            if inst.opcode == Opcode.BINOP and "==" in str(inst.operands)
+        ]
+        paren_binops = [
+            inst
+            for inst in ir_paren
+            if inst.opcode == Opcode.BINOP and "==" in str(inst.operands)
+        ]
+        assert len(bare_binops) == len(paren_binops)
+
+
+class TestCSharpOrPattern:
+    def test_or_pattern_no_symbolic(self):
+        """1 or 2 should not produce SYMBOLIC."""
+        ir = _parse_and_lower(
+            'int x = 1; var r = x switch { 1 or 2 => "yes", _ => "no" };'
+        )
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "or_pattern" in str(inst.operands) for inst in symbolics
+        ), f"or_pattern produced SYMBOLIC: {symbolics}"
+
+    def test_or_pattern_emits_two_comparisons(self):
+        """1 or 2 should emit two == comparisons (one per alternative)."""
+        ir = _parse_and_lower(
+            'int x = 1; var r = x switch { 1 or 2 => "yes", _ => "no" };'
+        )
+        eq_binops = [
+            inst
+            for inst in ir
+            if inst.opcode == Opcode.BINOP and "==" in str(inst.operands)
+        ]
+        assert len(eq_binops) >= 2
+
+
+class TestCSharpListPattern:
+    def test_list_pattern_no_symbolic(self):
+        """[1, 2] list pattern should not produce SYMBOLIC."""
+        ir = _parse_and_lower(
+            'int[] a = {1, 2}; var r = a switch { [1, 2] => "yes", _ => "no" };'
+        )
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "list_pattern" in str(inst.operands) for inst in symbolics
+        ), f"list_pattern produced SYMBOLIC: {symbolics}"
+
+    def test_list_pattern_checks_elements(self):
+        """[1, 2] should emit == comparisons for each element."""
+        ir = _parse_and_lower(
+            'int[] a = {1, 2}; var r = a switch { [1, 2] => "yes", _ => "no" };'
+        )
+        eq_binops = [
+            inst
+            for inst in ir
+            if inst.opcode == Opcode.BINOP and "==" in str(inst.operands)
+        ]
+        assert len(eq_binops) >= 2
