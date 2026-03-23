@@ -80,7 +80,9 @@ class TestAnnotateEndpoint:
 
     def test_return_endpoint(self):
         func = FunctionEntry(label=CodeLabel("func_f_0"), params=("x",))
-        loc = InstructionLocation(block_label=CodeLabel("func_f_0"), instruction_index=5)
+        loc = InstructionLocation(
+            block_label=CodeLabel("func_f_0"), instruction_index=5
+        )
         ep = ReturnEndpoint(function=func, location=loc)
         assert annotate_endpoint(ep, None) == "Return(func_f_0)"
 
@@ -94,7 +96,9 @@ class TestAnnotateEndpoint:
 class TestRenderGraphLines:
     def test_renders_edges_grouped_by_source(self):
         f = FunctionEntry(label=CodeLabel("func_f_0"), params=("x",))
-        loc = InstructionLocation(block_label=CodeLabel("func_f_0"), instruction_index=5)
+        loc = InstructionLocation(
+            block_label=CodeLabel("func_f_0"), instruction_index=5
+        )
         x_ep = VariableEndpoint(name="x", definition=NO_DEFINITION)
         ret_ep = ReturnEndpoint(function=f, location=loc)
         graph = {x_ep: frozenset({ret_ep})}

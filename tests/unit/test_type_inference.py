@@ -33,7 +33,13 @@ from interpreter.types.type_inference import infer_types, _infer_const_type
 from interpreter.types.type_resolver import TypeResolver
 
 
-def _make_inst(opcode, result_reg="", operands=None, label=NO_LABEL, branch_targets: list[CodeLabel] = []):
+def _make_inst(
+    opcode,
+    result_reg="",
+    operands=None,
+    label=NO_LABEL,
+    branch_targets: list[CodeLabel] = [],
+):
     return IRInstruction(
         opcode=opcode,
         result_reg=result_reg or None,
@@ -102,7 +108,9 @@ class TestInferConstType:
 
     def test_class_ref(self):
         class_st = {
-            "class_Dog_0": ClassRef(name="Dog", label=CodeLabel("class_Dog_0"), parents=())
+            "class_Dog_0": ClassRef(
+                name="Dog", label=CodeLabel("class_Dog_0"), parents=()
+            )
         }
         assert _infer_const_type("class_Dog_0", class_symbol_table=class_st) == ""
 
@@ -2318,7 +2326,9 @@ class TestInferConstTypeReturnsTypeExpr:
 
     def test_class_ref_returns_unknown(self):
         class_st = {
-            "class_Dog_0": ClassRef(name="Dog", label=CodeLabel("class_Dog_0"), parents=())
+            "class_Dog_0": ClassRef(
+                name="Dog", label=CodeLabel("class_Dog_0"), parents=()
+            )
         }
         result = _infer_const_type("class_Dog_0", class_symbol_table=class_st)
         assert isinstance(result, UnknownType)

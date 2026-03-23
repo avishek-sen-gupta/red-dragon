@@ -19,13 +19,23 @@ class BasicBlock:
 @dataclass
 class CFG:
     blocks: dict[CodeLabel, BasicBlock] = field(default_factory=dict)
-    entry: CodeLabel = field(default_factory=lambda: CodeLabel(constants.CFG_ENTRY_LABEL))
+    entry: CodeLabel = field(
+        default_factory=lambda: CodeLabel(constants.CFG_ENTRY_LABEL)
+    )
 
     def __str__(self) -> str:
         lines = []
         for label, block in self.blocks.items():
-            preds = ", ".join(str(p) for p in block.predecessors) if block.predecessors else "(none)"
-            succs = ", ".join(str(s) for s in block.successors) if block.successors else "(none)"
+            preds = (
+                ", ".join(str(p) for p in block.predecessors)
+                if block.predecessors
+                else "(none)"
+            )
+            succs = (
+                ", ".join(str(s) for s in block.successors)
+                if block.successors
+                else "(none)"
+            )
             lines.append(f"[{label}]  preds={preds}  succs={succs}")
             for inst in block.instructions:
                 lines.append(f"  {inst}")

@@ -50,7 +50,9 @@ class TestFormatFlowEndpoint:
 
     def test_return_endpoint(self):
         func = FunctionEntry(label=CodeLabel("func_f_0"), params=("x",))
-        loc = InstructionLocation(block_label=CodeLabel("func_f_0"), instruction_index=5)
+        loc = InstructionLocation(
+            block_label=CodeLabel("func_f_0"), instruction_index=5
+        )
         ep = ReturnEndpoint(function=func, location=loc)
         result = format_flow_endpoint(ep)
         assert result == {"function": "func_f_0", "type": "return"}

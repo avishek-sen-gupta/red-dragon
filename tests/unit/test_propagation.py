@@ -27,7 +27,13 @@ from interpreter.interprocedural.propagation import (
 from interpreter.registry import FunctionRegistry
 
 
-def _inst(opcode: Opcode, result_reg=None, operands=None, label: CodeLabel = NO_LABEL, branch_targets: list[CodeLabel] = []):
+def _inst(
+    opcode: Opcode,
+    result_reg=None,
+    operands=None,
+    label: CodeLabel = NO_LABEL,
+    branch_targets: list[CodeLabel] = [],
+):
     return IRInstruction(
         opcode=opcode,
         result_reg=result_reg,
@@ -83,7 +89,9 @@ class TestApplySummaryAtCallSite:
 
         ret_endpoint = ReturnEndpoint(
             function=callee,
-            location=InstructionLocation(block_label=CodeLabel("func__id"), instruction_index=2),
+            location=InstructionLocation(
+                block_label=CodeLabel("func__id"), instruction_index=2
+            ),
         )
         summary = FunctionSummary(
             function=callee,
@@ -444,14 +452,18 @@ class TestBuildWholeProgramGraph:
         # Flow in A: x → return_a
         ret_a = ReturnEndpoint(
             function=func_a,
-            location=InstructionLocation(block_label=CodeLabel("func__a"), instruction_index=3),
+            location=InstructionLocation(
+                block_label=CodeLabel("func__a"), instruction_index=3
+            ),
         )
         summary_a = FunctionSummary(
             function=func_a,
             context=CallContext(
                 site=CallSite(
                     caller=_make_function("__root__"),
-                    location=InstructionLocation(block_label=CodeLabel(""), instruction_index=-1),
+                    location=InstructionLocation(
+                        block_label=CodeLabel(""), instruction_index=-1
+                    ),
                     callees=frozenset(),
                     arg_operands=(),
                 )
@@ -462,14 +474,18 @@ class TestBuildWholeProgramGraph:
         # Flow in B: y → return_b
         ret_b = ReturnEndpoint(
             function=func_b,
-            location=InstructionLocation(block_label=CodeLabel("func__b"), instruction_index=3),
+            location=InstructionLocation(
+                block_label=CodeLabel("func__b"), instruction_index=3
+            ),
         )
         summary_b = FunctionSummary(
             function=func_b,
             context=CallContext(
                 site=CallSite(
                     caller=_make_function("__root__"),
-                    location=InstructionLocation(block_label=CodeLabel(""), instruction_index=-1),
+                    location=InstructionLocation(
+                        block_label=CodeLabel(""), instruction_index=-1
+                    ),
                     callees=frozenset(),
                     arg_operands=(),
                 )
