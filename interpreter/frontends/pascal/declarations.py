@@ -313,11 +313,20 @@ def lower_pascal_proc(ctx: TreeSitterEmitContext, node) -> None:
     ctx._pascal_current_function_name = prev_func_name
     ctx._current_class_name = prev_class_name
 
-    none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST, result_reg=none_reg, operands=[ctx.constants.default_return_value]
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    # Pascal functions return via the 'Result' variable. Procedures return None.
+    is_function = any(c.type == PascalNodeType.K_FUNCTION for c in search_node.children)
+    if is_function:
+        result_reg = ctx.fresh_reg()
+        ctx.emit(Opcode.LOAD_VAR, result_reg=result_reg, operands=["Result"])
+        ctx.emit(Opcode.RETURN, operands=[result_reg])
+    else:
+        none_reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.CONST,
+            result_reg=none_reg,
+            operands=[ctx.constants.default_return_value],
+        )
+        ctx.emit(Opcode.RETURN, operands=[none_reg])
     ctx.emit(Opcode.LABEL, label=end_label)
 
     func_reg = ctx.fresh_reg()

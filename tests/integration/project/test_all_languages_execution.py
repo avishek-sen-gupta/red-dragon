@@ -416,9 +416,6 @@ class TestLuaMultiFile:
 
 
 class TestPascalMultiFile:
-    @pytest.mark.xfail(
-        reason="Pascal begin...end. block not lowered — red-dragon-todo-pascal-block"
-    )
     def test_uses(self, tmp_path):
         result = _run_project(
             tmp_path,
