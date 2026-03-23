@@ -587,7 +587,7 @@ class TestNestedFunctionLeakyScoping:
         strict=True,
         reason=(
             "VM enforces frame-based scoping; in real Ruby/PHP/Lua, "
-            "inner functions leak to enclosing/global scope"
+            "inner functions leak to enclosing/global scope — red-dragon-crds"
         ),
     )
     def test_inner_leaks_outside_outer(self, leaky_result):

@@ -94,9 +94,7 @@ class TestArrayPointerTypes:
         assert isinstance(locals_["arr"], Pointer)
         assert locals_["arr"].base.startswith("arr_")
 
-    @pytest.mark.xfail(
-        reason="Rust frontend lowers vec![] macro to SymbolicValue, not array allocation"
-    )
+    @pytest.mark.xfail(reason="Rust vec![] macro → SymbolicValue — red-dragon-cjkr")
     def test_rust_vec_produces_pointer(self):
         vm = run(
             "let v = vec![1, 2, 3];\n",
