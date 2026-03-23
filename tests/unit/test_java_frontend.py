@@ -1077,3 +1077,18 @@ class TestJavaRecordPatternInstanceof:
         ]
         assert len(stores_a) >= 1, "record_pattern did not bind 'a'"
         assert len(stores_b) >= 1, "record_pattern did not bind 'b'"
+
+
+class TestJavaStringLengthExecution:
+    def test_string_length_returns_concrete(self):
+        """s.length() on a concrete string should return a concrete int."""
+        from interpreter.run import run
+        from interpreter.types.typed_value import unwrap_locals
+
+        vm = run(
+            'class M { static int result = "hello".length(); }',
+            language="java",
+            max_steps=100,
+        )
+        local_vars = unwrap_locals(vm.call_stack[0].local_vars)
+        assert local_vars["result"] == 5

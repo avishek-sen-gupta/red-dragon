@@ -101,9 +101,6 @@ class M {
 
 
 class TestJavaSwitchGuard:
-    @pytest.mark.xfail(
-        reason="Guard on pattern-bound variable evaluates symbolic — red-dragon-8h9z"
-    )
     def test_guard_filters_match(self):
         local_vars = _run_java(
             """\

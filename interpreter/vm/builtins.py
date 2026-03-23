@@ -269,6 +269,17 @@ def _method_to_string(
     return BuiltinResult(value=str(obj.value))
 
 
+def _method_length(
+    obj: TypedValue, args: list[TypedValue], vm: VMState
+) -> BuiltinResult:
+    """Method builtin: obj.length() / obj.size() / obj.Length → len(obj).
+
+    Handles Java .length(), Kotlin .length/.size, C# .Length, JS .length,
+    Ruby .size/.length on strings and collections.
+    """
+    return _builtin_len([obj], vm)
+
+
 _PRIMITIVE_TYPE_MAP: dict[str, type] = {
     "int": int,
     "Int": int,
@@ -343,4 +354,7 @@ class Builtins:
         "slice": _method_slice,
         "to_string": _method_to_string,
         "toString": _method_to_string,
+        "length": _method_length,
+        "size": _method_length,
+        "Length": _method_length,
     }
