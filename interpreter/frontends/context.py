@@ -131,10 +131,10 @@ class TreeSitterEmitContext:
     _base_declared_vars: set[str] = field(default_factory=set)
 
     # Function reference symbol table: func_label -> FuncRef
-    func_symbol_table: dict[str, FuncRef] = field(default_factory=dict)
+    func_symbol_table: dict[CodeLabel, FuncRef] = field(default_factory=dict)
 
     # Class reference symbol table: class_label -> ClassRef
-    class_symbol_table: dict[str, ClassRef] = field(default_factory=dict)
+    class_symbol_table: dict[CodeLabel, ClassRef] = field(default_factory=dict)
 
     # Byref parameter tracking (C# out/ref/in)
     byref_params: set[str] = field(default_factory=set)
@@ -211,12 +211,11 @@ class TreeSitterEmitContext:
         Emits the plain func_label as the CONST operand.  The symbol table
         maps func_label → FuncRef(name, label) for downstream consumers.
         """
-        label_str = str(func_label)
-        self.func_symbol_table[label_str] = FuncRef(name=func_name, label=label_str)
+        self.func_symbol_table[func_label] = FuncRef(name=func_name, label=func_label)
         return self.emit(
             Opcode.CONST,
             result_reg=result_reg,
-            operands=[label_str],
+            operands=[str(func_label)],
             node=node,
         )
 
@@ -233,14 +232,13 @@ class TreeSitterEmitContext:
         Emits the plain class_label as the CONST operand.  The symbol table
         maps class_label -> ClassRef(name, label, parents) for downstream consumers.
         """
-        label_str = str(class_label)
-        self.class_symbol_table[label_str] = ClassRef(
-            name=class_name, label=label_str, parents=tuple(parents)
+        self.class_symbol_table[class_label] = ClassRef(
+            name=class_name, label=class_label, parents=tuple(parents)
         )
         return self.emit(
             Opcode.CONST,
             result_reg=result_reg,
-            operands=[label_str],
+            operands=[str(class_label)],
             node=node,
         )
 

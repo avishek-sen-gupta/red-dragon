@@ -261,15 +261,15 @@ class ChunkedLLMFrontend(Frontend):
         self._language = language
         self._chunk_extractor = ChunkExtractor()
         self._renumberer = IRRenumberer()
-        self._func_symbol_table: dict[str, FuncRef] = {}
-        self._class_symbol_table: dict[str, ClassRef] = {}
+        self._func_symbol_table: dict[CodeLabel, FuncRef] = {}
+        self._class_symbol_table: dict[CodeLabel, ClassRef] = {}
 
     @property
-    def func_symbol_table(self) -> dict[str, FuncRef]:
+    def func_symbol_table(self) -> dict[CodeLabel, FuncRef]:
         return self._func_symbol_table
 
     @property
-    def class_symbol_table(self) -> dict[str, ClassRef]:
+    def class_symbol_table(self) -> dict[CodeLabel, ClassRef]:
         return self._class_symbol_table
 
     def lower(self, source: bytes) -> list[IRInstruction]:

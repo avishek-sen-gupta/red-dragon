@@ -221,22 +221,22 @@ def _transform_module(
 def _merge_symbol_tables(
     modules: dict[Path, ModuleUnit],
     prefixes: dict[Path, str],
-) -> tuple[dict[str, FuncRef], dict[str, ClassRef]]:
+) -> tuple[dict[CodeLabel, FuncRef], dict[CodeLabel, ClassRef]]:
     """Merge and namespace all modules' export symbol tables.
 
     Labels are namespaced (unique in merged CFG).
     Names are kept bare (VM uses them for method dispatch).
     """
-    merged_func: dict[str, FuncRef] = {}
-    merged_class: dict[str, ClassRef] = {}
+    merged_func: dict[CodeLabel, FuncRef] = {}
+    merged_class: dict[CodeLabel, ClassRef] = {}
 
     for path, module in modules.items():
         prefix = prefixes[path]
         for name, label in module.exports.functions.items():
-            ns_label = namespace_label(label, prefix)
+            ns_label = label.namespace(prefix)
             merged_func[ns_label] = FuncRef(name=name, label=ns_label)
         for name, label in module.exports.classes.items():
-            ns_label = namespace_label(label, prefix)
+            ns_label = label.namespace(prefix)
             merged_class[ns_label] = ClassRef(name=name, label=ns_label, parents=())
 
     return merged_func, merged_class

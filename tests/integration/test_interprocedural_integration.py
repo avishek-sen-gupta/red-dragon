@@ -506,7 +506,7 @@ class TestParamToReturnFlowsRust:
         flows = [
             (src, dst)
             for key, summary in result.summaries.items()
-            if key.function.label.startswith("func_id_")
+            if key.function.label.starts_with("func_id_")
             for src, dst in summary.flows
             if isinstance(src, VariableEndpoint) and isinstance(dst, ReturnEndpoint)
         ]
@@ -522,7 +522,7 @@ class TestParamToReturnFlowsRust:
         param_names = {
             src.name
             for key, summary in result.summaries.items()
-            if key.function.label.startswith("func_add_")
+            if key.function.label.starts_with("func_add_")
             for src, dst in summary.flows
             if isinstance(src, VariableEndpoint) and isinstance(dst, ReturnEndpoint)
         }

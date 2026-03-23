@@ -16,11 +16,11 @@ from interpreter import constants
 @dataclass
 class FunctionRegistry:
     # func_label → ordered list of parameter names
-    func_params: dict[str, list[str]] = field(default_factory=dict)
+    func_params: dict[CodeLabel, list[str]] = field(default_factory=dict)
     # class_name → {method_name → [func_label, ...]}  (supports overloads)
-    class_methods: dict[str, dict[str, list[str]]] = field(default_factory=dict)
+    class_methods: dict[str, dict[str, list[CodeLabel]]] = field(default_factory=dict)
     # class_name → class_body_label
-    classes: dict[str, str] = field(default_factory=dict)
+    classes: dict[str, CodeLabel] = field(default_factory=dict)
     # class_name → linearized parent chain (MRO, excluding self)
     class_parents: dict[str, list[str]] = field(default_factory=dict)
     # function_name → FuncRef (name→label mapping for call resolution)
@@ -65,9 +65,9 @@ def _is_end_class_label(label: str | CodeLabel) -> bool:
     )
 
 
-def _scan_func_params(cfg: CFG) -> dict[str, list[str]]:
+def _scan_func_params(cfg: CFG) -> dict[CodeLabel, list[str]]:
     """Extract parameter names from function blocks in the CFG."""
-    result: dict[str, list[str]] = {}
+    result: dict[CodeLabel, list[str]] = {}
     for label, block in cfg.blocks.items():
         if not _is_func_label(label):
             continue
@@ -78,15 +78,15 @@ def _scan_func_params(cfg: CFG) -> dict[str, list[str]]:
             and inst.operands
             and str(inst.operands[0]).startswith(constants.PARAM_PREFIX)
         ]
-        result[str(label)] = params
+        result[label] = params
     return result
 
 
 def _scan_classes(
     instructions: list[IRInstruction],
-    func_symbol_table: dict[str, FuncRef] = {},
-    class_symbol_table: dict[str, ClassRef] = {},
-) -> tuple[dict[str, str], dict[str, dict[str, list[str]]], dict[str, list[str]]]:
+    func_symbol_table: dict[CodeLabel, FuncRef] = {},
+    class_symbol_table: dict[CodeLabel, ClassRef] = {},
+) -> tuple[dict[str, CodeLabel], dict[str, dict[str, list[CodeLabel]]], dict[str, list[str]]]:
     """Scan IR to find classes, their methods, and parent chains.
 
     Returns (classes, class_methods, class_parents) where:
@@ -94,8 +94,8 @@ def _scan_classes(
     - class_methods: class_name → {method_name → [func_label, ...]}
     - class_parents: class_name → linearized parent chain (MRO, excluding self)
     """
-    classes: dict[str, str] = {}
-    class_methods: dict[str, dict[str, list[str]]] = {}
+    classes: dict[str, CodeLabel] = {}
+    class_methods: dict[str, dict[str, list[CodeLabel]]] = {}
     class_parents: dict[str, list[str]] = {}
 
     # First pass: populate from class_symbol_table (new path).
@@ -162,8 +162,8 @@ def _expand_parent_chains(
 def build_registry(
     instructions: list[IRInstruction],
     cfg: CFG,
-    func_symbol_table: dict[str, FuncRef] = {},
-    class_symbol_table: dict[str, ClassRef] = {},
+    func_symbol_table: dict[CodeLabel, FuncRef] = {},
+    class_symbol_table: dict[CodeLabel, ClassRef] = {},
 ) -> FunctionRegistry:
     """Scan IR and CFG to build a function/class registry."""
     reg = FunctionRegistry()

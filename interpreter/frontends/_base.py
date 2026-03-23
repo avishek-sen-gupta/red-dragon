@@ -102,8 +102,8 @@ class BaseFrontend(Frontend):
         self._language = language
         self._observer = observer
         self._type_env_builder: TypeEnvironmentBuilder = TypeEnvironmentBuilder()
-        self._func_symbol_table: dict[str, FuncRef] = {}
-        self._class_symbol_table: dict[str, ClassRef] = {}
+        self._func_symbol_table: dict[CodeLabel, FuncRef] = {}
+        self._class_symbol_table: dict[CodeLabel, ClassRef] = {}
         self._symbol_table: SymbolTable = SymbolTable.empty()
         # Legacy state (used only by unconverted frontends)
         self._reg_counter: int = 0
@@ -169,11 +169,11 @@ class BaseFrontend(Frontend):
         return self._type_env_builder
 
     @property
-    def func_symbol_table(self) -> dict[str, FuncRef]:
+    def func_symbol_table(self) -> dict[CodeLabel, FuncRef]:
         return self._func_symbol_table
 
     @property
-    def class_symbol_table(self) -> dict[str, ClassRef]:
+    def class_symbol_table(self) -> dict[CodeLabel, ClassRef]:
         return self._class_symbol_table
 
     @property
@@ -199,7 +199,7 @@ class BaseFrontend(Frontend):
         return self._emit(
             Opcode.CONST,
             result_reg=result_reg,
-            operands=[class_label],
+            operands=[str(class_label)],
             node=node,
         )
 
@@ -211,12 +211,11 @@ class BaseFrontend(Frontend):
         Emits the plain func_label as the CONST operand.  The symbol table
         maps func_label → FuncRef(name, label) for downstream consumers.
         """
-        label_str = str(func_label)
-        self._func_symbol_table[label_str] = FuncRef(name=func_name, label=label_str)
+        self._func_symbol_table[func_label] = FuncRef(name=func_name, label=func_label)
         return self._emit(
             Opcode.CONST,
             result_reg=result_reg,
-            operands=[label_str],
+            operands=[str(func_label)],
             node=node,
         )
 

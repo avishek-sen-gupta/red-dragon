@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from interpreter.ir import CodeLabel
 from interpreter.interprocedural.types import (
     CallGraph,
     CallSite,
@@ -30,23 +31,23 @@ class TestRenderEndpoint:
         assert render_endpoint(ep) == "x"
 
     def test_return_endpoint(self):
-        func = FunctionEntry(label="func_f_0", params=("x",))
-        loc = InstructionLocation(block_label="func_f_0", instruction_index=5)
+        func = FunctionEntry(label=CodeLabel("func_f_0"), params=("x",))
+        loc = InstructionLocation(block_label=CodeLabel("func_f_0"), instruction_index=5)
         ep = ReturnEndpoint(function=func, location=loc)
         assert render_endpoint(ep) == "Return(func_f_0)"
 
     def test_field_endpoint(self):
         base = VariableEndpoint(name="self", definition=NO_DEFINITION)
-        loc = InstructionLocation(block_label="func_init_0", instruction_index=3)
+        loc = InstructionLocation(block_label=CodeLabel("func_init_0"), instruction_index=3)
         ep = FieldEndpoint(base=base, field="name", location=loc)
         assert render_endpoint(ep) == "Field(self.name)"
 
 
 class TestBuildCallers:
     def test_function_with_caller(self):
-        f = FunctionEntry(label="func_f_0", params=("x",))
-        g = FunctionEntry(label="func_g_2", params=("y",))
-        loc = InstructionLocation(block_label="func_g_2", instruction_index=3)
+        f = FunctionEntry(label=CodeLabel("func_f_0"), params=("x",))
+        g = FunctionEntry(label=CodeLabel("func_g_2"), params=("y",))
+        loc = InstructionLocation(block_label=CodeLabel("func_g_2"), instruction_index=3)
         site = CallSite(
             caller=g,
             location=loc,
@@ -60,7 +61,7 @@ class TestBuildCallers:
         assert callers == {"func_g_2"}
 
     def test_function_with_no_callers(self):
-        f = FunctionEntry(label="func_f_0", params=("x",))
+        f = FunctionEntry(label=CodeLabel("func_f_0"), params=("x",))
         call_graph = CallGraph(functions=frozenset({f}), call_sites=frozenset())
         callers = build_function_callers(f, call_graph)
         assert callers == set()
@@ -68,9 +69,9 @@ class TestBuildCallers:
 
 class TestBuildCallees:
     def test_function_with_callee(self):
-        f = FunctionEntry(label="func_f_0", params=("x",))
-        g = FunctionEntry(label="func_g_2", params=("y",))
-        loc = InstructionLocation(block_label="func_g_2", instruction_index=3)
+        f = FunctionEntry(label=CodeLabel("func_f_0"), params=("x",))
+        g = FunctionEntry(label=CodeLabel("func_g_2"), params=("y",))
+        loc = InstructionLocation(block_label=CodeLabel("func_g_2"), instruction_index=3)
         site = CallSite(
             caller=g,
             location=loc,
@@ -86,7 +87,7 @@ class TestBuildCallees:
 
 class TestMergeFlows:
     def test_merges_across_contexts(self):
-        f = FunctionEntry(label="func_f_0", params=("x",))
+        f = FunctionEntry(label=CodeLabel("func_f_0"), params=("x",))
         flow1 = (
             VariableEndpoint(name="x", definition=NO_DEFINITION),
             ReturnEndpoint(

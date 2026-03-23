@@ -6,7 +6,7 @@ from interpreter.frontends.context import TreeSitterEmitContext, GrammarConstant
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.constants import Language
 from interpreter.refs.func_ref import FuncRef
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 
 
 def _make_ctx(lang: Language = Language.PYTHON) -> TreeSitterEmitContext:
@@ -24,7 +24,7 @@ class TestEmitFuncRef:
         ctx.emit_func_ref("add", "func_add_0", result_reg="%0")
         assert "func_add_0" in ctx.func_symbol_table
         ref = ctx.func_symbol_table["func_add_0"]
-        assert ref == FuncRef(name="add", label="func_add_0")
+        assert ref == FuncRef(name="add", label=CodeLabel("func_add_0"))
 
     def test_emits_const_with_plain_label(self):
         ctx = _make_ctx()

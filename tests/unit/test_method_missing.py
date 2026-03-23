@@ -14,7 +14,7 @@ from interpreter.vm.executor import (
     _default_handler_context,
 )
 from interpreter.refs.func_ref import BoundFuncRef, FuncRef
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.registry import FunctionRegistry
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime, unwrap
 from interpreter.types.type_expr import UNKNOWN, scalar
@@ -41,7 +41,7 @@ def _make_vm_with_method_missing(
     vm.heap[inner_addr] = HeapObject(type_hint="Inner", fields=inner_fields)
 
     # __method_missing__ function: takes (self, name) -> LOAD_FIELD_INDIRECT(self.BOXED_FIELD, name)
-    mm_label = "func_mm_0"
+    mm_label = CodeLabel("func_mm_0")
     cfg = CFG()
     cfg.blocks[mm_label] = BasicBlock(
         label=mm_label,
@@ -176,7 +176,7 @@ class TestFindMethodMissingRegistryPath:
         )
         vm.call_stack[-1].registers["%obj"] = typed(addr, scalar("Object"))
 
-        mm_label = "func_box_mm_0"
+        mm_label = CodeLabel("func_box_mm_0")
         cfg = CFG()
         cfg.blocks[mm_label] = BasicBlock(
             label=mm_label,
@@ -209,8 +209,8 @@ class TestFindMethodMissingRegistryPath:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="<test>"))
 
-        instance_mm_label = "func_instance_mm"
-        registry_mm_label = "func_registry_mm"
+        instance_mm_label = CodeLabel("func_instance_mm")
+        registry_mm_label = CodeLabel("func_registry_mm")
 
         cfg = CFG()
         cfg.blocks[instance_mm_label] = BasicBlock(
@@ -263,7 +263,7 @@ class TestMethodMissingCallMethod:
         )
         # Register "Outer" with no methods, "Inner" with 'some_method'
         registry.class_methods["Outer"] = {}
-        inner_method_label = "func_inner_some_method_0"
+        inner_method_label = CodeLabel("func_inner_some_method_0")
         cfg.blocks[inner_method_label] = BasicBlock(
             label=inner_method_label,
             instructions=[
@@ -321,7 +321,7 @@ class TestMethodMissingCallMethod:
         vm, cfg, registry = _make_vm_with_method_missing(
             inner_fields={"value": typed_from_runtime(42)}
         )
-        real_label = "func_real_method_0"
+        real_label = CodeLabel("func_real_method_0")
         cfg.blocks[real_label] = BasicBlock(
             label=real_label,
             instructions=[
