@@ -21,7 +21,7 @@ def build_cfg(instructions: list[IRInstruction]) -> CFG:
     for i, inst in enumerate(instructions):
         if inst.opcode == Opcode.LABEL:
             block_starts.add(i)
-            label_to_idx[inst.label] = i
+            label_to_idx[inst.label.value] = i
         elif inst.opcode in (
             Opcode.BRANCH,
             Opcode.BRANCH_IF,
@@ -43,7 +43,7 @@ def build_cfg(instructions: list[IRInstruction]) -> CFG:
 
         # Determine label
         if block_insts and block_insts[0].opcode == Opcode.LABEL:
-            label = block_insts[0].label
+            label = block_insts[0].label.value
             block_insts = block_insts[1:]  # don't include LABEL pseudo-inst
         else:
             label = f"__block_{start}"
@@ -63,12 +63,12 @@ def build_cfg(instructions: list[IRInstruction]) -> CFG:
         last = block.instructions[-1]
 
         if last.opcode == Opcode.BRANCH:
-            target = last.label
+            target = last.label.value
             if target in cfg.blocks:
                 _add_edge(cfg, label, target)
 
         elif last.opcode == Opcode.BRANCH_IF:
-            targets = last.label.split(",")
+            targets = last.label.branch_targets()
             for t in targets:
                 t = t.strip()
                 if t in cfg.blocks:
@@ -347,8 +347,8 @@ def extract_function_instructions(
             i
             for i, inst in enumerate(instructions)
             if inst.opcode == Opcode.LABEL
-            and inst.label.startswith(func_prefix)
-            and _extract_name(inst.label, func_prefix) == func_name
+            and inst.label.is_function()
+            and inst.label.extract_name(func_prefix) == func_name
         ),
         -1,
     )
@@ -360,7 +360,7 @@ def extract_function_instructions(
             i
             for i in range(start_idx + 1, len(instructions))
             if instructions[i].opcode == Opcode.LABEL
-            and instructions[i].label.startswith(end_prefix)
+            and instructions[i].label.value.startswith(end_prefix)
         ),
         -1,
     )

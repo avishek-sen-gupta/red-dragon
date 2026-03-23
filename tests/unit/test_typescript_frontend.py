@@ -82,7 +82,9 @@ class TestTypeScriptInterfaces:
         assert any(
             "class_" in str(c.operands) and "Point" in str(c.operands) for c in consts
         )
-        labels = [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+        labels = [
+            inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL
+        ]
         func_labels = [l for l in labels if "func_" in l]
         assert any("getX" in l for l in func_labels)
         assert any("getY" in l for l in func_labels)
@@ -221,7 +223,7 @@ class TestTypeScriptControlFlow:
 
         labels = _labels_in_order(instructions)
         branch_targets = {
-            target for inst in branch_ifs for target in inst.label.split(",")
+            target for inst in branch_ifs for target in inst.label.branch_targets()
         }
         label_set = set(labels)
         assert branch_targets.issubset(
@@ -230,7 +232,7 @@ class TestTypeScriptControlFlow:
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
-    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+    return [inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL]
 
 
 class TestNonTrivialTypeScript:
@@ -608,7 +610,7 @@ interface Shape {
 
     def test_interface_methods_produce_func_labels(self):
         ir = _parse_ts(self.INTERFACE_SOURCE)
-        labels = [inst.label for inst in ir if inst.opcode == Opcode.LABEL]
+        labels = [inst.label.value for inst in ir if inst.opcode == Opcode.LABEL]
         func_labels = [l for l in labels if "func_" in l]
         assert any(
             "area" in l for l in func_labels

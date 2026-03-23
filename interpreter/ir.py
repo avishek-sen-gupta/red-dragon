@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 @dataclass(frozen=True)
@@ -93,16 +93,134 @@ class SourceLocation(BaseModel):
 NO_SOURCE_LOCATION = SourceLocation(start_line=0, start_col=0, end_line=0, end_col=0)
 
 
+# ── Label types ──────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class CodeLabel:
+    """A label on an IR instruction (branch target or block entry)."""
+
+    _FUNC_PREFIX = "func_"
+    _CLASS_PREFIX = "class_"
+    _END_CLASS_PREFIX = "end_class_"
+    _PRELUDE_CLASS_PREFIX = "prelude_class_"
+    _PRELUDE_END_CLASS_PREFIX = "prelude_end_class_"
+    _ENTRY = "entry"
+
+    value: str
+
+    def is_present(self) -> bool:
+        return True
+
+    def is_function(self) -> bool:
+        """Is this a function entry label (possibly namespaced)?"""
+        return (
+            self.value.startswith(self._FUNC_PREFIX)
+            or f".{self._FUNC_PREFIX}" in self.value
+        )
+
+    def is_class(self) -> bool:
+        """Is this a class entry label (possibly namespaced)?"""
+        return (
+            self.value.startswith(self._CLASS_PREFIX)
+            or f".{self._CLASS_PREFIX}" in self.value
+            or self.value.startswith(self._PRELUDE_CLASS_PREFIX)
+            or f".{self._PRELUDE_CLASS_PREFIX}" in self.value
+        ) and not self.is_end_class()
+
+    def is_end_class(self) -> bool:
+        """Is this an end-class label (possibly namespaced)?"""
+        return (
+            self.value.startswith(self._END_CLASS_PREFIX)
+            or f".{self._END_CLASS_PREFIX}" in self.value
+            or self.value.startswith(self._PRELUDE_END_CLASS_PREFIX)
+            or f".{self._PRELUDE_END_CLASS_PREFIX}" in self.value
+        )
+
+    def is_entry(self) -> bool:
+        """Is this the program entry label?"""
+        return self.value == self._ENTRY
+
+    def is_end_label(self) -> bool:
+        """Is this an end_ label (function or class)?"""
+        return self.value.startswith("end_") or self.is_end_class()
+
+    def extract_name(self, prefix: str) -> str:
+        """Extract the base name from a label like func_foo_3 → foo."""
+        import re
+
+        suffix = self.value[len(prefix) :]
+        match = re.match(r"^(.+)_(\d+)$", suffix)
+        return match.group(1) if match else suffix
+
+    def branch_targets(self) -> list[str]:
+        """Parse comma-separated branch targets (BRANCH_IF, TRY_PUSH).
+
+        Temporary — see red-dragon-z4h3 for proper structured targets.
+        """
+        return [t.strip() for t in self.value.split(",")]
+
+    def __str__(self) -> str:
+        return self.value
+
+    def __hash__(self) -> int:
+        return hash(self.value)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, CodeLabel):
+            return self.value == other.value
+        if isinstance(other, str):
+            return self.value == other
+        return NotImplemented
+
+
+@dataclass(frozen=True)
+class NoCodeLabel(CodeLabel):
+    """Null object: instruction has no label."""
+
+    value: str = ""
+
+    def is_present(self) -> bool:
+        return False
+
+    def is_function(self) -> bool:
+        return False
+
+    def is_class(self) -> bool:
+        return False
+
+    def is_end_class(self) -> bool:
+        return False
+
+    def is_entry(self) -> bool:
+        return False
+
+    def is_end_label(self) -> bool:
+        return False
+
+
+NO_LABEL = NoCodeLabel()
+
+
 class IRInstruction(BaseModel):
     opcode: Opcode
     result_reg: str | None = None
     operands: list[Any] = []
-    label: str | None = None  # for LABEL / branch targets
+    label: CodeLabel = NO_LABEL
     source_location: SourceLocation = NO_SOURCE_LOCATION
+
+    @field_validator("label", mode="before")
+    @classmethod
+    def _coerce_label(cls, v: Any) -> CodeLabel:
+        if v is None:
+            return NO_LABEL
+        if isinstance(v, str):
+            return CodeLabel(v) if v else NO_LABEL
+        return v
 
     def __str__(self) -> str:
         parts: list[str] = []
-        if self.label and self.opcode == Opcode.LABEL:
+        if self.label.is_present() and self.opcode == Opcode.LABEL:
             base = f"{self.label}:"
         else:
             if self.result_reg:
@@ -110,8 +228,8 @@ class IRInstruction(BaseModel):
             parts.append(self.opcode.value.lower())
             for op in self.operands:
                 parts.append(str(op))
-            if self.label and self.opcode != Opcode.LABEL:
-                parts.append(self.label)
+            if self.label.is_present() and self.opcode != Opcode.LABEL:
+                parts.append(str(self.label))
             base = " ".join(parts)
         if not self.source_location.is_unknown():
             return f"{base}  # {self.source_location}"

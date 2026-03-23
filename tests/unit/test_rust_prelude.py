@@ -15,7 +15,7 @@ def _find_all(instructions, opcode):
 
 
 def _labels(instructions):
-    return [i.label for i in instructions if i.opcode == Opcode.LABEL]
+    return [i.label.value for i in instructions if i.opcode == Opcode.LABEL]
 
 
 class TestRustPrelude:

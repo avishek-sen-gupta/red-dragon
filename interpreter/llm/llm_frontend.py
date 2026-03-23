@@ -268,9 +268,7 @@ def _validate_ir(instructions: list[IRInstruction]) -> list[IRInstruction]:
         raise IRParsingError("LLM returned an empty instruction list")
 
     first = instructions[0]
-    has_entry_label = (
-        first.opcode == Opcode.LABEL and first.label == constants.CFG_ENTRY_LABEL
-    )
+    has_entry_label = first.opcode == Opcode.LABEL and first.label.is_entry()
 
     if not has_entry_label:
         logger.warning("LLM response missing entry label — auto-prepending")

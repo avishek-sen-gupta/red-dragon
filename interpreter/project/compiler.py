@@ -44,15 +44,10 @@ def build_export_table(
     variables: dict[str, str] = {}
     in_scope = True  # True while at module top-level
     for inst in ir:
-        if inst.opcode == Opcode.LABEL and inst.label:
-            label = inst.label
-            is_func_start = label.startswith(constants.FUNC_LABEL_PREFIX)
-            is_class_start = label.startswith(
-                constants.CLASS_LABEL_PREFIX
-            ) and not label.startswith(constants.END_CLASS_LABEL_PREFIX)
-            is_end = label.startswith("end_") or label.startswith(
-                constants.END_CLASS_LABEL_PREFIX
-            )
+        if inst.opcode == Opcode.LABEL and inst.label.is_present():
+            is_func_start = inst.label.is_function()
+            is_class_start = inst.label.is_class()
+            is_end = inst.label.is_end_label()
 
             if is_func_start or is_class_start:
                 in_scope = False

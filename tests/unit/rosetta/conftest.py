@@ -100,7 +100,11 @@ def assert_cross_language_consistency(
         if lang != "rust":
             return len(ir)
         last_prelude_idx = max(
-            (i for i, inst in enumerate(ir) if inst.label and "prelude_" in inst.label),
+            (
+                i
+                for i, inst in enumerate(ir)
+                if inst.label.is_present() and "prelude_" in inst.label.value
+            ),
             default=-1,
         )
         # Prelude ends at last prelude STORE_VAR after the last prelude label
