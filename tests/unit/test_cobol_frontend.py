@@ -120,7 +120,7 @@ class TestDataDivisionLowering:
         instructions = frontend.lower(b"")
 
         labels = _find_opcodes(instructions, Opcode.LABEL)
-        label_names = [inst.label.value for inst in labels]
+        label_names = [str(inst.label) for inst in labels]
         assert "entry" in label_names
 
     def test_group_field_total_bytes(self):
@@ -293,7 +293,7 @@ class TestProcedureDivisionLowering:
 
         # Should have three labels: if_true, if_false, if_end
         labels = _find_opcodes(instructions, Opcode.LABEL)
-        label_names = [inst.label.value for inst in labels]
+        label_names = [str(inst.label) for inst in labels]
         assert any("if_true" in l for l in label_names)
         assert any("if_false" in l for l in label_names)
         assert any("if_end" in l for l in label_names)
@@ -365,7 +365,7 @@ class TestProcedureDivisionLowering:
         goto_branches = [
             b
             for b in branches
-            if b.label.is_present() and "para_OTHER-PARA" in b.label.value
+            if b.label.is_present() and b.label.contains("para_OTHER-PARA")
         ]
         assert len(goto_branches) >= 1
 
@@ -385,7 +385,7 @@ class TestProcedureDivisionLowering:
         perform_branches = [
             b
             for b in branches
-            if b.label.is_present() and "para_WORK-PARA" in b.label.value
+            if b.label.is_present() and b.label.contains("para_WORK-PARA")
         ]
         assert len(perform_branches) >= 1
 
@@ -423,7 +423,7 @@ class TestProcedureDivisionLowering:
         perform_branches = [
             b
             for b in branches
-            if b.label.is_present() and "para_FIRST-PARA" in b.label.value
+            if b.label.is_present() and b.label.contains("para_FIRST-PARA")
         ]
         assert len(perform_branches) >= 1
 
@@ -441,7 +441,7 @@ class TestProcedureDivisionLowering:
         instructions = frontend.lower(b"")
 
         labels = _find_opcodes(instructions, Opcode.LABEL)
-        label_names = [inst.label.value for inst in labels]
+        label_names = [str(inst.label) for inst in labels]
         assert "para_MAIN" in label_names
 
 
@@ -1288,7 +1288,7 @@ class TestSearchLowering:
 
         # Should emit labels for loop structure
         labels = _find_opcodes(instructions, Opcode.LABEL)
-        label_names = [inst.label.value for inst in labels]
+        label_names = [str(inst.label) for inst in labels]
         assert any("search_loop" in name for name in label_names)
         assert any("search_end" in name for name in label_names)
 
@@ -1474,7 +1474,7 @@ class TestCallAlterEntryCancelLowering:
         entry_labels = [
             l
             for l in labels
-            if l.label.is_present() and "entry_ALT-ENTRY" in l.label.value
+            if l.label.is_present() and l.label.contains("entry_ALT-ENTRY")
         ]
         assert len(entry_labels) >= 1
 

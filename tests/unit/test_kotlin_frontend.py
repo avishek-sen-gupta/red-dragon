@@ -90,7 +90,7 @@ class TestKotlinControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.LABEL in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("if_true" in inst.label.value for inst in labels)
+        assert any(inst.label.contains("if_true") for inst in labels)
 
     def test_while_loop(self):
         instructions = _parse_kotlin("fun main() { while (x > 0) { x = x - 1 } }")
@@ -98,7 +98,7 @@ class TestKotlinControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BRANCH in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("while" in inst.label.value for inst in labels)
+        assert any(inst.label.contains("while") for inst in labels)
 
     def test_when_expression(self):
         instructions = _parse_kotlin(
@@ -108,7 +108,7 @@ class TestKotlinControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(
-            "match" in inst.label.value or "when" in inst.label.value for inst in labels
+            inst.label.contains("match") or inst.label.contains("when") for inst in labels
         )
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
@@ -216,7 +216,7 @@ class TestKotlinSpecial:
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
-    return [inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL]
+    return [str(inst.label) for inst in instructions if inst.opcode == Opcode.LABEL]
 
 
 class TestNonTrivialKotlin:
@@ -1244,7 +1244,7 @@ class TestKotlinInterfaceLowering:
         assert len(class_refs) == 1
         assert "Drawable" in str(class_refs[0].operands[0])
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("class_Drawable" in i.label.value for i in labels)
+        assert any(i.label.contains("class_Drawable") for i in labels)
 
     def test_interface_methods_emit_function_labels(self):
         """Each interface method should produce a FUNC_DEF label."""
@@ -1252,8 +1252,8 @@ class TestKotlinInterfaceLowering:
             "interface Shape { fun area(): Double\n fun perimeter(): Double }"
         )
         labels = _find_all(instructions, Opcode.LABEL)
-        func_labels = [i for i in labels if "func_" in i.label.value]
-        func_label_names = [i.label.value for i in func_labels]
+        func_labels = [i for i in labels if i.label.contains("func_")]
+        func_label_names = [str(i.label) for i in func_labels]
         assert any("area" in lbl for lbl in func_label_names)
         assert any("perimeter" in lbl for lbl in func_label_names)
 
@@ -1403,7 +1403,7 @@ class Foo {
         getter_labels = [
             inst
             for inst in labels
-            if inst.label.is_present() and "__get_x__" in inst.label.value
+            if inst.label.is_present() and inst.label.contains("__get_x__")
         ]
         assert len(getter_labels) >= 1, "Expected a __get_x__ method label"
 
@@ -1418,7 +1418,7 @@ class Foo {
         setter_labels = [
             inst
             for inst in labels
-            if inst.label.is_present() and "__set_x__" in inst.label.value
+            if inst.label.is_present() and inst.label.contains("__set_x__")
         ]
         assert len(setter_labels) >= 1, "Expected a __set_x__ method label"
 
@@ -1431,7 +1431,7 @@ class Foo {
         set(value) { field = value * 2 }
 }""")
         labels = _find_all(ir, Opcode.LABEL)
-        label_names = [inst.label.value for inst in labels if inst.label]
+        label_names = [str(inst.label) for inst in labels if inst.label]
         assert any("__get_x__" in lbl for lbl in label_names)
         assert any("__set_x__" in lbl for lbl in label_names)
 
@@ -1442,7 +1442,7 @@ class Foo {
     var x: Int = 0
 }""")
         labels = _find_all(ir, Opcode.LABEL)
-        label_names = [inst.label.value for inst in labels if inst.label]
+        label_names = [str(inst.label) for inst in labels if inst.label]
         assert not any("__get_" in lbl for lbl in label_names)
         assert not any("__set_" in lbl for lbl in label_names)
 

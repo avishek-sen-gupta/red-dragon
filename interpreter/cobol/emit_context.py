@@ -147,7 +147,7 @@ class EmitContext:
                 inst.opcode,
                 result_reg=new_result,
                 operands=mapped_operands,
-                label=inst.label.value,
+                label=str(inst.label),
             )
 
         return return_reg

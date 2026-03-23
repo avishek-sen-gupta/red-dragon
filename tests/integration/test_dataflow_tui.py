@@ -81,14 +81,14 @@ class TestDataflowModeToggle:
         result = run_pipeline(self.SOURCE, language="python", max_steps=50)
         cfg = result.cfg
 
-        func_labels = [l for l in cfg.blocks if l.startswith("func_f")]
+        func_labels = [l for l in cfg.blocks if l.starts_with("func_f")]
         assert len(func_labels) >= 1
         label = func_labels[0]
 
         min_line = float("inf")
         max_line = 0
         for block_label, block in cfg.blocks.items():
-            if block_label == label or block_label.startswith(label + "_"):
+            if block_label == label or block_label.starts_with(str(label) + "_"):
                 for inst in block.instructions:
                     loc = inst.source_location
                     if loc.is_unknown():

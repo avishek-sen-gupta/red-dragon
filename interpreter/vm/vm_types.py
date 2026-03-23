@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from interpreter.constants import TypeName
+from interpreter.ir import CodeLabel
 from interpreter.types.type_expr import TypeExpr, UNKNOWN, scalar
 from interpreter.types.typed_value import TypedValue, typed
 
@@ -68,9 +69,9 @@ class ClosureEnvironment:
 class ExceptionHandler:
     """Exception handler pushed by TRY_PUSH, popped by TRY_POP or THROW."""
 
-    catch_labels: list[str] = field(default_factory=list)
-    finally_label: str = ""
-    end_label: str = ""
+    catch_labels: list[CodeLabel] = field(default_factory=list)
+    finally_label: CodeLabel | None = None
+    end_label: CodeLabel | None = None
 
 
 @dataclass
@@ -78,7 +79,7 @@ class StackFrame:
     function_name: str
     registers: dict[str, TypedValue] = field(default_factory=dict)
     local_vars: dict[str, TypedValue] = field(default_factory=dict)
-    return_label: str | None = None
+    return_label: CodeLabel | None = None
     return_ip: int | None = None  # ip to resume at in caller block
     result_reg: str | None = None  # caller's register for return value
     closure_env_id: str = ""
@@ -91,7 +92,7 @@ class StackFrame:
             "function_name": self.function_name,
             "registers": {k: _serialize_value(v) for k, v in self.registers.items()},
             "local_vars": {k: _serialize_value(v) for k, v in self.local_vars.items()},
-            "return_label": self.return_label,
+            "return_label": str(self.return_label) if self.return_label else None,
         }
         if self.closure_env_id:
             d["closure_env_id"] = self.closure_env_id
@@ -120,7 +121,7 @@ class VMState:
     symbolic_counter: int = 0
     closures: dict[str, ClosureEnvironment] = field(default_factory=dict)
     regions: dict[str, bytearray] = field(default_factory=dict)
-    continuations: dict[str, str] = field(default_factory=dict)
+    continuations: dict[str, CodeLabel] = field(default_factory=dict)
     exception_stack: list[ExceptionHandler] = field(default_factory=list)
     data_layout: dict[str, dict] = field(default_factory=dict)
     io_provider: Any = (
@@ -152,7 +153,7 @@ class VMState:
                 addr: list(data) for addr, data in self.regions.items()
             }
         if self.continuations:
-            result["continuations"] = dict(self.continuations)
+            result["continuations"] = {k: str(v) for k, v in self.continuations.items()}
         if self.data_layout:
             result["data_layout"] = dict(self.data_layout)
         return result
@@ -194,7 +195,7 @@ class BuiltinResult:
 
 class StackFramePush(BaseModel):
     function_name: str
-    return_label: str | None = None
+    return_label: CodeLabel | None = None
     closure_env_id: str = ""
     captured_var_names: list[str] = []
     is_ctor: bool = False
@@ -210,9 +211,9 @@ class StateUpdate(BaseModel):
     new_objects: list[NewObject] = []
     region_writes: list[RegionWrite] = []
     new_regions: dict[str, int] = {}
-    continuation_writes: dict[str, str] = {}
+    continuation_writes: dict[str, CodeLabel] = {}
     continuation_clear: str = ""
-    next_label: str | None = None
+    next_label: CodeLabel | None = None
     call_push: StackFramePush | None = None
     call_pop: bool = False
     return_value: Any = VOID_RETURN

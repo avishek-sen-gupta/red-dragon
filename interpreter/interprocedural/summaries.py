@@ -11,7 +11,7 @@ from functools import reduce
 
 from interpreter.cfg_types import BasicBlock, CFG
 from interpreter.dataflow import DataflowResult, Definition, analyze
-from interpreter.ir import Opcode, VAR_DEFINITION_OPCODES
+from interpreter.ir import CodeLabel, Opcode, VAR_DEFINITION_OPCODES
 from interpreter import constants
 from interpreter.interprocedural.types import (
     CallContext,
@@ -34,11 +34,11 @@ def _collect_boundary_labels(cfg: CFG) -> frozenset[str]:
     A function entry block starts with 'func_' and contains a SYMBOLIC param: instruction.
     End blocks start with 'end_'. These are the boundaries where reachability walks stop.
     """
-    boundaries: set[str] = set()
+    boundaries: set[CodeLabel] = set()
     for label, block in cfg.blocks.items():
-        if label.startswith("end_"):
+        if label.starts_with("end_"):
             boundaries.add(label)
-        elif label.startswith("func_") and any(
+        elif label.starts_with("func_") and any(
             inst.opcode == Opcode.SYMBOLIC
             and len(inst.operands) >= 1
             and str(inst.operands[0]).startswith(constants.PARAM_PREFIX)
