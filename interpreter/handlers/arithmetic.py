@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from interpreter.instructions import to_typed, Binop, Unop
 from interpreter.ir import IRInstruction
 from interpreter.vm.vm import (
     VMState,
@@ -23,8 +24,10 @@ from interpreter.handlers._common import _symbolic_name
 
 
 def _handle_binop(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
+    t = to_typed(inst)
+    assert isinstance(t, Binop)
     binop_coercion = ctx.binop_coercion
-    oper = inst.operands[0]
+    oper = t.operator
     lhs_typed = _resolve_reg(vm, inst.operands[1])
     rhs_typed = _resolve_reg(vm, inst.operands[2])
 
@@ -41,7 +44,7 @@ def _handle_binop(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={
-                        inst.result_reg: typed(diff, scalar(constants.TypeName.INT))
+                        t.result_reg: typed(diff, scalar(constants.TypeName.INT))
                     },
                     reasoning=f"pointer diff {lhs!r} - {rhs!r} = {diff}",
                 )
@@ -51,7 +54,7 @@ def _handle_binop(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={
-                        inst.result_reg: typed(result, scalar(constants.TypeName.BOOL))
+                        t.result_reg: typed(result, scalar(constants.TypeName.BOOL))
                     },
                     reasoning=f"pointer cmp {lhs!r} {oper} {rhs!r} = {result!r}",
                 )
@@ -69,7 +72,7 @@ def _handle_binop(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={
-                        inst.result_reg: typed(
+                        t.result_reg: typed(
                             result_ptr, scalar(constants.TypeName.POINTER)
                         )
                     },
@@ -85,7 +88,7 @@ def _handle_binop(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult
         sym.constraints = [f"{lhs_desc} {oper} {rhs_desc}"]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                register_writes={t.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"binop {lhs_desc} {oper} {rhs_desc} → symbolic {sym.name}",
             )
         )
@@ -100,14 +103,14 @@ def _handle_binop(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult
         sym.constraints = [f"{lhs_raw!r} {oper} {rhs_raw!r}"]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                register_writes={t.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"binop {lhs_raw!r} {oper} {rhs_raw!r} → uncomputable, symbolic {sym.name}",
             )
         )
     return ExecutionResult.success(
         StateUpdate(
             register_writes={
-                inst.result_reg: typed(
+                t.result_reg: typed(
                     result, binop_coercion.result_type(oper, lhs_typed, rhs_typed)
                 )
             },
@@ -117,8 +120,10 @@ def _handle_binop(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult
 
 
 def _handle_unop(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
+    t = to_typed(inst)
+    assert isinstance(t, Unop)
     unop_coercion = ctx.unop_coercion
-    oper = inst.operands[0]
+    oper = t.operator
     operand_typed = _resolve_reg(vm, inst.operands[1])
     operand = operand_typed.value
     # Address-of (&) on a value that is already a reference (function ref or
@@ -129,7 +134,7 @@ def _handle_unop(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
         if isinstance(operand, BoundFuncRef) or (addr and addr in vm.heap):
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: typed_from_runtime(operand)},
+                    register_writes={t.result_reg: typed_from_runtime(operand)},
                     reasoning=f"unop &{operand} → {operand} (address-of reference is identity)",
                 )
             )
@@ -140,7 +145,7 @@ def _handle_unop(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
         sym.constraints = [f"{oper}{op_desc}"]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                register_writes={t.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"unop {oper}{op_desc} → symbolic {sym.name}",
             )
         )
@@ -154,14 +159,14 @@ def _handle_unop(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
         sym.constraints = [f"{oper}{raw!r}"]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                register_writes={t.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"unop {oper}{raw!r} → uncomputable, symbolic {sym.name}",
             )
         )
     return ExecutionResult.success(
         StateUpdate(
             register_writes={
-                inst.result_reg: typed(
+                t.result_reg: typed(
                     result, unop_coercion.result_type(oper, operand_typed)
                 )
             },
