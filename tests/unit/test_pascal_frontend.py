@@ -1443,3 +1443,52 @@ begin end.""")
         decls = _find_all(ir, Opcode.DECL_VAR)
         decl_names = [inst.operands[0] for inst in decls]
         assert "TColor" in decl_names
+
+
+class TestPascalFunctionResult:
+    """Pascal functions return via the Result variable, not explicit return."""
+
+    def test_function_returns_result_variable(self):
+        ir = _parse_pascal(
+            "function add(a, b: Integer): Integer;\n"
+            "begin\n"
+            "  Result := a + b;\n"
+            "end;\n"
+        )
+        # The implicit return at end of function body should load Result,
+        # not return None.
+        returns = _find_all(ir, Opcode.RETURN)
+        # Find the implicit return (last one before end_add label)
+        implicit_return = returns[-1]
+        ret_reg = str(implicit_return.operands[0])
+        # The register feeding the return should come from LOAD_VAR Result,
+        # not CONST None.
+        load_result = [
+            inst
+            for inst in ir
+            if inst.opcode == Opcode.LOAD_VAR
+            and inst.operands[0] == "Result"
+            and inst.result_reg == ret_reg
+        ]
+        assert (
+            len(load_result) == 1
+        ), f"Expected LOAD_VAR Result → {ret_reg}, got: " + str(
+            [inst for inst in ir if inst.result_reg == ret_reg]
+        )
+
+    def test_procedure_still_returns_none(self):
+        ir = _parse_pascal(
+            "procedure doStuff(x: Integer);\n" "begin\n" "  y := x + 1;\n" "end;\n"
+        )
+        returns = _find_all(ir, Opcode.RETURN)
+        implicit_return = returns[-1]
+        ret_reg = str(implicit_return.operands[0])
+        # Procedure should return None
+        const_none = [
+            inst
+            for inst in ir
+            if inst.opcode == Opcode.CONST
+            and inst.result_reg == ret_reg
+            and inst.operands[0] == "None"
+        ]
+        assert len(const_none) == 1
