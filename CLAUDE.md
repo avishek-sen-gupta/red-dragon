@@ -52,7 +52,7 @@ Run all three before every commit, in this order:
 ```bash
 poetry run python -m black .         # formatting
 poetry run lint-imports               # architectural contracts
-poetry run python -m pytest tests/    # full test suite
+poetry run python -m pytest tests/    # ALL tests (unit + integration), not just tests/unit/
 ```
 
 Do not commit if any check fails. Fix, then re-run all three. Non-negotiable.
