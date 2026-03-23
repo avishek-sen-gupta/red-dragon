@@ -31,8 +31,9 @@ Every non-trivial task goes through these phases. Do not skip. Do not start impl
 2. **Plan** — Choose an approach. For features spanning multiple modules, identify independently-committable units and their order. For Heavy tasks, write the design down before proceeding.
 3. **Test first** — Write failing tests that define the expected behavior. No implementation code until at least one test exists.
 4. **Implement** — Write the minimum code to make the tests pass.
-5. **Verify** — Run the full verification gate (see below). All checks must pass.
-6. **Commit** — One logical unit per commit. `bd backup` before `git add`. Push to remote.
+5. **Self-review** — Before running the verification gate, review your own diff (`git diff`). Check against the Design Principles and Programming Patterns sections below. Look for: workaround guards, mutation in loops, missing test coverage, weak assertions, leaked abstractions, stale docs. If the diff is large (Heavy task), run the `/review` skill.
+6. **Verify** — Run the full verification gate (see below). All checks must pass.
+7. **Commit** — One logical unit per commit. `bd backup` before `git add`. Push to remote.
 
 When asked to audit or show issues, only report findings — do not fix unless explicitly asked.
 
@@ -122,6 +123,31 @@ Do not commit if any check fails. Fix, then re-run all three. Non-negotiable.
 - **No implementation hacks for tests:** Never add special behavior just to make tests pass. Document hard-to-implement behavior or ask for guidance.
 - **xfail for frontend gaps:** If a frontend doesn't handle a feature yet, write the real test with correct assertions, mark it `xfail`, and file an issue. Don't rename tests or write fallback programs. Exclude languages that genuinely lack the feature (e.g., C has no classes).
 - **Both unit and integration tests** for every new feature.
+
+## Code Review
+
+### Self-review checklist
+
+Before every commit, scan the diff for these anti-patterns:
+
+- **Workaround guards** — `is not None`, bare `try/except`, or conditional logic added just to make tests pass without understanding the root cause.
+- **Weak assertions** — `assert x is not None` or `assert "name" in result` when a concrete value assertion (`assert result == 30`) is possible.
+- **Mutation in loops** — mutable accumulators inside `for` loops instead of comprehensions/map/filter/reduce.
+- **Stale documentation** — README, linker-design.md, or ADRs that no longer match the implementation.
+- **Missing tests** — new code paths without corresponding unit AND integration tests.
+- **Leaked abstractions** — internal labels, register names, or IR details exposed in public APIs or test assertions.
+- **Dead code** — unused imports, unreachable branches, assigned-but-never-read variables.
+
+### Requested reviews
+
+When asked to review code (or when running `/review`), apply the Programming Patterns and Design Principles sections as the review rubric. Prioritise findings by severity:
+
+1. **CRITICAL** — security vulnerabilities, data loss risks
+2. **HIGH** — likely bugs, significant performance issues
+3. **MEDIUM** — code quality, moderate risk
+4. **LOW** — minor improvements
+
+Report findings only. Do not fix code during review — present findings and let the user decide what to act on. File issues for anything that needs follow-up work.
 
 ## Implementation Guidelines
 
