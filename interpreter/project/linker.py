@@ -63,8 +63,8 @@ def max_register_number(ir: tuple[IRInstruction, ...] | list[IRInstruction]) -> 
     """Find the highest register number used in an IR sequence. Returns -1 if none."""
     max_reg = -1
     for inst in ir:
-        if inst.result_reg:
-            m = _REGISTER_RE.match(inst.result_reg)
+        if inst.result_reg.is_present():
+            m = _REGISTER_RE.match(str(inst.result_reg))
             if m:
                 max_reg = max(max_reg, int(m.group(1)))
         for op in inst.operands:
