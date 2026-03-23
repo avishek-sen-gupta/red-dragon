@@ -9,6 +9,7 @@ from interpreter.frontends.common.patterns import (
     LiteralPattern,
     OrPattern,
     Pattern,
+    RelationalPattern,
     SequencePattern,
     WildcardPattern,
 )
@@ -97,25 +98,43 @@ def parse_csharp_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
         elements = [parse_csharp_pattern(ctx, c) for c in node.children if c.is_named]
         return SequencePattern(elements=tuple(elements))
 
+    # Relational pattern: > 5, < 10, >= 0, <= 100
+    if node_type == NT.RELATIONAL_PATTERN:
+        children = [c for c in node.children if c.is_named]
+        op_node = next(
+            (c for c in node.children if not c.is_named and c.type not in ("(", ")")),
+            None,
+        )
+        operator = ctx.node_text(op_node) if op_node else ">"
+        value_node = children[0] if children else node
+        return RelationalPattern(
+            operator=operator, value=_parse_const_value(ctx, value_node)
+        )
+
     # Fallback: treat as literal
     return _parse_constant(ctx, node)
 
 
 def _parse_constant(ctx: TreeSitterEmitContext, node) -> LiteralPattern:
     """Parse a constant value node into a LiteralPattern."""
+    return LiteralPattern(value=_parse_const_value(ctx, node))
+
+
+def _parse_const_value(ctx: TreeSitterEmitContext, node) -> object:
+    """Parse a constant value node into a Python value."""
     text = ctx.node_text(node)
     match node.type:
         case "null_literal":
-            return LiteralPattern(value=None)
+            return None
         case "integer_literal":
-            return LiteralPattern(value=int(text))
+            return int(text)
         case "real_literal":
-            return LiteralPattern(value=float(text))
+            return float(text)
         case "string_literal":
-            return LiteralPattern(value=text.strip('"'))
+            return text.strip('"')
         case "character_literal":
-            return LiteralPattern(value=text.strip("'"))
+            return text.strip("'")
         case "boolean_literal":
-            return LiteralPattern(value=text == "true")
+            return text == "true"
         case _:
-            return LiteralPattern(value=text)
+            return text

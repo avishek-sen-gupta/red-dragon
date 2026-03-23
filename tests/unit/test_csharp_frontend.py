@@ -1540,3 +1540,27 @@ class TestCSharpListPattern:
             if inst.opcode == Opcode.BINOP and "==" in str(inst.operands)
         ]
         assert len(eq_binops) >= 2
+
+
+class TestCSharpRelationalPattern:
+    def test_relational_pattern_no_symbolic(self):
+        """> 5 pattern should not produce SYMBOLIC."""
+        ir = _parse_and_lower(
+            'int x = 10; var r = x switch { > 5 => "big", _ => "small" };'
+        )
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "relational_pattern" in str(inst.operands) for inst in symbolics
+        ), f"relational_pattern produced SYMBOLIC: {symbolics}"
+
+    def test_relational_pattern_emits_comparison(self):
+        """> 5 should emit a BINOP > comparison."""
+        ir = _parse_and_lower(
+            'int x = 10; var r = x switch { > 5 => "big", _ => "small" };'
+        )
+        gt_binops = [
+            inst
+            for inst in ir
+            if inst.opcode == Opcode.BINOP and ">" in str(inst.operands)
+        ]
+        assert len(gt_binops) >= 1
