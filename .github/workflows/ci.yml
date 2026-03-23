@@ -70,6 +70,8 @@ jobs:
         run: poetry run radon mi interpreter/ -s -n B
       - name: Pylint (report only)
         run: poetry run pylint interpreter/ --exit-zero
+      - name: Pyright type check (report only)
+        run: poetry run pyright || true
       - name: Pydeps (dry run)
         run: poetry run pydeps interpreter --no-show --no-output -T png 2>&1 || true
 
