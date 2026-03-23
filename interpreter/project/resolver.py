@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from interpreter.constants import Language
-from interpreter.project.types import CyclicImportError, ImportRef
+from interpreter.project.types import CyclicImportError, ImportKind, ImportRef
 
 # ── Resolution result ────────────────────────────────────────────
 
@@ -218,7 +218,7 @@ class RustImportResolver(ImportResolver):
         if ref.is_system:
             return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
 
-        if ref.kind == "mod":
+        if ref.kind == ImportKind.MOD:
             # mod helpers; → helpers.rs or helpers/mod.rs
             base = ref.source_file.parent
             candidates = [
@@ -354,7 +354,7 @@ class RubyImportResolver(ImportResolver):
             return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
 
         path = ref.module_path
-        if ref.is_relative or ref.kind == "require":
+        if ref.is_relative or ref.kind == ImportKind.REQUIRE:
             base = ref.source_file.parent if ref.is_relative else project_root / "lib"
             candidates = [
                 base / path,
@@ -377,13 +377,13 @@ class PhpImportResolver(ImportResolver):
         if ref.is_system:
             return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
 
-        if ref.kind in ("require", "include"):
+        if ref.kind in (ImportKind.REQUIRE, ImportKind.INCLUDE):
             base = ref.source_file.parent
             candidates = [base / ref.module_path, project_root / ref.module_path]
             for c in candidates:
                 if c.exists():
                     return ResolvedImport(ref=ref, resolved_path=c)
-        elif ref.kind == "use":
+        elif ref.kind == ImportKind.USE:
             # App.Models.User → App/Models/User.php
             parts = ref.module_path.split(".")
             if ref.names:
@@ -470,7 +470,7 @@ class CobolImportResolver(ImportResolver):
         base = ref.source_file.parent
         name = ref.module_path
 
-        if ref.kind == "include":
+        if ref.kind == ImportKind.INCLUDE:
             # COPY copybook — search for copybook files
             search_dirs = [
                 base,
@@ -490,7 +490,7 @@ class CobolImportResolver(ImportResolver):
                     if candidate.exists():
                         return ResolvedImport(ref=ref, resolved_path=candidate)
 
-        elif ref.kind == "require":
+        elif ref.kind == ImportKind.REQUIRE:
             # CALL program — search for program source files
             search_dirs = [base, project_root, project_root / "src"]
             for search_dir in search_dirs:
