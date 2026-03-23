@@ -5,6 +5,14 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from interpreter.instructions import (
+    to_typed,
+    Const,
+    LoadVar,
+    DeclVar,
+    StoreVar,
+    Symbolic,
+)
 from interpreter.ir import IRInstruction
 from interpreter.vm.vm import (
     VMState,
@@ -26,6 +34,8 @@ logger = logging.getLogger(__name__)
 
 
 def _handle_const(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
+    t = to_typed(inst)
+    assert isinstance(t, Const)
     func_symbol_table = ctx.func_symbol_table
     class_symbol_table = ctx.class_symbol_table
     raw = inst.operands[0] if inst.operands else "None"
@@ -71,14 +81,16 @@ def _handle_const(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult
 
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: typed_from_runtime(val)},
-            reasoning=f"const {raw!r} → {inst.result_reg}",
+            register_writes={t.result_reg: typed_from_runtime(val)},
+            reasoning=f"const {raw!r} → {t.result_reg}",
         )
     )
 
 
 def _handle_load_var(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    name = inst.operands[0]
+    t = to_typed(inst)
+    assert isinstance(t, LoadVar)
+    name = t.name
     # Alias-aware: if variable is backed by a heap object, read from heap
     for f in reversed(vm.call_stack):
         alias_ptr = f.var_heap_aliases.get(name)
@@ -86,7 +98,7 @@ def _handle_load_var(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionRes
             tv = vm.heap[alias_ptr.base].fields.get(str(alias_ptr.offset))
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: tv},
+                    register_writes={t.result_reg: tv},
                     reasoning=f"load {name} = {tv!r} (via heap alias {alias_ptr.base})",
                 )
             )
@@ -94,8 +106,8 @@ def _handle_load_var(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionRes
             stored = f.local_vars[name]
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: stored},
-                    reasoning=f"load {name} = {stored.value!r} → {inst.result_reg}",
+                    register_writes={t.result_reg: stored},
+                    reasoning=f"load {name} = {stored.value!r} → {t.result_reg}",
                 )
             )
     # Variable not found — try field fallback strategy
@@ -103,7 +115,7 @@ def _handle_load_var(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionRes
     if this_field is not None:
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: this_field},
+                register_writes={t.result_reg: this_field},
                 reasoning=f"load {name} = {this_field.value!r} (via implicit this.{name})",
             )
         )
@@ -111,7 +123,7 @@ def _handle_load_var(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionRes
     sym = vm.fresh_symbolic(hint=name)
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+            register_writes={t.result_reg: typed(sym, UNKNOWN)},
             reasoning=f"load {name} (not found) → symbolic {sym.name}",
         )
     )
@@ -119,8 +131,10 @@ def _handle_load_var(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionRes
 
 def _handle_decl_var(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
     """DECL_VAR: always create/overwrite in the current frame (declaration)."""
-    name = inst.operands[0]
-    tv = _resolve_reg(vm, inst.operands[1])
+    t = to_typed(inst)
+    assert isinstance(t, DeclVar)
+    name = t.name
+    tv = _resolve_reg(vm, t.value_reg)
     return ExecutionResult.success(
         StateUpdate(
             var_writes={name: tv},
@@ -131,8 +145,10 @@ def _handle_decl_var(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionRes
 
 def _handle_store_var(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
     """STORE_VAR: assignment — walk scope chain to find existing variable."""
-    name = inst.operands[0]
-    tv = _resolve_reg(vm, inst.operands[1])
+    t = to_typed(inst)
+    assert isinstance(t, StoreVar)
+    name = t.name
+    tv = _resolve_reg(vm, t.value_reg)
     # Walk scope chain: if variable exists in a parent frame, update it there.
     for frame in reversed(vm.call_stack):
         if name in frame.local_vars:
@@ -160,7 +176,9 @@ def _handle_store_var(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionRe
 
 
 def _handle_symbolic(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    hint = inst.operands[0] if inst.operands else ""
+    t = to_typed(inst)
+    assert isinstance(t, Symbolic)
+    hint = t.hint
     frame = vm.current_frame
     # If this is a parameter and the value was pre-populated by a call,
     # use the concrete value instead of creating a symbolic.
@@ -170,14 +188,14 @@ def _handle_symbolic(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionRes
             stored = frame.local_vars[param_name]
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: stored},
+                    register_writes={t.result_reg: stored},
                     reasoning=f"param {param_name} = {stored.value!r} (bound by caller)",
                 )
             )
     sym = vm.fresh_symbolic(hint=hint)
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+            register_writes={t.result_reg: typed(sym, UNKNOWN)},
             reasoning=f"symbolic {sym.name} (hint={hint})",
         )
     )
