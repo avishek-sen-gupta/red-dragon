@@ -12,7 +12,7 @@ from interpreter.project.linker import (
     max_register_number,
 )
 from interpreter.constants import Language
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 
 # ── module_prefix ────────────────────────────────────────────────
 
@@ -108,5 +108,5 @@ class TestMaxRegisterNumber:
         assert max_register_number(ir) == 12
 
     def test_no_registers(self):
-        ir = (IRInstruction(opcode=Opcode.LABEL, label="entry"),)
+        ir = (IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),)
         assert max_register_number(ir) == -1

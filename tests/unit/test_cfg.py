@@ -10,7 +10,7 @@ from interpreter.cfg import (
     CFG,
     BasicBlock,
 )
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 
 
 def _make_instructions(*specs):
@@ -21,7 +21,7 @@ def _make_instructions(*specs):
 class TestCfgToMermaidBasic:
     def test_linear_cfg_has_flowchart_header(self):
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [42]}),
             (Opcode.STORE_VAR, {"operands": ["x", "t0"]}),
             (Opcode.RETURN, {"operands": ["t0"]}),
@@ -33,7 +33,7 @@ class TestCfgToMermaidBasic:
 
     def test_linear_cfg_contains_node_and_instructions(self):
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [42]}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
@@ -46,7 +46,7 @@ class TestCfgToMermaidBasic:
 
     def test_linear_cfg_has_entry_style(self):
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
         cfg = build_cfg(instructions)
@@ -56,9 +56,9 @@ class TestCfgToMermaidBasic:
 
     def test_fallthrough_edge(self):
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "block_a"}),
+            (Opcode.LABEL, {"label": CodeLabel("block_a")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
-            (Opcode.LABEL, {"label": "block_b"}),
+            (Opcode.LABEL, {"label": CodeLabel("block_b")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
         cfg = build_cfg(instructions)
@@ -70,12 +70,12 @@ class TestCfgToMermaidBasic:
 class TestCfgToMermaidBranch:
     def test_branch_if_produces_true_false_labels(self):
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [True]}),
-            (Opcode.BRANCH_IF, {"operands": ["t0"], "label": "then_block, else_block"}),
-            (Opcode.LABEL, {"label": "then_block"}),
+            (Opcode.BRANCH_IF, {"operands": ["t0"], "label": CodeLabel("then_block, else_block")}),
+            (Opcode.LABEL, {"label": CodeLabel("then_block")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
-            (Opcode.LABEL, {"label": "else_block"}),
+            (Opcode.LABEL, {"label": CodeLabel("else_block")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
         cfg = build_cfg(instructions)
@@ -88,9 +88,9 @@ class TestCfgToMermaidBranch:
 
     def test_unconditional_branch_has_no_label(self):
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
-            (Opcode.BRANCH, {"label": "target"}),
-            (Opcode.LABEL, {"label": "target"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
+            (Opcode.BRANCH, {"label": CodeLabel("target")}),
+            (Opcode.LABEL, {"label": CodeLabel("target")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
         cfg = build_cfg(instructions)
@@ -103,7 +103,7 @@ class TestCfgToMermaidBranch:
 class TestCfgToMermaidEscaping:
     def test_quotes_in_operands_are_escaped(self):
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": ['"hello"']}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
@@ -116,7 +116,7 @@ class TestCfgToMermaidEscaping:
 
     def test_angle_brackets_are_escaped_in_instructions(self):
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": ["<value>"]}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
@@ -132,12 +132,12 @@ class TestCfgToMermaidEscaping:
 class TestCfgToMermaidSubgraphs:
     def test_function_blocks_grouped_in_subgraph(self):
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
-            (Opcode.LABEL, {"label": "func_foo_0"}),
+            (Opcode.LABEL, {"label": CodeLabel("func_foo_0")}),
             (Opcode.CONST, {"result_reg": "t1", "operands": [2]}),
-            (Opcode.BRANCH, {"label": "end_foo_0"}),
-            (Opcode.LABEL, {"label": "end_foo_0"}),
+            (Opcode.BRANCH, {"label": CodeLabel("end_foo_0")}),
+            (Opcode.LABEL, {"label": CodeLabel("end_foo_0")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
         cfg = build_cfg(instructions)
@@ -154,11 +154,11 @@ class TestCfgToMermaidSubgraphs:
 
     def test_class_blocks_grouped_in_subgraph(self):
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
-            (Opcode.LABEL, {"label": "class_Bar_0"}),
+            (Opcode.LABEL, {"label": CodeLabel("class_Bar_0")}),
             (Opcode.CONST, {"result_reg": "t1", "operands": [1]}),
-            (Opcode.LABEL, {"label": "end_class_Bar_0"}),
+            (Opcode.LABEL, {"label": CodeLabel("end_class_Bar_0")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
         cfg = build_cfg(instructions)
@@ -168,11 +168,11 @@ class TestCfgToMermaidSubgraphs:
 
     def test_toplevel_blocks_outside_subgraph(self):
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
-            (Opcode.LABEL, {"label": "func_foo_0"}),
-            (Opcode.BRANCH, {"label": "end_foo_0"}),
-            (Opcode.LABEL, {"label": "end_foo_0"}),
+            (Opcode.LABEL, {"label": CodeLabel("func_foo_0")}),
+            (Opcode.BRANCH, {"label": CodeLabel("end_foo_0")}),
+            (Opcode.LABEL, {"label": CodeLabel("end_foo_0")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
         cfg = build_cfg(instructions)
@@ -189,12 +189,12 @@ class TestCfgToMermaidSubgraphs:
     def test_mismatched_counters_still_grouped(self):
         """func_foo_0 pairs with end_foo_1 (counters differ)."""
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
-            (Opcode.LABEL, {"label": "func_foo_0"}),
+            (Opcode.LABEL, {"label": CodeLabel("func_foo_0")}),
             (Opcode.CONST, {"result_reg": "t1", "operands": [2]}),
-            (Opcode.BRANCH, {"label": "end_foo_1"}),
-            (Opcode.LABEL, {"label": "end_foo_1"}),
+            (Opcode.BRANCH, {"label": CodeLabel("end_foo_1")}),
+            (Opcode.LABEL, {"label": CodeLabel("end_foo_1")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
         cfg = build_cfg(instructions)
@@ -211,7 +211,7 @@ class TestCfgToMermaidSubgraphs:
 
     def test_no_subgraph_when_no_functions(self):
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
         cfg = build_cfg(instructions)
@@ -224,9 +224,9 @@ class TestCfgToMermaidPruning:
     def test_unreachable_blocks_excluded(self):
         """Blocks with no path from entry should not appear in output."""
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
-            (Opcode.LABEL, {"label": "dead_block"}),
+            (Opcode.LABEL, {"label": CodeLabel("dead_block")}),
             (Opcode.CONST, {"result_reg": "t1", "operands": [99]}),
             (Opcode.RETURN, {"operands": ["t1"]}),
         )
@@ -239,9 +239,9 @@ class TestCfgToMermaidPruning:
     def test_reachable_blocks_retained(self):
         """All blocks reachable from entry should appear."""
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
-            (Opcode.BRANCH, {"label": "target"}),
-            (Opcode.LABEL, {"label": "target"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
+            (Opcode.BRANCH, {"label": CodeLabel("target")}),
+            (Opcode.LABEL, {"label": CodeLabel("target")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
         cfg = build_cfg(instructions)
@@ -263,9 +263,9 @@ def _node_def_lines(mermaid: str, node_id: str) -> list[str]:
 class TestCfgToMermaidShapes:
     def test_entry_block_uses_stadium_shape(self):
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
-            (Opcode.LABEL, {"label": "next"}),
+            (Opcode.LABEL, {"label": CodeLabel("next")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
         cfg = build_cfg(instructions)
@@ -278,12 +278,12 @@ class TestCfgToMermaidShapes:
     def test_branch_if_entry_block_still_uses_stadium_shape(self):
         """Entry block ending with BRANCH_IF still gets stadium (entry wins)."""
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [True]}),
-            (Opcode.BRANCH_IF, {"operands": ["t0"], "label": "yes, no"}),
-            (Opcode.LABEL, {"label": "yes"}),
+            (Opcode.BRANCH_IF, {"operands": ["t0"], "label": CodeLabel("yes, no")}),
+            (Opcode.LABEL, {"label": CodeLabel("yes")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
-            (Opcode.LABEL, {"label": "no"}),
+            (Opcode.LABEL, {"label": CodeLabel("no")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
         cfg = build_cfg(instructions)
@@ -295,13 +295,13 @@ class TestCfgToMermaidShapes:
 
     def test_non_entry_branch_if_uses_diamond(self):
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [True]}),
-            (Opcode.LABEL, {"label": "check"}),
-            (Opcode.BRANCH_IF, {"operands": ["t0"], "label": "yes, no"}),
-            (Opcode.LABEL, {"label": "yes"}),
+            (Opcode.LABEL, {"label": CodeLabel("check")}),
+            (Opcode.BRANCH_IF, {"operands": ["t0"], "label": CodeLabel("yes, no")}),
+            (Opcode.LABEL, {"label": CodeLabel("yes")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
-            (Opcode.LABEL, {"label": "no"}),
+            (Opcode.LABEL, {"label": CodeLabel("no")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
         cfg = build_cfg(instructions)
@@ -313,9 +313,9 @@ class TestCfgToMermaidShapes:
 
     def test_return_block_uses_stadium_shape(self):
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
-            (Opcode.LABEL, {"label": "exit"}),
+            (Opcode.LABEL, {"label": CodeLabel("exit")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
         cfg = build_cfg(instructions)
@@ -327,11 +327,11 @@ class TestCfgToMermaidShapes:
 
     def test_regular_block_uses_rectangle_shape(self):
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
-            (Opcode.LABEL, {"label": "middle"}),
+            (Opcode.LABEL, {"label": CodeLabel("middle")}),
             (Opcode.CONST, {"result_reg": "t1", "operands": [2]}),
-            (Opcode.LABEL, {"label": "end"}),
+            (Opcode.LABEL, {"label": CodeLabel("end")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
         cfg = build_cfg(instructions)
@@ -349,12 +349,12 @@ class TestCfgToMermaidCallEdges:
     def test_function_body_visible_as_root(self):
         """Function entry blocks are BFS roots and appear in output."""
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
-            (Opcode.BRANCH, {"label": "end_foo_0"}),
-            (Opcode.LABEL, {"label": "func_foo_0"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
+            (Opcode.BRANCH, {"label": CodeLabel("end_foo_0")}),
+            (Opcode.LABEL, {"label": CodeLabel("func_foo_0")}),
             (Opcode.CONST, {"result_reg": "t1", "operands": [42]}),
             (Opcode.RETURN, {"operands": ["t1"]}),
-            (Opcode.LABEL, {"label": "end_foo_0"}),
+            (Opcode.LABEL, {"label": CodeLabel("end_foo_0")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
         cfg = build_cfg(instructions)
@@ -366,11 +366,11 @@ class TestCfgToMermaidCallEdges:
     def test_uncalled_function_still_visible(self):
         """Functions with no callers still appear (they're roots)."""
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
-            (Opcode.BRANCH, {"label": "end_bar_0"}),
-            (Opcode.LABEL, {"label": "func_bar_0"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
+            (Opcode.BRANCH, {"label": CodeLabel("end_bar_0")}),
+            (Opcode.LABEL, {"label": CodeLabel("func_bar_0")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
-            (Opcode.LABEL, {"label": "end_bar_0"}),
+            (Opcode.LABEL, {"label": CodeLabel("end_bar_0")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
         cfg = build_cfg(instructions)
@@ -381,12 +381,12 @@ class TestCfgToMermaidCallEdges:
     def test_call_function_produces_dashed_edge(self):
         """CALL_FUNCTION emits a dashed edge to the function entry block."""
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CALL_FUNCTION, {"result_reg": "t1", "operands": ["foo", "t0"]}),
-            (Opcode.BRANCH, {"label": "end_foo_0"}),
-            (Opcode.LABEL, {"label": "func_foo_0"}),
+            (Opcode.BRANCH, {"label": CodeLabel("end_foo_0")}),
+            (Opcode.LABEL, {"label": CodeLabel("func_foo_0")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
-            (Opcode.LABEL, {"label": "end_foo_0"}),
+            (Opcode.LABEL, {"label": CodeLabel("end_foo_0")}),
             (Opcode.RETURN, {"operands": ["t1"]}),
         )
         cfg = build_cfg(instructions)
@@ -398,7 +398,7 @@ class TestCfgToMermaidCallEdges:
     def test_call_function_no_edge_for_unknown_target(self):
         """CALL_FUNCTION with no matching func_ label emits no dashed edge."""
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (
                 Opcode.CALL_FUNCTION,
                 {"result_reg": "t1", "operands": ["unknown_fn", "t0"]},
@@ -413,9 +413,9 @@ class TestCfgToMermaidCallEdges:
     def test_non_func_dead_block_still_pruned(self):
         """Non-function unreachable blocks remain pruned."""
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
-            (Opcode.LABEL, {"label": "dead_block"}),
+            (Opcode.LABEL, {"label": CodeLabel("dead_block")}),
             (Opcode.RETURN, {"operands": ["t1"]}),
         )
         cfg = build_cfg(instructions)
@@ -446,7 +446,7 @@ class TestCollapseInstLines:
     def test_render_node_collapses_in_mermaid(self):
         """Long block in Mermaid output shows collapsed instructions."""
         instructions = _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
             (Opcode.CONST, {"result_reg": "t1", "operands": [2]}),
             (Opcode.CONST, {"result_reg": "t2", "operands": [3]}),
@@ -466,17 +466,17 @@ class TestCollapseInstLines:
 class TestExtractFunctionInstructions:
     def _full_program_instructions(self):
         return _make_instructions(
-            (Opcode.LABEL, {"label": "entry"}),
+            (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [1]}),
-            (Opcode.BRANCH, {"label": "end_foo_1"}),
-            (Opcode.LABEL, {"label": "func_foo_0"}),
+            (Opcode.BRANCH, {"label": CodeLabel("end_foo_1")}),
+            (Opcode.LABEL, {"label": CodeLabel("func_foo_0")}),
             (Opcode.CONST, {"result_reg": "t1", "operands": [10]}),
             (Opcode.CONST, {"result_reg": "t2", "operands": [20]}),
             (Opcode.RETURN, {"operands": ["t2"]}),
-            (Opcode.LABEL, {"label": "end_foo_1"}),
-            (Opcode.LABEL, {"label": "func_bar_2"}),
+            (Opcode.LABEL, {"label": CodeLabel("end_foo_1")}),
+            (Opcode.LABEL, {"label": CodeLabel("func_bar_2")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
-            (Opcode.LABEL, {"label": "end_bar_3"}),
+            (Opcode.LABEL, {"label": CodeLabel("end_bar_3")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
         )
 

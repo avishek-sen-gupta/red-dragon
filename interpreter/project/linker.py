@@ -23,7 +23,7 @@ import re
 from pathlib import Path
 
 from interpreter.cfg import build_cfg
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
 from interpreter.project.types import ExportTable, LinkedProgram, ModuleUnit
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
@@ -97,14 +97,17 @@ def _transform_instruction(
 ) -> IRInstruction:
     """Namespace labels, rebase registers, namespace CONST func/class refs."""
     # ── Label ──
-    new_label = None
+    new_label: CodeLabel = NO_LABEL
     if inst.label.is_present():
         if inst.opcode in (Opcode.BRANCH, Opcode.BRANCH_IF):
-            new_label = _namespace_branch_targets(str(inst.label), prefix)
-        elif inst.opcode == Opcode.TRY_PUSH:
-            new_label = _namespace_branch_targets(str(inst.label), prefix)
+            # Comma-separated branch targets: namespace each one
+            new_label = CodeLabel(
+                ",".join(
+                    str(t.namespace(prefix)) for t in inst.label.branch_targets()
+                )
+            )
         else:
-            new_label = namespace_label(str(inst.label), prefix)
+            new_label = inst.label.namespace(prefix)
 
     # ── Result register ──
     new_result_reg = (
@@ -113,9 +116,14 @@ def _transform_instruction(
 
     # ── Operands ──
     if inst.opcode == Opcode.TRY_PUSH:
+        # operands = [catch_labels: list[CodeLabel], finally: CodeLabel, end: CodeLabel]
+        catch_list = inst.operands[0]
+        finally_lbl = inst.operands[1]
+        end_lbl = inst.operands[2]
         new_operands = [
-            _namespace_branch_targets(op, prefix) if isinstance(op, str) and op else op
-            for op in inst.operands
+            [cl.namespace(prefix) for cl in catch_list],
+            finally_lbl.namespace(prefix),
+            end_lbl.namespace(prefix),
         ]
     else:
         new_operands = []
@@ -285,7 +293,7 @@ def link_modules(
     ]
 
     # Build merged IR with a single entry label
-    all_ir: list[IRInstruction] = [IRInstruction(opcode=Opcode.LABEL, label="entry")]
+    all_ir: list[IRInstruction] = [IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry"))]
     reg_offset = 0
 
     for file_path in processing_order:

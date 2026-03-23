@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from interpreter.cfg import BasicBlock, CFG
 from interpreter.dataflow import Definition
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
 from interpreter.interprocedural.types import (
     CallContext,
     CallGraph,
@@ -24,7 +24,7 @@ from interpreter.interprocedural.types import (
 )
 
 
-def _make_inst(opcode: Opcode, result_reg=None, operands=None, label=None):
+def _make_inst(opcode: Opcode, result_reg=None, operands=None, label: CodeLabel = NO_LABEL):
     """Helper to build an IRInstruction concisely."""
     return IRInstruction(
         opcode=opcode,
@@ -40,44 +40,44 @@ def _make_cfg() -> CFG:
     inst1 = _make_inst(Opcode.STORE_VAR, operands=["x", "%0"])
     inst2 = _make_inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"])
     inst3 = _make_inst(Opcode.RETURN, operands=["%1"])
-    entry_block = BasicBlock(label="entry", instructions=[inst0, inst1])
-    exit_block = BasicBlock(label="exit", instructions=[inst2, inst3])
+    entry_block = BasicBlock(label=CodeLabel("entry"), instructions=[inst0, inst1])
+    exit_block = BasicBlock(label=CodeLabel("exit"), instructions=[inst2, inst3])
     return CFG(blocks={"entry": entry_block, "exit": exit_block}, entry="entry")
 
 
 class TestInstructionLocation:
     def test_construction_and_equality(self):
-        loc1 = InstructionLocation(block_label="entry", instruction_index=0)
-        loc2 = InstructionLocation(block_label="entry", instruction_index=0)
+        loc1 = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=0)
+        loc2 = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=0)
         assert loc1 == loc2
 
     def test_inequality(self):
-        loc1 = InstructionLocation(block_label="entry", instruction_index=0)
-        loc2 = InstructionLocation(block_label="entry", instruction_index=1)
+        loc1 = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=0)
+        loc2 = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=1)
         assert loc1 != loc2
 
     def test_hashable_in_set(self):
-        loc1 = InstructionLocation(block_label="entry", instruction_index=0)
-        loc2 = InstructionLocation(block_label="entry", instruction_index=0)
-        loc3 = InstructionLocation(block_label="exit", instruction_index=0)
+        loc1 = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=0)
+        loc2 = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=0)
+        loc3 = InstructionLocation(block_label=CodeLabel("exit"), instruction_index=0)
         s = {loc1, loc2, loc3}
         assert len(s) == 2
 
     def test_hashable_as_dict_key(self):
-        loc = InstructionLocation(block_label="entry", instruction_index=0)
+        loc = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=0)
         d = {loc: "value"}
         assert d[loc] == "value"
 
     def test_resolve_returns_correct_instruction(self):
         cfg = _make_cfg()
-        loc = InstructionLocation(block_label="entry", instruction_index=1)
+        loc = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=1)
         inst = loc.resolve(cfg)
         assert inst.opcode == Opcode.STORE_VAR
         assert inst.operands == ["x", "%0"]
 
     def test_resolve_different_block(self):
         cfg = _make_cfg()
-        loc = InstructionLocation(block_label="exit", instruction_index=1)
+        loc = InstructionLocation(block_label=CodeLabel("exit"), instruction_index=1)
         inst = loc.resolve(cfg)
         assert inst.opcode == Opcode.RETURN
 
@@ -94,25 +94,25 @@ class TestNoInstructionLocSentinel:
 
 class TestFunctionEntry:
     def test_construction_and_equality(self):
-        fe1 = FunctionEntry(label="func_a", params=("x", "y"))
-        fe2 = FunctionEntry(label="func_a", params=("x", "y"))
+        fe1 = FunctionEntry(label=CodeLabel("func_a"), params=("x", "y"))
+        fe2 = FunctionEntry(label=CodeLabel("func_a"), params=("x", "y"))
         assert fe1 == fe2
 
     def test_hashable_in_set(self):
-        fe1 = FunctionEntry(label="func_a", params=("x",))
-        fe2 = FunctionEntry(label="func_b", params=("y",))
+        fe1 = FunctionEntry(label=CodeLabel("func_a"), params=("x",))
+        fe2 = FunctionEntry(label=CodeLabel("func_b"), params=("y",))
         s = {fe1, fe2}
         assert len(s) == 2
 
     def test_entry_block_returns_correct_block(self):
         cfg = _make_cfg()
-        fe = FunctionEntry(label="entry", params=())
+        fe = FunctionEntry(label=CodeLabel("entry"), params=())
         block = fe.entry_block(cfg)
         assert block.label == "entry"
         assert len(block.instructions) == 2
 
     def test_hashable_as_dict_key(self):
-        fe = FunctionEntry(label="func_a", params=("x",))
+        fe = FunctionEntry(label=CodeLabel("func_a"), params=("x",))
         d = {fe: 42}
         assert d[fe] == 42
 
@@ -134,7 +134,7 @@ class TestFlowEndpoints:
     def test_variable_endpoint_with_real_definition(self):
         inst = _make_inst(Opcode.STORE_VAR, operands=["x", "%0"])
         defn = Definition(
-            variable="x", block_label="entry", instruction_index=2, instruction=inst
+            variable="x", block_label=CodeLabel("entry"), instruction_index=2, instruction=inst
         )
         ve = VariableEndpoint(name="x", definition=defn)
         assert ve.definition.variable == "x"
@@ -144,28 +144,28 @@ class TestFlowEndpoints:
 
     def test_field_endpoint_construction(self):
         base = VariableEndpoint(name="obj", definition=NO_DEFINITION)
-        loc = InstructionLocation(block_label="entry", instruction_index=0)
+        loc = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=0)
         fe = FieldEndpoint(base=base, field="name", location=loc)
         assert fe.base.name == "obj"
         assert fe.field == "name"
 
     def test_field_endpoint_hashable(self):
         base = VariableEndpoint(name="obj", definition=NO_DEFINITION)
-        loc = InstructionLocation(block_label="entry", instruction_index=0)
+        loc = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=0)
         fe1 = FieldEndpoint(base=base, field="name", location=loc)
         fe2 = FieldEndpoint(base=base, field="name", location=loc)
         s = {fe1, fe2}
         assert len(s) == 1
 
     def test_return_endpoint_construction(self):
-        func = FunctionEntry(label="func_a", params=("x",))
-        loc = InstructionLocation(block_label="exit", instruction_index=1)
+        func = FunctionEntry(label=CodeLabel("func_a"), params=("x",))
+        loc = InstructionLocation(block_label=CodeLabel("exit"), instruction_index=1)
         re = ReturnEndpoint(function=func, location=loc)
         assert re.function.label == "func_a"
 
     def test_return_endpoint_hashable(self):
-        func = FunctionEntry(label="func_a", params=("x",))
-        loc = InstructionLocation(block_label="exit", instruction_index=1)
+        func = FunctionEntry(label=CodeLabel("func_a"), params=("x",))
+        loc = InstructionLocation(block_label=CodeLabel("exit"), instruction_index=1)
         re1 = ReturnEndpoint(function=func, location=loc)
         re2 = ReturnEndpoint(function=func, location=loc)
         s = {re1, re2}
@@ -177,11 +177,11 @@ class TestFlowEndpoints:
         fe: FlowEndpoint = FieldEndpoint(
             base=VariableEndpoint(name="obj", definition=NO_DEFINITION),
             field="f",
-            location=InstructionLocation(block_label="b", instruction_index=0),
+            location=InstructionLocation(block_label=CodeLabel("b"), instruction_index=0),
         )
         re: FlowEndpoint = ReturnEndpoint(
-            function=FunctionEntry(label="fn", params=()),
-            location=InstructionLocation(block_label="b", instruction_index=1),
+            function=FunctionEntry(label=CodeLabel("fn"), params=()),
+            location=InstructionLocation(block_label=CodeLabel("b"), instruction_index=1),
         )
         assert isinstance(ve, VariableEndpoint)
         assert isinstance(fe, FieldEndpoint)
@@ -194,9 +194,9 @@ class TestFlowEndpoints:
 
 class TestCallSite:
     def test_construction_and_equality(self):
-        caller = FunctionEntry(label="main", params=())
-        callee = FunctionEntry(label="helper", params=("a",))
-        loc = InstructionLocation(block_label="entry", instruction_index=0)
+        caller = FunctionEntry(label=CodeLabel("main"), params=())
+        callee = FunctionEntry(label=CodeLabel("helper"), params=("a",))
+        loc = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=0)
         cs1 = CallSite(
             caller=caller,
             location=loc,
@@ -212,8 +212,8 @@ class TestCallSite:
         assert cs1 == cs2
 
     def test_hashable(self):
-        caller = FunctionEntry(label="main", params=())
-        loc = InstructionLocation(block_label="entry", instruction_index=0)
+        caller = FunctionEntry(label=CodeLabel("main"), params=())
+        loc = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=0)
         cs = CallSite(
             caller=caller,
             location=loc,
@@ -225,8 +225,8 @@ class TestCallSite:
 
     def test_instruction_resolves(self):
         cfg = _make_cfg()
-        caller = FunctionEntry(label="entry", params=())
-        loc = InstructionLocation(block_label="entry", instruction_index=0)
+        caller = FunctionEntry(label=CodeLabel("entry"), params=())
+        loc = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=0)
         cs = CallSite(
             caller=caller,
             location=loc,
@@ -238,8 +238,8 @@ class TestCallSite:
 
     def test_block_resolves(self):
         cfg = _make_cfg()
-        caller = FunctionEntry(label="entry", params=())
-        loc = InstructionLocation(block_label="exit", instruction_index=0)
+        caller = FunctionEntry(label=CodeLabel("entry"), params=())
+        loc = InstructionLocation(block_label=CodeLabel("exit"), instruction_index=0)
         cs = CallSite(
             caller=caller,
             location=loc,
@@ -252,8 +252,8 @@ class TestCallSite:
 
 class TestCallContext:
     def test_construction_and_equality(self):
-        caller = FunctionEntry(label="main", params=())
-        loc = InstructionLocation(block_label="entry", instruction_index=0)
+        caller = FunctionEntry(label=CodeLabel("main"), params=())
+        loc = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=0)
         site = CallSite(
             caller=caller,
             location=loc,
@@ -270,8 +270,8 @@ class TestCallContext:
         assert ctx in s
 
     def test_root_context_is_distinct(self):
-        caller = FunctionEntry(label="main", params=())
-        loc = InstructionLocation(block_label="entry", instruction_index=0)
+        caller = FunctionEntry(label=CodeLabel("main"), params=())
+        loc = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=0)
         site = CallSite(
             caller=caller,
             location=loc,
@@ -284,12 +284,12 @@ class TestCallContext:
 
 class TestFunctionSummary:
     def test_construction(self):
-        func = FunctionEntry(label="f", params=("x",))
+        func = FunctionEntry(label=CodeLabel("f"), params=("x",))
         ctx = ROOT_CONTEXT
         src = VariableEndpoint(name="x", definition=NO_DEFINITION)
         sink = ReturnEndpoint(
             function=func,
-            location=InstructionLocation(block_label="f", instruction_index=2),
+            location=InstructionLocation(block_label=CodeLabel("f"), instruction_index=2),
         )
         summary = FunctionSummary(
             function=func,
@@ -300,7 +300,7 @@ class TestFunctionSummary:
         assert len(summary.flows) == 1
 
     def test_flows_is_frozenset(self):
-        func = FunctionEntry(label="f", params=())
+        func = FunctionEntry(label=CodeLabel("f"), params=())
         summary = FunctionSummary(
             function=func,
             context=ROOT_CONTEXT,
@@ -309,7 +309,7 @@ class TestFunctionSummary:
         assert isinstance(summary.flows, frozenset)
 
     def test_hashable(self):
-        func = FunctionEntry(label="f", params=())
+        func = FunctionEntry(label=CodeLabel("f"), params=())
         summary = FunctionSummary(
             function=func,
             context=ROOT_CONTEXT,
@@ -321,21 +321,21 @@ class TestFunctionSummary:
 
 class TestSummaryKey:
     def test_construction_and_equality(self):
-        func = FunctionEntry(label="f", params=())
+        func = FunctionEntry(label=CodeLabel("f"), params=())
         key1 = SummaryKey(function=func, context=ROOT_CONTEXT)
         key2 = SummaryKey(function=func, context=ROOT_CONTEXT)
         assert key1 == key2
 
     def test_usable_as_dict_key(self):
-        func = FunctionEntry(label="f", params=())
+        func = FunctionEntry(label=CodeLabel("f"), params=())
         key = SummaryKey(function=func, context=ROOT_CONTEXT)
         d = {key: "summary"}
         assert d[key] == "summary"
 
     def test_different_contexts_produce_different_keys(self):
-        func = FunctionEntry(label="f", params=())
-        caller = FunctionEntry(label="main", params=())
-        loc = InstructionLocation(block_label="entry", instruction_index=0)
+        func = FunctionEntry(label=CodeLabel("f"), params=())
+        caller = FunctionEntry(label=CodeLabel("main"), params=())
+        loc = InstructionLocation(block_label=CodeLabel("entry"), instruction_index=0)
         site = CallSite(
             caller=caller,
             location=loc,
@@ -351,9 +351,9 @@ class TestSummaryKey:
 
 class TestCallGraph:
     def test_construction(self):
-        f1 = FunctionEntry(label="f1", params=())
-        f2 = FunctionEntry(label="f2", params=("x",))
-        loc = InstructionLocation(block_label="f1", instruction_index=0)
+        f1 = FunctionEntry(label=CodeLabel("f1"), params=())
+        f2 = FunctionEntry(label=CodeLabel("f2"), params=("x",))
+        loc = InstructionLocation(block_label=CodeLabel("f1"), instruction_index=0)
         site = CallSite(
             caller=f1,
             location=loc,
@@ -388,7 +388,7 @@ class TestInterproceduralResult:
         assert result.raw_program_graph == {}
 
     def test_with_populated_summaries(self):
-        func = FunctionEntry(label="f", params=("x",))
+        func = FunctionEntry(label=CodeLabel("f"), params=("x",))
         cg = CallGraph(functions=frozenset({func}), call_sites=frozenset())
         key = SummaryKey(function=func, context=ROOT_CONTEXT)
         summary = FunctionSummary(
