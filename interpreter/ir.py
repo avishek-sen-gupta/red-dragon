@@ -173,12 +173,9 @@ class CodeLabel:
         """Return a new CodeLabel with a module namespace prefix."""
         return CodeLabel(f"{prefix}.{self.value}")
 
-    def branch_targets(self) -> list[CodeLabel]:
-        """Parse comma-separated branch targets (BRANCH_IF, TRY_PUSH).
-
-        Temporary — see red-dragon-z4h3 for proper structured targets.
-        """
-        return [CodeLabel(t.strip()) for t in self.value.split(",")]
+    def with_suffix(self, suffix: str) -> CodeLabel:
+        """Return a new CodeLabel with a suffix appended."""
+        return CodeLabel(self.value + suffix)
 
     def __str__(self) -> str:
         return self.value
@@ -230,6 +227,9 @@ class NoCodeLabel(CodeLabel):
     def namespace(self, prefix: str) -> CodeLabel:
         return self
 
+    def with_suffix(self, suffix: str) -> CodeLabel:
+        return self
+
 
 NO_LABEL = NoCodeLabel()
 
@@ -239,6 +239,7 @@ class IRInstruction(BaseModel):
     result_reg: str | None = None
     operands: list[Any] = []
     label: CodeLabel = NO_LABEL
+    branch_targets: list[CodeLabel] = []
     source_location: SourceLocation = NO_SOURCE_LOCATION
 
     def __str__(self) -> str:
@@ -251,7 +252,9 @@ class IRInstruction(BaseModel):
             parts.append(self.opcode.value.lower())
             for op in self.operands:
                 parts.append(str(op))
-            if self.label.is_present() and self.opcode != Opcode.LABEL:
+            if self.branch_targets:
+                parts.append(",".join(str(t) for t in self.branch_targets))
+            elif self.label.is_present() and self.opcode != Opcode.LABEL:
                 parts.append(str(self.label))
             base = " ".join(parts)
         if not self.source_location.is_unknown():

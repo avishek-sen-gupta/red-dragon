@@ -80,14 +80,14 @@ def lower_pascal_if(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{true_label},{false_label}"),
+            branch_targets=[true_label, false_label],
             node=node,
         )
     else:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{true_label},{end_label}"),
+            branch_targets=[true_label, end_label],
             node=node,
         )
 
@@ -127,7 +127,7 @@ def lower_pascal_while(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=CodeLabel(f"{body_label},{end_label}"),
+        branch_targets=[body_label, end_label],
         node=node,
     )
 
@@ -200,7 +200,7 @@ def lower_pascal_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=CodeLabel(f"{body_label},{end_label}"),
+        branch_targets=[body_label, end_label],
         node=node,
     )
 
@@ -313,7 +313,7 @@ def _lower_pascal_case_branch(
             ctx.emit(
                 Opcode.BRANCH_IF,
                 operands=[cmp_reg],
-                label=CodeLabel(f"{true_label},{next_label}"),
+                branch_targets=[true_label, next_label],
                 node=case_node,
             )
 
@@ -352,7 +352,7 @@ def lower_pascal_repeat(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=CodeLabel(f"{end_label},{body_label}"),
+        branch_targets=[end_label, body_label],
         node=node,
     )
     ctx.emit(Opcode.LABEL, label=end_label)
@@ -538,7 +538,7 @@ def lower_pascal_foreach(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=CodeLabel(f"{body_label},{end_label}"),
+        branch_targets=[body_label, end_label],
         node=node,
     )
 

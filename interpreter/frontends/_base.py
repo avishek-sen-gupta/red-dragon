@@ -134,6 +134,7 @@ class BaseFrontend(Frontend):
         result_reg: str = "",
         operands: list[Any] = [],
         label: CodeLabel = NO_LABEL,
+        branch_targets: list[CodeLabel] = [],
         source_location: SourceLocation = NO_SOURCE_LOCATION,
         node=None,
     ) -> IRInstruction:
@@ -147,6 +148,7 @@ class BaseFrontend(Frontend):
             result_reg=result_reg or None,
             operands=operands or [],
             label=label,
+            branch_targets=branch_targets,
             source_location=loc,
         )
         self._instructions.append(inst)
@@ -729,14 +731,14 @@ class BaseFrontend(Frontend):
             self._emit(
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
-                label=CodeLabel(f"{true_label},{false_label}"),
+                branch_targets=[true_label, false_label],
                 node=node,
             )
         else:
             self._emit(
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
-                label=CodeLabel(f"{true_label},{end_label}"),
+                branch_targets=[true_label, end_label],
                 node=node,
             )
 
@@ -784,7 +786,7 @@ class BaseFrontend(Frontend):
         self._emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{true_label},{false_label}"),
+            branch_targets=[true_label, false_label],
             node=node,
         )
 
@@ -856,7 +858,7 @@ class BaseFrontend(Frontend):
         self._emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{body_label},{end_label}"),
+            branch_targets=[body_label, end_label],
             node=node,
         )
 
@@ -888,7 +890,7 @@ class BaseFrontend(Frontend):
             self._emit(
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
-                label=CodeLabel(f"{body_label},{end_label}"),
+                branch_targets=[body_label, end_label],
                 node=node,
             )
         else:

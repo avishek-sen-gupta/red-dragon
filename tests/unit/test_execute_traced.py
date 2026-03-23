@@ -163,7 +163,7 @@ class TestExecuteCfgTracedBasic:
             (Opcode.CONST, {"result_reg": "%0", "operands": [True]}),
             (
                 Opcode.BRANCH_IF,
-                {"operands": ["%0"], "label": CodeLabel("then_block, else_block")},
+                {"operands": ["%0"], "branch_targets": [CodeLabel("then_block"), CodeLabel("else_block")]},
             ),
             (Opcode.LABEL, {"label": CodeLabel("then_block")}),
             (Opcode.CONST, {"result_reg": "%1", "operands": [10]}),

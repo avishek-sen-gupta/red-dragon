@@ -173,6 +173,7 @@ class TreeSitterEmitContext:
         result_reg: str = "",
         operands: list[Any] = [],
         label: CodeLabel = NO_LABEL,
+        branch_targets: list[CodeLabel] = [],
         source_location: SourceLocation = NO_SOURCE_LOCATION,
         node=None,
     ) -> IRInstruction:
@@ -187,6 +188,7 @@ class TreeSitterEmitContext:
             result_reg=result_reg or None,
             operands=resolved_operands,
             label=label,
+            branch_targets=branch_targets,
             source_location=loc,
         )
         self._track_label(opcode, label)

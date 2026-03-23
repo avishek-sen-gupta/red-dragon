@@ -101,12 +101,14 @@ class EmitContext:
         result_reg: str = "",
         operands: list[Any] = [],
         label: CodeLabel = NO_LABEL,
+        branch_targets: list[CodeLabel] = [],
     ) -> None:
         inst = IRInstruction(
             opcode=opcode,
             result_reg=result_reg or None,
             operands=operands,
             label=label,
+            branch_targets=branch_targets,
         )
         self._instructions.append(inst)
 
