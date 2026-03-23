@@ -424,11 +424,11 @@ def _infer_label(
     if not inst.label.is_present():
         return
     if inst.label.is_function():
-        ctx.current_func_label = inst.label.value
-        ctx.func_param_types.setdefault(inst.label.value, [])
+        ctx.current_func_label = str(inst.label)
+        ctx.func_param_types.setdefault(str(inst.label), [])
         # func_return_types are pre-seeded by the builder; no inst.type_hint read
     elif (
-        inst.label.value.startswith(constants.CLASS_LABEL_PREFIX)
+        inst.label.starts_with(constants.CLASS_LABEL_PREFIX)
         and not inst.label.is_end_class()
     ):
         ctx.current_class_name = scalar(

@@ -6,7 +6,7 @@ import json
 from abc import ABC, abstractmethod
 from typing import Any
 
-from interpreter.ir import IRInstruction
+from interpreter.ir import IRInstruction, CodeLabel
 from interpreter.llm.llm_client import LLMClient, get_llm_client
 from interpreter.vm.vm import VMState, StateUpdate, _resolve_reg, _serialize_value
 
@@ -127,6 +127,9 @@ Respond with ONLY valid JSON. No markdown fences. No text outside the JSON objec
             text = text.rsplit("\n", 1)[0]
         text = text.strip()
         data = json.loads(text)
+        # Coerce string next_label to CodeLabel at the JSON boundary
+        if "next_label" in data and isinstance(data["next_label"], str):
+            data["next_label"] = CodeLabel(data["next_label"])
         return StateUpdate(**data)
 
 

@@ -232,7 +232,7 @@ class IRRenumberer:
         if opcode == Opcode.BRANCH_IF:
             parts = [part.strip() + suffix for part in label.branch_targets()]
             return ",".join(parts)
-        return label.value + suffix
+        return str(label) + suffix
 
     def _extract_reg_number(self, value: Any) -> int:
         if not isinstance(value, str):

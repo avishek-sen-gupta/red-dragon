@@ -70,7 +70,7 @@ class M {
         instructions = _parse_java(source)
         branches = _find_all(instructions, Opcode.BRANCH)
         assert any(
-            "switch_end" in inst.label.value for inst in branches
+            inst.label.contains("switch_end") for inst in branches
         ), "yield should branch to switch_end"
 
     def test_yield_with_expression(self):

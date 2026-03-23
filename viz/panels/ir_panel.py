@@ -53,7 +53,7 @@ class IRPanel(Static):
             is_current_block = label == current_block
             header_style = "bold cyan" if is_current_block else "dim cyan"
             text.append(f"  {label}:", style=header_style)
-            succs = ", ".join(block.successors)
+            succs = ", ".join(str(s) for s in block.successors)
             if succs:
                 text.append(f"  → {succs}", style="dim")
             text.append("\n")

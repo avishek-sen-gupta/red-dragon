@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from interpreter.ir import IRInstruction
+from interpreter.ir import IRInstruction, CodeLabel
 from interpreter.vm.vm import (
     VMState,
     HeapObject,
@@ -99,7 +99,7 @@ def _try_class_constructor_call(
     vm: VMState,
     cfg: CFG,
     registry: FunctionRegistry,
-    current_label: str,
+    current_label: CodeLabel,
     overload_resolver: OverloadResolver = NullOverloadResolver(),
     type_env: TypeEnvironment = None,
     type_hint_source: str = "",
@@ -174,7 +174,7 @@ def _try_class_constructor_call(
                 return_label=current_label,
                 is_ctor=True,
             ),
-            next_label=init_label,
+            next_label=CodeLabel(init_label),
             reasoning=(
                 f"new {class_name}"
                 f"({', '.join(repr(a.value) for a in args)}) → {addr},"
@@ -192,7 +192,7 @@ def _try_user_function_call(
     vm: VMState,
     cfg: CFG,
     registry: FunctionRegistry,
-    current_label: str,
+    current_label: CodeLabel,
 ) -> ExecutionResult:
     """Attempt to dispatch a call to a user-defined function."""
     if not isinstance(func_val, BoundFuncRef):
@@ -232,7 +232,7 @@ def _try_user_function_call(
                 closure_env_id=closure_env_id,
                 captured_var_names=captured_var_names,
             ),
-            next_label=flabel,
+            next_label=CodeLabel(flabel),
             reasoning=(
                 f"call {fname}"
                 f"({', '.join(repr(a.value) for a in args)}),"
@@ -533,7 +533,7 @@ def _handle_call_method(
                 function_name=f"{type_hint}.{method_name}",
                 return_label=ctx.current_label,
             ),
-            next_label=func_label,
+            next_label=CodeLabel(func_label),
             reasoning=(
                 f"call {type_hint}.{method_name}"
                 f"({', '.join(repr(a.value) for a in args)}),"
