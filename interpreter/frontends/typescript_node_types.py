@@ -65,11 +65,6 @@ class TypeScriptNodeType:
     IDENTIFIER = "identifier"
     STATEMENT_BLOCK = "statement_block"
 
-    # ── import forms ────────────────────────────────────────────
-    IMPORT_ALIAS = "import_alias"
-    IMPORT_REQUIRE_CLAUSE = "import_require_clause"
-    NESTED_IDENTIFIER = "nested_identifier"
-
     # ── comment / noise types ────────────────────────────────────
 
     COMMENT = "comment"
