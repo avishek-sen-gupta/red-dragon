@@ -21,7 +21,14 @@ from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends.base_node_types import BaseNodeType
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.symbol_table import SymbolTable
-from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation, CodeLabel, NO_LABEL
+from interpreter.ir import (
+    NO_SOURCE_LOCATION,
+    IRInstruction,
+    Opcode,
+    SourceLocation,
+    CodeLabel,
+    NO_LABEL,
+)
 from interpreter.register import Register, NO_REGISTER
 from interpreter.parser import ParserFactory
 from interpreter.refs.class_ref import ClassRef
@@ -147,7 +154,9 @@ class BaseFrontend(Frontend):
         inst = IRInstruction(
             opcode=opcode,
             result_reg=result_reg,
-            operands=[str(op) if isinstance(op, Register) else op for op in (operands or [])],
+            operands=[
+                str(op) if isinstance(op, Register) else op for op in (operands or [])
+            ],
             label=label,
             branch_targets=branch_targets,
             source_location=loc,
@@ -1165,7 +1174,10 @@ class BaseFrontend(Frontend):
         if else_node:
             self._emit(Opcode.LABEL, label=else_label)
             self._lower_block(else_node)
-            self._emit(Opcode.BRANCH, label=finally_label if finally_label.is_present() else end_label)
+            self._emit(
+                Opcode.BRANCH,
+                label=finally_label if finally_label.is_present() else end_label,
+            )
 
         # ── finally clause ──
         if finally_node:
