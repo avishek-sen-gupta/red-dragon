@@ -33,6 +33,7 @@ class PascalNodeType:
     ROOT = "root"
     PROGRAM = "program"
     BLOCK = "block"
+    BLOCK_TR = "blockTr"
     STATEMENT = "statement"
     STATEMENTS = "statements"
     ASSIGNMENT = "assignment"
