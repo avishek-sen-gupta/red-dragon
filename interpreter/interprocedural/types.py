@@ -7,7 +7,7 @@ from typing import Union
 
 from interpreter.cfg_types import BasicBlock, CFG
 from interpreter.dataflow import Definition
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
 
 # ---------------------------------------------------------------------------
 # 1. InstructionLocation — hashable reference to an IR instruction
@@ -18,14 +18,14 @@ from interpreter.ir import IRInstruction, Opcode
 class InstructionLocation:
     """Hashable coordinate that resolves to an IRInstruction via CFG lookup."""
 
-    block_label: str
+    block_label: CodeLabel
     instruction_index: int
 
     def resolve(self, cfg: CFG) -> IRInstruction:
         return cfg.blocks[self.block_label].instructions[self.instruction_index]
 
 
-NO_INSTRUCTION_LOC = InstructionLocation(block_label="", instruction_index=-1)
+NO_INSTRUCTION_LOC = InstructionLocation(block_label=NO_LABEL, instruction_index=-1)
 
 
 # ---------------------------------------------------------------------------
@@ -37,7 +37,7 @@ NO_INSTRUCTION_LOC = InstructionLocation(block_label="", instruction_index=-1)
 class FunctionEntry:
     """A function known to the analysis, identified by its CFG entry label."""
 
-    label: str
+    label: CodeLabel
     params: tuple[str, ...]
 
     def entry_block(self, cfg: CFG) -> BasicBlock:
@@ -132,7 +132,7 @@ class CallContext:
 
 ROOT_CONTEXT = CallContext(
     site=CallSite(
-        caller=FunctionEntry(label="__root__", params=()),
+        caller=FunctionEntry(label=CodeLabel("__root__"), params=()),
         location=NO_INSTRUCTION_LOC,
         callees=frozenset(),
         arg_operands=(),

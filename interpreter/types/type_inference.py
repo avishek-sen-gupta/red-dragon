@@ -23,7 +23,7 @@ from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.types.function_kind import FunctionKind
 from interpreter.types.function_signature import FunctionSignature
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.type_expr import (
@@ -166,8 +166,8 @@ class _InferenceContext:
     class_method_signatures: dict[TypeExpr, dict[str, list[FunctionSignature]]] = field(
         default_factory=dict
     )
-    func_symbol_table: dict[str, FuncRef] = field(default_factory=dict)
-    class_symbol_table: dict[str, ClassRef] = field(default_factory=dict)
+    func_symbol_table: dict[CodeLabel, FuncRef] = field(default_factory=dict)
+    class_symbol_table: dict[CodeLabel, ClassRef] = field(default_factory=dict)
     _seeded_var_names: frozenset[str] = field(default_factory=frozenset)
 
     def store_var_type(self, name: str, type_expr: TypeExpr) -> None:
@@ -316,8 +316,8 @@ def infer_types(
     instructions: list[IRInstruction],
     type_resolver: TypeResolver,
     type_env_builder: TypeEnvironmentBuilder = TypeEnvironmentBuilder(),
-    func_symbol_table: dict[str, FuncRef] = {},
-    class_symbol_table: dict[str, ClassRef] = {},
+    func_symbol_table: dict[CodeLabel, FuncRef] = {},
+    class_symbol_table: dict[CodeLabel, ClassRef] = {},
 ) -> TypeEnvironment:
     """Walk *instructions* to fixpoint and return an immutable TypeEnvironment.
 
@@ -896,8 +896,8 @@ _DISPATCH: dict[Opcode, callable] = {
 
 def _infer_const_type(
     raw: str,
-    func_symbol_table: dict[str, FuncRef] = {},
-    class_symbol_table: dict[str, ClassRef] = {},
+    func_symbol_table: dict[CodeLabel, FuncRef] = {},
+    class_symbol_table: dict[CodeLabel, ClassRef] = {},
 ) -> TypeExpr:
     """Infer a canonical type from a CONST literal string."""
     if raw in (CanonicalLiteral.TRUE, CanonicalLiteral.FALSE):

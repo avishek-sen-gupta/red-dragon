@@ -37,7 +37,7 @@ def _inst(opcode: Opcode, result_reg=None, operands=None, label: CodeLabel = NO_
 
 
 def _make_function(label: str, params: tuple[str, ...] = ()) -> FunctionEntry:
-    return FunctionEntry(label=label, params=params)
+    return FunctionEntry(label=CodeLabel(label), params=params)
 
 
 def _make_call_site(
