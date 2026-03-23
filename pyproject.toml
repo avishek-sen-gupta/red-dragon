@@ -41,6 +41,7 @@ import-linter = "^2.0"
 grimp = "^3.0"
 pydeps = "^1.12"
 textual = "^8.1.0"
+pyright = "^1.1.408"
 
 [tool.radon]
 exclude = "tests/*"
