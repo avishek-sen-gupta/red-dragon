@@ -1,6 +1,6 @@
 # Linker & Multi-File Project Execution Design
 
-**Date:** 2026-03-22  
+**Date:** 2026-03-22 (revised 2026-03-23)  
 **Status:** Implemented  
 **Code:** `interpreter/project/`
 
@@ -8,97 +8,66 @@
 
 ## 1. Overview
 
-RedDragon's multi-file project support extends the single-file pipeline to real-world codebases where source spans multiple files connected by import/include/require/use relationships. The system compiles each file independently, then a **linker** merges them into a single program that the existing VM and analysis infrastructure consume without modification.
+RedDragon's multi-file project support extends the single-file pipeline to real-world codebases. Given an entry file, it recursively discovers imports, compiles each file independently, then a **linker** merges them into a single IR stream that looks exactly like what the single-file pipeline would produce if all source files were concatenated in dependency order.
 
-The design follows a principle of **zero downstream changes** — the linker produces the same data structures (`CFG`, `FunctionRegistry`, `list[IRInstruction]`) that the single-file pipeline produces. Everything downstream (`execute_cfg()`, `analyze_interprocedural()`, the TUI, the MCP server) works unmodified.
+**Design principle:** The linker's output is indistinguishable from single-file compilation. The VM, CFG builder, registry, and interprocedural analysis run completely unmodified.
+
+**Supported:** All 15 tree-sitter frontends + COBOL (16 languages total).
 
 ---
 
-## 2. End-to-End Pipeline
+## 2. Pipeline
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        compile_project()                               │
-│                                                                        │
-│   ┌─────────────┐    ┌──────────────┐    ┌──────────────┐             │
-│   │ Phase 1      │    │ Phase 2       │    │ Phase 3       │            │
-│   │ Import       │───▶│ Topological   │───▶│ Per-Module    │            │
-│   │ Discovery    │    │ Sort          │    │ Compilation   │            │
-│   │ (BFS)        │    │ (Kahn's)      │    │               │            │
-│   └─────────────┘    └──────────────┘    └──────┬───────┘            │
-│                                                   │                    │
-│                                          list[ModuleUnit]              │
-│                                                   │                    │
-│                                           ┌───────▼───────┐           │
-│                                           │ Phase 4        │           │
-│                                           │ Linking         │           │
-│                                           │                 │           │
-│                                           │ ┌─────────────┐│           │
-│                                           │ │ Namespace    ││           │
-│                                           │ │ labels       ││           │
-│                                           │ ├─────────────┤│           │
-│                                           │ │ Rebase       ││           │
-│                                           │ │ registers    ││           │
-│                                           │ ├─────────────┤│           │
-│                                           │ │ Rewrite      ││           │
-│                                           │ │ cross-module ││           │
-│                                           │ │ references   ││           │
-│                                           │ ├─────────────┤│           │
-│                                           │ │ Merge IR +   ││           │
-│                                           │ │ build CFG +  ││           │
-│                                           │ │ registry     ││           │
-│                                           │ └─────────────┘│           │
-│                                           └───────┬───────┘           │
-│                                                   │                    │
-│                                           LinkedProgram                │
-└───────────────────────────────────────────────┬─────────────────────────┘
-                                                │
-                          ┌─────────────────────┼─────────────────────┐
-                          │                     │                     │
-                    execute_cfg()    analyze_interprocedural()    MCP/API
-                    (no changes)        (no changes)           (no changes)
+Entry file
+    │
+    ▼
+Phase 1: Import Discovery (BFS)
+    │  extract_imports() per file — tree-sitter AST or regex (COBOL)
+    │  ImportResolver maps ImportRef → file path
+    ▼
+Dependency graph + topological sort
+    │
+    ▼
+Phase 2: Per-Module Compilation
+    │  frontend.lower() → IR (unchanged single-file pipeline)
+    │  build_export_table() → ExportTable
+    ▼
+list[ModuleUnit]
+    │
+    ▼
+Phase 3: Linking
+    │  Strip per-module entry: labels
+    │  Namespace all labels + rebase registers
+    │  Drop resolved import stubs
+    │  Concatenate: deps first, entry module last
+    │  Prepend single entry: label
+    │  build_cfg() + build_registry()
+    ▼
+LinkedProgram
+    │
+    ├──► execute_cfg()              (no changes)
+    └──► analyze_interprocedural()  (no changes)
 ```
 
 ### Entry points
 
 | Function | Module | Purpose |
 |----------|--------|---------|
-| `compile_project(entry_file, language, project_root?)` | `compiler.py` | Full pipeline orchestrator |
-| `analyze_project(entry_file, language, project_root?)` | `api.py` | Compile + interprocedural analysis |
-| `run_project(entry_file, language, project_root?, max_steps?)` | `api.py` | Compile + VM execution |
+| `compile_project(entry_file, language, project_root?)` | `compiler.py` | Full pipeline: discover → compile → link |
+| `analyze_project(entry_file, language, project_root?)` | `api.py` | compile_project + interprocedural analysis |
+| `run_project(entry_file, language, project_root?, ...)` | `api.py` | compile_project + VM execution |
 | `handle_load_project(entry_file, language)` | `mcp_server/tools.py` | MCP tool wrapper |
 
 ---
 
 ## 3. Phase 1: Import Discovery
 
-**Module:** `interpreter/project/imports.py`  
-**Input:** entry file path + language  
-**Output:** per-file list of `ImportRef` objects
+**Module:** `interpreter/project/imports.py`
 
-### 3.1 How it works
+### 3.1 ImportRef
 
-Import discovery uses tree-sitter to parse each file and walk its top-level AST nodes, extracting import statements into uniform `ImportRef` objects. This is intentionally separate from the full `lower()` pipeline — it only walks the root's children, never emits IR, and is much cheaper.
-
-A BFS starting from the entry file drives recursive discovery:
-
-```python
-queue = [entry_file]
-while queue:
-    file = queue.pop(0)
-    if already_discovered(file):
-        continue
-    refs = extract_imports(file.read_bytes(), file, language)
-    for ref in refs:
-        resolved = resolver.resolve(ref, project_root)
-        if resolved.resolved_path is not None:
-            import_graph[file].append(resolved.resolved_path)
-            queue.append(resolved.resolved_path)
-```
-
-### 3.2 ImportRef — the universal import representation
-
-Every language's import syntax is normalized into the same `ImportRef` dataclass:
+Every language's import syntax is normalized into the same frozen dataclass:
 
 ```python
 @dataclass(frozen=True)
@@ -108,458 +77,280 @@ class ImportRef:
     names: tuple[str, ...]   # ("join",), ("*",), or () for module-level
     is_relative: bool        # ./path, from . import, crate::
     relative_level: int      # from .. is 2, from . is 1
-    is_system: bool          # stdlib/third-party (skip resolution)
+    is_system: bool          # stdlib/third-party
     kind: str                # "import"|"include"|"use"|"require"|"mod"|"using"
     alias: str | None        # import X as Y
 ```
 
-### 3.3 Per-language import node mapping
+### 3.2 Per-language extraction
 
-Each language registers an extractor function that handles its tree-sitter AST node types:
+| Language | AST Node Types | Kind | Notes |
+|----------|---------------|------|-------|
+| Python | `import_statement`, `import_from_statement` | `import` | Relative imports, aliases, wildcards |
+| JS/TS | `import_statement`, `call_expression[require]` | `import`, `require` | ESM + CJS |
+| Java | `import_declaration` | `import` | Static, wildcard |
+| Go | `import_declaration` → `import_spec` | `import` | Grouped, aliased |
+| Rust | `use_declaration`, `mod_item` | `use`, `mod` | Scoped, lists |
+| C/C++ | `preproc_include` | `include` | System vs local by AST node type |
+| C# | `using_directive` | `using` | Static, alias |
+| Kotlin | `import_list` → `import_header` | `import` | |
+| Scala | `import_declaration` | `import` | Namespace selectors, wildcard |
+| Ruby | `call[require/require_relative]` | `require` | |
+| PHP | `namespace_use_declaration`, `require_*` | `use`, `require` | |
+| Lua | `function_call[require]` | `require` | |
+| Pascal | `declUses` → `moduleName` | `using` | |
+| COBOL | regex: `COPY name`, `CALL 'name'` | `include`, `require` | No tree-sitter |
 
-| Language | AST Node Types | Import Kind |
-|----------|---------------|-------------|
-| Python | `import_statement`, `import_from_statement` | `import` |
-| JavaScript/TypeScript | `import_statement`, `call_expression[require]` | `import`, `require` |
-| Java | `import_declaration` | `import` |
-| Go | `import_declaration` → `import_spec` | `import` |
-| Rust | `use_declaration`, `mod_item` | `use`, `mod` |
-| C/C++ | `preproc_include` | `include` |
-| C# | `using_directive` | `using` |
-| Kotlin | `import_list` → `import_header` | `import` |
-| Scala | `import_declaration` | `import` |
-| Ruby | `call[require/require_relative]` | `require` |
-| PHP | `namespace_use_declaration`, `require_*_expression` | `use`, `require` |
-| Lua | `function_call[require]` | `require` |
-| Pascal | `declUses` → `moduleName` | `using` |
-| COBOL | regex: `COPY name`, `CALL 'name'` | `include`, `require` |
+### 3.3 Import resolution
 
-Note: COBOL uses the ProLeap Java bridge instead of tree-sitter, so import extraction uses regex patterns directly on the source text rather than AST walking.
+**Module:** `interpreter/project/resolver.py`
 
-### 3.4 System import detection
+Each language has an `ImportResolver` that maps `ImportRef → file path`:
 
-Each language has heuristics to classify imports as system/third-party (skipped during resolution):
+| Resolver | Languages | Strategy |
+|----------|-----------|----------|
+| `PythonImportResolver` | Python | `mod.path` → `mod/path.py` or `mod/path/__init__.py` |
+| `JavaScriptImportResolver` | JS, TS | Extension probing (`.js/.ts/.jsx/.tsx`) + `index.*` |
+| `JavaImportResolver` | Java | Package path + source root probing |
+| `GoImportResolver` | Go | Relative paths → directories with `.go` files |
+| `RustImportResolver` | Rust | `crate::`/`self::`/`super::` + `.rs`/`mod.rs` |
+| `CIncludeResolver` | C, C++ | Source dir → project root → `include/` |
+| `CSharpImportResolver` | C# | Dotted name → `.cs` file |
+| `JvmImportResolver` | Kotlin, Scala | Package path + `.kt`/`.scala`/`.java` |
+| `RubyImportResolver` | Ruby | `lib/` dir probing + `.rb` extension |
+| `PhpImportResolver` | PHP | `use` namespace → dir, `require` → direct path |
+| `LuaImportResolver` | Lua | Dot-to-slash conversion + `.lua` extension |
+| `PascalImportResolver` | Pascal | `name.pas` in source dir or project root |
+| `CobolImportResolver` | COBOL | `.cpy`/`.cbl` in source dir, project root, `copylib/` |
 
-| Language | System Heuristic |
-|----------|-----------------|
-| Python | Not relative, file doesn't exist locally |
-| JS/TS | Path doesn't start with `.` or `/` |
-| Java | Starts with `java.`, `javax.`, `sun.`, `com.sun.` |
-| Go | No dots in path (`"fmt"`, `"os"`) |
-| Rust | Starts with `std::`, `core::`, `alloc::` |
-| C/C++ | Angle-bracket includes (`<stdio.h>`) — detected by AST node type `system_lib_string` |
-| C# | Starts with `System`, `Microsoft` |
-| Kotlin | Starts with `java.`, `javax.`, `kotlin.`, `kotlinx.` |
-| Scala | Starts with `scala.`, `java.`, `javax.` |
-| Ruby | No `.` or `/` in path |
-| Pascal | Known unit names: `SysUtils`, `Classes`, `System`, etc. |
-| COBOL | Not applicable — all COPY/CALL are resolved if files exist locally |
+System imports (stdlib, npm packages, etc.) are skipped — the resolver returns `resolved_path=None` and the file is not compiled.
+
+### 3.4 Dependency graph
+
+BFS from the entry file discovers all reachable files. **Kahn's algorithm** produces a topological sort (dependencies before dependents). Cycles raise `CyclicImportError` with the full cycle path.
 
 ---
 
-## 4. Phase 2: Import Resolution
+## 4. Phase 2: Per-Module Compilation
 
-**Module:** `interpreter/project/resolver.py`  
-**Input:** `ImportRef` + project root  
-**Output:** `ResolvedImport` (file path or external marker)
+**Module:** `interpreter/project/compiler.py`
 
-### 4.1 Resolver protocol
-
-Each language provides an `ImportResolver` implementation:
+Each file is compiled independently using the existing single-file pipeline:
 
 ```python
-class ImportResolver(ABC):
-    @abstractmethod
-    def resolve(self, ref: ImportRef, project_root: Path) -> ResolvedImport: ...
-
-@dataclass(frozen=True)
-class ResolvedImport:
-    ref: ImportRef
-    resolved_path: Path | None   # None = unresolvable
-    is_external: bool = False    # True for system imports
-```
-
-### 4.2 Resolution strategies
-
-**Python** — `module.path` → `module/path.py` or `module/path/__init__.py`. Relative imports go up `relative_level - 1` directories from the source file.
-
-**JavaScript/TypeScript** — relative paths probed with extensions (`.js`, `.ts`, `.jsx`, `.tsx`, `.mjs`, `.cjs`) and `index.*` files. Bare specifiers (`react`, `express`) are classified as external.
-
-**Java** — `com.example.Utils` → `com/example/Utils.java`. Searches `project_root/`, `src/`, `src/main/java/`.
-
-**Go** — relative paths resolve to directories containing `.go` files. Stdlib and external module paths are external.
-
-**Rust** — `crate::utils` → `src/utils.rs` or `src/utils/mod.rs`. `mod helpers;` → `helpers.rs` or `helpers/mod.rs` relative to the source file.
-
-**C/C++** — `"header.h"` searched in: source directory, project root, `include/`, `src/`. System includes (`<stdio.h>`) are skipped by the extractor (marked `is_system` from the AST).
-
-**Kotlin/Scala** — JVM package convention: `com.example.Utils` → `com/example/Utils.kt` (or `.scala`, `.java`). Searches `src/`, `src/main/kotlin/`, `src/main/scala/`.
-
-### 4.3 Topological sort
-
-After resolution, the import graph is topologically sorted using **Kahn's algorithm** so that dependencies are compiled before the files that import them.
-
-The graph semantics: `graph[A] = [B, C]` means "A depends on B and C". The sort produces an order where B and C appear before A.
-
-**Cycle detection:** If the sort can't complete (remaining nodes have nonzero in-degree), a DFS finds the actual cycle and raises `CyclicImportError` with the full cycle path (e.g., `a.py → b.py → c.py → a.py`).
-
-### 4.4 Project root inference
-
-When no explicit project root is provided, the system walks up from the entry file's directory looking for marker files:
-
-```
-pyproject.toml, setup.py, setup.cfg          # Python
-package.json                                  # JS/TS
-pom.xml, build.gradle, build.gradle.kts      # Java/Kotlin
-go.mod                                        # Go
-Cargo.toml                                    # Rust
-Makefile, CMakeLists.txt                      # C/C++
-composer.json                                 # PHP
-.git                                          # universal fallback
-```
-
-Falls back to the entry file's directory if no marker is found.
-
----
-
-## 5. Phase 3: Per-Module Compilation
-
-**Module:** `interpreter/project/compiler.py`  
-**Input:** file path + language  
-**Output:** `ModuleUnit`
-
-### 5.1 compile_module()
-
-Per-module compilation is the existing single-file pipeline with one addition — export table extraction:
-
-```
-source bytes
-    │
-    ▼
 frontend = get_frontend(language)
-ir = frontend.lower(source)             # existing pipeline, unchanged
-    │
-    ▼
+ir = frontend.lower(source)
 exports = build_export_table(ir, func_symbol_table, class_symbol_table)
-imports = extract_imports(source, file, language)
-    │
-    ▼
-ModuleUnit(path, language, ir, exports, imports)
+→ ModuleUnit(path, language, ir, exports, imports)
 ```
 
-### 5.2 Why no per-module CFG?
+No CFG or registry is built per module. Only the raw IR (as an immutable tuple) and an export table.
 
-The `ModuleUnit` stores raw IR as an immutable tuple — no CFG, no registry. This is a deliberate design choice:
-
-1. **Label collisions** — two modules can both have `func_helper_0`. Building per-module CFGs and then merging them would require renaming labels inside CFG blocks, successor/predecessor lists, and registry entries — a fragile multi-site rewrite.
-
-2. **Registry merge complexity** — merging two `FunctionRegistry` objects with overlapping class names, method tables, and func_refs requires careful conflict resolution.
-
-3. **Wasted work** — per-module CFGs are never used independently. Only the merged CFG matters for execution and analysis.
-
-**Instead:** store raw IR per module. The linker namespaces the IR, concatenates it, and builds CFG + registry exactly once on the final merged IR. `build_cfg()` and `build_registry()` work completely unmodified.
-
-### 5.3 Export table construction
-
-The `ExportTable` catalogs what a module makes available to other modules:
+### ExportTable
 
 ```python
 @dataclass(frozen=True)
 class ExportTable:
-    functions: dict[str, str]    # name → IR label ("helper" → "func_helper_0")
-    classes: dict[str, str]      # name → IR label ("User" → "class_User_4")
+    functions: dict[str, str]    # name → label ("helper" → "func_helper_0")
+    classes: dict[str, str]      # name → label ("User" → "class_User_4")
     variables: dict[str, str]    # name → register ("PI" → "%0")
 ```
 
-**Sources:**
-- `functions` — from `func_symbol_table` (populated by the frontend during `lower()`)
-- `classes` — from `class_symbol_table` (populated by the frontend during `lower()`)
-- `variables` — from top-level `STORE_VAR`/`DECL_VAR` instructions at module scope (outside any function or class body)
-
-**Scope tracking:** A boolean `in_scope` flag starts `True` (module level), flips to `False` when entering a `func_*` or `class_*` label, and flips back to `True` at `end_*` labels. Only `STORE_VAR`/`DECL_VAR` instructions encountered while `in_scope` is `True` are exported. Function and class names are excluded from the variables dict to avoid duplication.
+Functions and classes come from the frontend's symbol tables. Variables come from top-level `STORE_VAR`/`DECL_VAR` instructions (outside function/class bodies).
 
 ---
 
-## 6. Phase 4: Linking
+## 5. Phase 3: Linking
 
-**Module:** `interpreter/project/linker.py`  
-**Input:** `dict[Path, ModuleUnit]`, import graph, entry module, project root, topological order  
-**Output:** `LinkedProgram`
+**Module:** `interpreter/project/linker.py`
 
-The linker is the core of the multi-file system. It transforms independently compiled modules into a single flat IR stream that looks exactly like what a single-file compilation would produce — just larger.
+The linker's job: produce a single IR stream that looks exactly like single-file compilation. The entire logic:
 
-### 6.1 Step 1: Compute namespace prefixes
+### 5.1 Strip per-module `entry:` labels
 
-Each module gets a unique prefix derived from its file path relative to the project root:
+Each module's IR starts with `LABEL entry`. The linker removes these — there's only one entry point in the merged program.
 
+### 5.2 Namespace labels + rebase registers
+
+Labels get a module prefix derived from the file path: `func_helper_0` → `utils.func_helper_0`. Registers get an integer offset to avoid collisions: module A uses `%0–%47`, module B starts at `%48`.
+
+`CONST` operands referencing function/class labels (`CONST "func_helper_0"`) are also namespaced. This is how the VM's `_handle_const` handler finds the label in the `func_symbol_table` and creates a `BoundFuncRef`.
+
+### 5.3 Drop resolved import stubs
+
+Python emits import statements as:
 ```
-/project/main.py          →  "main"
-/project/utils.py         →  "utils"
-/project/src/helpers.py   →  "src.helpers"
-/project/pkg/models/user.py → "pkg.models.user"
-```
-
-**Rules:**
-- Strip the project root prefix
-- Strip the file extension
-- Replace path separators (`/`, `\`) with `.`
-
-### 6.2 Step 2: Build import tables
-
-For each module, the linker builds a mapping from local imported names to their fully-namespaced labels in the target module.
-
-**Example:** `main.py` has `from utils import helper`, and `utils.py` exports `{"helper": "func_helper_0"}`:
-
-```
-import_table["main.py"] = {
-    "helper": "utils.func_helper_0"    # local name → namespaced label
-}
+%0 = CALL_FUNCTION "import" "from utils import helper"
+DECL_VAR helper %0
 ```
 
-**Wildcard imports** (`from utils import *`): every export name from the target module is added to the table.
+For names that a dependency module already provides (functions, classes, variables), this pair is dropped. The dependency module's top-level code runs first and sets those names in scope — exactly like single-file.
 
-**Aliased imports** (`import numpy as np`): the alias is used as the local name key.
+Other languages (JS, Java, Go, etc.) emit no import IR at all — their import statements are no-ops during lowering. Ruby/PHP/Lua emit `CALL_FUNCTION require/require_once` which produce harmless symbolic values that don't overwrite the dependency's declarations.
 
-**Module-level imports** (`import utils`): these don't add entries — the VM handles `utils.helper()` via `CALL_METHOD` on the module object. Only `from X import Y` style (where `names` is non-empty) populates the table.
-
-### 6.3 Step 3: Namespace labels
-
-Every label in each module's IR is prefixed with the module's namespace:
+### 5.4 Concatenate in dependency order
 
 ```
-LABEL entry                →  LABEL main.entry
-LABEL func_helper_0        →  LABEL utils.func_helper_0
-BRANCH end_helper_1        →  BRANCH utils.end_helper_1
-BRANCH_IF %0 t_2,f_3       →  BRANCH_IF %100 utils.t_2,utils.f_3
+entry:                           ← single entry label
+  [dep1 top-level code]          ← STORE_VAR, CONST+DECL_VAR for funcs/classes
+  [dep2 top-level code]
+  [entry module top-level code]  ← uses imported names (already in scope)
+  [dep1 function/class bodies]   ← jumped over by BRANCH-end patterns
+  [dep2 function/class bodies]
+  [entry function/class bodies]
 ```
 
-**Comma-separated branch targets** (used by `BRANCH_IF` and `TRY_PUSH`) are split, each target namespaced, and rejoined.
+Dependencies run first, so by the time the entry module's code executes, all imported names are available in the scope chain.
 
-**TRY_PUSH operands** also contain label strings — these are namespaced in the operand list.
+### 5.5 Build CFG + registry
 
-### 6.4 Step 4: Rebase registers
+`build_cfg()` and `build_registry()` run on the merged IR exactly as they do for single-file compilation. No modifications needed.
 
-Registers use a simple integer offset to prevent collisions between modules. If module A uses `%0`..`%47` and module B uses `%0`..`%31`, module B's registers are shifted by 48:
+### 5.6 Symbol table merging
 
-```
-Module A: %0, %1, ..., %47   →  %0, %1, ..., %47       (offset 0)
-Module B: %0, %1, ..., %31   →  %48, %49, ..., %79     (offset 48)
-Module C: %0, %1, ..., %15   →  %80, %81, ..., %95     (offset 80)
-```
+Function and class symbol tables from all modules are merged. Labels are namespaced (unique in merged CFG). **Names are kept bare** — the VM uses bare names for method dispatch (`__init__`, `area`), constructor dispatch, and class_methods lookup.
 
-The offset is computed as `max_register_number(previous_module) + 1` accumulated across modules.
+---
 
-**Why not namespace registers as strings?** Registers appear in `result_reg`, in operand lists, inside `STORE_VAR`/`DECL_VAR`/`BINOP`/etc. Renaming `%0` to `%utils.0` would require parsing and rewriting every operand string. Integer rebasing is a clean arithmetic operation that doesn't change the string format.
+## 6. Worked Example
 
-### 6.5 Step 5: Rewrite cross-module references
+### Source
 
-Three kinds of operands are rewritten:
-
-**1. Imported function calls:**
-```
-CALL_FUNCTION "helper" %0     →  CALL_FUNCTION "utils.func_helper_0" %48
-```
-When the first operand of `CALL_FUNCTION` matches a key in the import table, it's replaced with the namespaced label.
-
-**2. Imported variable loads:**
-```
-LOAD_VAR "helper"              →  LOAD_VAR "utils.func_helper_0"
-```
-Same logic for `LOAD_VAR` — if the variable name is in the import table, rewrite it.
-
-**3. Internal function/class label references:**
-```
-CONST "func_helper_0"          →  CONST "utils.func_helper_0"
-```
-When a `CONST` instruction's first operand starts with `func_` or `class_`, it's a self-reference to a function or class label within the same module. These are namespaced to match the namespaced labels.
-
-### 6.6 Step 6: Merge and build
-
-The namespaced IR from all modules is concatenated in a specific order:
-
-```
-[entry module IR]          ← first, so its "entry" label is the program entry
-[dependency 1 IR]          ← in topological order (leaves first)
-[dependency 2 IR]
-...
-```
-
-The **entry module goes first** because `build_cfg()` sets `cfg.entry` to the first label it encounters. The entry module's namespaced entry label (e.g., `main.entry`) becomes the program's entry point.
-
-After concatenation, standard `build_cfg()` and `build_registry()` run on the merged IR — producing the same data structures the single-file pipeline produces.
-
-### 6.7 Step 7: Merge symbol tables
-
-Function and class symbol tables from all modules are merged with namespaced labels:
-
+**utils.py:**
 ```python
-# Module utils.py: FuncRef(name="helper", label="func_helper_0")
-# After merge:      FuncRef(name="utils.helper", label="utils.func_helper_0")
+def add(a, b):
+    return a + b
 ```
 
-These merged tables are passed to `build_registry()` so the registry correctly indexes namespaced functions and classes.
-
-### 6.8 Registry namespace awareness
-
-The existing `build_registry()` scans CFG blocks for labels starting with `func_` to extract function parameters. After namespacing, labels look like `utils.func_helper_0`. To handle this, three helper functions were added to `interpreter/registry.py`:
-
+**main.py:**
 ```python
-def _is_func_label(label: str) -> bool:
-    """Matches: func_foo_0, utils.func_foo_0, src.utils.func_foo_0"""
-    return label.startswith("func_") or ".func_" in label
-
-def _is_class_label(label: str) -> bool:
-    """Matches: class_Foo_0, utils.class_Foo_0"""
-    # Also handles prelude_class_ variants
-    ...
-
-def _is_end_class_label(label: str) -> bool:
-    """Matches: end_class_Foo_1, utils.end_class_Foo_1"""
-    ...
+from utils import add
+result = add(10, 20)
 ```
 
-These replace the previous `startswith(FUNC_LABEL_PREFIX)` checks, making the registry scanner work with both namespaced and non-namespaced labels. Single-file compilation is unaffected.
+### Phase 1: Discovery
+
+`main.py` → `from utils import add` → resolve `utils` → `utils.py`.
+Topo order: `[utils.py, main.py]`.
+
+### Phase 2: Compilation
+
+**utils.py IR:**
+```
+entry:
+  BRANCH end_add_1
+func_add_0:
+  %0 = SYMBOLIC param:a
+  DECL_VAR a %0
+  %1 = SYMBOLIC param:b
+  DECL_VAR b %1
+  %2 = LOAD_VAR a
+  %3 = LOAD_VAR b
+  %4 = BINOP + %2 %3
+  RETURN %4
+end_add_1:
+  %5 = CONST func_add_0
+  DECL_VAR add %5
+```
+
+**utils.py exports:** `{functions: {"add": "func_add_0"}}`
+
+**main.py IR:**
+```
+entry:
+  %0 = CALL_FUNCTION "import" "from utils import add"
+  DECL_VAR add %0
+  %1 = CONST 10
+  %2 = CONST 20
+  %3 = CALL_FUNCTION add %1 %2
+  STORE_VAR result %3
+```
+
+### Phase 3: Linking
+
+1. **Strip** `entry:` labels from both modules
+2. **Namespace** utils labels: `func_add_0` → `utils.func_add_0`, etc.
+3. **Rebase** main registers by 6 (utils uses %0–%5)
+4. **Drop** main's import stub (`CALL_FUNCTION "import"` + `DECL_VAR add`) — `add` is in utils.py exports
+5. **Prepend** single `entry:` label
+6. **Concatenate** utils first, then main
+
+**Merged IR:**
+```
+entry:
+  BRANCH utils.end_add_1
+utils.func_add_0:
+  %0 = SYMBOLIC param:a
+  DECL_VAR a %0
+  %1 = SYMBOLIC param:b
+  DECL_VAR b %1
+  %2 = LOAD_VAR a
+  %3 = LOAD_VAR b
+  %4 = BINOP + %2 %3
+  RETURN %4
+utils.end_add_1:
+  %5 = CONST utils.func_add_0
+  DECL_VAR add %5
+  %6 = CONST 10
+  %7 = CONST 20
+  %8 = CALL_FUNCTION add %6 %7
+  STORE_VAR result %8
+```
+
+This is one continuous stream. The VM:
+1. Hits `BRANCH utils.end_add_1` — skips the function body
+2. Hits `CONST utils.func_add_0` — handler looks up in `func_symbol_table`, creates `BoundFuncRef`
+3. Hits `DECL_VAR add` — stores the `BoundFuncRef` in local_vars
+4. Hits `CALL_FUNCTION add` — looks up `add` in local_vars, finds `BoundFuncRef`, dispatches to `utils.func_add_0`
+5. Function body runs, returns `30`
+6. Hits `STORE_VAR result 30`
+
+**Result:** `result = 30`. Zero LLM calls. Identical behavior to single-file.
 
 ---
 
 ## 7. Data Model
 
-### 7.1 ModuleUnit
-
 ```python
 @dataclass(frozen=True)
 class ModuleUnit:
-    path: Path                          # absolute file path
-    language: Language                  # source language
-    ir: tuple[IRInstruction, ...]       # raw, un-namespaced IR (immutable)
-    exports: ExportTable                # what this module makes available
-    imports: tuple[ImportRef, ...]      # what this module imports
-```
+    path: Path
+    language: Language
+    ir: tuple[IRInstruction, ...]    # raw, un-namespaced (immutable)
+    exports: ExportTable
+    imports: tuple[ImportRef, ...]
 
-Frozen and uses tuples (not lists) to prevent accidental mutation before linking.
-
-### 7.2 LinkedProgram
-
-```python
 @dataclass
 class LinkedProgram:
-    modules: dict[Path, ModuleUnit]       # all compiled modules
-    merged_ir: list[IRInstruction]        # namespaced + rebased + rewritten
-    merged_cfg: CFG                       # built from merged_ir
-    merged_registry: FunctionRegistry     # built from merged_ir
-    entry_module: Path                    # the entry point file
-    import_graph: dict[Path, list[Path]]  # file → files it imports
-    unresolved_imports: list[ImportRef]    # imports that couldn't be resolved
+    modules: dict[Path, ModuleUnit]
+    merged_ir: list[IRInstruction]
+    merged_cfg: CFG
+    merged_registry: FunctionRegistry
+    entry_module: Path
+    import_graph: dict[Path, list[Path]]
+    func_symbol_table: dict          # for ExecutionStrategies
+    class_symbol_table: dict         # for ExecutionStrategies
+    unresolved_imports: list[ImportRef]
 ```
-
-After linking, `merged_cfg` and `merged_registry` feed directly into `execute_cfg()` and `analyze_interprocedural()` — no adapter, no wrapper, no changes.
 
 ---
 
-## 8. Worked Example
+## 8. Registry Namespace Awareness
 
-### Source files
+The registry scanner (`interpreter/registry.py`) uses label prefix checks to find functions and classes. After namespacing, labels like `utils.func_add_0` don't start with `func_` — they start with the module prefix. Three helpers handle this:
 
-**`utils.py`:**
 ```python
-def helper(x):
-    return x + 1
+_is_func_label("func_add_0")          → True
+_is_func_label("utils.func_add_0")    → True  (checks for ".func_" substring)
+
+_is_class_label("class_User_0")       → True
+_is_class_label("geom.class_User_0")  → True
+
+_is_end_class_label("end_class_User_1")       → True
+_is_end_class_label("geom.end_class_User_1")  → True
 ```
 
-**`main.py`:**
-```python
-from utils import helper
-
-result = helper(42)
-```
-
-### Phase 1: Import discovery
-
-BFS from `main.py`:
-1. Parse `main.py` → finds `ImportRef(module_path="utils", names=("helper",))`
-2. Resolve `utils` → `utils.py` (file exists)
-3. Parse `utils.py` → no imports
-4. Import graph: `{main.py: [utils.py], utils.py: []}`
-
-### Phase 2: Topological sort
-
-`utils.py` has no dependencies → comes first.
-Order: `[utils.py, main.py]`
-
-### Phase 3: Per-module compilation
-
-**`utils.py` IR:**
-```
-entry:
-  BRANCH end_helper_1
-func_helper_0:
-  %0 = SYMBOLIC param:x
-  DECL_VAR x %0
-  %1 = LOAD_VAR x
-  %2 = CONST 1
-  %3 = BINOP + %1 %2
-  RETURN %3
-  %4 = CONST None
-  RETURN %4
-end_helper_1:
-  %5 = CONST func_helper_0
-  DECL_VAR helper %5
-```
-
-**`utils.py` exports:** `{functions: {"helper": "func_helper_0"}}`
-
-**`main.py` IR:**
-```
-entry:
-  %0 = CALL_FUNCTION "import" "from utils import helper"
-  DECL_VAR helper %0
-  %1 = CONST 42
-  %2 = CALL_FUNCTION "helper" %1
-  STORE_VAR result %2
-```
-
-**`main.py` imports:** `[ImportRef(module_path="utils", names=("helper",))]`
-
-### Phase 4: Linking
-
-**Prefixes:** `{utils.py: "utils", main.py: "main"}`
-
-**Import table for `main.py`:**
-```
-{"helper": "utils.func_helper_0"}
-```
-
-**Entry module (main.py) — namespaced + rebased (offset=0) + rewritten:**
-```
-main.entry:
-  %0 = CALL_FUNCTION "import" "from utils import helper"
-  DECL_VAR helper %0
-  %1 = CONST 42
-  %2 = CALL_FUNCTION "utils.func_helper_0" %1    ← REWRITTEN
-  STORE_VAR result %2
-```
-
-**utils.py — namespaced + rebased (offset=3):**
-```
-utils.entry:
-  BRANCH utils.end_helper_1
-utils.func_helper_0:
-  %3 = SYMBOLIC param:x
-  DECL_VAR x %3
-  %4 = LOAD_VAR x
-  %5 = CONST 1
-  %6 = BINOP + %4 %5
-  RETURN %6
-  %7 = CONST None
-  RETURN %7
-utils.end_helper_1:
-  %8 = CONST utils.func_helper_0                  ← NAMESPACED
-  DECL_VAR helper %8
-```
-
-**Merged IR:** entry module first, then utils module. `build_cfg()` sees `main.entry` as the first label → sets it as `cfg.entry`.
-
-**Execution:** When the VM hits `CALL_FUNCTION "utils.func_helper_0"`, it dispatches to the function body at label `utils.func_helper_0` — which contains the actual `x + 1` logic. The call resolves correctly because the merged registry maps `utils.func_helper_0` → params `["x"]`.
+These replace the original `startswith(FUNC_LABEL_PREFIX)` checks. Single-file compilation is unaffected.
 
 ---
 
@@ -567,23 +358,22 @@ utils.end_helper_1:
 
 | Scenario | Behavior |
 |----------|----------|
-| Cyclic import (`a → b → a`) | `CyclicImportError` raised with the full cycle path |
-| File not found during resolution | Import marked as unresolved; compilation continues without it |
-| Parse error in imported file | Exception propagates from `frontend.lower()` |
-| Export not found in target module | `CALL_FUNCTION "import" "from X import Y"` left unchanged (VM handles symbolically) |
-| Duplicate names across modules | No collision — every module's labels are namespaced uniquely |
+| Cyclic import | `CyclicImportError` with full cycle path |
+| File not found | Import skipped; compilation continues |
+| Parse error in imported file | Exception from `frontend.lower()` |
+| Export not found | Import stub left as-is (VM handles symbolically) |
+| Name collisions across modules | No collision — labels are namespaced |
 
 ---
 
-## 10. What This Does Not Include
+## 10. Limitations
 
-- **No incremental caching** — every `compile_project()` call recompiles all files
-- **No package manager integration** — no pip/npm/maven/cargo resolution; only local files
-- **No virtual environment or node_modules scanning**
-- **No macro expansion** — C preprocessor `#define` not expanded (only `#include` resolved)
-- **No cross-language linking** — all files in a project must be the same language
-- **No cycle-breaking** — cyclic imports abort with an error (no lazy import support)
-- **No IDE integration** — project support is API/MCP only, no Language Server Protocol
+- No incremental caching — recompiles all files every time
+- No package manager integration (pip/npm/maven/cargo)
+- No virtual environment or node_modules scanning
+- No C preprocessor macro expansion (only `#include`)
+- No cross-language linking
+- No cycle-breaking (aborts on cycles)
 
 ---
 
@@ -591,54 +381,40 @@ utils.end_helper_1:
 
 ```
 interpreter/project/
-    __init__.py         Package init
-    types.py            ImportRef, ExportTable, ModuleUnit, LinkedProgram, CyclicImportError
-    imports.py          extract_imports() — per-language tree-sitter AST walkers (15 languages)
-    resolver.py         ImportResolver protocol + 12 language-specific resolvers
-                        topological_sort() — Kahn's algorithm with cycle detection
-                        infer_project_root() — marker file search
-    compiler.py         compile_module() — single-file compilation + export extraction
-                        compile_project() — full orchestrator (discover → compile → link)
-                        build_export_table() — IR + symbol tables → ExportTable
-    linker.py           link_modules() — namespace + rebase + rewrite + merge
-                        module_prefix() — file path → namespace string
-                        namespace_label() — prefix a label
-                        rebase_register() — shift %N by offset
-                        max_register_number() — find highest register in IR
+    types.py       ImportRef, ExportTable, ModuleUnit, LinkedProgram, CyclicImportError
+    imports.py     extract_imports() — tree-sitter walkers for 15 languages + regex for COBOL
+    resolver.py    ImportResolver protocol + 13 language resolvers + topological_sort()
+    compiler.py    compile_module(), compile_project(), build_export_table()
+    linker.py      link_modules() — strip, namespace, rebase, drop stubs, concatenate
 
 interpreter/registry.py
-    _is_func_label()      — namespace-aware function label check
-    _is_class_label()     — namespace-aware class label check
-    _is_end_class_label() — namespace-aware end-class label check
+    _is_func_label(), _is_class_label(), _is_end_class_label()
 
 interpreter/api.py
-    analyze_project()     — compile + interprocedural analysis
-    run_project()         — compile + VM execution
+    analyze_project(), run_project()
 
-mcp_server/tools.py
-    handle_load_project() — MCP tool for multi-file project loading
-
-mcp_server/server.py
-    load_project()        — MCP tool registration
+mcp_server/tools.py      handle_load_project()
+mcp_server/server.py      load_project MCP tool registration
 ```
 
 ---
 
 ## 12. Test Coverage
 
-159 tests across unit and integration:
+179 tests across unit and integration:
 
 | Test File | Tests | Covers |
 |-----------|-------|--------|
-| `test_types.py` | 26 | Data model construction, immutability, defaults |
-| `test_export_table.py` | 10 | Export table building from IR + symbol tables |
+| `test_types.py` | 26 | Data model: ImportRef, ExportTable, ModuleUnit, LinkedProgram |
+| `test_export_table.py` | 10 | Export extraction from IR + symbol tables |
 | `test_import_extraction.py` | 14 | Python import extraction (all forms) |
 | `test_all_language_imports.py` | 33 | Import extraction across all 15 tree-sitter languages |
 | `test_cobol_imports.py` | 11 | COBOL COPY/CALL extraction + resolver |
 | `test_resolver.py` | 10 | Python resolver + protocol |
 | `test_topo_sort.py` | 9 | Topological sort, cycles, edge cases |
 | `test_linker.py` | 18 | Namespace, rebase, register helpers |
-| `test_project_pipeline.py` | 14 | Full pipeline (Python, JS, Java, C) |
+| `test_project_pipeline.py` | 14 | Full compile→link pipeline (Python, JS, Java, C) |
 | `test_fixture_projects.py` | 5 | On-disk fixture projects |
-| `test_api_integration.py` | 3 | API functions |
-| `test_mcp_tool.py` | 5 | MCP tool |
+| `test_all_languages_execution.py` | 20 | Multi-file execution for all 15 languages |
+| `test_api_integration.py` | 3 | analyze_project(), run_project() |
+| `test_mcp_tool.py` | 5 | MCP load_project tool |
