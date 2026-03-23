@@ -347,7 +347,7 @@ class Circle implements Shape {
         store_fields = _find_all(instructions, Opcode.STORE_FIELD)
         assert any("radius" in inst.operands for inst in store_fields)
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
-        assert any("instanceof" in inst.operands for inst in calls)
+        assert any("isinstance" in inst.operands for inst in calls)
 
     def test_try_catch_with_throw(self):
         source = """\
@@ -599,7 +599,7 @@ class TestJavaInstanceof:
         opcodes = _opcodes(instructions)
         assert Opcode.CALL_FUNCTION in opcodes
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
-        assert any("instanceof" in inst.operands for inst in calls)
+        assert any("isinstance" in inst.operands for inst in calls)
 
     def test_instanceof_in_condition(self):
         instructions = _parse_java(
@@ -997,3 +997,53 @@ interface Shape {
         assert (
             len(iface_objs) == 0
         ), "Interface should not use NEW_OBJECT enumeration pattern"
+
+
+class TestJavaTypePattern:
+    def test_instanceof_binds_variable(self):
+        """o instanceof String s should bind 's' to the matched value."""
+        ir = _parse_java(
+            "class M { void m(Object o) {"
+            "  if (o instanceof String s) { System.out.println(s); }"
+            "} }"
+        )
+        stores_s = [
+            inst
+            for inst in ir
+            if inst.opcode in (Opcode.STORE_VAR, Opcode.DECL_VAR)
+            and len(inst.operands) >= 1
+            and str(inst.operands[0]) == "s"
+        ]
+        assert len(stores_s) >= 1, "instanceof type_pattern did not bind 's'"
+
+    def test_switch_type_pattern_no_symbolic(self):
+        """case String s -> ... should not produce SYMBOLIC unsupported:pattern."""
+        ir = _parse_java(
+            "class M { String m(Object o) {"
+            '  return switch(o) { case String s -> s; default -> ""; };'
+            "} }"
+        )
+        symbolics = [
+            inst
+            for inst in ir
+            if inst.opcode == Opcode.SYMBOLIC
+            and "unsupported" in str(inst.operands)
+            and "pattern" in str(inst.operands)
+        ]
+        assert len(symbolics) == 0, f"type_pattern produced SYMBOLIC: {symbolics}"
+
+    def test_switch_type_pattern_emits_isinstance(self):
+        """case String s should emit an isinstance check."""
+        ir = _parse_java(
+            "class M { String m(Object o) {"
+            '  return switch(o) { case String s -> s; default -> ""; };'
+            "} }"
+        )
+        isinstance_calls = [
+            inst
+            for inst in ir
+            if inst.opcode == Opcode.CALL_FUNCTION
+            and len(inst.operands) >= 1
+            and str(inst.operands[0]) == "isinstance"
+        ]
+        assert len(isinstance_calls) >= 1

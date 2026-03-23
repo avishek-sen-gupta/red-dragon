@@ -323,10 +323,15 @@ def lower_cast_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 
 def lower_instanceof(ctx: TreeSitterEmitContext, node) -> str:
-    """Lower instanceof_expression: operand instanceof Type."""
+    """Lower instanceof_expression: operand instanceof Type [binding].
+
+    Java 16+ type patterns: ``o instanceof String s`` binds ``s`` to
+    the matched value after the type check.
+    """
     named_children = [c for c in node.children if c.is_named]
     operand_node = named_children[0] if named_children else None
     type_node = named_children[1] if len(named_children) > 1 else None
+    binding_node = named_children[2] if len(named_children) > 2 else None
 
     obj_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
     type_reg = ctx.fresh_reg()
@@ -336,9 +341,14 @@ def lower_instanceof(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(
         Opcode.CALL_FUNCTION,
         result_reg=reg,
-        operands=["instanceof", obj_reg, type_reg],
+        operands=["isinstance", obj_reg, type_reg],
         node=node,
     )
+    # Java 16+ type pattern binding: o instanceof String s → bind s = o
+    if binding_node:
+        binding_name = ctx.node_text(binding_node)
+        if binding_name != "_":
+            ctx.emit(Opcode.STORE_VAR, operands=[binding_name, obj_reg], node=node)
     return reg
 
 
