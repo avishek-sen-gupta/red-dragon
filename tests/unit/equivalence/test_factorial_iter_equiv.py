@@ -80,16 +80,41 @@ class TestFactorialIterCrossLanguageEquivalence:
             f"{set(SUPPORTED_DETERMINISTIC_LANGUAGES) - set(PROGRAMS.keys())}"
         )
 
+    def test_pascal_diverges_only_in_implicit_return(self, all_opcode_sequences):
+        """Pascal's implicit return uses LOAD_VAR Result instead of CONST None.
+
+        The rest of the opcode sequence must match the reference. Only the
+        last two instructions (implicit return) should differ:
+          reference: CONST, RETURN
+          pascal:    LOAD_VAR, RETURN
+        See red-dragon-44tw.
+        """
+        comparable = {
+            lang: seq for lang, seq in all_opcode_sequences.items() if lang != "pascal"
+        }
+        reference_seq = comparable[sorted(comparable.keys())[0]]
+        pascal_seq = all_opcode_sequences["pascal"]
+
+        assert pascal_seq[:-2] == reference_seq[:-2]
+        assert pascal_seq[-2] == Opcode.LOAD_VAR
+        assert pascal_seq[-1] == Opcode.RETURN
+        assert reference_seq[-2] == Opcode.CONST
+        assert reference_seq[-1] == Opcode.RETURN
+
     def test_all_languages_produce_identical_opcode_sequence(
         self, all_opcode_sequences
     ):
         sequences = all_opcode_sequences
-        reference_lang = sorted(sequences.keys())[0]
-        reference_seq = sequences[reference_lang]
+        # Pascal excluded: its implicit return is LOAD_VAR Result (not CONST
+        # None) because Pascal functions return via the Result variable.
+        # Correctness verified in test_pascal_diverges_only_in_implicit_return.
+        comparable = {lang: seq for lang, seq in sequences.items() if lang != "pascal"}
+        reference_lang = sorted(comparable.keys())[0]
+        reference_seq = comparable[reference_lang]
 
         mismatches = [
             (lang, seq)
-            for lang, seq in sorted(sequences.items())
+            for lang, seq in sorted(comparable.items())
             if seq != reference_seq
         ]
         assert not mismatches, (
