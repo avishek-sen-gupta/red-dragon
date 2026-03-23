@@ -28,7 +28,9 @@ class TestBuildExportTable:
 
     def test_exports_classes(self):
         class_table = {
-            "class_User_0": ClassRef(name="User", label=CodeLabel("class_User_0"), parents=()),
+            "class_User_0": ClassRef(
+                name="User", label=CodeLabel("class_User_0"), parents=()
+            ),
         }
         et = build_export_table([], {}, class_table)
         assert et.classes == {"User": "class_User_0"}
@@ -106,7 +108,9 @@ class TestBuildExportTable:
     def test_class_names_not_duplicated_as_variables(self):
         """If a class is in class_symbol_table, its DECL_VAR is not also in variables."""
         class_table = {
-            "class_User_0": ClassRef(name="User", label=CodeLabel("class_User_0"), parents=()),
+            "class_User_0": ClassRef(
+                name="User", label=CodeLabel("class_User_0"), parents=()
+            ),
         }
         ir = [
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),

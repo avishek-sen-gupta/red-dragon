@@ -47,12 +47,18 @@ class TestBuildFunctionEntries:
         entries = build_function_entries(cfg, registry)
 
         assert len(entries) == 2
-        assert entries["func_foo"] == FunctionEntry(label=CodeLabel("func_foo"), params=("x", "y"))
-        assert entries["func_bar"] == FunctionEntry(label=CodeLabel("func_bar"), params=("a",))
+        assert entries["func_foo"] == FunctionEntry(
+            label=CodeLabel("func_foo"), params=("x", "y")
+        )
+        assert entries["func_bar"] == FunctionEntry(
+            label=CodeLabel("func_bar"), params=("a",)
+        )
 
     def test_empty_registry_produces_empty_entries(self):
         registry = _make_registry()
-        cfg = _make_cfg(blocks={"entry": BasicBlock(label=CodeLabel("entry"), instructions=[])})
+        cfg = _make_cfg(
+            blocks={"entry": BasicBlock(label=CodeLabel("entry"), instructions=[])}
+        )
 
         entries = build_function_entries(cfg, registry)
 
@@ -69,7 +75,9 @@ class TestBuildCallGraphDirectCall:
         )
         cfg = _make_cfg(
             blocks={
-                "func_main": BasicBlock(label=CodeLabel("func_main"), instructions=[call_inst]),
+                "func_main": BasicBlock(
+                    label=CodeLabel("func_main"), instructions=[call_inst]
+                ),
                 "func_foo": BasicBlock(label=CodeLabel("func_foo"), instructions=[]),
             }
         )
@@ -99,9 +107,15 @@ class TestBuildCallGraphMethodCHA:
         )
         cfg = _make_cfg(
             blocks={
-                "func_main": BasicBlock(label=CodeLabel("func_main"), instructions=[call_inst]),
-                "func_Dog_speak": BasicBlock(label=CodeLabel("func_Dog_speak"), instructions=[]),
-                "func_Cat_speak": BasicBlock(label=CodeLabel("func_Cat_speak"), instructions=[]),
+                "func_main": BasicBlock(
+                    label=CodeLabel("func_main"), instructions=[call_inst]
+                ),
+                "func_Dog_speak": BasicBlock(
+                    label=CodeLabel("func_Dog_speak"), instructions=[]
+                ),
+                "func_Cat_speak": BasicBlock(
+                    label=CodeLabel("func_Cat_speak"), instructions=[]
+                ),
             }
         )
         registry = _make_registry(
@@ -122,8 +136,12 @@ class TestBuildCallGraphMethodCHA:
         site = next(iter(cg.call_sites))
         assert site.callees == frozenset(
             {
-                FunctionEntry(label=CodeLabel("func_Dog_speak"), params=("self", "volume")),
-                FunctionEntry(label=CodeLabel("func_Cat_speak"), params=("self", "volume")),
+                FunctionEntry(
+                    label=CodeLabel("func_Dog_speak"), params=("self", "volume")
+                ),
+                FunctionEntry(
+                    label=CodeLabel("func_Cat_speak"), params=("self", "volume")
+                ),
             }
         )
         # arg_operands for CALL_METHOD: skip object register, skip method name
@@ -140,7 +158,9 @@ class TestBuildCallGraphUnknown:
         )
         cfg = _make_cfg(
             blocks={
-                "func_main": BasicBlock(label=CodeLabel("func_main"), instructions=[call_inst]),
+                "func_main": BasicBlock(
+                    label=CodeLabel("func_main"), instructions=[call_inst]
+                ),
             }
         )
         registry = _make_registry(func_params={"func_main": []})
@@ -162,7 +182,9 @@ class TestBuildCallGraphNoCalls:
         )
         cfg = _make_cfg(
             blocks={
-                "func_main": BasicBlock(label=CodeLabel("func_main"), instructions=[store_inst]),
+                "func_main": BasicBlock(
+                    label=CodeLabel("func_main"), instructions=[store_inst]
+                ),
             }
         )
         registry = _make_registry(func_params={"func_main": []})
@@ -183,7 +205,9 @@ class TestBuildCallGraphRecursive:
         )
         cfg = _make_cfg(
             blocks={
-                "func_foo": BasicBlock(label=CodeLabel("func_foo"), instructions=[call_inst]),
+                "func_foo": BasicBlock(
+                    label=CodeLabel("func_foo"), instructions=[call_inst]
+                ),
             }
         )
         registry = _make_registry(func_params={"func_foo": ["n"]})
@@ -212,7 +236,9 @@ class TestBuildCallGraphMultipleCalls:
         )
         cfg = _make_cfg(
             blocks={
-                "func_main": BasicBlock(label=CodeLabel("func_main"), instructions=[call1, call2]),
+                "func_main": BasicBlock(
+                    label=CodeLabel("func_main"), instructions=[call1, call2]
+                ),
                 "func_foo": BasicBlock(label=CodeLabel("func_foo"), instructions=[]),
                 "func_bar": BasicBlock(label=CodeLabel("func_bar"), instructions=[]),
             }
@@ -238,7 +264,9 @@ class TestBuildCallGraphNonExistent:
         )
         cfg = _make_cfg(
             blocks={
-                "func_main": BasicBlock(label=CodeLabel("func_main"), instructions=[call_inst]),
+                "func_main": BasicBlock(
+                    label=CodeLabel("func_main"), instructions=[call_inst]
+                ),
             }
         )
         registry = _make_registry(func_params={"func_main": []})

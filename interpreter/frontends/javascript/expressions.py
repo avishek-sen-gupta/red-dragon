@@ -34,7 +34,9 @@ def _emit_optional_guard(ctx: TreeSitterEmitContext, obj_reg: str, emit_access) 
     end_label = ctx.fresh_label("optchain_end")
     result_var = f"__optchain_{ctx.label_counter}"
 
-    ctx.emit(Opcode.BRANCH_IF, operands=[cmp_reg], branch_targets=[null_label, access_label])
+    ctx.emit(
+        Opcode.BRANCH_IF, operands=[cmp_reg], branch_targets=[null_label, access_label]
+    )
 
     ctx.emit(Opcode.LABEL, label=null_label)
     none_reg = ctx.fresh_reg()
