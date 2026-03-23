@@ -6,6 +6,17 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from interpreter.instructions import (
+    to_typed,
+    AddressOf,
+    LoadIndirect,
+    LoadFieldIndirect,
+    StoreIndirect,
+    StoreField,
+    LoadField,
+    StoreIndex,
+    LoadIndex,
+)
 from interpreter.ir import IRInstruction
 from interpreter.vm.vm import (
     VMState,
@@ -93,7 +104,9 @@ def _resolve_method_delegation_target(
 
 def _handle_address_of(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
     """ADDRESS_OF var_name: promote variable to heap and return a Pointer."""
-    name = inst.operands[0]
+    t = to_typed(inst)
+    assert isinstance(t, AddressOf)
+    name = t.var_name
     frame = vm.current_frame
 
     # Already aliased — return the existing Pointer
@@ -102,7 +115,7 @@ def _handle_address_of(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionR
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={
-                    inst.result_reg: typed(ptr, scalar(constants.TypeName.POINTER))
+                    t.result_reg: typed(ptr, scalar(constants.TypeName.POINTER))
                 },
                 reasoning=f"address_of {name} → {ptr} (already aliased)",
             )
@@ -120,7 +133,7 @@ def _handle_address_of(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionR
     if isinstance(current_val, BoundFuncRef):
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed_from_runtime(current_val)},
+                register_writes={t.result_reg: typed_from_runtime(current_val)},
                 reasoning=f"address_of {name} → {current_val} (function ref, identity)",
             )
         )
@@ -143,7 +156,7 @@ def _handle_address_of(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionR
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={
-                    inst.result_reg: typed(ptr, scalar(constants.TypeName.POINTER))
+                    t.result_reg: typed(ptr, scalar(constants.TypeName.POINTER))
                 },
                 reasoning=f"address_of {name} → {ptr} (existing heap object)",
             )
@@ -161,7 +174,7 @@ def _handle_address_of(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionR
     return ExecutionResult.success(
         StateUpdate(
             register_writes={
-                inst.result_reg: typed(ptr, scalar(constants.TypeName.POINTER))
+                t.result_reg: typed(ptr, scalar(constants.TypeName.POINTER))
             },
             reasoning=f"address_of {name} → {ptr} (promoted to heap {mem_addr})",
         )
@@ -172,14 +185,16 @@ def _handle_load_indirect(
     inst: IRInstruction, vm: VMState, ctx: Any
 ) -> ExecutionResult:
     """LOAD_INDIRECT %ptr: read through a Pointer (dereference)."""
-    obj_val = _resolve_reg(vm, inst.operands[0]).value
+    t = to_typed(inst)
+    assert isinstance(t, LoadIndirect)
+    obj_val = _resolve_reg(vm, t.ptr_reg).value
     # Pointer dereference: read from heap[base].fields[offset]
     if isinstance(obj_val, Pointer) and obj_val.base in vm.heap:
         heap_obj = vm.heap[obj_val.base]
         tv = heap_obj.fields.get(str(obj_val.offset))
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: tv},
+                register_writes={t.result_reg: tv},
                 reasoning=f"load *{obj_val} = {tv!r}",
             )
         )
@@ -187,7 +202,7 @@ def _handle_load_indirect(
         sym = vm.fresh_symbolic(hint=f"*{obj_val}")
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                register_writes={t.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"load *{obj_val} (not on heap) → {sym.name}",
             )
         )
@@ -195,7 +210,7 @@ def _handle_load_indirect(
     if isinstance(obj_val, BoundFuncRef):
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed_from_runtime(obj_val)},
+                register_writes={t.result_reg: typed_from_runtime(obj_val)},
                 reasoning=f"deref {obj_val} → {obj_val} (function pointer identity)",
             )
         )
@@ -203,7 +218,7 @@ def _handle_load_indirect(
     sym = vm.fresh_symbolic(hint=f"*{_symbolic_name(obj_val)}")
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+            register_writes={t.result_reg: typed(sym, UNKNOWN)},
             reasoning=f"load_indirect on non-pointer {obj_val!r} → {sym.name}",
         )
     )
@@ -217,14 +232,16 @@ def _handle_load_field_indirect(
     """LOAD_FIELD_INDIRECT %obj %name: load field whose name is in a register."""
     from interpreter.handlers.calls import _try_user_function_call
 
-    obj_val = _resolve_reg(vm, inst.operands[0]).value
-    field_name = _resolve_reg(vm, inst.operands[1]).value
+    t = to_typed(inst)
+    assert isinstance(t, LoadFieldIndirect)
+    obj_val = _resolve_reg(vm, t.obj_reg).value
+    field_name = _resolve_reg(vm, t.name_reg).value
     addr = _heap_addr(obj_val)
     if not addr or addr not in vm.heap:
         sym = vm.fresh_symbolic(hint=f"{_symbolic_name(obj_val)}.{field_name}")
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                register_writes={t.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"load_field_indirect on non-heap {obj_val!r} → {sym.name}",
             )
         )
@@ -233,7 +250,7 @@ def _handle_load_field_indirect(
         tv = heap_obj.fields[field_name]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: tv},
+                register_writes={t.result_reg: tv},
                 reasoning=f"load {addr}.{field_name} (indirect) = {tv!r}",
             )
         )
@@ -255,7 +272,7 @@ def _handle_load_field_indirect(
     sym = vm.fresh_symbolic(hint=f"{addr}.{field_name}")
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+            register_writes={t.result_reg: typed(sym, UNKNOWN)},
             reasoning=f"load {addr}.{field_name} (indirect, unknown) → {sym.name}",
         )
     )
@@ -265,8 +282,10 @@ def _handle_store_indirect(
     inst: IRInstruction, vm: VMState, ctx: Any
 ) -> ExecutionResult:
     """STORE_INDIRECT %ptr %val: write through a Pointer (dereference)."""
-    obj_val = _resolve_reg(vm, inst.operands[0]).value
-    tv = _resolve_reg(vm, inst.operands[1])
+    t = to_typed(inst)
+    assert isinstance(t, StoreIndirect)
+    obj_val = _resolve_reg(vm, t.ptr_reg).value
+    tv = _resolve_reg(vm, t.value_reg)
     if isinstance(obj_val, Pointer):
         target_field = str(obj_val.offset)
         return ExecutionResult.success(
@@ -291,9 +310,11 @@ def _handle_store_indirect(
 
 
 def _handle_store_field(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    obj_val = _resolve_reg(vm, inst.operands[0]).value
-    field_name = inst.operands[1]
-    tv = _resolve_reg(vm, inst.operands[2])
+    t = to_typed(inst)
+    assert isinstance(t, StoreField)
+    obj_val = _resolve_reg(vm, t.obj_reg).value
+    field_name = t.field_name
+    tv = _resolve_reg(vm, t.value_reg)
     addr = _heap_addr(obj_val)
     if addr and addr not in vm.heap:
         # Materialise a synthetic heap entry for symbolic objects so that
@@ -328,8 +349,10 @@ def _handle_load_field(
 ) -> ExecutionResult:
     from interpreter.handlers.calls import _try_user_function_call
 
-    obj_val = _resolve_reg(vm, inst.operands[0]).value
-    field_name = inst.operands[1]
+    t = to_typed(inst)
+    assert isinstance(t, LoadField)
+    obj_val = _resolve_reg(vm, t.obj_reg).value
+    field_name = t.field_name
     # Static field access on a ClassRef: look up via symbol table constants
     if isinstance(obj_val, ClassRef):
         symbol_table = ctx.symbol_table
@@ -346,7 +369,7 @@ def _handle_load_field(
             )
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: static_tv},
+                    register_writes={t.result_reg: static_tv},
                     reasoning=f"load class static {obj_val.name}.{field_name} = {static_tv.value!r}",
                 )
             )
@@ -360,7 +383,7 @@ def _handle_load_field(
         sym = vm.fresh_symbolic(hint=f"{obj_desc}.{field_name}")
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                register_writes={t.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"load {obj_desc}.{field_name} (not on heap) → {sym.name}",
             )
         )
@@ -369,7 +392,7 @@ def _handle_load_field(
         tv = heap_obj.fields[field_name]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: tv},
+                register_writes={t.result_reg: tv},
                 reasoning=f"load {addr}.{field_name} = {tv!r}",
             )
         )
@@ -392,16 +415,18 @@ def _handle_load_field(
     heap_obj.fields[field_name] = typed(sym, UNKNOWN)
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+            register_writes={t.result_reg: typed(sym, UNKNOWN)},
             reasoning=f"load {addr}.{field_name} (unknown) → {sym.name}",
         )
     )
 
 
 def _handle_store_index(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    arr_val = _resolve_reg(vm, inst.operands[0]).value
-    idx_val = _resolve_reg(vm, inst.operands[1]).value
-    tv = _resolve_reg(vm, inst.operands[2])
+    t = to_typed(inst)
+    assert isinstance(t, StoreIndex)
+    arr_val = _resolve_reg(vm, t.arr_reg).value
+    idx_val = _resolve_reg(vm, t.index_reg).value
+    tv = _resolve_reg(vm, t.value_reg)
     addr = _heap_addr(arr_val)
     if addr and addr not in vm.heap:
         # Materialise a synthetic heap entry for symbolic arrays so that
@@ -430,8 +455,10 @@ def _handle_store_index(inst: IRInstruction, vm: VMState, ctx: Any) -> Execution
 
 
 def _handle_load_index(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    arr_val = _resolve_reg(vm, inst.operands[0]).value
-    idx_val = _resolve_reg(vm, inst.operands[1]).value
+    t = to_typed(inst)
+    assert isinstance(t, LoadIndex)
+    arr_val = _resolve_reg(vm, t.arr_reg).value
+    idx_val = _resolve_reg(vm, t.index_reg).value
     addr = _heap_addr(arr_val)
 
     # Native string/list indexing — bypass heap for raw Python values.
@@ -441,7 +468,7 @@ def _handle_load_index(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionR
             element = arr_val[idx_val]
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: typed_from_runtime(element)},
+                    register_writes={t.result_reg: typed_from_runtime(element)},
                     reasoning=f"native index {arr_val!r}[{idx_val}] = {element!r}",
                 )
             )
@@ -449,7 +476,7 @@ def _handle_load_index(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionR
             element = arr_val[idx_val]
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: typed_from_runtime(element)},
+                    register_writes={t.result_reg: typed_from_runtime(element)},
                     reasoning=f"native index {arr_val!r}[{idx_val}] = {element!r}",
                 )
             )
@@ -462,7 +489,7 @@ def _handle_load_index(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionR
         sym = vm.fresh_symbolic(hint=f"{arr_desc}[{idx_val}]")
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                register_writes={t.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"load {arr_desc}[{idx_val}] (not on heap) → {sym.name}",
             )
         )
@@ -472,14 +499,14 @@ def _handle_load_index(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionR
         tv = heap_obj.fields[key]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: tv},
+                register_writes={t.result_reg: tv},
                 reasoning=f"load {addr}[{idx_val}] = {tv!r}",
             )
         )
     sym = vm.fresh_symbolic(hint=f"{addr}[{idx_val}]")
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+            register_writes={t.result_reg: typed(sym, UNKNOWN)},
             reasoning=f"load {addr}[{idx_val}] (unknown) → {sym.name}",
         )
     )
