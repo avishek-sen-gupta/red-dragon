@@ -7,7 +7,7 @@ from interpreter.types.coercion.conversion_result import IDENTITY_CONVERSION
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
 from interpreter.types.null_type_resolver import NullTypeResolver
 from interpreter.types.function_kind import FunctionKind
 from interpreter.types.function_signature import FunctionSignature
@@ -33,12 +33,12 @@ from interpreter.types.type_inference import infer_types, _infer_const_type
 from interpreter.types.type_resolver import TypeResolver
 
 
-def _make_inst(opcode, result_reg="", operands=None, label=""):
+def _make_inst(opcode, result_reg="", operands=None, label=NO_LABEL):
     return IRInstruction(
         opcode=opcode,
         result_reg=result_reg or None,
         operands=operands or [],
-        label=label or None,
+        label=label,
     )
 
 
@@ -96,12 +96,12 @@ class TestInferConstType:
         assert _infer_const_type("None") == ""
 
     def test_func_ref(self):
-        func_st = {"func_add_0": FuncRef(name="add", label="func_add_0")}
+        func_st = {"func_add_0": FuncRef(name="add", label=CodeLabel("func_add_0"))}
         assert _infer_const_type("func_add_0", func_symbol_table=func_st) == ""
 
     def test_class_ref(self):
         class_st = {
-            "class_Dog_0": ClassRef(name="Dog", label="class_Dog_0", parents=())
+            "class_Dog_0": ClassRef(name="Dog", label=CodeLabel("class_Dog_0"), parents=())
         }
         assert _infer_const_type("class_Dog_0", class_symbol_table=class_st) == ""
 
@@ -123,7 +123,7 @@ class TestInferConstType:
 class TestSymbolicInference:
     def test_symbolic_with_type_hint(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
         ]
         builder = TypeEnvironmentBuilder(register_types={"%0": scalar("Int")})
@@ -137,7 +137,7 @@ class TestSymbolicInference:
 
     def test_symbolic_without_type_hint(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
         ]
         env = infer_types(
@@ -156,7 +156,7 @@ class TestSymbolicInference:
 class TestConstInference:
     def test_const_int(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
         ]
         env = infer_types(
@@ -168,7 +168,7 @@ class TestConstInference:
 
     def test_const_float(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["3.14"]),
         ]
         env = infer_types(
@@ -180,7 +180,7 @@ class TestConstInference:
 
     def test_const_bool(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["True"]),
         ]
         env = infer_types(
@@ -192,7 +192,7 @@ class TestConstInference:
 
     def test_const_string(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=['"hello"']),
         ]
         env = infer_types(
@@ -204,7 +204,7 @@ class TestConstInference:
 
     def test_const_none_not_typed(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["None"]),
         ]
         env = infer_types(
@@ -216,7 +216,7 @@ class TestConstInference:
 
     def test_const_func_ref_not_typed(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["func_add_0"]),
         ]
         env = infer_types(
@@ -235,7 +235,7 @@ class TestConstInference:
 class TestStoreVarInference:
     def test_store_var_with_explicit_type_hint(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
         ]
@@ -250,7 +250,7 @@ class TestStoreVarInference:
 
     def test_store_var_inherits_register_type(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["3.14"]),
             _make_inst(Opcode.STORE_VAR, operands=["pi", "%0"]),
         ]
@@ -264,7 +264,7 @@ class TestStoreVarInference:
     def test_store_var_explicit_type_overrides_register(self):
         """Declared type (pre-seeded) takes precedence over inferred register type."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
         ]
@@ -286,7 +286,7 @@ class TestStoreVarInference:
 class TestLoadVarInference:
     def test_load_var_inherits_variable_type(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"]),
@@ -302,7 +302,7 @@ class TestLoadVarInference:
 
     def test_load_var_unknown_variable(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.LOAD_VAR, result_reg="%0", operands=["unknown"]),
         ]
         env = infer_types(
@@ -321,7 +321,7 @@ class TestLoadVarInference:
 class TestBinopInference:
     def test_int_plus_int(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["3"]),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["4"]),
             _make_inst(Opcode.BINOP, result_reg="%2", operands=["+", "%0", "%1"]),
@@ -335,7 +335,7 @@ class TestBinopInference:
 
     def test_int_plus_float(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["3"]),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["1.5"]),
             _make_inst(Opcode.BINOP, result_reg="%2", operands=["+", "%0", "%1"]),
@@ -349,7 +349,7 @@ class TestBinopInference:
 
     def test_int_div_int_produces_int(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["7"]),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["2"]),
             _make_inst(Opcode.BINOP, result_reg="%2", operands=["/", "%0", "%1"]),
@@ -363,7 +363,7 @@ class TestBinopInference:
 
     def test_comparison_produces_bool(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["3"]),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["4"]),
             _make_inst(Opcode.BINOP, result_reg="%2", operands=["<", "%0", "%1"]),
@@ -377,7 +377,7 @@ class TestBinopInference:
 
     def test_untyped_operands_no_result_type(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["None"]),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["None"]),
             _make_inst(Opcode.BINOP, result_reg="%2", operands=["+", "%0", "%1"]),
@@ -398,7 +398,7 @@ class TestBinopInference:
 class TestUnopInference:
     def test_unop_inherits_operand_type(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.UNOP, result_reg="%1", operands=["-", "%0"]),
         ]
@@ -412,7 +412,7 @@ class TestUnopInference:
     def test_not_produces_bool(self):
         """UNOP `not` → Bool regardless of operand type."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.UNOP, result_reg="%1", operands=["not", "%0"]),
         ]
@@ -426,7 +426,7 @@ class TestUnopInference:
     def test_bang_produces_bool(self):
         """UNOP `!` → Bool regardless of operand type."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.UNOP, result_reg="%1", operands=["!", "%0"]),
         ]
@@ -440,7 +440,7 @@ class TestUnopInference:
     def test_hash_produces_int(self):
         """UNOP `#` (Lua length) → Int."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=['"hello"']),
             _make_inst(Opcode.UNOP, result_reg="%1", operands=["#", "%0"]),
         ]
@@ -454,7 +454,7 @@ class TestUnopInference:
     def test_negation_passes_through(self):
         """UNOP `-` passes through operand type (unchanged behaviour)."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["3.14"]),
             _make_inst(Opcode.UNOP, result_reg="%1", operands=["-", "%0"]),
         ]
@@ -468,7 +468,7 @@ class TestUnopInference:
     def test_not_on_untyped_operand_still_produces_bool(self):
         """UNOP `not` with untyped operand → Bool."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.UNOP, result_reg="%1", operands=["not", "%0"]),
         ]
         env = infer_types(
@@ -481,7 +481,7 @@ class TestUnopInference:
     def test_bitwise_not_produces_int(self):
         """UNOP `~` → Int regardless of operand type."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.UNOP, result_reg="%1", operands=["~", "%0"]),
         ]
@@ -495,7 +495,7 @@ class TestUnopInference:
     def test_bitwise_not_on_untyped_operand_still_produces_int(self):
         """UNOP `~` with untyped operand → Int."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.UNOP, result_reg="%1", operands=["~", "%0"]),
         ]
         env = infer_types(
@@ -514,7 +514,7 @@ class TestUnopInference:
 class TestNewObjectArrayInference:
     def test_new_object(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.NEW_OBJECT, result_reg="%0", operands=["Dog"]),
         ]
         env = infer_types(
@@ -526,7 +526,7 @@ class TestNewObjectArrayInference:
 
     def test_new_array(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.NEW_ARRAY, result_reg="%0", operands=["array", "%1"]),
         ]
         env = infer_types(
@@ -546,7 +546,7 @@ class TestFullChain:
     def test_const_store_load_binop_store(self):
         """CONST → STORE_VAR → LOAD_VAR → BINOP → STORE_VAR."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             # int x = 7
             _make_inst(Opcode.CONST, result_reg="%0", operands=["7"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
@@ -588,7 +588,7 @@ class TestNullTypeResolver:
     def test_instruction_level_types_still_propagated(self):
         """NullTypeResolver should still propagate pre-seeded and CONST types."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["3.14"]),
@@ -609,7 +609,7 @@ class TestNullTypeResolver:
     def test_binop_result_type_empty(self):
         """NullTypeResolver produces no result type for BINOP."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["7"]),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["2"]),
             _make_inst(Opcode.BINOP, result_reg="%2", operands=["/", "%0", "%1"]),
@@ -640,7 +640,7 @@ class TestCallFunctionInference:
     def test_call_function_with_type_hint_sets_register_type(self):
         """Constructor CALL_FUNCTION with pre-seeded type → register gets that type."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(
                 Opcode.CALL_FUNCTION,
                 result_reg="%0",
@@ -659,7 +659,7 @@ class TestCallFunctionInference:
     def test_call_function_without_type_hint_leaves_register_untyped(self):
         """Regular CALL_FUNCTION (no type_hint) → register has no type."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(
                 Opcode.CALL_FUNCTION,
                 result_reg="%0",
@@ -683,24 +683,24 @@ class TestForwardReferenceResolution:
     def test_call_before_definition_resolves_return_type(self):
         """main() calls helper() which is defined later → %0 gets helper's return type."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             # main calls helper (defined later)
-            _make_inst(Opcode.BRANCH, label="end_main_0"),
-            _make_inst(Opcode.LABEL, label="func_main_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_main_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_main_0")),
             _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["helper"]),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_main_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_main_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
                 operands=["func_main_0"],
             ),
             # helper defined after main
-            _make_inst(Opcode.BRANCH, label="end_helper_0"),
-            _make_inst(Opcode.LABEL, label="func_helper_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_helper_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_helper_0")),
             _make_inst(Opcode.CONST, result_reg="%2", operands=["42"]),
             _make_inst(Opcode.RETURN, operands=["%2"]),
-            _make_inst(Opcode.LABEL, label="end_helper_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_helper_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%3",
@@ -717,22 +717,22 @@ class TestForwardReferenceResolution:
     def test_forward_ref_cascades_to_caller_return_type(self):
         """main() returns helper() result → main's return type also resolves."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.BRANCH, label="end_main_0"),
-            _make_inst(Opcode.LABEL, label="func_main_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_main_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_main_0")),
             _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["helper"]),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_main_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_main_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
                 operands=["func_main_0"],
             ),
-            _make_inst(Opcode.BRANCH, label="end_helper_0"),
-            _make_inst(Opcode.LABEL, label="func_helper_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_helper_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_helper_0")),
             _make_inst(Opcode.CONST, result_reg="%2", operands=["42"]),
             _make_inst(Opcode.RETURN, operands=["%2"]),
-            _make_inst(Opcode.LABEL, label="end_helper_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_helper_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%3",
@@ -749,15 +749,15 @@ class TestForwardReferenceResolution:
     def test_forward_ref_store_var_propagates(self):
         """result = helper() where helper is defined later → var_types["result"] typed."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["helper"]),
             _make_inst(Opcode.STORE_VAR, operands=["result", "%0"]),
             # helper defined later
-            _make_inst(Opcode.BRANCH, label="end_helper_0"),
-            _make_inst(Opcode.LABEL, label="func_helper_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_helper_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_helper_0")),
             _make_inst(Opcode.CONST, result_reg="%1", operands=['"hello"']),
             _make_inst(Opcode.RETURN, operands=["%1"]),
-            _make_inst(Opcode.LABEL, label="end_helper_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_helper_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%2",
@@ -775,35 +775,35 @@ class TestForwardReferenceResolution:
     def test_three_function_chain_resolves(self):
         """a() calls b() calls c() — all defined in reverse order → all resolve."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             # a calls b
-            _make_inst(Opcode.BRANCH, label="end_a_0"),
-            _make_inst(Opcode.LABEL, label="func_a_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_a_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_a_0")),
             _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["b"]),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_a_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_a_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
                 operands=["func_a_0"],
             ),
             # b calls c
-            _make_inst(Opcode.BRANCH, label="end_b_0"),
-            _make_inst(Opcode.LABEL, label="func_b_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_b_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_b_0")),
             _make_inst(Opcode.CALL_FUNCTION, result_reg="%2", operands=["c"]),
             _make_inst(Opcode.RETURN, operands=["%2"]),
-            _make_inst(Opcode.LABEL, label="end_b_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_b_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%3",
                 operands=["func_b_0"],
             ),
             # c returns a constant
-            _make_inst(Opcode.BRANCH, label="end_c_0"),
-            _make_inst(Opcode.LABEL, label="func_c_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_c_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_c_0")),
             _make_inst(Opcode.CONST, result_reg="%4", operands=["3.14"]),
             _make_inst(Opcode.RETURN, operands=["%4"]),
-            _make_inst(Opcode.LABEL, label="end_c_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_c_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%5",
@@ -822,12 +822,12 @@ class TestForwardReferenceResolution:
     def test_no_forward_ref_converges_in_one_pass(self):
         """When all definitions precede calls, inference still works (no regression)."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.BRANCH, label="end_helper_0"),
-            _make_inst(Opcode.LABEL, label="func_helper_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_helper_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_helper_0")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_helper_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_helper_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
@@ -857,9 +857,9 @@ class TestReturnTypeInference:
     def test_label_with_pre_seeded_return_type(self):
         """Pre-seeded func_return_types → recorded internally."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_add_0")),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_add_0")),
         ]
         builder = TypeEnvironmentBuilder(
             func_return_types={"func_add_0": scalar("Int")}
@@ -876,12 +876,12 @@ class TestReturnTypeInference:
     def test_full_chain_label_const_call_function(self):
         """LABEL → CONST func ref → CALL_FUNCTION → result register gets return type."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             # Function definition with return type
-            _make_inst(Opcode.BRANCH, label="end_add_0"),
-            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_add_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_add_0")),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_add_0")),
             # Store function ref: add → func_add_0
             _make_inst(
                 Opcode.CONST,
@@ -912,10 +912,10 @@ class TestReturnTypeInference:
     def test_constructor_pre_seeded_type_overrides_return_type(self):
         """Pre-seeded register type (constructor) overrides inferred return type."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.LABEL, label="func_Dog_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_Dog_0")),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_Dog_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_Dog_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
@@ -944,7 +944,7 @@ class TestReturnTypeInference:
     def test_unknown_function_stays_untyped(self):
         """CALL_FUNCTION for an unknown function leaves register untyped."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(
                 Opcode.CALL_FUNCTION,
                 result_reg="%0",
@@ -968,7 +968,7 @@ class TestBuiltinReturnTypes:
     def test_len_returns_int(self):
         """CALL_FUNCTION `len` → Int via builtin table."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["len", "%1"]),
         ]
         env = infer_types(
@@ -981,7 +981,7 @@ class TestBuiltinReturnTypes:
     def test_str_returns_string(self):
         """CALL_FUNCTION `str` → String via builtin table."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["str", "%1"]),
         ]
         env = infer_types(
@@ -994,7 +994,7 @@ class TestBuiltinReturnTypes:
     def test_range_returns_array(self):
         """CALL_FUNCTION `range` → Array via builtin table."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["range", "%1"]),
         ]
         env = infer_types(
@@ -1007,7 +1007,7 @@ class TestBuiltinReturnTypes:
     def test_int_builtin_returns_int(self):
         """CALL_FUNCTION `int` → Int via builtin table."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["int", "%1"]),
         ]
         env = infer_types(
@@ -1020,7 +1020,7 @@ class TestBuiltinReturnTypes:
     def test_float_builtin_returns_float(self):
         """CALL_FUNCTION `float` → Float via builtin table."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["float", "%1"]),
         ]
         env = infer_types(
@@ -1033,7 +1033,7 @@ class TestBuiltinReturnTypes:
     def test_bool_builtin_returns_bool(self):
         """CALL_FUNCTION `bool` → Bool via builtin table."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["bool", "%1"]),
         ]
         env = infer_types(
@@ -1046,7 +1046,7 @@ class TestBuiltinReturnTypes:
     def test_abs_returns_number(self):
         """CALL_FUNCTION `abs` → Number via builtin table."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CALL_FUNCTION, result_reg="%0", operands=["abs", "%1"]),
         ]
         env = infer_types(
@@ -1059,7 +1059,7 @@ class TestBuiltinReturnTypes:
     def test_unknown_function_stays_untyped_with_builtins(self):
         """Unknown function not in builtin table → untyped."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(
                 Opcode.CALL_FUNCTION, result_reg="%0", operands=["myFunc", "%1"]
             ),
@@ -1074,7 +1074,7 @@ class TestBuiltinReturnTypes:
     def test_pre_seeded_type_takes_precedence_over_builtin(self):
         """Pre-seeded register type on CALL_FUNCTION overrides builtin table."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(
                 Opcode.CALL_FUNCTION,
                 result_reg="%0",
@@ -1093,10 +1093,10 @@ class TestBuiltinReturnTypes:
     def test_user_defined_function_takes_precedence_over_builtin(self):
         """User-defined `len` function overrides builtin table."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.LABEL, label="func_len_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_len_0")),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_len_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_len_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
@@ -1125,12 +1125,12 @@ class TestReturnBackfill:
     def test_unannotated_function_returning_typed_const_gets_return_type(self):
         """Unannotated function returning a typed CONST → func_return_types populated."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.BRANCH, label="end_double_0"),
-            _make_inst(Opcode.LABEL, label="func_double_0"),  # no type_hint
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_double_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_double_0")),  # no type_hint
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_double_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_double_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
@@ -1149,12 +1149,12 @@ class TestReturnBackfill:
     def test_call_function_picks_up_backfilled_return_type(self):
         """CALL_FUNCTION picks up the backfilled return type from RETURN."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.BRANCH, label="end_double_0"),
-            _make_inst(Opcode.LABEL, label="func_double_0"),  # no type_hint
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_double_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_double_0")),  # no type_hint
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_double_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_double_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
@@ -1177,12 +1177,12 @@ class TestReturnBackfill:
     def test_annotated_function_not_overwritten_by_return(self):
         """Annotated function's return type should NOT be overwritten by RETURN backfill."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.BRANCH, label="end_add_0"),
-            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_add_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_add_0")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_add_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
@@ -1205,11 +1205,11 @@ class TestReturnBackfill:
     def test_return_with_untyped_register_does_not_backfill(self):
         """RETURN with an untyped register does not backfill."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.BRANCH, label="end_f_0"),
-            _make_inst(Opcode.LABEL, label="func_f_0"),  # no type_hint
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_f_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_f_0")),  # no type_hint
             _make_inst(Opcode.RETURN, operands=["%0"]),  # %0 has no type
-            _make_inst(Opcode.LABEL, label="end_f_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_f_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
@@ -1234,19 +1234,19 @@ class TestCallMethodReturnTypes:
     def test_class_method_return_type_from_typed_function(self):
         """Class with typed method → CALL_METHOD on typed object → result typed."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             # class Dog { getAge(): Int }
-            _make_inst(Opcode.LABEL, label="class_Dog_0"),
-            _make_inst(Opcode.BRANCH, label="end_getAge_0"),
-            _make_inst(Opcode.LABEL, label="func_getAge_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("class_Dog_0")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_getAge_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_getAge_0")),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_getAge_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_getAge_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
                 operands=["func_getAge_0"],
             ),
-            _make_inst(Opcode.LABEL, label="end_class_Dog_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Dog_0")),
             # obj = new Dog()
             _make_inst(Opcode.NEW_OBJECT, result_reg="%2", operands=["Dog"]),
             # obj.getAge()
@@ -1270,7 +1270,7 @@ class TestCallMethodReturnTypes:
     def test_unknown_method_stays_untyped(self):
         """CALL_METHOD on unknown method → untyped."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.NEW_OBJECT, result_reg="%0", operands=["Dog"]),
             _make_inst(
                 Opcode.CALL_METHOD,
@@ -1288,12 +1288,12 @@ class TestCallMethodReturnTypes:
     def test_fallback_to_func_return_types_for_unique_method(self):
         """CALL_METHOD falls back to func_return_types when object type unknown."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             # Define function getAge with return type Int
-            _make_inst(Opcode.BRANCH, label="end_getAge_0"),
-            _make_inst(Opcode.LABEL, label="func_getAge_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_getAge_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_getAge_0")),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_getAge_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_getAge_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
@@ -1320,7 +1320,7 @@ class TestCallMethodReturnTypes:
     def test_builtin_string_method_upper_returns_string(self):
         """CALL_METHOD .upper() on any object → String."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=['"hello"']),
             _make_inst(
                 Opcode.CALL_METHOD,
@@ -1338,7 +1338,7 @@ class TestCallMethodReturnTypes:
     def test_builtin_string_method_split_returns_array(self):
         """CALL_METHOD .split() → Array."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=['"a,b,c"']),
             _make_inst(
                 Opcode.CALL_METHOD,
@@ -1356,7 +1356,7 @@ class TestCallMethodReturnTypes:
     def test_builtin_method_keys_returns_array(self):
         """CALL_METHOD .keys() → Array."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(
                 Opcode.CALL_METHOD,
                 result_reg="%1",
@@ -1373,7 +1373,7 @@ class TestCallMethodReturnTypes:
     def test_builtin_method_find_returns_int(self):
         """CALL_METHOD .find() → Int."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=['"hello"']),
             _make_inst(
                 Opcode.CALL_METHOD,
@@ -1391,7 +1391,7 @@ class TestCallMethodReturnTypes:
     def test_builtin_method_startswith_returns_bool(self):
         """CALL_METHOD .startswith() → Bool."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=['"hello"']),
             _make_inst(
                 Opcode.CALL_METHOD,
@@ -1409,18 +1409,18 @@ class TestCallMethodReturnTypes:
     def test_user_defined_method_takes_priority_over_builtin(self):
         """User-defined class method return type overrides builtin method table."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.LABEL, label="class_Widget_0"),
-            _make_inst(Opcode.BRANCH, label="end_split_0"),
-            _make_inst(Opcode.LABEL, label="func_split_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("class_Widget_0")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_split_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_split_0")),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_split_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_split_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
                 operands=["func_split_0"],
             ),
-            _make_inst(Opcode.LABEL, label="end_class_Widget_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Widget_0")),
             _make_inst(Opcode.NEW_OBJECT, result_reg="%2", operands=["Widget"]),
             _make_inst(
                 Opcode.CALL_METHOD,
@@ -1443,31 +1443,31 @@ class TestCallMethodReturnTypes:
     def test_class_scope_reset_on_new_class(self):
         """When a new class_ label is hit, scope switches to the new class."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             # class Cat { speak(): String }
-            _make_inst(Opcode.LABEL, label="class_Cat_0"),
-            _make_inst(Opcode.BRANCH, label="end_speak_0"),
-            _make_inst(Opcode.LABEL, label="func_speak_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("class_Cat_0")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_speak_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_speak_0")),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_speak_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_speak_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
                 operands=["func_speak_0"],
             ),
-            _make_inst(Opcode.LABEL, label="end_class_Cat_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Cat_0")),
             # class Dog { bark(): Int }
-            _make_inst(Opcode.LABEL, label="class_Dog_0"),
-            _make_inst(Opcode.BRANCH, label="end_bark_0"),
-            _make_inst(Opcode.LABEL, label="func_bark_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("class_Dog_0")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_bark_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_bark_0")),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_bark_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_bark_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%2",
                 operands=["func_bark_0"],
             ),
-            _make_inst(Opcode.LABEL, label="end_class_Dog_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Dog_0")),
             # cat.speak() → String
             _make_inst(Opcode.NEW_OBJECT, result_reg="%3", operands=["Cat"]),
             _make_inst(Opcode.CALL_METHOD, result_reg="%4", operands=["%3", "speak"]),
@@ -1500,7 +1500,7 @@ class TestFieldTypeTable:
     def test_store_field_then_load_field_typed(self):
         """STORE_FIELD typed value → LOAD_FIELD same class/field → typed."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.NEW_OBJECT, result_reg="%0", operands=["Dog"]),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["5"]),
             _make_inst(Opcode.STORE_FIELD, operands=["%0", "age", "%1"]),
@@ -1518,7 +1518,7 @@ class TestFieldTypeTable:
     def test_load_field_unknown_class_untyped(self):
         """LOAD_FIELD on untyped object → untyped."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.LOAD_FIELD, result_reg="%1", operands=["%0", "x"]),
         ]
         env = infer_types(
@@ -1531,7 +1531,7 @@ class TestFieldTypeTable:
     def test_load_field_unknown_field_untyped(self):
         """LOAD_FIELD on known class but unknown field → untyped."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.NEW_OBJECT, result_reg="%0", operands=["Dog"]),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["5"]),
             _make_inst(Opcode.STORE_FIELD, operands=["%0", "age", "%1"]),
@@ -1547,7 +1547,7 @@ class TestFieldTypeTable:
     def test_multiple_fields_on_same_class(self):
         """Multiple fields stored on same class → each loaded with correct type."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.NEW_OBJECT, result_reg="%0", operands=["Dog"]),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["5"]),
             _make_inst(Opcode.STORE_FIELD, operands=["%0", "age", "%1"]),
@@ -1574,7 +1574,7 @@ class TestRegionInference:
     def test_alloc_region_produces_region_type(self):
         """ALLOC_REGION → register typed as 'Region'."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.ALLOC_REGION, result_reg="%0", operands=["100"]),
         ]
         env = infer_types(
@@ -1587,7 +1587,7 @@ class TestRegionInference:
     def test_load_region_produces_array_type(self):
         """LOAD_REGION → register typed as Array."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.LOAD_REGION, result_reg="%0", operands=["%1", "0", "10"]),
         ]
         env = infer_types(
@@ -1601,7 +1601,7 @@ class TestRegionInference:
 class TestImmutability:
     def test_type_environment_is_frozen(self):
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
         ]
         env = infer_types(
@@ -1622,13 +1622,13 @@ class TestFunctionSignatures:
     def test_typed_params_collected(self):
         """Pre-seeded func types → signatures include param types."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.BRANCH, label="end_add_0"),
-            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_add_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_add_0")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"]),
             _make_inst(Opcode.SYMBOLIC, result_reg="%1", operands=["param:b"]),
             _make_inst(Opcode.RETURN, operands=["%2"]),
-            _make_inst(Opcode.LABEL, label="end_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_add_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%3",
@@ -1658,12 +1658,12 @@ class TestFunctionSignatures:
     def test_untyped_params_collected_with_empty_type(self):
         """SYMBOLIC params without type_hint → param name with empty type."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.BRANCH, label="end_greet_0"),
-            _make_inst(Opcode.LABEL, label="func_greet_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_greet_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_greet_0")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:name"]),
             _make_inst(Opcode.RETURN, operands=["%1"]),
-            _make_inst(Opcode.LABEL, label="end_greet_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_greet_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%2",
@@ -1683,12 +1683,12 @@ class TestFunctionSignatures:
     def test_no_internal_labels_in_signatures(self):
         """Internal labels like func_add_0 should NOT appear in func_signatures."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.BRANCH, label="end_add_0"),
-            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_add_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_add_0")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"]),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_add_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
@@ -1713,11 +1713,11 @@ class TestFunctionSignatures:
     def test_function_with_no_params(self):
         """Function with no parameters → empty params tuple."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.BRANCH, label="end_main_0"),
-            _make_inst(Opcode.LABEL, label="func_main_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_main_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_main_0")),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_main_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_main_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
@@ -1741,14 +1741,14 @@ class TestFunctionSignatures:
     def test_multiple_functions(self):
         """Multiple function definitions → each gets its own signature."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             # func add
-            _make_inst(Opcode.BRANCH, label="end_add_0"),
-            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_add_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_add_0")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"]),
             _make_inst(Opcode.SYMBOLIC, result_reg="%1", operands=["param:b"]),
             _make_inst(Opcode.RETURN, operands=["%2"]),
-            _make_inst(Opcode.LABEL, label="end_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_add_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%3",
@@ -1756,11 +1756,11 @@ class TestFunctionSignatures:
             ),
             _make_inst(Opcode.STORE_VAR, operands=["add", "%3"]),
             # func greet
-            _make_inst(Opcode.BRANCH, label="end_greet_0"),
-            _make_inst(Opcode.LABEL, label="func_greet_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_greet_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_greet_0")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%4", operands=["param:name"]),
             _make_inst(Opcode.RETURN, operands=["%5"]),
-            _make_inst(Opcode.LABEL, label="end_greet_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_greet_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%6",
@@ -1799,11 +1799,11 @@ class TestFunctionSignatures:
     def test_func_signatures_is_immutable(self):
         """func_signatures should be a read-only mapping."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.BRANCH, label="end_f_0"),
-            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_f_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_f_0")),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_f_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_f_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
@@ -1833,19 +1833,19 @@ class TestSelfThisTyping:
     def test_param_self_inside_class_typed_as_class_name(self):
         """param:self inside class_Dog scope → register typed as 'Dog'."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.LABEL, label="class_Dog_0"),
-            _make_inst(Opcode.BRANCH, label="end___init___0"),
-            _make_inst(Opcode.LABEL, label="func___init___0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("class_Dog_0")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end___init___0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func___init___0")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:self"]),
             _make_inst(Opcode.RETURN, operands=[]),
-            _make_inst(Opcode.LABEL, label="end___init___0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end___init___0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%9",
                 operands=["func___init___0"],
             ),
-            _make_inst(Opcode.LABEL, label="end_class_Dog_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Dog_0")),
         ]
         env = infer_types(
             instructions,
@@ -1857,19 +1857,19 @@ class TestSelfThisTyping:
     def test_param_this_inside_class_typed_as_class_name(self):
         """param:this inside class_Cat scope → register typed as 'Cat'."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.LABEL, label="class_Cat_0"),
-            _make_inst(Opcode.BRANCH, label="end_getAge_0"),
-            _make_inst(Opcode.LABEL, label="func_getAge_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("class_Cat_0")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_getAge_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_getAge_0")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:this"]),
             _make_inst(Opcode.RETURN, operands=[]),
-            _make_inst(Opcode.LABEL, label="end_getAge_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_getAge_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%9",
                 operands=["func_getAge_0"],
             ),
-            _make_inst(Opcode.LABEL, label="end_class_Cat_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Cat_0")),
         ]
         env = infer_types(
             instructions,
@@ -1881,19 +1881,19 @@ class TestSelfThisTyping:
     def test_param_dollar_this_inside_class_typed_as_class_name(self):
         """param:$this inside class_User scope → register typed as 'User' (PHP)."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.LABEL, label="class_User_0"),
-            _make_inst(Opcode.BRANCH, label="end_getName_0"),
-            _make_inst(Opcode.LABEL, label="func_getName_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("class_User_0")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_getName_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_getName_0")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:$this"]),
             _make_inst(Opcode.RETURN, operands=[]),
-            _make_inst(Opcode.LABEL, label="end_getName_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_getName_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%9",
                 operands=["func_getName_0"],
             ),
-            _make_inst(Opcode.LABEL, label="end_class_User_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_class_User_0")),
         ]
         env = infer_types(
             instructions,
@@ -1905,12 +1905,12 @@ class TestSelfThisTyping:
     def test_param_self_outside_class_not_typed(self):
         """param:self outside any class scope → no type assigned."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.BRANCH, label="end_f_0"),
-            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_f_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_f_0")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:self"]),
             _make_inst(Opcode.RETURN, operands=[]),
-            _make_inst(Opcode.LABEL, label="end_f_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_f_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%9",
@@ -1927,34 +1927,34 @@ class TestSelfThisTyping:
     def test_self_typing_enables_field_tracking(self):
         """param:self typed → STORE_FIELD on self register → field_types populated."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.LABEL, label="class_Dog_0"),
-            _make_inst(Opcode.BRANCH, label="end___init___0"),
-            _make_inst(Opcode.LABEL, label="func___init___0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("class_Dog_0")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end___init___0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func___init___0")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:self"]),
             _make_inst(Opcode.STORE_VAR, operands=["self", "%0"]),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["5"]),
             _make_inst(Opcode.STORE_FIELD, operands=["%0", "age", "%1"]),
             _make_inst(Opcode.RETURN, operands=[]),
-            _make_inst(Opcode.LABEL, label="end___init___0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end___init___0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%9",
                 operands=["func___init___0"],
             ),
             # get_age method — load self, load field
-            _make_inst(Opcode.BRANCH, label="end_get_age_0"),
-            _make_inst(Opcode.LABEL, label="func_get_age_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_get_age_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_get_age_0")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%2", operands=["param:self"]),
             _make_inst(Opcode.LOAD_FIELD, result_reg="%3", operands=["%2", "age"]),
             _make_inst(Opcode.RETURN, operands=["%3"]),
-            _make_inst(Opcode.LABEL, label="end_get_age_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_get_age_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%8",
                 operands=["func_get_age_0"],
             ),
-            _make_inst(Opcode.LABEL, label="end_class_Dog_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Dog_0")),
         ]
         env = infer_types(
             instructions,
@@ -1970,19 +1970,19 @@ class TestSelfThisTyping:
     def test_param_self_with_pre_seeded_type_uses_pre_seeded(self):
         """If param:self already has a pre-seeded type, that takes priority."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.LABEL, label="class_Dog_0"),
-            _make_inst(Opcode.BRANCH, label="end_f_0"),
-            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("class_Dog_0")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_f_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_f_0")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:self"]),
             _make_inst(Opcode.RETURN, operands=[]),
-            _make_inst(Opcode.LABEL, label="end_f_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_f_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%9",
                 operands=["func_f_0"],
             ),
-            _make_inst(Opcode.LABEL, label="end_class_Dog_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Dog_0")),
         ]
         builder = TypeEnvironmentBuilder(register_types={"%0": scalar("SpecialDog")})
         env = infer_types(
@@ -2004,12 +2004,12 @@ class TestCallUnknown:
     def test_target_resolves_to_known_function_via_var_types(self):
         """CALL_UNKNOWN target register → var_types → func_return_types → typed."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             # Define function 'add' with return type Int
-            _make_inst(Opcode.BRANCH, label="end_add_0"),
-            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_add_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_add_0")),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_add_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
@@ -2038,7 +2038,7 @@ class TestCallUnknown:
     def test_target_resolves_to_builtin(self):
         """CALL_UNKNOWN target register → var_types name → builtin → typed."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.STORE_VAR, operands=["len", "%0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="%1", operands=["len"]),
             _make_inst(
@@ -2049,7 +2049,7 @@ class TestCallUnknown:
         ]
         # var_types needs 'len' → store it via CONST + STORE_VAR
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:len"]),
             _make_inst(Opcode.STORE_VAR, operands=["len", "%0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="%1", operands=["len"]),
@@ -2070,7 +2070,7 @@ class TestCallUnknown:
     def test_unknown_target_stays_untyped(self):
         """CALL_UNKNOWN with unresolvable target → untyped."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(
                 Opcode.CALL_UNKNOWN,
                 result_reg="%1",
@@ -2087,7 +2087,7 @@ class TestCallUnknown:
     def test_no_result_reg_leaves_state_clean(self):
         """CALL_UNKNOWN without result_reg does not pollute register or var types."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CALL_UNKNOWN, operands=["%0"]),
         ]
         env = infer_types(
@@ -2108,7 +2108,7 @@ class TestStoreIndexLoadIndex:
     def test_store_then_load_same_array_register(self):
         """STORE_INDEX typed value → LOAD_INDEX same array register → typed."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.NEW_ARRAY, result_reg="%0"),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["5"]),
             _make_inst(Opcode.CONST, result_reg="%2", operands=["0"]),
@@ -2125,7 +2125,7 @@ class TestStoreIndexLoadIndex:
     def test_load_index_unknown_array_untyped(self):
         """LOAD_INDEX on array with no prior STORE_INDEX → untyped."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.NEW_ARRAY, result_reg="%0"),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["0"]),
             _make_inst(Opcode.LOAD_INDEX, result_reg="%2", operands=["%0", "%1"]),
@@ -2140,7 +2140,7 @@ class TestStoreIndexLoadIndex:
     def test_last_store_wins(self):
         """Multiple STORE_INDEX with different types → last one wins."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.NEW_ARRAY, result_reg="%0"),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["5"]),
             _make_inst(Opcode.CONST, result_reg="%2", operands=["0"]),
@@ -2160,7 +2160,7 @@ class TestStoreIndexLoadIndex:
     def test_store_index_untyped_value_no_tracking(self):
         """STORE_INDEX with untyped value → no element type tracked."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.NEW_ARRAY, result_reg="%0"),
             _make_inst(Opcode.CONST, result_reg="%2", operands=["0"]),
             # %1 is untyped
@@ -2177,7 +2177,7 @@ class TestStoreIndexLoadIndex:
     def test_store_index_no_result_reg(self):
         """STORE_INDEX never produces a result register."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.NEW_ARRAY, result_reg="%0"),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["5"]),
             _make_inst(Opcode.CONST, result_reg="%2", operands=["0"]),
@@ -2201,23 +2201,23 @@ class TestVarTypeScoping:
     def test_same_var_name_different_types_in_two_functions(self):
         """Variable 'x' in function f is Int, in function g is String."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             # function f: x = 42
-            _make_inst(Opcode.BRANCH, label="end_f"),
-            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_f")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_f_0")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"]),
             _make_inst(Opcode.RETURN, operands=["%1"]),
-            _make_inst(Opcode.LABEL, label="end_f"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_f")),
             # function g: x = "hello"
-            _make_inst(Opcode.BRANCH, label="end_g"),
-            _make_inst(Opcode.LABEL, label="func_g_1"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_g")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_g_1")),
             _make_inst(Opcode.CONST, result_reg="%2", operands=['"hello"']),
             _make_inst(Opcode.STORE_VAR, operands=["x", "%2"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="%3", operands=["x"]),
             _make_inst(Opcode.RETURN, operands=["%3"]),
-            _make_inst(Opcode.LABEL, label="end_g"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_g")),
         ]
         env = infer_types(
             instructions,
@@ -2233,16 +2233,16 @@ class TestVarTypeScoping:
     def test_global_var_visible_inside_function(self):
         """A top-level variable should be visible from within a function."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             # global: y = 99
             _make_inst(Opcode.CONST, result_reg="%0", operands=["99"]),
             _make_inst(Opcode.STORE_VAR, operands=["y", "%0"]),
             # function f: loads y
-            _make_inst(Opcode.BRANCH, label="end_f"),
-            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_f")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_f_0")),
             _make_inst(Opcode.LOAD_VAR, result_reg="%1", operands=["y"]),
             _make_inst(Opcode.RETURN, operands=["%1"]),
-            _make_inst(Opcode.LABEL, label="end_f"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_f")),
         ]
         env = infer_types(
             instructions,
@@ -2256,14 +2256,14 @@ class TestVarTypeScoping:
     def test_function_var_does_not_leak_to_global(self):
         """A variable defined inside a function should not affect global scope."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             # function f: z = 3.14
-            _make_inst(Opcode.BRANCH, label="end_f"),
-            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_f")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_f_0")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["3.14"]),
             _make_inst(Opcode.STORE_VAR, operands=["z", "%0"]),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_f"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_f")),
             # global: load z (should NOT get Float from f's scope)
             _make_inst(Opcode.LOAD_VAR, result_reg="%1", operands=["z"]),
         ]
@@ -2311,13 +2311,13 @@ class TestInferConstTypeReturnsTypeExpr:
         assert result is UNKNOWN
 
     def test_func_ref_returns_unknown(self):
-        func_st = {"func_add_0": FuncRef(name="add", label="func_add_0")}
+        func_st = {"func_add_0": FuncRef(name="add", label=CodeLabel("func_add_0"))}
         result = _infer_const_type("func_add_0", func_symbol_table=func_st)
         assert isinstance(result, UnknownType)
 
     def test_class_ref_returns_unknown(self):
         class_st = {
-            "class_Dog_0": ClassRef(name="Dog", label="class_Dog_0", parents=())
+            "class_Dog_0": ClassRef(name="Dog", label=CodeLabel("class_Dog_0"), parents=())
         }
         result = _infer_const_type("class_Dog_0", class_symbol_table=class_st)
         assert isinstance(result, UnknownType)
@@ -2333,7 +2333,7 @@ class TestInferenceInternalTypeExpr:
     def test_const_stores_type_expr_in_register(self):
         """CONST instruction should store a TypeExpr in register_types."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
         ]
         env = infer_types(
@@ -2348,7 +2348,7 @@ class TestInferenceInternalTypeExpr:
     def test_new_array_then_store_index_produces_parameterized_type(self):
         """Array promotion should produce ParameterizedType, not a string."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.NEW_ARRAY, result_reg="%arr"),
             _make_inst(Opcode.CONST, result_reg="%val", operands=["42"]),
             _make_inst(Opcode.CONST, result_reg="%idx", operands=["0"]),
@@ -2367,7 +2367,7 @@ class TestInferenceInternalTypeExpr:
     def test_binop_result_is_type_expr(self):
         """BINOP result type from TypeResolver should be stored as TypeExpr."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["10"]),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["20"]),
             _make_inst(Opcode.BINOP, result_reg="%2", operands=["+", "%0", "%1"]),
@@ -2383,7 +2383,7 @@ class TestInferenceInternalTypeExpr:
     def test_store_var_type_is_type_expr(self):
         """Variable types stored during inference should be TypeExpr."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
         ]
@@ -2400,7 +2400,7 @@ class TestInferenceInternalTypeExpr:
         builder = TypeEnvironmentBuilder(
             register_types={"%0": parse_type("List[String]")}
         )
-        instructions = [_make_inst(Opcode.LABEL, label="entry")]
+        instructions = [_make_inst(Opcode.LABEL, label=CodeLabel("entry"))]
         env = infer_types(
             instructions,
             _null_resolver(),
@@ -2417,7 +2417,7 @@ class TestInferenceInternalTypeExpr:
         builder = TypeEnvironmentBuilder(
             var_types={"items": parse_type("Map[String, Int]")}
         )
-        instructions = [_make_inst(Opcode.LABEL, label="entry")]
+        instructions = [_make_inst(Opcode.LABEL, label=CodeLabel("entry"))]
         env = infer_types(
             instructions,
             _null_resolver(),
@@ -2431,7 +2431,7 @@ class TestInferenceInternalTypeExpr:
     def test_new_object_class_name_is_scalar_type(self):
         """NEW_OBJECT stores class name as ScalarType."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.NEW_OBJECT, result_reg="%0", operands=["Dog"]),
         ]
         env = infer_types(
@@ -2445,7 +2445,7 @@ class TestInferenceInternalTypeExpr:
     def test_unop_fixed_type_is_type_expr(self):
         """UNOP with fixed result type (e.g., 'not' → Bool) stores TypeExpr."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["True"]),
             _make_inst(Opcode.UNOP, result_reg="%1", operands=["not", "%0"]),
         ]
@@ -2460,7 +2460,7 @@ class TestInferenceInternalTypeExpr:
     def test_alloc_region_is_scalar_type(self):
         """ALLOC_REGION stores 'Region' as ScalarType."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.ALLOC_REGION, result_reg="%0"),
         ]
         env = infer_types(
@@ -2474,7 +2474,7 @@ class TestInferenceInternalTypeExpr:
     def test_load_region_is_scalar_type(self):
         """LOAD_REGION stores 'Array' as ScalarType."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.ALLOC_REGION, result_reg="%0"),
             _make_inst(Opcode.LOAD_REGION, result_reg="%1", operands=["%0", "field"]),
         ]
@@ -2498,7 +2498,7 @@ class TestFieldTypeTableUsesTypeExprKeys:
     def test_store_field_uses_type_expr_class_key(self):
         """STORE_FIELD on typed object → field lookup works with TypeExpr key."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.NEW_OBJECT, result_reg="%0", operands=["Dog"]),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["5"]),
             _make_inst(Opcode.STORE_FIELD, operands=["%0", "age", "%1"]),
@@ -2516,33 +2516,33 @@ class TestFieldTypeTableUsesTypeExprKeys:
     def test_self_typed_field_store_uses_type_expr_key(self):
         """param:self typed as Dog → STORE_FIELD → LOAD_FIELD uses TypeExpr class key."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.LABEL, label="class_Dog_0"),
-            _make_inst(Opcode.BRANCH, label="end___init___0"),
-            _make_inst(Opcode.LABEL, label="func___init___0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("class_Dog_0")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end___init___0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func___init___0")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:self"]),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["5"]),
             _make_inst(Opcode.STORE_FIELD, operands=["%0", "age", "%1"]),
             _make_inst(Opcode.RETURN, operands=[]),
-            _make_inst(Opcode.LABEL, label="end___init___0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end___init___0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%9",
                 operands=["func___init___0"],
             ),
             # get_age method
-            _make_inst(Opcode.BRANCH, label="end_get_age_0"),
-            _make_inst(Opcode.LABEL, label="func_get_age_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_get_age_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_get_age_0")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%2", operands=["param:self"]),
             _make_inst(Opcode.LOAD_FIELD, result_reg="%3", operands=["%2", "age"]),
             _make_inst(Opcode.RETURN, operands=["%3"]),
-            _make_inst(Opcode.LABEL, label="end_get_age_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_get_age_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%8",
                 operands=["func_get_age_0"],
             ),
-            _make_inst(Opcode.LABEL, label="end_class_Dog_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Dog_0")),
         ]
         env = infer_types(
             instructions,
@@ -2559,18 +2559,18 @@ class TestFieldTypeTableUsesTypeExprKeys:
     def test_class_method_type_resolution_uses_type_expr_key(self):
         """CALL_METHOD on typed object → resolves return type via TypeExpr class key."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.LABEL, label="class_Cat_0"),
-            _make_inst(Opcode.BRANCH, label="end_get_lives_0"),
-            _make_inst(Opcode.LABEL, label="func_get_lives_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("class_Cat_0")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_get_lives_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_get_lives_0")),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_get_lives_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_get_lives_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
                 operands=["func_get_lives_0"],
             ),
-            _make_inst(Opcode.LABEL, label="end_class_Cat_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Cat_0")),
             # Call get_lives on a Cat object
             _make_inst(Opcode.NEW_OBJECT, result_reg="%2", operands=["Cat"]),
             _make_inst(
@@ -2604,7 +2604,7 @@ class TestUnionAwareVarTyping:
     def test_var_assigned_int_then_string_produces_union(self):
         """STORE_VAR x with Int, then STORE_VAR x with String → Union[Int, String]."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
             _make_inst(Opcode.CONST, result_reg="%1", operands=['"hello"']),
@@ -2621,7 +2621,7 @@ class TestUnionAwareVarTyping:
     def test_var_assigned_same_type_twice_no_union(self):
         """STORE_VAR x with Int twice → stays Int (no trivial union)."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
             _make_inst(Opcode.CONST, result_reg="%1", operands=["99"]),
@@ -2641,7 +2641,7 @@ class TestUnionAwareVarTyping:
             var_types={"items": parse_type("List[String]")}
         )
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["obj"]),
             _make_inst(Opcode.STORE_VAR, operands=["items", "%0"]),
         ]
@@ -2656,7 +2656,7 @@ class TestUnionAwareVarTyping:
     def test_three_types_produce_three_member_union(self):
         """Three different types → Union[Bool, Int, String]."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
             _make_inst(Opcode.CONST, result_reg="%1", operands=['"hello"']),
@@ -2682,15 +2682,15 @@ class TestFunctionTypeInference:
     def test_const_func_ref_infers_function_type_when_known(self):
         """CONST <function:add@func_add_0> with seeded params and return → FunctionType."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             # Define function with known param types and return type
-            _make_inst(Opcode.BRANCH, label="end_add_0"),
-            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_add_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_add_0")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"]),
             _make_inst(Opcode.SYMBOLIC, result_reg="%1", operands=["param:b"]),
             _make_inst(Opcode.BINOP, result_reg="%2", operands=["+", "%0", "%1"]),
             _make_inst(Opcode.RETURN, operands=["%2"]),
-            _make_inst(Opcode.LABEL, label="end_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_add_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%3",
@@ -2717,11 +2717,11 @@ class TestFunctionTypeInference:
     def test_const_func_ref_no_params_known(self):
         """CONST func ref with no param types known → no FunctionType inferred."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.BRANCH, label="end_f_0"),
-            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_f_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_f_0")),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_f_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_f_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
@@ -2739,12 +2739,12 @@ class TestFunctionTypeInference:
     def test_const_func_ref_only_return_known_infers_function_type(self):
         """CONST func ref with return type but no param types → FunctionType with empty params."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.BRANCH, label="end_g_0"),
-            _make_inst(Opcode.LABEL, label="func_g_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_g_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_g_0")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_g_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_g_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
@@ -2766,15 +2766,15 @@ class TestFunctionTypeInference:
     def test_call_unknown_with_function_type_uses_return_type(self):
         """CALL_UNKNOWN on register with FunctionType → result gets return_type."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             # Define function
-            _make_inst(Opcode.BRANCH, label="end_add_0"),
-            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_add_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_add_0")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"]),
             _make_inst(Opcode.SYMBOLIC, result_reg="%1", operands=["param:b"]),
             _make_inst(Opcode.BINOP, result_reg="%2", operands=["+", "%0", "%1"]),
             _make_inst(Opcode.RETURN, operands=["%2"]),
-            _make_inst(Opcode.LABEL, label="end_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_add_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%3",
@@ -2807,12 +2807,12 @@ class TestFunctionTypeInference:
     def test_call_unknown_uses_function_type_from_register(self):
         """CALL_UNKNOWN on register with FunctionType (no var name) → uses return_type."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.BRANCH, label="end_f_0"),
-            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("end_f_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_f_0")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_f_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_f_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
@@ -2841,7 +2841,7 @@ class TestTupleTypeInference:
     def test_new_array_tuple_typed_as_tuple(self):
         """NEW_ARRAY with 'tuple' operand produces Tuple type, not Array."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["2"]),
             _make_inst(Opcode.NEW_ARRAY, result_reg="%1", operands=["tuple", "%0"]),
         ]
@@ -2855,7 +2855,7 @@ class TestTupleTypeInference:
     def test_tuple_promotion_with_element_types(self):
         """Tuple register promoted to Tuple[Int, String] after STORE_INDEX."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["2"]),
             _make_inst(Opcode.NEW_ARRAY, result_reg="%1", operands=["tuple", "%0"]),
             _make_inst(Opcode.CONST, result_reg="%2", operands=["42"]),
@@ -2876,7 +2876,7 @@ class TestTupleTypeInference:
     def test_tuple_load_index_resolves_per_element(self):
         """LOAD_INDEX on a tuple at known index resolves to that element type."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["2"]),
             _make_inst(Opcode.NEW_ARRAY, result_reg="%1", operands=["tuple", "%0"]),
             _make_inst(Opcode.CONST, result_reg="%2", operands=["42"]),
@@ -2900,7 +2900,7 @@ class TestTupleTypeInference:
     def test_tuple_var_propagation(self):
         """Tuple element types propagate through STORE_VAR → LOAD_VAR."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["2"]),
             _make_inst(Opcode.NEW_ARRAY, result_reg="%1", operands=["tuple", "%0"]),
             _make_inst(Opcode.CONST, result_reg="%2", operands=["42"]),
@@ -2931,7 +2931,7 @@ class TestTypeAliasInference:
     def test_alias_resolves_in_var_type(self):
         """Variable seeded with alias name resolves to the aliased type."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "%0"]),
         ]
@@ -2950,7 +2950,7 @@ class TestTypeAliasInference:
     def test_alias_resolves_transitively(self):
         """Chained aliases resolve fully: Km → Distance → Int."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["10"]),
             _make_inst(Opcode.STORE_VAR, operands=["d", "%0"]),
         ]
@@ -2974,7 +2974,7 @@ class TestTypeAliasInference:
         from interpreter.types.type_expr import map_of
 
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=['"key"']),
             _make_inst(Opcode.STORE_VAR, operands=["m", "%0"]),
         ]
@@ -2993,7 +2993,7 @@ class TestTypeAliasInference:
     def test_aliases_exposed_in_environment(self):
         """TypeEnvironment includes alias registry."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
         ]
         builder = TypeEnvironmentBuilder(
             type_aliases={"UserId": scalar("Int")},
@@ -3010,11 +3010,11 @@ class TestTypeAliasInference:
     def test_func_return_alias_resolves(self):
         """Function return type seeded as alias resolves to concrete type."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="entry"),
-            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_f_0")),
             _make_inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _make_inst(Opcode.RETURN, operands=["%0"]),
-            _make_inst(Opcode.LABEL, label="end_f_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_f_0")),
             _make_inst(
                 Opcode.CONST,
                 result_reg="%1",
@@ -3052,15 +3052,15 @@ class TestMethodSignatures:
         instructions = [
             _make_inst(Opcode.CONST, "%0", ["<class:Calc@class_Calc_0>"]),
             _make_inst(Opcode.STORE_VAR, operands=["Calc", "%0"]),
-            _make_inst(Opcode.LABEL, label="class_Calc_0"),
-            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("class_Calc_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_add_0")),
             _make_inst(Opcode.SYMBOLIC, "%1", ["param:this"]),
             _make_inst(Opcode.SYMBOLIC, "%2", ["param:a"]),
             _make_inst(Opcode.SYMBOLIC, "%3", ["param:b"]),
-            _make_inst(Opcode.LABEL, label="end_func_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_func_add_0")),
             _make_inst(Opcode.CONST, "%4", ["func_add_0"]),
             _make_inst(Opcode.STORE_VAR, operands=["add", "%4"]),
-            _make_inst(Opcode.LABEL, label="end_class_Calc_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Calc_0")),
         ]
         builder = TypeEnvironmentBuilder(
             func_return_types={"func_add_0": scalar("Int")},
@@ -3091,25 +3091,25 @@ class TestMethodSignatures:
         instructions = [
             _make_inst(Opcode.CONST, "%0", ["<class:Calc@class_Calc_0>"]),
             _make_inst(Opcode.STORE_VAR, operands=["Calc", "%0"]),
-            _make_inst(Opcode.LABEL, label="class_Calc_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("class_Calc_0")),
             # First overload: add(this, a, b) -> Int
-            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_add_0")),
             _make_inst(Opcode.SYMBOLIC, "%1", ["param:this"]),
             _make_inst(Opcode.SYMBOLIC, "%2", ["param:a"]),
             _make_inst(Opcode.SYMBOLIC, "%3", ["param:b"]),
-            _make_inst(Opcode.LABEL, label="end_func_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_func_add_0")),
             _make_inst(Opcode.CONST, "%4", ["func_add_0"]),
             _make_inst(Opcode.STORE_VAR, operands=["add", "%4"]),
             # Second overload: add(this, a, b, c) -> Int
-            _make_inst(Opcode.LABEL, label="func_add_1"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_add_1")),
             _make_inst(Opcode.SYMBOLIC, "%5", ["param:this"]),
             _make_inst(Opcode.SYMBOLIC, "%6", ["param:a"]),
             _make_inst(Opcode.SYMBOLIC, "%7", ["param:b"]),
             _make_inst(Opcode.SYMBOLIC, "%8", ["param:c"]),
-            _make_inst(Opcode.LABEL, label="end_func_add_1"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_func_add_1")),
             _make_inst(Opcode.CONST, "%9", ["func_add_1"]),
             _make_inst(Opcode.STORE_VAR, operands=["add", "%9"]),
-            _make_inst(Opcode.LABEL, label="end_class_Calc_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Calc_0")),
         ]
         builder = TypeEnvironmentBuilder(
             func_return_types={
@@ -3148,24 +3148,24 @@ class TestMethodSignatures:
             # Class Foo
             _make_inst(Opcode.CONST, "%0", ["<class:Foo@class_Foo_0>"]),
             _make_inst(Opcode.STORE_VAR, operands=["Foo", "%0"]),
-            _make_inst(Opcode.LABEL, label="class_Foo_0"),
-            _make_inst(Opcode.LABEL, label="func_greet_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("class_Foo_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_greet_0")),
             _make_inst(Opcode.SYMBOLIC, "%1", ["param:this"]),
-            _make_inst(Opcode.LABEL, label="end_func_greet_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_func_greet_0")),
             _make_inst(Opcode.CONST, "%2", ["func_greet_0"]),
             _make_inst(Opcode.STORE_VAR, operands=["greet", "%2"]),
-            _make_inst(Opcode.LABEL, label="end_class_Foo_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Foo_0")),
             # Class Bar
             _make_inst(Opcode.CONST, "%3", ["<class:Bar@class_Bar_0>"]),
             _make_inst(Opcode.STORE_VAR, operands=["Bar", "%3"]),
-            _make_inst(Opcode.LABEL, label="class_Bar_0"),
-            _make_inst(Opcode.LABEL, label="func_greet_1"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("class_Bar_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_greet_1")),
             _make_inst(Opcode.SYMBOLIC, "%4", ["param:this"]),
             _make_inst(Opcode.SYMBOLIC, "%5", ["param:name"]),
-            _make_inst(Opcode.LABEL, label="end_func_greet_1"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_func_greet_1")),
             _make_inst(Opcode.CONST, "%6", ["func_greet_1"]),
             _make_inst(Opcode.STORE_VAR, operands=["greet", "%6"]),
-            _make_inst(Opcode.LABEL, label="end_class_Bar_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Bar_0")),
         ]
         builder = TypeEnvironmentBuilder(
             func_return_types={
@@ -3194,9 +3194,9 @@ class TestMethodSignatures:
     def test_get_func_signature_without_class_uses_flat(self):
         """get_func_signature without class_name still uses flat func_signatures."""
         instructions = [
-            _make_inst(Opcode.LABEL, label="func_f_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_f_0")),
             _make_inst(Opcode.SYMBOLIC, "%0", ["param:x"]),
-            _make_inst(Opcode.LABEL, label="end_func_f_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_func_f_0")),
             _make_inst(Opcode.CONST, "%1", ["func_f_0"]),
             _make_inst(Opcode.STORE_VAR, operands=["f", "%1"]),
         ]
@@ -3223,14 +3223,14 @@ class TestFunctionKindInference:
         instructions = [
             _make_inst(Opcode.CONST, "%0", ["<class:M@class_M_0>"]),
             _make_inst(Opcode.STORE_VAR, operands=["M", "%0"]),
-            _make_inst(Opcode.LABEL, label="class_M_0"),
-            _make_inst(Opcode.LABEL, label="func_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("class_M_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_add_0")),
             _make_inst(Opcode.SYMBOLIC, "%1", ["param:a"]),
             _make_inst(Opcode.SYMBOLIC, "%2", ["param:b"]),
-            _make_inst(Opcode.LABEL, label="end_func_add_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_func_add_0")),
             _make_inst(Opcode.CONST, "%3", ["func_add_0"]),
             _make_inst(Opcode.STORE_VAR, operands=["add", "%3"]),
-            _make_inst(Opcode.LABEL, label="end_class_M_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_class_M_0")),
         ]
         builder = TypeEnvironmentBuilder(
             func_return_types={"func_add_0": scalar("Int")},
@@ -3253,13 +3253,13 @@ class TestFunctionKindInference:
         instructions = [
             _make_inst(Opcode.CONST, "%0", ["<class:Dog@class_Dog_0>"]),
             _make_inst(Opcode.STORE_VAR, operands=["Dog", "%0"]),
-            _make_inst(Opcode.LABEL, label="class_Dog_0"),
-            _make_inst(Opcode.LABEL, label="func_bark_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("class_Dog_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_bark_0")),
             _make_inst(Opcode.SYMBOLIC, "%1", ["param:this"]),
-            _make_inst(Opcode.LABEL, label="end_func_bark_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_func_bark_0")),
             _make_inst(Opcode.CONST, "%2", ["func_bark_0"]),
             _make_inst(Opcode.STORE_VAR, operands=["bark", "%2"]),
-            _make_inst(Opcode.LABEL, label="end_class_Dog_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Dog_0")),
         ]
         builder = TypeEnvironmentBuilder(
             func_return_types={"func_bark_0": scalar("String")},
@@ -3282,14 +3282,14 @@ class TestFunctionKindInference:
         instructions = [
             _make_inst(Opcode.CONST, "%0", ["<class:User@class_User_0>"]),
             _make_inst(Opcode.STORE_VAR, operands=["User", "%0"]),
-            _make_inst(Opcode.LABEL, label="class_User_0"),
-            _make_inst(Opcode.LABEL, label="func_greet_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("class_User_0")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("func_greet_0")),
             _make_inst(Opcode.SYMBOLIC, "%1", ["param:$this"]),
             _make_inst(Opcode.SYMBOLIC, "%2", ["param:msg"]),
-            _make_inst(Opcode.LABEL, label="end_func_greet_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_func_greet_0")),
             _make_inst(Opcode.CONST, "%3", ["func_greet_0"]),
             _make_inst(Opcode.STORE_VAR, operands=["greet", "%3"]),
-            _make_inst(Opcode.LABEL, label="end_class_User_0"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("end_class_User_0")),
         ]
         builder = TypeEnvironmentBuilder(
             func_return_types={"func_greet_0": scalar("String")},

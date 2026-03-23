@@ -14,7 +14,7 @@ from interpreter.api import lower_and_infer
 from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
 
@@ -198,7 +198,7 @@ class Dog:
 class TestRegionTagging:
     def test_region_tagging(self):
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="entry"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
             IRInstruction(
                 opcode=Opcode.ALLOC_REGION,
                 result_reg="%0",

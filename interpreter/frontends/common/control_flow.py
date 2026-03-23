@@ -8,7 +8,7 @@ from __future__ import annotations
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.node_types import CommonNodeType
 
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 
 
 def lower_if(ctx: TreeSitterEmitContext, node) -> None:
@@ -25,14 +25,14 @@ def lower_if(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{true_label},{false_label}",
+            label=CodeLabel(f"{true_label},{false_label}"),
             node=node,
         )
     else:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{true_label},{end_label}",
+            label=CodeLabel(f"{true_label},{end_label}"),
             node=node,
         )
 
@@ -82,7 +82,7 @@ def lower_elif(ctx: TreeSitterEmitContext, node, end_label: str) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{true_label},{false_label}",
+        label=CodeLabel(f"{true_label},{false_label}"),
         node=node,
     )
 
@@ -145,7 +145,7 @@ def lower_while(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
         node=node,
     )
 
@@ -187,7 +187,7 @@ def lower_c_style_for(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{body_label},{end_label}",
+            label=CodeLabel(f"{body_label},{end_label}"),
             node=node,
         )
     else:

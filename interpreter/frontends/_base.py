@@ -21,7 +21,7 @@ from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends.base_node_types import BaseNodeType
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.symbol_table import SymbolTable
-from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
+from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation, CodeLabel, NO_LABEL
 from interpreter.parser import ParserFactory
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
@@ -122,8 +122,8 @@ class BaseFrontend(Frontend):
         self._reg_counter += 1
         return r
 
-    def _fresh_label(self, prefix: str = "L") -> str:
-        lbl = f"{prefix}_{self._label_counter}"
+    def _fresh_label(self, prefix: str = "L") -> CodeLabel:
+        lbl = CodeLabel(f"{prefix}_{self._label_counter}")
         self._label_counter += 1
         return lbl
 
@@ -133,7 +133,7 @@ class BaseFrontend(Frontend):
         *,
         result_reg: str = "",
         operands: list[Any] = [],
-        label: str = "",
+        label: CodeLabel = NO_LABEL,
         source_location: SourceLocation = NO_SOURCE_LOCATION,
         node=None,
     ) -> IRInstruction:
@@ -146,7 +146,7 @@ class BaseFrontend(Frontend):
             opcode=opcode,
             result_reg=result_reg or None,
             operands=operands or [],
-            label=label or None,
+            label=label,
             source_location=loc,
         )
         self._instructions.append(inst)
@@ -204,18 +204,19 @@ class BaseFrontend(Frontend):
         )
 
     def _emit_func_ref(
-        self, func_name: str, func_label: str, result_reg: str, node=None
+        self, func_name: str, func_label: CodeLabel, result_reg: str, node=None
     ) -> IRInstruction:
         """Legacy-mode equivalent of ctx.emit_func_ref().
 
         Emits the plain func_label as the CONST operand.  The symbol table
         maps func_label → FuncRef(name, label) for downstream consumers.
         """
-        self._func_symbol_table[func_label] = FuncRef(name=func_name, label=func_label)
+        label_str = str(func_label)
+        self._func_symbol_table[label_str] = FuncRef(name=func_name, label=label_str)
         return self._emit(
             Opcode.CONST,
             result_reg=result_reg,
-            operands=[func_label],
+            operands=[label_str],
             node=node,
         )
 
@@ -258,7 +259,7 @@ class BaseFrontend(Frontend):
             self._source = source
             self._loop_stack = []
             self._break_target_stack = []
-            self._emit(Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)
+            self._emit(Opcode.LABEL, label=CodeLabel(constants.CFG_ENTRY_LABEL))
             self._lower_block(root)
             result = self._instructions
 
@@ -280,7 +281,7 @@ class BaseFrontend(Frontend):
             block_scoped=self.BLOCK_SCOPED,
             symbol_table=symbol_table,
         )
-        ctx.emit(Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)
+        ctx.emit(Opcode.LABEL, label=CodeLabel(constants.CFG_ENTRY_LABEL))
         self._emit_prelude(ctx)
         ctx.lower_block(root)
         self._type_env_builder = ctx.type_env_builder
@@ -729,14 +730,14 @@ class BaseFrontend(Frontend):
             self._emit(
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
-                label=f"{true_label},{false_label}",
+                label=CodeLabel(f"{true_label},{false_label}"),
                 node=node,
             )
         else:
             self._emit(
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
-                label=f"{true_label},{end_label}",
+                label=CodeLabel(f"{true_label},{end_label}"),
                 node=node,
             )
 
@@ -784,7 +785,7 @@ class BaseFrontend(Frontend):
         self._emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{true_label},{false_label}",
+            label=CodeLabel(f"{true_label},{false_label}"),
             node=node,
         )
 
@@ -856,7 +857,7 @@ class BaseFrontend(Frontend):
         self._emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{body_label},{end_label}",
+            label=CodeLabel(f"{body_label},{end_label}"),
             node=node,
         )
 
@@ -888,7 +889,7 @@ class BaseFrontend(Frontend):
             self._emit(
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
-                label=f"{body_label},{end_label}",
+                label=CodeLabel(f"{body_label},{end_label}"),
                 node=node,
             )
         else:
@@ -1105,18 +1106,18 @@ class BaseFrontend(Frontend):
         catch_labels = [
             self._fresh_label(f"catch_{i}") for i in range(len(catch_clauses))
         ]
-        finally_label = self._fresh_label("try_finally") if finally_node else ""
-        else_label = self._fresh_label("try_else") if else_node else ""
+        finally_label = self._fresh_label("try_finally") if finally_node else NO_LABEL
+        else_label = self._fresh_label("try_else") if else_node else NO_LABEL
         end_label = self._fresh_label("try_end")
 
-        exit_target = finally_label or end_label
+        exit_target = finally_label if finally_label.is_present() else end_label
 
         # ── push exception handler ──
         self._emit(
             Opcode.TRY_PUSH,
             operands=[
-                ",".join(catch_labels),
-                finally_label or "",
+                catch_labels,
+                finally_label,
                 end_label,
             ],
         )
@@ -1162,7 +1163,7 @@ class BaseFrontend(Frontend):
         if else_node:
             self._emit(Opcode.LABEL, label=else_label)
             self._lower_block(else_node)
-            self._emit(Opcode.BRANCH, label=finally_label or end_label)
+            self._emit(Opcode.BRANCH, label=finally_label if finally_label.is_present() else end_label)
 
         # ── finally clause ──
         if finally_node:

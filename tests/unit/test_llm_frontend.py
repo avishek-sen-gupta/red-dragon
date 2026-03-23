@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.llm.llm_client import LLMClient
 from interpreter.llm.llm_frontend import (
     IRParsingError,
@@ -171,7 +171,7 @@ class TestParseIRResponse:
 class TestValidateIR:
     def test_valid_with_entry_label(self):
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="entry"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
             IRInstruction(opcode=Opcode.CONST, result_reg="%0", operands=["1"]),
         ]
         result = _validate_ir(instructions)
@@ -194,7 +194,7 @@ class TestValidateIR:
 
     def test_wrong_first_label_prepends_entry(self):
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="not_entry"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("not_entry")),
             IRInstruction(opcode=Opcode.CONST, result_reg="%0", operands=["1"]),
         ]
         result = _validate_ir(instructions)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from interpreter.cfg import build_cfg
 from interpreter.cfg_types import BasicBlock, CFG
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
 from interpreter.interprocedural.types import (
     CallContext,
     CallGraph,
@@ -27,7 +27,7 @@ from interpreter.interprocedural.propagation import (
 from interpreter.registry import FunctionRegistry
 
 
-def _inst(opcode: Opcode, result_reg=None, operands=None, label=None):
+def _inst(opcode: Opcode, result_reg=None, operands=None, label: CodeLabel = NO_LABEL):
     return IRInstruction(
         opcode=opcode,
         result_reg=result_reg,
@@ -76,13 +76,13 @@ class TestApplySummaryAtCallSite:
             caller=caller,
             callees=frozenset({callee}),
             arg_operands=("%1",),
-            block_label="func__main",
+            block_label=CodeLabel("func__main"),
             instruction_index=3,
         )
 
         ret_endpoint = ReturnEndpoint(
             function=callee,
-            location=InstructionLocation(block_label="func__id", instruction_index=2),
+            location=InstructionLocation(block_label=CodeLabel("func__id"), instruction_index=2),
         )
         summary = FunctionSummary(
             function=callee,
@@ -107,7 +107,7 @@ class TestApplySummaryAtCallSite:
             caller=caller,
             callees=frozenset({callee}),
             arg_operands=("%obj", "%val"),
-            block_label="func__main",
+            block_label=CodeLabel("func__main"),
             instruction_index=5,
         )
 
@@ -117,7 +117,7 @@ class TestApplySummaryAtCallSite:
             base=obj_var,
             field="name",
             location=InstructionLocation(
-                block_label="func__setter", instruction_index=4
+                block_label=CodeLabel("func__setter"), instruction_index=4
             ),
         )
         summary = FunctionSummary(
@@ -172,13 +172,13 @@ class TestComputeSccs:
             caller=func_a,
             callees=frozenset({func_b}),
             arg_operands=(),
-            block_label="func__a",
+            block_label=CodeLabel("func__a"),
         )
         site_bc = _make_call_site(
             caller=func_b,
             callees=frozenset({func_c}),
             arg_operands=(),
-            block_label="func__b",
+            block_label=CodeLabel("func__b"),
         )
 
         call_graph = CallGraph(
@@ -205,13 +205,13 @@ class TestComputeSccs:
             caller=func_a,
             callees=frozenset({func_b}),
             arg_operands=(),
-            block_label="func__a",
+            block_label=CodeLabel("func__a"),
         )
         site_ba = _make_call_site(
             caller=func_b,
             callees=frozenset({func_a}),
             arg_operands=(),
-            block_label="func__b",
+            block_label=CodeLabel("func__b"),
         )
 
         call_graph = CallGraph(
@@ -329,7 +329,7 @@ def _build_two_function_cfg_and_registry():
     """
     ir = [
         # main
-        _inst(Opcode.LABEL, label="func__main"),
+        _inst(Opcode.LABEL, label=CodeLabel("func__main")),
         _inst(Opcode.CONST, result_reg="%10", operands=["3"]),
         _inst(Opcode.CONST, result_reg="%11", operands=["4"]),
         _inst(
@@ -341,7 +341,7 @@ def _build_two_function_cfg_and_registry():
         _inst(Opcode.LOAD_VAR, result_reg="%13", operands=["result"]),
         _inst(Opcode.RETURN, operands=["%13"]),
         # func__add
-        _inst(Opcode.LABEL, label="func__add"),
+        _inst(Opcode.LABEL, label=CodeLabel("func__add")),
         _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"]),
         _inst(Opcode.STORE_VAR, operands=["a", "%0"]),
         _inst(Opcode.SYMBOLIC, result_reg="%1", operands=["param:b"]),
@@ -396,7 +396,7 @@ class TestWholeProgramFixpoint:
     def test_recursive_function_converges(self):
         """func__f calls func__f. Fixpoint converges without infinite loop."""
         ir = [
-            _inst(Opcode.LABEL, label="func__f"),
+            _inst(Opcode.LABEL, label=CodeLabel("func__f")),
             _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
             _inst(Opcode.STORE_VAR, operands=["x", "%0"]),
             _inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"]),
@@ -443,14 +443,14 @@ class TestBuildWholeProgramGraph:
         # Flow in A: x → return_a
         ret_a = ReturnEndpoint(
             function=func_a,
-            location=InstructionLocation(block_label="func__a", instruction_index=3),
+            location=InstructionLocation(block_label=CodeLabel("func__a"), instruction_index=3),
         )
         summary_a = FunctionSummary(
             function=func_a,
             context=CallContext(
                 site=CallSite(
                     caller=_make_function("__root__"),
-                    location=InstructionLocation(block_label="", instruction_index=-1),
+                    location=InstructionLocation(block_label=CodeLabel(""), instruction_index=-1),
                     callees=frozenset(),
                     arg_operands=(),
                 )
@@ -461,14 +461,14 @@ class TestBuildWholeProgramGraph:
         # Flow in B: y → return_b
         ret_b = ReturnEndpoint(
             function=func_b,
-            location=InstructionLocation(block_label="func__b", instruction_index=3),
+            location=InstructionLocation(block_label=CodeLabel("func__b"), instruction_index=3),
         )
         summary_b = FunctionSummary(
             function=func_b,
             context=CallContext(
                 site=CallSite(
                     caller=_make_function("__root__"),
-                    location=InstructionLocation(block_label="", instruction_index=-1),
+                    location=InstructionLocation(block_label=CodeLabel(""), instruction_index=-1),
                     callees=frozenset(),
                     arg_operands=(),
                 )
@@ -481,7 +481,7 @@ class TestBuildWholeProgramGraph:
             caller=func_a,
             callees=frozenset({func_b}),
             arg_operands=("%arg",),
-            block_label="func__a",
+            block_label=CodeLabel("func__a"),
             instruction_index=2,
         )
 

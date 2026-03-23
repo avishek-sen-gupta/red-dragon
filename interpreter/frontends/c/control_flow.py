@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 from interpreter.frontends.c.node_types import CNodeType
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{body_label},{end_label}",
+            label=CodeLabel(f"{body_label},{end_label}"),
             node=node,
         )
     else:
@@ -82,7 +82,7 @@ def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
             ctx.emit(
                 Opcode.BRANCH_IF,
                 operands=[cmp_reg],
-                label=f"{arm_label},{next_label}",
+                label=CodeLabel(f"{arm_label},{next_label}"),
             )
         else:
             # default case
@@ -117,7 +117,7 @@ def lower_goto(ctx: TreeSitterEmitContext, node) -> None:
         (c for c in node.children if c.type == CNodeType.STATEMENT_IDENTIFIER), None
     )
     if label_node:
-        target_label = f"user_{ctx.node_text(label_node)}"
+        target_label = CodeLabel(f"user_{ctx.node_text(label_node)}")
         ctx.emit(
             Opcode.BRANCH,
             label=target_label,
@@ -133,7 +133,7 @@ def lower_labeled_stmt(ctx: TreeSitterEmitContext, node) -> None:
         (c for c in node.children if c.type == CNodeType.STATEMENT_IDENTIFIER), None
     )
     if label_node:
-        ctx.emit(Opcode.LABEL, label=f"user_{ctx.node_text(label_node)}")
+        ctx.emit(Opcode.LABEL, label=CodeLabel(f"user_{ctx.node_text(label_node)}"))
     # Lower the actual statement within the label
     for child in node.children:
         if child.is_named and child.type != CNodeType.STATEMENT_IDENTIFIER:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 from interpreter import constants
 from interpreter.frontends.common.expressions import lower_const_literal
 from interpreter.frontends.rust.node_types import RustNodeType
@@ -190,14 +190,14 @@ def lower_if_expr(ctx: TreeSitterEmitContext, node) -> str:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{true_label},{false_label}",
+            label=CodeLabel(f"{true_label},{false_label}"),
             node=node,
         )
     else:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{true_label},{end_label}",
+            label=CodeLabel(f"{true_label},{end_label}"),
             node=node,
         )
 
@@ -238,7 +238,7 @@ def _lower_if_let_expr(ctx: TreeSitterEmitContext, node, let_cond_node) -> str:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[test_reg],
-        label=f"{true_label},{target_label}",
+        label=CodeLabel(f"{true_label},{target_label}"),
         node=node,
     )
 
@@ -293,7 +293,7 @@ def _lower_if_let_chain_expr(ctx: TreeSitterEmitContext, node, let_chain_node) -
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[combined],
-        label=f"{true_label},{target_label}",
+        label=CodeLabel(f"{true_label},{target_label}"),
         node=node,
     )
 

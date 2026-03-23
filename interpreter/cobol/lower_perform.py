@@ -12,7 +12,7 @@ from interpreter.cobol.cobol_statements import (
 )
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 
 logger = logging.getLogger(__name__)
 
@@ -43,23 +43,23 @@ def lower_perform(
         logger.warning("PERFORM with unknown spec: %s", stmt.spec)
 
 
-def resolve_perform_target(ctx: EmitContext, stmt: PerformStatement) -> tuple[str, str]:
+def resolve_perform_target(ctx: EmitContext, stmt: PerformStatement) -> tuple[CodeLabel, CodeLabel]:
     """Resolve branch-target label and continuation-key label for PERFORM."""
     target = stmt.target
     section_paras = ctx.section_paragraphs
 
     if target in section_paras:
-        branch_label = f"section_{target}"
+        branch_label = CodeLabel(f"section_{target}")
         thru = stmt.thru
         if thru and thru in section_paras:
-            continuation_key = f"section_{thru}_end"
+            continuation_key = CodeLabel(f"section_{thru}_end")
         else:
-            continuation_key = f"section_{target}_end"
+            continuation_key = CodeLabel(f"section_{target}_end")
         return branch_label, continuation_key
 
     thru_name = stmt.thru if stmt.thru else target
-    branch_label = f"para_{target}"
-    continuation_key = f"para_{thru_name}_end"
+    branch_label = CodeLabel(f"para_{target}")
+    continuation_key = CodeLabel(f"para_{thru_name}_end")
     return branch_label, continuation_key
 
 
@@ -104,7 +104,7 @@ def lower_perform_times(
     spec = stmt.spec
     assert isinstance(spec, PerformTimesSpec)
 
-    counter_var = ctx.fresh_label("__perform_ctr")
+    counter_var = ctx.fresh_name("__perform_ctr")
     loop_label = ctx.fresh_label("perform_times_loop")
     body_label = ctx.fresh_label("perform_times_body")
     exit_label = ctx.fresh_label("perform_times_exit")
@@ -132,7 +132,7 @@ def lower_perform_times(
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{exit_label},{body_label}",
+        label=CodeLabel(f"{exit_label},{body_label}"),
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
@@ -169,7 +169,7 @@ def lower_perform_until(
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{exit_label},{body_label}",
+            label=CodeLabel(f"{exit_label},{body_label}"),
         )
         ctx.emit(Opcode.LABEL, label=body_label)
         lower_perform_body(ctx, stmt, layout, region_reg)
@@ -182,7 +182,7 @@ def lower_perform_until(
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{exit_label},{loop_label}",
+            label=CodeLabel(f"{exit_label},{loop_label}"),
         )
         ctx.emit(Opcode.LABEL, label=exit_label)
 
@@ -214,7 +214,7 @@ def lower_perform_varying(
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{exit_label},{body_label}",
+            label=CodeLabel(f"{exit_label},{body_label}"),
         )
         ctx.emit(Opcode.LABEL, label=body_label)
         lower_perform_body(ctx, stmt, layout, region_reg)
@@ -229,7 +229,7 @@ def lower_perform_varying(
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{exit_label},{loop_label}",
+            label=CodeLabel(f"{exit_label},{loop_label}"),
         )
         ctx.emit(Opcode.LABEL, label=exit_label)
 

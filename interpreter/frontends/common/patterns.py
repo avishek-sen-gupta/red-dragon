@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from functools import reduce
 
 from interpreter.frontends.context import TreeSitterEmitContext
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 
 
 @dataclass(frozen=True)
@@ -492,7 +492,7 @@ def compile_pattern_bindings(
                 ctx.emit(
                     Opcode.BRANCH_IF,
                     operands=[test_reg],
-                    label=f"{bind_label},{next_label}",
+                    label=CodeLabel(f"{bind_label},{next_label}"),
                 )
                 ctx.emit(Opcode.LABEL, label=bind_label)
                 compile_pattern_bindings(ctx, subject_reg, alt)
@@ -569,7 +569,7 @@ def _compile_refutable_case(
 
     case_true = ctx.fresh_label("case_true")
     case_next = ctx.fresh_label("case_next")
-    ctx.emit(Opcode.BRANCH_IF, operands=[test_reg], label=f"{case_true},{case_next}")
+    ctx.emit(Opcode.BRANCH_IF, operands=[test_reg], label=CodeLabel(f"{case_true},{case_next}"))
     ctx.emit(Opcode.LABEL, label=case_true)
     # Only emit bindings in the true-branch if not already emitted pre-guard.
     if not (

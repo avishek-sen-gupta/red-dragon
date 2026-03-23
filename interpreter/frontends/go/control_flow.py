@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 from interpreter.frontends.go.expressions import (
     extract_expression_list,
     lower_expression_list,
@@ -45,14 +45,14 @@ def lower_go_if(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{true_label},{false_label}",
+            label=CodeLabel(f"{true_label},{false_label}"),
             node=node,
         )
     else:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{true_label},{end_label}",
+            label=CodeLabel(f"{true_label},{end_label}"),
             node=node,
         )
 
@@ -127,7 +127,7 @@ def _lower_go_for_clause(ctx: TreeSitterEmitContext, clause, body_node, parent) 
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{body_label},{end_label}",
+            label=CodeLabel(f"{body_label},{end_label}"),
         )
     else:
         ctx.emit(Opcode.BRANCH, label=body_label)
@@ -175,7 +175,7 @@ def _lower_go_range(ctx: TreeSitterEmitContext, clause, body_node, parent) -> No
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
@@ -241,7 +241,7 @@ def _lower_go_bare_for(ctx: TreeSitterEmitContext, node, body_node) -> None:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{body_label},{end_label}",
+            label=CodeLabel(f"{body_label},{end_label}"),
         )
     else:
         ctx.emit(Opcode.BRANCH, label=body_label)
@@ -423,7 +423,7 @@ def lower_expression_switch(ctx: TreeSitterEmitContext, node) -> None:
                     ctx.emit(
                         Opcode.BRANCH_IF,
                         operands=[cmp_reg],
-                        label=f"{body_label},{next_label}",
+                        label=CodeLabel(f"{body_label},{next_label}"),
                     )
                 else:
                     ctx.emit(Opcode.BRANCH, label=body_label)
@@ -504,7 +504,7 @@ def lower_type_switch(ctx: TreeSitterEmitContext, node) -> None:
                 ctx.emit(
                     Opcode.BRANCH_IF,
                     operands=[check_reg],
-                    label=f"{body_label},{next_label}",
+                    label=CodeLabel(f"{body_label},{next_label}"),
                 )
             else:
                 ctx.emit(Opcode.BRANCH, label=body_label)
@@ -575,7 +575,7 @@ def lower_labeled_stmt(ctx: TreeSitterEmitContext, node) -> None:
         None,
     )
     label_name = ctx.node_text(label_node) if label_node else "__label"
-    ctx.emit(Opcode.LABEL, label=label_name)
+    ctx.emit(Opcode.LABEL, label=CodeLabel(label_name))
     body_children = [
         c for c in node.children if c.is_named and c.type != GoNodeType.LABEL_NAME
     ]
@@ -595,7 +595,7 @@ def lower_goto_stmt(ctx: TreeSitterEmitContext, node) -> None:
     label_name = ctx.node_text(label_node) if label_node else "__unknown_label"
     ctx.emit(
         Opcode.BRANCH,
-        label=label_name,
+        label=CodeLabel(label_name),
         node=node,
     )
 

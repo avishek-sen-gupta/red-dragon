@@ -5,7 +5,7 @@ from __future__ import annotations
 from interpreter.cfg import build_cfg
 from interpreter.cfg_types import BasicBlock, CFG
 from interpreter.dataflow import Definition
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
 from interpreter import constants
 from interpreter.interprocedural.types import (
     CallContext,
@@ -24,7 +24,7 @@ from interpreter.interprocedural.summaries import (
 )
 
 
-def _inst(opcode: Opcode, result_reg=None, operands=None, label=None):
+def _inst(opcode: Opcode, result_reg=None, operands=None, label: CodeLabel = NO_LABEL):
     return IRInstruction(
         opcode=opcode,
         result_reg=result_reg,
@@ -38,7 +38,7 @@ def _make_context() -> CallContext:
     return CallContext(
         site=CallSite(
             caller=FunctionEntry(label="__root__", params=()),
-            location=InstructionLocation(block_label="", instruction_index=-1),
+            location=InstructionLocation(block_label=CodeLabel(""), instruction_index=-1),
             callees=frozenset(),
             arg_operands=(),
         )
@@ -49,10 +49,10 @@ class TestExtractSubCfg:
     def test_extracts_only_function_blocks(self):
         """A program with main + func__foo: extract_sub_cfg returns only foo's blocks."""
         ir = [
-            _inst(Opcode.LABEL, label="entry"),
+            _inst(Opcode.LABEL, label=CodeLabel("entry")),
             _inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _inst(Opcode.RETURN, operands=["%0"]),
-            _inst(Opcode.LABEL, label="func__foo"),
+            _inst(Opcode.LABEL, label=CodeLabel("func__foo")),
             _inst(Opcode.SYMBOLIC, result_reg="%1", operands=["param:x"]),
             _inst(Opcode.STORE_VAR, operands=["x", "%1"]),
             _inst(Opcode.LOAD_VAR, result_reg="%2", operands=["x"]),
@@ -70,22 +70,22 @@ class TestExtractSubCfg:
     def test_extracts_function_with_branches(self):
         """Function with internal branching blocks — all prefixed blocks included."""
         ir = [
-            _inst(Opcode.LABEL, label="entry"),
+            _inst(Opcode.LABEL, label=CodeLabel("entry")),
             _inst(Opcode.CONST, result_reg="%0", operands=["0"]),
             _inst(Opcode.RETURN, operands=["%0"]),
-            _inst(Opcode.LABEL, label="func__bar"),
+            _inst(Opcode.LABEL, label=CodeLabel("func__bar")),
             _inst(Opcode.SYMBOLIC, result_reg="%1", operands=["param:x"]),
             _inst(Opcode.STORE_VAR, operands=["x", "%1"]),
             _inst(Opcode.LOAD_VAR, result_reg="%2", operands=["x"]),
             _inst(
                 Opcode.BRANCH_IF,
                 operands=["%2"],
-                label="func__bar_if_true_1, func__bar_if_false_1",
+                label=CodeLabel("func__bar_if_true_1, func__bar_if_false_1"),
             ),
-            _inst(Opcode.LABEL, label="func__bar_if_true_1"),
+            _inst(Opcode.LABEL, label=CodeLabel("func__bar_if_true_1")),
             _inst(Opcode.CONST, result_reg="%3", operands=["1"]),
             _inst(Opcode.RETURN, operands=["%3"]),
-            _inst(Opcode.LABEL, label="func__bar_if_false_1"),
+            _inst(Opcode.LABEL, label=CodeLabel("func__bar_if_false_1")),
             _inst(Opcode.CONST, result_reg="%4", operands=["0"]),
             _inst(Opcode.RETURN, operands=["%4"]),
         ]
@@ -105,20 +105,20 @@ class TestExtractSubCfg:
         extract_sub_cfg must follow successors reachably, not just prefix-match.
         """
         ir = [
-            _inst(Opcode.LABEL, label="entry"),
-            _inst(Opcode.BRANCH, label="end_foo_1"),
-            _inst(Opcode.LABEL, label="func_foo_0"),
+            _inst(Opcode.LABEL, label=CodeLabel("entry")),
+            _inst(Opcode.BRANCH, label=CodeLabel("end_foo_1")),
+            _inst(Opcode.LABEL, label=CodeLabel("func_foo_0")),
             _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:n"]),
             _inst(Opcode.DECL_VAR, operands=["n", "%0"]),
             _inst(Opcode.LOAD_VAR, result_reg="%1", operands=["n"]),
-            _inst(Opcode.BRANCH_IF, operands=["%1"], label="if_true_2,if_end_3"),
-            _inst(Opcode.LABEL, label="if_true_2"),
+            _inst(Opcode.BRANCH_IF, operands=["%1"], label=CodeLabel("if_true_2,if_end_3")),
+            _inst(Opcode.LABEL, label=CodeLabel("if_true_2")),
             _inst(Opcode.CONST, result_reg="%2", operands=["1"]),
             _inst(Opcode.RETURN, operands=["%2"]),
-            _inst(Opcode.LABEL, label="if_end_3"),
+            _inst(Opcode.LABEL, label=CodeLabel("if_end_3")),
             _inst(Opcode.LOAD_VAR, result_reg="%3", operands=["n"]),
             _inst(Opcode.RETURN, operands=["%3"]),
-            _inst(Opcode.LABEL, label="end_foo_1"),
+            _inst(Opcode.LABEL, label=CodeLabel("end_foo_1")),
             _inst(Opcode.CONST, result_reg="%4", operands=["5"]),
             _inst(Opcode.RETURN, operands=["%4"]),
         ]
@@ -140,7 +140,7 @@ class TestBuildSummary:
     def test_passthrough_param_to_return(self):
         """SYMBOLIC param:x; STORE_VAR x; LOAD_VAR x; RETURN → (Variable(x), Return)."""
         ir = [
-            _inst(Opcode.LABEL, label="func__id"),
+            _inst(Opcode.LABEL, label=CodeLabel("func__id")),
             _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
             _inst(Opcode.STORE_VAR, operands=["x", "%0"]),
             _inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"]),
@@ -166,7 +166,7 @@ class TestBuildSummary:
         Real frontends emit DECL_VAR (not STORE_VAR) for parameter declarations.
         """
         ir = [
-            _inst(Opcode.LABEL, label="func__id"),
+            _inst(Opcode.LABEL, label=CodeLabel("func__id")),
             _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
             _inst(Opcode.DECL_VAR, operands=["x", "%0"]),
             _inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"]),
@@ -193,7 +193,7 @@ class TestBuildSummary:
         find the LOAD_VAR source.
         """
         ir = [
-            _inst(Opcode.LABEL, label="func__inc"),
+            _inst(Opcode.LABEL, label=CodeLabel("func__inc")),
             _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
             _inst(Opcode.DECL_VAR, operands=["x", "%0"]),
             _inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"]),
@@ -216,7 +216,7 @@ class TestBuildSummary:
     def test_two_params_to_return(self):
         """a + b → return: both params flow to return."""
         ir = [
-            _inst(Opcode.LABEL, label="func__add"),
+            _inst(Opcode.LABEL, label=CodeLabel("func__add")),
             _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:a"]),
             _inst(Opcode.STORE_VAR, operands=["a", "%0"]),
             _inst(Opcode.SYMBOLIC, result_reg="%1", operands=["param:b"]),
@@ -248,7 +248,7 @@ class TestBuildSummary:
     def test_param_to_field_write(self):
         """STORE_FIELD obj "name" val → (Variable(val), FieldEndpoint(obj, "name"))."""
         ir = [
-            _inst(Opcode.LABEL, label="func__setter"),
+            _inst(Opcode.LABEL, label=CodeLabel("func__setter")),
             _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:obj"]),
             _inst(Opcode.STORE_VAR, operands=["obj", "%0"]),
             _inst(Opcode.SYMBOLIC, result_reg="%1", operands=["param:val"]),
@@ -276,7 +276,7 @@ class TestBuildSummary:
     def test_field_read_to_return(self):
         """LOAD_FIELD obj "name" → return: (FieldEndpoint(obj, "name"), Return)."""
         ir = [
-            _inst(Opcode.LABEL, label="func__getter"),
+            _inst(Opcode.LABEL, label=CodeLabel("func__getter")),
             _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:obj"]),
             _inst(Opcode.STORE_VAR, operands=["obj", "%0"]),
             _inst(Opcode.LOAD_VAR, result_reg="%1", operands=["obj"]),
@@ -303,7 +303,7 @@ class TestBuildSummary:
     def test_constant_return_yields_no_param_flows(self):
         """CONST 42; RETURN → no param-connected flows."""
         ir = [
-            _inst(Opcode.LABEL, label="func__const"),
+            _inst(Opcode.LABEL, label=CodeLabel("func__const")),
             _inst(Opcode.CONST, result_reg="%0", operands=["42"]),
             _inst(Opcode.RETURN, operands=["%0"]),
         ]
@@ -318,7 +318,7 @@ class TestBuildSummary:
     def test_summary_is_frozen(self):
         """FunctionSummary should be immutable (frozen dataclass)."""
         ir = [
-            _inst(Opcode.LABEL, label="func__id"),
+            _inst(Opcode.LABEL, label=CodeLabel("func__id")),
             _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
             _inst(Opcode.STORE_VAR, operands=["x", "%0"]),
             _inst(Opcode.LOAD_VAR, result_reg="%1", operands=["x"]),
