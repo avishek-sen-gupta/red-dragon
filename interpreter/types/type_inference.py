@@ -543,18 +543,18 @@ def _infer_load_var(
     type_resolver: TypeResolver,
 ) -> None:
     name = inst.operands[0] if inst.operands else ""
-    if inst.result_reg and name:
+    if inst.result_reg.is_present() and name:
         ctx.register_source_var[inst.result_reg] = str(name)
     var_type = ctx.lookup_var_type(str(name)) if name else UNKNOWN
-    if inst.result_reg and var_type:
+    if inst.result_reg.is_present() and var_type:
         ctx.register_types[inst.result_reg] = var_type
     # Propagate array element types from variable to register
-    if inst.result_reg and str(name) in ctx.var_array_element_types:
+    if inst.result_reg.is_present() and str(name) in ctx.var_array_element_types:
         ctx.array_element_types[inst.result_reg] = ctx.var_array_element_types[
             str(name)
         ]
     # Propagate tuple element types from variable to register
-    if inst.result_reg and str(name) in ctx.var_tuple_element_types:
+    if inst.result_reg.is_present() and str(name) in ctx.var_tuple_element_types:
         ctx.tuple_element_types[inst.result_reg] = ctx.var_tuple_element_types[
             str(name)
         ]
@@ -626,7 +626,7 @@ def _infer_new_object(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if inst.result_reg and inst.operands:
+    if inst.result_reg.is_present() and inst.operands:
         class_name = str(inst.operands[0])
         if class_name:
             ctx.register_types[inst.result_reg] = scalar(class_name)

@@ -31,9 +31,6 @@ class Register:
     def __hash__(self) -> int:
         return hash(self.name)
 
-    def __bool__(self) -> bool:
-        return True
-
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Register):
             return self.name == other.name
@@ -69,9 +66,6 @@ class NoRegister(Register):
     name: str = ""
 
     def is_present(self) -> bool:
-        return False
-
-    def __bool__(self) -> bool:
         return False
 
 

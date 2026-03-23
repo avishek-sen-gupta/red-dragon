@@ -151,7 +151,7 @@ class Dog {
         method_return_types = {
             str(cm.operands[1]): env.register_types[cm.result_reg]
             for cm in call_methods
-            if cm.result_reg and cm.result_reg in env.register_types
+            if cm.result_reg.is_present() and cm.result_reg in env.register_types
         }
         assert (
             len(method_return_types) == 2
