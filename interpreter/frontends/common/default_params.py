@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from interpreter import constants
 from interpreter.frontends.context import TreeSitterEmitContext
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 
 
 def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
@@ -74,7 +74,7 @@ def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cmp_reg],
-        label=f"{provided_label},{use_default_label}",
+        label=CodeLabel(f"{provided_label},{use_default_label}"),
     )
 
     # True branch: return arguments_arr[param_index]

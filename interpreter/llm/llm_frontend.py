@@ -13,7 +13,7 @@ from interpreter.frontend import Frontend
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
-from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode
+from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, CodeLabel, NO_LABEL
 from interpreter.llm.llm_client import LLMClient
 from interpreter import constants
 
@@ -234,11 +234,12 @@ def _parse_single_instruction(raw: dict[str, Any]) -> IRInstruction:
     except ValueError as exc:
         raise IRParsingError(f"Unknown opcode: {opcode_str!r}") from exc
 
+    raw_label = raw.get("label")
     return IRInstruction(
         opcode=opcode,
         result_reg=raw.get("result_reg"),
         operands=raw.get("operands", []),
-        label=raw.get("label"),
+        label=CodeLabel(raw_label) if raw_label else NO_LABEL,
         source_location=NO_SOURCE_LOCATION,
     )
 
@@ -274,7 +275,7 @@ def _validate_ir(instructions: list[IRInstruction]) -> list[IRInstruction]:
         logger.warning("LLM response missing entry label — auto-prepending")
         entry_label = IRInstruction(
             opcode=Opcode.LABEL,
-            label=constants.CFG_ENTRY_LABEL,
+            label=CodeLabel(constants.CFG_ENTRY_LABEL),
         )
         instructions = [entry_label] + instructions
 

@@ -4,11 +4,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from interpreter.ir import SpreadArguments
+    from interpreter.ir import SpreadArguments, CodeLabel
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 from interpreter import constants
 from interpreter.frontends.common.expressions import lower_const_literal
 from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
@@ -34,7 +34,7 @@ def _emit_optional_guard(ctx: TreeSitterEmitContext, obj_reg: str, emit_access) 
     end_label = ctx.fresh_label("optchain_end")
     result_var = f"__optchain_{ctx.label_counter}"
 
-    ctx.emit(Opcode.BRANCH_IF, operands=[cmp_reg], label=f"{null_label},{access_label}")
+    ctx.emit(Opcode.BRANCH_IF, operands=[cmp_reg], label=CodeLabel(f"{null_label},{access_label}"))
 
     ctx.emit(Opcode.LABEL, label=null_label)
     none_reg = ctx.fresh_reg()
@@ -290,7 +290,7 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{true_label},{false_label}",
+        label=CodeLabel(f"{true_label},{false_label}"),
     )
 
     ctx.emit(Opcode.LABEL, label=true_label)

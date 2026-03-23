@@ -8,7 +8,7 @@ LABEL emit tracks the current function for param association.
 from interpreter.constants import Language
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 from interpreter.types.type_expr import ScalarType, ParameterizedType, UNKNOWN
 
 
@@ -24,19 +24,19 @@ def _make_ctx() -> TreeSitterEmitContext:
 class TestSeedHelpers:
     def test_seed_func_return_type(self):
         ctx = _make_ctx()
-        ctx.emit(Opcode.LABEL, label="func_add_0")
+        ctx.emit(Opcode.LABEL, label=CodeLabel("func_add_0"))
         ctx.seed_func_return_type("func_add_0", ScalarType("Int"))
         assert ctx.type_env_builder.func_return_types["func_add_0"] == ScalarType("Int")
 
     def test_seed_func_return_type_falsy_does_not_seed(self):
         ctx = _make_ctx()
-        ctx.emit(Opcode.LABEL, label="func_add_0")
+        ctx.emit(Opcode.LABEL, label=CodeLabel("func_add_0"))
         ctx.seed_func_return_type("func_add_0", UNKNOWN)
         assert "func_add_0" not in ctx.type_env_builder.func_return_types
 
     def test_label_func_initializes_param_types(self):
         ctx = _make_ctx()
-        ctx.emit(Opcode.LABEL, label="func_add_0")
+        ctx.emit(Opcode.LABEL, label=CodeLabel("func_add_0"))
         assert ctx.type_env_builder.func_param_types["func_add_0"] == []
 
     def test_seed_register_type(self):
@@ -47,7 +47,7 @@ class TestSeedHelpers:
 
     def test_seed_param_type_inside_function(self):
         ctx = _make_ctx()
-        ctx.emit(Opcode.LABEL, label="func_add_0")
+        ctx.emit(Opcode.LABEL, label=CodeLabel("func_add_0"))
         ctx.emit(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"])
         ctx.seed_register_type("%0", ScalarType("Float"))
         ctx.seed_param_type("x", ScalarType("Float"))
@@ -82,9 +82,9 @@ class TestSeedHelpers:
 
     def test_class_label_resets_current_func(self):
         ctx = _make_ctx()
-        ctx.emit(Opcode.LABEL, label="func_add_0")
+        ctx.emit(Opcode.LABEL, label=CodeLabel("func_add_0"))
         ctx.seed_func_return_type("func_add_0", ScalarType("Int"))
-        ctx.emit(Opcode.LABEL, label="class_Dog_0")
+        ctx.emit(Opcode.LABEL, label=CodeLabel("class_Dog_0"))
         ctx.emit(Opcode.SYMBOLIC, result_reg="%0", operands=["param:self"])
         ctx.seed_register_type("%0", ScalarType("Dog"))
         ctx.seed_param_type("self", ScalarType("Dog"))
@@ -92,7 +92,7 @@ class TestSeedHelpers:
 
     def test_seed_func_return_type_accepts_parameterized_type_expr(self):
         ctx = _make_ctx()
-        ctx.emit(Opcode.LABEL, label="func_get_0")
+        ctx.emit(Opcode.LABEL, label=CodeLabel("func_get_0"))
         ret_type = ParameterizedType("Array", (ScalarType("String"),))
         ctx.seed_func_return_type("func_get_0", ret_type)
         assert ctx.type_env_builder.func_return_types["func_get_0"] == ret_type

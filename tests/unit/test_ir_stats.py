@@ -2,7 +2,7 @@
 
 import pytest
 
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.ir_stats import count_opcodes
 from interpreter.api import ir_stats
 
@@ -50,13 +50,13 @@ class TestCountOpcodes:
 
     def test_all_opcodes_counted(self):
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="entry"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
             IRInstruction(opcode=Opcode.CONST, operands=[True], result_reg="r0"),
-            IRInstruction(opcode=Opcode.BRANCH_IF, operands=["r0"], label="then"),
-            IRInstruction(opcode=Opcode.BRANCH, label="end"),
-            IRInstruction(opcode=Opcode.LABEL, label="then"),
+            IRInstruction(opcode=Opcode.BRANCH_IF, operands=["r0"], label=CodeLabel("then")),
+            IRInstruction(opcode=Opcode.BRANCH, label=CodeLabel("end")),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("then")),
             IRInstruction(opcode=Opcode.RETURN, operands=["r0"]),
-            IRInstruction(opcode=Opcode.LABEL, label="end"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("end")),
         ]
         result = count_opcodes(instructions)
         assert result == {

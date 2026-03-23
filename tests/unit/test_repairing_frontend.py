@@ -8,7 +8,7 @@ from interpreter.ast_repair.repairing_frontend_decorator import (
 )
 from interpreter.constants import Language
 from interpreter.frontend import Frontend
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.llm.llm_client import LLMClient
 from interpreter.parser import TreeSitterParserFactory
 
@@ -70,7 +70,7 @@ class RecordingFrontend(Frontend):
         return self._instructions
 
 
-ENTRY_IR = [IRInstruction(opcode=Opcode.LABEL, label="entry")]
+ENTRY_IR = [IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry"))]
 VALID_PYTHON = b"x = 1\nprint(x)\n"
 BROKEN_PYTHON = b"def foo(:\n  return 1\n"
 FIXED_PYTHON = b"def foo():\n  return 1\n"

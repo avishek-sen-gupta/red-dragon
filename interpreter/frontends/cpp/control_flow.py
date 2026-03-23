@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 from interpreter import constants
 from interpreter.frontends.common.exceptions import (
     lower_raise_or_throw,
@@ -51,14 +51,14 @@ def lower_cpp_if(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{true_label},{false_label}",
+            label=CodeLabel(f"{true_label},{false_label}"),
             node=node,
         )
     else:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{true_label},{end_label}",
+            label=CodeLabel(f"{true_label},{end_label}"),
             node=node,
         )
 
@@ -94,7 +94,7 @@ def lower_cpp_while(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
         node=node,
     )
 
@@ -200,7 +200,7 @@ def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)

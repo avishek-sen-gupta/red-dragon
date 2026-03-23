@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel, NO_LABEL
 from interpreter import constants
 from interpreter.frontends.ruby.node_types import RubyNodeType
 
@@ -38,14 +38,14 @@ def lower_unless(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[negated_reg],
-            label=f"{true_label},{false_label}",
+            label=CodeLabel(f"{true_label},{false_label}"),
             node=node,
         )
     else:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[negated_reg],
-            label=f"{true_label},{end_label}",
+            label=CodeLabel(f"{true_label},{end_label}"),
             node=node,
         )
 
@@ -85,7 +85,7 @@ def lower_until(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[negated_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
         node=node,
     )
 
@@ -137,7 +137,7 @@ def lower_ruby_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
@@ -228,7 +228,7 @@ def lower_case(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{when_label},{next_label}",
+            label=CodeLabel(f"{when_label},{next_label}"),
             node=when_node,
         )
 
@@ -265,14 +265,14 @@ def lower_ruby_if(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{true_label},{false_label}",
+            label=CodeLabel(f"{true_label},{false_label}"),
             node=node,
         )
     else:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{true_label},{end_label}",
+            label=CodeLabel(f"{true_label},{end_label}"),
             node=node,
         )
 
@@ -319,7 +319,7 @@ def _lower_ruby_elsif(ctx: TreeSitterEmitContext, node, end_label: str) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{true_label},{false_label}",
+        label=CodeLabel(f"{true_label},{false_label}"),
         node=node,
     )
 
@@ -361,7 +361,7 @@ def lower_ruby_if_modifier(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{true_label},{end_label}",
+        label=CodeLabel(f"{true_label},{end_label}"),
         node=node,
     )
     ctx.emit(Opcode.LABEL, label=true_label)
@@ -399,7 +399,7 @@ def lower_ruby_unless_modifier(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[negated_reg],
-        label=f"{true_label},{end_label}",
+        label=CodeLabel(f"{true_label},{end_label}"),
         node=node,
     )
     ctx.emit(Opcode.LABEL, label=true_label)
@@ -432,7 +432,7 @@ def lower_ruby_while_modifier(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
         node=node,
     )
 
@@ -476,7 +476,7 @@ def lower_ruby_until_modifier(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[negated_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
         node=node,
     )
 
@@ -563,18 +563,18 @@ def _lower_try_catch_ruby(
     """Ruby-specific try/catch lowering (body is a list of children, not a single node)."""
     try_body_label = ctx.fresh_label("try_body")
     catch_labels = [ctx.fresh_label(f"catch_{i}") for i in range(len(catch_clauses))]
-    finally_label = ctx.fresh_label("try_finally") if finally_node else ""
-    else_label = ctx.fresh_label("try_else") if else_node else ""
+    finally_label = ctx.fresh_label("try_finally") if finally_node else NO_LABEL
+    else_label = ctx.fresh_label("try_else") if else_node else NO_LABEL
     end_label = ctx.fresh_label("try_end")
 
-    exit_target = finally_label or end_label
+    exit_target = finally_label if finally_label.is_present() else end_label
 
     # push exception handler
     ctx.emit(
         Opcode.TRY_PUSH,
         operands=[
-            ",".join(catch_labels),
-            finally_label or "",
+            catch_labels,
+            finally_label,
             end_label,
         ],
     )
@@ -590,7 +590,7 @@ def _lower_try_catch_ruby(
             ctx.lower_stmt(child)
     # pop exception handler (normal exit)
     ctx.emit(Opcode.TRY_POP)
-    if else_label:
+    if else_label.is_present():
         ctx.emit(Opcode.BRANCH, label=else_label)
     else:
         ctx.emit(Opcode.BRANCH, label=exit_target)
@@ -767,7 +767,7 @@ def lower_ruby_rescue_modifier_expr(ctx: TreeSitterEmitContext, node) -> str:
     catch_label = ctx.fresh_label("rescue_catch")
     end_label = ctx.fresh_label("rescue_end")
 
-    ctx.emit(Opcode.TRY_PUSH, operands=[catch_label, "", end_label])
+    ctx.emit(Opcode.TRY_PUSH, operands=[[catch_label], NO_LABEL, end_label])
     body_reg = ctx.lower_expr(body_node)
     ctx.emit(Opcode.DECL_VAR, operands=[result_var, body_reg], node=node)
     ctx.emit(Opcode.TRY_POP)

@@ -9,7 +9,7 @@ Covers:
 from __future__ import annotations
 
 from interpreter.refs.class_ref import ClassRef
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.llm.llm_frontend import _convert_llm_class_refs
 from interpreter.registry import (
     _expand_parent_chains,
@@ -27,7 +27,7 @@ class TestConvertLLMClassRefs:
         _convert_llm_class_refs([inst], table)
         assert inst.operands[0] == "class_Dog_0"
         assert table["class_Dog_0"] == ClassRef(
-            name="Dog", label="class_Dog_0", parents=()
+            name="Dog", label=CodeLabel("class_Dog_0"), parents=()
         )
 
     def test_class_ref_with_single_parent(self):
@@ -38,7 +38,7 @@ class TestConvertLLMClassRefs:
         _convert_llm_class_refs([inst], table)
         assert inst.operands[0] == "class_Dog_0"
         assert table["class_Dog_0"] == ClassRef(
-            name="Dog", label="class_Dog_0", parents=("Animal",)
+            name="Dog", label=CodeLabel("class_Dog_0"), parents=("Animal",)
         )
 
     def test_class_ref_with_multiple_parents(self):
@@ -103,22 +103,22 @@ class TestRegistryClassParents:
     def test_class_parents_populated_from_ir(self):
         """build_registry should populate class_parents from class_symbol_table."""
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="entry"),
-            IRInstruction(opcode=Opcode.BRANCH, label="end_class_Animal_1"),
-            IRInstruction(opcode=Opcode.LABEL, label="class_Animal_0"),
-            IRInstruction(opcode=Opcode.LABEL, label="end_class_Animal_1"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
+            IRInstruction(opcode=Opcode.BRANCH, label=CodeLabel("end_class_Animal_1")),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("class_Animal_0")),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("end_class_Animal_1")),
             IRInstruction(opcode=Opcode.STORE_VAR, operands=["Animal", "%0"]),
-            IRInstruction(opcode=Opcode.BRANCH, label="end_class_Dog_3"),
-            IRInstruction(opcode=Opcode.LABEL, label="class_Dog_2"),
-            IRInstruction(opcode=Opcode.LABEL, label="end_class_Dog_3"),
+            IRInstruction(opcode=Opcode.BRANCH, label=CodeLabel("end_class_Dog_3")),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("class_Dog_2")),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("end_class_Dog_3")),
             IRInstruction(opcode=Opcode.STORE_VAR, operands=["Dog", "%1"]),
         ]
         class_st = {
             "class_Animal_0": ClassRef(
-                name="Animal", label="class_Animal_0", parents=()
+                name="Animal", label=CodeLabel("class_Animal_0"), parents=()
             ),
             "class_Dog_2": ClassRef(
-                name="Dog", label="class_Dog_2", parents=("Animal",)
+                name="Dog", label=CodeLabel("class_Dog_2"), parents=("Animal",)
             ),
         }
         cfg = build_cfg(instructions)
@@ -129,12 +129,12 @@ class TestRegistryClassParents:
     def test_multi_level_parents_expanded(self):
         """C extends B extends A — class_parents['C'] should be ['B', 'A']."""
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="entry"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
         ]
         class_st = {
-            "class_A_0": ClassRef(name="A", label="class_A_0", parents=()),
-            "class_B_1": ClassRef(name="B", label="class_B_1", parents=("A",)),
-            "class_C_2": ClassRef(name="C", label="class_C_2", parents=("B",)),
+            "class_A_0": ClassRef(name="A", label=CodeLabel("class_A_0"), parents=()),
+            "class_B_1": ClassRef(name="B", label=CodeLabel("class_B_1"), parents=("A",)),
+            "class_C_2": ClassRef(name="C", label=CodeLabel("class_C_2"), parents=("B",)),
         }
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg, class_symbol_table=class_st)

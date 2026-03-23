@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 from interpreter.frontends.lua.node_types import LuaNodeType
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ def lower_lua_if(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{true_label},{false_label}",
+        label=CodeLabel(f"{true_label},{false_label}"),
         node=node,
     )
 
@@ -71,7 +71,7 @@ def _lower_lua_elseif_chain(
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{true_label},{false_label}",
+        label=CodeLabel(f"{true_label},{false_label}"),
         node=current,
     )
 
@@ -99,7 +99,7 @@ def lower_lua_while(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
         node=node,
     )
 
@@ -171,7 +171,7 @@ def _lower_lua_for_numeric(
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
         node=for_node,
     )
 
@@ -260,7 +260,7 @@ def _lower_lua_for_generic(
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
@@ -319,7 +319,7 @@ def lower_lua_repeat(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[negated_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
         node=node,
     )
 
@@ -344,7 +344,7 @@ def lower_lua_goto(ctx: TreeSitterEmitContext, node) -> None:
     logger.debug("Lowering goto -> %s at %s", label_name, ctx.source_loc(node))
     ctx.emit(
         Opcode.BRANCH,
-        label=label_name,
+        label=CodeLabel(label_name),
         node=node,
     )
 
@@ -354,4 +354,4 @@ def lower_lua_label(ctx: TreeSitterEmitContext, node) -> None:
     named_children = [c for c in node.children if c.is_named]
     label_name = ctx.node_text(named_children[0]) if named_children else "unknown"
     logger.debug("Lowering label :: %s :: at %s", label_name, ctx.source_loc(node))
-    ctx.emit(Opcode.LABEL, label=label_name)
+    ctx.emit(Opcode.LABEL, label=CodeLabel(label_name))

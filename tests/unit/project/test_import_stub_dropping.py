@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from interpreter.constants import Language
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.project.linker import link_modules
 from interpreter.project.types import ExportTable, ImportRef, ModuleUnit
 
@@ -43,7 +43,7 @@ class TestImportStubDropping:
         dep = _make_module(
             "/project/utils.py",
             [
-                IRInstruction(opcode=Opcode.LABEL, label="entry"),
+                IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
                 IRInstruction(
                     opcode=Opcode.CONST, result_reg="%0", operands=["func_add_0"]
                 ),
@@ -54,7 +54,7 @@ class TestImportStubDropping:
         entry = _make_module(
             "/project/main.py",
             [
-                IRInstruction(opcode=Opcode.LABEL, label="entry"),
+                IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
                 IRInstruction(
                     opcode=Opcode.CALL_FUNCTION,
                     result_reg="%0",
@@ -85,7 +85,7 @@ class TestImportStubDropping:
         dep = _make_module(
             "/project/utils.py",
             [
-                IRInstruction(opcode=Opcode.LABEL, label="entry"),
+                IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
                 IRInstruction(
                     opcode=Opcode.CONST, result_reg="%0", operands=["func_add_0"]
                 ),
@@ -96,7 +96,7 @@ class TestImportStubDropping:
         entry = _make_module(
             "/project/main.py",
             [
-                IRInstruction(opcode=Opcode.LABEL, label="entry"),
+                IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
                 # Import CALL
                 IRInstruction(
                     opcode=Opcode.CALL_FUNCTION,

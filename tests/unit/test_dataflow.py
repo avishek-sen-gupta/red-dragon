@@ -20,12 +20,12 @@ from interpreter.dataflow import (
     _build_defs_by_variable,
 )
 from interpreter.frontends.python import PythonFrontend
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
 from interpreter.parser import TreeSitterParserFactory
 from interpreter import constants
 
 
-def _make_inst(opcode: Opcode, result_reg=None, operands=None, label=None):
+def _make_inst(opcode: Opcode, result_reg=None, operands=None, label: CodeLabel = NO_LABEL):
     """Helper to build an IRInstruction concisely."""
     return IRInstruction(
         opcode=opcode,
@@ -51,7 +51,7 @@ class TestReachingDefinitions:
     def test_single_block_linear(self):
         """x=1; y=x+1 → x's def reaches y's use."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
@@ -73,7 +73,7 @@ class TestReachingDefinitions:
     def test_redefinition_kills(self):
         """x=1; x=2 → only second def of x reaches end."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.CONST, result_reg="t1", operands=["2"]),
@@ -91,21 +91,21 @@ class TestReachingDefinitions:
     def test_branch_merges_definitions(self):
         """if/else both define x → both reach merge point."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t_cond", operands=["true"]),
-            _make_inst(Opcode.BRANCH_IF, operands=["t_cond"], label="then,else"),
+            _make_inst(Opcode.BRANCH_IF, operands=["t_cond"], label=CodeLabel("then,else")),
             # then branch
-            _make_inst(Opcode.LABEL, label="then"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("then")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
-            _make_inst(Opcode.BRANCH, label="merge"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("merge")),
             # else branch
-            _make_inst(Opcode.LABEL, label="else"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("else")),
             _make_inst(Opcode.CONST, result_reg="t1", operands=["2"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t1"]),
-            _make_inst(Opcode.BRANCH, label="merge"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("merge")),
             # merge point
-            _make_inst(Opcode.LABEL, label="merge"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("merge")),
             _make_inst(Opcode.LOAD_VAR, result_reg="t2", operands=["x"]),
         ]
         cfg = _build_simple_cfg(ir)
@@ -118,24 +118,24 @@ class TestReachingDefinitions:
     def test_loop_reaches_header(self):
         """Loop body redefines x → def reaches loop header."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["0"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
-            _make_inst(Opcode.BRANCH, label="loop_header"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("loop_header")),
             # loop header
-            _make_inst(Opcode.LABEL, label="loop_header"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("loop_header")),
             _make_inst(Opcode.LOAD_VAR, result_reg="t_cond", operands=["x"]),
             _make_inst(
-                Opcode.BRANCH_IF, operands=["t_cond"], label="loop_body,loop_exit"
+                Opcode.BRANCH_IF, operands=["t_cond"], label=CodeLabel("loop_body,loop_exit")
             ),
             # loop body
-            _make_inst(Opcode.LABEL, label="loop_body"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("loop_body")),
             _make_inst(Opcode.CONST, result_reg="t1", operands=["1"]),
             _make_inst(Opcode.BINOP, result_reg="t2", operands=["+", "t_cond", "t1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t2"]),
-            _make_inst(Opcode.BRANCH, label="loop_header"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("loop_header")),
             # loop exit
-            _make_inst(Opcode.LABEL, label="loop_exit"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("loop_exit")),
             _make_inst(Opcode.LOAD_VAR, result_reg="t3", operands=["x"]),
         ]
         cfg = _build_simple_cfg(ir)
@@ -147,7 +147,7 @@ class TestReachingDefinitions:
 
     def test_empty_program(self):
         """Entry label only → no definitions."""
-        ir = [_make_inst(Opcode.LABEL, label="entry")]
+        ir = [_make_inst(Opcode.LABEL, label=CodeLabel("entry"))]
         cfg = _build_simple_cfg(ir)
         facts = solve_reaching_definitions(cfg)
 
@@ -159,7 +159,7 @@ class TestDefUseChains:
     def test_simple_def_use(self):
         """x=1; y=x → link from x's def to y's use of x."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
@@ -179,7 +179,7 @@ class TestDefUseChains:
     def test_use_after_redefinition(self):
         """x=1; x=2; y=x → only second def linked to LOAD_VAR use."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.CONST, result_reg="t1", operands=["2"]),
@@ -203,18 +203,18 @@ class TestDefUseChains:
     def test_branch_creates_multiple_chains(self):
         """if/else → use after merge has two possible defs."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t_cond", operands=["true"]),
-            _make_inst(Opcode.BRANCH_IF, operands=["t_cond"], label="then,else"),
-            _make_inst(Opcode.LABEL, label="then"),
+            _make_inst(Opcode.BRANCH_IF, operands=["t_cond"], label=CodeLabel("then,else")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("then")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
-            _make_inst(Opcode.BRANCH, label="merge"),
-            _make_inst(Opcode.LABEL, label="else"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("merge")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("else")),
             _make_inst(Opcode.CONST, result_reg="t1", operands=["2"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t1"]),
-            _make_inst(Opcode.BRANCH, label="merge"),
-            _make_inst(Opcode.LABEL, label="merge"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("merge")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("merge")),
             _make_inst(Opcode.LOAD_VAR, result_reg="t2", operands=["x"]),
         ]
         cfg = _build_simple_cfg(ir)
@@ -234,7 +234,7 @@ class TestDefUseChains:
     def test_function_params_are_definitions(self):
         """SYMBOLIC param:x → usable as a definition."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.SYMBOLIC, result_reg="t0", operands=["param:x"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
@@ -250,7 +250,7 @@ class TestDefUseChains:
     def test_decl_var_params_are_definitions(self):
         """SYMBOLIC param:x → DECL_VAR x %0: x is a definition (real frontend pattern)."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.SYMBOLIC, result_reg="t0", operands=["param:x"]),
             _make_inst(Opcode.DECL_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
@@ -267,7 +267,7 @@ class TestDependencyGraph:
     def test_direct_dependency(self):
         """y = x + 1 → y depends on x."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["10"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
@@ -284,7 +284,7 @@ class TestDependencyGraph:
     def test_decl_var_dependency(self):
         """DECL_VAR x t0; y = x + 1 → y depends on x (DECL_VAR is a variable definition)."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["10"]),
             _make_inst(Opcode.DECL_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
@@ -301,7 +301,7 @@ class TestDependencyGraph:
     def test_direct_dependency_in_raw_graph(self):
         """y = x + 1 → raw graph has y depending on x."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["10"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
@@ -318,7 +318,7 @@ class TestDependencyGraph:
     def test_transitive_dependency(self):
         """y=x+1; z=y*2 → z depends on y and transitively on x."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["10"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
@@ -340,7 +340,7 @@ class TestDependencyGraph:
     def test_raw_graph_excludes_transitive_deps(self):
         """y=x+1; z=y*2 → raw graph has z depending on y but NOT x."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["10"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
@@ -362,7 +362,7 @@ class TestDependencyGraph:
     def test_raw_graph_preserves_all_direct_deps_in_multi_operand_expression(self):
         """a=1; b=2; c=a+b; d=c+b → raw graph has d depending on both c and b."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["a", "t0"]),
             _make_inst(Opcode.CONST, result_reg="t1", operands=["2"]),
@@ -387,7 +387,7 @@ class TestDependencyGraph:
     def test_no_self_dependency_without_loop(self):
         """x=1 → x does not depend on itself."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
         ]
@@ -405,22 +405,22 @@ class TestDependencyGraph:
     def test_loop_creates_self_dependency(self):
         """while: x = x + 1 → x depends on x."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["0"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
-            _make_inst(Opcode.BRANCH, label="loop_header"),
-            _make_inst(Opcode.LABEL, label="loop_header"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("loop_header")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("loop_header")),
             _make_inst(Opcode.LOAD_VAR, result_reg="t_cond", operands=["x"]),
             _make_inst(
-                Opcode.BRANCH_IF, operands=["t_cond"], label="loop_body,loop_exit"
+                Opcode.BRANCH_IF, operands=["t_cond"], label=CodeLabel("loop_body,loop_exit")
             ),
-            _make_inst(Opcode.LABEL, label="loop_body"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("loop_body")),
             _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
             _make_inst(Opcode.CONST, result_reg="t2", operands=["1"]),
             _make_inst(Opcode.BINOP, result_reg="t3", operands=["+", "t1", "t2"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t3"]),
-            _make_inst(Opcode.BRANCH, label="loop_header"),
-            _make_inst(Opcode.LABEL, label="loop_exit"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("loop_header")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("loop_exit")),
             _make_inst(Opcode.LOAD_VAR, result_reg="t4", operands=["x"]),
         ]
         cfg = _build_simple_cfg(ir)
@@ -434,20 +434,20 @@ class TestIntegration:
     def test_analyze_returns_well_formed_result(self):
         """Multi-block program produces correct structure and content."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.CONST, result_reg="t_cond", operands=["true"]),
-            _make_inst(Opcode.BRANCH_IF, operands=["t_cond"], label="then,else"),
-            _make_inst(Opcode.LABEL, label="then"),
+            _make_inst(Opcode.BRANCH_IF, operands=["t_cond"], label=CodeLabel("then,else")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("then")),
             _make_inst(Opcode.CONST, result_reg="t1", operands=["2"]),
             _make_inst(Opcode.STORE_VAR, operands=["y", "t1"]),
-            _make_inst(Opcode.BRANCH, label="merge"),
-            _make_inst(Opcode.LABEL, label="else"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("merge")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("else")),
             _make_inst(Opcode.CONST, result_reg="t2", operands=["3"]),
             _make_inst(Opcode.STORE_VAR, operands=["y", "t2"]),
-            _make_inst(Opcode.BRANCH, label="merge"),
-            _make_inst(Opcode.LABEL, label="merge"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("merge")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("merge")),
             _make_inst(Opcode.LOAD_VAR, result_reg="t3", operands=["y"]),
             _make_inst(Opcode.RETURN, operands=["t3"]),
         ]
@@ -481,17 +481,17 @@ class TestIntegration:
     def test_analysis_converges_for_loop_program(self):
         """Reaching definitions analysis converges and covers all blocks on a loop program."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["0"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
-            _make_inst(Opcode.BRANCH, label="loop"),
-            _make_inst(Opcode.LABEL, label="loop"),
+            _make_inst(Opcode.BRANCH, label=CodeLabel("loop")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("loop")),
             _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
             _make_inst(Opcode.CONST, result_reg="t2", operands=["1"]),
             _make_inst(Opcode.BINOP, result_reg="t3", operands=["+", "t1", "t2"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t3"]),
-            _make_inst(Opcode.BRANCH_IF, operands=["t3"], label="loop,exit"),
-            _make_inst(Opcode.LABEL, label="exit"),
+            _make_inst(Opcode.BRANCH_IF, operands=["t3"], label=CodeLabel("loop,exit")),
+            _make_inst(Opcode.LABEL, label=CodeLabel("exit")),
             _make_inst(Opcode.RETURN, operands=["t3"]),
         ]
         cfg = _build_simple_cfg(ir)
@@ -505,7 +505,7 @@ class TestRegionOpcodeDataflow:
     def test_alloc_region_tracked_as_definition(self):
         """ALLOC_REGION result_reg appears in collected definitions."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.ALLOC_REGION, result_reg="%r0", operands=[1024]),
         ]
         cfg = _build_simple_cfg(ir)
@@ -517,7 +517,7 @@ class TestRegionOpcodeDataflow:
     def test_load_region_tracked_as_definition(self):
         """LOAD_REGION result_reg appears in collected definitions."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.ALLOC_REGION, result_reg="%r0", operands=[1024]),
             _make_inst(
                 Opcode.LOAD_REGION,
@@ -557,7 +557,7 @@ class TestRegionOpcodeDataflow:
     def test_cobol_style_def_use_chain(self):
         """Mini COBOL-like program produces correct def-use chains through region ops."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             # Allocate a region
             _make_inst(Opcode.ALLOC_REGION, result_reg="%r0", operands=[256]),
             # Write a value into the region
@@ -613,7 +613,7 @@ class TestEdgeCases:
     def test_symbolic_instruction_does_not_crash_analysis(self):
         """SYMBOLIC instruction doesn't crash analysis."""
         ir = [
-            _make_inst(Opcode.LABEL, label="entry"),
+            _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.SYMBOLIC, result_reg="t0", operands=["unknown_value"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),

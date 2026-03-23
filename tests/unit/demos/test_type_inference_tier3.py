@@ -12,7 +12,7 @@ from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
 from interpreter.refs.func_ref import FuncRef
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.type_expr import parse_type, scalar
 from interpreter.types.type_inference import infer_types
@@ -86,9 +86,9 @@ class Cat {
 class TestCallUnknownResolution:
     def test_call_unknown_resolution(self):
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="entry"),
-            IRInstruction(opcode=Opcode.BRANCH, label="end_add_0"),
-            IRInstruction(opcode=Opcode.LABEL, label="func_add_0"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
+            IRInstruction(opcode=Opcode.BRANCH, label=CodeLabel("end_add_0")),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("func_add_0")),
             IRInstruction(
                 opcode=Opcode.SYMBOLIC,
                 result_reg="%0",
@@ -100,7 +100,7 @@ class TestCallUnknownResolution:
                 operands=["param:b"],
             ),
             IRInstruction(opcode=Opcode.RETURN, operands=["%2"]),
-            IRInstruction(opcode=Opcode.LABEL, label="end_add_0"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("end_add_0")),
             IRInstruction(
                 opcode=Opcode.CONST,
                 result_reg="%3",
@@ -122,7 +122,7 @@ class TestCallUnknownResolution:
             },
             register_types={"%0": scalar("Int"), "%1": scalar("Int")},
         )
-        func_st = {"func_add_0": FuncRef(name="add", label="func_add_0")}
+        func_st = {"func_add_0": FuncRef(name="add", label=CodeLabel("func_add_0"))}
         env = infer_types(
             instructions,
             _resolver(),
@@ -136,7 +136,7 @@ class TestCallUnknownResolution:
 class TestStoreLoadIndex:
     def test_store_load_index(self):
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="entry"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
             IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg="%0"),
             IRInstruction(opcode=Opcode.CONST, result_reg="%1", operands=["42"]),
             IRInstruction(opcode=Opcode.CONST, result_reg="%2", operands=["0"]),
@@ -155,7 +155,7 @@ class TestStoreLoadIndex:
 
     def test_store_load_index_last_write_wins(self):
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="entry"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
             IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg="%0"),
             IRInstruction(opcode=Opcode.CONST, result_reg="%1", operands=["42"]),
             IRInstruction(opcode=Opcode.CONST, result_reg="%idx", operands=["0"]),
@@ -178,7 +178,7 @@ class TestArrayElementTypePromotion:
     def test_array_register_promoted_to_array_of_int(self):
         """NEW_ARRAY + STORE_INDEX with Int value → register type is Array[Int]."""
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="entry"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
             IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg="%arr"),
             IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=["42"]),
             IRInstruction(opcode=Opcode.CONST, result_reg="%idx", operands=["0"]),
@@ -190,7 +190,7 @@ class TestArrayElementTypePromotion:
     def test_array_var_promoted_to_array_of_int(self):
         """STORE_VAR of an array with Int elements → var type is Array[Int]."""
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="entry"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
             IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg="%arr"),
             IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=["42"]),
             IRInstruction(opcode=Opcode.CONST, result_reg="%idx", operands=["0"]),
@@ -203,7 +203,7 @@ class TestArrayElementTypePromotion:
     def test_array_var_promoted_to_array_of_string(self):
         """STORE_VAR of an array with String elements → var type is Array[String]."""
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="entry"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
             IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg="%arr"),
             IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=['"hello"']),
             IRInstruction(opcode=Opcode.CONST, result_reg="%idx", operands=["0"]),
@@ -216,7 +216,7 @@ class TestArrayElementTypePromotion:
     def test_element_type_propagated_through_load_var(self):
         """Array element types propagate through STORE_VAR → LOAD_VAR → LOAD_INDEX."""
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="entry"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
             IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg="%arr"),
             IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=["42"]),
             IRInstruction(opcode=Opcode.CONST, result_reg="%idx", operands=["0"]),
@@ -240,7 +240,7 @@ class TestArrayElementTypePromotion:
             var_types={"items": parse_type("List[String]")}
         )
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="entry"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
             IRInstruction(opcode=Opcode.CONST, result_reg="%val", operands=["obj"]),
             IRInstruction(opcode=Opcode.DECL_VAR, operands=["items", "%val"]),
         ]

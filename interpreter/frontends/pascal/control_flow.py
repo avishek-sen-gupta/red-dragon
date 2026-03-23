@@ -6,7 +6,7 @@ import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.constants import DEFAULT_EXCEPTION_TYPE
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 from interpreter.frontends.common.exceptions import lower_try_catch
 from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
 from interpreter.frontends.pascal.node_types import PascalNodeType
@@ -80,14 +80,14 @@ def lower_pascal_if(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{true_label},{false_label}",
+            label=CodeLabel(f"{true_label},{false_label}"),
             node=node,
         )
     else:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{true_label},{end_label}",
+            label=CodeLabel(f"{true_label},{end_label}"),
             node=node,
         )
 
@@ -127,7 +127,7 @@ def lower_pascal_while(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
         node=node,
     )
 
@@ -200,7 +200,7 @@ def lower_pascal_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
         node=node,
     )
 
@@ -313,7 +313,7 @@ def _lower_pascal_case_branch(
             ctx.emit(
                 Opcode.BRANCH_IF,
                 operands=[cmp_reg],
-                label=f"{true_label},{next_label}",
+                label=CodeLabel(f"{true_label},{next_label}"),
                 node=case_node,
             )
 
@@ -352,7 +352,7 @@ def lower_pascal_repeat(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{end_label},{body_label}",
+        label=CodeLabel(f"{end_label},{body_label}"),
         node=node,
     )
     ctx.emit(Opcode.LABEL, label=end_label)
@@ -538,7 +538,7 @@ def lower_pascal_foreach(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
         node=node,
     )
 
@@ -566,7 +566,7 @@ def lower_pascal_goto(ctx: TreeSitterEmitContext, node) -> None:
         (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
     )
     label_name = ctx.node_text(id_node) if id_node else "unknown"
-    ctx.emit(Opcode.BRANCH, label=label_name, node=node)
+    ctx.emit(Opcode.BRANCH, label=CodeLabel(label_name), node=node)
 
 
 def lower_pascal_label(ctx: TreeSitterEmitContext, node) -> None:
@@ -575,7 +575,7 @@ def lower_pascal_label(ctx: TreeSitterEmitContext, node) -> None:
         (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
     )
     label_name = ctx.node_text(id_node) if id_node else "unknown"
-    ctx.emit(Opcode.LABEL, label=label_name)
+    ctx.emit(Opcode.LABEL, label=CodeLabel(label_name))
 
 
 def lower_pascal_noop(ctx: TreeSitterEmitContext, node) -> None:

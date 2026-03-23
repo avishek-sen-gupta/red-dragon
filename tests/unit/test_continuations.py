@@ -23,7 +23,7 @@ class TestHandleSetContinuation:
     def test_produces_correct_state_update(self):
         inst = IRInstruction(
             opcode=Opcode.SET_CONTINUATION,
-            operands=["para_WORK_end", "perform_return_0"],
+            operands=["para_WORK_end", CodeLabel("perform_return_0")],
         )
         vm = _make_vm()
         result = _handle_set_continuation(inst, vm, _CTX)
@@ -39,7 +39,7 @@ class TestHandleSetContinuation:
 
         inst1 = IRInstruction(
             opcode=Opcode.SET_CONTINUATION,
-            operands=["para_X_end", "return_A"],
+            operands=["para_X_end", CodeLabel("return_A")],
         )
         result1 = _handle_set_continuation(inst1, vm, _CTX)
         apply_update(vm, result1.update)
@@ -47,7 +47,7 @@ class TestHandleSetContinuation:
 
         inst2 = IRInstruction(
             opcode=Opcode.SET_CONTINUATION,
-            operands=["para_X_end", "return_B"],
+            operands=["para_X_end", CodeLabel("return_B")],
         )
         result2 = _handle_set_continuation(inst2, vm, _CTX)
         apply_update(vm, result2.update)
@@ -111,13 +111,13 @@ class TestApplyUpdateContinuations:
 class TestCFGBuilderResumeContinuation:
     def test_resume_continuation_terminates_block(self):
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="para_A"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("para_A")),
             IRInstruction(opcode=Opcode.CONST, result_reg="%r0", operands=["hello"]),
             IRInstruction(
                 opcode=Opcode.RESUME_CONTINUATION,
                 operands=["para_A_end"],
             ),
-            IRInstruction(opcode=Opcode.LABEL, label="para_B"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("para_B")),
             IRInstruction(opcode=Opcode.CONST, result_reg="%r1", operands=["world"]),
             IRInstruction(
                 opcode=Opcode.RESUME_CONTINUATION,
@@ -138,7 +138,7 @@ class TestCFGBuilderResumeContinuation:
         from interpreter.cfg_types import BasicBlock
 
         block = BasicBlock(
-            label="para_A",
+            label=CodeLabel("para_A"),
             instructions=[
                 IRInstruction(
                     opcode=Opcode.RESUME_CONTINUATION,

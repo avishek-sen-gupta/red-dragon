@@ -7,7 +7,7 @@ import logging
 from interpreter.cobol.cobol_statements import SearchStatement
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ def lower_search(
     increment_label = ctx.fresh_label("search_incr")
 
     max_iterations = 256
-    counter_var = ctx.fresh_label("__search_ctr")
+    counter_var = ctx.fresh_name("__search_ctr")
     zero_reg = ctx.const_to_reg(0)
     ctx.emit(Opcode.STORE_VAR, operands=[counter_var, zero_reg])
 
@@ -45,7 +45,7 @@ def lower_search(
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[bound_cond],
-        label=f"{at_end_label},{body_label}",
+        label=CodeLabel(f"{at_end_label},{body_label}"),
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
@@ -58,7 +58,7 @@ def lower_search(
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{when_true},{when_next}",
+            label=CodeLabel(f"{when_true},{when_next}"),
         )
         ctx.emit(Opcode.LABEL, label=when_true)
         for child in when.children:

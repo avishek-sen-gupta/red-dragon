@@ -5,7 +5,7 @@ from __future__ import annotations
 from interpreter.cfg import build_cfg
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.registry import build_registry, _scan_classes
 
 
@@ -15,13 +15,13 @@ class TestScanClassesOverloads:
     def test_single_method_returns_single_element_list(self):
         """A class with one method should have a single-element list for that name."""
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="class_Foo_0"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("class_Foo_0")),
             IRInstruction(opcode=Opcode.CONST, operands=["func_greet_0"]),
-            IRInstruction(opcode=Opcode.LABEL, label="end_class_Foo_0"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("end_class_Foo_0")),
         ]
-        func_st = {"func_greet_0": FuncRef(name="greet", label="func_greet_0")}
+        func_st = {"func_greet_0": FuncRef(name="greet", label=CodeLabel("func_greet_0"))}
         class_st = {
-            "class_Foo_0": ClassRef(name="Foo", label="class_Foo_0", parents=()),
+            "class_Foo_0": ClassRef(name="Foo", label=CodeLabel("class_Foo_0"), parents=()),
         }
         _classes, class_methods, _parents = _scan_classes(
             instructions, func_st, class_st
@@ -31,17 +31,17 @@ class TestScanClassesOverloads:
     def test_overloaded_methods_accumulate(self):
         """Two methods with the same name should produce a two-element list."""
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="class_Foo_0"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("class_Foo_0")),
             IRInstruction(opcode=Opcode.CONST, operands=["func_greet_0"]),
             IRInstruction(opcode=Opcode.CONST, operands=["func_greet_1"]),
-            IRInstruction(opcode=Opcode.LABEL, label="end_class_Foo_0"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("end_class_Foo_0")),
         ]
         func_st = {
-            "func_greet_0": FuncRef(name="greet", label="func_greet_0"),
-            "func_greet_1": FuncRef(name="greet", label="func_greet_1"),
+            "func_greet_0": FuncRef(name="greet", label=CodeLabel("func_greet_0")),
+            "func_greet_1": FuncRef(name="greet", label=CodeLabel("func_greet_1")),
         }
         class_st = {
-            "class_Foo_0": ClassRef(name="Foo", label="class_Foo_0", parents=()),
+            "class_Foo_0": ClassRef(name="Foo", label=CodeLabel("class_Foo_0"), parents=()),
         }
         _classes, class_methods, _parents = _scan_classes(
             instructions, func_st, class_st
@@ -51,17 +51,17 @@ class TestScanClassesOverloads:
     def test_different_methods_separate_lists(self):
         """Different method names should have independent lists."""
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="class_Foo_0"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("class_Foo_0")),
             IRInstruction(opcode=Opcode.CONST, operands=["func_greet_0"]),
             IRInstruction(opcode=Opcode.CONST, operands=["func_farewell_0"]),
-            IRInstruction(opcode=Opcode.LABEL, label="end_class_Foo_0"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("end_class_Foo_0")),
         ]
         func_st = {
-            "func_greet_0": FuncRef(name="greet", label="func_greet_0"),
-            "func_farewell_0": FuncRef(name="farewell", label="func_farewell_0"),
+            "func_greet_0": FuncRef(name="greet", label=CodeLabel("func_greet_0")),
+            "func_farewell_0": FuncRef(name="farewell", label=CodeLabel("func_farewell_0")),
         }
         class_st = {
-            "class_Foo_0": ClassRef(name="Foo", label="class_Foo_0", parents=()),
+            "class_Foo_0": ClassRef(name="Foo", label=CodeLabel("class_Foo_0"), parents=()),
         }
         _classes, class_methods, _parents = _scan_classes(
             instructions, func_st, class_st
@@ -72,19 +72,19 @@ class TestScanClassesOverloads:
     def test_three_overloads(self):
         """Three overloads of the same method should all be preserved."""
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="class_Calc_0"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("class_Calc_0")),
             IRInstruction(opcode=Opcode.CONST, operands=["func_add_0"]),
             IRInstruction(opcode=Opcode.CONST, operands=["func_add_1"]),
             IRInstruction(opcode=Opcode.CONST, operands=["func_add_2"]),
-            IRInstruction(opcode=Opcode.LABEL, label="end_class_Calc_0"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("end_class_Calc_0")),
         ]
         func_st = {
-            "func_add_0": FuncRef(name="add", label="func_add_0"),
-            "func_add_1": FuncRef(name="add", label="func_add_1"),
-            "func_add_2": FuncRef(name="add", label="func_add_2"),
+            "func_add_0": FuncRef(name="add", label=CodeLabel("func_add_0")),
+            "func_add_1": FuncRef(name="add", label=CodeLabel("func_add_1")),
+            "func_add_2": FuncRef(name="add", label=CodeLabel("func_add_2")),
         }
         class_st = {
-            "class_Calc_0": ClassRef(name="Calc", label="class_Calc_0", parents=()),
+            "class_Calc_0": ClassRef(name="Calc", label=CodeLabel("class_Calc_0"), parents=()),
         }
         _classes, class_methods, _parents = _scan_classes(
             instructions, func_st, class_st

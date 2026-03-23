@@ -4,12 +4,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from interpreter.ir import SpreadArguments
+    from interpreter.ir import SpreadArguments, CodeLabel
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
     lower_const_literal,
@@ -310,7 +310,7 @@ def lower_php_ternary(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{true_label},{false_label}",
+        label=CodeLabel(f"{true_label},{false_label}"),
     )
 
     ctx.emit(Opcode.LABEL, label=true_label)
@@ -591,7 +591,7 @@ def lower_php_match_expression(ctx: TreeSitterEmitContext, node) -> str:
                 ctx.emit(
                     Opcode.BRANCH_IF,
                     operands=[cmp_reg],
-                    label=f"{arm_label},{next_label}",
+                    label=CodeLabel(f"{arm_label},{next_label}"),
                 )
             else:
                 ctx.emit(Opcode.BRANCH, label=arm_label)

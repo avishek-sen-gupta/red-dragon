@@ -14,7 +14,7 @@ from typing import Any, Callable
 from interpreter import constants
 from interpreter.constants import CanonicalLiteral, Language
 from interpreter.frontend_observer import FrontendObserver
-from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation
+from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation, CodeLabel, NO_LABEL
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.frontends.symbol_table import SymbolTable
@@ -161,8 +161,8 @@ class TreeSitterEmitContext:
         self.reg_counter += 1
         return r
 
-    def fresh_label(self, prefix: str = "L") -> str:
-        lbl = f"{prefix}_{self.label_counter}"
+    def fresh_label(self, prefix: str = "L") -> CodeLabel:
+        lbl = CodeLabel(f"{prefix}_{self.label_counter}")
         self.label_counter += 1
         return lbl
 
@@ -172,7 +172,7 @@ class TreeSitterEmitContext:
         *,
         result_reg: str = "",
         operands: list[Any] = [],
-        label: str = "",
+        label: CodeLabel = NO_LABEL,
         source_location: SourceLocation = NO_SOURCE_LOCATION,
         node=None,
     ) -> IRInstruction:
@@ -186,7 +186,7 @@ class TreeSitterEmitContext:
             opcode=opcode,
             result_reg=result_reg or None,
             operands=resolved_operands,
-            label=label or None,
+            label=label,
             source_location=loc,
         )
         self._track_label(opcode, label)
@@ -202,7 +202,7 @@ class TreeSitterEmitContext:
     def emit_func_ref(
         self,
         func_name: str,
-        func_label: str,
+        func_label: CodeLabel,
         result_reg: str,
         node=None,
     ) -> IRInstruction:
@@ -211,18 +211,19 @@ class TreeSitterEmitContext:
         Emits the plain func_label as the CONST operand.  The symbol table
         maps func_label → FuncRef(name, label) for downstream consumers.
         """
-        self.func_symbol_table[func_label] = FuncRef(name=func_name, label=func_label)
+        label_str = str(func_label)
+        self.func_symbol_table[label_str] = FuncRef(name=func_name, label=label_str)
         return self.emit(
             Opcode.CONST,
             result_reg=result_reg,
-            operands=[func_label],
+            operands=[label_str],
             node=node,
         )
 
     def emit_class_ref(
         self,
         class_name: str,
-        class_label: str,
+        class_label: CodeLabel,
         parents: list[str],
         result_reg: str,
         node=None,
@@ -232,42 +233,43 @@ class TreeSitterEmitContext:
         Emits the plain class_label as the CONST operand.  The symbol table
         maps class_label -> ClassRef(name, label, parents) for downstream consumers.
         """
-        self.class_symbol_table[class_label] = ClassRef(
-            name=class_name, label=class_label, parents=tuple(parents)
+        label_str = str(class_label)
+        self.class_symbol_table[label_str] = ClassRef(
+            name=class_name, label=label_str, parents=tuple(parents)
         )
         return self.emit(
             Opcode.CONST,
             result_reg=result_reg,
-            operands=[class_label],
+            operands=[label_str],
             node=node,
         )
 
-    def _track_label(self, opcode: Opcode, label: str) -> None:
+    def _track_label(self, opcode: Opcode, label: CodeLabel) -> None:
         """Track current function/class label for param type association."""
-        if opcode != Opcode.LABEL:
+        if opcode != Opcode.LABEL or not label.is_present():
             return
-        if label and label.startswith(constants.FUNC_LABEL_PREFIX):
-            self._current_func_label = label
-            self.type_env_builder.func_param_types.setdefault(label, [])
+        label_str = str(label)
+        if label.starts_with(constants.FUNC_LABEL_PREFIX):
+            self._current_func_label = label_str
+            self.type_env_builder.func_param_types.setdefault(label_str, [])
         elif (
-            label
-            and label.startswith(constants.CLASS_LABEL_PREFIX)
-            and not label.startswith(constants.END_CLASS_LABEL_PREFIX)
+            label.starts_with(constants.CLASS_LABEL_PREFIX)
+            and not label.starts_with(constants.END_CLASS_LABEL_PREFIX)
         ):
-            self._current_class_name = label.removeprefix(
+            self._current_class_name = label.extract_name(
                 constants.CLASS_LABEL_PREFIX
-            ).rsplit("_", 1)[0]
+            )
             self._current_func_label = ""
-        elif label and label.startswith(constants.END_CLASS_LABEL_PREFIX):
+        elif label.starts_with(constants.END_CLASS_LABEL_PREFIX):
             self._current_class_name = ""
             self._current_func_label = ""
         else:
             self._current_func_label = ""
 
-    def seed_func_return_type(self, func_label: str, return_type: TypeExpr) -> None:
+    def seed_func_return_type(self, func_label: str | CodeLabel, return_type: TypeExpr) -> None:
         """Seed the return type for a function label."""
         if return_type:
-            self.type_env_builder.func_return_types[func_label] = return_type
+            self.type_env_builder.func_return_types[str(func_label)] = return_type
 
     def seed_register_type(self, reg: str, type_name: TypeExpr) -> None:
         """Seed the type for a register."""
