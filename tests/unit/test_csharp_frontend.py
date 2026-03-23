@@ -144,7 +144,7 @@ else { y = 40; }
 
         labels = _labels_in_order(ir)
         branch_targets = {
-            target for inst in branch_ifs for target in inst.label.split(",")
+            target for inst in branch_ifs for target in inst.label.branch_targets()
         }
         label_set = set(labels)
         assert branch_targets.issubset(
@@ -176,7 +176,7 @@ for (int i = 0; i < 10; i++) {
         opcodes = _opcodes(ir)
         assert Opcode.BRANCH_IF in opcodes
         labels = _find_all(ir, Opcode.LABEL)
-        label_names = [lbl.label for lbl in labels]
+        label_names = [lbl.label.value for lbl in labels]
         for_labels = [l for l in label_names if l and "for_" in l]
         assert len(for_labels) >= 2
 
@@ -271,7 +271,7 @@ class TestCSharpFrontendFallback:
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
-    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+    return [inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL]
 
 
 class TestNonTrivialCSharp:
@@ -341,7 +341,7 @@ try {
 """
         ir = _parse_and_lower(source)
         opcodes = _opcodes(ir)
-        labels = [i.label for i in ir if i.opcode == Opcode.LABEL]
+        labels = [i.label.value for i in ir if i.opcode == Opcode.LABEL]
         # try/catch body and catch block are lowered with LABEL/BRANCH
         assert any("try_body" in l for l in labels)
         assert any("catch_0" in l for l in labels)
@@ -553,13 +553,13 @@ class TestCSharpInterfaceDeclaration:
         )
         stores = _find_all(ir, Opcode.DECL_VAR)
         assert any("IShape" in inst.operands for inst in stores)
-        labels = [inst.label for inst in ir if inst.opcode == Opcode.LABEL]
+        labels = [inst.label.value for inst in ir if inst.opcode == Opcode.LABEL]
         assert any("func_" in l and "Draw" in l for l in labels)
 
     def test_interface_methods_produce_func_labels(self):
         source = "interface IAnimal { void Speak(); string Name(); }"
         ir = _parse_and_lower(source)
-        labels = [inst.label for inst in ir if inst.opcode == Opcode.LABEL]
+        labels = [inst.label.value for inst in ir if inst.opcode == Opcode.LABEL]
         func_labels = [l for l in labels if "func_" in l]
         assert any("Speak" in l for l in func_labels)
         assert any("Name" in l for l in func_labels)

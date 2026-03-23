@@ -56,7 +56,7 @@ def _instructions_in_inline_function(
         if (
             inst.opcode == Opcode.LABEL
             and inst.label
-            and inst.label.startswith(label_prefix)
+            and inst.label.value.startswith(label_prefix)
         ):
             collecting = True
             continue
@@ -926,7 +926,9 @@ z = x
         ir = _lower(RubyFrontend, "ruby", source)
         # for..in should NOT produce an inline function — no RETURN inside the loop
         labels = [
-            inst.label for inst in ir if inst.opcode == Opcode.LABEL and inst.label
+            inst.label.value
+            for inst in ir
+            if inst.opcode == Opcode.LABEL and inst.label.is_present()
         ]
         # Should have for_cond / for_body / for_end labels, but no func_ or block_ labels
         func_labels = [
