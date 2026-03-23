@@ -6,6 +6,7 @@ Use `bd` (Beads) for all task tracking. Before starting work:
 1. Run `bd ready` to see unblocked tasks
 2. Claim your task: `bd update <id> --claim`
 3. When done: `bd update <id> --status closed`
+4. Before committing, always backup your work with `bd backup`, and push the exports to the remote repo.
 
 Do NOT use markdown TODO lists. All tasks live in Beads.
 
