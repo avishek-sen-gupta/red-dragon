@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from interpreter.instructions import to_typed, AllocRegion, WriteRegion, LoadRegion
 from interpreter.ir import IRInstruction
 from interpreter.vm.vm import (
     VMState,
@@ -20,12 +21,14 @@ from interpreter import constants
 
 def _handle_alloc_region(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
     """ALLOC_REGION: operands[0] = size literal. Allocate a zeroed byte region."""
-    size = _resolve_reg(vm, inst.operands[0]).value
+    t = to_typed(inst)
+    assert isinstance(t, AllocRegion)
+    size = _resolve_reg(vm, t.size_reg).value
     if _is_symbolic(size):
         sym = vm.fresh_symbolic(hint="region_addr")
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                register_writes={t.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"alloc_region(symbolic size) → {sym.name}",
             )
         )
@@ -34,7 +37,7 @@ def _handle_alloc_region(inst: IRInstruction, vm: VMState, ctx: Any) -> Executio
     return ExecutionResult.success(
         StateUpdate(
             new_regions={addr: int(size)},
-            register_writes={inst.result_reg: typed(addr, UNKNOWN)},
+            register_writes={t.result_reg: typed(addr, UNKNOWN)},
             reasoning=f"alloc_region({size}) → {addr}",
         )
     )
@@ -45,10 +48,12 @@ def _handle_write_region(inst: IRInstruction, vm: VMState, ctx: Any) -> Executio
 
     Write bytes from value_reg (a list[int]) into the region at the given offset.
     """
-    region_addr = _resolve_reg(vm, inst.operands[0]).value
-    offset = _resolve_reg(vm, inst.operands[1]).value
-    length = inst.operands[2]
-    value = _resolve_reg(vm, inst.operands[3]).value
+    t = to_typed(inst)
+    assert isinstance(t, WriteRegion)
+    region_addr = _resolve_reg(vm, t.region_reg).value
+    offset = _resolve_reg(vm, t.offset_reg).value
+    length = t.length
+    value = _resolve_reg(vm, t.value_reg).value
 
     has_symbolic_elements = isinstance(value, list) and any(
         _is_symbolic(v) for v in value
@@ -85,15 +90,17 @@ def _handle_load_region(inst: IRInstruction, vm: VMState, ctx: Any) -> Execution
 
     Read bytes from the region and return as list[int].
     """
-    region_addr = _resolve_reg(vm, inst.operands[0]).value
-    offset = _resolve_reg(vm, inst.operands[1]).value
-    length = inst.operands[2]
+    t = to_typed(inst)
+    assert isinstance(t, LoadRegion)
+    region_addr = _resolve_reg(vm, t.region_reg).value
+    offset = _resolve_reg(vm, t.offset_reg).value
+    length = t.length
 
     if _is_symbolic(region_addr) or _is_symbolic(offset):
         sym = vm.fresh_symbolic(hint=f"region_load")
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                register_writes={t.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"load_region(symbolic) → {sym.name}",
             )
         )
@@ -103,7 +110,7 @@ def _handle_load_region(inst: IRInstruction, vm: VMState, ctx: Any) -> Execution
         sym = vm.fresh_symbolic(hint=f"region_load({addr_str})")
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                register_writes={t.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"load_region({addr_str}) — unknown region → {sym.name}",
             )
         )
@@ -113,7 +120,7 @@ def _handle_load_region(inst: IRInstruction, vm: VMState, ctx: Any) -> Execution
     data = list(vm.regions[addr_str][start:end])
     return ExecutionResult.success(
         StateUpdate(
-            register_writes={inst.result_reg: typed(data, UNKNOWN)},
+            register_writes={t.result_reg: typed(data, UNKNOWN)},
             reasoning=f"load_region({addr_str}, offset={start}, len={length}) = {data}",
         )
     )
