@@ -108,6 +108,14 @@ class RelationalPattern(Pattern):
 
 
 @dataclass(frozen=True)
+class AndPattern(Pattern):
+    """Both sub-patterns must match. C#'s ``> 0 and < 10``."""
+
+    left: Pattern
+    right: Pattern
+
+
+@dataclass(frozen=True)
 class NoGuard:
     """Sentinel: this case has no guard clause."""
 
@@ -330,6 +338,16 @@ def compile_pattern_test(
                 operands=[op, subject_reg, const_reg],
             )
             return cmp_reg
+        case AndPattern(left=left, right=right):
+            left_reg = compile_pattern_test(ctx, subject_reg, left)
+            right_reg = compile_pattern_test(ctx, subject_reg, right)
+            and_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.BINOP,
+                result_reg=and_reg,
+                operands=["and", left_reg, right_reg],
+            )
+            return and_reg
         case _:
             raise NotImplementedError(f"compile_pattern_test: {type(pattern).__name__}")
 
@@ -364,6 +382,8 @@ def compile_pattern_bindings(
             pass  # no bindings
         case RelationalPattern():
             pass  # no bindings — comparison only
+        case AndPattern():
+            pass  # no bindings — test only
         case SequencePattern(elements=elems):
             if not _has_star(elems):
                 # No star — bind each element by literal index
