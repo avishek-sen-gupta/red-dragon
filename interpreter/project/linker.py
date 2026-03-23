@@ -30,7 +30,6 @@ from interpreter.refs.func_ref import FuncRef
 from interpreter.registry import build_registry
 from interpreter import constants
 
-
 # ── Public helpers (tested individually) ─────────────────────────
 
 _REGISTER_RE = re.compile(r"^%(\d+)$")
@@ -108,7 +107,9 @@ def _transform_instruction(
             new_label = namespace_label(inst.label, prefix)
 
     # ── Result register ──
-    new_result_reg = rebase_register(inst.result_reg, reg_offset) if inst.result_reg else None
+    new_result_reg = (
+        rebase_register(inst.result_reg, reg_offset) if inst.result_reg else None
+    )
 
     # ── Operands ──
     if inst.opcode == Opcode.TRY_PUSH:
@@ -272,9 +273,9 @@ def link_modules(
     resolved = _collect_resolved_imports(modules, import_graph)
 
     # Processing order: dependencies first (topo order), entry module last
-    processing_order = [
-        p for p in topo_order if p != entry_module and p in modules
-    ] + [entry_module]
+    processing_order = [p for p in topo_order if p != entry_module and p in modules] + [
+        entry_module
+    ]
 
     # Build merged IR with a single entry label
     all_ir: list[IRInstruction] = [IRInstruction(opcode=Opcode.LABEL, label="entry")]

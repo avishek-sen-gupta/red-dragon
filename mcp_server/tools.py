@@ -407,14 +407,11 @@ def handle_load_project(
             "modules": len(linked.modules),
             "entry": str(linked.entry_module),
             "import_graph": {
-                str(k): [str(v) for v in vs]
-                for k, vs in linked.import_graph.items()
+                str(k): [str(v) for v in vs] for k, vs in linked.import_graph.items()
             },
             "unresolved_imports": len(linked.unresolved_imports),
             "cfg_blocks": len(linked.merged_cfg.blocks),
-            "functions": sorted(
-                f.label for f in interprocedural.call_graph.functions
-            ),
+            "functions": sorted(f.label for f in interprocedural.call_graph.functions),
             "classes": sorted(linked.merged_registry.classes.keys()),
         }
     except Exception as e:

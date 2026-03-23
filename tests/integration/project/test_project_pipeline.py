@@ -63,9 +63,7 @@ class TestCompileProjectPython:
     @pytest.fixture
     def two_file_project(self, tmp_path):
         """main.py imports helper from utils.py."""
-        (tmp_path / "utils.py").write_text(
-            "def helper(x):\n    return x + 1\n"
-        )
+        (tmp_path / "utils.py").write_text("def helper(x):\n    return x + 1\n")
         (tmp_path / "main.py").write_text(
             "from utils import helper\n\nresult = helper(42)\n"
         )
@@ -90,9 +88,7 @@ class TestCompileProjectPython:
         pkg.mkdir()
         (pkg / "__init__.py").write_text("")
         (pkg / "models.py").write_text("class User:\n    pass\n")
-        (tmp_path / "main.py").write_text(
-            "from pkg.models import User\n\nu = User()\n"
-        )
+        (tmp_path / "main.py").write_text("from pkg.models import User\n\nu = User()\n")
         return tmp_path
 
     def test_two_file_links(self, two_file_project):
@@ -139,7 +135,9 @@ class TestCompileProjectPython:
             project_root=package_project,
         )
 
-        assert len(linked.modules) >= 2  # main.py + pkg/models.py (+ possibly __init__.py)
+        assert (
+            len(linked.modules) >= 2
+        )  # main.py + pkg/models.py (+ possibly __init__.py)
 
     def test_system_imports_not_resolved(self, tmp_path):
         """System imports (os, sys) should not cause file resolution."""
@@ -169,7 +167,7 @@ class TestCompileProjectPython:
 
 class TestCompileModuleJavaScript:
     def test_esm_module(self, tmp_path):
-        source = 'export function add(a, b) { return a + b; }\n'
+        source = "export function add(a, b) { return a + b; }\n"
         f = tmp_path / "math.js"
         f.write_text(source)
 
@@ -180,9 +178,7 @@ class TestCompileModuleJavaScript:
         assert "add" in unit.exports.functions
 
     def test_js_project_with_import(self, tmp_path):
-        (tmp_path / "utils.js").write_text(
-            "function helper(x) { return x + 1; }\n"
-        )
+        (tmp_path / "utils.js").write_text("function helper(x) { return x + 1; }\n")
         (tmp_path / "main.js").write_text(
             'import { helper } from "./utils.js";\nvar result = helper(42);\n'
         )

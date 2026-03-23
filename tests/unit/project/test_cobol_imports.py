@@ -84,9 +84,7 @@ class TestCobolResolver:
         (tmp_path / "CUSTOMER-REC.cpy").write_text(
             "       01 CUSTOMER-NAME PIC X(30).\n"
         )
-        (tmp_path / "VALIDATE.cbl").write_text(
-            "       DISPLAY 'VALID'.\n"
-        )
+        (tmp_path / "VALIDATE.cbl").write_text("       DISPLAY 'VALID'.\n")
         return tmp_path
 
     def test_resolves_copybook(self, cobol_project):
