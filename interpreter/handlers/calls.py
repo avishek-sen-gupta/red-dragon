@@ -5,6 +5,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from interpreter.instructions import (
+    to_typed,
+    CallFunction,
+    CallMethod,
+    CallUnknown,
+)
 from interpreter.ir import IRInstruction, CodeLabel
 from interpreter.vm.vm import (
     VMState,
@@ -250,14 +256,16 @@ def _handle_call_function(
     vm: VMState,
     ctx: Any,
 ) -> ExecutionResult:
-    raw_func_name = inst.operands[0]
+    t = to_typed(inst)
+    assert isinstance(t, CallFunction)
+    raw_func_name = t.func_name
     # Extract base name for scope lookup: "Box[Node]" → "Box"
     base_name = (
         raw_func_name.split("[")[0]
         if isinstance(raw_func_name, str) and "[" in raw_func_name
         else raw_func_name
     )
-    arg_regs = inst.operands[1:]
+    arg_regs = list(t.args)
     args = _resolve_call_args(vm, arg_regs)
 
     # 0. Try I/O provider (for __cobol_* calls)
@@ -270,7 +278,7 @@ def _handle_call_function(
         if result is not Operators.UNCOMPUTABLE:
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: typed_from_runtime(result)},
+                    register_writes={t.result_reg: typed_from_runtime(result)},
                     reasoning=f"io_provider {base_name}({[a.value for a in args]!r}) = {result!r}",
                 )
             )
@@ -278,7 +286,7 @@ def _handle_call_function(
         sym = vm.fresh_symbolic(hint=f"{base_name}(…)")
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                register_writes={t.result_reg: typed(sym, UNKNOWN)},
                 reasoning=f"io_provider {base_name} → symbolic (uncomputable)",
             )
         )
@@ -310,7 +318,7 @@ def _handle_call_function(
                 tv = heap_obj.fields[idx_key]
                 return ExecutionResult.success(
                     StateUpdate(
-                        register_writes={inst.result_reg: tv},
+                        register_writes={t.result_reg: tv},
                         reasoning=f"heap call-index {base_name}({args[0].value}) = {tv!r}",
                     )
                 )
@@ -318,7 +326,7 @@ def _handle_call_function(
             sym = vm.fresh_symbolic(hint=f"{base_name}({args[0].value})")
             return ExecutionResult.success(
                 StateUpdate(
-                    register_writes={inst.result_reg: typed(sym, UNKNOWN)},
+                    register_writes={t.result_reg: typed(sym, UNKNOWN)},
                     reasoning=f"heap call-index {base_name}({args[0].value}) out of bounds → symbolic",
                 )
             )
@@ -340,7 +348,7 @@ def _handle_call_function(
         element = func_val[args[0].value]
         return ExecutionResult.success(
             StateUpdate(
-                register_writes={inst.result_reg: typed_from_runtime(element)},
+                register_writes={t.result_reg: typed_from_runtime(element)},
                 reasoning=f"native call-index {base_name}({args[0].value}) = {element!r}",
             )
         )
@@ -377,9 +385,11 @@ def _handle_call_method(
     vm: VMState,
     ctx: Any,
 ) -> ExecutionResult:
-    obj_val = _resolve_reg(vm, inst.operands[0])
-    method_name = inst.operands[1]
-    arg_regs = inst.operands[2:]
+    t = to_typed(inst)
+    assert isinstance(t, CallMethod)
+    obj_val = _resolve_reg(vm, t.obj_reg)
+    method_name = t.method_name
+    arg_regs = list(t.args)
     args = _resolve_call_args(vm, arg_regs)
 
     # If the object is a FUNC_REF, invoke it directly (e.g. .call(), .apply())
@@ -411,7 +421,7 @@ def _handle_call_method(
             return ExecutionResult.success(
                 StateUpdate(
                     register_writes={
-                        inst.result_reg: _unwrap_builtin_result(result, method_name)
+                        t.result_reg: _unwrap_builtin_result(result, method_name)
                     },
                     new_objects=result.new_objects,
                     heap_writes=result.heap_writes,
@@ -552,8 +562,10 @@ def _handle_call_unknown(
     ctx: Any,
 ) -> ExecutionResult:
     """Handle CALL_UNKNOWN — dynamic call target, resolve via configured strategy."""
-    target_val = _resolve_reg(vm, inst.operands[0])
-    arg_regs = inst.operands[1:]
+    t = to_typed(inst)
+    assert isinstance(t, CallUnknown)
+    target_val = _resolve_reg(vm, t.target_reg)
+    arg_regs = list(t.args)
     args = [_resolve_reg(vm, a) for a in arg_regs]
 
     # If the target resolves to a FUNC_REF, invoke it directly
