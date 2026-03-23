@@ -143,6 +143,14 @@ class TestExportTable:
         )
         assert et.lookup("x") == "func_x_0"
 
+    def test_lookup_empty_string_label_not_skipped(self):
+        """A function with an empty-string label should still be returned."""
+        et = ExportTable(
+            functions={"f": ""},
+            classes={"f": "class_f_0"},
+        )
+        assert et.lookup("f") == ""
+
     def test_all_names(self):
         et = ExportTable(
             functions={"f1": "func_f1_0", "f2": "func_f2_1"},
