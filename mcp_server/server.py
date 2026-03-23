@@ -19,6 +19,7 @@ from mcp_server.tools import (
     handle_get_ir,
     handle_get_state,
     handle_load_program,
+    handle_load_project,
     handle_run_to_end,
     handle_step,
 )
@@ -119,6 +120,25 @@ def get_ir(function_name: str | None = None) -> dict[str, Any]:
     Requires load_program to be called first.
     """
     return handle_get_ir(function_name)
+
+
+# ---------------------------------------------------------------------------
+# Multi-file project tools
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def load_project(entry_file: str, language: str) -> dict[str, Any]:
+    """Load a multi-file project: discover imports, compile all modules, link, and analyze.
+
+    Starts from the entry file (e.g. main.py), recursively discovers local imports,
+    compiles each file, links them into a merged program, and runs interprocedural analysis.
+
+    Returns: module count, import graph, functions, classes, and unresolved imports.
+
+    Supported languages: python, javascript, typescript, java, csharp, cpp, c, go, rust, ruby, kotlin, scala, php, lua, pascal.
+    """
+    return handle_load_project(entry_file, language)
 
 
 # ---------------------------------------------------------------------------

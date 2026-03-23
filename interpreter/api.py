@@ -7,6 +7,7 @@ but is callable programmatically without argparse.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Optional
 
 from tree_sitter import Node
@@ -327,3 +328,78 @@ def extract_function_source(
     if match is None:
         raise ValueError(f"Function '{function_name}' not found in source")
     return source_bytes[match.start_byte : match.end_byte].decode("utf-8")
+
+
+# ── Multi-file project APIs ──────────────────────────────────────
+
+
+def analyze_project(
+    entry_file: str | Path,
+    language: str | Language,
+    project_root: str | Path | None = None,
+) -> "InterproceduralResult":
+    """Multi-file analysis: discover → compile → link → analyze.
+
+    Returns the same InterproceduralResult as single-file analysis,
+    but with cross-module call graphs and dataflow.
+
+    Args:
+        entry_file: Path to the entry point file (e.g. main.py).
+        language: Source language for all files in the project.
+        project_root: Root directory. Inferred from entry_file if not given.
+
+    Returns:
+        An InterproceduralResult with cross-module analysis.
+    """
+    from interpreter.project.compiler import compile_project
+    from interpreter.interprocedural.analyze import analyze_interprocedural
+
+    lang = Language(language)
+    linked = compile_project(
+        Path(entry_file),
+        lang,
+        project_root=Path(project_root) if project_root else None,
+    )
+    return analyze_interprocedural(linked.merged_cfg, linked.merged_registry)
+
+
+def run_project(
+    entry_file: str | Path,
+    language: str | Language,
+    project_root: str | Path | None = None,
+    max_steps: int = 500,
+    verbose: bool = False,
+) -> "VMState":
+    """Multi-file execution: discover → compile → link → execute.
+
+    Returns the same VMState as single-file run().
+
+    Args:
+        entry_file: Path to the entry point file (e.g. main.py).
+        language: Source language for all files in the project.
+        project_root: Root directory. Inferred from entry_file if not given.
+        max_steps: Maximum interpretation steps.
+        verbose: Print step-by-step execution info.
+
+    Returns:
+        The final VMState after execution.
+    """
+    from interpreter.project.compiler import compile_project
+    from interpreter.run import execute_cfg, build_execution_strategies
+    from interpreter.vm.vm import VMState
+
+    lang = Language(language)
+    linked = compile_project(
+        Path(entry_file),
+        lang,
+        project_root=Path(project_root) if project_root else None,
+    )
+
+    config = VMConfig(max_steps=max_steps, verbose=verbose)
+    vm, stats = execute_cfg(
+        linked.merged_cfg,
+        linked.merged_cfg.entry,
+        linked.merged_registry,
+        config,
+    )
+    return vm
