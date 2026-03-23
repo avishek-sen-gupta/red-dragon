@@ -178,3 +178,72 @@ def compile_project(
     )
 
     return linked
+
+
+# ── File extension mapping ───────────────────────────────────────
+
+_LANGUAGE_EXTENSIONS: dict[Language, tuple[str, ...]] = {
+    Language.PYTHON: (".py",),
+    Language.JAVASCRIPT: (".js", ".mjs", ".cjs"),
+    Language.TYPESCRIPT: (".ts", ".tsx"),
+    Language.JAVA: (".java",),
+    Language.GO: (".go",),
+    Language.RUST: (".rs",),
+    Language.C: (".c", ".h"),
+    Language.CPP: (".cpp", ".cc", ".cxx", ".hpp", ".h"),
+    Language.CSHARP: (".cs",),
+    Language.KOTLIN: (".kt", ".kts"),
+    Language.SCALA: (".scala",),
+    Language.RUBY: (".rb",),
+    Language.PHP: (".php",),
+    Language.LUA: (".lua",),
+    Language.PASCAL: (".pas", ".pp"),
+    Language.COBOL: (".cbl", ".cob", ".cpy"),
+}
+
+
+def compile_directory(
+    directory: Path,
+    language: Language,
+    entry_file: Path,
+) -> LinkedProgram:
+    """Compile all source files in a directory tree.
+
+    Unlike compile_project (which discovers files via import BFS), this
+    compiles every file matching the language's extensions. Catches
+    orphaned modules, test files, and files not reachable via imports.
+
+    Args:
+        directory: Root directory to scan recursively.
+        language: Source language — determines which file extensions to include.
+        entry_file: Entry point file — its code runs first.
+
+    Returns:
+        A LinkedProgram with all files compiled and linked.
+    """
+    directory = directory.resolve()
+    entry_file = entry_file.resolve()
+
+    extensions = _LANGUAGE_EXTENSIONS.get(language, ())
+    source_files = sorted(
+        f.resolve()
+        for ext in extensions
+        for f in directory.rglob(f"*{ext}")
+        if f.is_file()
+    )
+
+    modules = {path: compile_module(path, language) for path in source_files}
+
+    # Build a flat import graph — no import-based edges, just all files listed
+    import_graph = {path: [] for path in source_files}
+
+    # Topo order: entry file last, everything else in sorted order
+    topo_order = [p for p in source_files if p != entry_file] + [entry_file]
+
+    return link_modules(
+        modules=modules,
+        import_graph=import_graph,
+        entry_module=entry_file,
+        project_root=directory,
+        topo_order=topo_order,
+    )
