@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel, NO_LABEL
 from interpreter import constants
 from interpreter.constants import DEFAULT_EXCEPTION_TYPE
 
@@ -26,18 +26,18 @@ def lower_try_catch(
     """
     try_body_label = ctx.fresh_label("try_body")
     catch_labels = [ctx.fresh_label(f"catch_{i}") for i in range(len(catch_clauses))]
-    finally_label = ctx.fresh_label("try_finally") if finally_node else ""
-    else_label = ctx.fresh_label("try_else") if else_node else ""
+    finally_label = ctx.fresh_label("try_finally") if finally_node else NO_LABEL
+    else_label = ctx.fresh_label("try_else") if else_node else NO_LABEL
     end_label = ctx.fresh_label("try_end")
 
-    exit_target = finally_label or end_label
+    exit_target = finally_label if finally_label.is_present() else end_label
 
     # ── push exception handler ──
     ctx.emit(
         Opcode.TRY_PUSH,
         operands=[
-            ",".join(catch_labels),
-            finally_label or "",
+            catch_labels,
+            finally_label,
             end_label,
         ],
     )
@@ -49,7 +49,7 @@ def lower_try_catch(
     # ── pop exception handler (normal exit) ──
     ctx.emit(Opcode.TRY_POP)
     # After try body: jump to else (if present), then finally/end
-    if else_label:
+    if else_label.is_present():
         ctx.emit(Opcode.BRANCH, label=else_label)
     else:
         ctx.emit(Opcode.BRANCH, label=exit_target)
@@ -84,7 +84,7 @@ def lower_try_catch(
     if else_node:
         ctx.emit(Opcode.LABEL, label=else_label)
         ctx.lower_block(else_node)
-        ctx.emit(Opcode.BRANCH, label=finally_label or end_label)
+        ctx.emit(Opcode.BRANCH, label=finally_label if finally_label.is_present() else end_label)
 
     # ── finally clause ──
     if finally_node:

@@ -19,7 +19,7 @@ from interpreter.frontends.common.patterns import (
     _needs_pre_guard_bindings,
 )
 from interpreter.frontends.context import TreeSitterEmitContext
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 
 
 @dataclass(frozen=True)
@@ -99,7 +99,7 @@ def _lower_arm(
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[test_reg],
-        label=f"{arm_label},{next_label}",
+        label=CodeLabel(f"{arm_label},{next_label}"),
     )
     ctx.emit(Opcode.LABEL, label=arm_label)
 

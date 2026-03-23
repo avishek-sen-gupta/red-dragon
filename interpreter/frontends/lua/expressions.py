@@ -250,7 +250,7 @@ def lower_lua_function_definition(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(Opcode.LABEL, label=end_label)
 
     func_reg = ctx.fresh_reg()
-    ctx.emit_func_ref(anon_name, func_label, result_reg=func_reg)
+    ctx.emit_func_ref(str(anon_name), func_label, result_reg=func_reg)
     return func_reg
 
 

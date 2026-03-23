@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
     lower_const_literal,
@@ -254,7 +254,7 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{true_label},{false_label}",
+        label=CodeLabel(f"{true_label},{false_label}"),
     )
     ctx.emit(Opcode.LABEL, label=true_label)
     true_reg = ctx.lower_expr(true_node)

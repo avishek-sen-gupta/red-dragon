@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 
 @dataclass(frozen=True)
@@ -109,6 +109,10 @@ class CodeLabel:
 
     value: str
 
+    def __post_init__(self):
+        if not isinstance(self.value, str):
+            raise TypeError(f"CodeLabel.value must be str, got {type(self.value).__name__}: {self.value!r}")
+
     def is_present(self) -> bool:
         return True
 
@@ -165,6 +169,10 @@ class CodeLabel:
         """Support ``'x' in label`` syntax."""
         return item in self.value
 
+    def namespace(self, prefix: str) -> CodeLabel:
+        """Return a new CodeLabel with a module namespace prefix."""
+        return CodeLabel(f"{prefix}.{self.value}")
+
     def branch_targets(self) -> list[CodeLabel]:
         """Parse comma-separated branch targets (BRANCH_IF, TRY_PUSH).
 
@@ -219,6 +227,9 @@ class NoCodeLabel(CodeLabel):
     def __contains__(self, item: str) -> bool:
         return False
 
+    def namespace(self, prefix: str) -> CodeLabel:
+        return self
+
 
 NO_LABEL = NoCodeLabel()
 
@@ -229,15 +240,6 @@ class IRInstruction(BaseModel):
     operands: list[Any] = []
     label: CodeLabel = NO_LABEL
     source_location: SourceLocation = NO_SOURCE_LOCATION
-
-    @field_validator("label", mode="before")
-    @classmethod
-    def _coerce_label(cls, v: Any) -> CodeLabel:
-        if v is None:
-            return NO_LABEL
-        if isinstance(v, str):
-            return CodeLabel(v) if v else NO_LABEL
-        return v
 
     def __str__(self) -> str:
         parts: list[str] = []

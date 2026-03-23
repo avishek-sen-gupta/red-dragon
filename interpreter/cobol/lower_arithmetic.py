@@ -28,7 +28,7 @@ from interpreter.cobol.cobol_types import CobolDataCategory
 from interpreter.cobol.condition_lowering import lower_expr_node
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 
 logger = logging.getLogger(__name__)
 
@@ -171,7 +171,7 @@ def lower_if(
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{true_label},{false_label}",
+        label=CodeLabel(f"{true_label},{false_label}"),
     )
 
     ctx.emit(Opcode.LABEL, label=true_label)
@@ -208,7 +208,7 @@ def lower_evaluate(
             ctx.emit(
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
-                label=f"{when_true},{when_false}",
+                label=CodeLabel(f"{when_true},{when_false}"),
             )
             ctx.emit(Opcode.LABEL, label=when_true)
             for grandchild in child.children:
@@ -346,4 +346,4 @@ def lower_goto(
     region_reg: str,
 ) -> None:
     """GO TO paragraph-name."""
-    ctx.emit(Opcode.BRANCH, label=f"para_{stmt.target}")
+    ctx.emit(Opcode.BRANCH, label=CodeLabel(f"para_{stmt.target}"))

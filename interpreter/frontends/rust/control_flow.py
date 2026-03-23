@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 from interpreter.frontends.rust.expressions import lower_if_expr
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ def _lower_while_let(ctx: TreeSitterEmitContext, node, let_cond_node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[test_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
         node=node,
     )
 
@@ -108,7 +108,7 @@ def lower_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)

@@ -12,7 +12,7 @@ from interpreter.cobol.cobol_statements import (
 )
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ def lower_entry(
 ) -> None:
     """ENTRY 'name' — alternate entry point for a subprogram."""
     if stmt.entry_name:
-        ctx.emit(Opcode.LABEL, label=f"entry_{stmt.entry_name}")
+        ctx.emit(Opcode.LABEL, label=CodeLabel(f"entry_{stmt.entry_name}"))
         logger.info("ENTRY %s", stmt.entry_name)
 
 

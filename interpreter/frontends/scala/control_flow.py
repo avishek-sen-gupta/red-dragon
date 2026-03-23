@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 from interpreter.frontends.common.exceptions import lower_try_catch
 from interpreter.frontends.scala.expressions import lower_if_expr, lower_match_expr
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT
@@ -28,7 +28,7 @@ def lower_while(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
         node=node,
     )
 
@@ -117,7 +117,7 @@ def lower_for_expr(ctx: TreeSitterEmitContext, node) -> None:
             ctx.emit(
                 Opcode.BRANCH_IF,
                 operands=[guard_reg],
-                label=f"{continue_label},{loop_label}",
+                label=CodeLabel(f"{continue_label},{loop_label}"),
             )
             ctx.emit(Opcode.LABEL, label=continue_label)
 
@@ -146,7 +146,7 @@ def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=f"{body_label},{end_label}",
+            label=CodeLabel(f"{body_label},{end_label}"),
             node=node,
         )
     else:

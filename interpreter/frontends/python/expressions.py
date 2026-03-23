@@ -4,11 +4,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from interpreter.ir import SpreadArguments
+    from interpreter.ir import SpreadArguments, CodeLabel
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
     lower_const_literal,
@@ -167,7 +167,7 @@ def lower_conditional_expr(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{true_label},{false_label}",
+        label=CodeLabel(f"{true_label},{false_label}"),
     )
 
     ctx.emit(Opcode.LABEL, label=true_label)
@@ -262,7 +262,7 @@ def _lower_comprehension_loop(
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{body_label},{loop_end_label}",
+        label=CodeLabel(f"{body_label},{loop_end_label}"),
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
@@ -302,7 +302,7 @@ def _lower_comprehension_loop(
             ctx.emit(
                 Opcode.BRANCH_IF,
                 operands=[filter_reg],
-                label=f"{store_label},{skip_label}",
+                label=CodeLabel(f"{store_label},{skip_label}"),
             )
 
         ctx.emit(Opcode.LABEL, label=store_label)
@@ -374,7 +374,7 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=f"{body_label},{end_label}",
+        label=CodeLabel(f"{body_label},{end_label}"),
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
@@ -400,7 +400,7 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> str:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[filter_reg],
-            label=f"{store_label},{skip_label}",
+            label=CodeLabel(f"{store_label},{skip_label}"),
         )
 
     ctx.emit(Opcode.LABEL, label=store_label)

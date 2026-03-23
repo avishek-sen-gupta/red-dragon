@@ -11,7 +11,7 @@ from interpreter.interprocedural.types import (
     ReturnEndpoint,
     VariableEndpoint,
 )
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from viz.panels.dataflow_graph_panel import annotate_endpoint, render_graph_lines
 
 from interpreter.cfg import build_cfg
@@ -56,7 +56,7 @@ class TestAnnotateEndpoint:
         )
         defn = Definition(
             variable="%8",
-            block_label="func_g_2",
+            block_label=CodeLabel("func_g_2"),
             instruction_index=3,
             instruction=inst,
         )
@@ -71,7 +71,7 @@ class TestAnnotateEndpoint:
         )
         defn = Definition(
             variable="%3",
-            block_label="func_f_0",
+            block_label=CodeLabel("func_f_0"),
             instruction_index=4,
             instruction=inst,
         )
@@ -79,22 +79,22 @@ class TestAnnotateEndpoint:
         assert annotate_endpoint(ep, None) == "%3"
 
     def test_return_endpoint(self):
-        func = FunctionEntry(label="func_f_0", params=("x",))
-        loc = InstructionLocation(block_label="func_f_0", instruction_index=5)
+        func = FunctionEntry(label=CodeLabel("func_f_0"), params=("x",))
+        loc = InstructionLocation(block_label=CodeLabel("func_f_0"), instruction_index=5)
         ep = ReturnEndpoint(function=func, location=loc)
         assert annotate_endpoint(ep, None) == "Return(func_f_0)"
 
     def test_field_endpoint(self):
         base = VariableEndpoint(name="self", definition=NO_DEFINITION)
-        loc = InstructionLocation(block_label="b", instruction_index=1)
+        loc = InstructionLocation(block_label=CodeLabel("b"), instruction_index=1)
         ep = FieldEndpoint(base=base, field="name", location=loc)
         assert annotate_endpoint(ep, None) == "Field(self.name)"
 
 
 class TestRenderGraphLines:
     def test_renders_edges_grouped_by_source(self):
-        f = FunctionEntry(label="func_f_0", params=("x",))
-        loc = InstructionLocation(block_label="func_f_0", instruction_index=5)
+        f = FunctionEntry(label=CodeLabel("func_f_0"), params=("x",))
+        loc = InstructionLocation(block_label=CodeLabel("func_f_0"), instruction_index=5)
         x_ep = VariableEndpoint(name="x", definition=NO_DEFINITION)
         ret_ep = ReturnEndpoint(function=f, location=loc)
         graph = {x_ep: frozenset({ret_ep})}

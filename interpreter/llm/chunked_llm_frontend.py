@@ -11,7 +11,7 @@ from interpreter.constants import Language
 from interpreter.frontend import Frontend
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
-from interpreter.ir import CodeLabel, IRInstruction, NoCodeLabel, Opcode
+from interpreter.ir import CodeLabel, IRInstruction, NoCodeLabel, Opcode, NO_LABEL
 from interpreter.llm.llm_frontend import (
     IRParsingError,
     LLMFrontend,
@@ -226,13 +226,13 @@ class IRRenumberer:
 
     def _renumber_label(
         self, label: CodeLabel, suffix: str, opcode: Opcode
-    ) -> str | None:
+    ) -> CodeLabel:
         if isinstance(label, NoCodeLabel):
-            return None
+            return NO_LABEL
         if opcode == Opcode.BRANCH_IF:
             parts = [str(part) + suffix for part in label.branch_targets()]
-            return ",".join(parts)
-        return str(label) + suffix
+            return CodeLabel(",".join(parts))
+        return CodeLabel(str(label) + suffix)
 
     def _extract_reg_number(self, value: Any) -> int:
         if not isinstance(value, str):
@@ -294,7 +294,7 @@ class ChunkedLLMFrontend(Frontend):
             logger.warning(
                 "ChunkedLLMFrontend: no chunks extracted, returning entry label only"
             )
-            return [IRInstruction(opcode=Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)]
+            return [IRInstruction(opcode=Opcode.LABEL, label=CodeLabel(constants.CFG_ENTRY_LABEL))]
 
         all_instructions: list[IRInstruction] = []
         reg_offset = 0
@@ -343,7 +343,7 @@ class ChunkedLLMFrontend(Frontend):
             all_instructions.extend(renumbered)
 
         # Prepend the single entry label
-        entry = IRInstruction(opcode=Opcode.LABEL, label=constants.CFG_ENTRY_LABEL)
+        entry = IRInstruction(opcode=Opcode.LABEL, label=CodeLabel(constants.CFG_ENTRY_LABEL))
         combined = [entry] + all_instructions
 
         # Convert LLM-emitted <function:...> and <class:...> strings to plain labels after renumbering

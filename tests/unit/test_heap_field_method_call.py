@@ -7,7 +7,7 @@ rather than falling back to symbolic resolution.
 
 from __future__ import annotations
 
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.vm.vm import VMState, SymbolicValue, apply_update
 from interpreter.vm.vm_types import HeapObject, Pointer, StackFrame
 from interpreter.vm.executor import (
@@ -36,8 +36,8 @@ def _build_callable_field_vm():
     The function body is: return the first parameter (identity function).
     """
     instructions = [
-        IRInstruction(opcode=Opcode.LABEL, label="entry"),
-        IRInstruction(opcode=Opcode.LABEL, label="__func__greet"),
+        IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
+        IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("__func__greet")),
         IRInstruction(
             opcode=Opcode.RETURN,
             operands=["%param_self", "%param_x"],
