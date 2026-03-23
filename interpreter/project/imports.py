@@ -686,7 +686,7 @@ def _ruby_require(
         if child.type == "string":
             path = _extract_string_content(child, source)
             is_relative = func_name == "require_relative" or path.startswith("./") or path.startswith("../")
-            is_system = not is_relative and "/" not in path and "." not in path
+            is_system = False  # let the resolver decide — bare names may be local
             return [
                 ImportRef(
                     source_file=source_file,
@@ -807,7 +807,7 @@ def _lua_require_call(
                 if arg.type == "string":
                     path = _extract_string_content(arg, source)
                     is_relative = path.startswith("./") or path.startswith("../")
-                    is_system = not is_relative and "." not in path and "/" not in path
+                    is_system = False  # let the resolver decide — bare names may be local
                     return [
                         ImportRef(
                             source_file=source_file,
@@ -821,7 +821,7 @@ def _lua_require_call(
             # require "helpers" (no parens)
             path = _extract_string_content(child, source)
             is_relative = path.startswith("./") or path.startswith("../")
-            is_system = not is_relative and "." not in path and "/" not in path
+            is_system = False  # let the resolver decide — bare names may be local
             return [
                 ImportRef(
                     source_file=source_file,
