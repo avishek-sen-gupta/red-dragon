@@ -615,7 +615,7 @@ class TestScalaOperatorPrecedenceBug:
     """
 
     @pytest.mark.xfail(
-        reason="tree-sitter Scala grammar lacks operator precedence",
+        reason="tree-sitter Scala grammar lacks operator precedence — red-dragon-p6ka",
         strict=True,
     )
     def test_comparison_lower_precedence_than_subtraction(self):
@@ -633,7 +633,7 @@ class TestScalaOperatorPrecedenceBug:
         ), f"expected second binop to be '<', got '{binops[1].operands[0]}'"
 
     @pytest.mark.xfail(
-        reason="tree-sitter Scala grammar lacks operator precedence",
+        reason="tree-sitter Scala grammar lacks operator precedence — red-dragon-p6ka",
         strict=True,
     )
     def test_mixed_arithmetic_and_comparison(self):

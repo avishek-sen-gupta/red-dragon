@@ -85,8 +85,7 @@ class TestFactorialRecCrossLanguageEquivalence:
     @pytest.mark.xfail(
         reason=(
             "4 frontends (kotlin, pascal, rust, scala) emit minor redundant "
-            "instructions (extra STORE_VAR, LOAD_VAR, BRANCH). "
-            "Semantically correct but not yet structurally identical."
+            "instructions — red-dragon-ihxl"
         ),
         strict=True,
     )

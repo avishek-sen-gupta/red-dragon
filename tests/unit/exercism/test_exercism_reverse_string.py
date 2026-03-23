@@ -175,7 +175,7 @@ class TestPascalApostropheLimitation:
     @pytest.mark.xfail(
         reason=(
             "_parse_const does not un-escape Pascal '' → ' inside "
-            "single-quoted string literals (ADR-024)"
+            "single-quoted string literals — red-dragon-mo11"
         ),
         strict=True,
     )

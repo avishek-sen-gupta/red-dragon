@@ -73,7 +73,7 @@ val r = pair match {
 
 class TestScalaCaseClassPattern:
     @pytest.mark.xfail(
-        reason="Case class isinstance not yet wired for Scala match", strict=False
+        reason="Scala case class isinstance not wired — red-dragon-1qq6", strict=False
     )
     def test_case_class_match(self):
         """Case class pattern matching with field extraction."""
