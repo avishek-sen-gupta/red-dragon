@@ -242,26 +242,36 @@ def lower_java_switch_expr(ctx: TreeSitterEmitContext, node) -> str:
                 test_reg = compile_pattern_test(ctx, subject_reg, pattern)
 
                 if guard_node:
+                    # Two-stage branch: first check pattern, bind if it matches,
+                    # then check guard with bindings available.
+                    binding_label = ctx.fresh_label("guard_bind")
+                    ctx.emit(
+                        Opcode.BRANCH_IF,
+                        operands=[test_reg],
+                        label=f"{binding_label},{next_label}",
+                    )
+                    ctx.emit(Opcode.LABEL, label=binding_label)
+                    compile_pattern_bindings(ctx, subject_reg, pattern)
+
                     guard_expr = next(
                         (c for c in guard_node.children if c.is_named), None
                     )
                     if guard_expr:
                         guard_reg = ctx.lower_expr(guard_expr)
-                        combined = ctx.fresh_reg()
                         ctx.emit(
-                            Opcode.BINOP,
-                            result_reg=combined,
-                            operands=["and", test_reg, guard_reg],
+                            Opcode.BRANCH_IF,
+                            operands=[guard_reg],
+                            label=f"{arm_label},{next_label}",
                         )
-                        test_reg = combined
-
-                ctx.emit(
-                    Opcode.BRANCH_IF,
-                    operands=[test_reg],
-                    label=f"{arm_label},{next_label}",
-                )
-                ctx.emit(Opcode.LABEL, label=arm_label)
-                compile_pattern_bindings(ctx, subject_reg, pattern)
+                    ctx.emit(Opcode.LABEL, label=arm_label)
+                else:
+                    ctx.emit(
+                        Opcode.BRANCH_IF,
+                        operands=[test_reg],
+                        label=f"{arm_label},{next_label}",
+                    )
+                    ctx.emit(Opcode.LABEL, label=arm_label)
+                    compile_pattern_bindings(ctx, subject_reg, pattern)
             elif case_value:
                 case_reg = ctx.lower_expr(case_value)
                 cmp_reg = ctx.fresh_reg()
