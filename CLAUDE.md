@@ -116,6 +116,7 @@ Do not commit if any check fails. Fix, then re-run all three. Non-negotiable.
 ## Testing Patterns
 
 - **TDD:** Write failing tests first. For every bug fix, write a test that fails without the fix.
+- **Review assertions after writing tests.** After writing tests, review every assertion for specificity. Replace weak assertions (`assert x is not None`, `assert "name" in result`, `assert len(items) > 0`) with concrete value assertions (`assert result == 30`, `assert items == [1, 2, 3]`). If a concrete assertion isn't possible, document why.
 - **Unit vs integration:** Unit tests (no I/O) in `tests/unit/`. Integration tests (LLMs, databases, external repos) in `tests/integration/`.
 - **Fixtures:** Use `pytest` fixtures and `tmp_path` for filesystem tests.
 - **No mocking:** Do not use `unittest.mock.patch`. Use dependency injection with mock objects.
