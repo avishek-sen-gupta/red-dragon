@@ -200,15 +200,15 @@ def _extract_struct_field_names(
     for inst in ctx.instructions:
         if (
             inst.opcode == Opcode.LABEL
-            and inst.label
-            and inst.label.startswith(class_prefix)
+            and inst.label.is_present()
+            and inst.label.value.startswith(class_prefix)
         ):
             in_body = True
             continue
         if (
             inst.opcode == Opcode.LABEL
-            and inst.label
-            and inst.label.startswith(end_prefix)
+            and inst.label.is_present()
+            and inst.label.value.startswith(end_prefix)
         ):
             break
         if in_body and inst.opcode == Opcode.STORE_FIELD:

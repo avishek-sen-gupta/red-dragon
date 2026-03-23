@@ -194,8 +194,8 @@ def _has_nested_inner_label(ir: list[IRInstruction]) -> bool:
     """Return True if the IR contains a label for an inner/anonymous function."""
     return any(
         inst.opcode == Opcode.LABEL
-        and inst.label is not None
-        and ("func_inner" in inst.label or "func___anon" in inst.label)
+        and inst.label.is_present()
+        and ("func_inner" in inst.label.value or "func___anon" in inst.label.value)
         for inst in ir
     )
 
@@ -226,7 +226,7 @@ class TestNestedFunctionsLowering:
         assert _has_nested_inner_label(ir), (
             f"[{lang}] expected a 'func_inner' or 'func___anon' label in IR "
             f"(proving inner function was lowered as a nested definition), "
-            f"got labels: {[inst.label for inst in ir if inst.opcode == Opcode.LABEL]}"
+            f"got labels: {[inst.label.value for inst in ir if inst.opcode == Opcode.LABEL]}"
         )
 
 
@@ -261,7 +261,7 @@ class TestNestedFunctionsCrossLanguage:
         for lang, ir in all_results.items():
             assert _has_nested_inner_label(ir), (
                 f"[{lang}] expected a nested inner function label in IR, "
-                f"got labels: {[inst.label for inst in ir if inst.opcode == Opcode.LABEL]}"
+                f"got labels: {[inst.label.value for inst in ir if inst.opcode == Opcode.LABEL]}"
             )
 
 

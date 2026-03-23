@@ -78,7 +78,7 @@ class TestJavaScriptControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BRANCH in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("while" in (inst.label or "") for inst in labels)
+        assert any("while" in inst.label.value for inst in labels)
 
     def test_for_loop(self):
         instructions = _parse_js("for (let i = 0; i < 10; i++) { x = x + i; }")
@@ -117,7 +117,7 @@ class TestJavaScriptControlFlow:
 
         labels = _labels_in_order(instructions)
         branch_targets = {
-            target for inst in branch_ifs for target in inst.label.split(",")
+            target for inst in branch_ifs for target in inst.label.branch_targets()
         }
         label_set = set(labels)
         assert branch_targets.issubset(
@@ -215,7 +215,7 @@ class TestJavaScriptSpecial:
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
-    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+    return [inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL]
 
 
 class TestNonTrivialJavaScript:
@@ -357,7 +357,7 @@ try {
 """
         instructions = _parse_js(source)
         opcodes = _opcodes(instructions)
-        labels = [i.label for i in instructions if i.opcode == Opcode.LABEL]
+        labels = [i.label.value for i in instructions if i.opcode == Opcode.LABEL]
         # try/catch body and catch block are lowered with LABEL/BRANCH
         assert any("try_body" in l for l in labels)
         assert any("catch_0" in l for l in labels)
@@ -1282,7 +1282,9 @@ class TestAnonymousClassExpression:
     def test_anonymous_class_emits_class_block(self):
         ir = _parse_js("const Foo = class { constructor() {} };")
         labels = [
-            inst.label for inst in ir if inst.opcode == Opcode.LABEL and inst.label
+            inst.label.value
+            for inst in ir
+            if inst.opcode == Opcode.LABEL and inst.label.is_present()
         ]
         class_labels = [l for l in labels if l.startswith("class_")]
         assert len(class_labels) >= 1, f"Expected class_ label, got: {labels}"
@@ -1295,7 +1297,9 @@ class TestAnonymousClassExpression:
             };
             """)
         labels = [
-            inst.label for inst in ir if inst.opcode == Opcode.LABEL and inst.label
+            inst.label.value
+            for inst in ir
+            if inst.opcode == Opcode.LABEL and inst.label.is_present()
         ]
         func_labels = [l for l in labels if l.startswith("func_")]
         assert any(
@@ -1309,7 +1313,9 @@ class TestAnonymousClassExpression:
         """const Foo = class MyClass { ... } — class has explicit name."""
         ir = _parse_js("const Foo = class MyClass { constructor() {} };")
         labels = [
-            inst.label for inst in ir if inst.opcode == Opcode.LABEL and inst.label
+            inst.label.value
+            for inst in ir
+            if inst.opcode == Opcode.LABEL and inst.label.is_present()
         ]
         class_labels = [l for l in labels if l.startswith("class_")]
         assert any(

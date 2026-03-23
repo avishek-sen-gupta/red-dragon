@@ -264,7 +264,7 @@ class TestCompileMatch:
         ]
         compile_match(ctx, "%subj", cases)
         instrs = ctx.instructions
-        labels = [i.label for i in instrs if i.opcode == Opcode.LABEL]
+        labels = [i.label.value for i in instrs if i.opcode == Opcode.LABEL]
         branches = [i for i in instrs if i.opcode == Opcode.BRANCH]
         branch_ifs = [i for i in instrs if i.opcode == Opcode.BRANCH_IF]
         assert len(branch_ifs) >= 2, f"expected >=2 BRANCH_IF, got {branch_ifs}"
