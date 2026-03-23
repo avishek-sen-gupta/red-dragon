@@ -15,6 +15,7 @@ from interpreter import constants
 from interpreter.constants import CanonicalLiteral, Language
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation, CodeLabel, NO_LABEL
+from interpreter.register import Register, NO_REGISTER
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.frontends.symbol_table import SymbolTable
@@ -156,8 +157,8 @@ class TreeSitterEmitContext:
 
     # ── utility methods ──────────────────────────────────────────
 
-    def fresh_reg(self) -> str:
-        r = f"%{self.reg_counter}"
+    def fresh_reg(self) -> Register:
+        r = Register(f"%{self.reg_counter}")
         self.reg_counter += 1
         return r
 
@@ -170,7 +171,7 @@ class TreeSitterEmitContext:
         self,
         opcode: Opcode,
         *,
-        result_reg: str = "",
+        result_reg: Register = NO_REGISTER,
         operands: list[Any] = [],
         label: CodeLabel = NO_LABEL,
         branch_targets: list[CodeLabel] = [],
@@ -182,10 +183,13 @@ class TreeSitterEmitContext:
             if not source_location.is_unknown()
             else (self.source_loc(node) if node else NO_SOURCE_LOCATION)
         )
-        resolved_operands = operands or []
+        resolved_operands = [
+            str(op) if isinstance(op, Register) else op
+            for op in (operands or [])
+        ]
         inst = IRInstruction(
             opcode=opcode,
-            result_reg=result_reg or None,
+            result_reg=result_reg,
             operands=resolved_operands,
             label=label,
             branch_targets=branch_targets,

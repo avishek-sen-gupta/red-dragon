@@ -6,6 +6,7 @@ from types import MappingProxyType
 from typing import Any
 
 from interpreter.constants import CanonicalLiteral, TypeName
+from interpreter.register import Register
 from interpreter.types.coercion.conversion_rules import TypeConversionRules
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.types.type_environment import TypeEnvironment
@@ -48,7 +49,7 @@ def _coerce_value(
     Returns *val* unchanged when no coercion is needed (no declared type,
     runtime type already matches, or the register name is not in the env).
     """
-    if not isinstance(reg, str) or not reg.startswith("%"):
+    if not isinstance(reg, (str, Register)) or not (isinstance(reg, Register) or reg.startswith("%")):
         return val
     target_type = type_env.register_types.get(reg, UNKNOWN)
     if not target_type:
@@ -330,6 +331,18 @@ def _resolve_reg(vm: VMState, operand: str) -> TypedValue:
     Returns the TypedValue as-is if the register holds one, otherwise
     wraps the raw value via typed_from_runtime().
     """
+    # Handle Register objects directly
+    if isinstance(operand, Register):
+        if not operand.is_present():
+            return typed_from_runtime(None)
+        frame = vm.current_frame
+        val = frame.registers.get(operand)
+        if val is None:
+            # Fallback: try string key
+            val = frame.registers.get(str(operand), operand)
+        if isinstance(val, TypedValue):
+            return val
+        return typed_from_runtime(val)
     if isinstance(operand, str) and operand.startswith("%"):
         frame = vm.current_frame
         val = frame.registers.get(operand, operand)
