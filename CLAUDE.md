@@ -61,7 +61,7 @@ Do not commit if any check fails. Fix, then re-run all three. Non-negotiable.
 
 - One logical unit per commit. Each commit must have its own tests.
 - Push to `main` unless otherwise instructed.
-- Update the README if the diffs warrant it.
+- Update README and other living docs (ADRs, linker-design.md, type-system.md, etc.) if the diff changes public behavior, adds features, or modifies architecture. This is part of the commit, not a follow-up.
 - `bd backup` before every commit.
 - Leave the working directory clean. No uncommitted files.
 - Prefer a committed partial result over an uncommitted complete attempt. If a session may end, commit what's done with a `WIP:` prefix and file an issue for the remainder.
