@@ -63,6 +63,7 @@ class CSharpNodeType:
     OR_PATTERN = "or_pattern"
     LIST_PATTERN = "list_pattern"
     RELATIONAL_PATTERN = "relational_pattern"
+    AND_PATTERN = "and_pattern"
     PROPERTY_PATTERN_CLAUSE = "property_pattern_clause"
     SUBPATTERN = "subpattern"
     INTERPOLATION = "interpolation"
