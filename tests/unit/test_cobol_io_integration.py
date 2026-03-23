@@ -3,7 +3,7 @@
 from interpreter.cfg import build_cfg
 from interpreter.cobol.io_provider import NullIOProvider, StubIOProvider
 from interpreter.vm.vm_types import SymbolicValue
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg
 from interpreter.run_types import VMConfig
@@ -13,7 +13,7 @@ from interpreter.types.typed_value import unwrap
 def _build_call_function_ir(func_name: str, *arg_literals) -> list[IRInstruction]:
     """Build a minimal IR sequence: LABEL entry, CONST args, CALL_FUNCTION, RETURN."""
     instructions: list[IRInstruction] = []
-    instructions.append(IRInstruction(opcode=Opcode.LABEL, label="entry"))
+    instructions.append(IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")))
 
     arg_regs = []
     for i, lit in enumerate(arg_literals):
@@ -94,7 +94,7 @@ class TestExecutorIOProviderDispatch:
 
     def test_stub_open_close_lifecycle(self):
         # Build IR: OPEN, then CLOSE
-        instructions = [IRInstruction(opcode=Opcode.LABEL, label="entry")]
+        instructions = [IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry"))]
 
         instructions.append(
             IRInstruction(opcode=Opcode.CONST, result_reg="%f", operands=["MY-FILE"])

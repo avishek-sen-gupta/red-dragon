@@ -37,7 +37,7 @@ from interpreter.cobol.ir_encoders import (
     build_encode_float_ir,
     build_decode_float_ir,
 )
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +83,13 @@ class EmitContext:
         self._reg_counter += 1
         return name
 
-    def fresh_label(self, prefix: str) -> str:
+    def fresh_label(self, prefix: str) -> CodeLabel:
+        name = CodeLabel(f"{prefix}_{self._label_counter}")
+        self._label_counter += 1
+        return name
+
+    def fresh_name(self, prefix: str) -> str:
+        """Generate a unique name string (for variables, not labels)."""
         name = f"{prefix}_{self._label_counter}"
         self._label_counter += 1
         return name
@@ -94,13 +100,13 @@ class EmitContext:
         *,
         result_reg: str = "",
         operands: list[Any] = [],
-        label: str = "",
+        label: CodeLabel = NO_LABEL,
     ) -> None:
         inst = IRInstruction(
             opcode=opcode,
             result_reg=result_reg or None,
             operands=operands,
-            label=label or None,
+            label=label,
         )
         self._instructions.append(inst)
 
@@ -147,7 +153,7 @@ class EmitContext:
                 inst.opcode,
                 result_reg=new_result,
                 operands=mapped_operands,
-                label=str(inst.label),
+                label=inst.label,
             )
 
         return return_reg

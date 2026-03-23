@@ -13,7 +13,7 @@ from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
 from interpreter.types.function_signature import FunctionSignature
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg, ExecutionStrategies
 from interpreter.run_types import VMConfig
@@ -26,7 +26,7 @@ from interpreter.types.typed_value import unwrap
 def _build_division_index_program() -> list[IRInstruction]:
     """Build IR for: arr[0] = 42; idx = 4 / 2; result = arr[idx]."""
     return [
-        IRInstruction(opcode=Opcode.LABEL, label="entry"),
+        IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
         # Create array
         IRInstruction(opcode=Opcode.NEW_ARRAY, result_reg="%arr", operands=["int"]),
         # Store 42 at index 0

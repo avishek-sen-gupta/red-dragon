@@ -15,7 +15,7 @@ from interpreter.llm.chunked_llm_frontend import (
     SourceChunk,
 )
 from interpreter.frontend import get_frontend
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.llm.llm_client import LLMClient
 from interpreter.llm.llm_frontend import LLMFrontend
 from interpreter.parser import Parser, ParserFactory, TreeSitterParserFactory
@@ -148,8 +148,8 @@ class TestIRRenumberer:
 
     def test_label_suffix(self):
         instructions = [
-            IRInstruction(opcode=Opcode.LABEL, label="func_foo_0"),
-            IRInstruction(opcode=Opcode.BRANCH, label="end_foo_1"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("func_foo_0")),
+            IRInstruction(opcode=Opcode.BRANCH, label=CodeLabel("end_foo_1")),
         ]
         result, _ = self.renumberer.renumber(instructions, 0, "_chunk0")
         assert result[0].label == "func_foo_0_chunk0"
@@ -160,7 +160,7 @@ class TestIRRenumberer:
             IRInstruction(
                 opcode=Opcode.BRANCH_IF,
                 operands=["%0"],
-                label="if_true_0,if_false_1",
+                label=CodeLabel("if_true_0,if_false_1"),
             ),
         ]
         result, _ = self.renumberer.renumber(instructions, 0, "_chunk1")

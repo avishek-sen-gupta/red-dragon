@@ -13,7 +13,7 @@ from interpreter.project.types import (
     CyclicImportError,
 )
 from interpreter.constants import Language
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 
 # ── ImportRef ────────────────────────────────────────────────────
 
@@ -175,7 +175,7 @@ class TestExportTable:
 class TestModuleUnit:
     def _make_ir(self):
         return (
-            IRInstruction(opcode=Opcode.LABEL, label="entry"),
+            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
             IRInstruction(opcode=Opcode.CONST, result_reg="%0", operands=["42"]),
         )
 
@@ -237,7 +237,7 @@ class TestLinkedProgram:
         return ModuleUnit(
             path=Path(path),
             language=Language.PYTHON,
-            ir=(IRInstruction(opcode=Opcode.LABEL, label="entry"),),
+            ir=(IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),),
             exports=ExportTable(),
             imports=(),
         )
@@ -250,7 +250,7 @@ class TestLinkedProgram:
         m2 = self._make_module("utils.py")
         lp = LinkedProgram(
             modules={Path("main.py"): m1, Path("utils.py"): m2},
-            merged_ir=[IRInstruction(opcode=Opcode.LABEL, label="entry")],
+            merged_ir=[IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry"))],
             merged_cfg=CFG(),
             merged_registry=FunctionRegistry(),
             entry_module=Path("main.py"),

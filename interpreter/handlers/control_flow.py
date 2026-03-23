@@ -91,17 +91,14 @@ def _handle_throw(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult
 
 
 def _handle_try_push(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    catch_labels_str, finally_label, end_label = (
-        inst.operands[0],
-        inst.operands[1],
-        inst.operands[2],
-    )
-    catch_labels = [CodeLabel(lbl.strip()) for lbl in catch_labels_str.split(",") if lbl.strip()]
+    catch_labels: list[CodeLabel] = inst.operands[0]
+    finally_label: CodeLabel = inst.operands[1]
+    end_label: CodeLabel = inst.operands[2]
     vm.exception_stack.append(
         ExceptionHandler(
             catch_labels=catch_labels,
-            finally_label=CodeLabel(finally_label) if finally_label else None,
-            end_label=CodeLabel(end_label) if end_label else None,
+            finally_label=finally_label if finally_label.is_present() else None,
+            end_label=end_label if end_label.is_present() else None,
         )
     )
     return ExecutionResult.success(
@@ -118,8 +115,8 @@ def _handle_set_continuation(
     inst: IRInstruction, vm: VMState, ctx: Any
 ) -> ExecutionResult:
     """SET_CONTINUATION: operands = [name, label]. Write name → label into continuation table."""
-    name = inst.operands[0]
-    label = CodeLabel(inst.operands[1])
+    name = str(inst.operands[0])
+    label = inst.operands[1]
     return ExecutionResult.success(
         StateUpdate(
             continuation_writes={name: label},
@@ -132,7 +129,7 @@ def _handle_resume_continuation(
     inst: IRInstruction, vm: VMState, ctx: Any
 ) -> ExecutionResult:
     """RESUME_CONTINUATION: operands = [name]. Branch to label if set, else fall through."""
-    name = inst.operands[0]
+    name = str(inst.operands[0])
     target = vm.continuations.get(name)
     if target:
         return ExecutionResult.success(
