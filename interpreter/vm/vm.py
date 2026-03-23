@@ -49,7 +49,9 @@ def _coerce_value(
     Returns *val* unchanged when no coercion is needed (no declared type,
     runtime type already matches, or the register name is not in the env).
     """
-    if not isinstance(reg, (str, Register)) or not (isinstance(reg, Register) or reg.startswith("%")):
+    if not isinstance(reg, (str, Register)) or not (
+        isinstance(reg, Register) or reg.startswith("%")
+    ):
         return val
     target_type = type_env.register_types.get(reg, UNKNOWN)
     if not target_type:
