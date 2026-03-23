@@ -430,19 +430,16 @@ _COBOL_JAR_PATH = os.environ.get(
         "~/code/red-dragon/proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar"
     ),
 )
-_COBOL_JAR_AVAILABLE = os.path.isfile(_COBOL_JAR_PATH)
 
 
 class TestCobolMultiFile:
     """COBOL multi-file via CALL 'program-name'.
 
-    Requires the ProLeap bridge JAR. Tests skip when unavailable.
+    Requires the ProLeap bridge JAR.
     """
 
     @pytest.fixture(autouse=True)
     def _set_bridge_jar(self):
-        if not _COBOL_JAR_AVAILABLE:
-            pytest.skip("ProLeap bridge JAR not available")
         old = os.environ.get("PROLEAP_BRIDGE_JAR")
         os.environ["PROLEAP_BRIDGE_JAR"] = _COBOL_JAR_PATH
         yield
