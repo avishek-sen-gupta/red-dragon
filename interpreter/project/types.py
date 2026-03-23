@@ -83,11 +83,10 @@ class ExportTable:
 
         Priority: functions > classes > variables.
         """
-        return (
-            self.functions.get(name)
-            or self.classes.get(name)
-            or self.variables.get(name)
-        )
+        for source in (self.functions, self.classes, self.variables):
+            if name in source:
+                return source[name]
+        return None
 
     def all_names(self) -> set[str]:
         """All exported names (deduplicated)."""
