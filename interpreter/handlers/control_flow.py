@@ -5,6 +5,17 @@ from __future__ import annotations
 
 from typing import Any
 
+from interpreter.instructions import (
+    to_typed,
+    Branch,
+    BranchIf,
+    Return_,
+    Throw_,
+    TryPush,
+    TryPop,
+    SetContinuation,
+    ResumeContinuation,
+)
 from interpreter.ir import IRInstruction, CodeLabel
 from interpreter.vm.vm import (
     VMState,
@@ -21,18 +32,22 @@ from interpreter.handlers._common import _symbolic_name
 
 
 def _handle_branch(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
+    t = to_typed(inst)
+    assert isinstance(t, Branch)
     return ExecutionResult.success(
         StateUpdate(
-            next_label=inst.label,
-            reasoning=f"branch → {inst.label}",
+            next_label=t.label,
+            reasoning=f"branch → {t.label}",
         )
     )
 
 
 def _handle_branch_if(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    cond_val = _resolve_reg(vm, inst.operands[0]).value
-    true_label = inst.branch_targets[0]
-    false_label = inst.branch_targets[1] if len(inst.branch_targets) > 1 else None
+    t = to_typed(inst)
+    assert isinstance(t, BranchIf)
+    cond_val = _resolve_reg(vm, t.cond_reg).value
+    true_label = t.branch_targets[0]
+    false_label = t.branch_targets[1] if len(t.branch_targets) > 1 else None
 
     if _is_symbolic(cond_val):
         sym_desc = _symbolic_name(cond_val)
@@ -49,17 +64,19 @@ def _handle_branch_if(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionRe
     return ExecutionResult.success(
         StateUpdate(
             next_label=chosen,
-            path_condition=f"{inst.operands[0]} is {taken}",
+            path_condition=f"{t.cond_reg} is {taken}",
             reasoning=f"branch_if {cond_val!r} → {chosen}",
         )
     )
 
 
 def _handle_return(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
+    t = to_typed(inst)
+    assert isinstance(t, Return_)
     if vm.current_frame.is_ctor:
         tv = typed(None, scalar(constants.TypeName.VOID))
-    elif inst.operands:
-        tv = _resolve_reg(vm, inst.operands[0])
+    elif t.value_reg is not None:
+        tv = _resolve_reg(vm, t.value_reg)
     else:
         tv = typed(None, scalar(constants.TypeName.VOID))
     return ExecutionResult.success(
@@ -72,7 +89,9 @@ def _handle_return(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResul
 
 
 def _handle_throw(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    val = _resolve_reg(vm, inst.operands[0]).value if inst.operands else None
+    t = to_typed(inst)
+    assert isinstance(t, Throw_)
+    val = _resolve_reg(vm, t.value_reg).value if t.value_reg is not None else None
     if vm.exception_stack:
         handler = vm.exception_stack.pop()
         # Redirect to the first catch label (or finally if no catch)
@@ -90,12 +109,14 @@ def _handle_throw(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult
 
 
 def _handle_try_push(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    catch_labels: list[CodeLabel] = inst.operands[0]
-    finally_label: CodeLabel = inst.operands[1]
-    end_label: CodeLabel = inst.operands[2]
+    t = to_typed(inst)
+    assert isinstance(t, TryPush)
+    catch_labels: tuple[CodeLabel, ...] = t.catch_labels
+    finally_label: CodeLabel = t.finally_label
+    end_label: CodeLabel = t.end_label
     vm.exception_stack.append(
         ExceptionHandler(
-            catch_labels=catch_labels,
+            catch_labels=list(catch_labels),
             finally_label=finally_label if finally_label.is_present() else None,
             end_label=end_label if end_label.is_present() else None,
         )
@@ -106,6 +127,8 @@ def _handle_try_push(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionRes
 
 
 def _handle_try_pop(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
+    t = to_typed(inst)
+    assert isinstance(t, TryPop)
     vm.exception_stack.pop()
     return ExecutionResult.success(StateUpdate(reasoning="pop exception handler"))
 
@@ -114,8 +137,10 @@ def _handle_set_continuation(
     inst: IRInstruction, vm: VMState, ctx: Any
 ) -> ExecutionResult:
     """SET_CONTINUATION: operands = [name, label]. Write name → label into continuation table."""
-    name = str(inst.operands[0])
-    label = inst.operands[1]
+    t = to_typed(inst)
+    assert isinstance(t, SetContinuation)
+    name = t.name
+    label = t.target_label
     return ExecutionResult.success(
         StateUpdate(
             continuation_writes={name: label},
@@ -128,7 +153,9 @@ def _handle_resume_continuation(
     inst: IRInstruction, vm: VMState, ctx: Any
 ) -> ExecutionResult:
     """RESUME_CONTINUATION: operands = [name]. Branch to label if set, else fall through."""
-    name = str(inst.operands[0])
+    t = to_typed(inst)
+    assert isinstance(t, ResumeContinuation)
+    name = t.name
     target = vm.continuations.get(name)
     if target:
         return ExecutionResult.success(
