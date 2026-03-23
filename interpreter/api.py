@@ -272,13 +272,13 @@ def execute_traced(
         class_symbol_table=frontend.class_symbol_table,
     )
     config = VMConfig(backend=backend, max_steps=max_steps)
+    strategies = build_execution_strategies(frontend, instructions, registry, lang)
     _vm, trace = execute_cfg_traced(
         cfg,
         entry_point,
         registry,
         config,
-        func_symbol_table=frontend.func_symbol_table,
-        class_symbol_table=frontend.class_symbol_table,
+        strategies,
     )
     return trace
 

@@ -247,7 +247,7 @@ def lower_arrow_function(ctx: TreeSitterEmitContext, node) -> str:
 
     if params_node:
         if params_node.type == JSN.IDENTIFIER:
-            lower_js_param(ctx, params_node)
+            lower_js_param(ctx, params_node, 0)
         else:
             lower_js_params(ctx, params_node)
 
