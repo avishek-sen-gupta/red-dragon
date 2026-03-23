@@ -59,7 +59,6 @@ ignore_imports =
     interpreter.frontends.c.declarations -> interpreter.frontends.cpp.node_types
     interpreter.frontends.c.declarations -> interpreter.frontends.cpp.control_flow
     interpreter.frontends.typescript -> interpreter.frontends.javascript
-    interpreter.frontend -> interpreter.frontends.python
 
 [importlinter:contract:cobol-isolation]
 name = COBOL module only imported by frontend factory

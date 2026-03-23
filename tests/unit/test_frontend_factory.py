@@ -5,7 +5,8 @@ from __future__ import annotations
 import pytest
 
 from interpreter import constants
-from interpreter.frontend import PythonFrontend, get_frontend
+from interpreter.frontend import get_frontend
+from interpreter.frontends.python import PythonFrontend
 from interpreter.llm.llm_client import LLMClient
 from interpreter.llm.llm_frontend import LLMFrontend
 
