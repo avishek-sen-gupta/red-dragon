@@ -1,6 +1,10 @@
 """Python-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from interpreter.ir import SpreadArguments
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
@@ -705,7 +709,7 @@ def lower_await(ctx: TreeSitterEmitContext, node) -> str:
 # ── splat / spread ────────────────────────────────────────────
 
 
-def lower_splat_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_splat_expr(ctx: TreeSitterEmitContext, node) -> str | SpreadArguments:
     """Lower *expr (list_splat) or **expr (dictionary_splat) as CALL_FUNCTION('spread', inner)."""
     from interpreter.frontends.common.expressions import lower_spread_arg
 
