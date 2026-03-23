@@ -123,7 +123,7 @@ Do not commit if any check fails. Fix, then re-run all three. Non-negotiable.
 - **Assertions are sacred:** Do not modify test assertions unless certain the change is valid. Do not remove assertions without review.
 - **No implementation hacks for tests:** Never add special behavior just to make tests pass. Document hard-to-implement behavior or ask for guidance.
 - **xfail for frontend gaps:** If a frontend doesn't handle a feature yet, write the real test with correct assertions, mark it `xfail` with `reason="description — <issue-id>"`, and file a corresponding Beads issue. The xfail reason must reference the issue ID so it's traceable. Don't rename tests or write fallback programs. Exclude languages that genuinely lack the feature (e.g., C has no classes).
-- **Both unit and integration tests** for every new feature.
+- **Both unit and integration tests** for every new feature. Unit tests verify IR structure (correct opcodes, no SYMBOLIC). Integration tests compile, execute through the VM, and assert on **concrete output values**. This applies even when verifying suspected already-working features — "it probably works" is not a substitute for a test that proves it. If a feature is being closed as "already handled," write the integration test that confirms it before closing.
 
 ## Code Review
 
