@@ -63,14 +63,13 @@ def build_cfg(instructions: list[IRInstruction]) -> CFG:
         last = block.instructions[-1]
 
         if last.opcode == Opcode.BRANCH:
-            target = CodeLabel(str(last.label))
+            target = last.label
             if target in cfg.blocks:
                 _add_edge(cfg, label, target)
 
         elif last.opcode == Opcode.BRANCH_IF:
             targets = last.label.branch_targets()
-            for t in targets:
-                target = CodeLabel(t.strip())
+            for target in targets:
                 if target in cfg.blocks:
                     _add_edge(cfg, label, target)
 
