@@ -226,7 +226,43 @@ def lower_java_switch_expr(ctx: TreeSitterEmitContext, node) -> str:
 
         if label_node and not is_default:
             case_value = next((c for c in label_node.children if c.is_named), None)
-            if case_value:
+            guard_node = next(
+                (c for c in label_node.children if c.type == "guard"), None
+            )
+
+            if case_value and case_value.type == "pattern":
+                # Java 16+ pattern matching: use Pattern ADT
+                from interpreter.frontends.java.patterns import parse_java_pattern
+                from interpreter.frontends.common.patterns import (
+                    compile_pattern_test,
+                    compile_pattern_bindings,
+                )
+
+                pattern = parse_java_pattern(ctx, case_value)
+                test_reg = compile_pattern_test(ctx, subject_reg, pattern)
+
+                if guard_node:
+                    guard_expr = next(
+                        (c for c in guard_node.children if c.is_named), None
+                    )
+                    if guard_expr:
+                        guard_reg = ctx.lower_expr(guard_expr)
+                        combined = ctx.fresh_reg()
+                        ctx.emit(
+                            Opcode.BINOP,
+                            result_reg=combined,
+                            operands=["and", test_reg, guard_reg],
+                        )
+                        test_reg = combined
+
+                ctx.emit(
+                    Opcode.BRANCH_IF,
+                    operands=[test_reg],
+                    label=f"{arm_label},{next_label}",
+                )
+                ctx.emit(Opcode.LABEL, label=arm_label)
+                compile_pattern_bindings(ctx, subject_reg, pattern)
+            elif case_value:
                 case_reg = ctx.lower_expr(case_value)
                 cmp_reg = ctx.fresh_reg()
                 ctx.emit(
@@ -240,12 +276,13 @@ def lower_java_switch_expr(ctx: TreeSitterEmitContext, node) -> str:
                     operands=[cmp_reg],
                     label=f"{arm_label},{next_label}",
                 )
+                ctx.emit(Opcode.LABEL, label=arm_label)
             else:
                 ctx.emit(Opcode.BRANCH, label=arm_label)
+                ctx.emit(Opcode.LABEL, label=arm_label)
         else:
             ctx.emit(Opcode.BRANCH, label=arm_label)
-
-        ctx.emit(Opcode.LABEL, label=arm_label)
+            ctx.emit(Opcode.LABEL, label=arm_label)
         has_block = any(s.type == JavaNodeType.BLOCK for s in body_stmts)
         if has_block:
             # Block-form arm: yield_statement inside handles STORE_VAR + BRANCH
