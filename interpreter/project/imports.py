@@ -6,6 +6,7 @@ a pure function that walks the tree-sitter AST to find import nodes.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from interpreter.constants import Language
@@ -33,6 +34,11 @@ def extract_imports(
     Returns:
         List of ImportRef objects found in the source.
     """
+    # COBOL uses a separate parser (ProLeap), not tree-sitter.
+    # Use regex-based extraction directly on source bytes.
+    if language == Language.COBOL:
+        return _extract_cobol_imports(source, source_file)
+
     extractor = _EXTRACTORS.get(language)
     if extractor is None:
         return []
@@ -865,6 +871,57 @@ def _pascal_uses(
                             is_system=is_system,
                         )
                     )
+    return refs
+
+
+# ── COBOL import extraction (regex-based, no tree-sitter) ────────
+
+# COPY copybook-name [OF|IN library-name].
+_COBOL_COPY_RE = re.compile(
+    r"\bCOPY\s+([A-Za-z0-9][\w-]*)",
+    re.IGNORECASE,
+)
+
+# CALL 'program-name' or CALL "program-name"
+# Dynamic CALL (CALL variable-name) is intentionally not matched.
+_COBOL_CALL_RE = re.compile(
+    r'\bCALL\s+["\']([A-Za-z0-9][\w-]*)["\']',
+    re.IGNORECASE,
+)
+
+
+def _extract_cobol_imports(source: bytes, source_file: Path) -> list[ImportRef]:
+    """Extract COPY and CALL statements from COBOL source via regex.
+
+    COBOL doesn't use tree-sitter — the ProLeap bridge handles parsing.
+    For import discovery, we use simple regex patterns on the raw source
+    to find COPY (copybook inclusion) and CALL (subprogram invocation).
+    """
+    text = source.decode("utf-8", errors="replace")
+    refs: list[ImportRef] = []
+
+    # COPY statements → include kind (like #include)
+    for m in _COBOL_COPY_RE.finditer(text):
+        copybook_name = m.group(1)
+        refs.append(
+            ImportRef(
+                source_file=source_file,
+                module_path=copybook_name,
+                kind="include",
+            )
+        )
+
+    # CALL 'literal' statements → require kind (runtime linkage)
+    for m in _COBOL_CALL_RE.finditer(text):
+        program_name = m.group(1)
+        refs.append(
+            ImportRef(
+                source_file=source_file,
+                module_path=program_name,
+                kind="require",
+            )
+        )
+
     return refs
 
 
