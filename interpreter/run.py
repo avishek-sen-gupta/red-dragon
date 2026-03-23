@@ -105,8 +105,8 @@ class ExecutionStrategies:
     unop_coercion: UnopCoercionStrategy = dataclass_field(
         default_factory=DefaultUnopCoercion
     )
-    func_symbol_table: dict[str, FuncRef] = dataclass_field(default_factory=dict)
-    class_symbol_table: dict[str, ClassRef] = dataclass_field(default_factory=dict)
+    func_symbol_table: dict[CodeLabel, FuncRef] = dataclass_field(default_factory=dict)
+    class_symbol_table: dict[CodeLabel, ClassRef] = dataclass_field(default_factory=dict)
     field_fallback: FieldFallbackStrategy = dataclass_field(
         default_factory=NoFieldFallback
     )

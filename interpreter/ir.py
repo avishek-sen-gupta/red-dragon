@@ -194,7 +194,7 @@ class CodeLabel:
         return NotImplemented
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class NoCodeLabel(CodeLabel):
     """Null object: instruction has no label."""
 

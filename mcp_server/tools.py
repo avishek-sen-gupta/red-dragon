@@ -70,8 +70,8 @@ def _find_function_entry(
             return f
     # Try name-based lookup: "add" → "func_add_0"
     for f in interprocedural.call_graph.functions:
-        if f.label.startswith("func_") and "_" in f.label[5:]:
-            func_name = f.label.split("_")[1]
+        if f.label.starts_with("func_") and "_" in str(f.label)[5:]:
+            func_name = f.label.extract_name("func_")
             if func_name == name:
                 return f
     raise ValueError(f"Function not found: {name}")
@@ -92,15 +92,15 @@ def handle_analyze_program(source: str, language: str) -> dict[str, Any]:
     call_graph = interprocedural.call_graph
     return {
         "functions": [
-            {"label": f.label, "params": list(f.params)}
-            for f in sorted(call_graph.functions, key=lambda f: f.label)
+            {"label": str(f.label), "params": list(f.params)}
+            for f in sorted(call_graph.functions, key=lambda f: str(f.label))
         ],
         "call_graph": [
             {"caller": s.caller.label, "callees": sorted(c.label for c in s.callees)}
             for s in call_graph.call_sites
         ],
         "summary_counts": {
-            f.label: len(merge_flows_for_function(f, interprocedural.summaries))
+            str(f.label): len(merge_flows_for_function(f, interprocedural.summaries))
             for f in call_graph.functions
         },
         "whole_program_edge_count": sum(
@@ -134,7 +134,7 @@ def handle_get_function_summary(
         return "other"
 
     return {
-        "function": func_entry.label,
+        "function": str(func_entry.label),
         "params": list(func_entry.params),
         "callers": sorted(build_function_callers(func_entry, call_graph)),
         "callees": sorted(build_function_callees(func_entry, call_graph)),
@@ -187,8 +187,8 @@ def handle_get_call_chain(
                 (
                     f
                     for f in interprocedural.call_graph.functions
-                    if f.label.startswith("func_")
-                    and f.label.split("_")[1] == call.callee_label
+                    if f.label.starts_with("func_")
+                    and f.label.extract_name("func_") == call.callee_label
                 ),
                 None,
             )
@@ -230,7 +230,7 @@ def handle_load_program(
 
     return {
         "functions": sorted(
-            f.label for f in session.interprocedural.call_graph.functions
+            str(f.label) for f in session.interprocedural.call_graph.functions
         ),
         "ir_instruction_count": len(session.ir),
         "cfg_block_count": len(session.cfg.blocks),
@@ -411,8 +411,8 @@ def handle_load_project(
             },
             "unresolved_imports": len(linked.unresolved_imports),
             "cfg_blocks": len(linked.merged_cfg.blocks),
-            "functions": sorted(f.label for f in interprocedural.call_graph.functions),
-            "classes": sorted(linked.merged_registry.classes.keys()),
+            "functions": sorted(str(f.label) for f in interprocedural.call_graph.functions),
+            "classes": sorted(str(k) for k in linked.merged_registry.classes.keys()),
         }
     except Exception as e:
         logger.exception("handle_load_project failed")

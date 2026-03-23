@@ -5,7 +5,7 @@ the field name comes from a register (not a static operand).  This is
 needed by __method_missing__ to forward field access by dynamic name.
 """
 
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.vm.vm import VMState, HeapObject, apply_update
 from interpreter.vm.vm_types import StackFrame, StateUpdate, SymbolicValue
 from interpreter.vm.executor import (
@@ -120,7 +120,7 @@ class TestLoadFieldIndirect:
         """Object has __method_missing__ with BoundFuncRef — triggers call dispatch."""
         vm = _make_vm()
         addr = "obj_0"
-        mm_label = "func_mm_0"
+        mm_label = CodeLabel("func_mm_0")
         mm_func_ref = FuncRef(name="__method_missing__", label=mm_label)
         mm_bound = BoundFuncRef(func_ref=mm_func_ref, closure_id="")
 

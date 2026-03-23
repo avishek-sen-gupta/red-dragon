@@ -13,7 +13,7 @@ from typing import Sequence
 
 from interpreter.cfg_types import CFG
 from interpreter.constants import Language
-from interpreter.ir import IRInstruction
+from interpreter.ir import IRInstruction, CodeLabel
 from interpreter.registry import FunctionRegistry
 
 # ── Errors ───────────────────────────────────────────────────────
@@ -89,11 +89,11 @@ class ExportTable:
     by scanning the registry and top-level DECL_VAR instructions.
     """
 
-    functions: dict[str, str] = field(default_factory=dict)
-    classes: dict[str, str] = field(default_factory=dict)
+    functions: dict[str, CodeLabel] = field(default_factory=dict)
+    classes: dict[str, CodeLabel] = field(default_factory=dict)
     variables: dict[str, str] = field(default_factory=dict)
 
-    def lookup(self, name: str) -> str | None:
+    def lookup(self, name: str) -> CodeLabel | str | None:
         """Look up an exported name across all symbol categories.
 
         Priority: functions > classes > variables.

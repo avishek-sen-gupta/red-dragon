@@ -82,8 +82,8 @@ class HandlerContext:
     type_env: TypeEnvironment
     binop_coercion: BinopCoercionStrategy
     unop_coercion: UnopCoercionStrategy
-    func_symbol_table: dict[str, FuncRef]
-    class_symbol_table: dict[str, ClassRef]
+    func_symbol_table: dict[CodeLabel, FuncRef]
+    class_symbol_table: dict[CodeLabel, ClassRef]
     field_fallback: FieldFallbackStrategy
     symbol_table: SymbolTable
 
