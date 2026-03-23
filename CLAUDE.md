@@ -134,7 +134,7 @@ Before every commit, scan the diff for these anti-patterns:
 - **Workaround guards** — `is not None`, bare `try/except`, or conditional logic added just to make tests pass without understanding the root cause.
 - **Weak assertions** — `assert x is not None` or `assert "name" in result` when a concrete value assertion (`assert result == 30`) is possible.
 - **Mutation in loops** — mutable accumulators inside `for` loops instead of comprehensions/map/filter/reduce.
-- **Stale documentation** — README, linker-design.md, or ADRs that no longer match the implementation.
+- **Stale documentation** — README, linker-design.md, frontend design docs, IR reference, VM design docs, frontend lowering gaps, ADRs, etc. that no longer match the implementation.
 - **Missing tests** — new code paths without corresponding unit AND integration tests.
 - **Leaked abstractions** — internal labels, register names, or IR details exposed in public APIs or test assertions.
 - **Dead code** — unused imports, unreachable branches, assigned-but-never-read variables.
