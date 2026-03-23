@@ -109,13 +109,9 @@ def _namespace_and_rebase_instruction(
     new_operands = []
     for i, op in enumerate(inst.operands):
         rebased = _rebase_operand(op, reg_offset)
-        # Rewrite imported function/variable references
-        if isinstance(rebased, str) and rebased in import_table:
-            if inst.opcode in (
-                Opcode.CALL_FUNCTION,
-                Opcode.LOAD_VAR,
-            ) and i == 0:
-                rebased = import_table[rebased]
+        # Do NOT rewrite CALL_FUNCTION/LOAD_VAR operands — the VM resolves
+        # function names via local_vars scope lookup. We fix imports by
+        # replacing the import CALL_FUNCTION+DECL_VAR pair instead.
         # Namespace func/class label references in CONST operands
         # (e.g. CONST "func_helper_0" → CONST "utils.func_helper_0")
         if (
@@ -242,6 +238,100 @@ def _merge_symbol_tables(
     return merged_func, merged_class
 
 
+def _build_all_import_bindings(
+    import_tables: dict[Path, dict[str, str]],
+) -> dict[str, str]:
+    """Flatten all import tables into a single name → label mapping."""
+    bindings: dict[str, str] = {}
+    for table in import_tables.values():
+        bindings.update(table)
+    return bindings
+
+
+def _rewrite_import_stubs(
+    ir: list[IRInstruction],
+    import_tables: dict[Path, dict[str, str]],
+    modules: dict[Path, ModuleUnit],
+    prefixes: dict[Path, str],
+) -> list[IRInstruction]:
+    """Replace import CALL_FUNCTION + DECL_VAR pairs with direct label bindings.
+
+    The Python frontend (and others) emits import statements as:
+        %0 = CALL_FUNCTION "import" "from X import Y"
+        DECL_VAR Y %0
+
+    After linking, we know Y maps to a namespaced label. Replace the pair:
+        %0 = CONST "target_module.func_Y_0"
+        DECL_VAR Y %0
+
+    This way the VM finds the correct function/class label in local_vars
+    when dispatching calls.
+    """
+    # Build a combined name → namespaced-label mapping from all import tables
+    all_bindings: dict[str, str] = {}
+    for table in import_tables.values():
+        all_bindings.update(table)
+
+    if not all_bindings:
+        return ir
+
+    # Scan for CALL_FUNCTION "import" instructions and record which registers
+    # they write to, so we can replace the following DECL_VAR.
+    import_regs: dict[str, None] = {}  # registers produced by import calls
+    result: list[IRInstruction] = []
+
+    for inst in ir:
+        # Detect: %N = CALL_FUNCTION "import" "from X import Y"
+        if (
+            inst.opcode == Opcode.CALL_FUNCTION
+            and len(inst.operands) >= 1
+            and str(inst.operands[0]) == "import"
+            and inst.result_reg
+        ):
+            import_regs[inst.result_reg] = None
+            # Don't emit this instruction yet — check if next DECL_VAR uses it
+            # Actually, we need to replace this CALL with a CONST for the right label.
+            # But we don't know the name yet — that comes from the DECL_VAR.
+            # So keep the instruction but mark it for replacement.
+            result.append(inst)
+            continue
+
+        # Detect: DECL_VAR Y %N where %N is an import register
+        if (
+            inst.opcode == Opcode.DECL_VAR
+            and len(inst.operands) >= 2
+            and str(inst.operands[1]) in import_regs
+        ):
+            var_name = str(inst.operands[0])
+            reg = str(inst.operands[1])
+
+            if var_name in all_bindings:
+                target_label = all_bindings[var_name]
+                # Replace the preceding CALL_FUNCTION "import" with CONST
+                # Find and replace it in result
+                for j in range(len(result) - 1, -1, -1):
+                    if result[j].result_reg == reg and result[j].opcode == Opcode.CALL_FUNCTION:
+                        result[j] = IRInstruction(
+                            opcode=Opcode.CONST,
+                            result_reg=reg,
+                            operands=[target_label],
+                            source_location=result[j].source_location,
+                        )
+                        break
+                # Emit the DECL_VAR unchanged — it now binds to the CONST label
+                result.append(inst)
+                # Clean up the import_regs entry
+                del import_regs[reg]
+            else:
+                # Import name not in our bindings (e.g., system import) — keep as-is
+                result.append(inst)
+            continue
+
+        result.append(inst)
+
+    return result
+
+
 # ── Main linker ──────────────────────────────────────────────────
 
 
@@ -293,6 +383,10 @@ def link_modules(
 
     # Build merged CFG + registry
     merged_func_symbols, merged_class_symbols = _merge_symbol_tables(modules, prefixes)
+
+    # Replace import stubs with direct label bindings
+    all_ir = _rewrite_import_stubs(all_ir, import_tables, modules, prefixes)
+
     merged_cfg = build_cfg(all_ir)
     merged_registry = build_registry(
         all_ir,
@@ -308,4 +402,6 @@ def link_modules(
         merged_registry=merged_registry,
         entry_module=entry_module,
         import_graph=import_graph,
+        func_symbol_table=merged_func_symbols,
+        class_symbol_table=merged_class_symbols,
     )

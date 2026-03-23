@@ -132,3 +132,5 @@ class LinkedProgram:
     entry_module: Path
     import_graph: dict[Path, list[Path]]
     unresolved_imports: list[ImportRef] = field(default_factory=list)
+    func_symbol_table: dict = field(default_factory=dict)
+    class_symbol_table: dict = field(default_factory=dict)
