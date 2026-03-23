@@ -414,6 +414,7 @@ class LoadRegion(InstructionBase):
     result_reg: Register = NO_REGISTER
     region_reg: str = ""
     offset_reg: str = ""
+    length: int = 0
 
     @property
     def opcode(self) -> Opcode:
@@ -752,6 +753,7 @@ def _load_region(inst: IRInstruction) -> LoadRegion:
         result_reg=inst.result_reg,
         region_reg=str(ops[0]) if len(ops) >= 1 else "",
         offset_reg=str(ops[1]) if len(ops) >= 2 else "",
+        length=int(ops[2]) if len(ops) >= 3 else 0,
         source_location=inst.source_location,
     )
 
@@ -1077,7 +1079,7 @@ def _flat_load_region(t: LoadRegion) -> IRInstruction:
     return IRInstruction(
         opcode=Opcode.LOAD_REGION,
         result_reg=t.result_reg,
-        operands=[t.region_reg, t.offset_reg],
+        operands=[t.region_reg, t.offset_reg, t.length],
         source_location=t.source_location,
     )
 

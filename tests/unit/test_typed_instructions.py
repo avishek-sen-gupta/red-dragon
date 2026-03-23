@@ -460,7 +460,7 @@ class TestLoadRegionRoundTrip:
             IRInstruction(
                 opcode=Opcode.LOAD_REGION,
                 result_reg="%2",
-                operands=["%0", "%1"],
+                operands=["%0", "%1", 8],
             )
         )
 
