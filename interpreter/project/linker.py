@@ -83,6 +83,50 @@ def _rebase_operand(operand, offset: int) -> object:
     return operand
 
 
+def _chain_module_entries(
+    ir: list[IRInstruction],
+    processing_order: list[Path],
+    prefixes: dict[Path, str],
+) -> None:
+    """Insert BRANCH instructions to chain module entry points.
+
+    After concatenation, each module's top-level code is isolated — no
+    instruction branches from one module to the next. This function finds
+    the last top-level block of each module (excluding the final entry
+    module) and appends a BRANCH to the next module's entry label.
+
+    This ensures dependency modules' top-level code (variable assignments,
+    function declarations) runs before the entry module's code.
+    """
+    if len(processing_order) < 2:
+        return
+
+    # For each module except the last, find the last instruction that belongs
+    # to it and insert a BRANCH to the next module's entry after it.
+    module_boundaries: list[tuple[int, str]] = []  # (last_ir_index, next_entry_label)
+
+    current_module_idx = 0
+    for i, inst in enumerate(ir):
+        if inst.opcode == Opcode.LABEL and inst.label:
+            # Check if this label belongs to a later module
+            for j in range(current_module_idx + 1, len(processing_order)):
+                next_prefix = prefixes[processing_order[j]]
+                if inst.label == namespace_label("entry", next_prefix):
+                    # Found the start of the next module
+                    next_label = inst.label
+                    module_boundaries.append((i, next_label))
+                    current_module_idx = j
+                    break
+
+    # Insert BRANCH instructions before each module boundary (in reverse order
+    # to preserve indices)
+    for insert_before, next_label in reversed(module_boundaries):
+        ir.insert(insert_before, IRInstruction(
+            opcode=Opcode.BRANCH,
+            label=next_label,
+        ))
+
+
 def _namespace_and_rebase_instruction(
     inst: IRInstruction,
     prefix: str,
@@ -173,13 +217,21 @@ def _build_import_table(
 
         for name in ref.names:
             if name == "*":
-                # Wildcard: import all exports
+                # Wildcard: import all exports — only functions and classes
                 for export_name in target_module.exports.all_names():
+                    # Skip variable exports — they're resolved by running the dep module
+                    if export_name in target_module.exports.variables:
+                        continue
                     export_label = target_module.exports.lookup(export_name)
                     if export_label:
                         namespaced = namespace_label(export_label, target_prefix)
                         table[export_name] = namespaced
             else:
+                # Skip variable exports
+                if name in target_module.exports.variables and \
+                   name not in target_module.exports.functions and \
+                   name not in target_module.exports.classes:
+                    continue
                 export_label = target_module.exports.lookup(name)
                 if export_label:
                     actual_name = ref.alias if ref.alias and len(ref.names) == 1 else name
@@ -220,7 +272,11 @@ def _merge_symbol_tables(
     modules: dict[Path, ModuleUnit],
     prefixes: dict[Path, str],
 ) -> tuple[dict[str, FuncRef], dict[str, ClassRef]]:
-    """Merge and namespace all modules' export symbol tables."""
+    """Merge and namespace all modules' export symbol tables.
+
+    Labels are namespaced (to avoid collisions in the merged CFG).
+    Names are kept bare (the VM uses them for method dispatch lookups).
+    """
     merged_func: dict[str, FuncRef] = {}
     merged_class: dict[str, ClassRef] = {}
 
@@ -228,12 +284,13 @@ def _merge_symbol_tables(
         prefix = prefixes[path]
         for name, label in module.exports.functions.items():
             ns_label = namespace_label(label, prefix)
-            ns_name = f"{prefix}.{name}"
-            merged_func[ns_label] = FuncRef(name=ns_name, label=ns_label)
+            # Keep bare name — VM method dispatch looks up by bare name
+            merged_func[ns_label] = FuncRef(name=name, label=ns_label)
         for name, label in module.exports.classes.items():
             ns_label = namespace_label(label, prefix)
-            ns_name = f"{prefix}.{name}"
-            merged_class[ns_label] = ClassRef(name=ns_name, label=ns_label, parents=())
+            # Keep bare name — VM constructor dispatch uses it for heap type_hint
+            # and class_methods lookup
+            merged_class[ns_label] = ClassRef(name=name, label=ns_label, parents=())
 
     return merged_func, merged_class
 
@@ -280,6 +337,16 @@ def _rewrite_import_stubs(
     import_regs: dict[str, None] = {}  # registers produced by import calls
     result: list[IRInstruction] = []
 
+    # Pre-compute which names are variable-only imports (no function/class binding)
+    # These should be dropped entirely — the dep module already sets them.
+    var_only_names: set[str] = set()
+    for table in import_tables.values():
+        pass  # all_bindings only has func/class bindings (var skipped above)
+    # Gather variable names from all modules' exports
+    all_var_exports: set[str] = set()
+    for mod in modules.values():
+        all_var_exports.update(mod.exports.variables.keys())
+
     for inst in ir:
         # Detect: %N = CALL_FUNCTION "import" "from X import Y"
         if (
@@ -322,6 +389,17 @@ def _rewrite_import_stubs(
                 result.append(inst)
                 # Clean up the import_regs entry
                 del import_regs[reg]
+            elif var_name in all_var_exports:
+                # Variable-only import — the dependency module already set this
+                # variable in the global scope. Drop the import stub + DECL_VAR
+                # pair to avoid overwriting the concrete value with a symbolic one.
+                for j in range(len(result) - 1, -1, -1):
+                    if result[j].result_reg == reg and result[j].opcode == Opcode.CALL_FUNCTION:
+                        result.pop(j)
+                        break
+                if reg in import_regs:
+                    del import_regs[reg]
+                # Don't emit the DECL_VAR — skip it
             else:
                 # Import name not in our bindings (e.g., system import) — keep as-is
                 result.append(inst)
@@ -363,10 +441,14 @@ def link_modules(
     all_ir: list[IRInstruction] = []
     reg_offset = 0
 
-    # Entry module first — its entry label is the program entry
-    processing_order = [entry_module] + [
+    # Dependency modules first (their function/class declarations must be
+    # available before the entry module's top-level code uses them).
+    # Then entry module last — its entry label is still the program entry
+    # because build_cfg sets cfg.entry to the first label it sees, and we
+    # fix that below.
+    processing_order = [
         p for p in topo_order if p != entry_module and p in modules
-    ]
+    ] + [entry_module]
 
     for file_path in processing_order:
         module = modules[file_path]
@@ -381,6 +463,11 @@ def link_modules(
 
         reg_offset += max_register_number(module.ir) + 1
 
+    # Chain module entries: add BRANCH from the end of each module's
+    # top-level code to the next module's entry label. This ensures all
+    # dependency modules' code runs before the entry module.
+    _chain_module_entries(all_ir, processing_order, prefixes)
+
     # Build merged CFG + registry
     merged_func_symbols, merged_class_symbols = _merge_symbol_tables(modules, prefixes)
 
@@ -388,6 +475,11 @@ def link_modules(
     all_ir = _rewrite_import_stubs(all_ir, import_tables, modules, prefixes)
 
     merged_cfg = build_cfg(all_ir)
+    # Set entry to the first module in processing order (first dependency).
+    # The chain of BRANCH instructions will flow through all deps to the
+    # entry module's code.
+    first_prefix = prefixes[processing_order[0]]
+    merged_cfg.entry = namespace_label("entry", first_prefix)
     merged_registry = build_registry(
         all_ir,
         merged_cfg,
