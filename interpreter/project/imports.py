@@ -76,9 +76,7 @@ def _extract_python_import(
     return None
 
 
-def _python_import_statement(
-    node, source: bytes, source_file: Path
-) -> list[ImportRef]:
+def _python_import_statement(node, source: bytes, source_file: Path) -> list[ImportRef]:
     """Handle: import os, import os.path, import numpy as np"""
     refs: list[ImportRef] = []
 
@@ -192,9 +190,7 @@ def _extract_js_import(
     return None
 
 
-def _js_import_statement(
-    node, source: bytes, source_file: Path
-) -> list[ImportRef]:
+def _js_import_statement(node, source: bytes, source_file: Path) -> list[ImportRef]:
     """Handle ESM: import { foo } from './utils'; import X from 'mod'"""
     # Find the source string (after 'from')
     source_str = ""
@@ -244,16 +240,18 @@ def _js_import_statement(
     ]
 
 
-def _js_require_call(
-    node, source: bytes, source_file: Path
-) -> list[ImportRef] | None:
+def _js_require_call(node, source: bytes, source_file: Path) -> list[ImportRef] | None:
     """Handle CJS: const X = require('./utils')"""
     # Walk to find a call_expression with identifier 'require'
     calls = _find_nodes_by_type(node, "call_expression")
     refs: list[ImportRef] = []
     for call in calls:
         func_node = call.child_by_field_name("function")
-        if func_node and func_node.type == "identifier" and _node_text(func_node, source) == "require":
+        if (
+            func_node
+            and func_node.type == "identifier"
+            and _node_text(func_node, source) == "require"
+        ):
             args = call.child_by_field_name("arguments")
             if args:
                 for arg_child in args.children:
@@ -284,9 +282,7 @@ def _extract_java_import(
     return None
 
 
-def _java_import_declaration(
-    node, source: bytes, source_file: Path
-) -> list[ImportRef]:
+def _java_import_declaration(node, source: bytes, source_file: Path) -> list[ImportRef]:
     """Handle: import com.example.Utils; import static com.example.Math.add;"""
     text = _node_text(node, source).strip().rstrip(";").strip()
 
@@ -332,9 +328,7 @@ def _extract_go_import(
     return None
 
 
-def _go_import_declaration(
-    node, source: bytes, source_file: Path
-) -> list[ImportRef]:
+def _go_import_declaration(node, source: bytes, source_file: Path) -> list[ImportRef]:
     """Handle: import "fmt"; import ("fmt"; "os/exec")"""
     refs: list[ImportRef] = []
 
@@ -384,16 +378,18 @@ def _extract_rust_import(
     return None
 
 
-def _rust_use_declaration(
-    node, source: bytes, source_file: Path
-) -> list[ImportRef]:
+def _rust_use_declaration(node, source: bytes, source_file: Path) -> list[ImportRef]:
     """Handle: use crate::utils; use std::collections::HashMap;"""
     text = _node_text(node, source).strip().rstrip(";").strip()
     text = text.removeprefix("use").strip()
 
     _RUST_SYSTEM_PREFIXES = ("std::", "core::", "alloc::")
     is_system = any(text.startswith(p) for p in _RUST_SYSTEM_PREFIXES)
-    is_relative = text.startswith("crate::") or text.startswith("self::") or text.startswith("super::")
+    is_relative = (
+        text.startswith("crate::")
+        or text.startswith("self::")
+        or text.startswith("super::")
+    )
 
     # Extract names from use_list: use foo::{A, B}
     names: tuple[str, ...] = ()
@@ -424,9 +420,7 @@ def _rust_use_declaration(
     ]
 
 
-def _rust_mod_item(
-    node, source: bytes, source_file: Path
-) -> list[ImportRef]:
+def _rust_mod_item(node, source: bytes, source_file: Path) -> list[ImportRef]:
     """Handle: mod helpers;"""
     # Only external mod declarations (no body block)
     has_body = any(c.type == "declaration_list" for c in node.children)
@@ -455,18 +449,14 @@ def _rust_mod_item(
 # ── C / C++ import extraction ────────────────────────────────────
 
 
-def _extract_c_import(
-    node, source: bytes, source_file: Path
-) -> list[ImportRef] | None:
+def _extract_c_import(node, source: bytes, source_file: Path) -> list[ImportRef] | None:
     """Dispatch C/C++ preproc_include."""
     if node.type == "preproc_include":
         return _c_preproc_include(node, source, source_file)
     return None
 
 
-def _c_preproc_include(
-    node, source: bytes, source_file: Path
-) -> list[ImportRef]:
+def _c_preproc_include(node, source: bytes, source_file: Path) -> list[ImportRef]:
     """Handle: #include "header.h", #include <stdio.h>"""
     for child in node.children:
         if child.type == "system_lib_string":
@@ -505,9 +495,7 @@ def _extract_csharp_import(
     return None
 
 
-def _csharp_using_directive(
-    node, source: bytes, source_file: Path
-) -> list[ImportRef]:
+def _csharp_using_directive(node, source: bytes, source_file: Path) -> list[ImportRef]:
     """Handle: using System; using static System.Math; using X = System.Text;"""
     text = _node_text(node, source).strip().rstrip(";").strip()
     text = text.removeprefix("using").strip()
@@ -558,9 +546,7 @@ def _extract_kotlin_import(
     return None
 
 
-def _kotlin_import_header(
-    node, source: bytes, source_file: Path
-) -> list[ImportRef]:
+def _kotlin_import_header(node, source: bytes, source_file: Path) -> list[ImportRef]:
     """Handle: import com.example.Utils"""
     text = _node_text(node, source).strip()
     text = text.removeprefix("import").strip()
@@ -584,7 +570,10 @@ def _kotlin_import_header(
         names = (parts[1],)
 
     _KOTLIN_SYSTEM_PREFIXES = ("java.", "javax.", "kotlin.", "kotlinx.")
-    is_system = any(text.startswith(p) or (text + ".").startswith(p) for p in _KOTLIN_SYSTEM_PREFIXES)
+    is_system = any(
+        text.startswith(p) or (text + ".").startswith(p)
+        for p in _KOTLIN_SYSTEM_PREFIXES
+    )
 
     return [
         ImportRef(
@@ -635,7 +624,9 @@ def _scala_import_declaration(
         names = (parts[1],)
 
     _SCALA_SYSTEM_PREFIXES = ("scala.", "java.", "javax.")
-    is_system = any(text.startswith(p) or (text + ".").startswith(p) for p in _SCALA_SYSTEM_PREFIXES)
+    is_system = any(
+        text.startswith(p) or (text + ".").startswith(p) for p in _SCALA_SYSTEM_PREFIXES
+    )
 
     return [
         ImportRef(
@@ -685,7 +676,11 @@ def _ruby_require(
     for child in arg_list.children:
         if child.type == "string":
             path = _extract_string_content(child, source)
-            is_relative = func_name == "require_relative" or path.startswith("./") or path.startswith("../")
+            is_relative = (
+                func_name == "require_relative"
+                or path.startswith("./")
+                or path.startswith("../")
+            )
             is_system = False  # let the resolver decide — bare names may be local
             return [
                 ImportRef(
@@ -721,9 +716,7 @@ def _extract_php_import(
     return None
 
 
-def _php_use_declaration(
-    node, source: bytes, source_file: Path
-) -> list[ImportRef]:
+def _php_use_declaration(node, source: bytes, source_file: Path) -> list[ImportRef]:
     """Handle: use App\\Models\\User;"""
     text = _node_text(node, source).strip().rstrip(";").strip()
     text = text.removeprefix("use").strip()
@@ -747,9 +740,7 @@ def _php_use_declaration(
     ]
 
 
-def _php_require_include(
-    node, source: bytes, source_file: Path
-) -> list[ImportRef]:
+def _php_require_include(node, source: bytes, source_file: Path) -> list[ImportRef]:
     """Handle: require_once "helpers.php";"""
     for child in node.children:
         if child.type in ("string", "encapsed_string"):
@@ -786,9 +777,7 @@ def _extract_lua_import(
     return None
 
 
-def _lua_require_call(
-    node, source: bytes, source_file: Path
-) -> list[ImportRef] | None:
+def _lua_require_call(node, source: bytes, source_file: Path) -> list[ImportRef] | None:
     """Handle: require("utils"), require "helpers" """
     # Check the function name is 'require'
     func_name = ""
@@ -807,7 +796,9 @@ def _lua_require_call(
                 if arg.type == "string":
                     path = _extract_string_content(arg, source)
                     is_relative = path.startswith("./") or path.startswith("../")
-                    is_system = False  # let the resolver decide — bare names may be local
+                    is_system = (
+                        False  # let the resolver decide — bare names may be local
+                    )
                     return [
                         ImportRef(
                             source_file=source_file,
@@ -846,15 +837,24 @@ def _extract_pascal_import(
     return None
 
 
-def _pascal_uses(
-    node, source: bytes, source_file: Path
-) -> list[ImportRef]:
+def _pascal_uses(node, source: bytes, source_file: Path) -> list[ImportRef]:
     """Handle: uses SysUtils, Classes;"""
-    _PASCAL_SYSTEM_UNITS = frozenset({
-        "sysutils", "classes", "system", "types", "variants",
-        "math", "strutils", "dateutils", "generics.collections",
-        "generics.defaults", "rtlconsts", "character",
-    })
+    _PASCAL_SYSTEM_UNITS = frozenset(
+        {
+            "sysutils",
+            "classes",
+            "system",
+            "types",
+            "variants",
+            "math",
+            "strutils",
+            "dateutils",
+            "generics.collections",
+            "generics.defaults",
+            "rtlconsts",
+            "character",
+        }
+    )
 
     refs: list[ImportRef] = []
     for child in node.children:
@@ -932,7 +932,11 @@ def _extract_string_content(node, source: bytes) -> str:
     """Extract the inner text of a string node (strip quotes)."""
     # Try to find a string_content / string_fragment child
     for child in node.children:
-        if child.type in ("string_content", "string_fragment", "interpreted_string_literal_content"):
+        if child.type in (
+            "string_content",
+            "string_fragment",
+            "interpreted_string_literal_content",
+        ):
             return _node_text(child, source)
     # Fallback: strip quotes from the raw text
     text = _node_text(node, source)

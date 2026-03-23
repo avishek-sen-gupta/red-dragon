@@ -15,7 +15,6 @@ from interpreter.constants import Language
 from interpreter.ir import IRInstruction
 from interpreter.registry import FunctionRegistry
 
-
 # ── Errors ───────────────────────────────────────────────────────
 
 
