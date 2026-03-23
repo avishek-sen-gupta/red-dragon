@@ -1047,3 +1047,33 @@ class TestJavaTypePattern:
             and str(inst.operands[0]) == "isinstance"
         ]
         assert len(isinstance_calls) >= 1
+
+
+class TestJavaRecordPatternInstanceof:
+    def test_instanceof_record_pattern_binds_components(self):
+        """o instanceof Point(int a, int b) should bind a and b."""
+        ir = _parse_java(
+            "class M { record Point(int x, int y) {}"
+            "  void m(Object o) {"
+            "    if (o instanceof Point(int a, int b)) {"
+            "      System.out.println(a);"
+            "    }"
+            "  }"
+            "}"
+        )
+        stores_a = [
+            inst
+            for inst in ir
+            if inst.opcode in (Opcode.STORE_VAR, Opcode.DECL_VAR)
+            and len(inst.operands) >= 1
+            and str(inst.operands[0]) == "a"
+        ]
+        stores_b = [
+            inst
+            for inst in ir
+            if inst.opcode in (Opcode.STORE_VAR, Opcode.DECL_VAR)
+            and len(inst.operands) >= 1
+            and str(inst.operands[0]) == "b"
+        ]
+        assert len(stores_a) >= 1, "record_pattern did not bind 'a'"
+        assert len(stores_b) >= 1, "record_pattern did not bind 'b'"
