@@ -165,12 +165,12 @@ class CodeLabel:
         """Support ``'x' in label`` syntax."""
         return item in self.value
 
-    def branch_targets(self) -> list[str]:
+    def branch_targets(self) -> list[CodeLabel]:
         """Parse comma-separated branch targets (BRANCH_IF, TRY_PUSH).
 
         Temporary — see red-dragon-z4h3 for proper structured targets.
         """
-        return [t.strip() for t in self.value.split(",")]
+        return [CodeLabel(t.strip()) for t in self.value.split(",")]
 
     def __str__(self) -> str:
         return self.value
