@@ -19,7 +19,9 @@ class TestPythonBasicFixture:
         if not entry.exists():
             pytest.skip("fixture not found")
 
-        linked = compile_project(entry, Language.PYTHON, project_root=FIXTURES_DIR / "python_basic")
+        linked = compile_project(
+            entry, Language.PYTHON, project_root=FIXTURES_DIR / "python_basic"
+        )
         assert isinstance(linked, LinkedProgram)
         assert len(linked.modules) == 2
         assert any("helper" in label for label in linked.merged_registry.func_params)
@@ -29,7 +31,9 @@ class TestPythonBasicFixture:
         if not entry.exists():
             pytest.skip("fixture not found")
 
-        linked = compile_project(entry, Language.PYTHON, project_root=FIXTURES_DIR / "python_basic")
+        linked = compile_project(
+            entry, Language.PYTHON, project_root=FIXTURES_DIR / "python_basic"
+        )
         main_path = (FIXTURES_DIR / "python_basic" / "main.py").resolve()
         utils_path = (FIXTURES_DIR / "python_basic" / "utils.py").resolve()
         assert main_path in linked.import_graph
@@ -44,7 +48,9 @@ class TestPythonPackageFixture:
         if not entry.exists():
             pytest.skip("fixture not found")
 
-        linked = compile_project(entry, Language.PYTHON, project_root=FIXTURES_DIR / "python_package")
+        linked = compile_project(
+            entry, Language.PYTHON, project_root=FIXTURES_DIR / "python_package"
+        )
         assert len(linked.modules) >= 2  # main.py + models/user.py
 
 
@@ -56,7 +62,9 @@ class TestJsEsmFixture:
         if not entry.exists():
             pytest.skip("fixture not found")
 
-        linked = compile_project(entry, Language.JAVASCRIPT, project_root=FIXTURES_DIR / "js_esm")
+        linked = compile_project(
+            entry, Language.JAVASCRIPT, project_root=FIXTURES_DIR / "js_esm"
+        )
         assert len(linked.modules) == 2
         assert any("add" in label for label in linked.merged_registry.func_params)
 
@@ -69,5 +77,7 @@ class TestCSimpleFixture:
         if not entry.exists():
             pytest.skip("fixture not found")
 
-        linked = compile_project(entry, Language.C, project_root=FIXTURES_DIR / "c_simple")
+        linked = compile_project(
+            entry, Language.C, project_root=FIXTURES_DIR / "c_simple"
+        )
         assert len(linked.modules) == 2

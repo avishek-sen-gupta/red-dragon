@@ -11,9 +11,7 @@ from interpreter.api import analyze_project, run_project
 class TestAnalyzeProject:
     @pytest.fixture
     def two_file_project(self, tmp_path):
-        (tmp_path / "utils.py").write_text(
-            "def helper(x):\n    return x + 1\n"
-        )
+        (tmp_path / "utils.py").write_text("def helper(x):\n    return x + 1\n")
         (tmp_path / "main.py").write_text(
             "from utils import helper\n\nresult = helper(42)\n"
         )
@@ -42,9 +40,7 @@ class TestAnalyzeProject:
 class TestRunProject:
     @pytest.fixture
     def simple_project(self, tmp_path):
-        (tmp_path / "utils.py").write_text(
-            "def add(a, b):\n    return a + b\n"
-        )
+        (tmp_path / "utils.py").write_text("def add(a, b):\n    return a + b\n")
         (tmp_path / "main.py").write_text(
             "from utils import add\n\nresult = add(1, 2)\n"
         )
