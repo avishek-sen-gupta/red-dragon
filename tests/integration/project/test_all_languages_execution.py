@@ -5,6 +5,7 @@ a function defined in the dependency, called from the entry module.
 Verifies that the linker produces correct concrete VM execution results.
 """
 
+import os
 from pathlib import Path
 
 import pytest
@@ -16,8 +17,8 @@ from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
 
 
-def _run_project(tmp_path, files, entry, language):
-    """Write files, compile, link, execute, return local_vars dict."""
+def _run_project_vm(tmp_path, files, entry, language):
+    """Write files, compile, link, execute, return VMState."""
     for name, content in files.items():
         p = tmp_path / name
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -36,6 +37,12 @@ def _run_project(tmp_path, files, entry, language):
         VMConfig(max_steps=200),
         strategies,
     )
+    return vm
+
+
+def _run_project(tmp_path, files, entry, language):
+    """Write files, compile, link, execute, return local_vars dict."""
+    vm = _run_project_vm(tmp_path, files, entry, language)
     frame = vm.call_stack[0]
     return {
         k: v.value if isinstance(v, TypedValue) else v
@@ -412,3 +419,75 @@ class TestPascalMultiFile:
             Language.PASCAL,
         )
         assert "add" in result
+
+
+# ── COBOL ────────────────────────────────────────────────────────
+
+
+_COBOL_JAR_PATH = os.environ.get(
+    "PROLEAP_BRIDGE_JAR",
+    os.path.expanduser(
+        "~/code/red-dragon/proleap-bridge/target/proleap-bridge-0.1.0-shaded.jar"
+    ),
+)
+_COBOL_JAR_AVAILABLE = os.path.isfile(_COBOL_JAR_PATH)
+
+
+class TestCobolMultiFile:
+    """COBOL multi-file via CALL 'program-name'.
+
+    Requires the ProLeap bridge JAR. Tests skip when unavailable.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _set_bridge_jar(self):
+        if not _COBOL_JAR_AVAILABLE:
+            pytest.skip("ProLeap bridge JAR not available")
+        old = os.environ.get("PROLEAP_BRIDGE_JAR")
+        os.environ["PROLEAP_BRIDGE_JAR"] = _COBOL_JAR_PATH
+        yield
+        if old is None:
+            os.environ.pop("PROLEAP_BRIDGE_JAR", None)
+        else:
+            os.environ["PROLEAP_BRIDGE_JAR"] = old
+
+    def test_call_subprogram(self, tmp_path):
+        vm = _run_project_vm(
+            tmp_path,
+            {
+                "HELPER.cbl": (
+                    "       IDENTIFICATION DIVISION.\n"
+                    "       PROGRAM-ID. HELPER.\n"
+                    "       DATA DIVISION.\n"
+                    "       WORKING-STORAGE SECTION.\n"
+                    "       01 WS-VAL PIC 9(4) VALUE 0.\n"
+                    "       PROCEDURE DIVISION.\n"
+                    "           COMPUTE WS-VAL = 99.\n"
+                ),
+                "MAIN.cbl": (
+                    "       IDENTIFICATION DIVISION.\n"
+                    "       PROGRAM-ID. MAIN-PROG.\n"
+                    "       DATA DIVISION.\n"
+                    "       WORKING-STORAGE SECTION.\n"
+                    "       01 WS-RESULT PIC 9(4) VALUE 0.\n"
+                    "       PROCEDURE DIVISION.\n"
+                    "           CALL 'HELPER'.\n"
+                    "           COMPUTE WS-RESULT = 42.\n"
+                    "           STOP RUN.\n"
+                ),
+            },
+            "MAIN.cbl",
+            Language.COBOL,
+        )
+        # Both modules compiled, linked, and executed.
+        # HELPER runs first (dependency order), then MAIN.
+        # Note: HELPER omits STOP RUN — in the linked model, STOP RUN
+        # terminates the entire merged program. Only the entry module
+        # should have STOP RUN. This is a simplification vs. real COBOL
+        # runtime semantics where CALL returns control to the caller.
+        assert len(vm.regions) == 2
+        # Second region is MAIN's WS-RESULT: PIC 9(4) zoned = 0042
+        main_region = vm.regions[list(vm.regions.keys())[1]]
+        digits = [main_region[i] & 0x0F for i in range(4)]
+        value = sum(d * (10 ** (3 - i)) for i, d in enumerate(digits))
+        assert value == 42

@@ -86,7 +86,12 @@ def compile_module(
     if source is None:
         source = file_path.read_bytes()
 
-    frontend = get_frontend(language)
+    resolved_frontend_type = (
+        constants.FRONTEND_COBOL
+        if language == Language.COBOL
+        else constants.FRONTEND_DETERMINISTIC
+    )
+    frontend = get_frontend(language, frontend_type=resolved_frontend_type)
     ir = frontend.lower(source)
 
     exports = build_export_table(
