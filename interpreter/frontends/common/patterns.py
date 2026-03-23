@@ -97,6 +97,17 @@ class DerefPattern(Pattern):
 
 
 @dataclass(frozen=True)
+class RelationalPattern(Pattern):
+    """Compare subject against a value using a relational operator.
+
+    C#'s ``> 5``, ``< 10``, ``>= 0``, ``<= 100``.
+    """
+
+    operator: str  # ">", "<", ">=", "<=", "=="
+    value: object  # the literal to compare against
+
+
+@dataclass(frozen=True)
 class NoGuard:
     """Sentinel: this case has no guard clause."""
 
@@ -309,6 +320,16 @@ def compile_pattern_test(
                 Opcode.BINOP, result_reg=cmp_reg, operands=["==", subject_reg, reg]
             )
             return cmp_reg
+        case RelationalPattern(operator=op, value=v):
+            const_reg = ctx.fresh_reg()
+            ctx.emit(Opcode.CONST, result_reg=const_reg, operands=[str(v)])
+            cmp_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.BINOP,
+                result_reg=cmp_reg,
+                operands=[op, subject_reg, const_reg],
+            )
+            return cmp_reg
         case _:
             raise NotImplementedError(f"compile_pattern_test: {type(pattern).__name__}")
 
@@ -341,6 +362,8 @@ def compile_pattern_bindings(
             ctx.emit(Opcode.STORE_VAR, operands=[name, subject_reg])
         case LiteralPattern() | WildcardPattern():
             pass  # no bindings
+        case RelationalPattern():
+            pass  # no bindings — comparison only
         case SequencePattern(elements=elems):
             if not _has_star(elems):
                 # No star — bind each element by literal index
