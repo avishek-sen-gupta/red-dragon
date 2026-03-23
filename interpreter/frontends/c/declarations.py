@@ -201,14 +201,14 @@ def _extract_struct_field_names(
         if (
             inst.opcode == Opcode.LABEL
             and inst.label.is_present()
-            and inst.label.value.startswith(class_prefix)
+            and inst.label.starts_with(class_prefix)
         ):
             in_body = True
             continue
         if (
             inst.opcode == Opcode.LABEL
             and inst.label.is_present()
-            and inst.label.value.startswith(end_prefix)
+            and inst.label.starts_with(end_prefix)
         ):
             break
         if in_body and inst.opcode == Opcode.STORE_FIELD:

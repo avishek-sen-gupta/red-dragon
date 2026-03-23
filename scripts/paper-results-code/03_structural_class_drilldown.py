@@ -89,7 +89,7 @@ def main():
         print(f"  Successors:")
         for blk_label, block in cfg.blocks.items():
             if block.successors:
-                print(f"    {blk_label} -> {block.successors}")
+                print(f"    {blk_label} -> {[str(s) for s in block.successors]}")
         print(f"  IR ({len(ir)} instructions):")
         for i, inst in enumerate(ir):
             print(f"    {i:>3}  {inst}")

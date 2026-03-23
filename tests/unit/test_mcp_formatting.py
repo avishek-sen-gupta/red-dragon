@@ -107,6 +107,8 @@ class TestFormatStateUpdate:
     def test_next_label(self):
         from interpreter.vm.vm_types import StateUpdate
 
-        update = StateUpdate(next_label="func_f_0")
+        from interpreter.ir import CodeLabel
+
+        update = StateUpdate(next_label=CodeLabel("func_f_0"))
         result = format_state_update(update)
         assert result["next_block"] == "func_f_0"

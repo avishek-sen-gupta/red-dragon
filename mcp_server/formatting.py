@@ -70,7 +70,7 @@ def format_state_update(update: StateUpdate) -> dict[str, Any]:
             for no in update.new_objects
         ]
     if update.next_label:
-        result["next_block"] = update.next_label
+        result["next_block"] = str(update.next_label)
     if update.call_push:
         result["call_push"] = update.call_push.function_name
     if update.call_pop:

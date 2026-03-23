@@ -277,8 +277,8 @@ class TestClosuresLowering:
             for inst in ir
             if inst.opcode == Opcode.LABEL
             and inst.label.is_present()
-            and "func_" in inst.label.value
-            and not any(m in inst.label.value for m in prelude_markers)
+            and inst.label.contains("func_")
+            and not any(m in str(inst.label) for m in prelude_markers)
         ]
         if lang in CLOSURE_LANGUAGES:
             assert (

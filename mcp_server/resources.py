@@ -23,7 +23,7 @@ def handle_ir_resource() -> str:
 
     lines = []
     for label, block in current.cfg.blocks.items():
-        lines.append(f"{label}:  → {', '.join(block.successors)}")
+        lines.append(f"{label}:  → {', '.join(str(s) for s in block.successors)}")
         for inst in block.instructions:
             lines.append(f"  {inst}")
         lines.append("")
@@ -38,8 +38,8 @@ def handle_cfg_resource() -> str:
 
     blocks = [
         {
-            "label": label,
-            "successors": list(block.successors),
+            "label": str(label),
+            "successors": [str(s) for s in block.successors],
             "instruction_count": len(block.instructions),
         }
         for label, block in current.cfg.blocks.items()

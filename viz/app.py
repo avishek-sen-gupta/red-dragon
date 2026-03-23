@@ -273,7 +273,7 @@ class PipelineApp(App):
         min_line = float("inf")
         max_line = 0
         for block_label, block in cfg.blocks.items():
-            if block_label == label or block_label.startswith(label + "_"):
+            if block_label == label or block_label.starts_with(str(label) + "_"):
                 for inst in block.instructions:
                     loc = inst.source_location
                     if loc.is_unknown():
