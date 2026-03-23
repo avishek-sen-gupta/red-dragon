@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from interpreter.project.imports import extract_imports
-from interpreter.project.types import ImportRef
+from interpreter.project.types import ImportKind, ImportRef
 from interpreter.constants import Language
 
 
@@ -30,7 +30,7 @@ class TestJavaScriptImportExtraction:
         refs = extract_imports(source, Path("main.js"), Language.JAVASCRIPT)
         assert len(refs) == 1
         assert refs[0].module_path == "./bar"
-        assert refs[0].kind == "require"
+        assert refs[0].kind == ImportKind.REQUIRE
         assert refs[0].is_relative is True
 
     def test_system_package(self):
@@ -98,7 +98,7 @@ class TestRustImportExtraction:
         source = b"use crate::utils;\n"
         refs = extract_imports(source, Path("main.rs"), Language.RUST)
         assert len(refs) == 1
-        assert refs[0].kind == "use"
+        assert refs[0].kind == ImportKind.USE
         assert refs[0].is_relative is True
         assert "utils" in refs[0].names
 
@@ -112,7 +112,7 @@ class TestRustImportExtraction:
         source = b"mod helpers;\n"
         refs = extract_imports(source, Path("main.rs"), Language.RUST)
         assert len(refs) == 1
-        assert refs[0].kind == "mod"
+        assert refs[0].kind == ImportKind.MOD
         assert refs[0].module_path == "helpers"
 
     def test_use_list(self):
@@ -128,7 +128,7 @@ class TestCImportExtraction:
         refs = extract_imports(source, Path("main.c"), Language.C)
         assert len(refs) == 1
         assert refs[0].module_path == "header.h"
-        assert refs[0].kind == "include"
+        assert refs[0].kind == ImportKind.INCLUDE
         assert refs[0].is_system is False
 
     def test_system_include(self):
@@ -152,7 +152,7 @@ class TestCSharpImportExtraction:
         source = b"using System;\n"
         refs = extract_imports(source, Path("Program.cs"), Language.CSHARP)
         assert len(refs) == 1
-        assert refs[0].kind == "using"
+        assert refs[0].kind == ImportKind.USING
         assert refs[0].is_system is True
 
     def test_using_local(self):
@@ -203,7 +203,7 @@ class TestRubyImportExtraction:
         refs = extract_imports(source, Path("main.rb"), Language.RUBY)
         assert len(refs) == 1
         assert refs[0].module_path == "utils"
-        assert refs[0].kind == "require"
+        assert refs[0].kind == ImportKind.REQUIRE
 
     def test_require_relative(self):
         source = b'require_relative "./helpers"\n'
@@ -217,7 +217,7 @@ class TestPhpImportExtraction:
         source = b"<?php\nuse App\\Models\\User;\n"
         refs = extract_imports(source, Path("index.php"), Language.PHP)
         assert len(refs) == 1
-        assert refs[0].kind == "use"
+        assert refs[0].kind == ImportKind.USE
 
     def test_require_once(self):
         source = b'<?php\nrequire_once "helpers.php";\n'
@@ -232,7 +232,7 @@ class TestLuaImportExtraction:
         refs = extract_imports(source, Path("main.lua"), Language.LUA)
         assert len(refs) == 1
         assert refs[0].module_path == "utils"
-        assert refs[0].kind == "require"
+        assert refs[0].kind == ImportKind.REQUIRE
 
     def test_require_without_parens(self):
         source = b'require "helpers"\n'

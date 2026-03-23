@@ -11,7 +11,7 @@ from pathlib import Path
 
 from interpreter.constants import Language
 from interpreter.parser import TreeSitterParserFactory
-from interpreter.project.types import ImportRef
+from interpreter.project.types import ImportKind, ImportRef
 
 _parser_factory = TreeSitterParserFactory()
 
@@ -86,7 +86,7 @@ def _python_import_statement(node, source: bytes, source_file: Path) -> list[Imp
                 ImportRef(
                     source_file=source_file,
                     module_path=_node_text(child, source),
-                    kind="import",
+                    kind=ImportKind.IMPORT,
                 )
             )
         elif child.type == "aliased_import":
@@ -103,7 +103,7 @@ def _python_import_statement(node, source: bytes, source_file: Path) -> list[Imp
                     ImportRef(
                         source_file=source_file,
                         module_path=module_path,
-                        kind="import",
+                        kind=ImportKind.IMPORT,
                         alias=alias,
                     )
                 )
@@ -170,7 +170,7 @@ def _python_import_from_statement(
             names=tuple(names),
             is_relative=is_relative,
             relative_level=relative_level,
-            kind="import",
+            kind=ImportKind.IMPORT,
         )
     ]
 
@@ -235,7 +235,7 @@ def _js_import_statement(node, source: bytes, source_file: Path) -> list[ImportR
             names=tuple(names),
             is_relative=is_relative,
             is_system=is_system,
-            kind="import",
+            kind=ImportKind.IMPORT,
         )
     ]
 
@@ -262,7 +262,7 @@ def _js_require_call(node, source: bytes, source_file: Path) -> list[ImportRef] 
                             ImportRef(
                                 source_file=source_file,
                                 module_path=path,
-                                kind="require",
+                                kind=ImportKind.REQUIRE,
                                 is_relative=is_relative,
                                 is_system=not is_relative,
                             )
@@ -310,7 +310,7 @@ def _java_import_declaration(node, source: bytes, source_file: Path) -> list[Imp
             source_file=source_file,
             module_path=text,
             names=names,
-            kind="import",
+            kind=ImportKind.IMPORT,
             is_system=is_system,
         )
     ]
@@ -354,7 +354,7 @@ def _go_import_declaration(node, source: bytes, source_file: Path) -> list[Impor
             ImportRef(
                 source_file=source_file,
                 module_path=path_str,
-                kind="import",
+                kind=ImportKind.IMPORT,
                 is_system=is_system,
                 is_relative=is_relative,
                 alias=alias,
@@ -413,7 +413,7 @@ def _rust_use_declaration(node, source: bytes, source_file: Path) -> list[Import
             source_file=source_file,
             module_path=text,
             names=names,
-            kind="use",
+            kind=ImportKind.USE,
             is_system=is_system,
             is_relative=is_relative,
         )
@@ -440,7 +440,7 @@ def _rust_mod_item(node, source: bytes, source_file: Path) -> list[ImportRef]:
         ImportRef(
             source_file=source_file,
             module_path=mod_name,
-            kind="mod",
+            kind=ImportKind.MOD,
             is_relative=True,
         )
     ]
@@ -466,7 +466,7 @@ def _c_preproc_include(node, source: bytes, source_file: Path) -> list[ImportRef
                 ImportRef(
                     source_file=source_file,
                     module_path=path,
-                    kind="include",
+                    kind=ImportKind.INCLUDE,
                     is_system=True,
                 )
             ]
@@ -476,7 +476,7 @@ def _c_preproc_include(node, source: bytes, source_file: Path) -> list[ImportRef
                 ImportRef(
                     source_file=source_file,
                     module_path=path,
-                    kind="include",
+                    kind=ImportKind.INCLUDE,
                     is_system=False,
                 )
             ]
@@ -519,7 +519,7 @@ def _csharp_using_directive(node, source: bytes, source_file: Path) -> list[Impo
         ImportRef(
             source_file=source_file,
             module_path=text,
-            kind="using",
+            kind=ImportKind.USING,
             is_system=is_system,
             alias=alias,
         )
@@ -580,7 +580,7 @@ def _kotlin_import_header(node, source: bytes, source_file: Path) -> list[Import
             source_file=source_file,
             module_path=text,
             names=names,
-            kind="import",
+            kind=ImportKind.IMPORT,
             is_system=is_system,
             alias=alias,
         )
@@ -633,7 +633,7 @@ def _scala_import_declaration(
             source_file=source_file,
             module_path=text,
             names=names,
-            kind="import",
+            kind=ImportKind.IMPORT,
             is_system=is_system,
         )
     ]
@@ -686,7 +686,7 @@ def _ruby_require(
                 ImportRef(
                     source_file=source_file,
                     module_path=path,
-                    kind="require",
+                    kind=ImportKind.REQUIRE,
                     is_relative=is_relative,
                     is_system=is_system,
                 )
@@ -735,7 +735,7 @@ def _php_use_declaration(node, source: bytes, source_file: Path) -> list[ImportR
             source_file=source_file,
             module_path=module_path.replace("\\", "."),
             names=names,
-            kind="use",
+            kind=ImportKind.USE,
         )
     ]
 
@@ -745,7 +745,7 @@ def _php_require_include(node, source: bytes, source_file: Path) -> list[ImportR
     for child in node.children:
         if child.type in ("string", "encapsed_string"):
             path = _extract_string_content(child, source)
-            kind = "require" if "require" in node.type else "include"
+            kind = ImportKind.REQUIRE if "require" in node.type else ImportKind.INCLUDE
             return [
                 ImportRef(
                     source_file=source_file,
@@ -803,7 +803,7 @@ def _lua_require_call(node, source: bytes, source_file: Path) -> list[ImportRef]
                         ImportRef(
                             source_file=source_file,
                             module_path=path,
-                            kind="require",
+                            kind=ImportKind.REQUIRE,
                             is_relative=is_relative,
                             is_system=is_system,
                         )
@@ -817,7 +817,7 @@ def _lua_require_call(node, source: bytes, source_file: Path) -> list[ImportRef]
                 ImportRef(
                     source_file=source_file,
                     module_path=path,
-                    kind="require",
+                    kind=ImportKind.REQUIRE,
                     is_relative=is_relative,
                     is_system=is_system,
                 )
@@ -867,7 +867,7 @@ def _pascal_uses(node, source: bytes, source_file: Path) -> list[ImportRef]:
                         ImportRef(
                             source_file=source_file,
                             module_path=name,
-                            kind="using",
+                            kind=ImportKind.USING,
                             is_system=is_system,
                         )
                     )
@@ -907,7 +907,7 @@ def _extract_cobol_imports(source: bytes, source_file: Path) -> list[ImportRef]:
             ImportRef(
                 source_file=source_file,
                 module_path=copybook_name,
-                kind="include",
+                kind=ImportKind.INCLUDE,
             )
         )
 
@@ -918,7 +918,7 @@ def _extract_cobol_imports(source: bytes, source_file: Path) -> list[ImportRef]:
             ImportRef(
                 source_file=source_file,
                 module_path=program_name,
-                kind="require",
+                kind=ImportKind.REQUIRE,
             )
         )
 
