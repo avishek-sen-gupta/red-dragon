@@ -91,6 +91,7 @@ class TypeScriptFrontend(JavaScriptFrontend):
                 TypeScriptNodeType.INTERNAL_MODULE: lower_ts_internal_module,
                 TypeScriptNodeType.FUNCTION_SIGNATURE: lambda ctx, node: None,
                 TypeScriptNodeType.AMBIENT_DECLARATION: lambda ctx, node: None,
+                TypeScriptNodeType.IMPORT_ALIAS: lower_import_alias,
             }
         )
         return dispatch
@@ -671,3 +672,32 @@ def lower_ts_function_def(ctx: TreeSitterEmitContext, node) -> None:
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+
+
+def lower_import_alias(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower import_alias: import Foo = Bar.Baz → LOAD_VAR/LOAD_FIELD + STORE_VAR.
+
+    TypeScript namespace import. At runtime compiles to var Foo = Bar.Baz.
+    """
+    named = [c for c in node.children if c.is_named]
+    alias_node = named[0] if named else node
+    target_node = named[1] if len(named) >= 2 else node
+
+    alias_name = ctx.node_text(alias_node)
+    target_reg = _lower_nested_identifier(ctx, target_node)
+    ctx.emit(Opcode.STORE_VAR, operands=[alias_name, target_reg], node=node)
+
+
+def _lower_nested_identifier(ctx: TreeSitterEmitContext, node) -> str:
+    """Lower a nested_identifier (Bar.Baz) or plain identifier to a register."""
+    if node.type == "identifier":
+        return ctx.lower_expr(node)
+    # nested_identifier: member_expression . property_identifier
+    named = [c for c in node.children if c.is_named]
+    obj_reg = _lower_nested_identifier(ctx, named[0])
+    field_name = ctx.node_text(named[-1])
+    reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.LOAD_FIELD, result_reg=reg, operands=[obj_reg, field_name], node=node
+    )
+    return reg

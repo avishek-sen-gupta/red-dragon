@@ -41,6 +41,7 @@ class TypeScriptNodeType:
     INTERNAL_MODULE = "internal_module"
     FUNCTION_SIGNATURE = "function_signature"
     AMBIENT_DECLARATION = "ambient_declaration"
+    IMPORT_ALIAS = "import_alias"
 
     # ── expression node types (TS-specific) ────────────────────────
 
