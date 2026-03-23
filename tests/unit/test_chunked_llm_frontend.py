@@ -346,7 +346,7 @@ class TestChunkedLLMFrontend:
         frontend = self._make_frontend([_single_func_ir(), _second_func_ir()])
         result = frontend.lower(source.encode())
         # Collect all result_reg values
-        regs = [inst.result_reg for inst in result if inst.result_reg is not None]
+        regs = [inst.result_reg for inst in result if inst.result_reg.is_present()]
         # All registers should be unique
         assert len(regs) == len(set(regs)), f"Duplicate registers found: {regs}"
 

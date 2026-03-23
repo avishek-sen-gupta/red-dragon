@@ -8,6 +8,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from interpreter.register import Register, NoRegister, NO_REGISTER
+
 
 @dataclass(frozen=True)
 class SpreadArguments:
@@ -236,7 +238,7 @@ NO_LABEL = NoCodeLabel()
 
 class IRInstruction(BaseModel):
     opcode: Opcode
-    result_reg: str | None = None
+    result_reg: Register = NO_REGISTER
     operands: list[Any] = []
     label: CodeLabel = NO_LABEL
     branch_targets: list[CodeLabel] = []
@@ -247,7 +249,7 @@ class IRInstruction(BaseModel):
         if self.label.is_present() and self.opcode == Opcode.LABEL:
             base = f"{self.label}:"
         else:
-            if self.result_reg:
+            if self.result_reg.is_present():
                 parts.append(f"{self.result_reg} =")
             parts.append(self.opcode.value.lower())
             for op in self.operands:

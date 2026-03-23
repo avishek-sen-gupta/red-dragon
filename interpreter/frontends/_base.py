@@ -22,6 +22,7 @@ from interpreter.frontends.base_node_types import BaseNodeType
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation, CodeLabel, NO_LABEL
+from interpreter.register import Register, NO_REGISTER
 from interpreter.parser import ParserFactory
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
@@ -117,8 +118,8 @@ class BaseFrontend(Frontend):
 
     # ── helpers ──────────────────────────────────────────────────
 
-    def _fresh_reg(self) -> str:
-        r = f"%{self._reg_counter}"
+    def _fresh_reg(self) -> Register:
+        r = Register(f"%{self._reg_counter}")
         self._reg_counter += 1
         return r
 
@@ -131,7 +132,7 @@ class BaseFrontend(Frontend):
         self,
         opcode: Opcode,
         *,
-        result_reg: str = "",
+        result_reg: Register = NO_REGISTER,
         operands: list[Any] = [],
         label: CodeLabel = NO_LABEL,
         branch_targets: list[CodeLabel] = [],
@@ -145,8 +146,8 @@ class BaseFrontend(Frontend):
         )
         inst = IRInstruction(
             opcode=opcode,
-            result_reg=result_reg or None,
-            operands=operands or [],
+            result_reg=result_reg,
+            operands=[str(op) if isinstance(op, Register) else op for op in (operands or [])],
             label=label,
             branch_targets=branch_targets,
             source_location=loc,

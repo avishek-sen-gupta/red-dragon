@@ -205,12 +205,13 @@ class IRRenumberer:
         return result, next_offset
 
     def _renumber_reg(self, reg: str | None, offset: int) -> str | None:
-        if reg is None:
+        if reg is None or (hasattr(reg, 'is_present') and not reg.is_present()):
             return None
-        match = _REG_PATTERN.match(reg)
+        reg_str = str(reg)
+        match = _REG_PATTERN.match(reg_str)
         if match:
             return f"%{int(match.group(1)) + offset}"
-        return reg
+        return reg_str
 
     def _renumber_operand(self, operand: Any, offset: int, label_suffix: str) -> Any:
         if not isinstance(operand, str):
@@ -235,9 +236,8 @@ class IRRenumberer:
         return label.with_suffix(suffix)
 
     def _extract_reg_number(self, value: Any) -> int:
-        if not isinstance(value, str):
-            return -1
-        match = _REG_PATTERN.match(value)
+        s = str(value) if not isinstance(value, str) else value
+        match = _REG_PATTERN.match(s)
         if match:
             return int(match.group(1))
         return -1

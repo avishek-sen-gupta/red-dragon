@@ -243,7 +243,7 @@ def _handle_return_flow(
     # call_function with no %reg =), so there is no register to write to.
     # Skip Void returns (constructors, bare RETURN with no operands).
     caller_frame = vm.current_frame
-    if return_frame.result_reg and not (
+    if return_frame.result_reg.is_present() and not (
         isinstance(update.return_value, TypedValue)
         and update.return_value.type == scalar(TypeName.VOID)
     ):
