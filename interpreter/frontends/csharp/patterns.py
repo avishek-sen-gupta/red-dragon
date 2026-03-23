@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from interpreter.frontends.common.patterns import (
+    AndPattern,
     AsPattern,
     CapturePattern,
     ClassPattern,
@@ -110,6 +111,13 @@ def parse_csharp_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
         return RelationalPattern(
             operator=operator, value=_parse_const_value(ctx, value_node)
         )
+
+    # And pattern: pattern1 and pattern2
+    if node_type == NT.AND_PATTERN:
+        named = [c for c in node.children if c.is_named]
+        left = parse_csharp_pattern(ctx, named[0])
+        right = parse_csharp_pattern(ctx, named[1])
+        return AndPattern(left=left, right=right)
 
     # Fallback: treat as literal
     return _parse_constant(ctx, node)
