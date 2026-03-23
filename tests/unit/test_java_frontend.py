@@ -191,7 +191,7 @@ class TestJavaControlFlow:
 
         labels = _labels_in_order(instructions)
         branch_targets = {
-            target for inst in branch_ifs for target in inst.label.branch_targets()
+            target for inst in branch_ifs for target in inst.branch_targets
         }
         label_set = set(labels)
         assert branch_targets.issubset(

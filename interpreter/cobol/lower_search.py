@@ -45,7 +45,7 @@ def lower_search(
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[bound_cond],
-        label=CodeLabel(f"{at_end_label},{body_label}"),
+        branch_targets=[at_end_label, body_label],
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
@@ -58,7 +58,7 @@ def lower_search(
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{when_true},{when_next}"),
+            branch_targets=[when_true, when_next],
         )
         ctx.emit(Opcode.LABEL, label=when_true)
         for child in when.children:

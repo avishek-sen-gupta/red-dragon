@@ -24,12 +24,13 @@ from interpreter.interprocedural.summaries import (
 )
 
 
-def _inst(opcode: Opcode, result_reg=None, operands=None, label: CodeLabel = NO_LABEL):
+def _inst(opcode: Opcode, result_reg=None, operands=None, label: CodeLabel = NO_LABEL, branch_targets: list[CodeLabel] = []):
     return IRInstruction(
         opcode=opcode,
         result_reg=result_reg,
         operands=operands if operands is not None else [],
         label=label,
+        branch_targets=branch_targets,
     )
 
 
@@ -80,7 +81,7 @@ class TestExtractSubCfg:
             _inst(
                 Opcode.BRANCH_IF,
                 operands=["%2"],
-                label=CodeLabel("func__bar_if_true_1, func__bar_if_false_1"),
+                branch_targets=[CodeLabel("func__bar_if_true_1"), CodeLabel("func__bar_if_false_1")],
             ),
             _inst(Opcode.LABEL, label=CodeLabel("func__bar_if_true_1")),
             _inst(Opcode.CONST, result_reg="%3", operands=["1"]),
@@ -111,7 +112,7 @@ class TestExtractSubCfg:
             _inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:n"]),
             _inst(Opcode.DECL_VAR, operands=["n", "%0"]),
             _inst(Opcode.LOAD_VAR, result_reg="%1", operands=["n"]),
-            _inst(Opcode.BRANCH_IF, operands=["%1"], label=CodeLabel("if_true_2,if_end_3")),
+            _inst(Opcode.BRANCH_IF, operands=["%1"], branch_targets=[CodeLabel("if_true_2"), CodeLabel("if_end_3")]),
             _inst(Opcode.LABEL, label=CodeLabel("if_true_2")),
             _inst(Opcode.CONST, result_reg="%2", operands=["1"]),
             _inst(Opcode.RETURN, operands=["%2"]),

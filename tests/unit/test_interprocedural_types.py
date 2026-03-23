@@ -24,13 +24,14 @@ from interpreter.interprocedural.types import (
 )
 
 
-def _make_inst(opcode: Opcode, result_reg=None, operands=None, label: CodeLabel = NO_LABEL):
+def _make_inst(opcode: Opcode, result_reg=None, operands=None, label: CodeLabel = NO_LABEL, branch_targets: list[CodeLabel] = []):
     """Helper to build an IRInstruction concisely."""
     return IRInstruction(
         opcode=opcode,
         result_reg=result_reg,
         operands=operands if operands is not None else [],
         label=label,
+        branch_targets=branch_targets,
     )
 
 

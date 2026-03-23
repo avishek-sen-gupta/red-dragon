@@ -132,7 +132,7 @@ def lower_perform_times(
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=CodeLabel(f"{exit_label},{body_label}"),
+        branch_targets=[exit_label, body_label],
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
@@ -169,7 +169,7 @@ def lower_perform_until(
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{exit_label},{body_label}"),
+            branch_targets=[exit_label, body_label],
         )
         ctx.emit(Opcode.LABEL, label=body_label)
         lower_perform_body(ctx, stmt, layout, region_reg)
@@ -182,7 +182,7 @@ def lower_perform_until(
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{exit_label},{loop_label}"),
+            branch_targets=[exit_label, loop_label],
         )
         ctx.emit(Opcode.LABEL, label=exit_label)
 
@@ -214,7 +214,7 @@ def lower_perform_varying(
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{exit_label},{body_label}"),
+            branch_targets=[exit_label, body_label],
         )
         ctx.emit(Opcode.LABEL, label=body_label)
         lower_perform_body(ctx, stmt, layout, region_reg)
@@ -229,7 +229,7 @@ def lower_perform_varying(
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{exit_label},{loop_label}"),
+            branch_targets=[exit_label, loop_label],
         )
         ctx.emit(Opcode.LABEL, label=exit_label)
 

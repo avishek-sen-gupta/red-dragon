@@ -27,12 +27,13 @@ from interpreter.interprocedural.propagation import (
 from interpreter.registry import FunctionRegistry
 
 
-def _inst(opcode: Opcode, result_reg=None, operands=None, label: CodeLabel = NO_LABEL):
+def _inst(opcode: Opcode, result_reg=None, operands=None, label: CodeLabel = NO_LABEL, branch_targets: list[CodeLabel] = []):
     return IRInstruction(
         opcode=opcode,
         result_reg=result_reg,
         operands=operands if operands is not None else [],
         label=label,
+        branch_targets=branch_targets,
     )
 
 
