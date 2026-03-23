@@ -98,13 +98,13 @@ def _transform_instruction(
     """Namespace labels, rebase registers, namespace CONST func/class refs."""
     # ── Label ──
     new_label = None
-    if inst.label:
+    if inst.label.is_present():
         if inst.opcode in (Opcode.BRANCH, Opcode.BRANCH_IF):
-            new_label = _namespace_branch_targets(inst.label, prefix)
+            new_label = _namespace_branch_targets(inst.label.value, prefix)
         elif inst.opcode == Opcode.TRY_PUSH:
-            new_label = _namespace_branch_targets(inst.label, prefix)
+            new_label = _namespace_branch_targets(inst.label.value, prefix)
         else:
-            new_label = namespace_label(inst.label, prefix)
+            new_label = namespace_label(inst.label.value, prefix)
 
     # ── Result register ──
     new_result_reg = (
@@ -176,7 +176,7 @@ def _transform_module(
 
     for inst in module.ir:
         # Skip the per-module "entry:" label — we'll add a single one
-        if inst.opcode == Opcode.LABEL and inst.label == "entry":
+        if inst.opcode == Opcode.LABEL and inst.label.is_entry():
             continue
 
         # Drop import stubs for resolved names

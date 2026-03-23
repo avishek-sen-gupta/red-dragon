@@ -136,7 +136,7 @@ for ($i = 0; $i < 10; $i++) {
         opcodes = _opcodes(ir)
         assert Opcode.BRANCH_IF in opcodes
         labels = _find_all(ir, Opcode.LABEL)
-        label_names = [lbl.label for lbl in labels]
+        label_names = [lbl.label.value for lbl in labels]
         for_labels = [l for l in label_names if l and "for_" in l]
         assert len(for_labels) >= 2
 
@@ -229,7 +229,7 @@ class TestPhpFrontendFallback:
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
-    return [inst.label for inst in instructions if inst.opcode == Opcode.LABEL]
+    return [inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL]
 
 
 class TestNonTrivialPhp:
@@ -290,7 +290,7 @@ try {
 """
         ir = _parse_and_lower(source)
         opcodes = _opcodes(ir)
-        labels = [i.label for i in ir if i.opcode == Opcode.LABEL]
+        labels = [i.label.value for i in ir if i.opcode == Opcode.LABEL]
         # try/catch body and catch block are lowered with LABEL/BRANCH
         assert any("try_body" in l for l in labels)
         assert any("catch_0" in l for l in labels)
@@ -1460,5 +1460,5 @@ $obj = new class {
     public function greet() { return "hello"; }
 };
 ?>""")
-        labels = [inst.label for inst in ir if inst.opcode == Opcode.LABEL]
+        labels = [inst.label.value for inst in ir if inst.opcode == Opcode.LABEL]
         assert any("greet" in (lbl or "") for lbl in labels)

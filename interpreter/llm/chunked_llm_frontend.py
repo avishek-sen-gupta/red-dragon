@@ -11,7 +11,7 @@ from interpreter.constants import Language
 from interpreter.frontend import Frontend
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import CodeLabel, IRInstruction, NoCodeLabel, Opcode
 from interpreter.llm.llm_frontend import (
     IRParsingError,
     LLMFrontend,
@@ -225,15 +225,14 @@ class IRRenumberer:
         return operand
 
     def _renumber_label(
-        self, label: str | None, suffix: str, opcode: Opcode
+        self, label: CodeLabel, suffix: str, opcode: Opcode
     ) -> str | None:
-        if label is None:
+        if isinstance(label, NoCodeLabel):
             return None
         if opcode == Opcode.BRANCH_IF:
-            # Comma-separated labels
-            parts = [part.strip() + suffix for part in label.split(",")]
+            parts = [part.strip() + suffix for part in label.branch_targets()]
             return ",".join(parts)
-        return label + suffix
+        return label.value + suffix
 
     def _extract_reg_number(self, value: Any) -> int:
         if not isinstance(value, str):
@@ -334,10 +333,7 @@ class ChunkedLLMFrontend(Frontend):
             chunk_instructions = [
                 inst
                 for inst in chunk_instructions
-                if not (
-                    inst.opcode == Opcode.LABEL
-                    and inst.label == constants.CFG_ENTRY_LABEL
-                )
+                if not (inst.opcode == Opcode.LABEL and inst.label.is_entry())
             ]
 
             label_suffix = f"_chunk{i}"
