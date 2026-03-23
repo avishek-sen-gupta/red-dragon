@@ -28,7 +28,7 @@ def lower_while(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=CodeLabel(f"{body_label},{end_label}"),
+        branch_targets=[body_label, end_label],
         node=node,
     )
 
@@ -117,7 +117,7 @@ def lower_for_expr(ctx: TreeSitterEmitContext, node) -> None:
             ctx.emit(
                 Opcode.BRANCH_IF,
                 operands=[guard_reg],
-                label=CodeLabel(f"{continue_label},{loop_label}"),
+                branch_targets=[continue_label, loop_label],
             )
             ctx.emit(Opcode.LABEL, label=continue_label)
 
@@ -146,7 +146,7 @@ def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{body_label},{end_label}"),
+            branch_targets=[body_label, end_label],
             node=node,
         )
     else:

@@ -52,7 +52,7 @@ def _lower_while_let(ctx: TreeSitterEmitContext, node, let_cond_node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[test_reg],
-        label=CodeLabel(f"{body_label},{end_label}"),
+        branch_targets=[body_label, end_label],
         node=node,
     )
 
@@ -108,7 +108,7 @@ def lower_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=CodeLabel(f"{body_label},{end_label}"),
+        branch_targets=[body_label, end_label],
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)

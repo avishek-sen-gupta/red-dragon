@@ -31,9 +31,8 @@ def _handle_branch(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResul
 
 def _handle_branch_if(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
     cond_val = _resolve_reg(vm, inst.operands[0]).value
-    targets = inst.label.branch_targets()
-    true_label = targets[0]
-    false_label = targets[1] if len(targets) > 1 else None
+    true_label = inst.branch_targets[0]
+    false_label = inst.branch_targets[1] if len(inst.branch_targets) > 1 else None
 
     if _is_symbolic(cond_val):
         sym_desc = _symbolic_name(cond_val)

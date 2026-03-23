@@ -155,16 +155,19 @@ class TestIRRenumberer:
         assert result[0].label == "func_foo_0_chunk0"
         assert result[1].label == "end_foo_1_chunk0"
 
-    def test_branch_if_comma_separated_labels(self):
+    def test_branch_if_targets_renumbered(self):
         instructions = [
             IRInstruction(
                 opcode=Opcode.BRANCH_IF,
                 operands=["%0"],
-                label=CodeLabel("if_true_0,if_false_1"),
+                branch_targets=[CodeLabel("if_true_0"), CodeLabel("if_false_1")],
             ),
         ]
         result, _ = self.renumberer.renumber(instructions, 0, "_chunk1")
-        assert result[0].label == "if_true_0_chunk1,if_false_1_chunk1"
+        assert result[0].branch_targets == [
+            CodeLabel("if_true_0_chunk1"),
+            CodeLabel("if_false_1_chunk1"),
+        ]
 
     def test_function_ref_label_renaming(self):
         instructions = [
