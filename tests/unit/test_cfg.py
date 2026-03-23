@@ -72,7 +72,16 @@ class TestCfgToMermaidBranch:
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [True]}),
-            (Opcode.BRANCH_IF, {"operands": ["t0"], "branch_targets": [CodeLabel("then_block"), CodeLabel("else_block")]}),
+            (
+                Opcode.BRANCH_IF,
+                {
+                    "operands": ["t0"],
+                    "branch_targets": [
+                        CodeLabel("then_block"),
+                        CodeLabel("else_block"),
+                    ],
+                },
+            ),
             (Opcode.LABEL, {"label": CodeLabel("then_block")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
             (Opcode.LABEL, {"label": CodeLabel("else_block")}),
@@ -280,7 +289,13 @@ class TestCfgToMermaidShapes:
         instructions = _make_instructions(
             (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [True]}),
-            (Opcode.BRANCH_IF, {"operands": ["t0"], "branch_targets": [CodeLabel("yes"), CodeLabel("no")]}),
+            (
+                Opcode.BRANCH_IF,
+                {
+                    "operands": ["t0"],
+                    "branch_targets": [CodeLabel("yes"), CodeLabel("no")],
+                },
+            ),
             (Opcode.LABEL, {"label": CodeLabel("yes")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
             (Opcode.LABEL, {"label": CodeLabel("no")}),
@@ -298,7 +313,13 @@ class TestCfgToMermaidShapes:
             (Opcode.LABEL, {"label": CodeLabel("entry")}),
             (Opcode.CONST, {"result_reg": "t0", "operands": [True]}),
             (Opcode.LABEL, {"label": CodeLabel("check")}),
-            (Opcode.BRANCH_IF, {"operands": ["t0"], "branch_targets": [CodeLabel("yes"), CodeLabel("no")]}),
+            (
+                Opcode.BRANCH_IF,
+                {
+                    "operands": ["t0"],
+                    "branch_targets": [CodeLabel("yes"), CodeLabel("no")],
+                },
+            ),
             (Opcode.LABEL, {"label": CodeLabel("yes")}),
             (Opcode.RETURN, {"operands": ["t0"]}),
             (Opcode.LABEL, {"label": CodeLabel("no")}),

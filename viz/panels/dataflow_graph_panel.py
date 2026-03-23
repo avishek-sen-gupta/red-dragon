@@ -84,7 +84,9 @@ def find_top_level_call_sites(cfg: CFG, call_graph: CallGraph) -> list[TopLevelC
     non-function blocks.
     """
     # Build function-name -> label lookup
-    func_by_name: dict[str, CodeLabel] = {str(f.label): f.label for f in call_graph.functions}
+    func_by_name: dict[str, CodeLabel] = {
+        str(f.label): f.label for f in call_graph.functions
+    }
     func_by_name.update(
         {
             (

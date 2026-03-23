@@ -32,13 +32,17 @@ class TestRenderEndpoint:
 
     def test_return_endpoint(self):
         func = FunctionEntry(label=CodeLabel("func_f_0"), params=("x",))
-        loc = InstructionLocation(block_label=CodeLabel("func_f_0"), instruction_index=5)
+        loc = InstructionLocation(
+            block_label=CodeLabel("func_f_0"), instruction_index=5
+        )
         ep = ReturnEndpoint(function=func, location=loc)
         assert render_endpoint(ep) == "Return(func_f_0)"
 
     def test_field_endpoint(self):
         base = VariableEndpoint(name="self", definition=NO_DEFINITION)
-        loc = InstructionLocation(block_label=CodeLabel("func_init_0"), instruction_index=3)
+        loc = InstructionLocation(
+            block_label=CodeLabel("func_init_0"), instruction_index=3
+        )
         ep = FieldEndpoint(base=base, field="name", location=loc)
         assert render_endpoint(ep) == "Field(self.name)"
 
@@ -47,7 +51,9 @@ class TestBuildCallers:
     def test_function_with_caller(self):
         f = FunctionEntry(label=CodeLabel("func_f_0"), params=("x",))
         g = FunctionEntry(label=CodeLabel("func_g_2"), params=("y",))
-        loc = InstructionLocation(block_label=CodeLabel("func_g_2"), instruction_index=3)
+        loc = InstructionLocation(
+            block_label=CodeLabel("func_g_2"), instruction_index=3
+        )
         site = CallSite(
             caller=g,
             location=loc,
@@ -71,7 +77,9 @@ class TestBuildCallees:
     def test_function_with_callee(self):
         f = FunctionEntry(label=CodeLabel("func_f_0"), params=("x",))
         g = FunctionEntry(label=CodeLabel("func_g_2"), params=("y",))
-        loc = InstructionLocation(block_label=CodeLabel("func_g_2"), instruction_index=3)
+        loc = InstructionLocation(
+            block_label=CodeLabel("func_g_2"), instruction_index=3
+        )
         site = CallSite(
             caller=g,
             location=loc,

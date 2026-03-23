@@ -86,7 +86,9 @@ def _scan_classes(
     instructions: list[IRInstruction],
     func_symbol_table: dict[CodeLabel, FuncRef] = {},
     class_symbol_table: dict[CodeLabel, ClassRef] = {},
-) -> tuple[dict[str, CodeLabel], dict[str, dict[str, list[CodeLabel]]], dict[str, list[str]]]:
+) -> tuple[
+    dict[str, CodeLabel], dict[str, dict[str, list[CodeLabel]]], dict[str, list[str]]
+]:
     """Scan IR to find classes, their methods, and parent chains.
 
     Returns (classes, class_methods, class_parents) where:

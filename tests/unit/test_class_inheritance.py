@@ -133,8 +133,12 @@ class TestRegistryClassParents:
         ]
         class_st = {
             "class_A_0": ClassRef(name="A", label=CodeLabel("class_A_0"), parents=()),
-            "class_B_1": ClassRef(name="B", label=CodeLabel("class_B_1"), parents=("A",)),
-            "class_C_2": ClassRef(name="C", label=CodeLabel("class_C_2"), parents=("B",)),
+            "class_B_1": ClassRef(
+                name="B", label=CodeLabel("class_B_1"), parents=("A",)
+            ),
+            "class_C_2": ClassRef(
+                name="C", label=CodeLabel("class_C_2"), parents=("B",)
+            ),
         }
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg, class_symbol_table=class_st)
