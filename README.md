@@ -23,7 +23,7 @@ Concretely, RedDragon does the following:
 - **Extracts and infers types** — see [Type system](#type-system) below
 - **Builds** control flow graphs from IR instructions
 - **Analyses** data flow via iterative reaching definitions, def-use chains, and variable dependency graphs. An **interprocedural analysis** module (`interpreter/interprocedural/`) extends this with call graph construction (CHA for virtual dispatch), per-function summaries (1-CFA context-sensitive), depth-1 field-sensitive heap flow tracking, whole-program propagation via SCC fixpoint (Kosaraju's algorithm for strongly connected components, iterative summary stabilization within each SCC, formal-to-actual argument substitution at call sites), query interfaces for impact analysis, taint tracking, and program slicing, and an `analyze_interprocedural(cfg, registry)` entry point that orchestrates the full pipeline
-- **Supports multi-file projects** — given an entry file, recursively discovers imports (all 15 languages), resolves local dependencies, compiles each module independently, links them via label namespacing and cross-module reference rewriting, and produces a single merged program for execution and analysis — see [Multi-file project support](#multi-file-project-support) below
+- **Supports multi-file projects** — given an entry file, recursively discovers imports (all 15 languages + COBOL), resolves local dependencies, compiles each module independently, and links them into a single merged IR stream that the VM and analysis infrastructure consume unmodified — see [Multi-file project support](#multi-file-project-support) below
 - **Executes** programs via a deterministic VM with **write-time type coercion** and a configurable **LLM plausible-value resolver** for unresolved calls — see [VM features](#vm-features) below
 
 ### Type system
@@ -355,7 +355,7 @@ Functions compose hierarchically: `dump_ir` calls `lower_source`; `dump_cfg` and
 
 RedDragon can analyze and execute real-world multi-file codebases. Given an entry file, it recursively discovers imports, resolves them to local files, compiles each module independently, links them into a single merged program, and runs execution or interprocedural analysis — all with the same deterministic pipeline.
 
-**Supported across all 15 deterministic frontends** — Python, JavaScript, TypeScript, Java, Go, Rust, C, C++, C#, Kotlin, Scala, Ruby, PHP, Lua, Pascal.
+**Supported across all 15 deterministic frontends + COBOL** — Python, JavaScript, TypeScript, Java, Go, Rust, C, C++, C#, Kotlin, Scala, Ruby, PHP, Lua, Pascal, COBOL.
 
 ```python
 from interpreter.api import analyze_project, run_project
@@ -377,14 +377,14 @@ The pipeline:
 
 ```
 Entry file (main.py)
-    │ extract_imports()  — tree-sitter-based, per-language
+    │ extract_imports()  — tree-sitter or regex (COBOL)
     ▼
-Import graph (BFS + topological sort)
+Dependency graph (BFS + topological sort)
     │ compile_module()  — existing lower() pipeline per file
     ▼
 list[ModuleUnit]
-    │ link_modules()  — namespace labels, rebase registers, rewrite references
-    ▼
+    │ link_modules()  — strip entry labels, namespace, rebase, drop import stubs
+    ▼                    concatenate deps-first → single IR stream
 LinkedProgram
     │
     ├──► execute_cfg()             (no VM changes)
@@ -393,7 +393,7 @@ LinkedProgram
 
 - **Import extraction** uses tree-sitter ASTs (not regex) for each language's import syntax
 - **Resolution** is per-language: Python's `import X` / `from X import Y`, JS/TS `import`/`require`, Java package paths, C/C++ `#include`, Rust `use`/`mod`, Go grouped imports, etc.
-- **Linking** namespaces all labels and registers to avoid collisions, then rewrites cross-module references so `from utils import helper; helper(42)` correctly dispatches to the linked function
+- **Linking** strips per-module entry labels, namespaces all IR labels and registers, drops resolved import stubs, and concatenates everything — dependencies first, entry module last — producing a single IR stream indistinguishable from single-file compilation
 - **System imports** (stdlib, npm packages, maven artifacts) are automatically skipped — only local project files are compiled
 - **Cyclic imports** are detected and reported with the full cycle path
 
@@ -624,7 +624,7 @@ Tests are organised into `tests/unit/` (pure logic, no I/O) and `tests/integrati
 - **Language frontends** — all 15 tree-sitter frontends, LLM frontend, chunked LLM frontend
 - **CFG and dataflow** — CFG building, reaching definitions, def-use chains, dependency graphs
 - **Cross-language semantics** — closures (mutation persistence, accumulator semantics, nested-function and lambda forms), classes with method dispatch and overload resolution (12 languages), field access, exception handling, destructuring, variable scoping
-- **Multi-file projects** — import extraction (all 15 languages), import resolution, topological sort, cycle detection, module compilation, linking (label namespacing, register rebasing, cross-module reference rewriting), end-to-end pipeline tests (Python, JavaScript, Java, C), fixture project tests, API and MCP integration (148 tests)
+- **Multi-file projects** — import extraction (all 15 languages + COBOL), import resolution, topological sort, cycle detection, module compilation, linking (label namespacing, register rebasing, import stub dropping), multi-file VM execution for every language, API and MCP integration (179 tests)
 - **Frontend type extraction** — 13 statically-typed frontends verified to populate `TypeEnvironmentBuilder` with register types, variable types, function return types, parameter types, and this/self class typing from source-level annotations
 - **Static type inference** — type propagation through 15 opcode chains, builtin return types, RETURN backfill, UNOP refinement, class method/field tracking, region tagging, CALL_UNKNOWN resolution, array element tracking, function signatures across 13 languages; comprehensive cross-language integration tests covering BINOP (int+int, int+float, comparison→Bool), UNOP (not/!→Bool, Lua #→Int), return backfill, typed param seeding, field tracking, CALL_METHOD return types, and NEW_OBJECT typing across all 15 languages
 - **VM execution** — deterministic execution, write-time type coercion, factory routing
