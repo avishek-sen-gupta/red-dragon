@@ -1,6 +1,10 @@
 """Kotlin-specific expression lowerers -- pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from interpreter.ir import SpreadArguments
 
 import logging
 import re
@@ -1163,7 +1167,7 @@ def lower_unsigned_literal(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_spread_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_spread_expression(ctx: TreeSitterEmitContext, node) -> str | SpreadArguments:
     """Lower *array as CALL_FUNCTION('spread', inner) for call-site flattening."""
     from interpreter.frontends.common.expressions import lower_spread_arg
 
