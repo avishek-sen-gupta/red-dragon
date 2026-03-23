@@ -15,6 +15,7 @@ Do NOT use markdown TODO lists. All tasks live in Beads.
 - For each feature, treat it as an independent commit / push, with its own unit/integration/e2e testing. Always implement changes incrementally, one at a time. Do not batch mass feature implementations across multiple languages/files without explicit approval. Commit and verify tests pass after each individual change.
 - When asked to audit or show issues, only report findings — do not start fixing them unless explicitly asked to fix.
 - The workflow is Brainstorm -> Discuss Trade-offs of different designs -> Plan -> Write unit tests -> Implement -> Fix Tests -> Commit -> Refactor.
+- Do some brainstorming before starting work on a new feature / bugfix..
 - When brainstorming / planning, consider the follow parameters:
   - Whether there are any open source projects which perform similar functionality, so that you don't have to write new code for the task
   - The complexity of the implementation matters. Think of a good balance between absolute correctness and "good enough". If in doubt, prompt me for guidance.
@@ -22,6 +23,37 @@ Do NOT use markdown TODO lists. All tasks live in Beads.
 - **Never modify files in `docs/superpowers/specs/` or `docs/superpowers/plans/`.** These are point-in-time design records. Newer specs supersede older ones by convention. Update living documentation (README, `docs/type-system.md`, etc.) instead.
 - After completing implementation tasks, always run the full test suite before committing. Do not commit code that hasn't passed all tests.
 - When implementing plans that span many files, complete each logical unit fully before moving to the next. Do not start a new task until the current one is committed. If the session may end, prefer a committed partial result over an uncommitted complete attempt.
+
+### Enforced Phases Per Unit of Work
+
+Every non-trivial task (feature, bugfix, refactor) must go through these phases in order. Do not skip phases. Do not start implementing before completing brainstorm.
+
+1. **Brainstorm** — Understand the problem. Read the relevant code. Check how the existing system handles similar cases. Identify at least two approaches and their trade-offs. Ask: "does the system already have infrastructure for this?"
+2. **Plan** — Choose an approach. Write it down (in the issue description, or verbally if small). For features that span multiple modules, identify the independently-committable units and their order.
+3. **Test first** — Write failing tests that define the expected behavior. Do not write implementation code until at least one test exists that exercises the new behavior.
+4. **Implement** — Write the minimum code to make the tests pass.
+5. **Verify** — Run the full verification gate: `poetry run python -m black .` + `poetry run lint-imports` + `poetry run python -m pytest tests/`. All three must pass before committing.
+6. **Commit** — One logical unit per commit. `bd backup` before `git add`. Push to remote.
+
+### Complexity Classification
+
+Before starting work, classify the task:
+
+- **Light** (< 50 lines changed, single file, no new abstractions) — brainstorm can be brief. Example: adding a node type to a dispatch table.
+- **Standard** (50-300 lines, 2-5 files, uses existing patterns) — brainstorm should identify the pattern being followed. Example: adding import extraction for a new language.
+- **Heavy** (300+ lines, new abstractions, multiple subsystems) — brainstorm must produce a written design with trade-offs before any code. Example: the multi-file linker. Break into independently-committable units. Do not attempt in a single pass.
+
+### Verification Gate
+
+Before every commit, run all three checks in this order:
+
+```bash
+poetry run python -m black .                    # formatting
+poetry run lint-imports                          # architectural contracts
+poetry run python -m pytest tests/              # full test suite
+```
+
+Do not commit if any check fails. Fix the failure, then re-run all three. This is non-negotiable — the CI pipeline enforces all three, and a local failure that passes CI by luck is still a process failure.
 ## Project Context
 - Primary languages: Python (main codebase), TypeScript/JavaScript (tooling/web), Markdown (docs).
 - When editing Python, always run `black` formatting before committing. When test counts are mentioned (e.g., 'all 625 tests passing'), verify that count hasn't regressed.
@@ -57,9 +89,21 @@ Do NOT use markdown TODO lists. All tasks live in Beads.
 
 - When asked to commit and push, always push to 'main' branch, unless otherwise instructed.
 - Before committing anything, update the README based on the diffs.
-- Before committing anything, run `poetry run black` on the full codebase. The CI pipeline enforces Black formatting and will fail if this is skipped.
-- Before committing anything, run all tests, fixing them if necessary. If test assertions are being removed, ask me to review them.
+- Before committing anything, run the full verification gate (black + lint-imports + pytest). See "Verification Gate" above.
+- If test assertions are being removed, ask me to review them.
 - Always leave the working directory clean. Commit all changes (including transient file deletions) before finishing work. Never leave uncommitted files behind.
+
+### Fresh Context for Heavy Tasks
+
+For tasks classified as **Heavy** (300+ lines, new abstractions), explicitly re-read the relevant code at the start of each phase. Do not rely on assumptions from earlier phases — design documents can anchor you to a flawed model. Before implementing, re-read the actual code that your implementation will interact with (VM dispatch, registry scanning, CFG building, etc.).
+
+### State on Disk
+
+All work state must survive session crashes:
+- `bd backup` before every commit (ensures Beads state is exported)
+- Issues filed before work starts (ensures intent is recorded even if session dies)
+- Prefer committed partial results over uncommitted complete attempts
+- If a session may end, commit what's done with a clear "WIP:" prefix and file an issue for the remainder
 
 ## Testing Patterns
 
