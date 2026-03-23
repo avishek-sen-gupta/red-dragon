@@ -15,7 +15,6 @@ from pathlib import Path
 from interpreter.constants import Language
 from interpreter.project.types import CyclicImportError, ImportRef
 
-
 # ── Resolution result ────────────────────────────────────────────
 
 
@@ -62,9 +61,7 @@ class PythonImportResolver(ImportResolver):
             return self._resolve_relative(ref, project_root)
         return self._resolve_absolute(ref, project_root)
 
-    def _resolve_absolute(
-        self, ref: ImportRef, project_root: Path
-    ) -> ResolvedImport:
+    def _resolve_absolute(self, ref: ImportRef, project_root: Path) -> ResolvedImport:
         """Resolve absolute imports: 'import utils' or 'from pkg.mod import X'."""
         parts = ref.module_path.split(".") if ref.module_path else []
 
@@ -78,9 +75,7 @@ class PythonImportResolver(ImportResolver):
         # this shouldn't happen in absolute imports.
         return ResolvedImport(ref=ref, resolved_path=None)
 
-    def _resolve_relative(
-        self, ref: ImportRef, project_root: Path
-    ) -> ResolvedImport:
+    def _resolve_relative(self, ref: ImportRef, project_root: Path) -> ResolvedImport:
         """Resolve relative imports: 'from . import utils', 'from ..models import User'."""
         # Base directory: go up from source_file's directory by relative_level
         base = ref.source_file.parent
@@ -242,7 +237,7 @@ class RustImportResolver(ImportResolver):
         path = ref.module_path
         for prefix in ("crate::", "self::", "super::"):
             if path.startswith(prefix):
-                path = path[len(prefix):]
+                path = path[len(prefix) :]
                 break
 
         parts = path.split("::")
@@ -626,12 +621,17 @@ def _find_cycle(graph: dict[Path, list[Path]], nodes: set[Path]) -> list[Path]:
 # ── Project root inference ───────────────────────────────────────
 
 _PROJECT_ROOT_MARKERS = {
-    "pyproject.toml", "setup.py", "setup.cfg",
+    "pyproject.toml",
+    "setup.py",
+    "setup.cfg",
     "package.json",
-    "pom.xml", "build.gradle", "build.gradle.kts",
+    "pom.xml",
+    "build.gradle",
+    "build.gradle.kts",
     "go.mod",
     "Cargo.toml",
-    "Makefile", "CMakeLists.txt",
+    "Makefile",
+    "CMakeLists.txt",
     "composer.json",
     ".git",
 }
