@@ -1594,3 +1594,27 @@ class TestCSharpAndPattern:
         ]
         assert len(gt_binops) >= 1
         assert len(lt_binops) >= 1
+
+
+class TestCSharpNegatedPattern:
+    def test_negated_pattern_no_symbolic(self):
+        """not 0 should not produce SYMBOLIC."""
+        ir = _parse_and_lower(
+            'int x = 5; var r = x switch { not 0 => "nonzero", _ => "zero" };'
+        )
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert not any(
+            "negated_pattern" in str(inst.operands) for inst in symbolics
+        ), f"negated_pattern produced SYMBOLIC: {symbolics}"
+
+    def test_negated_pattern_emits_not(self):
+        """not 0 should emit an == comparison then a UNOP not."""
+        ir = _parse_and_lower(
+            'int x = 5; var r = x switch { not 0 => "nonzero", _ => "zero" };'
+        )
+        unops = [
+            inst
+            for inst in ir
+            if inst.opcode == Opcode.UNOP and "not" in str(inst.operands)
+        ]
+        assert len(unops) >= 1

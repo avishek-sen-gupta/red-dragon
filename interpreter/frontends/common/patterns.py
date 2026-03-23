@@ -116,6 +116,13 @@ class AndPattern(Pattern):
 
 
 @dataclass(frozen=True)
+class NegatedPattern(Pattern):
+    """Inner pattern must NOT match. C#'s ``not 0``."""
+
+    inner: Pattern
+
+
+@dataclass(frozen=True)
 class NoGuard:
     """Sentinel: this case has no guard clause."""
 
@@ -348,6 +355,15 @@ def compile_pattern_test(
                 operands=["and", left_reg, right_reg],
             )
             return and_reg
+        case NegatedPattern(inner=inner):
+            inner_reg = compile_pattern_test(ctx, subject_reg, inner)
+            neg_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.UNOP,
+                result_reg=neg_reg,
+                operands=["not", inner_reg],
+            )
+            return neg_reg
         case _:
             raise NotImplementedError(f"compile_pattern_test: {type(pattern).__name__}")
 
@@ -383,6 +399,8 @@ def compile_pattern_bindings(
         case RelationalPattern():
             pass  # no bindings — comparison only
         case AndPattern():
+            pass  # no bindings — test only
+        case NegatedPattern():
             pass  # no bindings — test only
         case SequencePattern(elements=elems):
             if not _has_star(elems):

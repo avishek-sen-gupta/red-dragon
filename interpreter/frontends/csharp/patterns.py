@@ -8,6 +8,7 @@ from interpreter.frontends.common.patterns import (
     CapturePattern,
     ClassPattern,
     LiteralPattern,
+    NegatedPattern,
     OrPattern,
     Pattern,
     RelationalPattern,
@@ -118,6 +119,11 @@ def parse_csharp_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
         left = parse_csharp_pattern(ctx, named[0])
         right = parse_csharp_pattern(ctx, named[1])
         return AndPattern(left=left, right=right)
+
+    # Negated pattern: not pattern
+    if node_type == NT.NEGATED_PATTERN:
+        inner = next((c for c in node.children if c.is_named), node)
+        return NegatedPattern(inner=parse_csharp_pattern(ctx, inner))
 
     # Fallback: treat as literal
     return _parse_constant(ctx, node)
