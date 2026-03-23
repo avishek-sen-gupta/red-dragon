@@ -163,6 +163,13 @@ def _transform_module(
     Import stubs (CALL_FUNCTION "import" + DECL_VAR) are dropped for names
     that are already resolved (present in resolved_imports). These names
     will be set by the dependency module's top-level code which runs first.
+
+    NOTE: The stub dropper assumes CALL_FUNCTION "import" is immediately
+    followed by DECL_VAR (no intervening instructions). This holds for all
+    current frontends — only Python emits CALL_FUNCTION "import", and its
+    lower_import / lower_import_from always emit the pair adjacently. If a
+    future frontend breaks this adjacency, the skip_next_decl_for_reg flag
+    could match a later unrelated DECL_VAR. See red-dragon-lzae.
     """
     result: list[IRInstruction] = []
     skip_next_decl_for_reg: str | None = None
