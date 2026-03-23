@@ -160,6 +160,8 @@ Report findings only. Do not fix code during review — present findings and let
 ## Interaction Style
 
 - When interrupted or cancelled, immediately proceed with the new instruction. No clarifying questions — treat interruptions as implicit redirects.
+- **Brainstorm collaboratively.** When thinking through approaches, present options and trade-offs to the user and actively incorporate their input before proceeding. Do not pick an approach and start implementing without discussion. The user's judgment on complexity/correctness trade-offs overrides the agent's default.
+- **Stop and consult when patching.** If an implementation requires more than one corrective patch (fix-on-fix), stop. The design is wrong. Re-brainstorm the approach with the user before adding more patches. Accumulating compensating transforms is a sign the underlying model doesn't match reality.
 
 ## Python Introspection
 
