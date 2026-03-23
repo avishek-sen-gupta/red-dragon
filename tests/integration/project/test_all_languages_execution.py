@@ -201,16 +201,18 @@ class TestJavaMultiFile:
                 "Main.java": (
                     "import Utils;\n"
                     "public class Main {\n"
-                    "    public static void main() {\n"
+                    "    public static int main() {\n"
                     "        int result = Utils.add(10, 20);\n"
+                    "        return result;\n"
                     "    }\n"
                     "}\n"
+                    "int answer = Main.main();\n"
                 ),
             },
             "Main.java",
             Language.JAVA,
         )
-        assert "Utils" in result
+        assert result["answer"] == 30
 
 
 # ── Go ───────────────────────────────────────────────────────────
@@ -226,15 +228,13 @@ class TestGoMultiFile:
                     "package utils\n" "func Add(a int, b int) int { return a + b }\n"
                 ),
                 "main.go": (
-                    "package main\n"
-                    'import "./utils"\n'
-                    "func main() { x := utils.Add(10, 20) }\n"
+                    "package main\n" 'import "./utils"\n' "var result = Add(10, 20)\n"
                 ),
             },
             "main.go",
             Language.GO,
         )
-        assert "Add" in result
+        assert result["result"] == 30
 
 
 # ── Rust ─────────────────────────────────────────────────────────
@@ -246,12 +246,16 @@ class TestRustMultiFile:
             tmp_path,
             {
                 "utils.rs": "pub fn add(a: i32, b: i32) -> i32 { a + b }\n",
-                "main.rs": "mod utils;\nfn main() { let r = utils::add(10, 20); }\n",
+                "main.rs": (
+                    "mod utils;\n"
+                    "fn main() -> i32 { let result = add(10, 20); result }\n"
+                    "let answer = main();\n"
+                ),
             },
             "main.rs",
             Language.RUST,
         )
-        assert "add" in result
+        assert result["answer"] == 30
 
 
 # ── C ────────────────────────────────────────────────────────────
@@ -262,13 +266,17 @@ class TestCMultiFile:
         result = _run_project(
             tmp_path,
             {
-                "helper.h": "int double_it(int x) { return x + x; }\n",
-                "main.c": '#include "helper.h"\nint main() { int r = double_it(21); return r; }\n',
+                "helper.h": "int add(int a, int b) { return a + b; }\n",
+                "main.c": (
+                    '#include "helper.h"\n'
+                    "int main() { int result = add(10, 20); return result; }\n"
+                    "int answer = main();\n"
+                ),
             },
             "main.c",
             Language.C,
         )
-        assert "double_it" in result
+        assert result["answer"] == 30
 
 
 # ── C++ ──────────────────────────────────────────────────────────
@@ -279,13 +287,17 @@ class TestCppMultiFile:
         result = _run_project(
             tmp_path,
             {
-                "util.h": "int inc(int x) { return x + 1; }\n",
-                "main.cpp": '#include "util.h"\nint main() { int r = inc(41); return r; }\n',
+                "util.h": "int add(int a, int b) { return a + b; }\n",
+                "main.cpp": (
+                    '#include "util.h"\n'
+                    "int main() { int result = add(10, 20); return result; }\n"
+                    "int answer = main();\n"
+                ),
             },
             "main.cpp",
             Language.CPP,
         )
-        assert "inc" in result
+        assert result["answer"] == 30
 
 
 # ── C# ───────────────────────────────────────────────────────────
@@ -304,14 +316,15 @@ class TestCSharpMultiFile:
                 "Program.cs": (
                     "using MathHelper;\n"
                     "class Program {\n"
-                    "    static void Main() { int r = MathHelper.Add(10, 20); }\n"
+                    "    static int Main() { int result = MathHelper.Add(10, 20); return result; }\n"
                     "}\n"
+                    "int answer = Program.Main();\n"
                 ),
             },
             "Program.cs",
             Language.CSHARP,
         )
-        assert "MathHelper" in result
+        assert result["answer"] == 30
 
 
 # ── Kotlin ───────────────────────────────────────────────────────
@@ -323,12 +336,12 @@ class TestKotlinMultiFile:
             tmp_path,
             {
                 "Utils.kt": "fun add(a: Int, b: Int): Int { return a + b }\n",
-                "Main.kt": "import Utils\nval result = add(3, 4)\n",
+                "Main.kt": "import Utils\nval result = add(10, 20)\n",
             },
             "Main.kt",
             Language.KOTLIN,
         )
-        assert "add" in result
+        assert result["result"] == 30
 
 
 # ── Scala ────────────────────────────────────────────────────────
@@ -340,12 +353,12 @@ class TestScalaMultiFile:
             tmp_path,
             {
                 "Utils.scala": "def add(a: Int, b: Int): Int = a + b\n",
-                "Main.scala": "import Utils\nval result = add(3, 4)\n",
+                "Main.scala": "import Utils\nval result = add(10, 20)\n",
             },
             "Main.scala",
             Language.SCALA,
         )
-        assert "add" in result
+        assert result["result"] == 30
 
 
 # ── Ruby ─────────────────────────────────────────────────────────
@@ -403,6 +416,9 @@ class TestLuaMultiFile:
 
 
 class TestPascalMultiFile:
+    @pytest.mark.xfail(
+        reason="Pascal begin...end. block not lowered — red-dragon-todo-pascal-block"
+    )
     def test_uses(self, tmp_path):
         result = _run_project(
             tmp_path,
@@ -413,12 +429,18 @@ class TestPascalMultiFile:
                     "  Result := a + b;\n"
                     "end;\n"
                 ),
-                "main.pas": "uses MathUnit;\nbegin\nend.\n",
+                "main.pas": (
+                    "uses MathUnit;\n"
+                    "var answer: Integer;\n"
+                    "begin\n"
+                    "  answer := add(10, 20);\n"
+                    "end.\n"
+                ),
             },
             "main.pas",
             Language.PASCAL,
         )
-        assert "add" in result
+        assert result["answer"] == 30
 
 
 # ── COBOL ────────────────────────────────────────────────────────
