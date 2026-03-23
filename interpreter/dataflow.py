@@ -158,7 +158,12 @@ def _uses_of(instruction: IRInstruction) -> list[str]:
     if op == Opcode.THROW and len(operands) >= 1:
         return [operands[0]]
     if op == Opcode.ALLOC_REGION:
-        return [o for o in operands if (isinstance(o, Register) and o.is_present()) or (isinstance(o, str) and o.startswith("%"))]
+        return [
+            o
+            for o in operands
+            if (isinstance(o, Register) and o.is_present())
+            or (isinstance(o, str) and o.startswith("%"))
+        ]
     if op == Opcode.LOAD_REGION and len(operands) >= 2:
         return [operands[0], operands[1]]
     if op == Opcode.WRITE_REGION and len(operands) >= 4:

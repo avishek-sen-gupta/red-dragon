@@ -14,7 +14,14 @@ from typing import Any, Callable
 from interpreter import constants
 from interpreter.constants import CanonicalLiteral, Language
 from interpreter.frontend_observer import FrontendObserver
-from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, SourceLocation, CodeLabel, NO_LABEL
+from interpreter.ir import (
+    NO_SOURCE_LOCATION,
+    IRInstruction,
+    Opcode,
+    SourceLocation,
+    CodeLabel,
+    NO_LABEL,
+)
 from interpreter.register import Register, NO_REGISTER
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
@@ -184,8 +191,7 @@ class TreeSitterEmitContext:
             else (self.source_loc(node) if node else NO_SOURCE_LOCATION)
         )
         resolved_operands = [
-            str(op) if isinstance(op, Register) else op
-            for op in (operands or [])
+            str(op) if isinstance(op, Register) else op for op in (operands or [])
         ]
         inst = IRInstruction(
             opcode=opcode,
@@ -256,13 +262,10 @@ class TreeSitterEmitContext:
         if label.starts_with(constants.FUNC_LABEL_PREFIX):
             self._current_func_label = label_str
             self.type_env_builder.func_param_types.setdefault(label_str, [])
-        elif (
-            label.starts_with(constants.CLASS_LABEL_PREFIX)
-            and not label.starts_with(constants.END_CLASS_LABEL_PREFIX)
+        elif label.starts_with(constants.CLASS_LABEL_PREFIX) and not label.starts_with(
+            constants.END_CLASS_LABEL_PREFIX
         ):
-            self._current_class_name = label.extract_name(
-                constants.CLASS_LABEL_PREFIX
-            )
+            self._current_class_name = label.extract_name(constants.CLASS_LABEL_PREFIX)
             self._current_func_label = ""
         elif label.starts_with(constants.END_CLASS_LABEL_PREFIX):
             self._current_class_name = ""
@@ -270,7 +273,9 @@ class TreeSitterEmitContext:
         else:
             self._current_func_label = ""
 
-    def seed_func_return_type(self, func_label: str | CodeLabel, return_type: TypeExpr) -> None:
+    def seed_func_return_type(
+        self, func_label: str | CodeLabel, return_type: TypeExpr
+    ) -> None:
         """Seed the return type for a function label."""
         if return_type:
             self.type_env_builder.func_return_types[str(func_label)] = return_type

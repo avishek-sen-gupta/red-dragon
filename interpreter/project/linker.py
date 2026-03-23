@@ -77,7 +77,6 @@ def max_register_number(ir: tuple[IRInstruction, ...] | list[IRInstruction]) -> 
 # ── IR transformation ───────────────────────────────────────────
 
 
-
 def _rebase_operand(operand, offset: int):
     """Rebase a single operand if it's a register."""
     if isinstance(operand, str):
@@ -287,7 +286,9 @@ def link_modules(
     ]
 
     # Build merged IR with a single entry label
-    all_ir: list[IRInstruction] = [IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry"))]
+    all_ir: list[IRInstruction] = [
+        IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry"))
+    ]
     reg_offset = 0
 
     for file_path in processing_order:

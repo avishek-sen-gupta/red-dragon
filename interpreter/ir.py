@@ -113,7 +113,9 @@ class CodeLabel:
 
     def __post_init__(self):
         if not isinstance(self.value, str):
-            raise TypeError(f"CodeLabel.value must be str, got {type(self.value).__name__}: {self.value!r}")
+            raise TypeError(
+                f"CodeLabel.value must be str, got {type(self.value).__name__}: {self.value!r}"
+            )
 
     def is_present(self) -> bool:
         return True
