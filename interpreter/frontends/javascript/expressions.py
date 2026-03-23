@@ -1,6 +1,10 @@
 """JavaScript-specific expression lowerers — pure functions taking (ctx, node)."""
 
 from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from interpreter.ir import SpreadArguments
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
@@ -385,7 +389,7 @@ def lower_sequence_expression(ctx: TreeSitterEmitContext, node) -> str:
     return last_reg
 
 
-def lower_spread_element(ctx: TreeSitterEmitContext, node) -> str:
+def lower_spread_element(ctx: TreeSitterEmitContext, node) -> str | SpreadArguments:
     """Lower `...expr` -> CALL_FUNCTION('spread', expr)."""
     from interpreter.frontends.common.expressions import lower_spread_arg
 
