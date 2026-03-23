@@ -110,7 +110,9 @@ def _scan_classes(
     in_class: str = ""
     for inst in instructions:
         if inst.opcode == Opcode.LABEL and inst.label:
-            is_class_start = _is_class_label(inst.label) and not _is_end_class_label(inst.label)
+            is_class_start = _is_class_label(inst.label) and not _is_end_class_label(
+                inst.label
+            )
             is_class_end = _is_end_class_label(inst.label)
             if is_class_start:
                 for cname, clabel in classes.items():

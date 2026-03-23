@@ -214,7 +214,7 @@ class TestRubyImportExtraction:
 
 class TestPhpImportExtraction:
     def test_use_declaration(self):
-        source = b'<?php\nuse App\\Models\\User;\n'
+        source = b"<?php\nuse App\\Models\\User;\n"
         refs = extract_imports(source, Path("index.php"), Language.PHP)
         assert len(refs) == 1
         assert refs[0].kind == "use"

@@ -2345,3 +2345,98 @@ Also added `_trace_register_to_source_vars` in `summaries.py` to trace
 return operands backward through computations (BINOP, CALL, etc.) to
 find param-connected named variables — previously only direct
 `LOAD_VAR → RETURN` chains were detected.
+
+## ADR-124: Multi-File Project Support — Per-Module Compilation and Linking (2026-03-22)
+
+**Status:** Accepted
+**Issue:** red-dragon-iz14
+
+Multi-file project support: given an entry file, recursively discover
+imports, compile each file independently, link into a single IR stream
+indistinguishable from single-file compilation, execute/analyse unmodified.
+
+**Architecture:** 4-phase pipeline in `interpreter/project/`:
+
+1. **Import discovery** (`imports.py`) — tree-sitter AST walkers for 15
+   languages + regex for COBOL (16 total). Each language's import syntax
+   normalised into `ImportRef` (module_path, names, is_relative, is_system,
+   kind, alias). BFS from entry file discovers all reachable files.
+
+2. **Import resolution** (`resolver.py`) — 13 language-specific `ImportResolver`
+   implementations map `ImportRef → file path`. System imports (stdlib,
+   npm packages) are skipped. Kahn's algorithm produces topological sort;
+   cycles raise `CyclicImportError`.
+
+3. **Per-module compilation** (`compiler.py`) — existing `frontend.lower()`
+   pipeline per file, plus `build_export_table()` that catalogs functions,
+   classes, and top-level variables from symbol tables and IR.
+
+4. **Linking** (`linker.py`) — produces IR identical to single-file compilation:
+   strip per-module `entry:` labels, namespace all labels (module prefix
+   from file path), rebase register numbers (integer offset), drop import
+   stubs for resolved names, concatenate deps-first with single shared
+   `entry:` label. `build_cfg()` and `build_registry()` run unmodified.
+
+**Key design decisions:**
+
+- **Link at IR level, not CFG level.** Per-module CFGs are never built.
+  Raw IR is namespaced and concatenated; CFG + registry are built once on
+  the merged IR. This avoids label collision resolution in CFG blocks,
+  successor/predecessor lists, and registry entries.
+
+- **Deps-first ordering.** Dependency modules' top-level code runs before
+  the entry module's code. Variables, functions, and classes are set in
+  scope by the time the entry module uses them — exactly like single-file.
+
+- **Drop import stubs, don't rewrite them.** Python emits
+  `CALL_FUNCTION "import"` + `DECL_VAR` for imports. Rather than rewriting
+  these to `CONST label` + `DECL_VAR` (which breaks for variable imports
+  and requires import tables), the linker drops the pair entirely. The
+  dependency module's top-level code already provides the binding.
+
+- **Bare names in symbol tables.** Function/class names are kept bare
+  (`add`, `Circle`) — not namespaced (`utils.add`). The VM uses bare names
+  for method dispatch, constructor dispatch, and class_methods lookup.
+  Only labels are namespaced (unique in merged CFG).
+
+- **Registry namespace awareness.** `_is_func_label()`, `_is_class_label()`,
+  `_is_end_class_label()` in `registry.py` check for both `func_*` prefix
+  and `.func_*` substring, so the registry scanner works with namespaced
+  labels. Single-file compilation unaffected.
+
+**API:** `analyze_project()`, `run_project()` in `api.py`.
+`load_project` MCP tool in `mcp_server/`.
+
+**Testing:** 179 tests — data model, import extraction (all 16 languages),
+resolution, topo sort, linker helpers, full pipeline (Python, JS, Java, C),
+multi-file execution for all 15 tree-sitter languages, fixture projects,
+API, MCP.
+
+## ADR-125: Linker Rewrite — Eliminate Compensating Transforms (2026-03-23)
+
+**Status:** Accepted
+**Issue:** red-dragon-x6td
+
+The initial linker (ADR-124) accumulated 4 compensating transforms to work
+around VM dispatch semantics: import stub rewriting (CALL_FUNCTION "import"
+→ CONST label), variable import dropping, module entry chaining (inserting
+BRANCH instructions between module boundaries), and cfg.entry override.
+499 lines, fragile.
+
+**Root cause:** The linker was designed without understanding that the VM
+resolves function calls via variable scope lookup (not by label), and that
+`_handle_const` converts label strings into `BoundFuncRef`/`ClassRef` via
+the `func_symbol_table`. The design assumed label-level manipulation would
+be transparent, but the VM's dispatch model is scope-based.
+
+**Rewrite:** 311 lines (38% reduction). One clean model:
+
+1. Strip per-module `entry:` labels
+2. Namespace labels + rebase registers
+3. Drop import stubs for names in dependency exports
+4. Concatenate: deps first, entry module last
+5. Prepend single `entry:` label
+6. `build_cfg()` + `build_registry()` on merged IR
+
+The merged IR is one continuous stream that looks exactly like single-file
+compilation. No chaining, no import tables, no special variable handling.
