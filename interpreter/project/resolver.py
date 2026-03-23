@@ -454,6 +454,62 @@ class PascalImportResolver(ImportResolver):
         return ResolvedImport(ref=ref, resolved_path=None)
 
 
+# ── COBOL resolver ───────────────────────────────────────────────
+
+
+class CobolImportResolver(ImportResolver):
+    """Resolve COBOL COPY copybooks and CALL programs to local files.
+
+    Copybooks: search for .cpy, .cbl, .CBL files in source dir, project root,
+    copylib/ subdirectories.
+    Programs: search for .cbl, .CBL files by program name.
+    """
+
+    _COPYBOOK_EXTENSIONS = (".cpy", ".cbl", ".CBL", ".CPY")
+    _PROGRAM_EXTENSIONS = (".cbl", ".CBL", ".cob", ".COB")
+
+    def resolve(self, ref: ImportRef, project_root: Path) -> ResolvedImport:
+        if ref.is_system:
+            return ResolvedImport(ref=ref, resolved_path=None, is_external=True)
+
+        base = ref.source_file.parent
+        name = ref.module_path
+
+        if ref.kind == "include":
+            # COPY copybook — search for copybook files
+            search_dirs = [
+                base,
+                project_root,
+                project_root / "copylib",
+                project_root / "COPYLIB",
+                project_root / "copy",
+                base / "copylib",
+            ]
+            for search_dir in search_dirs:
+                for ext in self._COPYBOOK_EXTENSIONS:
+                    candidate = search_dir / f"{name}{ext}"
+                    if candidate.exists():
+                        return ResolvedImport(ref=ref, resolved_path=candidate)
+                    # Try lowercase
+                    candidate = search_dir / f"{name.lower()}{ext}"
+                    if candidate.exists():
+                        return ResolvedImport(ref=ref, resolved_path=candidate)
+
+        elif ref.kind == "require":
+            # CALL program — search for program source files
+            search_dirs = [base, project_root, project_root / "src"]
+            for search_dir in search_dirs:
+                for ext in self._PROGRAM_EXTENSIONS:
+                    candidate = search_dir / f"{name}{ext}"
+                    if candidate.exists():
+                        return ResolvedImport(ref=ref, resolved_path=candidate)
+                    candidate = search_dir / f"{name.lower()}{ext}"
+                    if candidate.exists():
+                        return ResolvedImport(ref=ref, resolved_path=candidate)
+
+        return ResolvedImport(ref=ref, resolved_path=None)
+
+
 # ── Resolver registry ────────────────────────────────────────────
 
 _RESOLVERS: dict[Language, type[ImportResolver]] = {
@@ -472,6 +528,7 @@ _RESOLVERS: dict[Language, type[ImportResolver]] = {
     Language.PHP: PhpImportResolver,
     Language.LUA: LuaImportResolver,
     Language.PASCAL: PascalImportResolver,
+    Language.COBOL: CobolImportResolver,
 }
 
 

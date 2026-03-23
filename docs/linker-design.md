@@ -132,6 +132,9 @@ Each language registers an extractor function that handles its tree-sitter AST n
 | PHP | `namespace_use_declaration`, `require_*_expression` | `use`, `require` |
 | Lua | `function_call[require]` | `require` |
 | Pascal | `declUses` → `moduleName` | `using` |
+| COBOL | regex: `COPY name`, `CALL 'name'` | `include`, `require` |
+
+Note: COBOL uses the ProLeap Java bridge instead of tree-sitter, so import extraction uses regex patterns directly on the source text rather than AST walking.
 
 ### 3.4 System import detection
 
@@ -150,6 +153,7 @@ Each language has heuristics to classify imports as system/third-party (skipped 
 | Scala | Starts with `scala.`, `java.`, `javax.` |
 | Ruby | No `.` or `/` in path |
 | Pascal | Known unit names: `SysUtils`, `Classes`, `System`, etc. |
+| COBOL | Not applicable — all COPY/CALL are resolved if files exist locally |
 
 ---
 
@@ -622,14 +626,15 @@ mcp_server/server.py
 
 ## 12. Test Coverage
 
-148 tests across unit and integration:
+159 tests across unit and integration:
 
 | Test File | Tests | Covers |
 |-----------|-------|--------|
 | `test_types.py` | 26 | Data model construction, immutability, defaults |
 | `test_export_table.py` | 10 | Export table building from IR + symbol tables |
 | `test_import_extraction.py` | 14 | Python import extraction (all forms) |
-| `test_all_language_imports.py` | 33 | Import extraction across all 15 languages |
+| `test_all_language_imports.py` | 33 | Import extraction across all 15 tree-sitter languages |
+| `test_cobol_imports.py` | 11 | COBOL COPY/CALL extraction + resolver |
 | `test_resolver.py` | 10 | Python resolver + protocol |
 | `test_topo_sort.py` | 9 | Topological sort, cycles, edge cases |
 | `test_linker.py` | 18 | Namespace, rebase, register helpers |
