@@ -148,7 +148,9 @@ class EmitContext:
                 self.resolve_inline_operand(op, reg_map) for op in inst.operands
             ]
 
-            new_result = self.fresh_reg() if inst.result_reg else NO_REGISTER
+            new_result = (
+                self.fresh_reg() if inst.result_reg.is_present() else NO_REGISTER
+            )
             if inst.result_reg.is_present():
                 reg_map[str(inst.result_reg)] = str(new_result)
 
