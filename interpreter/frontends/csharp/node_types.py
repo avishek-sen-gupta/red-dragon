@@ -62,6 +62,7 @@ class CSharpNodeType:
     PARENTHESIZED_PATTERN = "parenthesized_pattern"
     OR_PATTERN = "or_pattern"
     LIST_PATTERN = "list_pattern"
+    RELATIONAL_PATTERN = "relational_pattern"
     PROPERTY_PATTERN_CLAUSE = "property_pattern_clause"
     SUBPATTERN = "subpattern"
     INTERPOLATION = "interpolation"
