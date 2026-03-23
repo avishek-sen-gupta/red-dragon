@@ -327,13 +327,32 @@ def lower_instanceof(ctx: TreeSitterEmitContext, node) -> str:
 
     Java 16+ type patterns: ``o instanceof String s`` binds ``s`` to
     the matched value after the type check.
+    Java 16+ record patterns: ``o instanceof Point(int a, int b)``
+    destructures via the Pattern ADT.
     """
     named_children = [c for c in node.children if c.is_named]
     operand_node = named_children[0] if named_children else None
-    type_node = named_children[1] if len(named_children) > 1 else None
-    binding_node = named_children[2] if len(named_children) > 2 else None
+    pattern_or_type_node = named_children[1] if len(named_children) > 1 else None
 
     obj_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
+
+    # Record pattern: o instanceof Point(int a, int b)
+    if pattern_or_type_node and pattern_or_type_node.type == "record_pattern":
+        from interpreter.frontends.java.patterns import parse_java_pattern
+        from interpreter.frontends.common.patterns import (
+            compile_pattern_test,
+            compile_pattern_bindings,
+        )
+
+        pattern = parse_java_pattern(ctx, pattern_or_type_node)
+        test_reg = compile_pattern_test(ctx, obj_reg, pattern)
+        compile_pattern_bindings(ctx, obj_reg, pattern)
+        return test_reg
+
+    # Simple type pattern: o instanceof String s
+    type_node = pattern_or_type_node
+    binding_node = named_children[2] if len(named_children) > 2 else None
+
     type_reg = ctx.fresh_reg()
     type_name = ctx.node_text(type_node) if type_node else "Object"
     ctx.emit(Opcode.CONST, result_reg=type_reg, operands=[type_name])
