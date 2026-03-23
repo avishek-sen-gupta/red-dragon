@@ -122,7 +122,7 @@ Do not commit if any check fails. Fix, then re-run all three. Non-negotiable.
 - **No mocking:** Do not use `unittest.mock.patch`. Use dependency injection with mock objects.
 - **Assertions are sacred:** Do not modify test assertions unless certain the change is valid. Do not remove assertions without review.
 - **No implementation hacks for tests:** Never add special behavior just to make tests pass. Document hard-to-implement behavior or ask for guidance.
-- **xfail for frontend gaps:** If a frontend doesn't handle a feature yet, write the real test with correct assertions, mark it `xfail`, and file an issue. Don't rename tests or write fallback programs. Exclude languages that genuinely lack the feature (e.g., C has no classes).
+- **xfail for frontend gaps:** If a frontend doesn't handle a feature yet, write the real test with correct assertions, mark it `xfail` with `reason="description — <issue-id>"`, and file a corresponding Beads issue. The xfail reason must reference the issue ID so it's traceable. Don't rename tests or write fallback programs. Exclude languages that genuinely lack the feature (e.g., C has no classes).
 - **Both unit and integration tests** for every new feature.
 
 ## Code Review
