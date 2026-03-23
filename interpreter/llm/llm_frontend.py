@@ -284,7 +284,7 @@ def _validate_ir(instructions: list[IRInstruction]) -> list[IRInstruction]:
 
 def _convert_llm_func_refs(
     instructions: list[IRInstruction],
-    func_symbol_table: dict[str, FuncRef],
+    func_symbol_table: dict[CodeLabel, FuncRef],
 ) -> None:
     """Convert LLM-emitted <function:name@label> strings to plain labels.
 
@@ -296,14 +296,14 @@ def _convert_llm_func_refs(
             operand = str(inst.operands[0])
             m = _LLM_FUNC_REF_RE.search(operand)
             if m:
-                name, label = m.group(1), m.group(2)
+                name, label = m.group(1), CodeLabel(m.group(2))
                 func_symbol_table[label] = FuncRef(name=name, label=label)
-                inst.operands[0] = label
+                inst.operands[0] = str(label)
 
 
 def _convert_llm_class_refs(
     instructions: list[IRInstruction],
-    class_symbol_table: dict[str, ClassRef],
+    class_symbol_table: dict[CodeLabel, ClassRef],
 ) -> None:
     """Convert LLM-emitted <class:name@label> strings to plain labels.
 
@@ -315,13 +315,13 @@ def _convert_llm_class_refs(
             operand = str(inst.operands[0])
             m = _LLM_CLASS_REF_RE.search(operand)
             if m:
-                name, label = m.group(1), m.group(2)
+                name, label = m.group(1), CodeLabel(m.group(2))
                 parents_str = m.group(3) or ""
                 parents = tuple(p for p in parents_str.split(",") if p)
                 class_symbol_table[label] = ClassRef(
                     name=name, label=label, parents=parents
                 )
-                inst.operands[0] = label
+                inst.operands[0] = str(label)
 
 
 class LLMFrontend(Frontend):
@@ -346,15 +346,15 @@ class LLMFrontend(Frontend):
         self._max_tokens = max_tokens
         self._max_retries = max_retries
         self._observer = observer
-        self._func_symbol_table: dict[str, FuncRef] = {}
-        self._class_symbol_table: dict[str, ClassRef] = {}
+        self._func_symbol_table: dict[CodeLabel, FuncRef] = {}
+        self._class_symbol_table: dict[CodeLabel, ClassRef] = {}
 
     @property
-    def func_symbol_table(self) -> dict[str, FuncRef]:
+    def func_symbol_table(self) -> dict[CodeLabel, FuncRef]:
         return self._func_symbol_table
 
     @property
-    def class_symbol_table(self) -> dict[str, ClassRef]:
+    def class_symbol_table(self) -> dict[CodeLabel, ClassRef]:
         return self._class_symbol_table
 
     def lower(self, source: bytes) -> list[IRInstruction]:

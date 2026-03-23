@@ -84,13 +84,13 @@ def find_top_level_call_sites(cfg: CFG, call_graph: CallGraph) -> list[TopLevelC
     non-function blocks.
     """
     # Build function-name -> label lookup
-    func_by_name: dict[str, str] = {f.label: f.label for f in call_graph.functions}
+    func_by_name: dict[str, CodeLabel] = {str(f.label): f.label for f in call_graph.functions}
     func_by_name.update(
         {
             (
-                f.label.split("_")[1]
-                if f.label.startswith("func_") and "_" in f.label[5:]
-                else f.label
+                f.label.extract_name("func_")
+                if f.label.starts_with("func_") and "_" in str(f.label)[5:]
+                else str(f.label)
             ): f.label
             for f in call_graph.functions
         }
@@ -269,8 +269,8 @@ class DataflowGraphPanel(Tree):
                     (
                         f
                         for f in result.call_graph.functions
-                        if f.label.split("_")[1] == call.callee_label
-                        if f.label.startswith("func_") and "_" in f.label[5:]
+                        if f.label.extract_name("func_") == call.callee_label
+                        if f.label.starts_with("func_") and "_" in str(f.label)[5:]
                     ),
                     None,
                 )

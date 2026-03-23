@@ -49,7 +49,7 @@ class TestImportStubDropping:
                 ),
                 IRInstruction(opcode=Opcode.DECL_VAR, operands=["add", "%0"]),
             ],
-            exports=ExportTable(functions={"add": "func_add_0"}),
+            exports=ExportTable(functions={"add": CodeLabel("func_add_0")}),
         )
         entry = _make_module(
             "/project/main.py",
@@ -91,7 +91,7 @@ class TestImportStubDropping:
                 ),
                 IRInstruction(opcode=Opcode.DECL_VAR, operands=["add", "%0"]),
             ],
-            exports=ExportTable(functions={"add": "func_add_0"}),
+            exports=ExportTable(functions={"add": CodeLabel("func_add_0")}),
         )
         entry = _make_module(
             "/project/main.py",

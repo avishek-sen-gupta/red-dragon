@@ -9,7 +9,7 @@ from interpreter.constants import Language
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
-from interpreter.ir import IRInstruction
+from interpreter.ir import IRInstruction, CodeLabel
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter import constants
 from interpreter.constants import LLMProvider
@@ -42,12 +42,12 @@ class Frontend(ABC):
         return TypeEnvironmentBuilder()
 
     @property
-    def func_symbol_table(self) -> dict[str, FuncRef]:
+    def func_symbol_table(self) -> dict[CodeLabel, FuncRef]:
         """Function reference symbol table accumulated during lowering."""
         return {}
 
     @property
-    def class_symbol_table(self) -> dict[str, ClassRef]:
+    def class_symbol_table(self) -> dict[CodeLabel, ClassRef]:
         """Class reference symbol table accumulated during lowering."""
         return {}
 

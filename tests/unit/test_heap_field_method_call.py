@@ -49,7 +49,7 @@ def _build_callable_field_vm():
     registry.func_params["__func__greet"] = ["self", "x"]
 
     vm = VMState()
-    func_ref = FuncRef(name="greet", label="__func__greet")
+    func_ref = FuncRef(name="greet", label=CodeLabel("__func__greet"))
     bound = BoundFuncRef(func_ref=func_ref, closure_id="")
 
     vm.heap["obj_0"] = HeapObject(

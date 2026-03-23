@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from interpreter.cfg_types import CFG
-from interpreter.ir import Opcode
+from interpreter.ir import Opcode, CodeLabel
 from interpreter.registry import FunctionRegistry
 from interpreter import constants
 from interpreter.interprocedural.types import (
@@ -24,7 +24,7 @@ CALL_OPCODES = frozenset(
 
 def build_function_entries(
     cfg: CFG, registry: FunctionRegistry
-) -> dict[str, FunctionEntry]:
+) -> dict[CodeLabel, FunctionEntry]:
     """Create one FunctionEntry per registered function."""
     return {
         label: FunctionEntry(label=label, params=tuple(params))
@@ -33,15 +33,15 @@ def build_function_entries(
 
 
 def _build_block_to_function(
-    cfg: CFG, function_entries: dict[str, FunctionEntry]
-) -> dict[str, FunctionEntry]:
+    cfg: CFG, function_entries: dict[CodeLabel, FunctionEntry]
+) -> dict[CodeLabel, FunctionEntry]:
     """Map each block label to the FunctionEntry that owns it.
 
     Strategy: walk blocks in order. When we hit a block whose label is a known
     function entry, set current_function. All subsequent blocks belong to that
     function until we hit the next function entry.
     """
-    block_to_func: dict[str, FunctionEntry] = {}
+    block_to_func: dict[CodeLabel, FunctionEntry] = {}
     current_func: FunctionEntry | None = None
 
     for label in cfg.blocks:
@@ -55,7 +55,7 @@ def _build_block_to_function(
 
 def _resolve_call_function_callees(
     target: str,
-    function_entries: dict[str, FunctionEntry],
+    function_entries: dict[CodeLabel, FunctionEntry],
     registry: FunctionRegistry,
 ) -> frozenset[FunctionEntry]:
     """Resolve a CALL_FUNCTION target to its callee set (0 or 1).
@@ -79,7 +79,7 @@ def _resolve_call_function_callees(
 def _resolve_call_method_callees_cha(
     method_name: str,
     registry: FunctionRegistry,
-    function_entries: dict[str, FunctionEntry],
+    function_entries: dict[CodeLabel, FunctionEntry],
 ) -> frozenset[FunctionEntry]:
     """CHA: collect all classes that define this method, return their FunctionEntries."""
     callees: list[FunctionEntry] = []

@@ -37,7 +37,7 @@ def _make_context() -> CallContext:
     """Build a root context for testing."""
     return CallContext(
         site=CallSite(
-            caller=FunctionEntry(label="__root__", params=()),
+            caller=FunctionEntry(label=CodeLabel("__root__"), params=()),
             location=InstructionLocation(block_label=CodeLabel(""), instruction_index=-1),
             callees=frozenset(),
             arg_operands=(),
@@ -59,7 +59,7 @@ class TestExtractSubCfg:
             _inst(Opcode.RETURN, operands=["%2"]),
         ]
         full_cfg = build_cfg(ir)
-        entry = FunctionEntry(label="func__foo", params=("x",))
+        entry = FunctionEntry(label=CodeLabel("func__foo"), params=("x",))
 
         sub = extract_sub_cfg(full_cfg, entry)
 
@@ -90,7 +90,7 @@ class TestExtractSubCfg:
             _inst(Opcode.RETURN, operands=["%4"]),
         ]
         full_cfg = build_cfg(ir)
-        entry = FunctionEntry(label="func__bar", params=("x",))
+        entry = FunctionEntry(label=CodeLabel("func__bar"), params=("x",))
 
         sub = extract_sub_cfg(full_cfg, entry)
 
@@ -123,7 +123,7 @@ class TestExtractSubCfg:
             _inst(Opcode.RETURN, operands=["%4"]),
         ]
         full_cfg = build_cfg(ir)
-        entry = FunctionEntry(label="func_foo_0", params=("n",))
+        entry = FunctionEntry(label=CodeLabel("func_foo_0"), params=("n",))
 
         sub = extract_sub_cfg(full_cfg, entry)
 
@@ -147,7 +147,7 @@ class TestBuildSummary:
             _inst(Opcode.RETURN, operands=["%1"]),
         ]
         cfg = build_cfg(ir)
-        entry = FunctionEntry(label="func__id", params=("x",))
+        entry = FunctionEntry(label=CodeLabel("func__id"), params=("x",))
         ctx = _make_context()
 
         summary = build_summary(cfg, entry, ctx)
@@ -173,7 +173,7 @@ class TestBuildSummary:
             _inst(Opcode.RETURN, operands=["%1"]),
         ]
         cfg = build_cfg(ir)
-        entry = FunctionEntry(label="func__id", params=("x",))
+        entry = FunctionEntry(label=CodeLabel("func__id"), params=("x",))
         ctx = _make_context()
 
         summary = build_summary(cfg, entry, ctx)
@@ -202,7 +202,7 @@ class TestBuildSummary:
             _inst(Opcode.RETURN, operands=["%3"]),
         ]
         cfg = build_cfg(ir)
-        entry = FunctionEntry(label="func__inc", params=("x",))
+        entry = FunctionEntry(label=CodeLabel("func__inc"), params=("x",))
         ctx = _make_context()
 
         summary = build_summary(cfg, entry, ctx)
@@ -229,7 +229,7 @@ class TestBuildSummary:
             _inst(Opcode.RETURN, operands=["%5"]),
         ]
         cfg = build_cfg(ir)
-        entry = FunctionEntry(label="func__add", params=("a", "b"))
+        entry = FunctionEntry(label=CodeLabel("func__add"), params=("a", "b"))
         ctx = _make_context()
 
         summary = build_summary(cfg, entry, ctx)
@@ -258,7 +258,7 @@ class TestBuildSummary:
             _inst(Opcode.STORE_FIELD, operands=["%3", "name", "%2"]),
         ]
         cfg = build_cfg(ir)
-        entry = FunctionEntry(label="func__setter", params=("obj", "val"))
+        entry = FunctionEntry(label=CodeLabel("func__setter"), params=("obj", "val"))
         ctx = _make_context()
 
         summary = build_summary(cfg, entry, ctx)
@@ -286,7 +286,7 @@ class TestBuildSummary:
             _inst(Opcode.RETURN, operands=["%3"]),
         ]
         cfg = build_cfg(ir)
-        entry = FunctionEntry(label="func__getter", params=("obj",))
+        entry = FunctionEntry(label=CodeLabel("func__getter"), params=("obj",))
         ctx = _make_context()
 
         summary = build_summary(cfg, entry, ctx)
@@ -308,7 +308,7 @@ class TestBuildSummary:
             _inst(Opcode.RETURN, operands=["%0"]),
         ]
         cfg = build_cfg(ir)
-        entry = FunctionEntry(label="func__const", params=())
+        entry = FunctionEntry(label=CodeLabel("func__const"), params=())
         ctx = _make_context()
 
         summary = build_summary(cfg, entry, ctx)
@@ -325,7 +325,7 @@ class TestBuildSummary:
             _inst(Opcode.RETURN, operands=["%1"]),
         ]
         cfg = build_cfg(ir)
-        entry = FunctionEntry(label="func__id", params=("x",))
+        entry = FunctionEntry(label=CodeLabel("func__id"), params=("x",))
         ctx = _make_context()
 
         summary = build_summary(cfg, entry, ctx)
