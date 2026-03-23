@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
-from interpreter.ir import IRInstruction, Opcode, SpreadArguments
+from interpreter.ir import IRInstruction, Opcode, SpreadArguments, CodeLabel, NoCodeLabel, NO_LABEL
 from interpreter.cfg import CFG
 from interpreter.vm.vm import (
     VMState,
@@ -75,7 +75,7 @@ class HandlerContext:
 
     cfg: CFG
     registry: FunctionRegistry
-    current_label: str
+    current_label: CodeLabel
     ip: int
     call_resolver: UnresolvedCallResolver
     overload_resolver: OverloadResolver
@@ -93,7 +93,7 @@ def _default_handler_context() -> HandlerContext:
     return HandlerContext(
         cfg=CFG(),
         registry=FunctionRegistry(),
-        current_label="",
+        current_label=NO_LABEL,
         ip=0,
         call_resolver=_DEFAULT_RESOLVER,
         overload_resolver=_DEFAULT_OVERLOAD_RESOLVER,

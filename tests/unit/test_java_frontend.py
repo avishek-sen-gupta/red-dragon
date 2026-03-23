@@ -151,7 +151,7 @@ class TestJavaControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BRANCH in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("while" in inst.label.value for inst in labels)
+        assert any(inst.label.contains("while") for inst in labels)
 
     def test_c_style_for_loop(self):
         instructions = _parse_java(
@@ -241,7 +241,7 @@ class TestJavaClasses:
             for c in consts
         )
         labels = [
-            inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL
+            str(inst.label) for inst in instructions if inst.opcode == Opcode.LABEL
         ]
         assert any("func_" in l and "run" in l for l in labels)
 
@@ -282,7 +282,7 @@ class TestJavaSpecial:
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
-    return [inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL]
+    return [str(inst.label) for inst in instructions if inst.opcode == Opcode.LABEL]
 
 
 class TestNonTrivialJava:
@@ -366,7 +366,7 @@ class M {
 """
         instructions = _parse_java(source)
         opcodes = _opcodes(instructions)
-        labels = [i.label.value for i in instructions if i.opcode == Opcode.LABEL]
+        labels = [str(i.label) for i in instructions if i.opcode == Opcode.LABEL]
         branches = [i.label for i in instructions if i.opcode == Opcode.BRANCH]
         # try/catch body and catch block are lowered with LABEL/BRANCH
         assert any("try_body" in l for l in labels)
@@ -638,7 +638,7 @@ class TestJavaDoStatement:
             "class M { void m() { int x = 0; do { x = x + 1; } while (x < 10); } }"
         )
         labels = [
-            inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL
+            str(inst.label) for inst in instructions if inst.opcode == Opcode.LABEL
         ]
         assert any("do_body" in l for l in labels)
         assert any("do_cond" in l for l in labels)
@@ -780,7 +780,7 @@ class TestJavaRecordDeclaration:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("Empty" in inst.operands for inst in stores)
         labels = [
-            inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL
+            str(inst.label) for inst in instructions if inst.opcode == Opcode.LABEL
         ]
         assert any("class_Empty" in l for l in labels)
         assert any("end_class_Empty" in l for l in labels)
@@ -967,7 +967,7 @@ interface Shape {
     def test_interface_methods_produce_func_labels(self):
         """Interface method declarations should emit LABEL instructions for function defs."""
         ir = _parse_java(self.INTERFACE_SOURCE)
-        labels = [inst.label.value for inst in ir if inst.opcode == Opcode.LABEL]
+        labels = [str(inst.label) for inst in ir if inst.opcode == Opcode.LABEL]
         func_labels = [l for l in labels if "func_" in l]
         assert any(
             "area" in l for l in func_labels

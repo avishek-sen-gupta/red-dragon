@@ -103,7 +103,7 @@ def assert_cross_language_consistency(
             (
                 i
                 for i, inst in enumerate(ir)
-                if inst.label.is_present() and "prelude_" in inst.label.value
+                if inst.label.is_present() and inst.label.contains("prelude_")
             ),
             default=-1,
         )

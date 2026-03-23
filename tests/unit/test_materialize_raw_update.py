@@ -6,6 +6,7 @@ from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
+from interpreter.ir import CodeLabel
 from interpreter.vm.vm import materialize_raw_update, apply_update
 from interpreter.vm.vm_types import (
     StateUpdate,
@@ -86,7 +87,7 @@ class TestMaterializeRawUpdate:
         raw = StateUpdate(
             register_writes={"%0": 42},
             reasoning="test",
-            next_label="block_1",
+            next_label=CodeLabel("block_1"),
             path_condition="x > 0",
         )
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)

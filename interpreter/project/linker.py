@@ -100,11 +100,11 @@ def _transform_instruction(
     new_label = None
     if inst.label.is_present():
         if inst.opcode in (Opcode.BRANCH, Opcode.BRANCH_IF):
-            new_label = _namespace_branch_targets(inst.label.value, prefix)
+            new_label = _namespace_branch_targets(str(inst.label), prefix)
         elif inst.opcode == Opcode.TRY_PUSH:
-            new_label = _namespace_branch_targets(inst.label.value, prefix)
+            new_label = _namespace_branch_targets(str(inst.label), prefix)
         else:
-            new_label = namespace_label(inst.label.value, prefix)
+            new_label = namespace_label(str(inst.label), prefix)
 
     # ── Result register ──
     new_result_reg = (

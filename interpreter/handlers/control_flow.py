@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from interpreter.ir import IRInstruction
+from interpreter.ir import IRInstruction, CodeLabel
 from interpreter.vm.vm import (
     VMState,
     ExceptionHandler,
@@ -23,7 +23,7 @@ from interpreter.handlers._common import _symbolic_name
 def _handle_branch(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
     return ExecutionResult.success(
         StateUpdate(
-            next_label=inst.label.value,
+            next_label=inst.label,
             reasoning=f"branch → {inst.label}",
         )
     )
@@ -32,12 +32,10 @@ def _handle_branch(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResul
 def _handle_branch_if(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
     cond_val = _resolve_reg(vm, inst.operands[0]).value
     targets = inst.label.branch_targets()
-    true_label = targets[0].strip()
-    false_label = targets[1].strip() if len(targets) > 1 else None
+    true_label = CodeLabel(targets[0].strip())
+    false_label = CodeLabel(targets[1].strip()) if len(targets) > 1 else None
 
     if _is_symbolic(cond_val):
-        # Symbolic condition — deterministically take the true branch
-        # and record the assumption as a path condition
         sym_desc = _symbolic_name(cond_val)
         return ExecutionResult.success(
             StateUpdate(
@@ -98,12 +96,12 @@ def _handle_try_push(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionRes
         inst.operands[1],
         inst.operands[2],
     )
-    catch_labels = [lbl.strip() for lbl in catch_labels_str.split(",") if lbl.strip()]
+    catch_labels = [CodeLabel(lbl.strip()) for lbl in catch_labels_str.split(",") if lbl.strip()]
     vm.exception_stack.append(
         ExceptionHandler(
             catch_labels=catch_labels,
-            finally_label=finally_label,
-            end_label=end_label,
+            finally_label=CodeLabel(finally_label) if finally_label else None,
+            end_label=CodeLabel(end_label) if end_label else None,
         )
     )
     return ExecutionResult.success(
@@ -121,7 +119,7 @@ def _handle_set_continuation(
 ) -> ExecutionResult:
     """SET_CONTINUATION: operands = [name, label]. Write name → label into continuation table."""
     name = inst.operands[0]
-    label = inst.operands[1]
+    label = CodeLabel(inst.operands[1])
     return ExecutionResult.success(
         StateUpdate(
             continuation_writes={name: label},

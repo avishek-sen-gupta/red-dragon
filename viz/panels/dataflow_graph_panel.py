@@ -98,7 +98,7 @@ def find_top_level_call_sites(cfg: CFG, call_graph: CallGraph) -> list[TopLevelC
 
     # Identify top-level blocks: entry block + end_* blocks
     non_func_blocks = {
-        label for label in cfg.blocks if label.startswith("end_") or label == "entry"
+        label for label in cfg.blocks if label.starts_with("end_") or label == "entry"
     }
 
     return [
