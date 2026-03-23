@@ -76,7 +76,7 @@ int y = 2;
         instructions = _parse_csharp(source)
         branches = _find_all(instructions, Opcode.BRANCH)
         assert any(
-            "skip" in inst.label.value for inst in branches
+            inst.label.contains("skip") for inst in branches
         ), "goto should emit BRANCH to 'skip'"
 
 
@@ -107,7 +107,7 @@ int y = 2;
         instructions = _parse_csharp(source)
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(
-            "myLabel" in inst.label.value for inst in labels
+            inst.label.contains("myLabel") for inst in labels
         ), "labeled_statement should emit LABEL 'myLabel'"
 
     def test_labeled_statement_lowers_body(self):

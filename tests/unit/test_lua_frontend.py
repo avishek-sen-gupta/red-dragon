@@ -210,7 +210,7 @@ class TestLuaControlFlow:
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
-        label_names = [inst.label.value for inst in labels]
+        label_names = [str(inst.label) for inst in labels]
         assert any("if_true" in (lbl or "") for lbl in label_names)
         assert any("if_false" in (lbl or "") for lbl in label_names)
 
@@ -229,7 +229,7 @@ class TestLuaControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BRANCH in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("while" in inst.label.value for inst in labels)
+        assert any(inst.label.contains("while") for inst in labels)
 
     def test_for_numeric(self):
         instructions = _parse_lua("for i = 1, 10 do print(i) end")
@@ -248,7 +248,7 @@ class TestLuaControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.UNOP in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("repeat" in inst.label.value for inst in labels)
+        assert any(inst.label.contains("repeat") for inst in labels)
 
     def test_generic_for_index_based(self):
         """Generic for should produce index-based IR with LOAD_INDEX."""
@@ -287,7 +287,7 @@ class TestLuaControlFlow:
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
-    return [inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL]
+    return [str(inst.label) for inst in instructions if inst.opcode == Opcode.LABEL]
 
 
 class TestNonTrivialLua:

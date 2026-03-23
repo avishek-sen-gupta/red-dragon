@@ -15,7 +15,7 @@ from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
 from interpreter.frontend import get_frontend
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.cfg import CFG, build_cfg
@@ -154,14 +154,14 @@ def _binop_coercion_for_language(lang: Language) -> BinopCoercionStrategy:
     return DefaultBinopCoercion()
 
 
-def _find_entry_point(cfg: CFG, entry_point: str) -> str:
+def _find_entry_point(cfg: CFG, entry_point: str) -> CodeLabel:
     """Resolve the entry point label in the CFG."""
-    entry = entry_point or cfg.entry
+    entry: str | CodeLabel = entry_point or cfg.entry
     if entry in cfg.blocks:
-        return entry
+        return entry if isinstance(entry, CodeLabel) else CodeLabel(entry)
     # Try to find a function label matching the entry point
     for label in cfg.blocks:
-        if entry in label:
+        if label.contains(str(entry)):
             return label
     raise ValueError(
         f"Entry point '{entry}' not found in CFG. "
@@ -171,7 +171,7 @@ def _find_entry_point(cfg: CFG, entry_point: str) -> str:
 
 def _log_update(
     step: int,
-    current_label: str,
+    current_label: CodeLabel,
     ip: int,
     instruction: Any,
     update: StateUpdate,
@@ -201,7 +201,7 @@ def _handle_call_dispatch_setup(
     vm: VMState,
     instruction: Any,
     update: StateUpdate,
-    current_label: str,
+    current_label: CodeLabel,
     ip: int,
     type_env: TypeEnvironment = _EMPTY_TYPE_ENV,
     conversion_rules: TypeConversionRules = _IDENTITY_RULES,
@@ -226,7 +226,7 @@ def _handle_return_flow(
     update: StateUpdate,
     verbose: bool,
     step: int,
-) -> tuple[str, int] | _StopExecution:
+) -> tuple[CodeLabel, int] | _StopExecution:
     """Handle RETURN/THROW control flow. Returns new (label, ip) or stop sentinel."""
     if len(vm.call_stack) < 1:
         if verbose:
@@ -299,7 +299,7 @@ def execute_cfg(
     base_ctx = HandlerContext(
         cfg=cfg,
         registry=registry,
-        current_label="",
+        current_label=NO_LABEL,
         ip=0,
         call_resolver=call_resolver,
         overload_resolver=strategies.overload_resolver,
@@ -451,7 +451,7 @@ def execute_cfg_traced(
     base_ctx = HandlerContext(
         cfg=cfg,
         registry=registry,
-        current_label="",
+        current_label=NO_LABEL,
         ip=0,
         call_resolver=call_resolver,
         overload_resolver=strategies.overload_resolver,

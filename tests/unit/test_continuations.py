@@ -8,7 +8,7 @@ from interpreter.vm.executor import (
 )
 
 _CTX = _default_handler_context()
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.vm.vm import VMState, apply_update
 from interpreter.vm.vm_types import StackFrame, StateUpdate
 
@@ -57,7 +57,7 @@ class TestHandleSetContinuation:
 class TestHandleResumeContinuation:
     def test_branches_when_set(self):
         vm = _make_vm()
-        vm.continuations["para_WORK_end"] = "perform_return_0"
+        vm.continuations["para_WORK_end"] = CodeLabel("perform_return_0")
 
         inst = IRInstruction(
             opcode=Opcode.RESUME_CONTINUATION,
@@ -87,7 +87,7 @@ class TestApplyUpdateContinuations:
     def test_writes_continuation(self):
         vm = _make_vm()
         update = StateUpdate(
-            continuation_writes={"para_X_end": "return_label"},
+            continuation_writes={"para_X_end": CodeLabel("return_label")},
             reasoning="test",
         )
         apply_update(vm, update)
@@ -95,7 +95,7 @@ class TestApplyUpdateContinuations:
 
     def test_clears_continuation(self):
         vm = _make_vm()
-        vm.continuations["para_X_end"] = "return_label"
+        vm.continuations["para_X_end"] = CodeLabel("return_label")
 
         update = StateUpdate(continuation_clear="para_X_end", reasoning="test")
         apply_update(vm, update)

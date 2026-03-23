@@ -83,7 +83,7 @@ class TestTypeScriptInterfaces:
             "class_" in str(c.operands) and "Point" in str(c.operands) for c in consts
         )
         labels = [
-            inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL
+            str(inst.label) for inst in instructions if inst.opcode == Opcode.LABEL
         ]
         func_labels = [l for l in labels if "func_" in l]
         assert any("getX" in l for l in func_labels)
@@ -232,7 +232,7 @@ class TestTypeScriptControlFlow:
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
-    return [inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL]
+    return [str(inst.label) for inst in instructions if inst.opcode == Opcode.LABEL]
 
 
 class TestNonTrivialTypeScript:
@@ -610,7 +610,7 @@ interface Shape {
 
     def test_interface_methods_produce_func_labels(self):
         ir = _parse_ts(self.INTERFACE_SOURCE)
-        labels = [inst.label.value for inst in ir if inst.opcode == Opcode.LABEL]
+        labels = [str(inst.label) for inst in ir if inst.opcode == Opcode.LABEL]
         func_labels = [l for l in labels if "func_" in l]
         assert any(
             "area" in l for l in func_labels

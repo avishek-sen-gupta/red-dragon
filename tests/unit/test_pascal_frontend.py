@@ -139,7 +139,7 @@ class TestPascalControlFlow:
         opcodes = _opcodes(instructions)
         assert Opcode.BRANCH_IF in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
-        label_names = [inst.label.value for inst in labels]
+        label_names = [str(inst.label) for inst in labels]
         assert any("if_true" in (lbl or "") for lbl in label_names)
         assert any("if_false" in (lbl or "") for lbl in label_names)
 
@@ -149,7 +149,7 @@ class TestPascalControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BRANCH in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("while" in inst.label.value for inst in labels)
+        assert any(inst.label.contains("while") for inst in labels)
 
     def test_for_loop(self):
         instructions = _parse_pascal(
@@ -162,7 +162,7 @@ class TestPascalControlFlow:
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("x" in inst.operands for inst in stores)
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("for_" in inst.label.value for inst in labels)
+        assert any(inst.label.contains("for_") for inst in labels)
 
     def test_if_elseif_chain_all_branches_produce_ir(self):
         """All branches of if/else-if/else-if/else must produce IR."""
@@ -231,7 +231,7 @@ class TestPascalFallback:
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
-    return [inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL]
+    return [str(inst.label) for inst in instructions if inst.opcode == Opcode.LABEL]
 
 
 class TestNonTrivialPascal:
@@ -417,14 +417,14 @@ end.
             for i, inst in enumerate(instructions)
             if inst.opcode == Opcode.LABEL
             and inst.label.is_present()
-            and "func_Main" in inst.label.value
+            and inst.label.contains("func_Main")
         )
         end_main_idx = next(
             i
             for i, inst in enumerate(instructions)
             if inst.opcode == Opcode.LABEL
             and inst.label.is_present()
-            and "end_Main" in inst.label.value
+            and inst.label.contains("end_Main")
         )
         greet_call_indices = [
             i
@@ -528,14 +528,14 @@ class TestPascalCaseStatement:
         calls = _find_all(instructions, Opcode.CALL_FUNCTION)
         assert any("WriteLn" in inst.operands for inst in calls)
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("case_match" in inst.label.value for inst in labels)
+        assert any(inst.label.contains("case_match") for inst in labels)
 
     def test_case_with_end_label(self):
         instructions = _parse_pascal(
             "program M; begin case x of 1: WriteLn('one'); end; end."
         )
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("case_end" in inst.label.value for inst in labels)
+        assert any(inst.label.contains("case_end") for inst in labels)
 
 
 class TestPascalRepeatUntil:
@@ -553,7 +553,7 @@ class TestPascalRepeatUntil:
             "program M; begin repeat x := x + 1; until x = 10; end."
         )
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("repeat" in inst.label.value for inst in labels)
+        assert any(inst.label.contains("repeat") for inst in labels)
 
     def test_repeat_lowers_body_before_condition(self):
         """Body should appear before condition check in instruction order."""
@@ -864,7 +864,7 @@ end.
 """
         instructions = _parse_pascal(source)
         labels = _find_all(instructions, Opcode.LABEL)
-        try_end_labels = [l for l in labels if "try_end" in l.label.value]
+        try_end_labels = [l for l in labels if l.label.contains("try_end")]
         assert len(try_end_labels) >= 1, "Expected at least 1 try_end label in IR"
 
     def test_try_finally_has_finally_label(self):
@@ -882,7 +882,7 @@ end.
 """
         instructions = _parse_pascal(source)
         labels = _find_all(instructions, Opcode.LABEL)
-        label_names = [l.label.value for l in labels]
+        label_names = [str(l.label) for l in labels]
         assert any("try_body" in name for name in label_names)
         assert any("try_finally" in name for name in label_names)
         assert any("try_end" in name for name in label_names)
@@ -904,7 +904,7 @@ end.
 """
         instructions = _parse_pascal(source)
         labels = _find_all(instructions, Opcode.LABEL)
-        label_names = [l.label.value for l in labels]
+        label_names = [str(l.label) for l in labels]
         # Must have catch label — proves separation
         assert any("catch" in name for name in label_names), (
             f"Expected a 'catch' label proving try/except separation, "
@@ -958,14 +958,14 @@ class TestPascalGoto:
             "program M; label myLabel; begin goto myLabel; myLabel: writeln(1); end."
         )
         branches = _find_all(instructions, Opcode.BRANCH)
-        assert any("myLabel" in inst.label.value for inst in branches)
+        assert any(inst.label.contains("myLabel") for inst in branches)
 
     def test_label_produces_label_instruction(self):
         instructions = _parse_pascal(
             "program M; label myLabel; begin goto myLabel; myLabel: writeln(1); end."
         )
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("myLabel" in inst.label.value for inst in labels)
+        assert any(inst.label.contains("myLabel") for inst in labels)
 
     def test_decl_labels_no_symbolic(self):
         instructions = _parse_pascal(

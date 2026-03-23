@@ -99,7 +99,7 @@ class TestScalaControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.LABEL in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("if_true" in inst.label.value for inst in labels)
+        assert any(inst.label.contains("if_true") for inst in labels)
 
     def test_while_loop(self):
         instructions = _parse_scala(
@@ -109,7 +109,7 @@ class TestScalaControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         assert Opcode.BRANCH in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("while" in inst.label.value for inst in labels)
+        assert any(inst.label.contains("while") for inst in labels)
 
     def test_match_expression(self):
         instructions = _parse_scala(
@@ -120,7 +120,7 @@ class TestScalaControlFlow:
             Opcode.BRANCH_IF in opcodes
         ), "match expression must produce BRANCH_IF for case dispatch"
         labels = _find_all(instructions, Opcode.LABEL)
-        assert any("match" in inst.label.value for inst in labels)
+        assert any(inst.label.contains("match") for inst in labels)
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)
 
@@ -243,7 +243,7 @@ class TestScalaSpecial:
 
 
 def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
-    return [inst.label.value for inst in instructions if inst.opcode == Opcode.LABEL]
+    return [str(inst.label) for inst in instructions if inst.opcode == Opcode.LABEL]
 
 
 class TestNonTrivialScala:
@@ -914,7 +914,7 @@ object M {
 """
         instructions = _parse_scala(source)
         labels = _find_all(instructions, Opcode.LABEL)
-        try_end_labels = [l for l in labels if "try_end" in l.label.value]
+        try_end_labels = [l for l in labels if l.label.contains("try_end")]
         assert len(try_end_labels) >= 1, "Expected at least 1 try_end label in IR"
 
     def test_try_catch_with_finally(self):
@@ -933,7 +933,7 @@ object M {
 """
         instructions = _parse_scala(source)
         labels = _find_all(instructions, Opcode.LABEL)
-        label_names = [l.label.value for l in labels]
+        label_names = [str(l.label) for l in labels]
         assert any("try_body" in name for name in label_names)
         assert any("catch" in name for name in label_names)
         assert any("try_finally" in name for name in label_names)
@@ -1103,12 +1103,12 @@ object M {
         func_label_idx = next(
             i
             for i, inst in enumerate(ir)
-            if inst.opcode == Opcode.LABEL and "func_f" in inst.label.value
+            if inst.opcode == Opcode.LABEL and inst.label.contains("func_f")
         )
         end_label_idx = next(
             i
             for i, inst in enumerate(ir)
-            if inst.opcode == Opcode.LABEL and "end_f" in inst.label.value
+            if inst.opcode == Opcode.LABEL and inst.label.contains("end_f")
         )
         func_returns = [
             inst

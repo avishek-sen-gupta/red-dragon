@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter import constants
 from interpreter.cfg_types import (
     BasicBlock,
@@ -15,13 +15,13 @@ def build_cfg(instructions: list[IRInstruction]) -> CFG:
     cfg = CFG()
 
     # Phase 1: identify block starts
-    label_to_idx: dict[str, int] = {}
+    label_to_idx: dict[CodeLabel, int] = {}
     block_starts: set[int] = {0}
 
     for i, inst in enumerate(instructions):
         if inst.opcode == Opcode.LABEL:
             block_starts.add(i)
-            label_to_idx[inst.label.value] = i
+            label_to_idx[inst.label] = i
         elif inst.opcode in (
             Opcode.BRANCH,
             Opcode.BRANCH_IF,
@@ -43,10 +43,10 @@ def build_cfg(instructions: list[IRInstruction]) -> CFG:
 
         # Determine label
         if block_insts and block_insts[0].opcode == Opcode.LABEL:
-            label = block_insts[0].label.value
+            label = block_insts[0].label
             block_insts = block_insts[1:]  # don't include LABEL pseudo-inst
         else:
-            label = f"__block_{start}"
+            label = CodeLabel(f"__block_{start}")
 
         cfg.blocks[label] = BasicBlock(label=label, instructions=block_insts)
 
@@ -63,16 +63,16 @@ def build_cfg(instructions: list[IRInstruction]) -> CFG:
         last = block.instructions[-1]
 
         if last.opcode == Opcode.BRANCH:
-            target = last.label.value
+            target = CodeLabel(str(last.label))
             if target in cfg.blocks:
                 _add_edge(cfg, label, target)
 
         elif last.opcode == Opcode.BRANCH_IF:
             targets = last.label.branch_targets()
             for t in targets:
-                t = t.strip()
-                if t in cfg.blocks:
-                    _add_edge(cfg, label, t)
+                target = CodeLabel(t.strip())
+                if target in cfg.blocks:
+                    _add_edge(cfg, label, target)
 
         elif last.opcode == Opcode.RESUME_CONTINUATION:
             # Fall-through edge only; branch target is dynamic
@@ -106,26 +106,22 @@ def _instruction_summary(inst: IRInstruction, max_len: int = 60) -> str:
     return _escape_mermaid(truncated)
 
 
-def _node_id(label: str) -> str:
+def _node_id(label: CodeLabel) -> str:
     """Sanitise a block label into a valid Mermaid node ID."""
-    return label.replace(" ", "_").replace("-", "_")
+    return str(label).replace(" ", "_").replace("-", "_")
 
 
-def _extract_name(label: str, prefix: str) -> str:
+def _extract_name(label: CodeLabel, prefix: str) -> str:
     """Extract the base name from a label like ``func_foo_3`` → ``foo``.
 
     The label format is ``<prefix><name>_<counter>``.  We strip the
     prefix and the trailing ``_<digits>`` to recover the name.
     """
-    import re
-
-    suffix = label[len(prefix) :]
-    match = re.match(r"^(.+)_(\d+)$", suffix)
-    return match.group(1) if match else suffix
+    return label.extract_name(prefix)
 
 
 def _build_subgraph_ranges(
-    labels: list[str],
+    labels: list[CodeLabel],
 ) -> list[tuple[str, int, int]]:
     """Identify function/class subgraph ranges from block label ordering.
 
@@ -144,7 +140,7 @@ def _build_subgraph_ranges(
     ranges: list[tuple[str, int, int]] = []
 
     for i, lbl in enumerate(labels):
-        if lbl.startswith(func_prefix):
+        if lbl.starts_with(func_prefix):
             name = _extract_name(lbl, func_prefix)
             end_prefix = f"end_{name}_"
             # Find the first end_NAME_* label appearing after this block
@@ -152,21 +148,21 @@ def _build_subgraph_ranges(
                 (
                     j
                     for j in range(i + 1, len(labels))
-                    if labels[j].startswith(end_prefix)
+                    if labels[j].starts_with(end_prefix)
                 ),
                 -1,
             )
             if end_idx > 0:
                 ranges.append((f"fn {name}", i, end_idx))
 
-        elif lbl.startswith(class_prefix) and not lbl.startswith(end_class_prefix):
+        elif lbl.starts_with(class_prefix) and not lbl.starts_with(end_class_prefix):
             name = _extract_name(lbl, class_prefix)
             end_prefix = f"{end_class_prefix}{name}_"
             end_idx = next(
                 (
                     j
                     for j in range(i + 1, len(labels))
-                    if labels[j].startswith(end_prefix)
+                    if labels[j].starts_with(end_prefix)
                 ),
                 -1,
             )
@@ -176,7 +172,7 @@ def _build_subgraph_ranges(
     return ranges
 
 
-def _reachable_blocks(cfg: CFG) -> set[str]:
+def _reachable_blocks(cfg: CFG) -> set[CodeLabel]:
     """Return the set of block labels reachable from the entry and function roots via BFS.
 
     Function entry blocks (labels starting with ``FUNC_LABEL_PREFIX``) are
@@ -184,8 +180,10 @@ def _reachable_blocks(cfg: CFG) -> set[str]:
     even though the frontend emits a ``BRANCH end_foo`` that skips over them.
     """
     func_prefix = constants.FUNC_LABEL_PREFIX
-    roots = [cfg.entry] + [lbl for lbl in cfg.blocks if lbl.startswith(func_prefix)]
-    visited: set[str] = set()
+    roots: list[CodeLabel] = [cfg.entry] + [
+        lbl for lbl in cfg.blocks if lbl.starts_with(func_prefix)
+    ]
+    visited: set[CodeLabel] = set()
     queue = list(roots)
     while queue:
         label = queue.pop(0)
@@ -197,16 +195,16 @@ def _reachable_blocks(cfg: CFG) -> set[str]:
     return visited
 
 
-def _build_call_target_map(block_labels: list[str]) -> dict[str, str]:
+def _build_call_target_map(block_labels: list[CodeLabel]) -> dict[str, CodeLabel]:
     """Map function name → entry label for all ``func_<name>_<counter>`` labels.
 
-    Example: ``["func_foo_0", "func_bar_2"]`` → ``{"foo": "func_foo_0", "bar": "func_bar_2"}``.
+    Example: ``["func_foo_0", "func_bar_2"]`` → ``{"foo": CodeLabel("func_foo_0"), ...}``.
     Only the *first* matching label per name is kept (there should be exactly one).
     """
     func_prefix = constants.FUNC_LABEL_PREFIX
-    result: dict[str, str] = {}
+    result: dict[str, CodeLabel] = {}
     for lbl in block_labels:
-        if not lbl.startswith(func_prefix):
+        if not lbl.starts_with(func_prefix):
             continue
         name = _extract_name(lbl, func_prefix)
         if name not in result:
@@ -243,7 +241,7 @@ def _collapse_inst_lines(
 
 
 def _render_node(
-    label: str, block: BasicBlock, indent: str, is_entry: bool = False
+    label: CodeLabel, block: BasicBlock, indent: str, is_entry: bool = False
 ) -> str:
     """Render a single Mermaid node definition."""
     nid = _node_id(label)
@@ -251,7 +249,7 @@ def _render_node(
         [_instruction_summary(inst) for inst in block.instructions]
     )
     body = "<br/>".join(inst_lines) if inst_lines else "(empty)"
-    node_label = f"<b>{_escape_mermaid(label)}</b><br/>{body}"
+    node_label = f"<b>{_escape_mermaid(str(label))}</b><br/>{body}"
     open_delim, close_delim = _node_shape(block, is_entry)
     return f"{indent}{nid}{open_delim}{node_label}{close_delim}"
 
@@ -320,7 +318,7 @@ def cfg_to_mermaid(cfg: CFG) -> str:
             if inst.opcode != Opcode.CALL_FUNCTION or not inst.operands:
                 continue
             func_name = inst.operands[0]
-            target_label = call_target_map.get(func_name, "")
+            target_label = call_target_map.get(func_name)
             if target_label:
                 lines.append(f'    {src} -.->|"call"| {_node_id(target_label)}')
 
@@ -360,7 +358,7 @@ def extract_function_instructions(
             i
             for i in range(start_idx + 1, len(instructions))
             if instructions[i].opcode == Opcode.LABEL
-            and instructions[i].label.value.startswith(end_prefix)
+            and instructions[i].label.starts_with(end_prefix)
         ),
         -1,
     )
@@ -372,7 +370,7 @@ def extract_function_instructions(
     return instructions[start_idx : end_idx + 1]
 
 
-def _add_edge(cfg: CFG, src: str, dst: str):
+def _add_edge(cfg: CFG, src: CodeLabel, dst: CodeLabel):
     if dst not in cfg.blocks[src].successors:
         cfg.blocks[src].successors.append(dst)
     if src not in cfg.blocks[dst].predecessors:

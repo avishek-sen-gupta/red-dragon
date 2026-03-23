@@ -153,6 +153,18 @@ class CodeLabel:
         match = re.match(r"^(.+)_(\d+)$", suffix)
         return match.group(1) if match else suffix
 
+    def starts_with(self, prefix: str) -> bool:
+        """Check if the label value starts with the given prefix."""
+        return self.value.startswith(prefix)
+
+    def contains(self, substring: str) -> bool:
+        """Check if the label value contains the given substring."""
+        return substring in self.value
+
+    def __contains__(self, item: str) -> bool:
+        """Support ``'x' in label`` syntax."""
+        return item in self.value
+
     def branch_targets(self) -> list[str]:
         """Parse comma-separated branch targets (BRANCH_IF, TRY_PUSH).
 
@@ -196,6 +208,15 @@ class NoCodeLabel(CodeLabel):
         return False
 
     def is_end_label(self) -> bool:
+        return False
+
+    def starts_with(self, prefix: str) -> bool:
+        return False
+
+    def contains(self, substring: str) -> bool:
+        return False
+
+    def __contains__(self, item: str) -> bool:
         return False
 
 
