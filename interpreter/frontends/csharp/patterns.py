@@ -7,7 +7,9 @@ from interpreter.frontends.common.patterns import (
     CapturePattern,
     ClassPattern,
     LiteralPattern,
+    OrPattern,
     Pattern,
+    SequencePattern,
     WildcardPattern,
 )
 from interpreter.frontends.context import TreeSitterEmitContext
@@ -77,6 +79,23 @@ def parse_csharp_pattern(ctx: TreeSitterEmitContext, node) -> Pattern:
         if text == "_":
             return WildcardPattern()
         return CapturePattern(name=text)
+
+    # Parenthesized pattern: (pattern) — unwrap and parse inner
+    if node_type == NT.PARENTHESIZED_PATTERN:
+        inner = next((c for c in node.children if c.is_named), node)
+        return parse_csharp_pattern(ctx, inner)
+
+    # Or pattern: pattern1 or pattern2
+    if node_type == NT.OR_PATTERN:
+        alternatives = [
+            parse_csharp_pattern(ctx, c) for c in node.children if c.is_named
+        ]
+        return OrPattern(alternatives=tuple(alternatives))
+
+    # List pattern: [1, 2, ..]
+    if node_type == NT.LIST_PATTERN:
+        elements = [parse_csharp_pattern(ctx, c) for c in node.children if c.is_named]
+        return SequencePattern(elements=tuple(elements))
 
     # Fallback: treat as literal
     return _parse_constant(ctx, node)
