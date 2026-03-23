@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from interpreter.project.imports import extract_imports
-from interpreter.project.types import ImportRef
+from interpreter.project.types import ImportKind, ImportRef
 from interpreter.constants import Language
 
 
@@ -17,7 +17,7 @@ class TestCobolCopyExtraction:
         refs = extract_imports(source, Path("main.cbl"), Language.COBOL)
         assert len(refs) == 1
         assert refs[0].module_path == "CUSTOMER-RECORD"
-        assert refs[0].kind == "include"
+        assert refs[0].kind == ImportKind.INCLUDE
 
     def test_copy_with_library(self):
         source = b"       COPY DATFMT OF COPYLIB.\n"
@@ -46,14 +46,14 @@ class TestCobolCallExtraction:
     def test_call_literal(self):
         source = b'       CALL "SUBPROG1" USING WS-DATA.\n'
         refs = extract_imports(source, Path("main.cbl"), Language.COBOL)
-        call_refs = [r for r in refs if r.kind == "require"]
+        call_refs = [r for r in refs if r.kind == ImportKind.REQUIRE]
         assert len(call_refs) == 1
         assert call_refs[0].module_path == "SUBPROG1"
 
     def test_call_with_single_quotes(self):
         source = b"       CALL 'SUBPROG2'.\n"
         refs = extract_imports(source, Path("main.cbl"), Language.COBOL)
-        call_refs = [r for r in refs if r.kind == "require"]
+        call_refs = [r for r in refs if r.kind == ImportKind.REQUIRE]
         assert len(call_refs) == 1
         assert call_refs[0].module_path == "SUBPROG2"
 
@@ -61,7 +61,7 @@ class TestCobolCallExtraction:
         """CALL WS-PROG (dynamic) should be skipped — we can't resolve it."""
         source = b"       CALL WS-PROGRAM-NAME USING WS-DATA.\n"
         refs = extract_imports(source, Path("main.cbl"), Language.COBOL)
-        call_refs = [r for r in refs if r.kind == "require"]
+        call_refs = [r for r in refs if r.kind == ImportKind.REQUIRE]
         assert len(call_refs) == 0
 
     def test_mixed_copy_and_call(self):
@@ -69,8 +69,8 @@ class TestCobolCallExtraction:
         refs = extract_imports(source, Path("main.cbl"), Language.COBOL)
         assert len(refs) == 2
         kinds = {r.kind for r in refs}
-        assert "include" in kinds
-        assert "require" in kinds
+        assert ImportKind.INCLUDE in kinds
+        assert ImportKind.REQUIRE in kinds
 
 
 class TestCobolResolver:
@@ -94,7 +94,7 @@ class TestCobolResolver:
         ref = ImportRef(
             source_file=cobol_project / "MAIN.cbl",
             module_path="CUSTOMER-REC",
-            kind="include",
+            kind=ImportKind.INCLUDE,
         )
         result = resolver.resolve(ref, cobol_project)
         assert result.resolved_path == cobol_project / "CUSTOMER-REC.cpy"
@@ -106,7 +106,7 @@ class TestCobolResolver:
         ref = ImportRef(
             source_file=cobol_project / "MAIN.cbl",
             module_path="VALIDATE",
-            kind="require",
+            kind=ImportKind.REQUIRE,
         )
         result = resolver.resolve(ref, cobol_project)
         assert result.resolved_path == cobol_project / "VALIDATE.cbl"
@@ -118,7 +118,7 @@ class TestCobolResolver:
         ref = ImportRef(
             source_file=cobol_project / "MAIN.cbl",
             module_path="MISSING-COPY",
-            kind="include",
+            kind=ImportKind.INCLUDE,
         )
         result = resolver.resolve(ref, cobol_project)
         assert result.resolved_path is None

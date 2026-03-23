@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from interpreter.project.types import ImportRef
+from interpreter.project.types import ImportKind, ImportRef
 from interpreter.project.imports import extract_imports
 from interpreter.constants import Language
 
@@ -31,7 +31,7 @@ class TestExtractImportsPython:
         assert len(refs) == 1
         assert refs[0].module_path == "os"
         assert refs[0].names == ()
-        assert refs[0].kind == "import"
+        assert refs[0].kind == ImportKind.IMPORT
         assert refs[0].source_file == Path("main.py")
 
     def test_import_dotted(self):
