@@ -868,3 +868,57 @@ class TestOptionalChain:
         assert (
             len(branches) >= 2
         ), f"Expected 2 BRANCH_IFs for chained guards, got {len(branches)}"
+
+
+class TestImportAlias:
+    """import Foo = Bar.Baz → LOAD_VAR Bar, LOAD_FIELD Baz, DECL_VAR Foo."""
+
+    def test_import_alias_emits_load_chain(self):
+        ir = _parse_ts("import Foo = Bar.Baz;")
+        loads = _find_all(ir, Opcode.LOAD_FIELD)
+        assert any(
+            "Baz" in str(inst.operands) for inst in loads
+        ), f"Expected LOAD_FIELD Baz, got: {[str(i) for i in ir]}"
+
+    def test_import_alias_declares_variable(self):
+        ir = _parse_ts("import Foo = Bar.Baz;")
+        decls = _find_all(ir, Opcode.DECL_VAR)
+        assert any(
+            "Foo" in str(inst.operands) for inst in decls
+        ), f"Expected DECL_VAR Foo, got: {[str(i) for i in ir]}"
+
+    def test_import_alias_no_symbolic(self):
+        ir = _parse_ts("import Foo = Bar.Baz;")
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert (
+            len(symbolics) == 0
+        ), f"import_alias should not produce SYMBOLIC, got: {[str(i) for i in symbolics]}"
+
+    def test_import_alias_simple_identifier(self):
+        """import F = X → LOAD_VAR X, DECL_VAR F (no LOAD_FIELD)."""
+        ir = _parse_ts("import F = X;")
+        decls = _find_all(ir, Opcode.DECL_VAR)
+        assert any("F" in str(inst.operands) for inst in decls)
+
+
+class TestImportRequireClause:
+    """import x = require("module") → CALL_FUNCTION require, DECL_VAR x."""
+
+    def test_import_require_emits_call(self):
+        ir = _parse_ts('import x = require("module");')
+        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        assert any(
+            "require" in str(inst.operands) for inst in calls
+        ), f"Expected CALL_FUNCTION require, got: {[str(i) for i in ir]}"
+
+    def test_import_require_declares_variable(self):
+        ir = _parse_ts('import x = require("module");')
+        decls = _find_all(ir, Opcode.DECL_VAR)
+        assert any(
+            "x" in str(inst.operands) for inst in decls
+        ), f"Expected DECL_VAR x, got: {[str(i) for i in ir]}"
+
+    def test_import_require_no_symbolic(self):
+        ir = _parse_ts('import x = require("module");')
+        symbolics = _find_all(ir, Opcode.SYMBOLIC)
+        assert len(symbolics) == 0
