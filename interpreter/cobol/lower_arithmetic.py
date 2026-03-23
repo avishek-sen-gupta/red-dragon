@@ -171,7 +171,7 @@ def lower_if(
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=CodeLabel(f"{true_label},{false_label}"),
+        branch_targets=[true_label, false_label],
     )
 
     ctx.emit(Opcode.LABEL, label=true_label)
@@ -208,7 +208,7 @@ def lower_evaluate(
             ctx.emit(
                 Opcode.BRANCH_IF,
                 operands=[cond_reg],
-                label=CodeLabel(f"{when_true},{when_false}"),
+                branch_targets=[when_true, when_false],
             )
             ctx.emit(Opcode.LABEL, label=when_true)
             for grandchild in child.children:

@@ -310,7 +310,7 @@ def lower_php_ternary(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=CodeLabel(f"{true_label},{false_label}"),
+        branch_targets=[true_label, false_label],
     )
 
     ctx.emit(Opcode.LABEL, label=true_label)
@@ -591,7 +591,7 @@ def lower_php_match_expression(ctx: TreeSitterEmitContext, node) -> str:
                 ctx.emit(
                     Opcode.BRANCH_IF,
                     operands=[cmp_reg],
-                    label=CodeLabel(f"{arm_label},{next_label}"),
+                    branch_targets=[arm_label, next_label],
                 )
             else:
                 ctx.emit(Opcode.BRANCH, label=arm_label)

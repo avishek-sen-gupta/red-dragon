@@ -32,14 +32,14 @@ def lower_if(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{true_label},{false_label}"),
+            branch_targets=[true_label, false_label],
             node=node,
         )
     else:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{true_label},{end_label}"),
+            branch_targets=[true_label, end_label],
             node=node,
         )
 
@@ -87,7 +87,7 @@ def lower_enhanced_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=CodeLabel(f"{body_label},{end_label}"),
+        branch_targets=[body_label, end_label],
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
@@ -167,7 +167,7 @@ def lower_java_switch(ctx: TreeSitterEmitContext, node) -> None:
                 ctx.emit(
                     Opcode.BRANCH_IF,
                     operands=[cmp_reg],
-                    label=CodeLabel(f"{arm_label},{next_label}"),
+                    branch_targets=[arm_label, next_label],
                 )
             else:
                 ctx.emit(Opcode.BRANCH, label=arm_label)
@@ -248,7 +248,7 @@ def lower_java_switch_expr(ctx: TreeSitterEmitContext, node) -> str:
                     ctx.emit(
                         Opcode.BRANCH_IF,
                         operands=[test_reg],
-                        label=CodeLabel(f"{binding_label},{next_label}"),
+                        branch_targets=[binding_label, next_label],
                     )
                     ctx.emit(Opcode.LABEL, label=binding_label)
                     compile_pattern_bindings(ctx, subject_reg, pattern)
@@ -261,14 +261,14 @@ def lower_java_switch_expr(ctx: TreeSitterEmitContext, node) -> str:
                         ctx.emit(
                             Opcode.BRANCH_IF,
                             operands=[guard_reg],
-                            label=CodeLabel(f"{arm_label},{next_label}"),
+                            branch_targets=[arm_label, next_label],
                         )
                     ctx.emit(Opcode.LABEL, label=arm_label)
                 else:
                     ctx.emit(
                         Opcode.BRANCH_IF,
                         operands=[test_reg],
-                        label=CodeLabel(f"{arm_label},{next_label}"),
+                        branch_targets=[arm_label, next_label],
                     )
                     ctx.emit(Opcode.LABEL, label=arm_label)
                     compile_pattern_bindings(ctx, subject_reg, pattern)
@@ -284,7 +284,7 @@ def lower_java_switch_expr(ctx: TreeSitterEmitContext, node) -> str:
                 ctx.emit(
                     Opcode.BRANCH_IF,
                     operands=[cmp_reg],
-                    label=CodeLabel(f"{arm_label},{next_label}"),
+                    branch_targets=[arm_label, next_label],
                 )
                 ctx.emit(Opcode.LABEL, label=arm_label)
             else:
@@ -349,7 +349,7 @@ def lower_do_statement(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{body_label},{end_label}"),
+            branch_targets=[body_label, end_label],
             node=node,
         )
     else:

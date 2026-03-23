@@ -190,14 +190,14 @@ def lower_if_expr(ctx: TreeSitterEmitContext, node) -> str:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{true_label},{false_label}"),
+            branch_targets=[true_label, false_label],
             node=node,
         )
     else:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{true_label},{end_label}"),
+            branch_targets=[true_label, end_label],
             node=node,
         )
 
@@ -238,7 +238,7 @@ def _lower_if_let_expr(ctx: TreeSitterEmitContext, node, let_cond_node) -> str:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[test_reg],
-        label=CodeLabel(f"{true_label},{target_label}"),
+        branch_targets=[true_label, target_label],
         node=node,
     )
 
@@ -293,7 +293,7 @@ def _lower_if_let_chain_expr(ctx: TreeSitterEmitContext, node, let_chain_node) -
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[combined],
-        label=CodeLabel(f"{true_label},{target_label}"),
+        branch_targets=[true_label, target_label],
         node=node,
     )
 

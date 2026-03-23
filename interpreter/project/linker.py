@@ -77,11 +77,6 @@ def max_register_number(ir: tuple[IRInstruction, ...] | list[IRInstruction]) -> 
 # ── IR transformation ───────────────────────────────────────────
 
 
-def _namespace_branch_targets(label_str: str, prefix: str) -> str:
-    """Namespace comma-separated branch targets."""
-    parts = label_str.split(",")
-    return ",".join(namespace_label(p.strip(), prefix) for p in parts)
-
 
 def _rebase_operand(operand, offset: int):
     """Rebase a single operand if it's a register."""
@@ -99,15 +94,13 @@ def _transform_instruction(
     # ── Label ──
     new_label: CodeLabel = NO_LABEL
     if inst.label.is_present():
-        if inst.opcode in (Opcode.BRANCH, Opcode.BRANCH_IF):
-            # Comma-separated branch targets: namespace each one
-            new_label = CodeLabel(
-                ",".join(
-                    str(t.namespace(prefix)) for t in inst.label.branch_targets()
-                )
-            )
+        if inst.opcode == Opcode.BRANCH:
+            new_label = inst.label.namespace(prefix)
         else:
             new_label = inst.label.namespace(prefix)
+
+    # ── Branch targets ──
+    new_branch_targets = [t.namespace(prefix) for t in inst.branch_targets]
 
     # ── Result register ──
     new_result_reg = (
@@ -147,6 +140,7 @@ def _transform_instruction(
         result_reg=new_result_reg,
         operands=new_operands,
         label=new_label,
+        branch_targets=new_branch_targets,
         source_location=inst.source_location,
     )
 

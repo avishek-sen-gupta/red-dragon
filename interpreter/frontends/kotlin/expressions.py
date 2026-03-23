@@ -283,14 +283,14 @@ def lower_if_expr(ctx: TreeSitterEmitContext, node) -> str:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{true_label},{false_label}"),
+            branch_targets=[true_label, false_label],
             node=node,
         )
     else:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[cond_reg],
-            label=CodeLabel(f"{true_label},{end_label}"),
+            branch_targets=[true_label, end_label],
             node=node,
         )
 
@@ -432,7 +432,7 @@ def _lower_subjectless_when_entry(
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[test_reg],
-            label=CodeLabel(f"{arm_label},{next_label}"),
+            branch_targets=[arm_label, next_label],
         )
         ctx.emit(Opcode.LABEL, label=arm_label)
     else:
@@ -857,7 +857,7 @@ def _lower_elvis_with_throw(
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=CodeLabel(f"{non_null_label},{throw_label}"),
+        branch_targets=[non_null_label, throw_label],
         node=node,
     )
 

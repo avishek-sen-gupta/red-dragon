@@ -52,9 +52,9 @@ class TestCountOpcodes:
         instructions = [
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),
             IRInstruction(opcode=Opcode.CONST, operands=[True], result_reg="r0"),
-            IRInstruction(opcode=Opcode.BRANCH_IF, operands=["r0"], label=CodeLabel("then")),
+            IRInstruction(opcode=Opcode.BRANCH_IF, operands=["r0"], branch_targets=[CodeLabel("then")]),
             IRInstruction(opcode=Opcode.BRANCH, label=CodeLabel("end")),
-            IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("then")),
+            IRInstruction(opcode=Opcode.LABEL, branch_targets=[CodeLabel("then")]),
             IRInstruction(opcode=Opcode.RETURN, operands=["r0"]),
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("end")),
         ]

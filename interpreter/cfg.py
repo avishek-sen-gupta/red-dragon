@@ -68,8 +68,7 @@ def build_cfg(instructions: list[IRInstruction]) -> CFG:
                 _add_edge(cfg, label, target)
 
         elif last.opcode == Opcode.BRANCH_IF:
-            targets = last.label.branch_targets()
-            for target in targets:
+            for target in last.branch_targets:
                 if target in cfg.blocks:
                     _add_edge(cfg, label, target)
 

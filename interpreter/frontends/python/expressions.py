@@ -167,7 +167,7 @@ def lower_conditional_expr(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=CodeLabel(f"{true_label},{false_label}"),
+        branch_targets=[true_label, false_label],
     )
 
     ctx.emit(Opcode.LABEL, label=true_label)
@@ -262,7 +262,7 @@ def _lower_comprehension_loop(
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=CodeLabel(f"{body_label},{loop_end_label}"),
+        branch_targets=[body_label, loop_end_label],
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
@@ -302,7 +302,7 @@ def _lower_comprehension_loop(
             ctx.emit(
                 Opcode.BRANCH_IF,
                 operands=[filter_reg],
-                label=CodeLabel(f"{store_label},{skip_label}"),
+                branch_targets=[store_label, skip_label],
             )
 
         ctx.emit(Opcode.LABEL, label=store_label)
@@ -374,7 +374,7 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> str:
     ctx.emit(
         Opcode.BRANCH_IF,
         operands=[cond_reg],
-        label=CodeLabel(f"{body_label},{end_label}"),
+        branch_targets=[body_label, end_label],
     )
 
     ctx.emit(Opcode.LABEL, label=body_label)
@@ -400,7 +400,7 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> str:
         ctx.emit(
             Opcode.BRANCH_IF,
             operands=[filter_reg],
-            label=CodeLabel(f"{store_label},{skip_label}"),
+            branch_targets=[store_label, skip_label],
         )
 
     ctx.emit(Opcode.LABEL, label=store_label)

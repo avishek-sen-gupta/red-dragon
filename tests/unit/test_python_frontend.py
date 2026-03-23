@@ -156,7 +156,7 @@ class TestPythonControlFlow:
         labels = _labels_in_order(instructions)
         # Each BRANCH_IF target label must appear as a LABEL instruction
         branch_targets = {
-            target for inst in branch_ifs for target in inst.label.branch_targets()
+            target for inst in branch_ifs for target in inst.branch_targets
         }
         label_set = set(labels)
         assert branch_targets.issubset(

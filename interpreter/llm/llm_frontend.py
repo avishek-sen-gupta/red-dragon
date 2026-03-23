@@ -62,7 +62,7 @@ Consumers / control flow (result_reg is null):
 - STORE_VAR: operands=[var_name, value_reg]
 - STORE_FIELD: operands=[obj_reg, field_name, value_reg]
 - STORE_INDEX: operands=[obj_reg, index_reg, value_reg]
-- BRANCH_IF: operands=[cond_reg], label="true_label,false_label"
+- BRANCH_IF: operands=[cond_reg], branch_targets=["true_label", "false_label"]
 - BRANCH: label=target_label
 - RETURN: operands=[value_reg]
 - THROW: operands=[value_reg]
@@ -118,7 +118,7 @@ To call a method like `obj.method(arg)`:
 ### If/elif/else
 
   ...compute condition...
-  BRANCH_IF %cond if_true_N,if_false_N (or if_true_N,if_end_N when no else)
+  BRANCH_IF %cond [if_true_N, if_false_N] (or [if_true_N, if_end_N] when no else)
   LABEL if_true_N
   ...true body...
   BRANCH if_end_N
@@ -148,7 +148,7 @@ IR:
   {"opcode":"LOAD_VAR","result_reg":"%1","operands":["n"],"label":null,"source_location":null},
   {"opcode":"CONST","result_reg":"%2","operands":["1"],"label":null,"source_location":null},
   {"opcode":"BINOP","result_reg":"%3","operands":["<=","%1","%2"],"label":null,"source_location":null},
-  {"opcode":"BRANCH_IF","result_reg":null,"operands":["%3"],"label":"if_true_2,if_end_3","source_location":null},
+  {"opcode":"BRANCH_IF","result_reg":null,"operands":["%3"],"branch_targets":["if_true_2","if_end_3"],"source_location":null},
   {"opcode":"LABEL","result_reg":null,"operands":[],"label":"if_true_2","source_location":null},
   {"opcode":"LOAD_VAR","result_reg":"%4","operands":["n"],"label":null,"source_location":null},
   {"opcode":"RETURN","result_reg":null,"operands":["%4"],"label":null,"source_location":null},
@@ -235,11 +235,13 @@ def _parse_single_instruction(raw: dict[str, Any]) -> IRInstruction:
         raise IRParsingError(f"Unknown opcode: {opcode_str!r}") from exc
 
     raw_label = raw.get("label")
+    raw_targets = raw.get("branch_targets", [])
     return IRInstruction(
         opcode=opcode,
         result_reg=raw.get("result_reg"),
         operands=raw.get("operands", []),
         label=CodeLabel(raw_label) if raw_label else NO_LABEL,
+        branch_targets=[CodeLabel(t) for t in raw_targets],
         source_location=NO_SOURCE_LOCATION,
     )
 
