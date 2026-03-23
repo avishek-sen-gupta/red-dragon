@@ -84,7 +84,8 @@ class TypeScriptFrontend(JavaScriptFrontend):
                 TypeScriptNodeType.ENUM_DECLARATION: lower_enum_decl,
                 TypeScriptNodeType.TYPE_ALIAS_DECLARATION: lambda ctx, node: None,
                 TypeScriptNodeType.EXPORT_STATEMENT: lower_ts_export_statement,
-                TypeScriptNodeType.IMPORT_STATEMENT: lambda ctx, node: None,
+                TypeScriptNodeType.IMPORT_STATEMENT: _lower_ts_import_statement,
+                TypeScriptNodeType.IMPORT_ALIAS: lower_import_alias,
                 TypeScriptNodeType.ABSTRACT_CLASS_DECLARATION: lower_ts_class_def,
                 TypeScriptNodeType.PUBLIC_FIELD_DEFINITION: lower_ts_field_definition,
                 TypeScriptNodeType.ABSTRACT_METHOD_SIGNATURE: lower_ts_abstract_method,
@@ -128,6 +129,12 @@ def lower_satisfies_expr(ctx: TreeSitterEmitContext, node) -> str:
     if children:
         return ctx.lower_expr(children[0])
     return common_expr.lower_const_literal(ctx, node)
+
+
+def _lower_ts_import_statement(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower import statements. Most are no-ops; import_require_clause has runtime semantics."""
+    if any(c.type == TypeScriptNodeType.IMPORT_REQUIRE_CLAUSE for c in node.children):
+        lower_import_require_clause(ctx, node)
 
 
 def lower_instantiation_expr(ctx: TreeSitterEmitContext, node) -> str:
@@ -671,3 +678,97 @@ def lower_ts_function_def(ctx: TreeSitterEmitContext, node) -> None:
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
     ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+
+
+def lower_import_alias(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower import Foo = Bar.Baz → LOAD_VAR Bar, LOAD_FIELD Baz, DECL_VAR Foo.
+
+    import Foo = X → LOAD_VAR X, DECL_VAR Foo.
+    import Foo = Bar.Baz.Qux → LOAD_VAR Bar, LOAD_FIELD Baz, LOAD_FIELD Qux, DECL_VAR Foo.
+    """
+    name_node = next(
+        c for c in node.children if c.type == TypeScriptNodeType.IDENTIFIER
+    )
+    alias_name = ctx.node_text(name_node)
+
+    # Find the RHS: either a nested_identifier (Bar.Baz) or a plain identifier
+    rhs_node = next(
+        (
+            c
+            for c in node.children
+            if c.type
+            in (TypeScriptNodeType.NESTED_IDENTIFIER, TypeScriptNodeType.IDENTIFIER)
+            and c != name_node
+        ),
+        None,
+    )
+
+    if rhs_node and rhs_node.type == TypeScriptNodeType.NESTED_IDENTIFIER:
+        # Walk the dot chain: first child is the base, rest are LOAD_FIELDs
+        parts = [
+            ctx.node_text(c)
+            for c in rhs_node.children
+            if c.type in ("identifier", "property_identifier")
+        ]
+        reg = ctx.fresh_reg()
+        ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[parts[0]], node=node)
+        for field in parts[1:]:
+            next_reg = ctx.fresh_reg()
+            ctx.emit(
+                Opcode.LOAD_FIELD, result_reg=next_reg, operands=[reg, field], node=node
+            )
+            reg = next_reg
+    elif rhs_node:
+        # Simple: import F = X
+        reg = ctx.fresh_reg()
+        ctx.emit(
+            Opcode.LOAD_VAR,
+            result_reg=reg,
+            operands=[ctx.node_text(rhs_node)],
+            node=node,
+        )
+    else:
+        return
+
+    ctx.emit(Opcode.DECL_VAR, operands=[alias_name, reg], node=node)
+
+
+def lower_import_require_clause(ctx: TreeSitterEmitContext, node) -> None:
+    """Lower import x = require("module") → CONST "module", CALL_FUNCTION require, DECL_VAR x.
+
+    The node is an import_statement containing an import_require_clause child.
+    """
+    require_clause = next(
+        (
+            c
+            for c in node.children
+            if c.type == TypeScriptNodeType.IMPORT_REQUIRE_CLAUSE
+        ),
+        None,
+    )
+    if require_clause is None:
+        return
+
+    var_name = next(
+        ctx.node_text(c)
+        for c in require_clause.children
+        if c.type == TypeScriptNodeType.IDENTIFIER
+    )
+
+    # Find the string argument to require()
+    string_node = next(
+        (c for c in require_clause.children if c.type == "string"),
+        None,
+    )
+    module_name = ctx.node_text(string_node) if string_node else '""'
+
+    arg_reg = ctx.fresh_reg()
+    ctx.emit(Opcode.CONST, result_reg=arg_reg, operands=[module_name], node=node)
+    call_reg = ctx.fresh_reg()
+    ctx.emit(
+        Opcode.CALL_FUNCTION,
+        result_reg=call_reg,
+        operands=["require", arg_reg],
+        node=node,
+    )
+    ctx.emit(Opcode.DECL_VAR, operands=[var_name, call_reg], node=node)
