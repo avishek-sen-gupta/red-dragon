@@ -24,6 +24,7 @@ class PascalFrontend(BaseFrontend):
             block_node_types=frozenset(
                 {
                     PascalNodeType.BLOCK,
+                    PascalNodeType.BLOCK_TR,
                     PascalNodeType.ROOT,
                     PascalNodeType.PROGRAM,
                     PascalNodeType.STATEMENTS,
@@ -86,6 +87,7 @@ class PascalFrontend(BaseFrontend):
             PascalNodeType.ROOT: pascal_cf.lower_pascal_root,
             PascalNodeType.PROGRAM: pascal_cf.lower_pascal_program,
             PascalNodeType.BLOCK: pascal_cf.lower_pascal_block,
+            PascalNodeType.BLOCK_TR: pascal_cf.lower_pascal_block,
             PascalNodeType.STATEMENT: pascal_cf.lower_pascal_statement,
             PascalNodeType.ASSIGNMENT: pascal_decl.lower_pascal_assignment,
             PascalNodeType.DECL_VARS: pascal_decl.lower_pascal_decl_vars,
