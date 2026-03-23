@@ -25,7 +25,13 @@ from interpreter.parser import TreeSitterParserFactory
 from interpreter import constants
 
 
-def _make_inst(opcode: Opcode, result_reg=None, operands=None, label: CodeLabel = NO_LABEL, branch_targets: list[CodeLabel] = []):
+def _make_inst(
+    opcode: Opcode,
+    result_reg=None,
+    operands=None,
+    label: CodeLabel = NO_LABEL,
+    branch_targets: list[CodeLabel] = [],
+):
     """Helper to build an IRInstruction concisely."""
     return IRInstruction(
         opcode=opcode,
@@ -94,7 +100,11 @@ class TestReachingDefinitions:
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t_cond", operands=["true"]),
-            _make_inst(Opcode.BRANCH_IF, operands=["t_cond"], branch_targets=[CodeLabel("then"), CodeLabel("else")]),
+            _make_inst(
+                Opcode.BRANCH_IF,
+                operands=["t_cond"],
+                branch_targets=[CodeLabel("then"), CodeLabel("else")],
+            ),
             # then branch
             _make_inst(Opcode.LABEL, label=CodeLabel("then")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
@@ -127,7 +137,9 @@ class TestReachingDefinitions:
             _make_inst(Opcode.LABEL, label=CodeLabel("loop_header")),
             _make_inst(Opcode.LOAD_VAR, result_reg="t_cond", operands=["x"]),
             _make_inst(
-                Opcode.BRANCH_IF, operands=["t_cond"], branch_targets=[CodeLabel("loop_body"), CodeLabel("loop_exit")]
+                Opcode.BRANCH_IF,
+                operands=["t_cond"],
+                branch_targets=[CodeLabel("loop_body"), CodeLabel("loop_exit")],
             ),
             # loop body
             _make_inst(Opcode.LABEL, label=CodeLabel("loop_body")),
@@ -206,7 +218,11 @@ class TestDefUseChains:
         ir = [
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.CONST, result_reg="t_cond", operands=["true"]),
-            _make_inst(Opcode.BRANCH_IF, operands=["t_cond"], branch_targets=[CodeLabel("then"), CodeLabel("else")]),
+            _make_inst(
+                Opcode.BRANCH_IF,
+                operands=["t_cond"],
+                branch_targets=[CodeLabel("then"), CodeLabel("else")],
+            ),
             _make_inst(Opcode.LABEL, label=CodeLabel("then")),
             _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
@@ -413,7 +429,9 @@ class TestDependencyGraph:
             _make_inst(Opcode.LABEL, label=CodeLabel("loop_header")),
             _make_inst(Opcode.LOAD_VAR, result_reg="t_cond", operands=["x"]),
             _make_inst(
-                Opcode.BRANCH_IF, operands=["t_cond"], branch_targets=[CodeLabel("loop_body"), CodeLabel("loop_exit")]
+                Opcode.BRANCH_IF,
+                operands=["t_cond"],
+                branch_targets=[CodeLabel("loop_body"), CodeLabel("loop_exit")],
             ),
             _make_inst(Opcode.LABEL, label=CodeLabel("loop_body")),
             _make_inst(Opcode.LOAD_VAR, result_reg="t1", operands=["x"]),
@@ -439,7 +457,11 @@ class TestIntegration:
             _make_inst(Opcode.CONST, result_reg="t0", operands=["1"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t0"]),
             _make_inst(Opcode.CONST, result_reg="t_cond", operands=["true"]),
-            _make_inst(Opcode.BRANCH_IF, operands=["t_cond"], branch_targets=[CodeLabel("then"), CodeLabel("else")]),
+            _make_inst(
+                Opcode.BRANCH_IF,
+                operands=["t_cond"],
+                branch_targets=[CodeLabel("then"), CodeLabel("else")],
+            ),
             _make_inst(Opcode.LABEL, label=CodeLabel("then")),
             _make_inst(Opcode.CONST, result_reg="t1", operands=["2"]),
             _make_inst(Opcode.STORE_VAR, operands=["y", "t1"]),
@@ -491,7 +513,11 @@ class TestIntegration:
             _make_inst(Opcode.CONST, result_reg="t2", operands=["1"]),
             _make_inst(Opcode.BINOP, result_reg="t3", operands=["+", "t1", "t2"]),
             _make_inst(Opcode.STORE_VAR, operands=["x", "t3"]),
-            _make_inst(Opcode.BRANCH_IF, operands=["t3"], branch_targets=[CodeLabel("loop"), CodeLabel("exit")]),
+            _make_inst(
+                Opcode.BRANCH_IF,
+                operands=["t3"],
+                branch_targets=[CodeLabel("loop"), CodeLabel("exit")],
+            ),
             _make_inst(Opcode.LABEL, label=CodeLabel("exit")),
             _make_inst(Opcode.RETURN, operands=["t3"]),
         ]

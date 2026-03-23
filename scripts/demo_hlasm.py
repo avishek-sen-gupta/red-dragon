@@ -129,8 +129,16 @@ def main():
     cfg = build_cfg(instructions)
     print(f"  {len(cfg.blocks)} basic blocks:")
     for label, block in cfg.blocks.items():
-        preds = ", ".join(str(p) for p in block.predecessors) if block.predecessors else "(none)"
-        succs = ", ".join(str(s) for s in block.successors) if block.successors else "(none)"
+        preds = (
+            ", ".join(str(p) for p in block.predecessors)
+            if block.predecessors
+            else "(none)"
+        )
+        succs = (
+            ", ".join(str(s) for s in block.successors)
+            if block.successors
+            else "(none)"
+        )
         print(
             f"    [{label}]  {len(block.instructions)} instructions  "
             f"preds={preds}  succs={succs}"

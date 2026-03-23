@@ -108,7 +108,8 @@ class TestKotlinControlFlow:
         assert Opcode.BRANCH_IF in opcodes
         labels = _find_all(instructions, Opcode.LABEL)
         assert any(
-            inst.label.contains("match") or inst.label.contains("when") for inst in labels
+            inst.label.contains("match") or inst.label.contains("when")
+            for inst in labels
         )
         stores = _find_all(instructions, Opcode.DECL_VAR)
         assert any("r" in inst.operands for inst in stores)

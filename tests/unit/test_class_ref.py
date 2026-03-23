@@ -66,7 +66,9 @@ class TestNoClassRef:
     def test_lookup_pattern(self):
         """Verify the .get(label, NO_CLASS_REF) pattern works."""
         table: dict[str, ClassRef] = {
-            "class_Dog_0": ClassRef(name="Dog", label=CodeLabel("class_Dog_0"), parents=())
+            "class_Dog_0": ClassRef(
+                name="Dog", label=CodeLabel("class_Dog_0"), parents=()
+            )
         }
         found = table.get("class_Dog_0", NO_CLASS_REF)
         assert found.name == "Dog"

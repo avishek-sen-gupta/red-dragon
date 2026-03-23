@@ -13,7 +13,13 @@ from interpreter.frontend import Frontend
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
-from interpreter.ir import NO_SOURCE_LOCATION, IRInstruction, Opcode, CodeLabel, NO_LABEL
+from interpreter.ir import (
+    NO_SOURCE_LOCATION,
+    IRInstruction,
+    Opcode,
+    CodeLabel,
+    NO_LABEL,
+)
 from interpreter.llm.llm_client import LLMClient
 from interpreter import constants
 

@@ -43,7 +43,9 @@ def lower_perform(
         logger.warning("PERFORM with unknown spec: %s", stmt.spec)
 
 
-def resolve_perform_target(ctx: EmitContext, stmt: PerformStatement) -> tuple[CodeLabel, CodeLabel]:
+def resolve_perform_target(
+    ctx: EmitContext, stmt: PerformStatement
+) -> tuple[CodeLabel, CodeLabel]:
     """Resolve branch-target label and continuation-key label for PERFORM."""
     target = stmt.target
     section_paras = ctx.section_paragraphs

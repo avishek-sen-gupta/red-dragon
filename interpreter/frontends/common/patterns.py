@@ -569,7 +569,9 @@ def _compile_refutable_case(
 
     case_true = ctx.fresh_label("case_true")
     case_next = ctx.fresh_label("case_next")
-    ctx.emit(Opcode.BRANCH_IF, operands=[test_reg], branch_targets=[case_true, case_next])
+    ctx.emit(
+        Opcode.BRANCH_IF, operands=[test_reg], branch_targets=[case_true, case_next]
+    )
     ctx.emit(Opcode.LABEL, label=case_true)
     # Only emit bindings in the true-branch if not already emitted pre-guard.
     if not (

@@ -19,9 +19,13 @@ class TestScanClassesOverloads:
             IRInstruction(opcode=Opcode.CONST, operands=["func_greet_0"]),
             IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("end_class_Foo_0")),
         ]
-        func_st = {"func_greet_0": FuncRef(name="greet", label=CodeLabel("func_greet_0"))}
+        func_st = {
+            "func_greet_0": FuncRef(name="greet", label=CodeLabel("func_greet_0"))
+        }
         class_st = {
-            "class_Foo_0": ClassRef(name="Foo", label=CodeLabel("class_Foo_0"), parents=()),
+            "class_Foo_0": ClassRef(
+                name="Foo", label=CodeLabel("class_Foo_0"), parents=()
+            ),
         }
         _classes, class_methods, _parents = _scan_classes(
             instructions, func_st, class_st
@@ -41,7 +45,9 @@ class TestScanClassesOverloads:
             "func_greet_1": FuncRef(name="greet", label=CodeLabel("func_greet_1")),
         }
         class_st = {
-            "class_Foo_0": ClassRef(name="Foo", label=CodeLabel("class_Foo_0"), parents=()),
+            "class_Foo_0": ClassRef(
+                name="Foo", label=CodeLabel("class_Foo_0"), parents=()
+            ),
         }
         _classes, class_methods, _parents = _scan_classes(
             instructions, func_st, class_st
@@ -58,10 +64,14 @@ class TestScanClassesOverloads:
         ]
         func_st = {
             "func_greet_0": FuncRef(name="greet", label=CodeLabel("func_greet_0")),
-            "func_farewell_0": FuncRef(name="farewell", label=CodeLabel("func_farewell_0")),
+            "func_farewell_0": FuncRef(
+                name="farewell", label=CodeLabel("func_farewell_0")
+            ),
         }
         class_st = {
-            "class_Foo_0": ClassRef(name="Foo", label=CodeLabel("class_Foo_0"), parents=()),
+            "class_Foo_0": ClassRef(
+                name="Foo", label=CodeLabel("class_Foo_0"), parents=()
+            ),
         }
         _classes, class_methods, _parents = _scan_classes(
             instructions, func_st, class_st
@@ -84,7 +94,9 @@ class TestScanClassesOverloads:
             "func_add_2": FuncRef(name="add", label=CodeLabel("func_add_2")),
         }
         class_st = {
-            "class_Calc_0": ClassRef(name="Calc", label=CodeLabel("class_Calc_0"), parents=()),
+            "class_Calc_0": ClassRef(
+                name="Calc", label=CodeLabel("class_Calc_0"), parents=()
+            ),
         }
         _classes, class_methods, _parents = _scan_classes(
             instructions, func_st, class_st
