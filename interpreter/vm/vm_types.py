@@ -82,7 +82,9 @@ class StackFrame:
     local_vars: dict[str, TypedValue] = field(default_factory=dict)
     return_label: CodeLabel | None = None
     return_ip: int | None = None  # ip to resume at in caller block
-    result_reg: Register = field(default_factory=lambda: NO_REGISTER)  # caller's register for return value
+    result_reg: Register = field(
+        default_factory=lambda: NO_REGISTER
+    )  # caller's register for return value
     closure_env_id: str = ""
     captured_var_names: frozenset[str] = field(default_factory=frozenset)
     var_heap_aliases: dict[str, Pointer] = field(default_factory=dict)
@@ -91,7 +93,9 @@ class StackFrame:
     def to_dict(self) -> dict:
         d: dict[str, Any] = {
             "function_name": self.function_name,
-            "registers": {str(k): _serialize_value(v) for k, v in self.registers.items()},
+            "registers": {
+                str(k): _serialize_value(v) for k, v in self.registers.items()
+            },
             "local_vars": {k: _serialize_value(v) for k, v in self.local_vars.items()},
             "return_label": str(self.return_label) if self.return_label else None,
         }

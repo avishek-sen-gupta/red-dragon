@@ -205,7 +205,7 @@ class IRRenumberer:
         return result, next_offset
 
     def _renumber_reg(self, reg: str | None, offset: int) -> str | None:
-        if reg is None or (hasattr(reg, 'is_present') and not reg.is_present()):
+        if reg is None or (hasattr(reg, "is_present") and not reg.is_present()):
             return None
         reg_str = str(reg)
         match = _REG_PATTERN.match(reg_str)
@@ -228,9 +228,7 @@ class IRRenumberer:
             )
         return operand
 
-    def _renumber_label(
-        self, label: CodeLabel, suffix: str
-    ) -> CodeLabel:
+    def _renumber_label(self, label: CodeLabel, suffix: str) -> CodeLabel:
         if isinstance(label, NoCodeLabel):
             return NO_LABEL
         return label.with_suffix(suffix)
@@ -294,7 +292,11 @@ class ChunkedLLMFrontend(Frontend):
             logger.warning(
                 "ChunkedLLMFrontend: no chunks extracted, returning entry label only"
             )
-            return [IRInstruction(opcode=Opcode.LABEL, label=CodeLabel(constants.CFG_ENTRY_LABEL))]
+            return [
+                IRInstruction(
+                    opcode=Opcode.LABEL, label=CodeLabel(constants.CFG_ENTRY_LABEL)
+                )
+            ]
 
         all_instructions: list[IRInstruction] = []
         reg_offset = 0
@@ -343,7 +345,9 @@ class ChunkedLLMFrontend(Frontend):
             all_instructions.extend(renumbered)
 
         # Prepend the single entry label
-        entry = IRInstruction(opcode=Opcode.LABEL, label=CodeLabel(constants.CFG_ENTRY_LABEL))
+        entry = IRInstruction(
+            opcode=Opcode.LABEL, label=CodeLabel(constants.CFG_ENTRY_LABEL)
+        )
         combined = [entry] + all_instructions
 
         # Convert LLM-emitted <function:...> and <class:...> strings to plain labels after renumbering

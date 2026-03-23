@@ -14,7 +14,9 @@ class Register:
 
     def __post_init__(self):
         if not isinstance(self.name, str):
-            raise TypeError(f"Register.name must be str, got {type(self.name).__name__}: {self.name!r}")
+            raise TypeError(
+                f"Register.name must be str, got {type(self.name).__name__}: {self.name!r}"
+            )
 
     def is_present(self) -> bool:
         return True
@@ -53,7 +55,9 @@ class Register:
                 return NO_REGISTER
             if isinstance(value, str):
                 return Register(value)
-            raise TypeError(f"Cannot coerce {type(value).__name__} to Register: {value!r}")
+            raise TypeError(
+                f"Cannot coerce {type(value).__name__} to Register: {value!r}"
+            )
 
         return core_schema.no_info_plain_validator_function(_coerce)
 
