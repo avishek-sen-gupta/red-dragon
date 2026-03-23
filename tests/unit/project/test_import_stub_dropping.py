@@ -112,9 +112,7 @@ class TestImportStubDropping:
                 # DECL_VAR for the import — not adjacent
                 IRInstruction(opcode=Opcode.DECL_VAR, operands=["add", "%0"]),
                 # Unrelated DECL_VAR that must NOT be dropped
-                IRInstruction(
-                    opcode=Opcode.CONST, result_reg="%1", operands=["42"]
-                ),
+                IRInstruction(opcode=Opcode.CONST, result_reg="%1", operands=["42"]),
                 IRInstruction(opcode=Opcode.DECL_VAR, operands=["x", "%1"]),
             ],
         )
@@ -125,4 +123,6 @@ class TestImportStubDropping:
             for inst in linked.merged_ir
             if inst.opcode == Opcode.DECL_VAR and str(inst.operands[0]) == "x"
         ]
-        assert len(decl_x) == 1, f"DECL_VAR x was incorrectly dropped: {linked.merged_ir}"
+        assert (
+            len(decl_x) == 1
+        ), f"DECL_VAR x was incorrectly dropped: {linked.merged_ir}"
