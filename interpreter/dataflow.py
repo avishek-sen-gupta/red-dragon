@@ -10,6 +10,7 @@ from functools import reduce
 from interpreter import constants
 from interpreter.cfg import BasicBlock, CFG
 from interpreter.ir import IRInstruction, Opcode, VAR_DEFINITION_OPCODES
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
@@ -114,10 +115,10 @@ def _defs_of(instruction: IRInstruction) -> list[str]:
     """Return variable/register names defined by an instruction."""
     if instruction.opcode in VAR_DEFINITION_OPCODES and len(instruction.operands) >= 1:
         return [instruction.operands[0]]
-    if instruction.opcode in _VALUE_PRODUCERS and instruction.result_reg is not None:
-        return [instruction.result_reg]
-    if instruction.opcode == Opcode.SYMBOLIC and instruction.result_reg is not None:
-        return [instruction.result_reg]
+    if instruction.opcode in _VALUE_PRODUCERS and instruction.result_reg.is_present():
+        return [str(instruction.result_reg)]
+    if instruction.opcode == Opcode.SYMBOLIC and instruction.result_reg.is_present():
+        return [str(instruction.result_reg)]
     return []
 
 
@@ -157,7 +158,7 @@ def _uses_of(instruction: IRInstruction) -> list[str]:
     if op == Opcode.THROW and len(operands) >= 1:
         return [operands[0]]
     if op == Opcode.ALLOC_REGION:
-        return [o for o in operands if isinstance(o, str) and o.startswith("%")]
+        return [o for o in operands if (isinstance(o, Register) and o.is_present()) or (isinstance(o, str) and o.startswith("%"))]
     if op == Opcode.LOAD_REGION and len(operands) >= 2:
         return [operands[0], operands[1]]
     if op == Opcode.WRITE_REGION and len(operands) >= 4:
