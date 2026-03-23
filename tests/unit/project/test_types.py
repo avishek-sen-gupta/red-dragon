@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from interpreter.project.types import (
+    ImportKind,
     ImportRef,
     ExportTable,
     ModuleUnit,
@@ -26,7 +27,7 @@ class TestImportRef:
         assert ref.is_relative is False
         assert ref.relative_level == 0
         assert ref.is_system is False
-        assert ref.kind == "import"
+        assert ref.kind == ImportKind.IMPORT
         assert ref.alias is None
 
     def test_python_from_import(self):
@@ -34,7 +35,7 @@ class TestImportRef:
             source_file=Path("main.py"),
             module_path="os.path",
             names=("join", "exists"),
-            kind="import",
+            kind=ImportKind.IMPORT,
         )
         assert ref.names == ("join", "exists")
         assert ref.module_path == "os.path"
@@ -78,16 +79,16 @@ class TestImportRef:
         ref = ImportRef(
             source_file=Path("main.c"),
             module_path="header.h",
-            kind="include",
+            kind=ImportKind.INCLUDE,
             is_system=False,
         )
-        assert ref.kind == "include"
+        assert ref.kind == ImportKind.INCLUDE
 
     def test_system_c_include(self):
         ref = ImportRef(
             source_file=Path("main.c"),
             module_path="stdio.h",
-            kind="include",
+            kind=ImportKind.INCLUDE,
             is_system=True,
         )
         assert ref.is_system is True
@@ -97,10 +98,10 @@ class TestImportRef:
             source_file=Path("main.rs"),
             module_path="crate::utils",
             names=("helper",),
-            kind="use",
+            kind=ImportKind.USE,
             is_relative=True,
         )
-        assert ref.kind == "use"
+        assert ref.kind == ImportKind.USE
 
     def test_frozen(self):
         ref = ImportRef(source_file=Path("main.py"), module_path="utils")
@@ -289,3 +290,22 @@ class TestCyclicImportError:
         cycle = [Path("a.py"), Path("b.py"), Path("a.py")]
         err = CyclicImportError(cycle)
         assert err.cycle == cycle
+
+
+class TestImportKind:
+    def test_all_values_defined(self):
+        from interpreter.project.types import ImportKind, ImportKind
+
+        expected = {"import", "include", "use", "require", "mod", "using"}
+        actual = {k.value for k in ImportKind}
+        assert actual == expected
+
+    def test_import_ref_uses_enum(self):
+        from interpreter.project.types import ImportKind, ImportKind
+
+        ref = ImportRef(
+            source_file=Path("main.py"),
+            module_path="utils",
+            kind=ImportKind.IMPORT,
+        )
+        assert ref.kind == ImportKind.IMPORT
