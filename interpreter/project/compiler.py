@@ -11,7 +11,7 @@ from pathlib import Path
 
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.project.types import ExportTable, ImportRef, ModuleUnit, LinkedProgram
 from interpreter.project.imports import extract_imports
 from interpreter.project.resolver import (
@@ -28,8 +28,8 @@ from interpreter import constants
 
 def build_export_table(
     ir: list[IRInstruction] | tuple[IRInstruction, ...],
-    func_symbol_table: dict[str, FuncRef],
-    class_symbol_table: dict[str, ClassRef],
+    func_symbol_table: dict[CodeLabel, FuncRef],
+    class_symbol_table: dict[CodeLabel, ClassRef],
 ) -> ExportTable:
     """Build an export table from IR instructions and symbol tables.
 

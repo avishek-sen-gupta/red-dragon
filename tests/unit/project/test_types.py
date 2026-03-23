@@ -121,11 +121,11 @@ class TestExportTable:
         assert et.all_names() == set()
 
     def test_lookup_function(self):
-        et = ExportTable(functions={"helper": "func_helper_0"})
+        et = ExportTable(functions={"helper": CodeLabel("func_helper_0")})
         assert et.lookup("helper") == "func_helper_0"
 
     def test_lookup_class(self):
-        et = ExportTable(classes={"User": "class_User_4"})
+        et = ExportTable(classes={"User": CodeLabel("class_User_4")})
         assert et.lookup("User") == "class_User_4"
 
     def test_lookup_variable(self):
@@ -133,13 +133,13 @@ class TestExportTable:
         assert et.lookup("PI") == "%3"
 
     def test_lookup_missing(self):
-        et = ExportTable(functions={"helper": "func_helper_0"})
+        et = ExportTable(functions={"helper": CodeLabel("func_helper_0")})
         assert et.lookup("missing") is None
 
     def test_lookup_priority_function_over_variable(self):
         """Functions take precedence over variables with the same name."""
         et = ExportTable(
-            functions={"x": "func_x_0"},
+            functions={"x": CodeLabel("func_x_0")},
             variables={"x": "%5"},
         )
         assert et.lookup("x") == "func_x_0"
@@ -147,15 +147,15 @@ class TestExportTable:
     def test_lookup_empty_string_label_not_skipped(self):
         """A function with an empty-string label should still be returned."""
         et = ExportTable(
-            functions={"f": ""},
-            classes={"f": "class_f_0"},
+            functions={"f": CodeLabel("")},
+            classes={"f": CodeLabel("class_f_0")},
         )
         assert et.lookup("f") == ""
 
     def test_all_names(self):
         et = ExportTable(
-            functions={"f1": "func_f1_0", "f2": "func_f2_1"},
-            classes={"C1": "class_C1_2"},
+            functions={"f1": CodeLabel("func_f1_0"), "f2": CodeLabel("func_f2_1")},
+            classes={"C1": CodeLabel("class_C1_2")},
             variables={"v1": "%0"},
         )
         assert et.all_names() == {"f1", "f2", "C1", "v1"}
@@ -163,7 +163,7 @@ class TestExportTable:
     def test_all_names_deduplicates(self):
         """If a name appears in multiple categories, all_names returns it once."""
         et = ExportTable(
-            functions={"x": "func_x_0"},
+            functions={"x": CodeLabel("func_x_0")},
             variables={"x": "%5"},
         )
         assert et.all_names() == {"x"}
@@ -185,7 +185,7 @@ class TestModuleUnit:
             path=Path("utils.py"),
             language=Language.PYTHON,
             ir=ir,
-            exports=ExportTable(functions={"helper": "func_helper_0"}),
+            exports=ExportTable(functions={"helper": CodeLabel("func_helper_0")}),
             imports=(),
         )
         assert mu.path == Path("utils.py")

@@ -59,7 +59,7 @@ def _build_func_symbol_table(
         m = _FUNC_LABEL_RE.match(operand)
         if m:
             name = m.group(1)
-            table[operand] = FuncRef(name=name, label=operand)
+            table[operand] = FuncRef(name=name, label=CodeLabel(operand))
     return table
 
 

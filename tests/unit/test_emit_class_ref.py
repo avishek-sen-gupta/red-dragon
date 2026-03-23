@@ -6,6 +6,7 @@ from interpreter.frontends.context import TreeSitterEmitContext, GrammarConstant
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.constants import Language
 from interpreter.refs.class_ref import ClassRef
+from interpreter.ir import CodeLabel
 from interpreter.ir import Opcode
 
 
@@ -24,7 +25,7 @@ class TestEmitClassRef:
         ctx.emit_class_ref("Dog", "class_Dog_0", [], result_reg="%0")
         assert "class_Dog_0" in ctx.class_symbol_table
         ref = ctx.class_symbol_table["class_Dog_0"]
-        assert ref == ClassRef(name="Dog", label="class_Dog_0", parents=())
+        assert ref == ClassRef(name="Dog", label=CodeLabel("class_Dog_0"), parents=())
 
     def test_registers_in_symbol_table_with_parents(self):
         ctx = _make_ctx()

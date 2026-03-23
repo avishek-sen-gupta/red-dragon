@@ -11,7 +11,7 @@ from interpreter.interprocedural.types import (
     ReturnEndpoint,
     VariableEndpoint,
 )
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.types.typed_value import TypedValue
 from interpreter.constants import TypeName
 from interpreter.types.type_expr import ScalarType
@@ -49,15 +49,15 @@ class TestFormatFlowEndpoint:
         assert result == {"name": "x", "type": "variable"}
 
     def test_return_endpoint(self):
-        func = FunctionEntry(label="func_f_0", params=("x",))
-        loc = InstructionLocation(block_label="func_f_0", instruction_index=5)
+        func = FunctionEntry(label=CodeLabel("func_f_0"), params=("x",))
+        loc = InstructionLocation(block_label=CodeLabel("func_f_0"), instruction_index=5)
         ep = ReturnEndpoint(function=func, location=loc)
         result = format_flow_endpoint(ep)
         assert result == {"function": "func_f_0", "type": "return"}
 
     def test_field_endpoint(self):
         base = VariableEndpoint(name="self", definition=NO_DEFINITION)
-        loc = InstructionLocation(block_label="b", instruction_index=1)
+        loc = InstructionLocation(block_label=CodeLabel("b"), instruction_index=1)
         ep = FieldEndpoint(base=base, field="name", location=loc)
         result = format_flow_endpoint(ep)
         assert result == {"base": "self", "field": "name", "type": "field"}

@@ -30,8 +30,8 @@ def _resolve_callee(callee_label: str, interprocedural):
         (
             f
             for f in interprocedural.call_graph.functions
-            if f.label.startswith("func_")
-            and "_" in f.label[5:]
+            if f.label.starts_with("func_")
+            and "_" in str(f.label)[5:]
             and f.label.split("_")[1] == callee_label
         ),
         func_by_label.get(callee_label),
@@ -135,7 +135,7 @@ result = double(5)
                     f
                     for f in interprocedural.call_graph.functions
                     if f.label.split("_")[1] == callee_label
-                    if f.label.startswith("func_") and "_" in f.label[5:]
+                    if f.label.starts_with("func_") and "_" in str(f.label)[5:]
                 ),
                 None,
             )
