@@ -7,7 +7,7 @@ Reusable by any frontend that supports property getters/setters
 from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
-from interpreter.ir import Opcode
+from interpreter.instructions import CallMethod, LoadField, StoreField
 
 
 def register_property_accessor(
@@ -39,18 +39,23 @@ def emit_field_load_or_getter(
     """Emit CALL_METHOD for getter if registered, otherwise plain LOAD_FIELD."""
     if has_property_accessor(ctx, class_name, field_name, "get"):
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_METHOD,
-            result_reg=reg,
-            operands=[obj_reg, f"__get_{field_name}__"],
+        ctx.emit_inst(
+            CallMethod(
+                result_reg=reg,
+                obj_reg=str(obj_reg),
+                method_name=f"__get_{field_name}__",
+                args=(),
+            ),
             node=node,
         )
         return reg
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_FIELD,
-        result_reg=reg,
-        operands=[obj_reg, field_name],
+    ctx.emit_inst(
+        LoadField(
+            result_reg=reg,
+            obj_reg=str(obj_reg),
+            field_name=field_name,
+        ),
         node=node,
     )
     return reg
@@ -66,15 +71,21 @@ def emit_field_store_or_setter(
 ) -> None:
     """Emit CALL_METHOD for setter if registered, otherwise plain STORE_FIELD."""
     if has_property_accessor(ctx, class_name, field_name, "set"):
-        ctx.emit(
-            Opcode.CALL_METHOD,
-            result_reg=ctx.fresh_reg(),
-            operands=[obj_reg, f"__set_{field_name}__", val_reg],
+        ctx.emit_inst(
+            CallMethod(
+                result_reg=ctx.fresh_reg(),
+                obj_reg=str(obj_reg),
+                method_name=f"__set_{field_name}__",
+                args=(str(val_reg),),
+            ),
             node=node,
         )
         return
-    ctx.emit(
-        Opcode.STORE_FIELD,
-        operands=[obj_reg, field_name, val_reg],
+    ctx.emit_inst(
+        StoreField(
+            obj_reg=str(obj_reg),
+            field_name=field_name,
+            value_reg=str(val_reg),
+        ),
         node=node,
     )

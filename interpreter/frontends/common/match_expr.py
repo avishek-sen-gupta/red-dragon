@@ -19,7 +19,14 @@ from interpreter.frontends.common.patterns import (
     _needs_pre_guard_bindings,
 )
 from interpreter.frontends.context import TreeSitterEmitContext
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.instructions import (
+    Binop,
+    Branch,
+    BranchIf,
+    DeclVar,
+    Label_,
+    LoadVar,
+)
 
 
 @dataclass(frozen=True)
@@ -51,9 +58,9 @@ def lower_match_as_expr(
     for arm in spec.extract_arms(body_node):
         _lower_arm(ctx, arm, subject_reg, result_var, end_label, spec)
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[result_var])
+    ctx.emit_inst(LoadVar(result_reg=reg, name=result_var))
     return reg
 
 
@@ -76,8 +83,8 @@ def _lower_arm(
     if is_irrefutable:
         compile_pattern_bindings(ctx, subject_reg, pattern)
         body_reg = spec.body_of(ctx, arm)
-        ctx.emit(Opcode.DECL_VAR, operands=[result_var, body_reg])
-        ctx.emit(Opcode.BRANCH, label=end_label)
+        ctx.emit_inst(DeclVar(name=result_var, value_reg=str(body_reg)))
+        ctx.emit_inst(Branch(label=end_label))
         return
 
     test_reg = compile_pattern_test(ctx, subject_reg, pattern)
@@ -87,26 +94,30 @@ def _lower_arm(
             compile_pattern_bindings(ctx, subject_reg, pattern)
         guard_reg = ctx.lower_expr(guard_node)
         final_test = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.BINOP,
-            result_reg=final_test,
-            operands=["&&", test_reg, guard_reg],
+        ctx.emit_inst(
+            Binop(
+                result_reg=final_test,
+                operator="&&",
+                left=str(test_reg),
+                right=str(guard_reg),
+            ),
         )
         test_reg = final_test
 
     arm_label = ctx.fresh_label("match_arm")
     next_label = ctx.fresh_label("match_next")
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[test_reg],
-        branch_targets=[arm_label, next_label],
+    ctx.emit_inst(
+        BranchIf(
+            cond_reg=str(test_reg),
+            branch_targets=(arm_label, next_label),
+        ),
     )
-    ctx.emit(Opcode.LABEL, label=arm_label)
+    ctx.emit_inst(Label_(label=arm_label))
 
     if not (guard_node and _needs_pre_guard_bindings(pattern)):
         compile_pattern_bindings(ctx, subject_reg, pattern)
 
     body_reg = spec.body_of(ctx, arm)
-    ctx.emit(Opcode.DECL_VAR, operands=[result_var, body_reg])
-    ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=next_label)
+    ctx.emit_inst(DeclVar(name=result_var, value_reg=str(body_reg)))
+    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Label_(label=next_label))
