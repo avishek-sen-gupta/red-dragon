@@ -20,6 +20,7 @@ from interpreter.frontends.type_extraction import (
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.typescript_node_types import TypeScriptNodeType
 from interpreter.types.type_expr import UNKNOWN, ScalarType, TypeExpr, metatype
+from interpreter.register import Register
 
 
 class TypeScriptFrontend(JavaScriptFrontend):
@@ -108,7 +109,7 @@ class TypeScriptFrontend(JavaScriptFrontend):
 # ── TS-specific expression lowerers (pure functions) ─────────────
 
 
-def lower_as_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_as_expression(ctx: TreeSitterEmitContext, node) -> Register:
     # x as Type -> just lower x, ignore the type
     children = [c for c in node.children if c.is_named]
     if children:
@@ -116,7 +117,7 @@ def lower_as_expression(ctx: TreeSitterEmitContext, node) -> str:
     return common_expr.lower_const_literal(ctx, node)
 
 
-def lower_non_null_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_non_null_expr(ctx: TreeSitterEmitContext, node) -> Register:
     # x! -> just lower x
     children = [c for c in node.children if c.is_named]
     if children:
@@ -124,14 +125,14 @@ def lower_non_null_expr(ctx: TreeSitterEmitContext, node) -> str:
     return common_expr.lower_const_literal(ctx, node)
 
 
-def lower_satisfies_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_satisfies_expr(ctx: TreeSitterEmitContext, node) -> Register:
     children = [c for c in node.children if c.is_named]
     if children:
         return ctx.lower_expr(children[0])
     return common_expr.lower_const_literal(ctx, node)
 
 
-def lower_instantiation_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_instantiation_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `fn<Type>` -> lower fn, discard type arguments (type erasure)."""
     func_node = next(
         (c for c in node.children if c.is_named and c.type != "type_arguments"),
@@ -142,7 +143,7 @@ def lower_instantiation_expr(ctx: TreeSitterEmitContext, node) -> str:
     return common_expr.lower_const_literal(ctx, node)
 
 
-def lower_type_assertion(ctx: TreeSitterEmitContext, node) -> str:
+def lower_type_assertion(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `<Type>expr` -> just lower expr, ignore the type."""
     children = [c for c in node.children if c.is_named]
     # type_assertion: <Type>expr — type is first child, expression is last
@@ -564,7 +565,7 @@ def lower_ts_params(ctx: TreeSitterEmitContext, params_node) -> None:
         param_index += 1
 
 
-def lower_ts_arrow_function(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ts_arrow_function(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower arrow function using TS-specific param handling."""
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
@@ -603,7 +604,7 @@ def lower_ts_arrow_function(ctx: TreeSitterEmitContext, node) -> str:
     return func_reg
 
 
-def lower_ts_function_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ts_function_expression(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower anonymous function expression using TS-specific param handling."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
@@ -688,7 +689,7 @@ def lower_import_alias(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.STORE_VAR, operands=[alias_name, target_reg], node=node)
 
 
-def _lower_nested_identifier(ctx: TreeSitterEmitContext, node) -> str:
+def _lower_nested_identifier(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower a nested_identifier (Bar.Baz) or plain identifier to a register."""
     if node.type == "identifier":
         return ctx.lower_expr(node)

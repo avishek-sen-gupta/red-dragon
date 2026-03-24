@@ -16,6 +16,7 @@ from interpreter.frontends.common.expressions import (
     extract_call_args_unwrap,
 )
 from interpreter.frontends.php.node_types import PHPNodeType
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ _NON_INTERPOLATION_TYPES = frozenset(
 )
 
 
-def lower_php_variable(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_variable(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower PHP variable ($x) as LOAD_VAR."""
     var_name = ctx.node_text(node)
     reg = ctx.fresh_reg()
@@ -37,7 +38,9 @@ def lower_php_variable(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def _lower_php_interpolated_children(ctx: TreeSitterEmitContext, children, node) -> str:
+def _lower_php_interpolated_children(
+    ctx: TreeSitterEmitContext, children, node
+) -> Register:
     """Shared logic: decompose string_content / variable_name / expr children into CONST + BINOP '+'.
 
     Used by both encapsed_string and heredoc_body.
@@ -62,7 +65,7 @@ def _is_interpolation_relevant(child) -> bool:
     )
 
 
-def _lower_interpolated_child(ctx: TreeSitterEmitContext, child) -> str:
+def _lower_interpolated_child(ctx: TreeSitterEmitContext, child) -> Register:
     """Lower a single interpolation child to a register."""
     if child.type == PHPNodeType.STRING_CONTENT:
         frag_reg = ctx.fresh_reg()
@@ -80,7 +83,7 @@ def _lower_interpolated_child(ctx: TreeSitterEmitContext, child) -> str:
 
 def _lower_interpolated_string_parts(
     ctx: TreeSitterEmitContext, parts: list[str], node
-) -> str:
+) -> Register:
     """Concatenate parts with BINOP '+'."""
     if not parts:
         reg = ctx.fresh_reg()
@@ -99,7 +102,7 @@ def _lower_interpolated_string_parts(
     return result
 
 
-def lower_php_encapsed_string(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_encapsed_string(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower PHP double-quoted string, decomposing interpolation into CONST + LOAD_VAR + BINOP '+'."""
     has_interpolation = any(
         c.is_named and c.type not in _NON_INTERPOLATION_TYPES for c in node.children
@@ -109,7 +112,7 @@ def lower_php_encapsed_string(ctx: TreeSitterEmitContext, node) -> str:
     return _lower_php_interpolated_children(ctx, node.children, node)
 
 
-def lower_php_heredoc(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_heredoc(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower PHP heredoc (<<<EOT ... EOT), decomposing interpolation inside heredoc_body."""
     body = next((c for c in node.children if c.type == PHPNodeType.HEREDOC_BODY), None)
     if body is None:
@@ -123,7 +126,7 @@ def lower_php_heredoc(ctx: TreeSitterEmitContext, node) -> str:
     return _lower_php_interpolated_children(ctx, body.children, node)
 
 
-def lower_php_func_call(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_func_call(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower function_call_expression: name(args) or dynamic call."""
     func_node = node.child_by_field_name(ctx.constants.call_function_field)
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
@@ -152,7 +155,7 @@ def lower_php_func_call(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_php_method_call(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_method_call(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower $obj->method(args) as CALL_METHOD."""
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     name_node = node.child_by_field_name("name")
@@ -171,7 +174,7 @@ def lower_php_method_call(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_php_member_access(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_member_access(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower $obj->field as LOAD_FIELD."""
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     name_node = node.child_by_field_name("name")
@@ -189,7 +192,7 @@ def lower_php_member_access(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_php_subscript(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_subscript(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower $arr[idx] as LOAD_INDEX."""
     children = [c for c in node.children if c.is_named]
     if len(children) < 2:
@@ -206,7 +209,7 @@ def lower_php_subscript(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_php_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower assignment expression ($x = expr)."""
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
@@ -215,7 +218,7 @@ def lower_php_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
     return val_reg
 
 
-def lower_php_augmented_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_augmented_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower augmented assignment ($x += expr)."""
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
@@ -285,7 +288,7 @@ def lower_php_store_target(
         )
 
 
-def lower_php_cast(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_cast(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower (type) expr -- just lower the inner expression."""
     children = [c for c in node.children if c.is_named]
     if children:
@@ -293,7 +296,7 @@ def lower_php_cast(ctx: TreeSitterEmitContext, node) -> str:
     return lower_const_literal(ctx, node)
 
 
-def lower_php_ternary(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_ternary(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower ternary / conditional expression ($cond ? $a : $b)."""
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     true_node = node.child_by_field_name("body")
@@ -330,7 +333,7 @@ def lower_php_ternary(ctx: TreeSitterEmitContext, node) -> str:
     return result_reg
 
 
-def lower_php_throw_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_throw_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower throw_expression when it appears in expression context."""
     from interpreter.frontends.common.exceptions import lower_raise_or_throw
 
@@ -344,7 +347,7 @@ def lower_php_throw_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_php_object_creation(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower ``new Foo(args)`` or ``new class { ... }``."""
     from interpreter.frontends.php.declarations import lower_php_class
 
@@ -466,7 +469,7 @@ def _lower_php_anonymous_class(
     ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
 
 
-def lower_php_array(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_array(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower array_creation_expression: array(1, 2) or [1, 2] or ['k' => 'v'].
 
     Value-only elements: NEW_ARRAY + STORE_INDEX per element.
@@ -490,7 +493,7 @@ def lower_php_array(ctx: TreeSitterEmitContext, node) -> str:
 
 def _lower_php_associative_array(
     ctx: TreeSitterEmitContext, node, elements: list
-) -> str:
+) -> Register:
     """Lower associative array as NEW_OBJECT + STORE_INDEX per key-value pair."""
     obj_reg = ctx.fresh_reg()
     ctx.emit(
@@ -519,7 +522,9 @@ def _lower_php_associative_array(
     return obj_reg
 
 
-def _lower_php_indexed_array(ctx: TreeSitterEmitContext, node, elements: list) -> str:
+def _lower_php_indexed_array(
+    ctx: TreeSitterEmitContext, node, elements: list
+) -> Register:
     """Lower indexed array as NEW_ARRAY + STORE_INDEX per element."""
     size_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elements))])
@@ -539,7 +544,7 @@ def _lower_php_indexed_array(ctx: TreeSitterEmitContext, node, elements: list) -
     return arr_reg
 
 
-def lower_php_match_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_match_expression(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower match(subject) { pattern => expr, default => expr } as if/else chain."""
     cond_node = node.child_by_field_name("condition")
     body_node = node.child_by_field_name("body")
@@ -618,7 +623,7 @@ def lower_php_match_expression(ctx: TreeSitterEmitContext, node) -> str:
     return result_reg
 
 
-def lower_php_arrow_function(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_arrow_function(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower fn($x) => expr as a function definition with implicit return."""
     from interpreter.frontends.php.declarations import lower_php_params
 
@@ -653,7 +658,7 @@ def lower_php_arrow_function(ctx: TreeSitterEmitContext, node) -> str:
     return func_reg
 
 
-def lower_php_scoped_call(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_scoped_call(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower ClassName::method(args) as CALL_METHOD on a ClassRef.
 
     Emits LOAD_VAR for the class name (which resolves to a ClassRef),
@@ -686,7 +691,7 @@ def lower_php_scoped_call(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_php_anonymous_function(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_anonymous_function(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower function($x) use ($y) { body } as anonymous function."""
     from interpreter.frontends.php.declarations import lower_php_params
     from interpreter.frontends.php.control_flow import lower_php_compound
@@ -721,7 +726,7 @@ def lower_php_anonymous_function(ctx: TreeSitterEmitContext, node) -> str:
     return func_reg
 
 
-def lower_php_nullsafe_member_access(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_nullsafe_member_access(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower $obj?->field as LOAD_FIELD (null-safety is semantic)."""
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     name_node = node.child_by_field_name("name")
@@ -739,7 +744,7 @@ def lower_php_nullsafe_member_access(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_php_class_constant_access(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_class_constant_access(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower ClassName::CONST as LOAD_FIELD on the class."""
     named = [c for c in node.children if c.is_named]
     if len(named) < 2:
@@ -756,7 +761,7 @@ def lower_php_class_constant_access(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_php_scoped_property_access(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_scoped_property_access(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower ClassName::$prop as LOAD_FIELD on the class."""
     named = [c for c in node.children if c.is_named]
     if len(named) < 2:
@@ -773,7 +778,7 @@ def lower_php_scoped_property_access(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_php_yield(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_yield(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower yield $value as CALL_FUNCTION('yield', expr)."""
     named = [c for c in node.children if c.is_named]
     arg_regs = [ctx.lower_expr(c) for c in named]
@@ -787,7 +792,7 @@ def lower_php_yield(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_php_reference_assignment(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_reference_assignment(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower $x = &$y as STORE_VAR (ignore reference semantics)."""
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
@@ -797,7 +802,7 @@ def lower_php_reference_assignment(ctx: TreeSitterEmitContext, node) -> str:
     return val_reg
 
 
-def lower_php_dynamic_variable(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_dynamic_variable(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower ``${x}`` -- unwrap to inner variable_name or expression."""
     named_children = [c for c in node.children if c.is_named]
     if named_children:
@@ -805,7 +810,7 @@ def lower_php_dynamic_variable(ctx: TreeSitterEmitContext, node) -> str:
     return lower_const_literal(ctx, node)
 
 
-def lower_php_include(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_include(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower ``include 'file.php'`` / ``require_once 'file.php'`` as CALL_FUNCTION."""
     keyword = node.type.replace("_expression", "")
     named_children = [c for c in node.children if c.is_named]
@@ -820,7 +825,7 @@ def lower_php_include(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_php_nullsafe_method_call(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_nullsafe_method_call(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower ``$obj?->method(args)`` like regular method call."""
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     name_node = node.child_by_field_name("name")
@@ -849,7 +854,7 @@ def lower_php_nullsafe_method_call(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_php_print_intrinsic(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_print_intrinsic(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower ``print $x`` as CALL_FUNCTION('print', arg)."""
     named_children = [c for c in node.children if c.is_named]
     arg_reg = ctx.lower_expr(named_children[0]) if named_children else ctx.fresh_reg()
@@ -863,7 +868,7 @@ def lower_php_print_intrinsic(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_php_clone_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_clone_expression(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower ``clone $obj`` as CALL_FUNCTION('clone', arg)."""
     named_children = [c for c in node.children if c.is_named]
     arg_reg = ctx.lower_expr(named_children[0]) if named_children else ctx.fresh_reg()
@@ -886,7 +891,7 @@ def lower_php_variadic_unpacking(
     return lower_spread_arg(ctx, node)
 
 
-def lower_php_error_suppression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_error_suppression(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower @expr — just lower the inner expression (error suppression is a no-op for us)."""
     named_children = [c for c in node.children if c.is_named]
     return (
@@ -896,7 +901,7 @@ def lower_php_error_suppression(ctx: TreeSitterEmitContext, node) -> str:
     )
 
 
-def lower_php_sequence_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_php_sequence_expression(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower comma expression ($a = 1, $b = 2) -> evaluate all, return last."""
     children = [c for c in node.children if c.is_named]
     if not children:

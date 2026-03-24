@@ -27,11 +27,12 @@ from interpreter.frontends.common.patterns import (
 )
 from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
 from interpreter.frontends.kotlin.patterns import parse_kotlin_pattern
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
 
-def lower_kotlin_identifier(ctx: TreeSitterEmitContext, node) -> str:
+def lower_kotlin_identifier(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower identifier, intercepting 'field' inside property accessor bodies."""
     text = ctx.node_text(node)
     if text == "field" and ctx._accessor_backing_field:
@@ -51,7 +52,7 @@ def lower_kotlin_identifier(ctx: TreeSitterEmitContext, node) -> str:
 # -- string interpolation ----------------------------------------------
 
 
-def lower_kotlin_string_literal(ctx: TreeSitterEmitContext, node) -> str:
+def lower_kotlin_string_literal(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower Kotlin string literal, decomposing $var / ${expr} interpolation."""
     has_interpolation = any(
         c.type in (KNT.INTERPOLATED_IDENTIFIER, KNT.INTERPOLATED_EXPRESSION)
@@ -99,7 +100,7 @@ def _extract_kotlin_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
     return regs
 
 
-def _extract_nav_field_name(ctx: TreeSitterEmitContext, node) -> str:
+def _extract_nav_field_name(ctx: TreeSitterEmitContext, node) -> Register:
     """Extract the identifier name from a navigation_suffix or plain node.
 
     ``navigation_suffix`` nodes include the leading dot in their text,
@@ -114,7 +115,7 @@ def _extract_nav_field_name(ctx: TreeSitterEmitContext, node) -> str:
     return ctx.node_text(node)
 
 
-def lower_kotlin_call(ctx: TreeSitterEmitContext, node) -> str:
+def lower_kotlin_call(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower call_expression: first child is callee, call_suffix has args."""
     named_children = [c for c in node.children if c.is_named]
     if not named_children:
@@ -177,7 +178,7 @@ def lower_kotlin_call(ctx: TreeSitterEmitContext, node) -> str:
 # -- navigation expression (member access) -----------------------------
 
 
-def lower_navigation_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_navigation_expr(ctx: TreeSitterEmitContext, node) -> Register:
     from interpreter.frontends.common.property_accessors import (
         emit_field_load_or_getter,
     )
@@ -208,7 +209,7 @@ def lower_navigation_expr(ctx: TreeSitterEmitContext, node) -> str:
 # -- if expression (value-producing) -----------------------------------
 
 
-def _lower_control_body(ctx: TreeSitterEmitContext, body_node) -> str:
+def _lower_control_body(ctx: TreeSitterEmitContext, body_node) -> Register:
     """Lower control_structure_body or block, returning last expr reg."""
     if body_node is None:
         reg = ctx.fresh_reg()
@@ -265,7 +266,7 @@ def _lower_control_body(ctx: TreeSitterEmitContext, body_node) -> str:
     return ctx.lower_expr(children[-1])
 
 
-def lower_if_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_if_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower Kotlin if as an expression (returns a value)."""
     children = [c for c in node.children if c.is_named]
     # Children layout: condition, consequence, [alternative]
@@ -328,7 +329,7 @@ def _kotlin_guard_of(ctx: TreeSitterEmitContext, entry):
     return None
 
 
-def _kotlin_body_of(ctx: TreeSitterEmitContext, entry) -> str:
+def _kotlin_body_of(ctx: TreeSitterEmitContext, entry) -> Register:
     """Lower the body of a when entry, returning its result register."""
     return _lower_when_body(ctx, entry)
 
@@ -341,7 +342,7 @@ _KOTLIN_WHEN_SPEC = MatchArmSpec(
 )
 
 
-def lower_when_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_when_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower when(subject) { entries } as an if/else chain.
 
     Kotlin allows ``when(val x = expr) { }`` where the subject variable
@@ -446,7 +447,7 @@ def _lower_subjectless_when_entry(
     ctx.emit(Opcode.LABEL, label=next_label)
 
 
-def _lower_when_body(ctx: TreeSitterEmitContext, entry) -> str:
+def _lower_when_body(ctx: TreeSitterEmitContext, entry) -> Register:
     """Lower a when entry body, returning the result register."""
     body_node = next(
         (c for c in entry.children if c.type == KNT.CONTROL_STRUCTURE_BODY), None
@@ -470,7 +471,7 @@ def _lower_when_body(ctx: TreeSitterEmitContext, entry) -> str:
 # -- statements as expression ------------------------------------------
 
 
-def lower_statements_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_statements_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower a ``statements`` node in expression context (last child is value)."""
     children = [c for c in node.children if c.is_named]
     if not children:
@@ -482,7 +483,7 @@ def lower_statements_expr(ctx: TreeSitterEmitContext, node) -> str:
     return ctx.lower_expr(children[-1])
 
 
-def lower_loop_as_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_loop_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower while/for/do-while in expression position (returns unit)."""
     ctx.lower_stmt(node)
     reg = ctx.fresh_reg()
@@ -493,7 +494,7 @@ def lower_loop_as_expr(ctx: TreeSitterEmitContext, node) -> str:
 # -- assignment as expression ------------------------------------------
 
 
-def lower_kotlin_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_kotlin_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower assignment in expression context (e.g. last expr in block)."""
     from interpreter.frontends.kotlin.control_flow import lower_kotlin_assignment
 
@@ -506,7 +507,7 @@ def lower_kotlin_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
 # -- jump as expression ------------------------------------------------
 
 
-def lower_jump_as_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_jump_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower jump_expression in expression context (emit + return reg)."""
     from interpreter.frontends.kotlin.control_flow import lower_jump_expr
 
@@ -519,7 +520,7 @@ def lower_jump_as_expr(ctx: TreeSitterEmitContext, node) -> str:
 # -- postfix expression ------------------------------------------------
 
 
-def lower_postfix_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_postfix_expr(ctx: TreeSitterEmitContext, node) -> Register:
     text = ctx.node_text(node)
     if "++" in text or "--" in text:
         return lower_update_expr(ctx, node)
@@ -528,7 +529,7 @@ def lower_postfix_expr(ctx: TreeSitterEmitContext, node) -> str:
     return lower_const_literal(ctx, node)
 
 
-def _lower_not_null_assertion(ctx: TreeSitterEmitContext, node) -> str:
+def _lower_not_null_assertion(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower not-null assertion (expr!!) as UNOP('!!', expr)."""
     named_children = [c for c in node.children if c.is_named]
     if not named_children:
@@ -547,7 +548,7 @@ def _lower_not_null_assertion(ctx: TreeSitterEmitContext, node) -> str:
 # -- lambda literal ----------------------------------------------------
 
 
-def lower_lambda_literal(ctx: TreeSitterEmitContext, node) -> str:
+def lower_lambda_literal(ctx: TreeSitterEmitContext, node) -> Register:
     func_name = f"__lambda_{ctx.label_counter}"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
@@ -627,7 +628,7 @@ def lower_lambda_literal(ctx: TreeSitterEmitContext, node) -> str:
 # -- anonymous function expression ------------------------------------
 
 
-def lower_anonymous_function(ctx: TreeSitterEmitContext, node) -> str:
+def lower_anonymous_function(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `fun(x: Int): Int { return x * 2 }` as a function definition.
 
     Structurally similar to lambda_literal but uses function_value_parameters
@@ -694,7 +695,7 @@ def _lower_anon_func_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 )
 
 
-def _lower_anon_func_body(ctx: TreeSitterEmitContext, body_node) -> str:
+def _lower_anon_func_body(ctx: TreeSitterEmitContext, body_node) -> Register:
     """Lower function_body, returning last expression register for expression-bodied funs."""
     last_reg = ""
     for child in body_node.children:
@@ -716,7 +717,7 @@ def _lower_anon_func_body(ctx: TreeSitterEmitContext, body_node) -> str:
 # -- object literal (anonymous object expression) ------------------------
 
 
-def lower_object_literal(ctx: TreeSitterEmitContext, node) -> str:
+def lower_object_literal(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `object : Type { ... }` as NEW_OBJECT + body lowering."""
     delegation = next(
         (c for c in node.children if c.type == KNT.DELEGATION_SPECIFIER),
@@ -750,7 +751,7 @@ def lower_object_literal(ctx: TreeSitterEmitContext, node) -> str:
 # -- range expression --------------------------------------------------
 
 
-def lower_range_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_range_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `1..10` as CALL_FUNCTION("range", start, end)."""
     named = [c for c in node.children if c.is_named]
     start_reg = ctx.lower_expr(named[0]) if len(named) > 0 else ctx.fresh_reg()
@@ -768,7 +769,7 @@ def lower_range_expr(ctx: TreeSitterEmitContext, node) -> str:
 # -- check expression (is / !is) --------------------------------------
 
 
-def lower_check_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_check_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower check_expression (is/!is) as CALL_FUNCTION('is', expr, type_text)."""
     named_children = [c for c in node.children if c.is_named]
     if len(named_children) < 2:
@@ -788,7 +789,7 @@ def lower_check_expr(ctx: TreeSitterEmitContext, node) -> str:
 # -- try expression (in expression context) ----------------------------
 
 
-def lower_try_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_try_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower try_expression in expression context (returns a register)."""
     from interpreter.frontends.kotlin.control_flow import lower_try_stmt
 
@@ -808,7 +809,7 @@ def _rhs_has_throw(node) -> bool:
     )
 
 
-def lower_elvis_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_elvis_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `x ?: default` as BINOP or conditional branch (when RHS is throw).
 
     When the RHS is a throw expression, short-circuit evaluation is required:
@@ -838,7 +839,7 @@ def lower_elvis_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def _lower_elvis_with_throw(
     ctx: TreeSitterEmitContext, node, lhs_node, rhs_node
-) -> str:
+) -> Register:
     """Lower `x ?: throw E()` as conditional: if x != null use x, else throw."""
     left_reg = ctx.lower_expr(lhs_node)
 
@@ -887,7 +888,7 @@ _KOTLIN_BITWISE_INFIX: dict[str, str] = {
 }
 
 
-def lower_infix_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_infix_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `a to b`, `x until y` as CALL_FUNCTION(infix_name, left, right).
 
     Kotlin bitwise infix functions (and, or, xor, shl, shr) are lowered as
@@ -921,7 +922,7 @@ def lower_infix_expr(ctx: TreeSitterEmitContext, node) -> str:
 # -- indexing expression -----------------------------------------------
 
 
-def lower_indexing_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_indexing_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `collection[index]` as LOAD_INDEX."""
     named_children = [c for c in node.children if c.is_named]
     if not named_children:
@@ -951,7 +952,7 @@ def lower_indexing_expr(ctx: TreeSitterEmitContext, node) -> str:
 # -- as expression (type cast) -----------------------------------------
 
 
-def lower_as_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `expr as Type` as CALL_FUNCTION('as', expr, type_name)."""
     named_children = [c for c in node.children if c.is_named]
     if len(named_children) < 2:
@@ -971,7 +972,7 @@ def lower_as_expr(ctx: TreeSitterEmitContext, node) -> str:
 # -- type_test (is Type in when) ----------------------------------
 
 
-def lower_type_test(ctx: TreeSitterEmitContext, node) -> str:
+def lower_type_test(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `is Type` as CONST(type_name) for pattern matching in when."""
     named_children = [c for c in node.children if c.is_named]
     type_node = named_children[0] if named_children else None
@@ -1148,7 +1149,7 @@ def lower_kotlin_store_target(
 # -- P1 gap handlers ------------------------------------------------------
 
 
-def lower_callable_reference(ctx: TreeSitterEmitContext, node) -> str:
+def lower_callable_reference(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower ::functionName — emit LOAD_VAR for the referenced function."""
     named_children = [c for c in node.children if c.is_named]
     func_name = (
@@ -1159,7 +1160,7 @@ def lower_callable_reference(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_unsigned_literal(ctx: TreeSitterEmitContext, node) -> str:
+def lower_unsigned_literal(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower Kotlin unsigned literal (42u, 10UL) by stripping the suffix."""
     text = _UNSIGNED_SUFFIX.sub("", ctx.node_text(node))
     reg = ctx.fresh_reg()

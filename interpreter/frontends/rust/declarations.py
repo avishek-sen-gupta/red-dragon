@@ -12,6 +12,7 @@ from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
 from interpreter.frontends.rust.node_types import RustNodeType
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,9 @@ def lower_rust_param(ctx: TreeSitterEmitContext, child) -> None:
 # ── Function definition ─────────────────────────────────────────────
 
 
-def _lower_rust_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> str:
+def _lower_rust_body_with_implicit_return(
+    ctx: TreeSitterEmitContext, body_node
+) -> Register:
     """Lower a Rust block body, returning the last bare-expression register.
 
     Rust uses expression-oriented semantics: a block ending with a bare

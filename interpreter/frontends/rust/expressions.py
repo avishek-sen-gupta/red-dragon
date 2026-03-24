@@ -16,11 +16,12 @@ from interpreter.frontends.common.patterns import (
     compile_pattern_test,
 )
 from interpreter.frontends.rust.patterns import parse_rust_pattern
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
 
-def lower_call_with_box_option(ctx: TreeSitterEmitContext, node) -> str:
+def lower_call_with_box_option(ctx: TreeSitterEmitContext, node) -> Register:
     """Rust-specific call lowering that intercepts Box::new and Some."""
     func_node = node.child_by_field_name(ctx.constants.call_function_field)
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
@@ -47,7 +48,7 @@ def lower_call_with_box_option(ctx: TreeSitterEmitContext, node) -> str:
     return lower_call_impl(ctx, func_node, args_node, node)
 
 
-def _lower_box_new(ctx: TreeSitterEmitContext, args_node, call_node) -> str:
+def _lower_box_new(ctx: TreeSitterEmitContext, args_node, call_node) -> Register:
     """Lower Box::new(expr) → CALL_FUNCTION 'Box' with the argument."""
     from interpreter.frontends.common.expressions import extract_call_args
 
@@ -62,7 +63,7 @@ def _lower_box_new(ctx: TreeSitterEmitContext, args_node, call_node) -> str:
     return reg
 
 
-def _lower_string_from(ctx: TreeSitterEmitContext, args_node) -> str:
+def _lower_string_from(ctx: TreeSitterEmitContext, args_node) -> Register:
     """Lower String::from(expr) as pass-through — return the argument directly."""
     from interpreter.frontends.common.expressions import extract_call_args
 
@@ -70,7 +71,7 @@ def _lower_string_from(ctx: TreeSitterEmitContext, args_node) -> str:
     return arg_regs[0] if arg_regs else ctx.fresh_reg()
 
 
-def _lower_some(ctx: TreeSitterEmitContext, args_node, call_node) -> str:
+def _lower_some(ctx: TreeSitterEmitContext, args_node, call_node) -> Register:
     """Lower Some(expr) -> CALL_FUNCTION 'Option' with single arg."""
     from interpreter.frontends.common.expressions import extract_call_args
 
@@ -85,7 +86,7 @@ def _lower_some(ctx: TreeSitterEmitContext, args_node, call_node) -> str:
     return reg
 
 
-def lower_field_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_field_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower field_expression: value.field -> LOAD_FIELD."""
     value_node = node.child_by_field_name("value")
     field_node = node.child_by_field_name("field")
@@ -103,7 +104,7 @@ def lower_field_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_reference_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_reference_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower &expr or &mut expr -> ADDRESS_OF for identifiers, UNOP '&' otherwise."""
     children = [
         c
@@ -140,7 +141,7 @@ def lower_reference_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_deref_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_deref_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower *expr → LOAD_INDIRECT (unified Box unwrap / reference deref)."""
     children = [c for c in node.children if c.type != RustNodeType.ASTERISK]
     inner = children[0] if children else node
@@ -155,7 +156,7 @@ def lower_deref_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_unary_or_deref(ctx: TreeSitterEmitContext, node) -> str:
+def lower_unary_or_deref(ctx: TreeSitterEmitContext, node) -> Register:
     """Route unary_expression: '*' -> pointer deref, else -> generic unop."""
     from interpreter.frontends.common.expressions import lower_unop
 
@@ -165,7 +166,7 @@ def lower_unary_or_deref(ctx: TreeSitterEmitContext, node) -> str:
     return lower_unop(ctx, node)
 
 
-def lower_if_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_if_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower Rust if expression (value-producing)."""
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
 
@@ -218,7 +219,7 @@ def lower_if_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def _lower_if_let_expr(ctx: TreeSitterEmitContext, node, let_cond_node) -> str:
+def _lower_if_let_expr(ctx: TreeSitterEmitContext, node, let_cond_node) -> Register:
     """Lower `if let Pattern = expr { body } else { alt }` as expression."""
     pattern_node = let_cond_node.child_by_field_name("pattern")
     value_node = let_cond_node.child_by_field_name("value")
@@ -260,7 +261,9 @@ def _lower_if_let_expr(ctx: TreeSitterEmitContext, node, let_cond_node) -> str:
     return reg
 
 
-def _lower_if_let_chain_expr(ctx: TreeSitterEmitContext, node, let_chain_node) -> str:
+def _lower_if_let_chain_expr(
+    ctx: TreeSitterEmitContext, node, let_chain_node
+) -> Register:
     """Lower `if let A && let B { body } else { alt }` as expression.
 
     Extracts all let_condition children from the let_chain, tests each
@@ -327,7 +330,7 @@ def _test_let_condition(ctx: TreeSitterEmitContext, let_cond_node):
     return (test_reg, pattern, subject_reg)
 
 
-def lower_expr_stmt_as_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_expr_stmt_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Unwrap expression_statement to its inner expression."""
     named = [c for c in node.children if c.is_named]
     if named:
@@ -341,7 +344,7 @@ def lower_expr_stmt_as_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_else_clause(ctx: TreeSitterEmitContext, node) -> str:
+def lower_else_clause(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower else_clause by extracting its inner block or expression."""
     named = [c for c in node.children if c.is_named]
     if named:
@@ -355,7 +358,7 @@ def lower_else_clause(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_return_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_return_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower Rust return expression (value-producing)."""
     children = [c for c in node.children if c.type != RustNodeType.RETURN_KEYWORD]
     if children:
@@ -394,7 +397,7 @@ def _rust_guard_of(ctx: TreeSitterEmitContext, arm):
     return named_children[1] if len(named_children) > 1 else None
 
 
-def _rust_body_of(ctx: TreeSitterEmitContext, arm) -> str:
+def _rust_body_of(ctx: TreeSitterEmitContext, arm) -> Register:
     """Lower a Rust match_arm body as expression."""
     body_expr = _extract_arm_body(arm)
     return ctx.lower_expr(body_expr)
@@ -410,7 +413,7 @@ _RUST_MATCH_SPEC = MatchArmSpec(
 )
 
 
-def lower_match_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_match_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower Rust match expression using unified framework."""
     value_node = node.child_by_field_name("value")
     body_node = node.child_by_field_name("body")
@@ -434,7 +437,7 @@ def _extract_arm_body(arm):
     ][0]
 
 
-def lower_block_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_block_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower a block `{ ... }` as an expression (last expr is value)."""
     children = [
         c
@@ -462,7 +465,7 @@ def lower_block_expr(ctx: TreeSitterEmitContext, node) -> str:
     return ctx.lower_expr(children[-1])
 
 
-def lower_closure_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_closure_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower Rust closure expression |params| body."""
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
@@ -522,7 +525,7 @@ def _lower_closure_params(ctx: TreeSitterEmitContext, params_node) -> None:
             lower_rust_param(ctx, child)
 
 
-def lower_struct_instantiation(ctx: TreeSitterEmitContext, node) -> str:
+def lower_struct_instantiation(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower struct_expression: Point { x: 1, y: 2 }."""
     name_node = node.child_by_field_name(ctx.constants.class_name_field)
     body_node = node.child_by_field_name(ctx.constants.class_body_field)
@@ -569,7 +572,7 @@ def lower_struct_instantiation(ctx: TreeSitterEmitContext, node) -> str:
     return obj_reg
 
 
-def lower_macro_invocation(ctx: TreeSitterEmitContext, node) -> str:
+def lower_macro_invocation(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower macro_invocation: println!(...) -> CALL_FUNCTION."""
     macro_name = ctx.node_text(node).split("!")[0] + "!"
     reg = ctx.fresh_reg()
@@ -582,7 +585,7 @@ def lower_macro_invocation(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_index_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_index_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower index_expression: arr[idx] -> LOAD_INDEX, arr[1..3] -> slice."""
     children = [c for c in node.children if c.is_named]
     if len(children) < 2:
@@ -603,7 +606,7 @@ def lower_index_expr(ctx: TreeSitterEmitContext, node) -> str:
 
 def _lower_range_slice(
     ctx: TreeSitterEmitContext, range_node, collection_reg: str
-) -> str:
+) -> Register:
     """Lower arr[start..end] as CALL_FUNCTION('slice', collection, start, end).
 
     Rust's `..` is exclusive (like Python's slice), `..=` is inclusive.
@@ -640,14 +643,14 @@ def _lower_range_slice(
     return reg
 
 
-def _make_rust_const(ctx: TreeSitterEmitContext, value: str) -> str:
+def _make_rust_const(ctx: TreeSitterEmitContext, value: str) -> Register:
     """Emit a CONST and return the register."""
     reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=reg, operands=[value])
     return reg
 
 
-def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower tuple_expression: (a, b, c) -> NEW_ARRAY."""
     elems = [
         c
@@ -672,7 +675,7 @@ def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> str:
     return arr_reg
 
 
-def lower_try_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_try_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `expr?` as CALL_FUNCTION("try_unwrap", inner)."""
     inner = next(
         (
@@ -693,7 +696,7 @@ def lower_try_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_await_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_await_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `expr.await` as CALL_FUNCTION("await", inner)."""
     inner = next(
         (
@@ -715,7 +718,7 @@ def lower_await_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_type_cast_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_type_cast_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `expr as Type` as CALL_FUNCTION('as', expr, type_name)."""
     named_children = [c for c in node.children if c.is_named]
     if not named_children:
@@ -732,7 +735,7 @@ def lower_type_cast_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_scoped_identifier(ctx: TreeSitterEmitContext, node) -> str:
+def lower_scoped_identifier(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `HashMap::new`, `Shape::Circle` as LOAD_VAR with qualified name."""
     full_name = "::".join(
         ctx.node_text(c) for c in node.children if c.type == RustNodeType.IDENTIFIER
@@ -747,7 +750,7 @@ def lower_scoped_identifier(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_range_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_range_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `0..10` or `0..=10` as CALL_FUNCTION("range", start, end)."""
     named = [c for c in node.children if c.is_named]
     start_reg = ctx.lower_expr(named[0]) if len(named) > 0 else ctx.fresh_reg()
@@ -762,7 +765,7 @@ def lower_range_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_loop_as_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_loop_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower while/loop/for in expression position (returns unit)."""
     ctx.lower_stmt(node)
     reg = ctx.fresh_reg()
@@ -774,7 +777,7 @@ def lower_loop_as_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_continue_as_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_continue_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower continue in expression position."""
     from interpreter.frontends.common.control_flow import lower_continue
 
@@ -788,7 +791,7 @@ def lower_continue_as_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_break_as_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_break_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower break in expression position."""
     from interpreter.frontends.common.control_flow import lower_break
 
@@ -802,7 +805,7 @@ def lower_break_as_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower assignment_expression: left = right (value-producing)."""
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
@@ -811,7 +814,7 @@ def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
     return val_reg
 
 
-def lower_compound_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_compound_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower compound_assignment_expr: left += right."""
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
@@ -830,7 +833,7 @@ def lower_compound_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
     return result
 
 
-def lower_tuple_struct_pattern(ctx: TreeSitterEmitContext, node) -> str:
+def lower_tuple_struct_pattern(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower tuple_struct_pattern like Some(x) or Message::Write(text)."""
     type_node = next(
         (
@@ -876,7 +879,7 @@ def lower_tuple_struct_pattern(ctx: TreeSitterEmitContext, node) -> str:
     return variant_reg
 
 
-def lower_generic_function(ctx: TreeSitterEmitContext, node) -> str:
+def lower_generic_function(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower a.parse::<i32>() -- strip type params, lower as identifier."""
     named_children = [c for c in node.children if c.is_named]
     if named_children:
@@ -884,7 +887,7 @@ def lower_generic_function(ctx: TreeSitterEmitContext, node) -> str:
     return lower_const_literal(ctx, node)
 
 
-def lower_let_condition(ctx: TreeSitterEmitContext, node) -> str:
+def lower_let_condition(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `let Pattern = expr` — returns boolean test register."""
     pattern_node = node.child_by_field_name("pattern")
     value_node = node.child_by_field_name("value")
@@ -893,7 +896,7 @@ def lower_let_condition(ctx: TreeSitterEmitContext, node) -> str:
     return compile_pattern_test(ctx, subject_reg, pattern)
 
 
-def lower_struct_pattern_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_struct_pattern_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower struct_pattern like Message::Move { x, y } as pattern value."""
     type_node = next(
         (

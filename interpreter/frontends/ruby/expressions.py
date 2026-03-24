@@ -12,9 +12,10 @@ from interpreter.frontends.common.expressions import (
     lower_interpolated_string_parts,
 )
 from interpreter.frontends.ruby.node_types import RubyNodeType
+from interpreter.register import Register
 
 
-def lower_scope_resolution(ctx: TreeSitterEmitContext, node) -> str:
+def lower_scope_resolution(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower ``Foo::Bar`` as LOAD_VAR(Foo) + LOAD_FIELD(scope_reg, 'Bar').
 
     For root scope ``::TopLevel`` (no scope child), emits LOAD_VAR('TopLevel').
@@ -45,7 +46,7 @@ def lower_scope_resolution(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_instance_variable(ctx: TreeSitterEmitContext, node) -> str:
+def lower_instance_variable(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower ``@var`` as ``LOAD_VAR self`` + ``LOAD_FIELD self_reg 'var'``."""
     raw = ctx.node_text(node)
     field_name = raw.lstrip("@")
@@ -63,7 +64,7 @@ def lower_instance_variable(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_ruby_string(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ruby_string(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower Ruby string, decomposing interpolation into CONST + LOAD_VAR + BINOP '+'."""
     has_interpolation = any(c.type == RubyNodeType.INTERPOLATION for c in node.children)
     if not has_interpolation:
@@ -88,7 +89,7 @@ def lower_ruby_string(ctx: TreeSitterEmitContext, node) -> str:
     return lower_interpolated_string_parts(ctx, parts, node)
 
 
-def lower_ruby_heredoc_body(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ruby_heredoc_body(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower Ruby heredoc body, decomposing interpolation like lower_ruby_string."""
     has_interpolation = any(c.type == RubyNodeType.INTERPOLATION for c in node.children)
     if not has_interpolation:
@@ -113,7 +114,7 @@ def lower_ruby_heredoc_body(ctx: TreeSitterEmitContext, node) -> str:
     return lower_interpolated_string_parts(ctx, parts, node)
 
 
-def lower_ruby_call(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ruby_call(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower Ruby method call with receiver, block, and raise handling."""
     receiver_node = node.child_by_field_name("receiver")
     method_node = node.child_by_field_name("method")
@@ -199,7 +200,7 @@ def lower_ruby_call(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_ruby_argument_list(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ruby_argument_list(ctx: TreeSitterEmitContext, node) -> Register:
     """Unwrap argument_list to its first named child (e.g. return value)."""
     named = [c for c in node.children if c.is_named]
     if named:
@@ -211,7 +212,7 @@ def lower_ruby_argument_list(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_ruby_hash(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ruby_hash(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower Ruby hash literal as NEW_OBJECT + STORE_INDEX per pair."""
     obj_reg = ctx.fresh_reg()
     ctx.emit(
@@ -231,7 +232,7 @@ def lower_ruby_hash(ctx: TreeSitterEmitContext, node) -> str:
     return obj_reg
 
 
-def lower_ruby_range(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ruby_range(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `a..b` or `a...b` as CALL_FUNCTION("range", start, end)."""
     named = [c for c in node.children if c.is_named]
     start_reg = ctx.lower_expr(named[0]) if len(named) > 0 else ctx.fresh_reg()
@@ -246,7 +247,7 @@ def lower_ruby_range(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_ruby_lambda(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ruby_lambda(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `-> (params) { body }` as anonymous function."""
     func_name = f"__lambda_{ctx.label_counter}"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -310,7 +311,7 @@ def lower_ruby_lambda(ctx: TreeSitterEmitContext, node) -> str:
     return ref_reg
 
 
-def lower_ruby_word_array(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ruby_word_array(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `%w[a b c]` or `%i[a b c]` as NEW_ARRAY + STORE_INDEX per element."""
     elems = [
         c
@@ -346,7 +347,7 @@ def lower_ruby_word_array(ctx: TreeSitterEmitContext, node) -> str:
     return arr_reg
 
 
-def lower_element_reference(ctx: TreeSitterEmitContext, node) -> str:
+def lower_element_reference(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `arr[idx]` as LOAD_INDEX, `arr[1..3]` as CALL_FUNCTION('slice')."""
     named_children = [c for c in node.children if c.is_named]
     if not named_children:
@@ -374,7 +375,7 @@ def lower_element_reference(ctx: TreeSitterEmitContext, node) -> str:
 
 def _lower_range_slice(
     ctx: TreeSitterEmitContext, range_node, collection_reg: str
-) -> str:
+) -> Register:
     """Lower arr[start..end] as CALL_FUNCTION('slice', collection, start, end+1).
 
     Ruby's inclusive range (1..3) maps to Python's slice(1, 4).
@@ -412,7 +413,7 @@ def _lower_range_slice(
 
 def _lower_positional_slice(
     ctx: TreeSitterEmitContext, named_children: list, collection_reg: str, node
-) -> str:
+) -> Register:
     """Lower arr[start, length] as CALL_FUNCTION('slice', arr, start, start+length)."""
     start_reg = ctx.lower_expr(named_children[1])
     length_reg = ctx.lower_expr(named_children[2])
@@ -434,14 +435,14 @@ def _lower_positional_slice(
     return reg
 
 
-def _make_const(ctx: TreeSitterEmitContext, value: str) -> str:
+def _make_const(ctx: TreeSitterEmitContext, value: str) -> Register:
     """Emit a CONST and return the register."""
     reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=reg, operands=[value])
     return reg
 
 
-def lower_ruby_conditional(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ruby_conditional(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `condition ? true_expr : false_expr` as ternary."""
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     true_node = node.child_by_field_name(ctx.constants.if_consequence_field)
@@ -475,7 +476,7 @@ def lower_ruby_conditional(ctx: TreeSitterEmitContext, node) -> str:
     return result_reg
 
 
-def lower_ruby_self(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ruby_self(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `self` as LOAD_VAR('self')."""
     reg = ctx.fresh_reg()
     ctx.emit(
@@ -487,7 +488,7 @@ def lower_ruby_self(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_ruby_super(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ruby_super(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `super` or `super(args)` as CALL_FUNCTION("super", ...args)."""
     args_node = next(
         (c for c in node.children if c.type == RubyNodeType.ARGUMENT_LIST),
@@ -504,7 +505,7 @@ def lower_ruby_super(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_ruby_yield(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ruby_yield(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `yield` or `yield expr` as CALL_FUNCTION("yield", ...args)."""
     args_node = next(
         (c for c in node.children if c.type == RubyNodeType.ARGUMENT_LIST),
@@ -521,7 +522,7 @@ def lower_ruby_yield(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_ruby_pattern(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ruby_pattern(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower a `pattern` wrapper node by lowering its inner child."""
     named_children = [c for c in node.children if c.is_named]
     if named_children:
@@ -532,7 +533,7 @@ def lower_ruby_pattern(ctx: TreeSitterEmitContext, node) -> str:
 # ── Ruby block as inline closure ─────────────────────────────────────
 
 
-def lower_ruby_block(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ruby_block(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower a Ruby block (curly brace) or do_block (do/end) as inline closure.
 
     BRANCH end -> LABEL block_ -> params -> body -> CONST nil -> RETURN -> LABEL end -> CONST func:label
