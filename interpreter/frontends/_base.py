@@ -342,7 +342,7 @@ class BaseFrontend(Frontend):
         # Fallback: try as expression
         self._lower_expr(node)
 
-    def _lower_expr(self, node) -> str:
+    def _lower_expr(self, node) -> Register:
         """Lower an expression, return the register holding its value."""
         handler = self._EXPR_DISPATCH.get(node.type)
         if handler:
@@ -359,7 +359,7 @@ class BaseFrontend(Frontend):
 
     # ── common expression lowerers ───────────────────────────────
 
-    def _lower_interpolated_string_parts(self, parts: list[str], node) -> str:
+    def _lower_interpolated_string_parts(self, parts: list[str], node) -> Register:
         """Chain a list of string-part registers with BINOP '+' concatenation."""
         if not parts:
             return self._lower_const_literal(node)
@@ -375,7 +375,7 @@ class BaseFrontend(Frontend):
             result = new_reg
         return result
 
-    def _lower_const_literal(self, node) -> str:
+    def _lower_const_literal(self, node) -> Register:
         reg = self._fresh_reg()
         self._emit(
             Opcode.CONST,
@@ -385,7 +385,7 @@ class BaseFrontend(Frontend):
         )
         return reg
 
-    def _lower_canonical_none(self, node) -> str:
+    def _lower_canonical_none(self, node) -> Register:
         """Emit canonical ``CONST "None"`` for any language's null/nil/undefined."""
         reg = self._fresh_reg()
         self._emit(
@@ -393,7 +393,7 @@ class BaseFrontend(Frontend):
         )
         return reg
 
-    def _lower_canonical_true(self, node) -> str:
+    def _lower_canonical_true(self, node) -> Register:
         """Emit canonical ``CONST "True"``."""
         reg = self._fresh_reg()
         self._emit(
@@ -401,7 +401,7 @@ class BaseFrontend(Frontend):
         )
         return reg
 
-    def _lower_canonical_false(self, node) -> str:
+    def _lower_canonical_false(self, node) -> Register:
         """Emit canonical ``CONST "False"``."""
         reg = self._fresh_reg()
         self._emit(
@@ -409,14 +409,14 @@ class BaseFrontend(Frontend):
         )
         return reg
 
-    def _lower_canonical_bool(self, node) -> str:
+    def _lower_canonical_bool(self, node) -> Register:
         """Emit canonical ``CONST "True"`` or ``CONST "False"`` based on node text."""
         text = self._node_text(node).strip().lower()
         if text == "true":
             return self._lower_canonical_true(node)
         return self._lower_canonical_false(node)
 
-    def _lower_identifier(self, node) -> str:
+    def _lower_identifier(self, node) -> Register:
         reg = self._fresh_reg()
         self._emit(
             Opcode.LOAD_VAR,
@@ -426,7 +426,7 @@ class BaseFrontend(Frontend):
         )
         return reg
 
-    def _lower_paren(self, node) -> str:
+    def _lower_paren(self, node) -> Register:
         inner = next(
             (
                 c
@@ -439,7 +439,7 @@ class BaseFrontend(Frontend):
             return self._lower_const_literal(node)
         return self._lower_expr(inner)
 
-    def _lower_binop(self, node) -> str:
+    def _lower_binop(self, node) -> Register:
         children = [
             c
             for c in node.children
@@ -457,7 +457,7 @@ class BaseFrontend(Frontend):
         )
         return reg
 
-    def _lower_comparison(self, node) -> str:
+    def _lower_comparison(self, node) -> Register:
         children = [
             c
             for c in node.children
@@ -475,7 +475,7 @@ class BaseFrontend(Frontend):
         )
         return reg
 
-    def _lower_unop(self, node) -> str:
+    def _lower_unop(self, node) -> Register:
         children = [
             c
             for c in node.children
@@ -492,12 +492,12 @@ class BaseFrontend(Frontend):
         )
         return reg
 
-    def _lower_call(self, node) -> str:
+    def _lower_call(self, node) -> Register:
         func_node = node.child_by_field_name(self.CALL_FUNCTION_FIELD)
         args_node = node.child_by_field_name(self.CALL_ARGUMENTS_FIELD)
         return self._lower_call_impl(func_node, args_node, node)
 
-    def _lower_call_impl(self, func_node, args_node, node) -> str:
+    def _lower_call_impl(self, func_node, args_node, node) -> Register:
         arg_regs = self._extract_call_args(args_node)
 
         # Method call: obj.method(...)
@@ -601,7 +601,7 @@ class BaseFrontend(Frontend):
                 regs.append(self._lower_expr(c))
         return regs
 
-    def _lower_attribute(self, node) -> str:
+    def _lower_attribute(self, node) -> Register:
         obj_node = node.child_by_field_name(self.ATTR_OBJECT_FIELD)
         attr_node = node.child_by_field_name(self.ATTR_ATTRIBUTE_FIELD)
         if obj_node is None:
@@ -621,7 +621,7 @@ class BaseFrontend(Frontend):
         )
         return reg
 
-    def _lower_subscript(self, node) -> str:
+    def _lower_subscript(self, node) -> Register:
         obj_node = node.child_by_field_name(self.SUBSCRIPT_VALUE_FIELD)
         idx_node = node.child_by_field_name(self.SUBSCRIPT_INDEX_FIELD)
         if obj_node is None or idx_node is None:
@@ -1036,7 +1036,7 @@ class BaseFrontend(Frontend):
             node=node,
         )
 
-    def _lower_list_literal(self, node) -> str:
+    def _lower_list_literal(self, node) -> Register:
         elems = [
             c
             for c in node.children
@@ -1063,7 +1063,7 @@ class BaseFrontend(Frontend):
             self._emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
         return arr_reg
 
-    def _lower_dict_literal(self, node) -> str:
+    def _lower_dict_literal(self, node) -> Register:
         obj_reg = self._fresh_reg()
         self._emit(
             Opcode.NEW_OBJECT,
@@ -1080,7 +1080,7 @@ class BaseFrontend(Frontend):
                 self._emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
         return obj_reg
 
-    def _lower_update_expr(self, node) -> str:
+    def _lower_update_expr(self, node) -> Register:
         """Lower i++ / i-- / ++i / --i update expressions."""
         children = [c for c in node.children if c.is_named]
         if not children:

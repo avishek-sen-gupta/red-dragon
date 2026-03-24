@@ -13,6 +13,7 @@ from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
 from interpreter.types.type_expr import ScalarType, metatype
+from interpreter.register import Register
 
 
 def lower_js_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
@@ -181,7 +182,7 @@ def _extract_js_parents(ctx: TreeSitterEmitContext, node) -> list[str]:
     return [ctx.node_text(parent_id)] if parent_id else []
 
 
-def lower_js_class_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_js_class_expression(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower anonymous class expression: `class { ... }` or `class Name { ... }`.
 
     Like lower_js_class_def but returns a register (expression position)

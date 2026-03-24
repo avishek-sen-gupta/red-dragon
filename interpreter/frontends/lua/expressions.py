@@ -12,11 +12,12 @@ from interpreter.frontends.common.expressions import (
     lower_const_literal,
 )
 from interpreter.frontends.lua.node_types import LuaNodeType
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
 
-def lower_lua_call(ctx: TreeSitterEmitContext, node) -> str:
+def lower_lua_call(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower function_call -- name field is identifier or method_index_expression."""
     name_node = node.child_by_field_name("name")
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
@@ -101,7 +102,7 @@ def lower_lua_call(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_dot_index(ctx: TreeSitterEmitContext, node) -> str:
+def lower_dot_index(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower dot_index_expression (obj.field)."""
     table_node = node.child_by_field_name("table")
     field_node = node.child_by_field_name("field")
@@ -119,7 +120,7 @@ def lower_dot_index(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_method_index(ctx: TreeSitterEmitContext, node) -> str:
+def lower_method_index(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower method_index_expression (obj:method) as attribute load.
 
     When used standalone (not as the callee inside function_call),
@@ -141,7 +142,7 @@ def lower_method_index(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_bracket_index(ctx: TreeSitterEmitContext, node) -> str:
+def lower_bracket_index(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower bracket_index_expression (obj[key])."""
     table_node = node.child_by_field_name("table")
     key_node = node.child_by_field_name("field")
@@ -159,7 +160,7 @@ def lower_bracket_index(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_table_constructor(ctx: TreeSitterEmitContext, node) -> str:
+def lower_table_constructor(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower table_constructor ({key=val, ...})."""
     obj_reg = ctx.fresh_reg()
     ctx.emit(
@@ -202,7 +203,7 @@ def lower_table_constructor(ctx: TreeSitterEmitContext, node) -> str:
     return obj_reg
 
 
-def lower_expression_list(ctx: TreeSitterEmitContext, node) -> str:
+def lower_expression_list(ctx: TreeSitterEmitContext, node) -> Register:
     """Unwrap expression_list to its first named child."""
     named = [c for c in node.children if c.is_named]
     if named:
@@ -216,7 +217,7 @@ def lower_expression_list(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_lua_function_definition(ctx: TreeSitterEmitContext, node) -> str:
+def lower_lua_function_definition(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower function_definition (anonymous function expression).
 
     Produces BRANCH past body, LABEL, params, body, default RETURN,
@@ -254,7 +255,7 @@ def lower_lua_function_definition(ctx: TreeSitterEmitContext, node) -> str:
     return func_reg
 
 
-def lower_lua_vararg(ctx: TreeSitterEmitContext, node) -> str:
+def lower_lua_vararg(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower vararg_expression (...) as SYMBOLIC('varargs')."""
     reg = ctx.fresh_reg()
     ctx.emit(

@@ -12,6 +12,7 @@ from interpreter.ir import Opcode, CodeLabel
 from interpreter import constants
 from interpreter.frontends.common.expressions import lower_const_literal
 from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
+from interpreter.register import Register
 
 
 def _has_optional_chain(node) -> bool:
@@ -19,7 +20,9 @@ def _has_optional_chain(node) -> bool:
     return any(c.type == JSN.OPTIONAL_CHAIN for c in node.children)
 
 
-def _emit_optional_guard(ctx: TreeSitterEmitContext, obj_reg: str, emit_access) -> str:
+def _emit_optional_guard(
+    ctx: TreeSitterEmitContext, obj_reg: str, emit_access
+) -> Register:
     """Wrap an access in a null guard: obj == None ? None : access(obj).
 
     emit_access is a callable that emits the access IR and returns the result register.
@@ -55,7 +58,7 @@ def _emit_optional_guard(ctx: TreeSitterEmitContext, obj_reg: str, emit_access) 
     return result_reg
 
 
-def lower_js_subscript(ctx: TreeSitterEmitContext, node) -> str:
+def lower_js_subscript(ctx: TreeSitterEmitContext, node) -> Register:
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     idx_node = node.child_by_field_name("index")
     if obj_node is None or idx_node is None:
@@ -75,7 +78,7 @@ def lower_js_subscript(ctx: TreeSitterEmitContext, node) -> str:
     return emit_access()
 
 
-def lower_js_attribute(ctx: TreeSitterEmitContext, node) -> str:
+def lower_js_attribute(ctx: TreeSitterEmitContext, node) -> Register:
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     prop_node = node.child_by_field_name("property")
     if obj_node is None or prop_node is None:
@@ -95,7 +98,7 @@ def lower_js_attribute(ctx: TreeSitterEmitContext, node) -> str:
     return emit_access()
 
 
-def lower_js_call(ctx: TreeSitterEmitContext, node) -> str:
+def lower_js_call(ctx: TreeSitterEmitContext, node) -> Register:
     func_node = node.child_by_field_name(ctx.constants.call_function_field)
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = _extract_js_call_args(ctx, args_node) if args_node else []
@@ -191,7 +194,7 @@ def lower_js_store_target(
         )
 
 
-def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
@@ -199,7 +202,7 @@ def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
     return val_reg
 
 
-def lower_js_object_literal(ctx: TreeSitterEmitContext, node) -> str:
+def lower_js_object_literal(ctx: TreeSitterEmitContext, node) -> Register:
     obj_reg = ctx.fresh_reg()
     ctx.emit(
         Opcode.NEW_OBJECT,
@@ -240,7 +243,7 @@ def lower_js_object_literal(ctx: TreeSitterEmitContext, node) -> str:
     return obj_reg
 
 
-def lower_arrow_function(ctx: TreeSitterEmitContext, node) -> str:
+def lower_arrow_function(ctx: TreeSitterEmitContext, node) -> Register:
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
@@ -279,7 +282,7 @@ def lower_arrow_function(ctx: TreeSitterEmitContext, node) -> str:
     return func_reg
 
 
-def lower_ternary(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ternary(ctx: TreeSitterEmitContext, node) -> Register:
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     true_node = node.child_by_field_name(ctx.constants.if_consequence_field)
     false_node = node.child_by_field_name(ctx.constants.if_alternative_field)
@@ -312,7 +315,7 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> str:
     return result_reg
 
 
-def lower_new_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_new_expression(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `new Foo(args)` -> NEW_OBJECT(class) + CALL_METHOD('constructor', args)."""
     constructor_node = node.child_by_field_name("constructor")
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
@@ -336,7 +339,7 @@ def lower_new_expression(ctx: TreeSitterEmitContext, node) -> str:
     return obj_reg
 
 
-def lower_await_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_await_expression(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `await expr` -> CALL_FUNCTION('await', expr)."""
     children = [c for c in node.children if c.is_named]
     expr_reg = ctx.lower_expr(children[0]) if children else ctx.fresh_reg()
@@ -350,7 +353,7 @@ def lower_await_expression(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_yield_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_yield_expression(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `yield expr` or bare `yield` -> CALL_FUNCTION('yield', expr)."""
     children = [c for c in node.children if c.is_named]
     if children:
@@ -380,7 +383,7 @@ def lower_yield_expression(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_sequence_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_sequence_expression(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `(a, b, c)` -> evaluate all, return last register."""
     children = [c for c in node.children if c.is_named]
     if not children:
@@ -398,7 +401,7 @@ def lower_spread_element(ctx: TreeSitterEmitContext, node) -> str | SpreadArgume
     return lower_spread_arg(ctx, node)
 
 
-def lower_function_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_function_expression(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower anonymous function expression: same as function_declaration but anonymous."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
@@ -431,7 +434,7 @@ def lower_function_expression(ctx: TreeSitterEmitContext, node) -> str:
     return func_reg
 
 
-def lower_template_string(ctx: TreeSitterEmitContext, node) -> str:
+def lower_template_string(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower template string, descending into template_substitution children."""
     has_substitution = any(c.type == JSN.TEMPLATE_SUBSTITUTION for c in node.children)
     if not has_substitution:
@@ -469,7 +472,7 @@ def lower_template_string(ctx: TreeSitterEmitContext, node) -> str:
     return result
 
 
-def lower_template_substitution(ctx: TreeSitterEmitContext, node) -> str:
+def lower_template_substitution(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower ${expr} inside a template string."""
     children = [c for c in node.children if c.is_named]
     if children:
@@ -477,7 +480,7 @@ def lower_template_substitution(ctx: TreeSitterEmitContext, node) -> str:
     return lower_const_literal(ctx, node)
 
 
-def lower_export_clause(ctx: TreeSitterEmitContext, node) -> str:
+def lower_export_clause(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `{ a, b }` export clause — lower inner export_specifiers."""
     last_reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=last_reg, operands=[ctx.constants.none_literal])
@@ -487,7 +490,7 @@ def lower_export_clause(ctx: TreeSitterEmitContext, node) -> str:
     return last_reg
 
 
-def lower_js_field_definition(ctx: TreeSitterEmitContext, node) -> str:
+def lower_js_field_definition(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower class field: `#privateField = 0` or `name = expr`."""
     property_node = node.child_by_field_name("property")
     value_node = node.child_by_field_name("value")

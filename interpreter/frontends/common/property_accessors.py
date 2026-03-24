@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.instructions import CallMethod, LoadField, StoreField
+from interpreter.register import Register
 
 
 def register_property_accessor(
@@ -35,7 +36,7 @@ def emit_field_load_or_getter(
     class_name: str,
     field_name: str,
     node,
-) -> str:
+) -> Register:
     """Emit CALL_METHOD for getter if registered, otherwise plain LOAD_FIELD."""
     if has_property_accessor(ctx, class_name, field_name, "get"):
         reg = ctx.fresh_reg()
