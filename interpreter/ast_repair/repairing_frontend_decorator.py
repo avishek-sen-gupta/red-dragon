@@ -10,7 +10,6 @@ from interpreter.ast_repair.repair_prompter import build_prompt, parse_response
 from interpreter.ast_repair.source_patcher import patch
 from interpreter.constants import Language
 from interpreter.frontend import Frontend
-from interpreter.ir import IRInstruction
 from interpreter.llm.llm_client import LLMClient
 from interpreter.parser import ParserFactory
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
@@ -53,7 +52,7 @@ class RepairingFrontendDecorator(Frontend):
         """
         return self._last_lowered_source
 
-    def lower(self, source: bytes) -> list[IRInstruction]:
+    def lower(self, source: bytes) -> list[InstructionBase]:
         parser = self._parser_factory.get_parser(self._language)
         tree = parser.parse(source)
 

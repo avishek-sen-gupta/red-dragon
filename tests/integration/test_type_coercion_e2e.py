@@ -14,6 +14,7 @@ from interpreter.types.coercion.default_conversion_rules import (
 )
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.instructions import InstructionBase
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg, ExecutionStrategies
 from interpreter.run_types import VMConfig
@@ -24,7 +25,7 @@ from interpreter.types.typed_value import unwrap
 from interpreter.register import Register
 
 
-def _build_division_index_program() -> list[IRInstruction]:
+def _build_division_index_program() -> list[InstructionBase]:
     """Build IR for: arr[0] = 42; idx = 4 / 2; result = arr[idx]."""
     return [
         IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")),

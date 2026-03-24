@@ -11,7 +11,6 @@ from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.interprocedural.analyze import analyze_interprocedural
 from interpreter.interprocedural.types import InterproceduralResult
-from interpreter.ir import IRInstruction
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.registry import build_registry
 from interpreter.run import (
@@ -67,7 +66,7 @@ class PipelineResult:
     source: str
     language: str
     ast: ASTNode | None = None
-    ir: list[IRInstruction] = field(default_factory=list)
+    ir: list[InstructionBase] = field(default_factory=list)
     cfg: CFG = field(default_factory=CFG)
     trace: ExecutionTrace = field(default_factory=ExecutionTrace)
     interprocedural: InterproceduralResult | None = None

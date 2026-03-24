@@ -26,7 +26,6 @@ from interpreter.interprocedural.types import (
 )
 from interpreter.ir import CodeLabel
 from interpreter.instructions import (
-    to_typed,
     CallFunction,
     CallMethod,
     DeclVar,
@@ -64,7 +63,7 @@ def trace_reg_to_var(reg: str, cfg: CFG, block_label: str) -> str:
         (
             str(t.name)
             for inst in block.instructions
-            if isinstance((t := to_typed(inst)), LoadVar) and str(t.result_reg) == reg
+            if isinstance((t := inst), LoadVar) and str(t.result_reg) == reg
         ),
         "",
     )
@@ -74,8 +73,7 @@ def trace_reg_to_var(reg: str, cfg: CFG, block_label: str) -> str:
         (
             str(t.name)
             for inst in block.instructions
-            if isinstance((t := to_typed(inst)), (DeclVar, StoreVar))
-            and str(t.value_reg) == reg
+            if isinstance((t := inst), (DeclVar, StoreVar)) and str(t.value_reg) == reg
         ),
         "",
     )
@@ -112,7 +110,7 @@ def find_top_level_call_sites(cfg: CFG, call_graph: CallGraph) -> list[TopLevelC
     result = []
     for label in non_func_blocks:
         for idx, inst in enumerate(cfg.blocks[label].instructions):
-            t = to_typed(inst)
+            t = inst
             if isinstance(t, CallFunction):
                 callee_name = str(t.func_name)
                 arg_ops = tuple(str(a) for a in t.args)
@@ -217,7 +215,7 @@ def annotate_endpoint(ep: FlowEndpoint, cfg: CFG | None) -> str:
     if isinstance(ep, VariableEndpoint):
         name = ep.name
         if name.startswith("%") and ep.definition != NO_DEFINITION:
-            t = to_typed(ep.definition.instruction)
+            t = ep.definition.instruction
             if isinstance(t, CallFunction):
                 return f"{name} (call result: {t.func_name})"
             if isinstance(t, CallMethod):

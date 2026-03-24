@@ -21,7 +21,8 @@ Program:
 
 import pytest
 
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import Opcode
+from interpreter.instructions import InstructionBase
 from interpreter.types.typed_value import unwrap
 from interpreter.vm.vm_types import SymbolicValue, VMState
 
@@ -190,7 +191,7 @@ EXPECTED_ANSWER = 11
 # ---------------------------------------------------------------------------
 
 
-def _has_nested_inner_label(ir: list[IRInstruction]) -> bool:
+def _has_nested_inner_label(ir: list[InstructionBase]) -> bool:
     """Return True if the IR contains a label for an inner/anonymous function."""
     return any(
         inst.opcode == Opcode.LABEL

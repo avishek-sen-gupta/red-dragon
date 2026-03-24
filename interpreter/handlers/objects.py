@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from interpreter.instructions import to_typed
-from interpreter.instructions import NewObject as NewObjectInst
+from interpreter.instructions import InstructionBase, NewObject as NewObjectInst
 from interpreter.instructions import NewArray
-from interpreter.ir import IRInstruction
 from interpreter.vm.vm import (
     VMState,
     Pointer,
@@ -21,8 +19,8 @@ from interpreter.types.typed_value import typed
 from interpreter import constants
 
 
-def _handle_new_object(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    t = to_typed(inst)
+def _handle_new_object(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+    t = inst
     assert isinstance(t, NewObjectInst)
     type_hint = t.type_hint
     # Dereference: if type_hint is a variable holding a ClassRef,
@@ -50,8 +48,8 @@ def _handle_new_object(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionR
     )
 
 
-def _handle_new_array(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    t = to_typed(inst)
+def _handle_new_array(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+    t = inst
     assert isinstance(t, NewArray)
     type_hint = t.type_hint
     addr = f"{constants.ARR_ADDR_PREFIX}{vm.symbolic_counter}"

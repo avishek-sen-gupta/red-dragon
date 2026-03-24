@@ -4,14 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from interpreter.ir import IRInstruction, CodeLabel
+from interpreter.ir import CodeLabel
+from interpreter.instructions import InstructionBase
 from interpreter import constants
 
 
 @dataclass
 class BasicBlock:
     label: CodeLabel
-    instructions: list[IRInstruction] = field(default_factory=list)
+    instructions: list[InstructionBase] = field(default_factory=list)
     successors: list[CodeLabel] = field(default_factory=list)
     predecessors: list[CodeLabel] = field(default_factory=list)
 

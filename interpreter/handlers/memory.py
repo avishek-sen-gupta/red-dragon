@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 from interpreter.instructions import (
-    to_typed,
+    InstructionBase,
     AddressOf,
     LoadIndirect,
     LoadFieldIndirect,
@@ -17,7 +17,6 @@ from interpreter.instructions import (
     StoreIndex,
     LoadIndex,
 )
-from interpreter.ir import IRInstruction
 from interpreter.vm.vm import (
     VMState,
     HeapObject,
@@ -102,9 +101,9 @@ def _resolve_method_delegation_target(
     return None
 
 
-def _handle_address_of(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_address_of(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
     """ADDRESS_OF var_name: promote variable to heap and return a Pointer."""
-    t = to_typed(inst)
+    t = inst
     assert isinstance(t, AddressOf)
     name = t.var_name
     frame = vm.current_frame
@@ -182,10 +181,10 @@ def _handle_address_of(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionR
 
 
 def _handle_load_indirect(
-    inst: IRInstruction, vm: VMState, ctx: Any
+    inst: InstructionBase, vm: VMState, ctx: Any
 ) -> ExecutionResult:
     """LOAD_INDIRECT %ptr: read through a Pointer (dereference)."""
-    t = to_typed(inst)
+    t = inst
     assert isinstance(t, LoadIndirect)
     obj_val = _resolve_reg(vm, t.ptr_reg).value
     # Pointer dereference: read from heap[base].fields[offset]
@@ -225,14 +224,14 @@ def _handle_load_indirect(
 
 
 def _handle_load_field_indirect(
-    inst: IRInstruction,
+    inst: InstructionBase,
     vm: VMState,
     ctx: Any,
 ) -> ExecutionResult:
     """LOAD_FIELD_INDIRECT %obj %name: load field whose name is in a register."""
     from interpreter.handlers.calls import _try_user_function_call
 
-    t = to_typed(inst)
+    t = inst
     assert isinstance(t, LoadFieldIndirect)
     obj_val = _resolve_reg(vm, t.obj_reg).value
     field_name = _resolve_reg(vm, t.name_reg).value
@@ -279,10 +278,10 @@ def _handle_load_field_indirect(
 
 
 def _handle_store_indirect(
-    inst: IRInstruction, vm: VMState, ctx: Any
+    inst: InstructionBase, vm: VMState, ctx: Any
 ) -> ExecutionResult:
     """STORE_INDIRECT %ptr %val: write through a Pointer (dereference)."""
-    t = to_typed(inst)
+    t = inst
     assert isinstance(t, StoreIndirect)
     obj_val = _resolve_reg(vm, t.ptr_reg).value
     tv = _resolve_reg(vm, t.value_reg)
@@ -309,8 +308,10 @@ def _handle_store_indirect(
     )
 
 
-def _handle_store_field(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    t = to_typed(inst)
+def _handle_store_field(
+    inst: InstructionBase, vm: VMState, ctx: Any
+) -> ExecutionResult:
+    t = inst
     assert isinstance(t, StoreField)
     obj_val = _resolve_reg(vm, t.obj_reg).value
     field_name = t.field_name
@@ -343,13 +344,13 @@ def _handle_store_field(inst: IRInstruction, vm: VMState, ctx: Any) -> Execution
 
 
 def _handle_load_field(
-    inst: IRInstruction,
+    inst: InstructionBase,
     vm: VMState,
     ctx: Any,
 ) -> ExecutionResult:
     from interpreter.handlers.calls import _try_user_function_call
 
-    t = to_typed(inst)
+    t = inst
     assert isinstance(t, LoadField)
     obj_val = _resolve_reg(vm, t.obj_reg).value
     field_name = t.field_name
@@ -421,8 +422,10 @@ def _handle_load_field(
     )
 
 
-def _handle_store_index(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    t = to_typed(inst)
+def _handle_store_index(
+    inst: InstructionBase, vm: VMState, ctx: Any
+) -> ExecutionResult:
+    t = inst
     assert isinstance(t, StoreIndex)
     arr_val = _resolve_reg(vm, t.arr_reg).value
     idx_val = _resolve_reg(vm, t.index_reg).value
@@ -454,8 +457,8 @@ def _handle_store_index(inst: IRInstruction, vm: VMState, ctx: Any) -> Execution
     )
 
 
-def _handle_load_index(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    t = to_typed(inst)
+def _handle_load_index(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+    t = inst
     assert isinstance(t, LoadIndex)
     arr_val = _resolve_reg(vm, t.arr_reg).value
     idx_val = _resolve_reg(vm, t.index_reg).value

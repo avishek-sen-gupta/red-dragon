@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.ir import Opcode, CodeLabel
 from interpreter.instructions import (
-    to_typed,
     CallFunction,
     InstructionBase,
     Label_,
@@ -20,37 +19,11 @@ from interpreter.cfg_types import (
     CFG,
 )  # noqa: F401 — re-exported for backwards compatibility
 
-# Structural opcodes that control-flow analysis depends on.
-# Only these are normalised in build_cfg; non-structural opcodes (CONST, etc.)
-# are left as IRInstruction to avoid lossy conversions (e.g. COBOL list operands).
-_STRUCTURAL_OPCODES: frozenset[Opcode] = frozenset(
-    {
-        Opcode.LABEL,
-        Opcode.BRANCH,
-        Opcode.BRANCH_IF,
-        Opcode.RETURN,
-        Opcode.THROW,
-        Opcode.RESUME_CONTINUATION,
-    }
-)
-
-
-def _normalize_structural(
-    inst: IRInstruction | InstructionBase,
-) -> IRInstruction | InstructionBase:
-    """Convert structural IRInstruction to its typed form; leave everything else unchanged."""
-    if isinstance(inst, InstructionBase):
-        return inst
-    if inst.opcode in _STRUCTURAL_OPCODES:
-        return to_typed(inst)
-    return inst
-
-
-def build_cfg(instructions: list[IRInstruction]) -> CFG:
+def build_cfg(instructions: list[InstructionBase]) -> CFG:
     """Partition instructions into basic blocks and wire edges."""
     cfg = CFG()
 
-    typed_instructions = [_normalize_structural(inst) for inst in instructions]
+    typed_instructions = instructions
 
     # Phase 1: identify block starts
     label_to_idx: dict[CodeLabel, int] = {}
@@ -131,7 +104,7 @@ def _escape_mermaid(text: str) -> str:
     return text.replace('"', "#quot;").replace("<", "#lt;").replace(">", "#gt;")
 
 
-def _instruction_summary(inst: IRInstruction, max_len: int = 60) -> str:
+def _instruction_summary(inst: InstructionBase, max_len: int = 60) -> str:
     """Return a truncated, Mermaid-safe string for an instruction."""
     raw = str(inst)
     truncated = raw[:max_len] + "..." if len(raw) > max_len else raw
@@ -250,7 +223,7 @@ def _node_shape(block: BasicBlock, is_entry: bool) -> tuple[str, str]:
         return '(["', '"])'
     last = block.instructions[-1] if block.instructions else None
     if last is not None:
-        t = to_typed(last) if isinstance(last, IRInstruction) else last
+        t = last
         if isinstance(t, (BranchIf, ResumeContinuation)):
             return '{"', '"}'
         if isinstance(t, (Return_, Throw_)):
@@ -349,7 +322,7 @@ def cfg_to_mermaid(cfg: CFG) -> str:
         block = cfg.blocks[label]
         src = _node_id(label)
         for inst in block.instructions:
-            t = to_typed(inst) if isinstance(inst, IRInstruction) else inst
+            t = inst
             if not isinstance(t, CallFunction):
                 continue
             func_name = t.func_name
@@ -364,8 +337,8 @@ def cfg_to_mermaid(cfg: CFG) -> str:
 
 
 def extract_function_instructions(
-    instructions: list[IRInstruction], func_name: str
-) -> list[IRInstruction]:
+    instructions: list[InstructionBase], func_name: str
+) -> list[InstructionBase]:
     """Extract the IR instruction slice for a single named function.
 
     Scans for ``LABEL func_<name>_N`` … ``LABEL end_<name>_M`` and

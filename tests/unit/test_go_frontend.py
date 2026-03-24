@@ -4,28 +4,31 @@ from __future__ import annotations
 
 from interpreter.frontends.go import GoFrontend
 from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import Opcode
+from interpreter.instructions import InstructionBase
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 
 
-def _parse_and_lower(source: str) -> list[IRInstruction]:
+def _parse_and_lower(source: str) -> list[InstructionBase]:
     frontend = GoFrontend(TreeSitterParserFactory(), "go")
     return frontend.lower(source.encode("utf-8"))
 
 
 def _parse_go_with_types(
     source: str,
-) -> tuple[list[IRInstruction], TypeEnvironmentBuilder]:
+) -> tuple[list[InstructionBase], TypeEnvironmentBuilder]:
     frontend = GoFrontend(TreeSitterParserFactory(), "go")
     instructions = frontend.lower(source.encode("utf-8"))
     return instructions, frontend.type_env_builder
 
 
-def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:
+def _opcodes(instructions: list[InstructionBase]) -> list[Opcode]:
     return [inst.opcode for inst in instructions]
 
 
-def _find_all(instructions: list[IRInstruction], opcode: Opcode) -> list[IRInstruction]:
+def _find_all(
+    instructions: list[InstructionBase], opcode: Opcode
+) -> list[InstructionBase]:
     return [inst for inst in instructions if inst.opcode == opcode]
 
 
@@ -275,7 +278,7 @@ class TestGoFrontendFallback:
         assert ir[0].label == "entry"
 
 
-def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
+def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
     return [str(inst.label) for inst in instructions if inst.opcode == Opcode.LABEL]
 
 

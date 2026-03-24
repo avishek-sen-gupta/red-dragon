@@ -9,8 +9,8 @@ from functools import reduce
 
 from interpreter import constants
 from interpreter.cfg import BasicBlock, CFG
-from interpreter.ir import IRInstruction, Opcode, VAR_DEFINITION_OPCODES
-from interpreter.instructions import to_typed, DeclVar, StoreVar, Symbolic
+from interpreter.ir import Opcode, VAR_DEFINITION_OPCODES
+from interpreter.instructions import DeclVar, InstructionBase, StoreVar, Symbolic
 from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class Definition:
     variable: str
     block_label: str
     instruction_index: int
-    instruction: IRInstruction
+    instruction: InstructionBase
 
     def __hash__(self) -> int:
         return hash((self.variable, self.block_label, self.instruction_index))
@@ -68,7 +68,7 @@ class Use:
     variable: str
     block_label: str
     instruction_index: int
-    instruction: IRInstruction
+    instruction: InstructionBase
 
     def __hash__(self) -> int:
         return hash((self.variable, self.block_label, self.instruction_index))
@@ -112,23 +112,20 @@ class DataflowResult:
     raw_dependency_graph: dict[str, set[str]]
 
 
-def _defs_of(instruction: IRInstruction) -> list[str]:
+def _defs_of(instruction: InstructionBase) -> list[str]:
     """Return variable/register names defined by an instruction."""
     if instruction.opcode in VAR_DEFINITION_OPCODES and len(instruction.operands) >= 1:
-        t = to_typed(instruction)
+        t = instruction
         assert isinstance(t, (DeclVar, StoreVar))
         return [t.name]
     if instruction.opcode in _VALUE_PRODUCERS and instruction.result_reg.is_present():
         return [str(instruction.result_reg)]
-    if (
-        isinstance(to_typed(instruction), Symbolic)
-        and instruction.result_reg.is_present()
-    ):
+    if isinstance(instruction, Symbolic) and instruction.result_reg.is_present():
         return [str(instruction.result_reg)]
     return []
 
 
-def _uses_of(instruction: IRInstruction) -> list[str]:
+def _uses_of(instruction: InstructionBase) -> list[str]:
     """Return variable/register names used by an instruction."""
     op = instruction.opcode
     operands = instruction.operands
@@ -363,7 +360,7 @@ def _build_raw_dependency_graph(
         for link in def_use_chains
         if (use_inst := link.use.instruction).opcode in VAR_DEFINITION_OPCODES
         and len(use_inst.operands) >= 2
-        and isinstance((t := to_typed(use_inst)), (DeclVar, StoreVar))
+        and isinstance((t := use_inst), (DeclVar, StoreVar))
     }
 
     # For each STORE_VAR, trace the RHS register backward to named variables

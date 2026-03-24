@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
+from interpreter.instructions import InstructionBase
 from interpreter.ir import (
-    IRInstruction,
     Opcode,
     SpreadArguments,
     CodeLabel,
@@ -217,7 +217,7 @@ class LocalExecutor:
     @classmethod
     def execute(
         cls,
-        inst: IRInstruction,
+        inst: InstructionBase,
         vm: VMState,
         ctx: HandlerContext,
     ) -> ExecutionResult:
@@ -228,7 +228,7 @@ class LocalExecutor:
 
 
 def _try_execute_locally(
-    inst: IRInstruction,
+    inst: InstructionBase,
     vm: VMState,
     ctx: HandlerContext,
 ) -> ExecutionResult:

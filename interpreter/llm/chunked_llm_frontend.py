@@ -12,7 +12,7 @@ from interpreter.frontend import Frontend
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.ir import CodeLabel, IRInstruction, NoCodeLabel, Opcode, NO_LABEL
-from interpreter.instructions import Label_, Symbolic
+from interpreter.instructions import InstructionBase, Label_, Symbolic
 from interpreter.register import Register
 from interpreter.llm.llm_frontend import (
     IRParsingError,
@@ -164,10 +164,10 @@ class IRRenumberer:
 
     def renumber(
         self,
-        instructions: list[IRInstruction],
+        instructions: list[InstructionBase],
         reg_offset: int,
         label_suffix: str,
-    ) -> tuple[list[IRInstruction], int]:
+    ) -> tuple[list[InstructionBase], int]:
         """Renumber registers and labels in the given instructions.
 
         Args:
@@ -179,7 +179,7 @@ class IRRenumberer:
             Tuple of (renumbered instructions, next available reg_offset).
         """
 
-        def _renumber_inst(inst: IRInstruction) -> IRInstruction:
+        def _renumber_inst(inst: InstructionBase) -> InstructionBase:
             new_operands = [
                 self._renumber_operand(op, reg_offset, label_suffix)
                 for op in inst.operands
@@ -272,7 +272,7 @@ class ChunkedLLMFrontend(Frontend):
     def class_symbol_table(self) -> dict[CodeLabel, ClassRef]:
         return self._class_symbol_table
 
-    def lower(self, source: bytes) -> list[IRInstruction]:
+    def lower(self, source: bytes) -> list[InstructionBase]:
         """Lower source code to IR by chunking and delegating to wrapped LLMFrontend.
 
         Args:
@@ -296,7 +296,7 @@ class ChunkedLLMFrontend(Frontend):
             )
             return [Label_(label=CodeLabel(constants.CFG_ENTRY_LABEL))]
 
-        all_instructions: list[IRInstruction] = []
+        all_instructions: list[InstructionBase] = []
         reg_offset = 0
 
         for i, chunk in enumerate(chunks):
