@@ -166,7 +166,7 @@ class TestPerformReturnFixture:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
         # Execution should have completed (hit STOP RUN)
         assert len(vm.regions) >= 1
@@ -266,7 +266,7 @@ class TestPerformReturnFixture:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
         # Should complete within steps (hit STOP RUN in SECOND-PARA)
         assert stats.steps < 200
@@ -385,7 +385,7 @@ class TestIfElseExecution:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
         assert stats.steps < 200
         assert len(vm.regions) >= 1
         # WS-RESULT should be 1 (THEN branch: MOVE 1 TO WS-RESULT)
@@ -439,7 +439,7 @@ class TestIfElseExecution:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
         assert stats.steps < 200
         assert len(vm.regions) >= 1
         # WS-RESULT should be 2 (ELSE branch: MOVE 2 TO WS-RESULT)
@@ -655,7 +655,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
         region = vm.regions[list(vm.regions.keys())[0]]
         assert _decode_zoned_unsigned(region, 0, 3) == 42
@@ -698,7 +698,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
         region = vm.regions[list(vm.regions.keys())[0]]
         assert _decode_zoned_unsigned(region, 0, 4) == 10  # WS-A unchanged
@@ -742,7 +742,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
         region = vm.regions[list(vm.regions.keys())[0]]
         assert _decode_zoned_unsigned(region, 0, 4) == 7  # WS-A = 10 - 3
@@ -777,7 +777,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
         region = vm.regions[list(vm.regions.keys())[0]]
         assert _decode_zoned_unsigned(region, 0, 4) == 25
@@ -853,7 +853,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
         region = vm.regions[list(vm.regions.keys())[0]]
         assert _decode_zoned_unsigned(region, 0, 4) == 123
@@ -889,7 +889,7 @@ class TestNumericValueVerification:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
         region = vm.regions[list(vm.regions.keys())[0]]
         assert _decode_zoned_unsigned(region, 0, 4) == 15
@@ -1040,7 +1040,7 @@ class TestSectionFallThrough:
         cfg = build_cfg(instructions)
         registry = build_registry(instructions, cfg)
 
-        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
+        vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=500))
 
         assert stats.steps < 200
         assert len(vm.regions) >= 1

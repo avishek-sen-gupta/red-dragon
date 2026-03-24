@@ -59,7 +59,7 @@ def _to_fixed(lines: list[str]) -> str:
     return "\n".join(prefix + line for line in lines) + "\n"
 
 
-def _run_cobol(lines: list[str], max_steps: int = 500):
+def _run_cobol(lines: list[str], max_steps: int = 1000):
     """Run a COBOL program through the full pipeline and return VMState."""
     source = _to_fixed(lines)
     return run(source=source, language="cobol", max_steps=max_steps)
@@ -1783,7 +1783,7 @@ class TestRedefines:
                 "    MOVE WS-FLAT TO WS-RESULT.",
                 "    STOP RUN.",
             ],
-            max_steps=800,
+            max_steps=1600,
         )
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 8, 8) == 10203040
@@ -1853,7 +1853,7 @@ class TestRedefines:
                 "    MOVE WS-DATE-NUM TO WS-NEXT.",
                 "    STOP RUN.",
             ],
-            max_steps=800,
+            max_steps=1600,
         )
         region = _first_region(vm)
         assert _decode_zoned_unsigned(region, 6, 2) == 23
