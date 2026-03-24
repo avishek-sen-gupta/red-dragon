@@ -23,8 +23,9 @@ from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.types.function_kind import FunctionKind
 from interpreter.types.function_signature import FunctionSignature
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.ir import IRInstruction, CodeLabel
 from interpreter.instructions import (
+    InstructionBase,
     to_typed,
     Const,
     DeclVar,
@@ -40,9 +41,14 @@ from interpreter.instructions import (
     StoreField,
     LoadIndex,
     StoreIndex,
+    LoadIndirect,
+    StoreIndirect,
     NewObject,
     NewArray,
+    Label_,
     Return_,
+    AllocRegion,
+    LoadRegion,
 )
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
@@ -426,18 +432,19 @@ def infer_types(
 
 
 def _infer_instruction(
-    inst: IRInstruction,
+    inst: IRInstruction | InstructionBase,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
     """Infer and record the output type for a single instruction."""
-    handler = _DISPATCH.get(inst.opcode)
+    typed = to_typed(inst) if isinstance(inst, IRInstruction) else inst
+    handler = _DISPATCH.get(type(typed))
     if handler:
-        handler(inst, ctx, type_resolver)
+        handler(typed, ctx, type_resolver)
 
 
 def _infer_label(
-    inst: IRInstruction,
+    inst: Label_,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
@@ -446,7 +453,6 @@ def _infer_label(
     if inst.label.is_function():
         ctx.current_func_label = str(inst.label)
         ctx.func_param_types.setdefault(str(inst.label), [])
-        # func_return_types are pre-seeded by the builder; no inst.type_hint read
     elif (
         inst.label.starts_with(constants.CLASS_LABEL_PREFIX)
         and not inst.label.is_end_class()
@@ -461,17 +467,15 @@ def _infer_label(
 
 
 def _infer_symbolic(
-    inst: IRInstruction,
+    inst: Symbolic,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
     # register_types are pre-seeded by the builder; no inst.type_hint read
-    t = to_typed(inst)
-    assert isinstance(t, Symbolic)
 
     # Collect param types if inside a function (only if not already seeded)
-    if ctx.current_func_label and t.hint:
-        operand = str(t.hint)
+    if ctx.current_func_label and inst.hint:
+        operand = str(inst.hint)
         if operand.startswith("param:"):
             param_name = operand[len("param:") :]
             # Skip param append when func already seeded in func_param_types
@@ -490,9 +494,9 @@ def _infer_symbolic(
         inst.result_reg
         and inst.result_reg not in ctx.register_types
         and ctx.current_class_name
-        and t.hint
+        and inst.hint
     ):
-        operand = str(t.hint)
+        operand = str(inst.hint)
         if operand.startswith("param:"):
             param_name = operand[len("param:") :]
             if param_name in _SELF_PARAM_NAMES:
@@ -500,15 +504,13 @@ def _infer_symbolic(
 
 
 def _infer_const(
-    inst: IRInstruction,
+    inst: Const,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
     if not inst.result_reg.is_present():
         return
-    t = to_typed(inst)
-    assert isinstance(t, Const)
-    raw = str(t.value) if t.value != "" else "None"
+    raw = str(inst.value) if inst.value != "" else "None"
     # If this is a function reference, extract name→return-type and name→param-types mappings
     # Symbol table lookup: plain label operands → FuncRef
     func_name, func_label = "", ""
@@ -562,13 +564,11 @@ def _infer_const(
 
 
 def _infer_load_var(
-    inst: IRInstruction,
+    inst: LoadVar,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    t = to_typed(inst)
-    assert isinstance(t, LoadVar)
-    name = t.name if t.name else ""
+    name = inst.name if inst.name else ""
     if inst.result_reg.is_present() and name:
         ctx.register_source_var[inst.result_reg] = str(name)
     var_type = ctx.lookup_var_type(str(name)) if name else UNKNOWN
@@ -588,17 +588,15 @@ def _infer_load_var(
 
 
 def _infer_store_var(
-    inst: IRInstruction,
+    inst: StoreVar | DeclVar,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    # Dispatched for both STORE_VAR and DECL_VAR
-    t = to_typed(inst)
-    assert isinstance(t, (StoreVar, DeclVar))
-    name = t.name if t.name else ""
+    # Dispatched for both StoreVar and DeclVar
+    name = inst.name if inst.name else ""
     if not name:
         return
-    value_reg = str(t.value_reg)
+    value_reg = str(inst.value_reg)
     if value_reg:
         if value_reg in ctx.register_types:
             ctx.store_var_type(str(name), ctx.register_types[value_reg])
@@ -611,17 +609,15 @@ def _infer_store_var(
 
 
 def _infer_binop(
-    inst: IRInstruction,
+    inst: Binop,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if not inst.result_reg.is_present() or len(inst.operands) < 3:
+    if not inst.result_reg.is_present():
         return
-    t = to_typed(inst)
-    assert isinstance(t, Binop)
-    operator = str(t.operator)
-    left_hint = ctx.register_types.get(str(t.left), UNKNOWN)
-    right_hint = ctx.register_types.get(str(t.right), UNKNOWN)
+    operator = str(inst.operator)
+    left_hint = ctx.register_types.get(str(inst.left), UNKNOWN)
+    right_hint = ctx.register_types.get(str(inst.right), UNKNOWN)
     result = type_resolver.resolve_binop(operator, left_hint, right_hint)
     if result.result_type:
         ctx.register_types[inst.result_reg] = result.result_type
@@ -636,47 +632,41 @@ _UNOP_FIXED_TYPES: dict[str, TypeExpr] = {
 
 
 def _infer_unop(
-    inst: IRInstruction,
-    ctx: _InferenceContext,
-    type_resolver: TypeResolver,
-) -> None:
-    if not inst.result_reg.is_present() or len(inst.operands) < 2:
-        return
-    t = to_typed(inst)
-    assert isinstance(t, Unop)
-    operator = str(t.operator)
-    fixed = _UNOP_FIXED_TYPES.get(operator)
-    if fixed:
-        ctx.register_types[inst.result_reg] = fixed
-        return
-    operand_hint = ctx.register_types.get(str(t.operand), UNKNOWN)
-    if operand_hint:
-        ctx.register_types[inst.result_reg] = operand_hint
-
-
-def _infer_new_object(
-    inst: IRInstruction,
-    ctx: _InferenceContext,
-    type_resolver: TypeResolver,
-) -> None:
-    if inst.result_reg.is_present() and inst.operands:
-        t = to_typed(inst)
-        assert isinstance(t, NewObject)
-        class_name = str(t.type_hint)
-        if class_name:
-            ctx.register_types[inst.result_reg] = scalar(class_name)
-
-
-def _infer_new_array(
-    inst: IRInstruction,
+    inst: Unop,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
     if not inst.result_reg.is_present():
         return
-    t = to_typed(inst)
-    assert isinstance(t, NewArray)
-    is_tuple = str(t.type_hint) == "tuple"
+    operator = str(inst.operator)
+    fixed = _UNOP_FIXED_TYPES.get(operator)
+    if fixed:
+        ctx.register_types[inst.result_reg] = fixed
+        return
+    operand_hint = ctx.register_types.get(str(inst.operand), UNKNOWN)
+    if operand_hint:
+        ctx.register_types[inst.result_reg] = operand_hint
+
+
+def _infer_new_object(
+    inst: NewObject,
+    ctx: _InferenceContext,
+    type_resolver: TypeResolver,
+) -> None:
+    if inst.result_reg.is_present():
+        class_name = str(inst.type_hint)
+        if class_name:
+            ctx.register_types[inst.result_reg] = scalar(class_name)
+
+
+def _infer_new_array(
+    inst: NewArray,
+    ctx: _InferenceContext,
+    type_resolver: TypeResolver,
+) -> None:
+    if not inst.result_reg.is_present():
+        return
+    is_tuple = str(inst.type_hint) == "tuple"
     if is_tuple:
         ctx.register_types[inst.result_reg] = scalar(TypeName.TUPLE)
         ctx.tuple_registers.add(inst.result_reg)
@@ -685,7 +675,7 @@ def _infer_new_array(
 
 
 def _infer_call_function(
-    inst: IRInstruction,
+    inst: CallFunction,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
@@ -694,27 +684,24 @@ def _infer_call_function(
     # register_types may be pre-seeded by the builder (e.g., constructor type_hint)
     if inst.result_reg in ctx.register_types:
         return
-    if inst.operands:
-        t = to_typed(inst)
-        assert isinstance(t, CallFunction)
-        func_name = str(t.func_name)
-        if func_name in ctx.func_return_types:
-            ctx.register_types[inst.result_reg] = ctx.func_return_types[func_name]
-        else:
-            # Search class-scoped method types for static methods called by name
-            matching = [
-                methods[func_name]
-                for methods in ctx.class_method_types.values()
-                if func_name in methods
-            ]
-            if len(matching) == 1:
-                ctx.register_types[inst.result_reg] = matching[0]
-            elif func_name in _BUILTIN_RETURN_TYPES:
-                ctx.register_types[inst.result_reg] = _BUILTIN_RETURN_TYPES[func_name]
+    func_name = str(inst.func_name)
+    if func_name in ctx.func_return_types:
+        ctx.register_types[inst.result_reg] = ctx.func_return_types[func_name]
+    else:
+        # Search class-scoped method types for static methods called by name
+        matching = [
+            methods[func_name]
+            for methods in ctx.class_method_types.values()
+            if func_name in methods
+        ]
+        if len(matching) == 1:
+            ctx.register_types[inst.result_reg] = matching[0]
+        elif func_name in _BUILTIN_RETURN_TYPES:
+            ctx.register_types[inst.result_reg] = _BUILTIN_RETURN_TYPES[func_name]
 
 
 def _infer_alloc_region(
-    inst: IRInstruction,
+    inst: AllocRegion,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
@@ -723,7 +710,7 @@ def _infer_alloc_region(
 
 
 def _infer_load_region(
-    inst: IRInstruction,
+    inst: LoadRegion,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
@@ -732,17 +719,13 @@ def _infer_load_region(
 
 
 def _infer_store_field(
-    inst: IRInstruction,
+    inst: StoreField,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if len(inst.operands) < 3:
-        return
-    t = to_typed(inst)
-    assert isinstance(t, StoreField)
-    obj_reg = str(t.obj_reg)
-    field_name = str(t.field_name)
-    value_reg = str(t.value_reg)
+    obj_reg = str(inst.obj_reg)
+    field_name = str(inst.field_name)
+    value_reg = str(inst.value_reg)
     class_name = ctx.register_types.get(obj_reg, UNKNOWN)
     value_type = ctx.register_types.get(value_reg, UNKNOWN)
     if class_name and value_type:
@@ -750,16 +733,14 @@ def _infer_store_field(
 
 
 def _infer_load_field(
-    inst: IRInstruction,
+    inst: LoadField,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if not inst.result_reg.is_present() or len(inst.operands) < 2:
+    if not inst.result_reg.is_present():
         return
-    t = to_typed(inst)
-    assert isinstance(t, LoadField)
-    obj_reg = str(t.obj_reg)
-    field_name = str(t.field_name)
+    obj_reg = str(inst.obj_reg)
+    field_name = str(inst.field_name)
     class_name = ctx.register_types.get(obj_reg, UNKNOWN)
     if class_name and class_name in ctx.field_types:
         field_type = ctx.field_types[class_name].get(field_name, UNKNOWN)
@@ -768,16 +749,14 @@ def _infer_load_field(
 
 
 def _infer_call_method(
-    inst: IRInstruction,
+    inst: CallMethod,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if not inst.result_reg.is_present() or len(inst.operands) < 2:
+    if not inst.result_reg.is_present():
         return
-    t = to_typed(inst)
-    assert isinstance(t, CallMethod)
-    obj_reg = str(t.obj_reg)
-    method_name = str(t.method_name)
+    obj_reg = str(inst.obj_reg)
+    method_name = str(inst.method_name)
     class_name = ctx.register_types.get(obj_reg, UNKNOWN)
     if class_name and class_name in ctx.class_method_types:
         ret_type = ctx.class_method_types[class_name].get(method_name, UNKNOWN)
@@ -813,15 +792,13 @@ def _infer_call_method(
 
 
 def _infer_call_unknown(
-    inst: IRInstruction,
+    inst: CallUnknown,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if not inst.result_reg.is_present() or not inst.operands:
+    if not inst.result_reg.is_present():
         return
-    t = to_typed(inst)
-    assert isinstance(t, CallUnknown)
-    target_reg = str(t.target_reg)
+    target_reg = str(inst.target_reg)
     # Check if the target register has a FunctionType directly
     target_type = ctx.register_types.get(target_reg, UNKNOWN)
     if isinstance(target_type, FunctionType) and target_type.return_type:
@@ -837,17 +814,13 @@ def _infer_call_unknown(
 
 
 def _infer_store_index(
-    inst: IRInstruction,
+    inst: StoreIndex,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if len(inst.operands) < 3:
-        return
-    t = to_typed(inst)
-    assert isinstance(t, StoreIndex)
-    arr_reg = str(t.arr_reg)
-    index_reg = str(t.index_reg)
-    value_reg = str(t.value_reg)
+    arr_reg = str(inst.arr_reg)
+    index_reg = str(inst.index_reg)
+    value_reg = str(inst.value_reg)
     value_type = ctx.register_types.get(value_reg, UNKNOWN)
     if not value_type:
         return
@@ -861,18 +834,16 @@ def _infer_store_index(
 
 
 def _infer_load_index(
-    inst: IRInstruction,
+    inst: LoadIndex,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if not inst.result_reg.is_present() or len(inst.operands) < 2:
+    if not inst.result_reg.is_present():
         return
-    t = to_typed(inst)
-    assert isinstance(t, LoadIndex)
-    arr_reg = str(t.arr_reg)
+    arr_reg = str(inst.arr_reg)
     # Tuple: resolve per-index element type
-    if arr_reg in ctx.tuple_registers and len(inst.operands) >= 2:
-        index_reg = str(t.index_reg)
+    if arr_reg in ctx.tuple_registers:
+        index_reg = str(inst.index_reg)
         idx = _try_parse_int(ctx.const_values.get(index_reg, ""))
         idx_types = ctx.tuple_element_types.get(arr_reg, {})
         if idx >= 0 and idx in idx_types:
@@ -884,7 +855,7 @@ def _infer_load_index(
 
 
 def _infer_return(
-    inst: IRInstruction,
+    inst: Return_,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
@@ -892,18 +863,14 @@ def _infer_return(
         return
     if ctx.current_func_label in ctx.func_return_types:
         return
-    if not inst.operands:
-        return
-    t = to_typed(inst)
-    assert isinstance(t, Return_)
-    value_reg = str(t.value_reg)
+    value_reg = str(inst.value_reg)
     ret_type = ctx.register_types.get(value_reg, UNKNOWN)
     if ret_type:
         ctx.func_return_types[ctx.current_func_label] = ret_type
 
 
 def _infer_load_indirect(
-    inst: IRInstruction,
+    inst: LoadIndirect,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
@@ -913,7 +880,7 @@ def _infer_load_indirect(
 
 
 def _infer_store_indirect(
-    inst: IRInstruction,
+    inst: StoreIndirect,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
@@ -921,29 +888,29 @@ def _infer_store_indirect(
     pass
 
 
-_DISPATCH: dict[Opcode, callable] = {
-    Opcode.LABEL: _infer_label,
-    Opcode.SYMBOLIC: _infer_symbolic,
-    Opcode.CONST: _infer_const,
-    Opcode.LOAD_VAR: _infer_load_var,
-    Opcode.STORE_VAR: _infer_store_var,
-    Opcode.DECL_VAR: _infer_store_var,
-    Opcode.BINOP: _infer_binop,
-    Opcode.UNOP: _infer_unop,
-    Opcode.NEW_OBJECT: _infer_new_object,
-    Opcode.NEW_ARRAY: _infer_new_array,
-    Opcode.CALL_FUNCTION: _infer_call_function,
-    Opcode.CALL_METHOD: _infer_call_method,
-    Opcode.STORE_FIELD: _infer_store_field,
-    Opcode.LOAD_FIELD: _infer_load_field,
-    Opcode.ALLOC_REGION: _infer_alloc_region,
-    Opcode.LOAD_REGION: _infer_load_region,
-    Opcode.RETURN: _infer_return,
-    Opcode.CALL_UNKNOWN: _infer_call_unknown,
-    Opcode.STORE_INDEX: _infer_store_index,
-    Opcode.LOAD_INDEX: _infer_load_index,
-    Opcode.LOAD_INDIRECT: _infer_load_indirect,
-    Opcode.STORE_INDIRECT: _infer_store_indirect,
+_DISPATCH: dict[type, callable] = {
+    Label_: _infer_label,
+    Symbolic: _infer_symbolic,
+    Const: _infer_const,
+    LoadVar: _infer_load_var,
+    StoreVar: _infer_store_var,
+    DeclVar: _infer_store_var,
+    Binop: _infer_binop,
+    Unop: _infer_unop,
+    NewObject: _infer_new_object,
+    NewArray: _infer_new_array,
+    CallFunction: _infer_call_function,
+    CallMethod: _infer_call_method,
+    StoreField: _infer_store_field,
+    LoadField: _infer_load_field,
+    AllocRegion: _infer_alloc_region,
+    LoadRegion: _infer_load_region,
+    Return_: _infer_return,
+    CallUnknown: _infer_call_unknown,
+    StoreIndex: _infer_store_index,
+    LoadIndex: _infer_load_index,
+    LoadIndirect: _infer_load_indirect,
+    StoreIndirect: _infer_store_indirect,
 }
 
 
