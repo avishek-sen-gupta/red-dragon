@@ -11,8 +11,8 @@ from pathlib import Path
 
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
-from interpreter.instructions import to_typed, DeclVar, StoreVar
+from interpreter.ir import IRInstruction, CodeLabel
+from interpreter.instructions import to_typed, DeclVar, StoreVar, Label_
 from interpreter.project.types import ExportTable, ImportRef, ModuleUnit, LinkedProgram
 from interpreter.project.imports import extract_imports
 from interpreter.project.resolver import (
@@ -45,27 +45,22 @@ def build_export_table(
     variables: dict[str, str] = {}
     in_scope = True  # True while at module top-level
     for inst in ir:
-        if inst.opcode == Opcode.LABEL and inst.label.is_present():
-            is_func_start = inst.label.is_function()
-            is_class_start = inst.label.is_class()
-            is_end = inst.label.is_end_label()
+        typed = to_typed(inst)
+        if isinstance(typed, Label_) and typed.label.is_present():
+            is_func_start = typed.label.is_function()
+            is_class_start = typed.label.is_class()
+            is_end = typed.label.is_end_label()
 
             if is_func_start or is_class_start:
                 in_scope = False
             elif is_end:
                 in_scope = True
 
-        if (
-            in_scope
-            and inst.opcode in (Opcode.DECL_VAR, Opcode.STORE_VAR)
-            and len(inst.operands) >= 2
-        ):
-            t = to_typed(inst)
-            assert isinstance(t, (DeclVar, StoreVar))
-            var_name = str(t.name)
+        if in_scope and isinstance(typed, (DeclVar, StoreVar)):
+            var_name = str(typed.name)
             # Don't duplicate names already in functions or classes
             if var_name not in functions and var_name not in classes:
-                variables[var_name] = str(t.value_reg)
+                variables[var_name] = str(typed.value_reg)
 
     return ExportTable(functions=functions, classes=classes, variables=variables)
 
