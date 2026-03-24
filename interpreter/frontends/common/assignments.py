@@ -54,7 +54,7 @@ def lower_return(ctx: TreeSitterEmitContext, node) -> None:
             ),
         )
     ctx.emit_inst(
-        Return_(value_reg=str(val_reg)),
+        Return_(value_reg=val_reg),
         node=node,
     )
 
