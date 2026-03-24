@@ -8,7 +8,7 @@ from __future__ import annotations
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.node_types import CommonNodeType
 
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.instructions import Branch, BranchIf, Label_, Symbolic
 
 
 def lower_if(ctx: TreeSitterEmitContext, node) -> None:
@@ -22,30 +22,32 @@ def lower_if(ctx: TreeSitterEmitContext, node) -> None:
     end_label = ctx.fresh_label("if_end")
 
     if alt_node:
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[true_label, false_label],
+        ctx.emit_inst(
+            BranchIf(
+                cond_reg=str(cond_reg),
+                branch_targets=(true_label, false_label),
+            ),
             node=node,
         )
     else:
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[true_label, end_label],
+        ctx.emit_inst(
+            BranchIf(
+                cond_reg=str(cond_reg),
+                branch_targets=(true_label, end_label),
+            ),
             node=node,
         )
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     ctx.lower_block(body_node)
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
 
     if alt_node:
-        ctx.emit(Opcode.LABEL, label=false_label)
+        ctx.emit_inst(Label_(label=false_label))
         lower_alternative(ctx, alt_node, end_label)
-        ctx.emit(Opcode.BRANCH, label=end_label)
+        ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_alternative(ctx: TreeSitterEmitContext, alt_node, end_label: str) -> None:
@@ -79,37 +81,38 @@ def lower_elif(ctx: TreeSitterEmitContext, node, end_label: str) -> None:
     true_label = ctx.fresh_label("elif_true")
     false_label = ctx.fresh_label("elif_false") if alt_node else end_label
 
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[true_label, false_label],
+    ctx.emit_inst(
+        BranchIf(
+            cond_reg=str(cond_reg),
+            branch_targets=(true_label, false_label),
+        ),
         node=node,
     )
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     ctx.lower_block(body_node)
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
 
     if alt_node:
-        ctx.emit(Opcode.LABEL, label=false_label)
+        ctx.emit_inst(Label_(label=false_label))
         lower_alternative(ctx, alt_node, end_label)
-        ctx.emit(Opcode.BRANCH, label=end_label)
+        ctx.emit_inst(Branch(label=end_label))
 
 
 def lower_break(ctx: TreeSitterEmitContext, node) -> None:
     """Lower break statement as BRANCH to innermost break target."""
     if ctx.break_target_stack:
-        ctx.emit(
-            Opcode.BRANCH,
-            label=ctx.break_target_stack[-1],
+        ctx.emit_inst(
+            Branch(label=ctx.break_target_stack[-1]),
             node=node,
         )
     else:
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=["break_outside_loop_or_switch"],
+        ctx.emit_inst(
+            Symbolic(
+                result_reg=reg,
+                hint="break_outside_loop_or_switch",
+            ),
             node=node,
         )
 
@@ -117,17 +120,17 @@ def lower_break(ctx: TreeSitterEmitContext, node) -> None:
 def lower_continue(ctx: TreeSitterEmitContext, node) -> None:
     """Lower continue statement as BRANCH to innermost loop continue label."""
     if ctx.loop_stack:
-        ctx.emit(
-            Opcode.BRANCH,
-            label=ctx.loop_stack[-1]["continue_label"],
+        ctx.emit_inst(
+            Branch(label=ctx.loop_stack[-1]["continue_label"]),
             node=node,
         )
     else:
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=["continue_outside_loop"],
+        ctx.emit_inst(
+            Symbolic(
+                result_reg=reg,
+                hint="continue_outside_loop",
+            ),
             node=node,
         )
 
@@ -140,22 +143,23 @@ def lower_while(ctx: TreeSitterEmitContext, node) -> None:
     body_label = ctx.fresh_label("while_body")
     end_label = ctx.fresh_label("while_end")
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     cond_reg = ctx.lower_expr(cond_node)
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[body_label, end_label],
+    ctx.emit_inst(
+        BranchIf(
+            cond_reg=str(cond_reg),
+            branch_targets=(body_label, end_label),
+        ),
         node=node,
     )
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     ctx.push_loop(loop_label, end_label)
     ctx.lower_block(body_node)
     ctx.pop_loop()
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(Branch(label=loop_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_c_style_for(ctx: TreeSitterEmitContext, node) -> None:
@@ -181,30 +185,31 @@ def lower_c_style_for(ctx: TreeSitterEmitContext, node) -> None:
     body_label = ctx.fresh_label("for_body")
     end_label = ctx.fresh_label("for_end")
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     if cond_node:
         cond_reg = ctx.lower_expr(cond_node)
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[body_label, end_label],
+        ctx.emit_inst(
+            BranchIf(
+                cond_reg=str(cond_reg),
+                branch_targets=(body_label, end_label),
+            ),
             node=node,
         )
     else:
-        ctx.emit(Opcode.BRANCH, label=body_label)
+        ctx.emit_inst(Branch(label=body_label))
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     update_label = ctx.fresh_label("for_update") if update_node else loop_label
     ctx.push_loop(update_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
     if update_node:
-        ctx.emit(Opcode.LABEL, label=update_label)
+        ctx.emit_inst(Label_(label=update_label))
         ctx.lower_expr(update_node)
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(Branch(label=loop_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
     if scope_entered:
         ctx.exit_block_scope()

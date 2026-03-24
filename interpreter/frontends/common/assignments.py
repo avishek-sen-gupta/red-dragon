@@ -7,8 +7,9 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.node_types import CommonNodeType
+from interpreter.instructions import Binop, Const, Return_
 
-from interpreter.ir import Opcode
+
 from interpreter.frontends.common.expressions import lower_store_target
 
 
@@ -27,10 +28,13 @@ def lower_augmented_assignment(ctx: TreeSitterEmitContext, node) -> None:
     lhs_reg = ctx.lower_expr(left)
     rhs_reg = ctx.lower_expr(right)
     result = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=result,
-        operands=[op_text, lhs_reg, rhs_reg],
+    ctx.emit_inst(
+        Binop(
+            result_reg=result,
+            operator=op_text,
+            left=str(lhs_reg),
+            right=str(rhs_reg),
+        ),
         node=node,
     )
     lower_store_target(ctx, left, result, node)
@@ -43,14 +47,14 @@ def lower_return(ctx: TreeSitterEmitContext, node) -> None:
         val_reg = ctx.lower_expr(children[0])
     else:
         val_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CONST,
-            result_reg=val_reg,
-            operands=[ctx.constants.default_return_value],
+        ctx.emit_inst(
+            Const(
+                result_reg=val_reg,
+                value=ctx.constants.default_return_value,
+            ),
         )
-    ctx.emit(
-        Opcode.RETURN,
-        operands=[val_reg],
+    ctx.emit_inst(
+        Return_(value_reg=str(val_reg)),
         node=node,
     )
 
