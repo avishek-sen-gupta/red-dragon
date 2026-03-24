@@ -5,13 +5,28 @@ from __future__ import annotations
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode, CodeLabel, NO_LABEL
+from interpreter.ir import NO_LABEL
+from interpreter.instructions import (
+    Binop,
+    Branch,
+    BranchIf,
+    CallFunction,
+    Const,
+    DeclVar,
+    Label_,
+    LoadIndex,
+    LoadVar,
+    StoreVar,
+    Symbolic,
+    TryPop,
+    TryPush,
+    Unop,
+)
 from interpreter import constants
 from interpreter.frontends.ruby.node_types import RubyNodeType
 from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
-
 
 # ── unless (inverted if) ────────────────────────────────────────────
 
@@ -24,11 +39,8 @@ def lower_unless(ctx: TreeSitterEmitContext, node) -> None:
 
     cond_reg = ctx.lower_expr(cond_node)
     negated_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.UNOP,
-        result_reg=negated_reg,
-        operands=["!", cond_reg],
-        node=node,
+    ctx.emit_inst(
+        Unop(result_reg=negated_reg, operator="!", operand=cond_reg), node=node
     )
 
     true_label = ctx.fresh_label("unless_true")
@@ -36,30 +48,26 @@ def lower_unless(ctx: TreeSitterEmitContext, node) -> None:
     end_label = ctx.fresh_label("unless_end")
 
     if alt_node:
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[negated_reg],
-            branch_targets=[true_label, false_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=negated_reg, branch_targets=(true_label, false_label)),
             node=node,
         )
     else:
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[negated_reg],
-            branch_targets=[true_label, end_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=negated_reg, branch_targets=(true_label, end_label)),
             node=node,
         )
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     ctx.lower_block(body_node)
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
 
     if alt_node:
-        ctx.emit(Opcode.LABEL, label=false_label)
+        ctx.emit_inst(Label_(label=false_label))
         _lower_ruby_alternative(ctx, alt_node, end_label)
-        ctx.emit(Opcode.BRANCH, label=end_label)
+        ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 # ── until (inverted while) ──────────────────────────────────────────
@@ -74,29 +82,24 @@ def lower_until(ctx: TreeSitterEmitContext, node) -> None:
     body_label = ctx.fresh_label("until_body")
     end_label = ctx.fresh_label("until_end")
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     cond_reg = ctx.lower_expr(cond_node)
     negated_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.UNOP,
-        result_reg=negated_reg,
-        operands=["!", cond_reg],
-        node=node,
+    ctx.emit_inst(
+        Unop(result_reg=negated_reg, operator="!", operand=cond_reg), node=node
     )
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[negated_reg],
-        branch_targets=[body_label, end_label],
+    ctx.emit_inst(
+        BranchIf(cond_reg=negated_reg, branch_targets=(body_label, end_label)),
         node=node,
     )
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     ctx.push_loop(loop_label, end_label)
     ctx.lower_block(body_node)
     ctx.pop_loop()
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(Branch(label=loop_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 # ── for loop ────────────────────────────────────────────────────────
@@ -121,30 +124,26 @@ def lower_ruby_for(ctx: TreeSitterEmitContext, node) -> None:
     var_name = ctx.node_text(pattern_node) if pattern_node else "__for_var"
 
     init_idx = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
-    ctx.emit(Opcode.DECL_VAR, operands=["__for_idx", init_idx])
+    ctx.emit_inst(Const(result_reg=init_idx, value="0"))
+    ctx.emit_inst(DeclVar(name="__for_idx", value_reg=init_idx))
     len_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
+    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
 
     loop_label = ctx.fresh_label("for_cond")
     body_label = ctx.fresh_label("for_body")
     end_label = ctx.fresh_label("for_end")
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     idx_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=idx_reg, operands=["__for_idx"])
+    ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
     cond_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=cond_reg, operands=["<", idx_reg, len_reg])
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[body_label, end_label],
-    )
+    ctx.emit_inst(Binop(result_reg=cond_reg, operator="<", left=idx_reg, right=len_reg))
+    ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)))
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     elem_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
-    ctx.emit(Opcode.DECL_VAR, operands=[var_name, elem_reg])
+    ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
+    ctx.emit_inst(DeclVar(name=var_name, value_reg=elem_reg))
 
     update_label = ctx.fresh_label("for_update")
     ctx.push_loop(update_label, end_label)
@@ -152,15 +151,15 @@ def lower_ruby_for(ctx: TreeSitterEmitContext, node) -> None:
         ctx.lower_block(body_node)
     ctx.pop_loop()
 
-    ctx.emit(Opcode.LABEL, label=update_label)
+    ctx.emit_inst(Label_(label=update_label))
     one_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
+    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     new_idx = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=new_idx, operands=["+", idx_reg, one_reg])
-    ctx.emit(Opcode.STORE_VAR, operands=["__for_idx", new_idx])
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(Binop(result_reg=new_idx, operator="+", left=idx_reg, right=one_reg))
+    ctx.emit_inst(StoreVar(name="__for_idx", value_reg=new_idx))
+    ctx.emit_inst(Branch(label=loop_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 # ── case/when ───────────────────────────────────────────────────────
@@ -207,42 +206,40 @@ def lower_case(ctx: TreeSitterEmitContext, node) -> None:
         elif when_patterns:
             pattern_reg = ctx.lower_expr(when_patterns[0])
         else:
-            ctx.emit(Opcode.BRANCH, label=when_label)
-            ctx.emit(Opcode.LABEL, label=when_label)
+            ctx.emit_inst(Branch(label=when_label))
+            ctx.emit_inst(Label_(label=when_label))
             if body_node:
                 ctx.lower_block(body_node)
-            ctx.emit(Opcode.BRANCH, label=end_label)
-            ctx.emit(Opcode.LABEL, label=next_label)
+            ctx.emit_inst(Branch(label=end_label))
+            ctx.emit_inst(Label_(label=next_label))
             continue
 
         if val_reg:
             cond_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.BINOP,
-                result_reg=cond_reg,
-                operands=["==", val_reg, pattern_reg],
+            ctx.emit_inst(
+                Binop(
+                    result_reg=cond_reg, operator="==", left=val_reg, right=pattern_reg
+                ),
                 node=when_node,
             )
         else:
             cond_reg = pattern_reg
 
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[when_label, next_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=cond_reg, branch_targets=(when_label, next_label)),
             node=when_node,
         )
 
-        ctx.emit(Opcode.LABEL, label=when_label)
+        ctx.emit_inst(Label_(label=when_label))
         if body_node:
             ctx.lower_block(body_node)
-        ctx.emit(Opcode.BRANCH, label=end_label)
-        ctx.emit(Opcode.LABEL, label=next_label)
+        ctx.emit_inst(Branch(label=end_label))
+        ctx.emit_inst(Label_(label=next_label))
 
     if else_clause:
         ctx.lower_block(else_clause)
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 # ── if with elsif handling ──────────────────────────────────────────
@@ -263,30 +260,26 @@ def lower_ruby_if(ctx: TreeSitterEmitContext, node) -> None:
     end_label = ctx.fresh_label("if_end")
 
     if alt_node:
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[true_label, false_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)),
             node=node,
         )
     else:
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[true_label, end_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=cond_reg, branch_targets=(true_label, end_label)),
             node=node,
         )
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     ctx.lower_block(body_node)
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
 
     if alt_node:
-        ctx.emit(Opcode.LABEL, label=false_label)
+        ctx.emit_inst(Label_(label=false_label))
         _lower_ruby_alternative(ctx, alt_node, end_label)
-        ctx.emit(Opcode.BRANCH, label=end_label)
+        ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def _lower_ruby_alternative(
@@ -317,28 +310,25 @@ def _lower_ruby_elsif(ctx: TreeSitterEmitContext, node, end_label: str) -> None:
     true_label = ctx.fresh_label("elsif_true")
     false_label = ctx.fresh_label("elsif_false") if alt_node else end_label
 
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[true_label, false_label],
-        node=node,
+    ctx.emit_inst(
+        BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)), node=node
     )
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     ctx.lower_block(body_node)
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
 
     if alt_node:
-        ctx.emit(Opcode.LABEL, label=false_label)
+        ctx.emit_inst(Label_(label=false_label))
         _lower_ruby_alternative(ctx, alt_node, end_label)
-        ctx.emit(Opcode.BRANCH, label=end_label)
+        ctx.emit_inst(Branch(label=end_label))
 
 
 def lower_ruby_elsif_stmt(ctx: TreeSitterEmitContext, node) -> None:
     """Handle elsif appearing as a top-level statement (fallback)."""
     end_label = ctx.fresh_label("elsif_end")
     _lower_ruby_elsif(ctx, node, end_label)
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 # ── if_modifier (body if condition) ─────────────────────────────────
@@ -359,16 +349,13 @@ def lower_ruby_if_modifier(ctx: TreeSitterEmitContext, node) -> None:
     true_label = ctx.fresh_label("ifmod_true")
     end_label = ctx.fresh_label("ifmod_end")
 
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[true_label, end_label],
-        node=node,
+    ctx.emit_inst(
+        BranchIf(cond_reg=cond_reg, branch_targets=(true_label, end_label)), node=node
     )
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     ctx.lower_stmt(body_node)
-    ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Label_(label=end_label))
 
 
 # ── unless_modifier (body unless condition) ─────────────────────────
@@ -388,25 +375,20 @@ def lower_ruby_unless_modifier(ctx: TreeSitterEmitContext, node) -> None:
 
     cond_reg = ctx.lower_expr(cond_node)
     negated_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.UNOP,
-        result_reg=negated_reg,
-        operands=["!", cond_reg],
-        node=node,
+    ctx.emit_inst(
+        Unop(result_reg=negated_reg, operator="!", operand=cond_reg), node=node
     )
     true_label = ctx.fresh_label("unlessmod_true")
     end_label = ctx.fresh_label("unlessmod_end")
 
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[negated_reg],
-        branch_targets=[true_label, end_label],
+    ctx.emit_inst(
+        BranchIf(cond_reg=negated_reg, branch_targets=(true_label, end_label)),
         node=node,
     )
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     ctx.lower_stmt(body_node)
-    ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Label_(label=end_label))
 
 
 # ── while_modifier (body while condition) ───────────────────────────
@@ -428,22 +410,19 @@ def lower_ruby_while_modifier(ctx: TreeSitterEmitContext, node) -> None:
     body_label = ctx.fresh_label("whilemod_body")
     end_label = ctx.fresh_label("whilemod_end")
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     cond_reg = ctx.lower_expr(cond_node)
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[body_label, end_label],
-        node=node,
+    ctx.emit_inst(
+        BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)), node=node
     )
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     ctx.push_loop(loop_label, end_label)
     ctx.lower_stmt(body_node)
     ctx.pop_loop()
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(Branch(label=loop_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 # ── until_modifier (body until condition) ───────────────────────────
@@ -465,29 +444,24 @@ def lower_ruby_until_modifier(ctx: TreeSitterEmitContext, node) -> None:
     body_label = ctx.fresh_label("untilmod_body")
     end_label = ctx.fresh_label("untilmod_end")
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     cond_reg = ctx.lower_expr(cond_node)
     negated_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.UNOP,
-        result_reg=negated_reg,
-        operands=["!", cond_reg],
-        node=node,
+    ctx.emit_inst(
+        Unop(result_reg=negated_reg, operator="!", operand=cond_reg), node=node
     )
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[negated_reg],
-        branch_targets=[body_label, end_label],
+    ctx.emit_inst(
+        BranchIf(cond_reg=negated_reg, branch_targets=(body_label, end_label)),
         node=node,
     )
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     ctx.push_loop(loop_label, end_label)
     ctx.lower_stmt(body_node)
     ctx.pop_loop()
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(Branch(label=loop_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 # ── begin/rescue/else/ensure ────────────────────────────────────────
@@ -571,17 +545,16 @@ def _lower_try_catch_ruby(
     exit_target = finally_label if finally_label.is_present() else end_label
 
     # push exception handler
-    ctx.emit(
-        Opcode.TRY_PUSH,
-        operands=[
-            catch_labels,
-            finally_label,
-            end_label,
-        ],
+    ctx.emit_inst(
+        TryPush(
+            catch_labels=tuple(catch_labels),
+            finally_label=finally_label,
+            end_label=end_label,
+        )
     )
 
     # try body
-    ctx.emit(Opcode.LABEL, label=try_body_label)
+    ctx.emit_inst(Label_(label=try_body_label))
     for child in body_children:
         if (
             child.is_named
@@ -590,47 +563,44 @@ def _lower_try_catch_ruby(
         ):
             ctx.lower_stmt(child)
     # pop exception handler (normal exit)
-    ctx.emit(Opcode.TRY_POP)
+    ctx.emit_inst(TryPop())
     if else_label.is_present():
-        ctx.emit(Opcode.BRANCH, label=else_label)
+        ctx.emit_inst(Branch(label=else_label))
     else:
-        ctx.emit(Opcode.BRANCH, label=exit_target)
+        ctx.emit_inst(Branch(label=exit_target))
 
     # catch clauses
     for i, clause in enumerate(catch_clauses):
-        ctx.emit(Opcode.LABEL, label=catch_labels[i])
+        ctx.emit_inst(Label_(label=catch_labels[i]))
         exc_type = clause.get("type", "StandardError") or "StandardError"
         exc_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.SYMBOLIC,
-            result_reg=exc_reg,
-            operands=[f"{constants.CAUGHT_EXCEPTION_PREFIX}:{exc_type}"],
+        ctx.emit_inst(
+            Symbolic(
+                result_reg=exc_reg,
+                hint=f"{constants.CAUGHT_EXCEPTION_PREFIX}:{exc_type}",
+            ),
             node=node,
         )
         exc_var = clause.get("variable")
         if exc_var:
-            ctx.emit(
-                Opcode.DECL_VAR,
-                operands=[exc_var, exc_reg],
-                node=node,
-            )
+            ctx.emit_inst(DeclVar(name=exc_var, value_reg=exc_reg), node=node)
         catch_body = clause.get("body")
         if catch_body:
             ctx.lower_block(catch_body)
-        ctx.emit(Opcode.BRANCH, label=exit_target)
+        ctx.emit_inst(Branch(label=exit_target))
 
     # else clause
     if else_node:
-        ctx.emit(Opcode.LABEL, label=else_label)
+        ctx.emit_inst(Label_(label=else_label))
         ctx.lower_block(else_node)
-        ctx.emit(Opcode.BRANCH, label=finally_label or end_label)
+        ctx.emit_inst(Branch(label=finally_label or end_label))
 
     # finally (ensure)
     if finally_node:
-        ctx.emit(Opcode.LABEL, label=finally_label)
+        ctx.emit_inst(Label_(label=finally_label))
         ctx.lower_block(finally_node)
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 # ── case/in pattern matching ─────────────────────────────────────────
@@ -737,12 +707,7 @@ def lower_ruby_in_clause(ctx: TreeSitterEmitContext, node) -> None:
 def lower_ruby_retry(ctx: TreeSitterEmitContext, node) -> None:
     """Lower `retry` as CALL_FUNCTION('retry')."""
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["retry"],
-        node=node,
-    )
+    ctx.emit_inst(CallFunction(result_reg=reg, func_name="retry", args=()), node=node)
 
 
 # ── rescue_modifier (expr rescue fallback) ────────────────────────
@@ -768,20 +733,24 @@ def lower_ruby_rescue_modifier_expr(ctx: TreeSitterEmitContext, node) -> Registe
     catch_label = ctx.fresh_label("rescue_catch")
     end_label = ctx.fresh_label("rescue_end")
 
-    ctx.emit(Opcode.TRY_PUSH, operands=[[catch_label], NO_LABEL, end_label])
+    ctx.emit_inst(
+        TryPush(
+            catch_labels=(catch_label,), finally_label=NO_LABEL, end_label=end_label
+        )
+    )
     body_reg = ctx.lower_expr(body_node)
-    ctx.emit(Opcode.DECL_VAR, operands=[result_var, body_reg], node=node)
-    ctx.emit(Opcode.TRY_POP)
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(DeclVar(name=result_var, value_reg=body_reg), node=node)
+    ctx.emit_inst(TryPop())
+    ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=catch_label)
+    ctx.emit_inst(Label_(label=catch_label))
     fallback_reg = ctx.lower_expr(fallback_node)
-    ctx.emit(Opcode.DECL_VAR, operands=[result_var, fallback_reg], node=node)
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(DeclVar(name=result_var, value_reg=fallback_reg), node=node)
+    ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[result_var])
+    ctx.emit_inst(LoadVar(result_reg=reg, name=result_var))
     return reg
 
 
