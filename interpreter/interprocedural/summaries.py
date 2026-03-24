@@ -11,7 +11,7 @@ from functools import reduce
 
 from interpreter.cfg_types import BasicBlock, CFG
 from interpreter.dataflow import DataflowResult, Definition, analyze
-from interpreter.ir import CodeLabel, Opcode, VAR_DEFINITION_OPCODES
+from interpreter.ir import CodeLabel
 from interpreter.instructions import (
     to_typed,
     DeclVar,
@@ -49,9 +49,7 @@ def _collect_boundary_labels(cfg: CFG) -> frozenset[str]:
         if label.starts_with("end_"):
             boundaries.add(label)
         elif label.starts_with("func_") and any(
-            inst.opcode == Opcode.SYMBOLIC
-            and len(inst.operands) >= 1
-            and isinstance((t := to_typed(inst)), Symbolic)
+            isinstance((t := to_typed(inst)), Symbolic)
             and str(t.hint).startswith(constants.PARAM_PREFIX)
             for inst in block.instructions
         ):
@@ -104,11 +102,10 @@ def extract_sub_cfg(cfg: CFG, function_entry: FunctionEntry) -> CFG:
 def _find_param_names(cfg: CFG) -> frozenset[str]:
     """Find all parameter names declared via SYMBOLIC param:x → DECL_VAR/STORE_VAR x patterns."""
     return frozenset(
-        to_typed(inst).name
+        t.name
         for block in cfg.blocks.values()
         for inst in block.instructions
-        if inst.opcode in VAR_DEFINITION_OPCODES
-        and len(inst.operands) >= 2
+        if isinstance((t := to_typed(inst)), (DeclVar, StoreVar))
         and _is_param_store(cfg, block, inst)
     )
 
@@ -119,10 +116,8 @@ def _is_param_store(cfg: CFG, block: BasicBlock, store_inst) -> bool:
     assert isinstance(t_store, (DeclVar, StoreVar))
     rhs_reg = t_store.value_reg
     return any(
-        inst.opcode == Opcode.SYMBOLIC
-        and inst.result_reg == rhs_reg
-        and len(inst.operands) >= 1
-        and isinstance((t := to_typed(inst)), Symbolic)
+        isinstance((t := to_typed(inst)), Symbolic)
+        and t.result_reg == rhs_reg
         and str(t.hint).startswith(constants.PARAM_PREFIX)
         for inst in block.instructions
     )
@@ -134,10 +129,10 @@ def _find_return_operands(cfg: CFG) -> list[tuple[str, str, int]]:
     Returns list of (block_label, operand_register, instruction_index).
     """
     return [
-        (label, str(to_typed(inst).value_reg), idx)
+        (label, str(t.value_reg), idx)
         for label, block in cfg.blocks.items()
         for idx, inst in enumerate(block.instructions)
-        if inst.opcode == Opcode.RETURN and len(inst.operands) >= 1
+        if isinstance((t := to_typed(inst)), Return_) and t.value_reg.is_present()
     ]
 
 
@@ -151,13 +146,13 @@ def _find_store_fields(cfg: CFG) -> list[tuple[str, int, str, str, str]]:
         (
             label,
             idx,
-            str((t := to_typed(inst)).obj_reg),
+            str(t.obj_reg),
             str(t.field_name),
             str(t.value_reg),
         )
         for label, block in cfg.blocks.items()
         for idx, inst in enumerate(block.instructions)
-        if inst.opcode == Opcode.STORE_FIELD and len(inst.operands) >= 3
+        if isinstance((t := to_typed(inst)), StoreField)
     ]
 
 
@@ -171,15 +166,13 @@ def _find_load_fields(cfg: CFG) -> list[tuple[str, int, str, str, str]]:
         (
             label,
             idx,
-            str((t := to_typed(inst)).obj_reg),
+            str(t.obj_reg),
             str(t.field_name),
-            inst.result_reg,
+            t.result_reg,
         )
         for label, block in cfg.blocks.items()
         for idx, inst in enumerate(block.instructions)
-        if inst.opcode == Opcode.LOAD_FIELD
-        and len(inst.operands) >= 2
-        and inst.result_reg.is_present()
+        if isinstance((t := to_typed(inst)), LoadField) and t.result_reg.is_present()
     ]
 
 
@@ -213,9 +206,8 @@ def _trace_register_to_named_var(
     Returns the variable name, or None if not traceable.
     """
     for defn in dataflow.definitions:
-        if defn.variable == register and defn.instruction.opcode == Opcode.LOAD_VAR:
-            t = to_typed(defn.instruction)
-            assert isinstance(t, LoadVar)
+        t = to_typed(defn.instruction)
+        if defn.variable == register and isinstance(t, LoadVar):
             return str(t.name)
     return None
 
@@ -227,13 +219,8 @@ def _find_register_source_var(
     """Find the named variable that a register was loaded from via LOAD_VAR."""
     for block in cfg.blocks.values():
         for inst in block.instructions:
-            if (
-                inst.opcode == Opcode.LOAD_VAR
-                and inst.result_reg == register
-                and len(inst.operands) >= 1
-            ):
-                t = to_typed(inst)
-                assert isinstance(t, LoadVar)
+            t = to_typed(inst)
+            if isinstance(t, LoadVar) and str(t.result_reg) == register:
                 return str(t.name)
     return None
 
@@ -256,16 +243,15 @@ def _trace_register_to_source_vars(register: str, cfg: CFG) -> frozenset[str]:
 
         for block in cfg.blocks.values():
             for inst in block.instructions:
-                if inst.result_reg != reg:
+                t = to_typed(inst)
+                if str(t.result_reg) != reg:
                     continue
-                if inst.opcode == Opcode.LOAD_VAR and len(inst.operands) >= 1:
-                    t = to_typed(inst)
-                    assert isinstance(t, LoadVar)
+                if isinstance(t, LoadVar):
                     source_vars.add(str(t.name))
                 else:
                     worklist.extend(
                         str(op)
-                        for op in inst.operands
+                        for op in t.operands
                         if isinstance(op, str) and str(op).startswith("%")
                     )
 
@@ -343,9 +329,8 @@ def _add_field_to_return_flows(
     # Find DECL_VAR/STORE_VAR instructions for this variable where the RHS comes from a LOAD_FIELD
     for block in cfg.blocks.values():
         for inst in block.instructions:
-            if inst.opcode in VAR_DEFINITION_OPCODES and len(inst.operands) >= 2:
-                t = to_typed(inst)
-                assert isinstance(t, (DeclVar, StoreVar))
+            t = to_typed(inst)
+            if isinstance(t, (DeclVar, StoreVar)):
                 if t.name != var_name:
                     continue
                 rhs_reg = t.value_reg

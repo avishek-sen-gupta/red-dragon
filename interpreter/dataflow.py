@@ -10,7 +10,7 @@ from functools import reduce
 from interpreter import constants
 from interpreter.cfg import BasicBlock, CFG
 from interpreter.ir import IRInstruction, Opcode, VAR_DEFINITION_OPCODES
-from interpreter.instructions import to_typed, DeclVar, StoreVar
+from interpreter.instructions import to_typed, DeclVar, StoreVar, Symbolic
 from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
@@ -120,7 +120,10 @@ def _defs_of(instruction: IRInstruction) -> list[str]:
         return [t.name]
     if instruction.opcode in _VALUE_PRODUCERS and instruction.result_reg.is_present():
         return [str(instruction.result_reg)]
-    if instruction.opcode == Opcode.SYMBOLIC and instruction.result_reg.is_present():
+    if (
+        isinstance(to_typed(instruction), Symbolic)
+        and instruction.result_reg.is_present()
+    ):
         return [str(instruction.result_reg)]
     return []
 

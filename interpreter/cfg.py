@@ -3,34 +3,65 @@
 from __future__ import annotations
 
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
-from interpreter.instructions import to_typed, CallFunction
+from interpreter.instructions import (
+    to_typed,
+    CallFunction,
+    InstructionBase,
+    Label_,
+    Branch,
+    BranchIf,
+    Return_,
+    Throw_,
+    ResumeContinuation,
+)
 from interpreter import constants
 from interpreter.cfg_types import (
     BasicBlock,
     CFG,
 )  # noqa: F401 — re-exported for backwards compatibility
 
+# Structural opcodes that control-flow analysis depends on.
+# Only these are normalised in build_cfg; non-structural opcodes (CONST, etc.)
+# are left as IRInstruction to avoid lossy conversions (e.g. COBOL list operands).
+_STRUCTURAL_OPCODES: frozenset[Opcode] = frozenset(
+    {
+        Opcode.LABEL,
+        Opcode.BRANCH,
+        Opcode.BRANCH_IF,
+        Opcode.RETURN,
+        Opcode.THROW,
+        Opcode.RESUME_CONTINUATION,
+    }
+)
+
+
+def _normalize_structural(
+    inst: IRInstruction | InstructionBase,
+) -> IRInstruction | InstructionBase:
+    """Convert structural IRInstruction to its typed form; leave everything else unchanged."""
+    if isinstance(inst, InstructionBase):
+        return inst
+    if inst.opcode in _STRUCTURAL_OPCODES:
+        return to_typed(inst)
+    return inst
+
 
 def build_cfg(instructions: list[IRInstruction]) -> CFG:
     """Partition instructions into basic blocks and wire edges."""
     cfg = CFG()
 
+    typed_instructions = [_normalize_structural(inst) for inst in instructions]
+
     # Phase 1: identify block starts
     label_to_idx: dict[CodeLabel, int] = {}
     block_starts: set[int] = {0}
 
-    for i, inst in enumerate(instructions):
-        if inst.opcode == Opcode.LABEL:
+    for i, inst in enumerate(typed_instructions):
+        if isinstance(inst, Label_):
             block_starts.add(i)
             label_to_idx[inst.label] = i
-        elif inst.opcode in (
-            Opcode.BRANCH,
-            Opcode.BRANCH_IF,
-            Opcode.RETURN,
-            Opcode.THROW,
-            Opcode.RESUME_CONTINUATION,
-        ):
-            if i + 1 < len(instructions):
+        elif isinstance(inst, (Branch, BranchIf, Return_, Throw_, ResumeContinuation)):
+            if i + 1 < len(typed_instructions):
                 block_starts.add(i + 1)
 
     sorted_starts = sorted(block_starts)
@@ -38,12 +69,14 @@ def build_cfg(instructions: list[IRInstruction]) -> CFG:
     # Phase 2: create blocks
     for si, start in enumerate(sorted_starts):
         end = (
-            sorted_starts[si + 1] if si + 1 < len(sorted_starts) else len(instructions)
+            sorted_starts[si + 1]
+            if si + 1 < len(sorted_starts)
+            else len(typed_instructions)
         )
-        block_insts = instructions[start:end]
+        block_insts = typed_instructions[start:end]
 
         # Determine label
-        if block_insts and block_insts[0].opcode == Opcode.LABEL:
+        if block_insts and isinstance(block_insts[0], Label_):
             label = block_insts[0].label
             block_insts = block_insts[1:]  # don't include LABEL pseudo-inst
         else:
@@ -63,22 +96,22 @@ def build_cfg(instructions: list[IRInstruction]) -> CFG:
 
         last = block.instructions[-1]
 
-        if last.opcode == Opcode.BRANCH:
+        if isinstance(last, Branch):
             target = last.label
             if target in cfg.blocks:
                 _add_edge(cfg, label, target)
 
-        elif last.opcode == Opcode.BRANCH_IF:
+        elif isinstance(last, BranchIf):
             for target in last.branch_targets:
                 if target in cfg.blocks:
                     _add_edge(cfg, label, target)
 
-        elif last.opcode == Opcode.RESUME_CONTINUATION:
+        elif isinstance(last, ResumeContinuation):
             # Fall-through edge only; branch target is dynamic
             if i + 1 < len(block_labels):
                 _add_edge(cfg, label, block_labels[i + 1])
 
-        elif last.opcode in (Opcode.RETURN, Opcode.THROW):
+        elif isinstance(last, (Return_, Throw_)):
             pass  # no successors
 
         else:
@@ -216,10 +249,12 @@ def _node_shape(block: BasicBlock, is_entry: bool) -> tuple[str, str]:
     if is_entry:
         return '(["', '"])'
     last = block.instructions[-1] if block.instructions else None
-    if last and last.opcode in (Opcode.BRANCH_IF, Opcode.RESUME_CONTINUATION):
-        return '{"', '"}'
-    if last and last.opcode in (Opcode.RETURN, Opcode.THROW):
-        return '(["', '"])'
+    if last is not None:
+        t = to_typed(last) if isinstance(last, IRInstruction) else last
+        if isinstance(t, (BranchIf, ResumeContinuation)):
+            return '{"', '"}'
+        if isinstance(t, (Return_, Throw_)):
+            return '(["', '"])'
     return '["', '"]'
 
 
@@ -297,7 +332,7 @@ def cfg_to_mermaid(cfg: CFG) -> str:
         block = cfg.blocks[label]
         src = _node_id(label)
         last = block.instructions[-1] if block.instructions else None
-        is_branch_if = last is not None and last.opcode == Opcode.BRANCH_IF
+        is_branch_if = last is not None and isinstance(last, BranchIf)
 
         if is_branch_if and len(block.successors) == 2:
             true_target = block.successors[0]
@@ -314,10 +349,9 @@ def cfg_to_mermaid(cfg: CFG) -> str:
         block = cfg.blocks[label]
         src = _node_id(label)
         for inst in block.instructions:
-            if inst.opcode != Opcode.CALL_FUNCTION or not inst.operands:
+            t = to_typed(inst) if isinstance(inst, IRInstruction) else inst
+            if not isinstance(t, CallFunction):
                 continue
-            t = to_typed(inst)
-            assert isinstance(t, CallFunction)
             func_name = t.func_name
             target_label = call_target_map.get(func_name)
             if target_label:
