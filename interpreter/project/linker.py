@@ -24,10 +24,10 @@ import re
 from pathlib import Path
 
 from interpreter.cfg import build_cfg
-from interpreter.ir import IRInstruction, CodeLabel
+from interpreter.ir import CodeLabel
 from interpreter.instructions import (
+    InstructionBase,
     Instruction,
-    to_typed,
     CallFunction,
     DeclVar,
     Const,
@@ -68,7 +68,7 @@ def rebase_register(operand: str, offset: int) -> str:
     return operand
 
 
-def max_register_number(ir: tuple[IRInstruction, ...] | list[IRInstruction]) -> int:
+def max_register_number(ir: tuple[...] | list[InstructionBase]) -> int:
     """Find the highest register number used in an IR sequence. Returns -1 if none."""
     max_reg = -1
     for inst in ir:
@@ -87,12 +87,12 @@ def max_register_number(ir: tuple[IRInstruction, ...] | list[IRInstruction]) -> 
 
 
 def _transform_instruction(
-    inst: IRInstruction,
+    inst: InstructionBase,
     prefix: str,
     reg_offset: int,
 ) -> Instruction:
     """Namespace labels, rebase registers, namespace CONST func/class refs."""
-    typed = to_typed(inst)
+    typed = inst
 
     # map_labels handles all CodeLabel fields (label, branch_targets, catch_labels, etc.)
     transformed = typed.map_labels(lambda l: l.namespace(prefix))
@@ -117,9 +117,9 @@ def _transform_instruction(
     return transformed
 
 
-def _is_import_call(inst: IRInstruction) -> bool:
+def _is_import_call(inst: InstructionBase) -> bool:
     """Is this a CALL_FUNCTION 'import' ... instruction?"""
-    t = to_typed(inst)
+    t = inst
     if not isinstance(t, CallFunction):
         return False
     return str(t.func_name) == "import"
@@ -130,7 +130,7 @@ def _transform_module(
     prefix: str,
     reg_offset: int,
     resolved_imports: set[str],
-) -> list[IRInstruction]:
+) -> list[InstructionBase]:
     """Transform a module's IR: namespace, rebase, drop resolved import stubs.
 
     Import stubs (CALL_FUNCTION "import" + DECL_VAR) are dropped for names
@@ -144,12 +144,12 @@ def _transform_module(
     future frontend breaks this adjacency, the skip_next_decl_for_reg flag
     could match a later unrelated DECL_VAR. See red-dragon-lzae.
     """
-    result: list[IRInstruction] = []
+    result: list[InstructionBase] = []
     skip_next_decl_for_reg: str | None = None
 
     for inst in module.ir:
         # Skip the per-module "entry:" label — we'll add a single one
-        typed = to_typed(inst)
+        typed = inst
         if isinstance(typed, Label_) and typed.label.is_entry():
             continue
 
@@ -255,7 +255,7 @@ def link_modules(
     ]
 
     # Build merged IR with a single entry label
-    all_ir: list[IRInstruction] = [Label_(label=CodeLabel("entry"))]
+    all_ir: list[InstructionBase] = [Label_(label=CodeLabel("entry"))]
     reg_offset = 0
 
     for file_path in processing_order:

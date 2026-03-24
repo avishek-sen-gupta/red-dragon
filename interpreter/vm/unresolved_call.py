@@ -9,7 +9,6 @@ from typing import Any
 
 from litellm.exceptions import OpenAIError
 
-from interpreter.ir import IRInstruction
 from interpreter.llm.llm_client import LLMClient
 from interpreter.types.type_expr import UNKNOWN
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
@@ -42,7 +41,7 @@ class UnresolvedCallResolver(ABC):
         self,
         func_name: str,
         args: list[Any],
-        inst: IRInstruction,
+        inst: InstructionBase,
         vm: VMState,
     ) -> ExecutionResult:
         """Resolve an unknown function call and return an ExecutionResult."""
@@ -54,7 +53,7 @@ class UnresolvedCallResolver(ABC):
         obj_desc: str,
         method_name: str,
         args: list[Any],
-        inst: IRInstruction,
+        inst: InstructionBase,
         vm: VMState,
     ) -> ExecutionResult:
         """Resolve an unknown method call and return an ExecutionResult."""
@@ -68,7 +67,7 @@ class SymbolicResolver(UnresolvedCallResolver):
         self,
         func_name: str,
         args: list[Any],
-        inst: IRInstruction,
+        inst: InstructionBase,
         vm: VMState,
     ) -> ExecutionResult:
         args_desc = ", ".join(_symbolic_name(a) for a in args)
@@ -87,7 +86,7 @@ class SymbolicResolver(UnresolvedCallResolver):
         obj_desc: str,
         method_name: str,
         args: list[Any],
-        inst: IRInstruction,
+        inst: InstructionBase,
         vm: VMState,
     ) -> ExecutionResult:
         args_desc = ", ".join(_symbolic_name(a) for a in args)
@@ -142,7 +141,7 @@ class LLMPlausibleResolver(UnresolvedCallResolver):
         self,
         call_desc: str,
         args: list[Any],
-        inst: IRInstruction,
+        inst: InstructionBase,
         vm: VMState,
     ) -> str:
         frame = vm.current_frame
@@ -163,7 +162,7 @@ class LLMPlausibleResolver(UnresolvedCallResolver):
 
         return json.dumps(msg, indent=2, default=str)
 
-    def _parse_llm_response(self, text: str, inst: IRInstruction) -> ExecutionResult:
+    def _parse_llm_response(self, text: str, inst: InstructionBase) -> ExecutionResult:
         text = text.strip()
         if text.startswith("```"):
             text = text.split("\n", 1)[1]
@@ -206,7 +205,7 @@ class LLMPlausibleResolver(UnresolvedCallResolver):
         self,
         func_name: str,
         args: list[Any],
-        inst: IRInstruction,
+        inst: InstructionBase,
         vm: VMState,
     ) -> ExecutionResult:
         args_desc = ", ".join(_symbolic_name(a) for a in args)
@@ -233,7 +232,7 @@ class LLMPlausibleResolver(UnresolvedCallResolver):
         obj_desc: str,
         method_name: str,
         args: list[Any],
-        inst: IRInstruction,
+        inst: InstructionBase,
         vm: VMState,
     ) -> ExecutionResult:
         args_desc = ", ".join(_symbolic_name(a) for a in args)

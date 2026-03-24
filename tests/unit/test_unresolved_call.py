@@ -5,6 +5,7 @@ import json
 import pytest
 
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.instructions import InstructionBase
 from interpreter.llm.llm_client import LLMClient
 from interpreter.vm.unresolved_call import (
     LLMPlausibleResolver,
@@ -32,7 +33,7 @@ def _make_vm() -> VMState:
 
 def _make_call_inst(
     result_reg: str = "%0", func_name: str = "unknown_func"
-) -> IRInstruction:
+) -> InstructionBase:
     """Create a CALL_FUNCTION instruction."""
     return IRInstruction(
         opcode=Opcode.CALL_FUNCTION,
@@ -41,7 +42,7 @@ def _make_call_inst(
     )
 
 
-def _make_method_inst(result_reg: str = "%0") -> IRInstruction:
+def _make_method_inst(result_reg: str = "%0") -> InstructionBase:
     """Create a CALL_METHOD instruction."""
     return IRInstruction(
         opcode=Opcode.CALL_METHOD,

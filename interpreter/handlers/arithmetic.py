@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from interpreter.instructions import to_typed, Binop, Unop
-from interpreter.ir import IRInstruction
+from interpreter.instructions import InstructionBase, Binop, Unop
 from interpreter.vm.vm import (
     VMState,
     Pointer,
@@ -23,8 +22,8 @@ from interpreter import constants
 from interpreter.handlers._common import _symbolic_name
 
 
-def _handle_binop(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    t = to_typed(inst)
+def _handle_binop(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+    t = inst
     assert isinstance(t, Binop)
     binop_coercion = ctx.binop_coercion
     oper = t.operator
@@ -119,8 +118,8 @@ def _handle_binop(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult
     )
 
 
-def _handle_unop(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    t = to_typed(inst)
+def _handle_unop(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+    t = inst
     assert isinstance(t, Unop)
     unop_coercion = ctx.unop_coercion
     oper = t.operator

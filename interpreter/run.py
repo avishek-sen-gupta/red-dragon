@@ -15,7 +15,7 @@ from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
-from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
+from interpreter.ir import Opcode, CodeLabel, NO_LABEL
 from interpreter.instructions import Label_, Return_, Throw_
 from interpreter.frontend import get_frontend
 from interpreter.frontend_observer import FrontendObserver

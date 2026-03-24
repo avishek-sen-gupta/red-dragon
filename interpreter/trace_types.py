@@ -19,7 +19,7 @@ class TraceStep:
     step_index: int
     block_label: str
     instruction_index: int
-    instruction: Any  # IRInstruction
+    instruction: Any  # InstructionBase
     update: Any  # StateUpdate
     vm_state: Any  # deep-copied VMState after applying update
     used_llm: bool

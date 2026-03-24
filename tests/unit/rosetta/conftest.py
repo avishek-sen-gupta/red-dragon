@@ -10,7 +10,8 @@ from interpreter.frontends import (
     get_deterministic_frontend,
     SUPPORTED_DETERMINISTIC_LANGUAGES,
 )
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import Opcode
+from interpreter.instructions import InstructionBase
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg, ExecutionStrategies
 from interpreter.run_types import ExecutionStats, VMConfig
@@ -19,23 +20,25 @@ from interpreter.vm.vm_types import VMState
 logger = logging.getLogger(__name__)
 
 
-def parse_for_language(language: str, source: str) -> list[IRInstruction]:
+def parse_for_language(language: str, source: str) -> list[InstructionBase]:
     """Parse *source* with tree-sitter and lower via the deterministic frontend."""
     frontend = get_deterministic_frontend(language)
     return frontend.lower(source.encode("utf-8"))
 
 
-def opcodes(instructions: list[IRInstruction]) -> set[Opcode]:
+def opcodes(instructions: list[InstructionBase]) -> set[Opcode]:
     """Return the set of opcodes present in *instructions*."""
     return {inst.opcode for inst in instructions}
 
 
-def find_all(instructions: list[IRInstruction], opcode: Opcode) -> list[IRInstruction]:
+def find_all(
+    instructions: list[InstructionBase], opcode: Opcode
+) -> list[InstructionBase]:
     """Return all instructions matching *opcode*."""
     return [inst for inst in instructions if inst.opcode == opcode]
 
 
-def count_symbolic_unsupported(instructions: list[IRInstruction]) -> int:
+def count_symbolic_unsupported(instructions: list[InstructionBase]) -> int:
     """Count SYMBOLIC instructions whose operands contain 'unsupported:'."""
     return len(
         [
@@ -48,7 +51,7 @@ def count_symbolic_unsupported(instructions: list[IRInstruction]) -> int:
 
 
 def assert_clean_lowering(
-    ir: list[IRInstruction],
+    ir: list[InstructionBase],
     *,
     min_instructions: int,
     required_opcodes: set[Opcode],
@@ -77,7 +80,7 @@ def assert_clean_lowering(
 
 
 def assert_cross_language_consistency(
-    results: dict[str, list[IRInstruction]],
+    results: dict[str, list[InstructionBase]],
     *,
     required_opcodes: set[Opcode],
     expected_languages: set[str] = frozenset(),
@@ -96,7 +99,7 @@ def assert_cross_language_consistency(
 
     # Instruction count variance <= 5x median
     # Subtract prelude overhead (Box/Option class defs) from Rust instruction count
-    def _effective_count(lang: str, ir: list[IRInstruction]) -> int:
+    def _effective_count(lang: str, ir: list[InstructionBase]) -> int:
         if lang != "rust":
             return len(ir)
         last_prelude_idx = max(

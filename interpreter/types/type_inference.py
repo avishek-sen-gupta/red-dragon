@@ -24,10 +24,9 @@ from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.types.function_kind import FunctionKind
 from interpreter.types.function_signature import FunctionSignature
-from interpreter.ir import IRInstruction, CodeLabel
+from interpreter.ir import CodeLabel
 from interpreter.instructions import (
     InstructionBase,
-    to_typed,
     Const,
     DeclVar,
     LoadVar,
@@ -347,7 +346,7 @@ def _resolve_aliases_in_dict(d: dict, aliases: dict[str, TypeExpr]) -> dict:
 
 
 def infer_types(
-    instructions: list[IRInstruction],
+    instructions: list[InstructionBase],
     type_resolver: TypeResolver,
     type_env_builder: TypeEnvironmentBuilder = TypeEnvironmentBuilder(),
     func_symbol_table: dict[CodeLabel, FuncRef] = {},
@@ -440,12 +439,12 @@ def infer_types(
 
 
 def _infer_instruction(
-    inst: IRInstruction | InstructionBase,
+    inst: InstructionBase | InstructionBase,
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
     """Infer and record the output type for a single instruction."""
-    typed = to_typed(inst) if isinstance(inst, IRInstruction) else inst
+    typed = inst
     handler = _DISPATCH.get(type(typed))
     if handler:
         handler(typed, ctx, type_resolver)

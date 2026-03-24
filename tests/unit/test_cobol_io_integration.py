@@ -4,6 +4,7 @@ from interpreter.cfg import build_cfg
 from interpreter.cobol.io_provider import NullIOProvider, StubIOProvider
 from interpreter.vm.vm_types import SymbolicValue
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.instructions import InstructionBase
 from interpreter.registry import build_registry
 from interpreter.run import execute_cfg
 from interpreter.run_types import VMConfig
@@ -11,9 +12,9 @@ from interpreter.types.typed_value import unwrap
 from interpreter.register import Register
 
 
-def _build_call_function_ir(func_name: str, *arg_literals) -> list[IRInstruction]:
+def _build_call_function_ir(func_name: str, *arg_literals) -> list[InstructionBase]:
     """Build a minimal IR sequence: LABEL entry, CONST args, CALL_FUNCTION, RETURN."""
-    instructions: list[IRInstruction] = []
+    instructions: list[InstructionBase] = []
     instructions.append(IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")))
 
     arg_regs = []

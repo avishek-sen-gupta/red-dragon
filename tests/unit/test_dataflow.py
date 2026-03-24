@@ -21,6 +21,7 @@ from interpreter.dataflow import (
 )
 from interpreter.frontends.python import PythonFrontend
 from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
+from interpreter.instructions import InstructionBase
 from interpreter.parser import TreeSitterParserFactory
 from interpreter import constants
 
@@ -42,7 +43,7 @@ def _make_inst(
     )
 
 
-def _build_simple_cfg(ir_instructions: list[IRInstruction]) -> CFG:
+def _build_simple_cfg(ir_instructions: list[InstructionBase]) -> CFG:
     """Build a CFG from raw IR instructions."""
     return build_cfg(ir_instructions)
 

@@ -16,7 +16,6 @@ from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.interprocedural.analyze import analyze_interprocedural
 from interpreter.interprocedural.types import InterproceduralResult
-from interpreter.ir import IRInstruction
 from interpreter.registry import FunctionRegistry, build_registry
 from interpreter.run import build_execution_strategies, execute_cfg_traced
 from interpreter.run_types import VMConfig
@@ -32,7 +31,7 @@ class Session:
 
     source: str
     language: Language
-    ir: list[IRInstruction]
+    ir: list[InstructionBase]
     cfg: CFG
     registry: FunctionRegistry
     interprocedural: InterproceduralResult

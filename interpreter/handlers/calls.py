@@ -6,12 +6,12 @@ import logging
 from typing import Any
 
 from interpreter.instructions import (
-    to_typed,
+    InstructionBase,
     CallFunction,
     CallMethod,
     CallUnknown,
 )
-from interpreter.ir import IRInstruction, CodeLabel
+from interpreter.ir import CodeLabel
 from interpreter.vm.vm import (
     VMState,
     HeapObject,
@@ -66,7 +66,7 @@ def _unwrap_builtin_result(result: BuiltinResult, name: str) -> TypedValue:
 def _try_builtin_call(
     func_name: str,
     args: list[TypedValue],
-    inst: IRInstruction,
+    inst: InstructionBase,
     vm: VMState,
 ) -> ExecutionResult:
     """Attempt to handle a call via the builtin table."""
@@ -101,7 +101,7 @@ def _try_builtin_call(
 def _try_class_constructor_call(
     func_val: Any,
     args: list[TypedValue],
-    inst: IRInstruction,
+    inst: InstructionBase,
     vm: VMState,
     cfg: CFG,
     registry: FunctionRegistry,
@@ -194,7 +194,7 @@ def _try_class_constructor_call(
 def _try_user_function_call(
     func_val: Any,
     args: list[TypedValue],
-    inst: IRInstruction,
+    inst: InstructionBase,
     vm: VMState,
     cfg: CFG,
     registry: FunctionRegistry,
@@ -252,11 +252,11 @@ def _try_user_function_call(
 
 
 def _handle_call_function(
-    inst: IRInstruction,
+    inst: InstructionBase,
     vm: VMState,
     ctx: Any,
 ) -> ExecutionResult:
-    t = to_typed(inst)
+    t = inst
     assert isinstance(t, CallFunction)
     raw_func_name = t.func_name
     # Extract base name for scope lookup: "Box[Node]" → "Box"
@@ -381,11 +381,11 @@ def _handle_call_function(
 
 
 def _handle_call_method(
-    inst: IRInstruction,
+    inst: InstructionBase,
     vm: VMState,
     ctx: Any,
 ) -> ExecutionResult:
-    t = to_typed(inst)
+    t = inst
     assert isinstance(t, CallMethod)
     obj_val = _resolve_reg(vm, t.obj_reg)
     method_name = t.method_name
@@ -557,12 +557,12 @@ def _handle_call_method(
 
 
 def _handle_call_unknown(
-    inst: IRInstruction,
+    inst: InstructionBase,
     vm: VMState,
     ctx: Any,
 ) -> ExecutionResult:
     """Handle CALL_UNKNOWN — dynamic call target, resolve via configured strategy."""
-    t = to_typed(inst)
+    t = inst
     assert isinstance(t, CallUnknown)
     target_val = _resolve_reg(vm, t.target_reg)
     arg_regs = list(t.args)
