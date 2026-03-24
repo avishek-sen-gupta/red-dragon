@@ -24,6 +24,26 @@ from interpreter.refs.func_ref import FuncRef
 from interpreter.types.function_kind import FunctionKind
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.instructions import (
+    to_typed,
+    Const,
+    DeclVar,
+    LoadVar,
+    StoreVar,
+    Symbolic,
+    Binop,
+    Unop,
+    CallFunction,
+    CallMethod,
+    CallUnknown,
+    LoadField,
+    StoreField,
+    LoadIndex,
+    StoreIndex,
+    NewObject,
+    NewArray,
+    Return_,
+)
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.type_expr import (
@@ -446,10 +466,12 @@ def _infer_symbolic(
     type_resolver: TypeResolver,
 ) -> None:
     # register_types are pre-seeded by the builder; no inst.type_hint read
+    t = to_typed(inst)
+    assert isinstance(t, Symbolic)
 
     # Collect param types if inside a function (only if not already seeded)
-    if ctx.current_func_label and inst.operands:
-        operand = str(inst.operands[0])
+    if ctx.current_func_label and t.hint:
+        operand = str(t.hint)
         if operand.startswith("param:"):
             param_name = operand[len("param:") :]
             # Skip param append when func already seeded in func_param_types
@@ -468,9 +490,9 @@ def _infer_symbolic(
         inst.result_reg
         and inst.result_reg not in ctx.register_types
         and ctx.current_class_name
-        and inst.operands
+        and t.hint
     ):
-        operand = str(inst.operands[0])
+        operand = str(t.hint)
         if operand.startswith("param:"):
             param_name = operand[len("param:") :]
             if param_name in _SELF_PARAM_NAMES:
@@ -484,7 +506,9 @@ def _infer_const(
 ) -> None:
     if not inst.result_reg.is_present():
         return
-    raw = str(inst.operands[0]) if inst.operands else "None"
+    t = to_typed(inst)
+    assert isinstance(t, Const)
+    raw = str(t.value) if t.value != "" else "None"
     # If this is a function reference, extract name→return-type and name→param-types mappings
     # Symbol table lookup: plain label operands → FuncRef
     func_name, func_label = "", ""
@@ -542,7 +566,9 @@ def _infer_load_var(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    name = inst.operands[0] if inst.operands else ""
+    t = to_typed(inst)
+    assert isinstance(t, LoadVar)
+    name = t.name if t.name else ""
     if inst.result_reg.is_present() and name:
         ctx.register_source_var[inst.result_reg] = str(name)
     var_type = ctx.lookup_var_type(str(name)) if name else UNKNOWN
@@ -566,11 +592,14 @@ def _infer_store_var(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    name = inst.operands[0] if inst.operands else ""
+    # Dispatched for both STORE_VAR and DECL_VAR
+    t = to_typed(inst)
+    assert isinstance(t, (StoreVar, DeclVar))
+    name = t.name if t.name else ""
     if not name:
         return
-    if len(inst.operands) >= 2:
-        value_reg = str(inst.operands[1])
+    value_reg = str(t.value_reg)
+    if value_reg:
         if value_reg in ctx.register_types:
             ctx.store_var_type(str(name), ctx.register_types[value_reg])
         # Track array element types at the variable level
@@ -588,9 +617,11 @@ def _infer_binop(
 ) -> None:
     if not inst.result_reg.is_present() or len(inst.operands) < 3:
         return
-    operator = str(inst.operands[0])
-    left_hint = ctx.register_types.get(str(inst.operands[1]), UNKNOWN)
-    right_hint = ctx.register_types.get(str(inst.operands[2]), UNKNOWN)
+    t = to_typed(inst)
+    assert isinstance(t, Binop)
+    operator = str(t.operator)
+    left_hint = ctx.register_types.get(str(t.left), UNKNOWN)
+    right_hint = ctx.register_types.get(str(t.right), UNKNOWN)
     result = type_resolver.resolve_binop(operator, left_hint, right_hint)
     if result.result_type:
         ctx.register_types[inst.result_reg] = result.result_type
@@ -611,12 +642,14 @@ def _infer_unop(
 ) -> None:
     if not inst.result_reg.is_present() or len(inst.operands) < 2:
         return
-    operator = str(inst.operands[0])
+    t = to_typed(inst)
+    assert isinstance(t, Unop)
+    operator = str(t.operator)
     fixed = _UNOP_FIXED_TYPES.get(operator)
     if fixed:
         ctx.register_types[inst.result_reg] = fixed
         return
-    operand_hint = ctx.register_types.get(str(inst.operands[1]), UNKNOWN)
+    operand_hint = ctx.register_types.get(str(t.operand), UNKNOWN)
     if operand_hint:
         ctx.register_types[inst.result_reg] = operand_hint
 
@@ -627,7 +660,9 @@ def _infer_new_object(
     type_resolver: TypeResolver,
 ) -> None:
     if inst.result_reg.is_present() and inst.operands:
-        class_name = str(inst.operands[0])
+        t = to_typed(inst)
+        assert isinstance(t, NewObject)
+        class_name = str(t.type_hint)
         if class_name:
             ctx.register_types[inst.result_reg] = scalar(class_name)
 
@@ -639,7 +674,9 @@ def _infer_new_array(
 ) -> None:
     if not inst.result_reg.is_present():
         return
-    is_tuple = inst.operands and str(inst.operands[0]) == "tuple"
+    t = to_typed(inst)
+    assert isinstance(t, NewArray)
+    is_tuple = str(t.type_hint) == "tuple"
     if is_tuple:
         ctx.register_types[inst.result_reg] = scalar(TypeName.TUPLE)
         ctx.tuple_registers.add(inst.result_reg)
@@ -658,7 +695,9 @@ def _infer_call_function(
     if inst.result_reg in ctx.register_types:
         return
     if inst.operands:
-        func_name = str(inst.operands[0])
+        t = to_typed(inst)
+        assert isinstance(t, CallFunction)
+        func_name = str(t.func_name)
         if func_name in ctx.func_return_types:
             ctx.register_types[inst.result_reg] = ctx.func_return_types[func_name]
         else:
@@ -699,9 +738,11 @@ def _infer_store_field(
 ) -> None:
     if len(inst.operands) < 3:
         return
-    obj_reg = str(inst.operands[0])
-    field_name = str(inst.operands[1])
-    value_reg = str(inst.operands[2])
+    t = to_typed(inst)
+    assert isinstance(t, StoreField)
+    obj_reg = str(t.obj_reg)
+    field_name = str(t.field_name)
+    value_reg = str(t.value_reg)
     class_name = ctx.register_types.get(obj_reg, UNKNOWN)
     value_type = ctx.register_types.get(value_reg, UNKNOWN)
     if class_name and value_type:
@@ -715,8 +756,10 @@ def _infer_load_field(
 ) -> None:
     if not inst.result_reg.is_present() or len(inst.operands) < 2:
         return
-    obj_reg = str(inst.operands[0])
-    field_name = str(inst.operands[1])
+    t = to_typed(inst)
+    assert isinstance(t, LoadField)
+    obj_reg = str(t.obj_reg)
+    field_name = str(t.field_name)
     class_name = ctx.register_types.get(obj_reg, UNKNOWN)
     if class_name and class_name in ctx.field_types:
         field_type = ctx.field_types[class_name].get(field_name, UNKNOWN)
@@ -731,8 +774,10 @@ def _infer_call_method(
 ) -> None:
     if not inst.result_reg.is_present() or len(inst.operands) < 2:
         return
-    obj_reg = str(inst.operands[0])
-    method_name = str(inst.operands[1])
+    t = to_typed(inst)
+    assert isinstance(t, CallMethod)
+    obj_reg = str(t.obj_reg)
+    method_name = str(t.method_name)
     class_name = ctx.register_types.get(obj_reg, UNKNOWN)
     if class_name and class_name in ctx.class_method_types:
         ret_type = ctx.class_method_types[class_name].get(method_name, UNKNOWN)
@@ -774,7 +819,9 @@ def _infer_call_unknown(
 ) -> None:
     if not inst.result_reg.is_present() or not inst.operands:
         return
-    target_reg = str(inst.operands[0])
+    t = to_typed(inst)
+    assert isinstance(t, CallUnknown)
+    target_reg = str(t.target_reg)
     # Check if the target register has a FunctionType directly
     target_type = ctx.register_types.get(target_reg, UNKNOWN)
     if isinstance(target_type, FunctionType) and target_type.return_type:
@@ -796,9 +843,11 @@ def _infer_store_index(
 ) -> None:
     if len(inst.operands) < 3:
         return
-    arr_reg = str(inst.operands[0])
-    index_reg = str(inst.operands[1])
-    value_reg = str(inst.operands[2])
+    t = to_typed(inst)
+    assert isinstance(t, StoreIndex)
+    arr_reg = str(t.arr_reg)
+    index_reg = str(t.index_reg)
+    value_reg = str(t.value_reg)
     value_type = ctx.register_types.get(value_reg, UNKNOWN)
     if not value_type:
         return
@@ -818,10 +867,12 @@ def _infer_load_index(
 ) -> None:
     if not inst.result_reg.is_present() or len(inst.operands) < 2:
         return
-    arr_reg = str(inst.operands[0])
+    t = to_typed(inst)
+    assert isinstance(t, LoadIndex)
+    arr_reg = str(t.arr_reg)
     # Tuple: resolve per-index element type
     if arr_reg in ctx.tuple_registers and len(inst.operands) >= 2:
-        index_reg = str(inst.operands[1])
+        index_reg = str(t.index_reg)
         idx = _try_parse_int(ctx.const_values.get(index_reg, ""))
         idx_types = ctx.tuple_element_types.get(arr_reg, {})
         if idx >= 0 and idx in idx_types:
@@ -843,7 +894,9 @@ def _infer_return(
         return
     if not inst.operands:
         return
-    value_reg = str(inst.operands[0])
+    t = to_typed(inst)
+    assert isinstance(t, Return_)
+    value_reg = str(t.value_reg)
     ret_type = ctx.register_types.get(value_reg, UNKNOWN)
     if ret_type:
         ctx.func_return_types[ctx.current_func_label] = ret_type

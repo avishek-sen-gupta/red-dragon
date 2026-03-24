@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.instructions import to_typed, Symbolic, Const
 from interpreter.cfg import CFG
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
@@ -72,11 +73,12 @@ def _scan_func_params(cfg: CFG) -> dict[CodeLabel, list[str]]:
         if not _is_func_label(label):
             continue
         params = [
-            str(inst.operands[0])[len(constants.PARAM_PREFIX) :]
+            str(t.hint)[len(constants.PARAM_PREFIX) :]
             for inst in block.instructions
             if inst.opcode == Opcode.SYMBOLIC
             and inst.operands
-            and str(inst.operands[0]).startswith(constants.PARAM_PREFIX)
+            and isinstance((t := to_typed(inst)), Symbolic)
+            and str(t.hint).startswith(constants.PARAM_PREFIX)
         ]
         result[label] = params
     return result
@@ -129,7 +131,9 @@ def _scan_classes(
                 pass
 
         if in_class and inst.opcode == Opcode.CONST and inst.operands:
-            operand = str(inst.operands[0])
+            t = to_typed(inst)
+            assert isinstance(t, Const)
+            operand = str(t.value)
             if operand in func_symbol_table:
                 ref = func_symbol_table[operand]
                 class_methods[in_class].setdefault(ref.name, []).append(ref.label)
