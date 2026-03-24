@@ -9,7 +9,26 @@ if TYPE_CHECKING:
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.instructions import (
+    Binop,
+    Branch,
+    BranchIf,
+    CallFunction,
+    CallMethod,
+    CallUnknown,
+    Const,
+    DeclVar,
+    Label_,
+    LoadField,
+    LoadIndex,
+    LoadVar,
+    NewArray,
+    NewObject,
+    Return_,
+    StoreField,
+    StoreIndex,
+    StoreVar,
+)
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
     lower_const_literal,
@@ -29,12 +48,7 @@ def lower_php_variable(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower PHP variable ($x) as LOAD_VAR."""
     var_name = ctx.node_text(node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_VAR,
-        result_reg=reg,
-        operands=[var_name],
-        node=node,
-    )
+    ctx.emit_inst(LoadVar(result_reg=reg, name=var_name), node=node)
     return reg
 
 
@@ -69,11 +83,8 @@ def _lower_interpolated_child(ctx: TreeSitterEmitContext, child) -> Register:
     """Lower a single interpolation child to a register."""
     if child.type == PHPNodeType.STRING_CONTENT:
         frag_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CONST,
-            result_reg=frag_reg,
-            operands=[ctx.node_text(child)],
-            node=child,
+        ctx.emit_inst(
+            Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
         )
         return frag_reg
     if child.type == PHPNodeType.VARIABLE_NAME:
@@ -87,16 +98,13 @@ def _lower_interpolated_string_parts(
     """Concatenate parts with BINOP '+'."""
     if not parts:
         reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=reg, operands=[""], node=node)
+        ctx.emit_inst(Const(result_reg=reg, value=""), node=node)
         return reg
     result = parts[0]
     for part in parts[1:]:
         new_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.BINOP,
-            result_reg=new_reg,
-            operands=["+", result, part],
-            node=node,
+        ctx.emit_inst(
+            Binop(result_reg=new_reg, operator="+", left=result, right=part), node=node
         )
         result = new_reg
     return result
@@ -135,10 +143,8 @@ def lower_php_func_call(ctx: TreeSitterEmitContext, node) -> Register:
     if func_node and func_node.type in (PHPNodeType.NAME, PHPNodeType.QUALIFIED_NAME):
         func_name = ctx.node_text(func_node)
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=reg,
-            operands=[func_name] + arg_regs,
+        ctx.emit_inst(
+            CallFunction(result_reg=reg, func_name=func_name, args=tuple(arg_regs)),
             node=node,
         )
         return reg
@@ -146,10 +152,8 @@ def lower_php_func_call(ctx: TreeSitterEmitContext, node) -> Register:
     # Dynamic call target
     target_reg = ctx.lower_expr(func_node) if func_node else ctx.fresh_reg()
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_UNKNOWN,
-        result_reg=reg,
-        operands=[target_reg] + arg_regs,
+    ctx.emit_inst(
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -165,10 +169,13 @@ def lower_php_method_call(ctx: TreeSitterEmitContext, node) -> Register:
     obj_reg = ctx.lower_expr(obj_node) if obj_node else ctx.fresh_reg()
     method_name = ctx.node_text(name_node) if name_node else "unknown"
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_METHOD,
-        result_reg=reg,
-        operands=[obj_reg, method_name] + arg_regs,
+    ctx.emit_inst(
+        CallMethod(
+            result_reg=reg,
+            obj_reg=obj_reg,
+            method_name=method_name,
+            args=tuple(arg_regs),
+        ),
         node=node,
     )
     return reg
@@ -183,11 +190,8 @@ def lower_php_member_access(ctx: TreeSitterEmitContext, node) -> Register:
     obj_reg = ctx.lower_expr(obj_node)
     field_name = ctx.node_text(name_node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_FIELD,
-        result_reg=reg,
-        operands=[obj_reg, field_name],
-        node=node,
+    ctx.emit_inst(
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
     )
     return reg
 
@@ -200,11 +204,8 @@ def lower_php_subscript(ctx: TreeSitterEmitContext, node) -> Register:
     obj_reg = ctx.lower_expr(children[0])
     idx_reg = ctx.lower_expr(children[1])
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_INDEX,
-        result_reg=reg,
-        operands=[obj_reg, idx_reg],
-        node=node,
+    ctx.emit_inst(
+        LoadIndex(result_reg=reg, arr_reg=obj_reg, index_reg=idx_reg), node=node
     )
     return reg
 
@@ -227,10 +228,8 @@ def lower_php_augmented_assignment_expr(ctx: TreeSitterEmitContext, node) -> Reg
     lhs_reg = ctx.lower_expr(left)
     rhs_reg = ctx.lower_expr(right)
     result = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=result,
-        operands=[op_text, lhs_reg, rhs_reg],
+    ctx.emit_inst(
+        Binop(result_reg=result, operator=op_text, left=lhs_reg, right=rhs_reg),
         node=node,
     )
     lower_php_store_target(ctx, left, result, node)
@@ -242,19 +241,20 @@ def lower_php_store_target(
 ) -> None:
     """Store to a PHP target: variable_name, member_access, subscript, or fallback."""
     if target.type in (PHPNodeType.VARIABLE_NAME, PHPNodeType.NAME):
-        ctx.emit(
-            Opcode.STORE_VAR,
-            operands=[ctx.node_text(target), val_reg],
-            node=parent_node,
+        ctx.emit_inst(
+            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
         )
     elif target.type == PHPNodeType.MEMBER_ACCESS_EXPRESSION:
         obj_node = target.child_by_field_name(ctx.constants.attr_object_field)
         name_node = target.child_by_field_name("name")
         if obj_node and name_node:
             obj_reg = ctx.lower_expr(obj_node)
-            ctx.emit(
-                Opcode.STORE_FIELD,
-                operands=[obj_reg, ctx.node_text(name_node), val_reg],
+            ctx.emit_inst(
+                StoreField(
+                    obj_reg=obj_reg,
+                    field_name=ctx.node_text(name_node),
+                    value_reg=val_reg,
+                ),
                 node=parent_node,
             )
     elif target.type == PHPNodeType.SUBSCRIPT_EXPRESSION:
@@ -262,29 +262,24 @@ def lower_php_store_target(
         if len(children) >= 2:
             obj_reg = ctx.lower_expr(children[0])
             idx_reg = ctx.lower_expr(children[1])
-            ctx.emit(
-                Opcode.STORE_INDEX,
-                operands=[obj_reg, idx_reg, val_reg],
+            ctx.emit_inst(
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
     elif target.type == PHPNodeType.LIST_LITERAL:
         vars_ = [c for c in target.children if c.is_named]
         for i, var_node in enumerate(vars_):
             idx_reg = ctx.fresh_reg()
-            ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[i])
+            ctx.emit_inst(Const(result_reg=idx_reg, value=i))
             elem_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.LOAD_INDEX,
-                result_reg=elem_reg,
-                operands=[val_reg, idx_reg],
+            ctx.emit_inst(
+                LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg),
                 node=var_node,
             )
             lower_php_store_target(ctx, var_node, elem_reg, parent_node)
     else:
-        ctx.emit(
-            Opcode.STORE_VAR,
-            operands=[ctx.node_text(target), val_reg],
-            node=parent_node,
+        ctx.emit_inst(
+            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
         )
 
 
@@ -310,26 +305,22 @@ def lower_php_ternary(ctx: TreeSitterEmitContext, node) -> Register:
     false_label = ctx.fresh_label("ternary_false")
     end_label = ctx.fresh_label("ternary_end")
 
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[true_label, false_label],
-    )
+    ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)))
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     true_reg = ctx.lower_expr(true_node) if true_node else cond_reg
     result_var = f"__ternary_{ctx.label_counter}"
-    ctx.emit(Opcode.DECL_VAR, operands=[result_var, true_reg])
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(DeclVar(name=result_var, value_reg=true_reg))
+    ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=false_label)
+    ctx.emit_inst(Label_(label=false_label))
     false_reg = ctx.lower_expr(false_node) if false_node else ctx.fresh_reg()
-    ctx.emit(Opcode.DECL_VAR, operands=[result_var, false_reg])
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(DeclVar(name=result_var, value_reg=false_reg))
+    ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
     result_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=result_reg, operands=[result_var])
+    ctx.emit_inst(LoadVar(result_reg=result_reg, name=result_var))
     return result_reg
 
 
@@ -339,11 +330,7 @@ def lower_php_throw_expr(ctx: TreeSitterEmitContext, node) -> Register:
 
     lower_raise_or_throw(ctx, node, keyword="throw")
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=reg,
-        operands=[ctx.constants.none_literal],
-    )
+    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
     return reg
 
 
@@ -366,17 +353,15 @@ def lower_php_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
         )
         arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
         obj_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.NEW_OBJECT,
-            result_reg=obj_reg,
-            operands=[anon_name],
-            node=node,
-        )
+        ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=anon_name), node=node)
         ctor_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_METHOD,
-            result_reg=ctor_reg,
-            operands=[obj_reg, "__construct"] + arg_regs,
+        ctx.emit_inst(
+            CallMethod(
+                result_reg=ctor_reg,
+                obj_reg=obj_reg,
+                method_name="__construct",
+                args=tuple(arg_regs),
+            ),
             node=node,
         )
         return obj_reg
@@ -392,17 +377,15 @@ def lower_php_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
     type_name = ctx.node_text(name_node) if name_node else "Object"
 
     obj_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.NEW_OBJECT,
-        result_reg=obj_reg,
-        operands=[type_name],
-        node=node,
-    )
+    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=type_name), node=node)
     ctor_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_METHOD,
-        result_reg=ctor_reg,
-        operands=[obj_reg, "__construct"] + arg_regs,
+    ctx.emit_inst(
+        CallMethod(
+            result_reg=ctor_reg,
+            obj_reg=obj_reg,
+            method_name="__construct",
+            args=tuple(arg_regs),
+        ),
         node=node,
     )
     return obj_reg
@@ -429,8 +412,8 @@ def _lower_php_anonymous_class(
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=anon_node)
-    ctx.emit(Opcode.LABEL, label=class_label)
+    ctx.emit_inst(Branch(label=end_label), node=anon_node)
+    ctx.emit_inst(Label_(label=class_label))
 
     field_inits = []
     has_constructor = False
@@ -463,10 +446,10 @@ def _lower_php_anonymous_class(
     if not has_constructor and field_inits:
         _emit_php_synthetic_constructor(ctx, field_inits)
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
+    ctx.emit_inst(DeclVar(name=class_name, value_reg=cls_reg))
 
 
 def lower_php_array(ctx: TreeSitterEmitContext, node) -> Register:
@@ -496,28 +479,21 @@ def _lower_php_associative_array(
 ) -> Register:
     """Lower associative array as NEW_OBJECT + STORE_INDEX per key-value pair."""
     obj_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.NEW_OBJECT,
-        result_reg=obj_reg,
-        operands=["array"],
-        node=node,
-    )
+    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint="array"), node=node)
     for elem in elements:
         named = [c for c in elem.children if c.is_named]
         if len(named) >= 2:
             key_reg = ctx.lower_expr(named[0])
             val_reg = ctx.lower_expr(named[1])
-            ctx.emit(
-                Opcode.STORE_INDEX,
-                operands=[obj_reg, key_reg, val_reg],
+            ctx.emit_inst(
+                StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg)
             )
         elif named:
             idx_reg = ctx.fresh_reg()
-            ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
+            ctx.emit_inst(Const(result_reg=idx_reg, value="0"))
             val_reg = ctx.lower_expr(named[0])
-            ctx.emit(
-                Opcode.STORE_INDEX,
-                operands=[obj_reg, idx_reg, val_reg],
+            ctx.emit_inst(
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg)
             )
     return obj_reg
 
@@ -527,20 +503,17 @@ def _lower_php_indexed_array(
 ) -> Register:
     """Lower indexed array as NEW_ARRAY + STORE_INDEX per element."""
     size_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elements))])
+    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elements))))
     arr_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.NEW_ARRAY,
-        result_reg=arr_reg,
-        operands=["array", size_reg],
-        node=node,
+    ctx.emit_inst(
+        NewArray(result_reg=arr_reg, type_hint="array", size_reg=size_reg), node=node
     )
     for i, elem in enumerate(elements):
         named = [c for c in elem.children if c.is_named]
         val_reg = ctx.lower_expr(named[0]) if named else ctx.fresh_reg()
         idx_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
-        ctx.emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg))
     return arr_reg
 
 
@@ -587,39 +560,40 @@ def lower_php_match_expression(ctx: TreeSitterEmitContext, node) -> Register:
             if patterns:
                 pattern_reg = ctx.lower_expr(patterns[0])
                 cmp_reg = ctx.fresh_reg()
-                ctx.emit(
-                    Opcode.BINOP,
-                    result_reg=cmp_reg,
-                    operands=["===", subject_reg, pattern_reg],
+                ctx.emit_inst(
+                    Binop(
+                        result_reg=cmp_reg,
+                        operator="===",
+                        left=subject_reg,
+                        right=pattern_reg,
+                    ),
                     node=arm,
                 )
-                ctx.emit(
-                    Opcode.BRANCH_IF,
-                    operands=[cmp_reg],
-                    branch_targets=[arm_label, next_label],
+                ctx.emit_inst(
+                    BranchIf(cond_reg=cmp_reg, branch_targets=(arm_label, next_label))
                 )
             else:
-                ctx.emit(Opcode.BRANCH, label=arm_label)
+                ctx.emit_inst(Branch(label=arm_label))
         else:
-            ctx.emit(Opcode.BRANCH, label=arm_label)
+            ctx.emit_inst(Branch(label=arm_label))
 
-        ctx.emit(Opcode.LABEL, label=arm_label)
+        ctx.emit_inst(Label_(label=arm_label))
         if return_expr:
             val_reg = ctx.lower_expr(return_expr)
-            ctx.emit(Opcode.DECL_VAR, operands=[result_var, val_reg])
-        ctx.emit(Opcode.BRANCH, label=end_label)
-        ctx.emit(Opcode.LABEL, label=next_label)
+            ctx.emit_inst(DeclVar(name=result_var, value_reg=val_reg))
+        ctx.emit_inst(Branch(label=end_label))
+        ctx.emit_inst(Label_(label=next_label))
 
     if default_arm:
         default_body = default_arm.child_by_field_name("return_expression")
         if default_body:
             val_reg = ctx.lower_expr(default_body)
-            ctx.emit(Opcode.DECL_VAR, operands=[result_var, val_reg])
-        ctx.emit(Opcode.BRANCH, label=end_label)
+            ctx.emit_inst(DeclVar(name=result_var, value_reg=val_reg))
+        ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
     result_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=result_reg, operands=[result_var])
+    ctx.emit_inst(LoadVar(result_reg=result_reg, name=result_var))
     return result_reg
 
 
@@ -634,24 +608,20 @@ def lower_php_arrow_function(ctx: TreeSitterEmitContext, node) -> Register:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Label_(label=func_label))
 
     if params_node:
         lower_php_params(ctx, params_node)
 
     if body_node:
         val_reg = ctx.lower_expr(body_node)
-        ctx.emit(Opcode.RETURN, operands=[val_reg])
+        ctx.emit_inst(Return_(value_reg=val_reg))
 
     none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
@@ -674,18 +644,16 @@ def lower_php_scoped_call(ctx: TreeSitterEmitContext, node) -> Register:
 
     class_reg = ctx.fresh_reg()
     scope_name = ctx.node_text(scope_node) if scope_node else "Unknown"
-    ctx.emit(
-        Opcode.LOAD_VAR,
-        result_reg=class_reg,
-        operands=[scope_name],
-        node=node,
-    )
+    ctx.emit_inst(LoadVar(result_reg=class_reg, name=scope_name), node=node)
 
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_METHOD,
-        result_reg=reg,
-        operands=[class_reg, method_name] + arg_regs,
+    ctx.emit_inst(
+        CallMethod(
+            result_reg=reg,
+            obj_reg=class_reg,
+            method_name=method_name,
+            args=tuple(arg_regs),
+        ),
         node=node,
     )
     return reg
@@ -703,8 +671,8 @@ def lower_php_anonymous_function(ctx: TreeSitterEmitContext, node) -> Register:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Label_(label=func_label))
 
     if params_node:
         lower_php_params(ctx, params_node)
@@ -713,13 +681,9 @@ def lower_php_anonymous_function(ctx: TreeSitterEmitContext, node) -> Register:
         lower_php_compound(ctx, body_node)
 
     none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
@@ -735,11 +699,8 @@ def lower_php_nullsafe_member_access(ctx: TreeSitterEmitContext, node) -> Regist
     obj_reg = ctx.lower_expr(obj_node)
     field_name = ctx.node_text(name_node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_FIELD,
-        result_reg=reg,
-        operands=[obj_reg, field_name],
-        node=node,
+    ctx.emit_inst(
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
     )
     return reg
 
@@ -752,11 +713,8 @@ def lower_php_class_constant_access(ctx: TreeSitterEmitContext, node) -> Registe
     class_reg = ctx.lower_expr(named[0])
     const_name = ctx.node_text(named[1])
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_FIELD,
-        result_reg=reg,
-        operands=[class_reg, const_name],
-        node=node,
+    ctx.emit_inst(
+        LoadField(result_reg=reg, obj_reg=class_reg, field_name=const_name), node=node
     )
     return reg
 
@@ -769,11 +727,8 @@ def lower_php_scoped_property_access(ctx: TreeSitterEmitContext, node) -> Regist
     class_reg = ctx.lower_expr(named[0])
     prop_name = ctx.node_text(named[1])
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_FIELD,
-        result_reg=reg,
-        operands=[class_reg, prop_name],
-        node=node,
+    ctx.emit_inst(
+        LoadField(result_reg=reg, obj_reg=class_reg, field_name=prop_name), node=node
     )
     return reg
 
@@ -783,11 +738,8 @@ def lower_php_yield(ctx: TreeSitterEmitContext, node) -> Register:
     named = [c for c in node.children if c.is_named]
     arg_regs = [ctx.lower_expr(c) for c in named]
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["yield"] + arg_regs,
-        node=node,
+    ctx.emit_inst(
+        CallFunction(result_reg=reg, func_name="yield", args=tuple(arg_regs)), node=node
     )
     return reg
 
@@ -816,11 +768,8 @@ def lower_php_include(ctx: TreeSitterEmitContext, node) -> Register:
     named_children = [c for c in node.children if c.is_named]
     arg_reg = ctx.lower_expr(named_children[0]) if named_children else ctx.fresh_reg()
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=[keyword, arg_reg],
-        node=node,
+    ctx.emit_inst(
+        CallFunction(result_reg=reg, func_name=keyword, args=(arg_reg,)), node=node
     )
     return reg
 
@@ -845,10 +794,13 @@ def lower_php_nullsafe_method_call(ctx: TreeSitterEmitContext, node) -> Register
         else []
     )
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_METHOD,
-        result_reg=reg,
-        operands=[obj_reg, method_name] + arg_regs,
+    ctx.emit_inst(
+        CallMethod(
+            result_reg=reg,
+            obj_reg=obj_reg,
+            method_name=method_name,
+            args=tuple(arg_regs),
+        ),
         node=node,
     )
     return reg
@@ -859,11 +811,8 @@ def lower_php_print_intrinsic(ctx: TreeSitterEmitContext, node) -> Register:
     named_children = [c for c in node.children if c.is_named]
     arg_reg = ctx.lower_expr(named_children[0]) if named_children else ctx.fresh_reg()
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["print", arg_reg],
-        node=node,
+    ctx.emit_inst(
+        CallFunction(result_reg=reg, func_name="print", args=(arg_reg,)), node=node
     )
     return reg
 
@@ -873,11 +822,8 @@ def lower_php_clone_expression(ctx: TreeSitterEmitContext, node) -> Register:
     named_children = [c for c in node.children if c.is_named]
     arg_reg = ctx.lower_expr(named_children[0]) if named_children else ctx.fresh_reg()
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["clone", arg_reg],
-        node=node,
+    ctx.emit_inst(
+        CallFunction(result_reg=reg, func_name="clone", args=(arg_reg,)), node=node
     )
     return reg
 

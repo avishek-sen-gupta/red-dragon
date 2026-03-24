@@ -5,7 +5,19 @@ from __future__ import annotations
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.instructions import (
+    Binop,
+    Branch,
+    BranchIf,
+    CallFunction,
+    Const,
+    DeclVar,
+    Label_,
+    LoadIndex,
+    Return_,
+    StoreVar,
+)
+from interpreter.ir import CodeLabel
 from interpreter.frontends.common.exceptions import (
     lower_raise_or_throw,
     lower_try_catch,
@@ -32,16 +44,10 @@ def lower_php_return(ctx: TreeSitterEmitContext, node) -> None:
         val_reg = ctx.lower_expr(children[0])
     else:
         val_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CONST,
-            result_reg=val_reg,
-            operands=[ctx.constants.default_return_value],
+        ctx.emit_inst(
+            Const(result_reg=val_reg, value=ctx.constants.default_return_value)
         )
-    ctx.emit(
-        Opcode.RETURN,
-        operands=[val_reg],
-        node=node,
-    )
+    ctx.emit_inst(Return_(value_reg=val_reg), node=node)
 
 
 def lower_php_echo(ctx: TreeSitterEmitContext, node) -> None:
@@ -49,11 +55,8 @@ def lower_php_echo(ctx: TreeSitterEmitContext, node) -> None:
     children = [c for c in node.children if c.type != PHPNodeType.ECHO and c.is_named]
     arg_regs = [ctx.lower_expr(c) for c in children]
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["echo"] + arg_regs,
-        node=node,
+    ctx.emit_inst(
+        CallFunction(result_reg=reg, func_name="echo", args=tuple(arg_regs)), node=node
     )
 
 
@@ -75,32 +78,28 @@ def lower_php_if(ctx: TreeSitterEmitContext, node) -> None:
 
     if else_clauses:
         false_label = ctx.fresh_label("if_false")
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[true_label, false_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)),
             node=node,
         )
     else:
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[true_label, end_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=cond_reg, branch_targets=(true_label, end_label)),
             node=node,
         )
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     if body_node:
         lower_php_compound(ctx, body_node)
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
 
     if else_clauses:
-        ctx.emit(Opcode.LABEL, label=false_label)
+        ctx.emit_inst(Label_(label=false_label))
         for clause in else_clauses:
             _lower_php_else_clause(ctx, clause, end_label)
-        ctx.emit(Opcode.BRANCH, label=end_label)
+        ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def _lower_php_else_clause(ctx: TreeSitterEmitContext, node, end_label: str) -> None:
@@ -112,19 +111,17 @@ def _lower_php_else_clause(ctx: TreeSitterEmitContext, node, end_label: str) -> 
         true_label = ctx.fresh_label("elseif_true")
         false_label = ctx.fresh_label("elseif_false")
 
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[true_label, false_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)),
             node=node,
         )
 
-        ctx.emit(Opcode.LABEL, label=true_label)
+        ctx.emit_inst(Label_(label=true_label))
         if body_node:
             lower_php_compound(ctx, body_node)
-        ctx.emit(Opcode.BRANCH, label=end_label)
+        ctx.emit_inst(Branch(label=end_label))
 
-        ctx.emit(Opcode.LABEL, label=false_label)
+        ctx.emit_inst(Label_(label=false_label))
     elif node.type == PHPNodeType.ELSE_CLAUSE:
         for child in node.children:
             if (
@@ -164,36 +161,30 @@ def lower_php_foreach(ctx: TreeSitterEmitContext, node) -> None:
         value_var = ctx.node_text(binding_node)
 
     idx_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
+    ctx.emit_inst(Const(result_reg=idx_reg, value="0"))
     len_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
+    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
 
     loop_label = ctx.fresh_label("foreach_cond")
     body_label = ctx.fresh_label("foreach_body")
     end_label = ctx.fresh_label("foreach_end")
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     cond_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=cond_reg, operands=["<", idx_reg, len_reg])
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[body_label, end_label],
-    )
+    ctx.emit_inst(Binop(result_reg=cond_reg, operator="<", left=idx_reg, right=len_reg))
+    ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)))
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     # Store key variable (index) if present
     if key_var:
-        ctx.emit(Opcode.DECL_VAR, operands=[key_var, idx_reg])
+        ctx.emit_inst(DeclVar(name=key_var, value_reg=idx_reg))
     # Store value variable (element at index)
     if value_var:
         elem_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.LOAD_INDEX,
-            result_reg=elem_reg,
-            operands=[iter_reg, idx_reg],
+        ctx.emit_inst(
+            LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg)
         )
-        ctx.emit(Opcode.DECL_VAR, operands=[value_var, elem_reg])
+        ctx.emit_inst(DeclVar(name=value_var, value_reg=elem_reg))
 
     update_label = ctx.fresh_label("foreach_update")
     ctx.push_loop(update_label, end_label)
@@ -201,15 +192,15 @@ def lower_php_foreach(ctx: TreeSitterEmitContext, node) -> None:
         ctx.lower_block(body_node)
     ctx.pop_loop()
 
-    ctx.emit(Opcode.LABEL, label=update_label)
+    ctx.emit_inst(Label_(label=update_label))
     one_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
+    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     new_idx = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=new_idx, operands=["+", idx_reg, one_reg])
-    ctx.emit(Opcode.STORE_VAR, operands=["__foreach_idx", new_idx])
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(Binop(result_reg=new_idx, operator="+", left=idx_reg, right=one_reg))
+    ctx.emit_inst(StoreVar(name="__foreach_idx", value_reg=new_idx))
+    ctx.emit_inst(Branch(label=loop_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_php_throw(ctx: TreeSitterEmitContext, node) -> None:
@@ -290,28 +281,26 @@ def lower_php_switch(ctx: TreeSitterEmitContext, node) -> None:
         if not is_default and value_node:
             case_reg = ctx.lower_expr(value_node)
             cmp_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.BINOP,
-                result_reg=cmp_reg,
-                operands=["==", subject_reg, case_reg],
+            ctx.emit_inst(
+                Binop(
+                    result_reg=cmp_reg, operator="==", left=subject_reg, right=case_reg
+                ),
                 node=case,
             )
-            ctx.emit(
-                Opcode.BRANCH_IF,
-                operands=[cmp_reg],
-                branch_targets=[arm_label, next_label],
+            ctx.emit_inst(
+                BranchIf(cond_reg=cmp_reg, branch_targets=(arm_label, next_label))
             )
         else:
-            ctx.emit(Opcode.BRANCH, label=arm_label)
+            ctx.emit_inst(Branch(label=arm_label))
 
-        ctx.emit(Opcode.LABEL, label=arm_label)
+        ctx.emit_inst(Label_(label=arm_label))
         for stmt in body_stmts:
             ctx.lower_stmt(stmt)
-        ctx.emit(Opcode.BRANCH, label=end_label)
-        ctx.emit(Opcode.LABEL, label=next_label)
+        ctx.emit_inst(Branch(label=end_label))
+        ctx.emit_inst(Label_(label=next_label))
 
     ctx.break_target_stack.pop()
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_php_do(ctx: TreeSitterEmitContext, node) -> None:
@@ -323,25 +312,23 @@ def lower_php_do(ctx: TreeSitterEmitContext, node) -> None:
     cond_label = ctx.fresh_label("do_cond")
     end_label = ctx.fresh_label("do_end")
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     ctx.push_loop(cond_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
 
-    ctx.emit(Opcode.LABEL, label=cond_label)
+    ctx.emit_inst(Label_(label=cond_label))
     if cond_node:
         cond_reg = ctx.lower_expr(cond_node)
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[body_label, end_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)),
             node=node,
         )
     else:
-        ctx.emit(Opcode.BRANCH, label=body_label)
+        ctx.emit_inst(Branch(label=body_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_php_namespace(ctx: TreeSitterEmitContext, node) -> None:
@@ -360,11 +347,7 @@ def lower_php_named_label(ctx: TreeSitterEmitContext, node) -> None:
         name_node = next((c for c in node.children if c.type == PHPNodeType.NAME), None)
     if name_node:
         label_name = CodeLabel(f"user_{ctx.node_text(name_node)}")
-        ctx.emit(
-            Opcode.LABEL,
-            label=label_name,
-            node=node,
-        )
+        ctx.emit_inst(Label_(label=label_name), node=node)
     else:
         logger.warning(
             "named_label_statement without name: %s", ctx.node_text(node)[:40]
@@ -378,10 +361,6 @@ def lower_php_goto(ctx: TreeSitterEmitContext, node) -> None:
         name_node = next((c for c in node.children if c.type == PHPNodeType.NAME), None)
     if name_node:
         target_label = CodeLabel(f"user_{ctx.node_text(name_node)}")
-        ctx.emit(
-            Opcode.BRANCH,
-            label=target_label,
-            node=node,
-        )
+        ctx.emit_inst(Branch(label=target_label), node=node)
     else:
         logger.warning("goto_statement without label: %s", ctx.node_text(node)[:40])
