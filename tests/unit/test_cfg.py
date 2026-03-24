@@ -11,11 +11,12 @@ from interpreter.cfg import (
     BasicBlock,
 )
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.instructions import to_typed, Label_
 
 
 def _make_instructions(*specs):
     """Helper: build IRInstruction list from (opcode, kwargs) tuples."""
-    return [IRInstruction(opcode=op, **kw) for op, kw in specs]
+    return [to_typed(IRInstruction(opcode=op, **kw)) for op, kw in specs]
 
 
 class TestCfgToMermaidBasic:
@@ -505,7 +506,7 @@ class TestExtractFunctionInstructions:
         instructions = self._full_program_instructions()
         result = extract_function_instructions(instructions, "foo")
 
-        labels = [i.label for i in result if i.opcode == Opcode.LABEL]
+        labels = [i.label for i in result if isinstance(i, Label_)]
         assert labels == ["func_foo_0", "end_foo_1"]
         assert len(result) == 5  # func_foo_0, 2 consts, return, end_foo_1
 

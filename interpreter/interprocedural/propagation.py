@@ -11,7 +11,7 @@ from collections import defaultdict
 
 from interpreter import constants
 from interpreter.cfg_types import CFG
-from interpreter.ir import Opcode
+from interpreter.ir import IRInstruction
 from interpreter.instructions import to_typed, LoadVar, DeclVar, StoreVar
 from interpreter.interprocedural.summaries import build_summary
 from interpreter.interprocedural.types import (
@@ -161,20 +161,14 @@ def _trace_reg_to_var(reg: str, cfg: CFG, block_label: str) -> str:
         return reg
     # Scan for LOAD_VAR that produces this register
     for inst in block.instructions:
-        if inst.opcode == Opcode.LOAD_VAR and inst.result_reg == reg:
-            t = to_typed(inst)
-            assert isinstance(t, LoadVar)
+        t = to_typed(inst) if isinstance(inst, IRInstruction) else inst
+        if isinstance(t, LoadVar) and str(t.result_reg) == reg:
             return str(t.name)
     # Scan for DECL_VAR/STORE_VAR that consumes this register
     for inst in block.instructions:
-        if (
-            inst.opcode in (Opcode.DECL_VAR, Opcode.STORE_VAR)
-            and len(inst.operands) >= 2
-        ):
-            t = to_typed(inst)
-            assert isinstance(t, (DeclVar, StoreVar))
-            if str(t.value_reg) == reg:
-                return str(t.name)
+        t = to_typed(inst) if isinstance(inst, IRInstruction) else inst
+        if isinstance(t, (DeclVar, StoreVar)) and str(t.value_reg) == reg:
+            return str(t.name)
     return reg
 
 
