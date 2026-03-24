@@ -10,7 +10,6 @@ from textual.widgets import Static, Tree
 
 from interpreter.cfg_types import CFG
 from interpreter.interprocedural.call_graph import (
-    CALL_OPCODES,
     _build_block_to_function,
 )
 from interpreter.interprocedural.types import (
@@ -25,7 +24,15 @@ from interpreter.interprocedural.types import (
     SummaryKey,
     VariableEndpoint,
 )
-from interpreter.ir import IRInstruction, Opcode, VAR_DEFINITION_OPCODES
+from interpreter.ir import CodeLabel
+from interpreter.instructions import (
+    to_typed,
+    CallFunction,
+    CallMethod,
+    DeclVar,
+    LoadVar,
+    StoreVar,
+)
 from viz.panels.dataflow_summary_panel import merge_flows_for_function, render_endpoint
 
 logger = logging.getLogger(__name__)
@@ -55,9 +62,9 @@ def trace_reg_to_var(reg: str, cfg: CFG, block_label: str) -> str:
     block = cfg.blocks[block_label]
     load_match = next(
         (
-            str(inst.operands[0])
+            str(t.name)
             for inst in block.instructions
-            if inst.opcode == Opcode.LOAD_VAR and inst.result_reg == reg
+            if isinstance((t := to_typed(inst)), LoadVar) and str(t.result_reg) == reg
         ),
         "",
     )
@@ -65,11 +72,10 @@ def trace_reg_to_var(reg: str, cfg: CFG, block_label: str) -> str:
         return load_match
     store_match = next(
         (
-            str(inst.operands[0])
+            str(t.name)
             for inst in block.instructions
-            if inst.opcode in VAR_DEFINITION_OPCODES
-            and len(inst.operands) >= 2
-            and str(inst.operands[1]) == reg
+            if isinstance((t := to_typed(inst)), (DeclVar, StoreVar))
+            and str(t.value_reg) == reg
         ),
         "",
     )
@@ -103,35 +109,33 @@ def find_top_level_call_sites(cfg: CFG, call_graph: CallGraph) -> list[TopLevelC
         label for label in cfg.blocks if label.starts_with("end_") or label == "entry"
     }
 
-    return [
-        TopLevelCall(
-            callee_label=func_by_name.get(
-                (
-                    str(inst.operands[0])
-                    if inst.opcode == Opcode.CALL_FUNCTION
-                    else str(inst.operands[1])
-                ),
-                (
-                    str(inst.operands[0])
-                    if inst.opcode == Opcode.CALL_FUNCTION
-                    else str(inst.operands[1])
-                ),
-            ),
-            arg_operands=(
-                tuple(str(op) for op in inst.operands[1:])
-                if inst.opcode == Opcode.CALL_FUNCTION
-                else tuple(str(op) for op in inst.operands[2:])
-            ),
-            result_var=(
-                trace_reg_to_var(inst.result_reg, cfg, label) if inst.result_reg else ""
-            ),
-            block_label=label,
-            instruction_index=idx,
-        )
-        for label in non_func_blocks
-        for idx, inst in enumerate(cfg.blocks[label].instructions)
-        if inst.opcode in (Opcode.CALL_FUNCTION, Opcode.CALL_METHOD)
-    ]
+    result = []
+    for label in non_func_blocks:
+        for idx, inst in enumerate(cfg.blocks[label].instructions):
+            t = to_typed(inst)
+            if isinstance(t, CallFunction):
+                callee_name = str(t.func_name)
+                arg_ops = tuple(str(a) for a in t.args)
+            elif isinstance(t, CallMethod):
+                callee_name = str(t.method_name)
+                arg_ops = tuple(str(a) for a in t.args)
+            else:
+                continue
+            result_var = (
+                trace_reg_to_var(str(t.result_reg), cfg, label)
+                if t.result_reg.is_present()
+                else ""
+            )
+            result.append(
+                TopLevelCall(
+                    callee_label=func_by_name.get(callee_name, callee_name),
+                    arg_operands=arg_ops,
+                    result_var=result_var,
+                    block_label=label,
+                    instruction_index=idx,
+                )
+            )
+    return result
 
 
 def _build_param_map(site, callee: FunctionEntry, cfg: CFG) -> dict[str, str]:
@@ -213,10 +217,11 @@ def annotate_endpoint(ep: FlowEndpoint, cfg: CFG | None) -> str:
     if isinstance(ep, VariableEndpoint):
         name = ep.name
         if name.startswith("%") and ep.definition != NO_DEFINITION:
-            opcode = ep.definition.instruction.opcode
-            if opcode in (Opcode.CALL_FUNCTION, Opcode.CALL_METHOD):
-                callee_name = str(ep.definition.instruction.operands[0])
-                return f"{name} (call result: {callee_name})"
+            t = to_typed(ep.definition.instruction)
+            if isinstance(t, CallFunction):
+                return f"{name} (call result: {t.func_name})"
+            if isinstance(t, CallMethod):
+                return f"{name} (call result: {t.method_name})"
         return name
     return render_endpoint(ep)
 

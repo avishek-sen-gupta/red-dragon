@@ -5,8 +5,13 @@ from __future__ import annotations
 import logging
 
 from interpreter.cfg_types import CFG
-from interpreter.ir import Opcode, CodeLabel
-from interpreter.instructions import to_typed, CallFunction, CallMethod, CallUnknown
+from interpreter.ir import CodeLabel, IRInstruction
+from interpreter.instructions import (
+    to_typed,
+    CallFunction,
+    CallMethod,
+    CallUnknown,
+)
 from interpreter.registry import FunctionRegistry
 from interpreter import constants
 from interpreter.interprocedural.types import (
@@ -17,10 +22,6 @@ from interpreter.interprocedural.types import (
 )
 
 logger = logging.getLogger(__name__)
-
-CALL_OPCODES = frozenset(
-    {Opcode.CALL_FUNCTION, Opcode.CALL_METHOD, Opcode.CALL_UNKNOWN}
-)
 
 
 def build_function_entries(
@@ -106,33 +107,28 @@ def build_call_graph(cfg: CFG, registry: FunctionRegistry) -> CallGraph:
             continue
 
         for idx, inst in enumerate(block.instructions):
-            if inst.opcode not in CALL_OPCODES:
+            t = to_typed(inst) if isinstance(inst, IRInstruction) else inst
+            if not isinstance(t, (CallFunction, CallMethod, CallUnknown)):
                 continue
 
             location = InstructionLocation(block_label=label, instruction_index=idx)
 
-            if inst.opcode == Opcode.CALL_FUNCTION:
-                t = to_typed(inst)
-                assert isinstance(t, CallFunction)
+            if isinstance(t, CallFunction):
                 target_label = str(t.func_name)
                 callees = _resolve_call_function_callees(
                     target_label, function_entries, registry
                 )
                 arg_operands = tuple(str(a) for a in t.args)
 
-            elif inst.opcode == Opcode.CALL_METHOD:
+            elif isinstance(t, CallMethod):
                 # operands: [object_reg, method_name, arg1, arg2, ...]
-                t = to_typed(inst)
-                assert isinstance(t, CallMethod)
                 method_name = str(t.method_name)
                 callees = _resolve_call_method_callees_cha(
                     method_name, registry, function_entries
                 )
                 arg_operands = tuple(str(a) for a in t.args)
 
-            else:  # CALL_UNKNOWN
-                t = to_typed(inst)
-                assert isinstance(t, CallUnknown)
+            else:  # CallUnknown
                 callees = frozenset()
                 arg_operands = (str(t.target_reg),) + tuple(str(a) for a in t.args)
 
