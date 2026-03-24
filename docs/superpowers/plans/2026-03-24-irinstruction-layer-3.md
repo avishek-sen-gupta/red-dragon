@@ -1,6 +1,6 @@
 # IRInstruction Elimination — Layer 3 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status: COMPLETED** (2026-03-24). All 5 sub-issues executed. See commits `7d29af6` (3c), `5d569f8` (3d), `1abeb16` (3b), `0bdfbf9` (3e). Layer 3a deferred (blocked by pyww, later resolved in prerequisites).
 
 **Goal:** Migrate all non-frontend consumers from `opcode==` comparisons and `IRInstruction(` construction to `isinstance` checks and typed instruction construction.
 
