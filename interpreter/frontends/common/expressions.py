@@ -9,15 +9,33 @@ from __future__ import annotations
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.node_types import CommonNodeType
 
-from interpreter.ir import Opcode, SpreadArguments
+from interpreter.ir import SpreadArguments
+from interpreter.instructions import (
+    Binop,
+    CallFunction,
+    CallMethod,
+    CallUnknown,
+    Const,
+    LoadField,
+    LoadIndex,
+    LoadVar,
+    NewArray,
+    NewObject,
+    StoreField,
+    StoreIndex,
+    StoreVar,
+    Symbolic,
+    Unop,
+)
 
 
 def lower_const_literal(ctx: TreeSitterEmitContext, node) -> str:
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=reg,
-        operands=[ctx.node_text(node)],
+    ctx.emit_inst(
+        Const(
+            result_reg=reg,
+            value=ctx.node_text(node),
+        ),
         node=node,
     )
     return reg
@@ -26,10 +44,11 @@ def lower_const_literal(ctx: TreeSitterEmitContext, node) -> str:
 def lower_canonical_none(ctx: TreeSitterEmitContext, node) -> str:
     """Emit canonical ``CONST "None"`` for any language's null/nil/undefined."""
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=reg,
-        operands=[ctx.constants.none_literal],
+    ctx.emit_inst(
+        Const(
+            result_reg=reg,
+            value=ctx.constants.none_literal,
+        ),
         node=node,
     )
     return reg
@@ -37,10 +56,11 @@ def lower_canonical_none(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_canonical_true(ctx: TreeSitterEmitContext, node) -> str:
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=reg,
-        operands=[ctx.constants.true_literal],
+    ctx.emit_inst(
+        Const(
+            result_reg=reg,
+            value=ctx.constants.true_literal,
+        ),
         node=node,
     )
     return reg
@@ -48,10 +68,11 @@ def lower_canonical_true(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_canonical_false(ctx: TreeSitterEmitContext, node) -> str:
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=reg,
-        operands=[ctx.constants.false_literal],
+    ctx.emit_inst(
+        Const(
+            result_reg=reg,
+            value=ctx.constants.false_literal,
+        ),
         node=node,
     )
     return reg
@@ -75,20 +96,23 @@ def lower_identifier(ctx: TreeSitterEmitContext, node) -> str:
         and ctx.symbol_table.resolve_field(ctx._current_class_name, resolved_name).name
     ):
         this_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"], node=node)
+        ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"), node=node)
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.LOAD_FIELD,
-            result_reg=reg,
-            operands=[this_reg, resolved_name],
+        ctx.emit_inst(
+            LoadField(
+                result_reg=reg,
+                obj_reg=str(this_reg),
+                field_name=resolved_name,
+            ),
             node=node,
         )
         return reg
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_VAR,
-        result_reg=reg,
-        operands=[resolved_name],
+    ctx.emit_inst(
+        LoadVar(
+            result_reg=reg,
+            name=resolved_name,
+        ),
         node=node,
     )
     return reg
@@ -134,10 +158,13 @@ def lower_binop(ctx: TreeSitterEmitContext, node) -> str:
     op = ctx.node_text(children[1])
     rhs_reg = ctx.lower_expr(children[2])
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=reg,
-        operands=[op, lhs_reg, rhs_reg],
+    ctx.emit_inst(
+        Binop(
+            result_reg=reg,
+            operator=op,
+            left=str(lhs_reg),
+            right=str(rhs_reg),
+        ),
         node=node,
     )
     return reg
@@ -153,10 +180,13 @@ def lower_comparison(ctx: TreeSitterEmitContext, node) -> str:
     op = ctx.node_text(children[1])
     rhs_reg = ctx.lower_expr(children[2])
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=reg,
-        operands=[op, lhs_reg, rhs_reg],
+    ctx.emit_inst(
+        Binop(
+            result_reg=reg,
+            operator=op,
+            left=str(lhs_reg),
+            right=str(rhs_reg),
+        ),
         node=node,
     )
     return reg
@@ -171,10 +201,12 @@ def lower_unop(ctx: TreeSitterEmitContext, node) -> str:
     op = ctx.node_text(children[0])
     operand_reg = ctx.lower_expr(children[1])
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.UNOP,
-        result_reg=reg,
-        operands=[op, operand_reg],
+    ctx.emit_inst(
+        Unop(
+            result_reg=reg,
+            operator=op,
+            operand=str(operand_reg),
+        ),
         node=node,
     )
     return reg
@@ -208,10 +240,16 @@ def lower_call_impl(ctx: TreeSitterEmitContext, func_node, args_node, node) -> s
             obj_reg = ctx.lower_expr(obj_node)
             method_name = ctx.node_text(attr_node)
             reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CALL_METHOD,
-                result_reg=reg,
-                operands=[obj_reg, method_name] + arg_regs,
+            ctx.emit_inst(
+                CallMethod(
+                    result_reg=reg,
+                    obj_reg=str(obj_reg),
+                    method_name=method_name,
+                    args=tuple(
+                        str(a) if not isinstance(a, SpreadArguments) else a
+                        for a in arg_regs
+                    ),
+                ),
                 node=node,
             )
             return reg
@@ -220,10 +258,15 @@ def lower_call_impl(ctx: TreeSitterEmitContext, func_node, args_node, node) -> s
     if func_node and func_node.type == CommonNodeType.IDENTIFIER:
         func_name = ctx.node_text(func_node)
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=reg,
-            operands=[func_name] + arg_regs,
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=reg,
+                func_name=func_name,
+                args=tuple(
+                    str(a) if not isinstance(a, SpreadArguments) else a
+                    for a in arg_regs
+                ),
+            ),
             node=node,
         )
         return reg
@@ -233,16 +276,21 @@ def lower_call_impl(ctx: TreeSitterEmitContext, func_node, args_node, node) -> s
         target_reg = ctx.lower_expr(func_node)
     else:
         target_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.SYMBOLIC,
-            result_reg=target_reg,
-            operands=["unknown_call_target"],
+        ctx.emit_inst(
+            Symbolic(
+                result_reg=target_reg,
+                hint="unknown_call_target",
+            ),
         )
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_UNKNOWN,
-        result_reg=reg,
-        operands=[target_reg] + arg_regs,
+    ctx.emit_inst(
+        CallUnknown(
+            result_reg=reg,
+            target_reg=str(target_reg),
+            args=tuple(
+                str(a) if not isinstance(a, SpreadArguments) else a for a in arg_regs
+            ),
+        ),
         node=node,
     )
     return reg
@@ -303,10 +351,12 @@ def lower_attribute(ctx: TreeSitterEmitContext, node) -> str:
     obj_reg = ctx.lower_expr(obj_node)
     field_name = ctx.node_text(attr_node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_FIELD,
-        result_reg=reg,
-        operands=[obj_reg, field_name],
+    ctx.emit_inst(
+        LoadField(
+            result_reg=reg,
+            obj_reg=str(obj_reg),
+            field_name=field_name,
+        ),
         node=node,
     )
     return reg
@@ -320,10 +370,12 @@ def lower_subscript(ctx: TreeSitterEmitContext, node) -> str:
     obj_reg = ctx.lower_expr(obj_node)
     idx_reg = ctx.lower_expr(idx_node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_INDEX,
-        result_reg=reg,
-        operands=[obj_reg, idx_reg],
+    ctx.emit_inst(
+        LoadIndex(
+            result_reg=reg,
+            arr_reg=str(obj_reg),
+            index_reg=str(idx_reg),
+        ),
         node=node,
     )
     return reg
@@ -338,10 +390,13 @@ def lower_interpolated_string_parts(
     result = parts[0]
     for part in parts[1:]:
         new_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.BINOP,
-            result_reg=new_reg,
-            operands=["+", result, part],
+        ctx.emit_inst(
+            Binop(
+                result_reg=new_reg,
+                operator="+",
+                left=str(result),
+                right=str(part),
+            ),
             node=node,
         )
         result = new_reg
@@ -358,12 +413,15 @@ def lower_update_expr(ctx: TreeSitterEmitContext, node) -> str:
     op = "+" if "++" in text else "-"
     operand_reg = ctx.lower_expr(operand)
     one_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
+    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     result_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=result_reg,
-        operands=[op, operand_reg, one_reg],
+    ctx.emit_inst(
+        Binop(
+            result_reg=result_reg,
+            operator=op,
+            left=str(operand_reg),
+            right=str(one_reg),
+        ),
         node=node,
     )
     lower_store_target(ctx, operand, result_reg, node)
@@ -383,27 +441,38 @@ def lower_list_literal(ctx: TreeSitterEmitContext, node) -> str:
     ]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
-    ctx.emit(
-        Opcode.NEW_ARRAY,
-        result_reg=arr_reg,
-        operands=["list", size_reg],
+    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
+    ctx.emit_inst(
+        NewArray(
+            result_reg=arr_reg,
+            type_hint="list",
+            size_reg=str(size_reg),
+        ),
         node=node,
     )
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)
         idx_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
-        ctx.emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(
+            StoreIndex(
+                arr_reg=str(arr_reg),
+                index_reg=str(idx_reg),
+                value_reg=(
+                    val_reg if isinstance(val_reg, SpreadArguments) else str(val_reg)
+                ),
+            ),
+        )
     return arr_reg
 
 
 def lower_dict_literal(ctx: TreeSitterEmitContext, node) -> str:
     obj_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.NEW_OBJECT,
-        result_reg=obj_reg,
-        operands=["dict"],
+    ctx.emit_inst(
+        NewObject(
+            result_reg=obj_reg,
+            type_hint="dict",
+        ),
         node=node,
     )
     for child in node.children:
@@ -412,7 +481,21 @@ def lower_dict_literal(ctx: TreeSitterEmitContext, node) -> str:
             val_node = child.child_by_field_name("value")
             key_reg = ctx.lower_expr(key_node)
             val_reg = ctx.lower_expr(val_node)
-            ctx.emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
+            ctx.emit_inst(
+                StoreIndex(
+                    arr_reg=str(obj_reg),
+                    index_reg=(
+                        key_reg
+                        if isinstance(key_reg, SpreadArguments)
+                        else str(key_reg)
+                    ),
+                    value_reg=(
+                        val_reg
+                        if isinstance(val_reg, SpreadArguments)
+                        else str(val_reg)
+                    ),
+                ),
+            )
     return obj_reg
 
 
@@ -423,9 +506,11 @@ def lower_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
     if target.type == CommonNodeType.IDENTIFIER:
-        ctx.emit(
-            Opcode.STORE_VAR,
-            operands=[ctx.resolve_var(ctx.node_text(target)), val_reg],
+        ctx.emit_inst(
+            StoreVar(
+                name=ctx.resolve_var(ctx.node_text(target)),
+                value_reg=str(val_reg),
+            ),
             node=parent_node,
         )
     elif target.type in (
@@ -443,9 +528,12 @@ def lower_store_target(
             attr_node = target.children[-1] if len(target.children) > 1 else None
         if obj_node and attr_node:
             obj_reg = ctx.lower_expr(obj_node)
-            ctx.emit(
-                Opcode.STORE_FIELD,
-                operands=[obj_reg, ctx.node_text(attr_node), val_reg],
+            ctx.emit_inst(
+                StoreField(
+                    obj_reg=str(obj_reg),
+                    field_name=ctx.node_text(attr_node),
+                    value_reg=str(val_reg),
+                ),
                 node=parent_node,
             )
     elif target.type == CommonNodeType.SUBSCRIPT:
@@ -454,15 +542,20 @@ def lower_store_target(
         if obj_node and idx_node:
             obj_reg = ctx.lower_expr(obj_node)
             idx_reg = ctx.lower_expr(idx_node)
-            ctx.emit(
-                Opcode.STORE_INDEX,
-                operands=[obj_reg, idx_reg, val_reg],
+            ctx.emit_inst(
+                StoreIndex(
+                    arr_reg=str(obj_reg),
+                    index_reg=str(idx_reg),
+                    value_reg=str(val_reg),
+                ),
                 node=parent_node,
             )
     else:
         # Fallback: just store to the text of the target
-        ctx.emit(
-            Opcode.STORE_VAR,
-            operands=[ctx.node_text(target), val_reg],
+        ctx.emit_inst(
+            StoreVar(
+                name=ctx.node_text(target),
+                value_reg=str(val_reg),
+            ),
             node=parent_node,
         )
