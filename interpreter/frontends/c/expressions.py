@@ -8,11 +8,12 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode, CodeLabel
 from interpreter.frontends.common.expressions import lower_const_literal
 from interpreter.frontends.c.node_types import CNodeType
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
 
-def lower_field_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_field_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower field_expression (e.g., obj.field or ptr->field)."""
     obj_node = node.child_by_field_name("argument")
     field_node = node.child_by_field_name("field")
@@ -30,7 +31,7 @@ def lower_field_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_subscript_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_subscript_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower subscript_expression (arr[idx])."""
     arr_node = node.child_by_field_name("argument")
     idx_node = node.child_by_field_name("index")
@@ -48,7 +49,7 @@ def lower_subscript_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower assignment_expression (x = val)."""
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
@@ -115,7 +116,7 @@ def lower_c_store_target(
         )
 
 
-def lower_cast_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_cast_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower cast_expression — pass through the value."""
     value_node = node.child_by_field_name("value")
     if value_node:
@@ -126,7 +127,7 @@ def lower_cast_expr(ctx: TreeSitterEmitContext, node) -> str:
     return lower_const_literal(ctx, node)
 
 
-def lower_pointer_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_pointer_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower pointer dereference (*p) as LOAD_INDIRECT or address-of (&x) as ADDRESS_OF."""
     operand_node = node.child_by_field_name("argument")
     # Detect operator: first non-named child is '*' or '&'
@@ -180,7 +181,7 @@ def lower_pointer_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_sizeof(ctx: TreeSitterEmitContext, node) -> str:
+def lower_sizeof(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower sizeof(type) or sizeof(expr) as CALL_FUNCTION sizeof(arg)."""
     type_node = next(
         (c for c in node.children if c.type == CNodeType.TYPE_DESCRIPTOR),
@@ -210,7 +211,7 @@ def lower_sizeof(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_ternary(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ternary(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower conditional_expression (ternary operator)."""
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     true_node = node.child_by_field_name(ctx.constants.if_consequence_field)
@@ -243,7 +244,7 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> str:
     return result_reg
 
 
-def lower_comma_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_comma_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower comma expression (a, b) — evaluate both, return last."""
     children = [c for c in node.children if c.is_named]
     reg = ctx.fresh_reg()
@@ -253,7 +254,7 @@ def lower_comma_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_compound_literal(ctx: TreeSitterEmitContext, node) -> str:
+def lower_compound_literal(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower (type){elem1, elem2, ...} as NEW_OBJECT + STORE_INDEX per element."""
     type_node = next(
         (c for c in node.children if c.type == CNodeType.TYPE_DESCRIPTOR),
@@ -284,7 +285,7 @@ def lower_compound_literal(ctx: TreeSitterEmitContext, node) -> str:
     return obj_reg
 
 
-def lower_initializer_list(ctx: TreeSitterEmitContext, node) -> str:
+def lower_initializer_list(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower initializer_list {a, b, c} as NEW_ARRAY + STORE_INDEX per element."""
     elements = [c for c in node.children if c.is_named]
     size_reg = ctx.fresh_reg()
@@ -304,7 +305,7 @@ def lower_initializer_list(ctx: TreeSitterEmitContext, node) -> str:
     return arr_reg
 
 
-def lower_initializer_pair(ctx: TreeSitterEmitContext, node) -> str:
+def lower_initializer_pair(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `.field = value` — lower the value (field binding handled by parent)."""
     value_node = next(
         (

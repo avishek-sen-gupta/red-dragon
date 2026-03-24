@@ -15,11 +15,12 @@ from interpreter.frontends.pascal.pascal_constants import (
 )
 from interpreter.frontends.pascal.node_types import PascalNodeType
 from interpreter.frontends.pascal.declarations import _resolve_object_class
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
 
-def lower_pascal_binop(ctx: TreeSitterEmitContext, node) -> str:
+def lower_pascal_binop(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower exprBinary -- children: lhs, operator_keyword, rhs."""
     named_children = [c for c in node.children if c.is_named]
     if len(named_children) < 2:
@@ -52,7 +53,7 @@ def lower_pascal_binop(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_pascal_call(ctx: TreeSitterEmitContext, node) -> str:
+def lower_pascal_call(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower exprCall -- children: identifier, (, exprArgs, )."""
     id_node = next(
         (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
@@ -100,7 +101,7 @@ def _extract_pascal_args(ctx: TreeSitterEmitContext, args_node) -> list[str]:
     ]
 
 
-def lower_pascal_paren(ctx: TreeSitterEmitContext, node) -> str:
+def lower_pascal_paren(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower exprParens -- unwrap inner expression."""
     inner = next(
         (c for c in node.children if c.type not in ("(", ")")),
@@ -111,7 +112,7 @@ def lower_pascal_paren(ctx: TreeSitterEmitContext, node) -> str:
     return ctx.lower_expr(inner)
 
 
-def lower_pascal_dot(ctx: TreeSitterEmitContext, node) -> str:
+def lower_pascal_dot(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower exprDot -- first child = object, last child = field name.
 
     If the object is a class-typed variable with a registered property getter,
@@ -142,7 +143,7 @@ def lower_pascal_dot(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_pascal_subscript(ctx: TreeSitterEmitContext, node) -> str:
+def lower_pascal_subscript(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower exprSubscript -- object followed by exprArgs containing index."""
     named_children = [
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
@@ -171,7 +172,7 @@ def lower_pascal_subscript(ctx: TreeSitterEmitContext, node) -> str:
     return obj_reg
 
 
-def lower_pascal_unary(ctx: TreeSitterEmitContext, node) -> str:
+def lower_pascal_unary(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower exprUnary -- operator keyword + operand."""
     op_symbol = "?"
     for child in node.children:
@@ -195,7 +196,7 @@ def lower_pascal_unary(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_pascal_brackets(ctx: TreeSitterEmitContext, node) -> str:
+def lower_pascal_brackets(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower exprBrackets (set literal) as NEW_ARRAY + STORE_INDEX per element."""
     elems = [c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE]
     arr_reg = ctx.fresh_reg()
@@ -215,7 +216,7 @@ def lower_pascal_brackets(ctx: TreeSitterEmitContext, node) -> str:
     return arr_reg
 
 
-def lower_pascal_range(ctx: TreeSitterEmitContext, node) -> str:
+def lower_pascal_range(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `4..10` as CALL_FUNCTION('range', lo, hi)."""
     nums = [c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE]
     arg_regs = [ctx.lower_expr(c) for c in nums]
@@ -229,7 +230,7 @@ def lower_pascal_range(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_pascal_inherited_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_pascal_inherited_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `inherited Create` as CALL_FUNCTION('inherited', method)."""
     named_children = [
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from functools import reduce
 
 from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.register import Register
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -154,7 +155,7 @@ class MatchCase:
     body_node: object  # tree-sitter node for case body, or NoBody()
 
 
-def _const_true(ctx: TreeSitterEmitContext) -> str:
+def _const_true(ctx: TreeSitterEmitContext) -> Register:
     """Emit a CONST True and return the register."""
     true_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=true_reg, value="True"))
@@ -163,7 +164,7 @@ def _const_true(ctx: TreeSitterEmitContext) -> str:
 
 def _compile_indexed_element(
     ctx: TreeSitterEmitContext, subject_reg: str, index: int, elem_pat: Pattern
-) -> str:
+) -> Register:
     """Load element at index from subject and compile its pattern test."""
     elem_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -176,7 +177,7 @@ def _compile_indexed_element(
     return compile_pattern_test(ctx, elem_reg, elem_pat)
 
 
-def _emit_binop(ctx: TreeSitterEmitContext, op: str, left: str, right: str) -> str:
+def _emit_binop(ctx: TreeSitterEmitContext, op: str, left: str, right: str) -> Register:
     """Emit a single BINOP and return the result register."""
     combined = ctx.fresh_reg()
     ctx.emit_inst(
@@ -207,7 +208,7 @@ def _compile_after_star_element_test(
     after_count: int,
     after_offset: int,
     elem_pat: Pattern,
-) -> str:
+) -> Register:
     """Load an after-star element by computing index = len - (after_count - after_offset)."""
     offset_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -225,19 +226,19 @@ def _compile_after_star_element_test(
     return compile_pattern_test(ctx, elem_reg, elem_pat)
 
 
-def _and_all(ctx: TreeSitterEmitContext, regs: list[str]) -> str:
+def _and_all(ctx: TreeSitterEmitContext, regs: list[str]) -> Register:
     """AND a list of boolean registers together with BINOP &&."""
     return reduce(lambda acc, reg: _emit_binop(ctx, "&&", acc, reg), regs[1:], regs[0])
 
 
-def _or_any(ctx: TreeSitterEmitContext, regs: list[str]) -> str:
+def _or_any(ctx: TreeSitterEmitContext, regs: list[str]) -> Register:
     """OR a list of boolean registers together with BINOP ||."""
     return reduce(lambda acc, reg: _emit_binop(ctx, "||", acc, reg), regs[1:], regs[0])
 
 
 def compile_pattern_test(
     ctx: TreeSitterEmitContext, subject_reg: str, pattern: Pattern
-) -> str:
+) -> Register:
     """Emit IR that tests whether subject matches pattern. Returns a boolean register."""
     match pattern:
         case LiteralPattern(value=v):

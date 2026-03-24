@@ -20,6 +20,7 @@ from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
 from interpreter.frontends.python.node_types import PythonNodeType
+from interpreter.register import Register
 
 # ── store target (with tuple unpack) ──────────────────────────
 
@@ -54,7 +55,7 @@ def lower_tuple_unpack(
 # ── call ──────────────────────────────────────────────────────
 
 
-def lower_call(ctx: TreeSitterEmitContext, node) -> str:
+def lower_call(ctx: TreeSitterEmitContext, node) -> Register:
     func_node = node.child_by_field_name(ctx.constants.call_function_field)
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
 
@@ -118,7 +119,7 @@ def lower_call(ctx: TreeSitterEmitContext, node) -> str:
 # ── tuple ─────────────────────────────────────────────────────
 
 
-def lower_tuple_literal(ctx: TreeSitterEmitContext, node) -> str:
+def lower_tuple_literal(ctx: TreeSitterEmitContext, node) -> Register:
     elems = [
         c
         for c in node.children
@@ -149,7 +150,7 @@ def lower_tuple_literal(ctx: TreeSitterEmitContext, node) -> str:
 # ── conditional expression (ternary) ─────────────────────────
 
 
-def lower_conditional_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_conditional_expr(ctx: TreeSitterEmitContext, node) -> Register:
     children = [
         c
         for c in node.children
@@ -190,7 +191,7 @@ def lower_conditional_expr(ctx: TreeSitterEmitContext, node) -> str:
 # ── list comprehension ────────────────────────────────────────
 
 
-def lower_list_comprehension(ctx: TreeSitterEmitContext, node) -> str:
+def lower_list_comprehension(ctx: TreeSitterEmitContext, node) -> Register:
     """Desugar [expr for var in iterable if cond] into index-based loop."""
     children = [c for c in node.children if c.is_named]
     body_expr = children[0] if children else None
@@ -332,7 +333,7 @@ def _lower_comprehension_loop(
 # ── dict comprehension ────────────────────────────────────────
 
 
-def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> str:
+def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> Register:
     """Desugar {k: v for var in iterable if cond} into loop."""
     children = [c for c in node.children if c.is_named]
     pair_node = next((c for c in children if c.type == PythonNodeType.PAIR), None)
@@ -430,7 +431,7 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> str:
 # ── lambda ────────────────────────────────────────────────────
 
 
-def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
+def lower_lambda(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `lambda x, y: expr` into inline function definition."""
     func_name = f"__lambda_{ctx.label_counter}"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -558,7 +559,7 @@ def lower_python_function_def(ctx: TreeSitterEmitContext, node) -> None:
 # ── generator expression ─────────────────────────────────────
 
 
-def lower_generator_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_generator_expression(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower (expr for var in iterable) like list_comprehension but as generator."""
     children = [c for c in node.children if c.is_named]
     body_expr = children[0] if children else None
@@ -607,7 +608,7 @@ def lower_generator_expression(ctx: TreeSitterEmitContext, node) -> str:
 # ── set comprehension ────────────────────────────────────────
 
 
-def lower_set_comprehension(ctx: TreeSitterEmitContext, node) -> str:
+def lower_set_comprehension(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower {expr for var in iterable} as set comprehension."""
     children = [c for c in node.children if c.is_named]
     body_expr = children[0] if children else None
@@ -645,7 +646,7 @@ def lower_set_comprehension(ctx: TreeSitterEmitContext, node) -> str:
 # ── set literal ───────────────────────────────────────────────
 
 
-def lower_set_literal(ctx: TreeSitterEmitContext, node) -> str:
+def lower_set_literal(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower {1, 2, 3} as NEW_OBJECT('set') + STORE_INDEX per element."""
     elems = [
         c
@@ -675,7 +676,7 @@ def lower_set_literal(ctx: TreeSitterEmitContext, node) -> str:
 # ── yield ─────────────────────────────────────────────────────
 
 
-def lower_yield(ctx: TreeSitterEmitContext, node) -> str:
+def lower_yield(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower yield expr as CALL_FUNCTION('yield', expr)."""
     named_children = [c for c in node.children if c.is_named]
     arg_regs = [ctx.lower_expr(c) for c in named_children]
@@ -692,7 +693,7 @@ def lower_yield(ctx: TreeSitterEmitContext, node) -> str:
 # ── await ─────────────────────────────────────────────────────
 
 
-def lower_await(ctx: TreeSitterEmitContext, node) -> str:
+def lower_await(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower await expr as CALL_FUNCTION('await', expr)."""
     named_children = [c for c in node.children if c.is_named]
     arg_regs = [ctx.lower_expr(c) for c in named_children]
@@ -719,7 +720,7 @@ def lower_splat_expr(ctx: TreeSitterEmitContext, node) -> str | SpreadArguments:
 # ── named expression (walrus :=) ─────────────────────────────
 
 
-def lower_named_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_named_expression(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower (y := expr) as lower value, DECL_VAR name, return register."""
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     value_node = node.child_by_field_name(ctx.constants.subscript_value_field)
@@ -736,7 +737,7 @@ def lower_named_expression(ctx: TreeSitterEmitContext, node) -> str:
 # ── slice ─────────────────────────────────────────────────────
 
 
-def lower_python_subscript(ctx: TreeSitterEmitContext, node) -> str:
+def lower_python_subscript(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower subscript: a[idx] as LOAD_INDEX, a[1:3] as CALL_FUNCTION('slice', ...)."""
     obj_node = node.child_by_field_name(ctx.constants.subscript_value_field)
     idx_node = node.child_by_field_name(ctx.constants.subscript_index_field)
@@ -758,7 +759,7 @@ def lower_python_subscript(ctx: TreeSitterEmitContext, node) -> str:
 
 def _lower_slice_with_collection(
     ctx: TreeSitterEmitContext, slice_node, collection_reg: str
-) -> str:
+) -> Register:
     """Lower a[1:3] or a[1:3:2] as CALL_FUNCTION('slice', collection, start, stop, step)."""
     all_children = list(slice_node.children)
     colons = [i for i, c in enumerate(all_children) if c.type == PythonNodeType.COLON]
@@ -820,7 +821,7 @@ def _lower_slice_with_collection(
     return reg
 
 
-def _lower_slice_none(ctx: TreeSitterEmitContext) -> str:
+def _lower_slice_none(ctx: TreeSitterEmitContext) -> Register:
     """Emit a CONST('None') for a missing slice component."""
     reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=reg, operands=[ctx.constants.none_literal])
@@ -830,7 +831,7 @@ def _lower_slice_none(ctx: TreeSitterEmitContext) -> str:
 # ── no-op expression ──────────────────────────────────────────
 
 
-def lower_noop_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_noop_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower a no-op expression node (e.g. keyword_separator, positional_separator)."""
     reg = ctx.fresh_reg()
     ctx.emit(
@@ -845,7 +846,7 @@ def lower_noop_expr(ctx: TreeSitterEmitContext, node) -> str:
 # ── list pattern ──────────────────────────────────────────────
 
 
-def lower_list_pattern(ctx: TreeSitterEmitContext, node) -> str:
+def lower_list_pattern(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower [p1, p2, ...] pattern in match/case like a list literal."""
     elems = [
         c
@@ -877,7 +878,7 @@ def lower_list_pattern(ctx: TreeSitterEmitContext, node) -> str:
 # ── dict pattern ──────────────────────────────────────────────
 
 
-def lower_dict_pattern(ctx: TreeSitterEmitContext, node) -> str:
+def lower_dict_pattern(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower {"key": pattern, ...} in match/case as NEW_OBJECT with key/value pairs."""
     obj_reg = ctx.fresh_reg()
     ctx.emit(
@@ -915,7 +916,7 @@ def lower_dict_pattern(ctx: TreeSitterEmitContext, node) -> str:
 # ── f-string / interpolated string ────────────────────────────
 
 
-def lower_python_string(ctx: TreeSitterEmitContext, node) -> str:
+def lower_python_string(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower string nodes, decomposing f-strings into parts + concatenation."""
     has_interpolation = any(
         c.type == PythonNodeType.INTERPOLATION for c in node.children
@@ -941,7 +942,7 @@ def lower_python_string(ctx: TreeSitterEmitContext, node) -> str:
     return lower_interpolated_string_parts(ctx, parts, node)
 
 
-def lower_interpolation(ctx: TreeSitterEmitContext, node) -> str:
+def lower_interpolation(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower {expr} inside f-strings by lowering the inner expression."""
     named_children = [
         c
