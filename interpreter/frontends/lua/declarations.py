@@ -9,6 +9,17 @@ from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.common.declarations import lower_params
 from interpreter.frontends.lua.node_types import LuaNodeType
+from interpreter.instructions import (
+    Const,
+    LoadVar,
+    DeclVar,
+    StoreVar,
+    StoreField,
+    StoreIndex,
+    Label_,
+    Branch,
+    Return_,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,15 +34,9 @@ def lower_lua_variable_declaration(ctx: TreeSitterEmitContext, node) -> None:
     for child in node.children:
         if child.type == LuaNodeType.IDENTIFIER:
             val_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CONST,
-                result_reg=val_reg,
-                operands=[ctx.constants.none_literal],
-            )
-            ctx.emit(
-                Opcode.DECL_VAR,
-                operands=[ctx.node_text(child), val_reg],
-                node=node,
+            ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+            ctx.emit_inst(
+                DeclVar(name=ctx.node_text(child), value_reg=val_reg), node=node
             )
 
 
@@ -64,11 +69,7 @@ def lower_lua_assignment(ctx: TreeSitterEmitContext, node) -> None:
     for i, target in enumerate(targets):
         val_reg = val_regs[i] if i < len(val_regs) else ctx.fresh_reg()
         if i >= len(val_regs):
-            ctx.emit(
-                Opcode.CONST,
-                result_reg=val_reg,
-                operands=[ctx.constants.none_literal],
-            )
+            ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
         lower_lua_store_target(ctx, target, val_reg, node)
 
 
@@ -77,19 +78,20 @@ def lower_lua_store_target(
 ) -> None:
     """Lua-specific store target supporting dot_index and bracket_index."""
     if target.type == LuaNodeType.IDENTIFIER:
-        ctx.emit(
-            Opcode.STORE_VAR,
-            operands=[ctx.node_text(target), val_reg],
-            node=parent_node,
+        ctx.emit_inst(
+            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
         )
     elif target.type == LuaNodeType.DOT_INDEX_EXPRESSION:
         obj_node = target.child_by_field_name("table")
         field_node = target.child_by_field_name("field")
         if obj_node and field_node:
             obj_reg = ctx.lower_expr(obj_node)
-            ctx.emit(
-                Opcode.STORE_FIELD,
-                operands=[obj_reg, ctx.node_text(field_node), val_reg],
+            ctx.emit_inst(
+                StoreField(
+                    obj_reg=obj_reg,
+                    field_name=ctx.node_text(field_node),
+                    value_reg=val_reg,
+                ),
                 node=parent_node,
             )
     elif target.type == LuaNodeType.BRACKET_INDEX_EXPRESSION:
@@ -98,16 +100,13 @@ def lower_lua_store_target(
         if obj_node and idx_node:
             obj_reg = ctx.lower_expr(obj_node)
             idx_reg = ctx.lower_expr(idx_node)
-            ctx.emit(
-                Opcode.STORE_INDEX,
-                operands=[obj_reg, idx_reg, val_reg],
+            ctx.emit_inst(
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
     else:
-        ctx.emit(
-            Opcode.STORE_VAR,
-            operands=[ctx.node_text(target), val_reg],
-            node=parent_node,
+        ctx.emit_inst(
+            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
         )
 
 
@@ -137,8 +136,8 @@ def lower_lua_function_declaration(ctx: TreeSitterEmitContext, node) -> None:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=func_label))
 
     if params_node:
         lower_params(ctx, params_node)
@@ -147,27 +146,22 @@ def lower_lua_function_declaration(ctx: TreeSitterEmitContext, node) -> None:
         ctx.lower_block(body_node)
 
     none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
 
     if is_dotted and table_name:
         obj_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.LOAD_VAR, result_reg=obj_reg, operands=[table_name])
-        ctx.emit(
-            Opcode.STORE_FIELD,
-            operands=[obj_reg, func_name, func_reg],
+        ctx.emit_inst(LoadVar(result_reg=obj_reg, name=table_name))
+        ctx.emit_inst(
+            StoreField(obj_reg=obj_reg, field_name=func_name, value_reg=func_reg),
             node=node,
         )
     else:
-        ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+        ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
 
 
 def lower_lua_return(ctx: TreeSitterEmitContext, node) -> None:
@@ -177,16 +171,10 @@ def lower_lua_return(ctx: TreeSitterEmitContext, node) -> None:
         val_reg = ctx.lower_expr(children[0])
     else:
         val_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CONST,
-            result_reg=val_reg,
-            operands=[ctx.constants.default_return_value],
+        ctx.emit_inst(
+            Const(result_reg=val_reg, value=ctx.constants.default_return_value)
         )
-    ctx.emit(
-        Opcode.RETURN,
-        operands=[val_reg],
-        node=node,
-    )
+    ctx.emit_inst(Return_(value_reg=val_reg), node=node)
 
 
 # ---------------------------------------------------------------------------

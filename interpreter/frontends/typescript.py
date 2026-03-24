@@ -13,6 +13,23 @@ from interpreter.frontends.context import GrammarConstants
 from interpreter.frontends.common import expressions as common_expr
 from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.instructions import (
+    Const,
+    LoadVar,
+    DeclVar,
+    StoreVar,
+    Symbolic,
+    CallFunction,
+    CallMethod,
+    LoadField,
+    StoreField,
+    StoreIndex,
+    NewObject,
+    Label_,
+    Branch,
+    BranchIf,
+    Return_,
+)
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
     normalize_type_hint,
@@ -172,8 +189,8 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{iface_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{iface_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=class_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=class_label))
 
     if body_node:
         for child in body_node.children:
@@ -188,12 +205,12 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
             elif child.is_named and child.type not in ("index_signature",):
                 ctx.lower_stmt(child)
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)
     ctx.seed_var_type(iface_name, metatype(ScalarType(iface_name)))
-    ctx.emit(Opcode.DECL_VAR, operands=[iface_name, cls_reg])
+    ctx.emit_inst(DeclVar(name=iface_name, value_reg=cls_reg))
 
 
 def _lower_ts_interface_method(ctx: TreeSitterEmitContext, node) -> None:
@@ -206,22 +223,18 @@ def _lower_ts_interface_method(ctx: TreeSitterEmitContext, node) -> None:
     raw_return = extract_type_from_field(ctx, node, "return_type")
     return_hint = normalize_type_hint(raw_return.lstrip(": "), ctx.type_map)
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=func_label))
     ctx.seed_func_return_type(func_label, return_hint)
 
     none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
 
 
 def _lower_ts_interface_property(ctx: TreeSitterEmitContext, node) -> None:
@@ -235,12 +248,8 @@ def _lower_ts_interface_property(ctx: TreeSitterEmitContext, node) -> None:
     raw_type = extract_type_from_field(ctx, node, "type")
     type_hint = normalize_type_hint(raw_type.lstrip(": "), ctx.type_map)
     val_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=val_reg,
-        operands=[ctx.constants.none_literal],
-    )
-    ctx.emit(Opcode.DECL_VAR, operands=[prop_name, val_reg], node=node)
+    ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+    ctx.emit_inst(DeclVar(name=prop_name, value_reg=val_reg), node=node)
     ctx.seed_var_type(prop_name, type_hint)
 
 
@@ -250,24 +259,20 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
     if name_node:
         enum_name = ctx.node_text(name_node)
         obj_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.NEW_OBJECT,
-            result_reg=obj_reg,
-            operands=[f"enum:{enum_name}"],
-            node=node,
+        ctx.emit_inst(
+            NewObject(result_reg=obj_reg, type_hint=f"enum:{enum_name}"), node=node
         )
         if body_node:
             for i, child in enumerate(c for c in body_node.children if c.is_named):
                 member_name = ctx.node_text(child).split("=")[0].strip()
                 key_reg = ctx.fresh_reg()
-                ctx.emit(Opcode.CONST, result_reg=key_reg, operands=[member_name])
+                ctx.emit_inst(Const(result_reg=key_reg, value=member_name))
                 val_reg = ctx.fresh_reg()
-                ctx.emit(Opcode.CONST, result_reg=val_reg, operands=[str(i)])
-                ctx.emit(
-                    Opcode.STORE_INDEX,
-                    operands=[obj_reg, key_reg, val_reg],
+                ctx.emit_inst(Const(result_reg=val_reg, value=str(i)))
+                ctx.emit_inst(
+                    StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg)
                 )
-        ctx.emit(Opcode.DECL_VAR, operands=[enum_name, obj_reg])
+        ctx.emit_inst(DeclVar(name=enum_name, value_reg=obj_reg))
 
 
 def lower_ts_field_definition(ctx: TreeSitterEmitContext, node) -> None:
@@ -290,16 +295,8 @@ def lower_ts_field_definition(ctx: TreeSitterEmitContext, node) -> None:
         val_reg = ctx.lower_expr(value_node)
     else:
         val_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CONST,
-            result_reg=val_reg,
-            operands=[ctx.constants.none_literal],
-        )
-    ctx.emit(
-        Opcode.DECL_VAR,
-        operands=[field_name, val_reg],
-        node=node,
-    )
+        ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+    ctx.emit_inst(DeclVar(name=field_name, value_reg=val_reg), node=node)
 
 
 def lower_ts_export_statement(ctx: TreeSitterEmitContext, node) -> None:
@@ -356,8 +353,8 @@ def lower_ts_class_def(ctx: TreeSitterEmitContext, node) -> None:
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=class_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=class_label))
 
     if body_node:
         for child in body_node.children:
@@ -378,12 +375,12 @@ def lower_ts_class_def(ctx: TreeSitterEmitContext, node) -> None:
             elif child.is_named:
                 ctx.lower_stmt(child)
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
     ctx.seed_var_type(class_name, metatype(ScalarType(class_name)))
-    ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
+    ctx.emit_inst(DeclVar(name=class_name, value_reg=cls_reg))
 
 
 def _lower_ts_method_def(ctx: TreeSitterEmitContext, node) -> None:
@@ -404,8 +401,8 @@ def _lower_ts_method_def(ctx: TreeSitterEmitContext, node) -> None:
     raw_return = extract_type_from_field(ctx, node, "return_type")
     return_hint = normalize_type_hint(raw_return.lstrip(": "), ctx.type_map)
 
-    ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Label_(label=func_label))
     ctx.seed_func_return_type(func_label, return_hint)
 
     if not _has_static_modifier(node):
@@ -418,17 +415,13 @@ def _lower_ts_method_def(ctx: TreeSitterEmitContext, node) -> None:
         ctx.lower_block(body_node)
 
     none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
 
 
 def lower_ts_abstract_method(ctx: TreeSitterEmitContext, node) -> None:
@@ -438,21 +431,17 @@ def lower_ts_abstract_method(ctx: TreeSitterEmitContext, node) -> None:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=func_label))
 
     none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
 
 
 def lower_ts_internal_module(ctx: TreeSitterEmitContext, node) -> None:
@@ -500,18 +489,13 @@ def lower_ts_param(ctx: TreeSitterEmitContext, child, param_index: int) -> None:
             pname = ctx.node_text(pname_node)
             type_hint = _extract_ts_type_hint(ctx, child)
             sym_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.SYMBOLIC,
-                result_reg=sym_reg,
-                operands=[f"{constants.PARAM_PREFIX}{pname}"],
+            ctx.emit_inst(
+                Symbolic(result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}{pname}"),
                 node=child,
             )
             ctx.seed_register_type(sym_reg, type_hint)
             ctx.seed_param_type(pname, type_hint)
-            ctx.emit(
-                Opcode.DECL_VAR,
-                operands=[pname, f"%{ctx.reg_counter - 1}"],
-            )
+            ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
             ctx.seed_var_type(pname, type_hint)
             default_value_node = child.child_by_field_name("value")
             if default_value_node:
@@ -532,18 +516,13 @@ def lower_ts_param(ctx: TreeSitterEmitContext, child, param_index: int) -> None:
             pname = ctx.node_text(pname_node)
             type_hint = _extract_ts_type_hint(ctx, child)
             sym_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.SYMBOLIC,
-                result_reg=sym_reg,
-                operands=[f"{constants.PARAM_PREFIX}{pname}"],
+            ctx.emit_inst(
+                Symbolic(result_reg=sym_reg, hint=f"{constants.PARAM_PREFIX}{pname}"),
                 node=child,
             )
             ctx.seed_register_type(sym_reg, type_hint)
             ctx.seed_param_type(pname, type_hint)
-            ctx.emit(
-                Opcode.DECL_VAR,
-                operands=[pname, f"%{ctx.reg_counter - 1}"],
-            )
+            ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
             ctx.seed_var_type(pname, type_hint)
         return
     # Fall back to JS param handling
@@ -574,8 +553,8 @@ def lower_ts_arrow_function(ctx: TreeSitterEmitContext, node) -> Register:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Label_(label=func_label))
 
     if params_node:
         if params_node.type == TypeScriptNodeType.IDENTIFIER:
@@ -588,16 +567,12 @@ def lower_ts_arrow_function(ctx: TreeSitterEmitContext, node) -> Register:
             ctx.lower_block(body_node)
         else:
             val_reg = ctx.lower_expr(body_node)
-            ctx.emit(Opcode.RETURN, operands=[val_reg])
+            ctx.emit_inst(Return_(value_reg=val_reg))
 
     none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
@@ -614,8 +589,8 @@ def lower_ts_function_expression(ctx: TreeSitterEmitContext, node) -> Register:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Label_(label=func_label))
 
     if params_node:
         lower_ts_params(ctx, params_node)
@@ -624,13 +599,9 @@ def lower_ts_function_expression(ctx: TreeSitterEmitContext, node) -> Register:
         ctx.lower_block(body_node)
 
     none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
@@ -650,8 +621,8 @@ def lower_ts_function_def(ctx: TreeSitterEmitContext, node) -> None:
     raw_return = extract_type_from_field(ctx, node, "return_type")
     return_hint = normalize_type_hint(raw_return.lstrip(": "), ctx.type_map)
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=func_label))
     ctx.seed_func_return_type(func_label, return_hint)
 
     if params_node:
@@ -661,18 +632,14 @@ def lower_ts_function_def(ctx: TreeSitterEmitContext, node) -> None:
         ctx.lower_block(body_node)
 
     none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
+    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Return_(value_reg=none_reg))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
 
 
 def lower_import_alias(ctx: TreeSitterEmitContext, node) -> None:
@@ -686,7 +653,7 @@ def lower_import_alias(ctx: TreeSitterEmitContext, node) -> None:
 
     alias_name = ctx.node_text(alias_node)
     target_reg = _lower_nested_identifier(ctx, target_node)
-    ctx.emit(Opcode.STORE_VAR, operands=[alias_name, target_reg], node=node)
+    ctx.emit_inst(StoreVar(name=alias_name, value_reg=target_reg), node=node)
 
 
 def _lower_nested_identifier(ctx: TreeSitterEmitContext, node) -> Register:
@@ -698,7 +665,7 @@ def _lower_nested_identifier(ctx: TreeSitterEmitContext, node) -> Register:
     obj_reg = _lower_nested_identifier(ctx, named[0])
     field_name = ctx.node_text(named[-1])
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_FIELD, result_reg=reg, operands=[obj_reg, field_name], node=node
+    ctx.emit_inst(
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
     )
     return reg

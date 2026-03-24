@@ -6,6 +6,19 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode, CodeLabel
 from interpreter import constants
+from interpreter.instructions import (
+    Const,
+    LoadVar,
+    DeclVar,
+    StoreVar,
+    Binop,
+    CallFunction,
+    LoadIndex,
+    Symbolic,
+    Label_,
+    Branch,
+    BranchIf,
+)
 from interpreter.frontends.common.exceptions import (
     lower_raise_or_throw,
     lower_try_catch,
@@ -48,33 +61,23 @@ def lower_cpp_if(ctx: TreeSitterEmitContext, node) -> None:
     end_label = ctx.fresh_label("if_end")
 
     if alt_node:
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[true_label, false_label],
-            node=node,
-        )
+        ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)), node=node)
     else:
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[true_label, end_label],
-            node=node,
-        )
+        ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(true_label, end_label)), node=node)
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     if body_node:
         ctx.lower_block(body_node)
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
 
     if alt_node:
-        ctx.emit(Opcode.LABEL, label=false_label)
+        ctx.emit_inst(Label_(label=false_label))
         for child in alt_node.children:
             if child.type not in (CppNodeType.ELSE_KEYWORD,) and child.is_named:
                 ctx.lower_stmt(child)
-        ctx.emit(Opcode.BRANCH, label=end_label)
+        ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
     if scope_entered:
         ctx.exit_block_scope()
@@ -89,23 +92,18 @@ def lower_cpp_while(ctx: TreeSitterEmitContext, node) -> None:
     body_label = ctx.fresh_label("while_body")
     end_label = ctx.fresh_label("while_end")
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     cond_reg = ctx.lower_expr(cond_node)
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[body_label, end_label],
-        node=node,
-    )
+    ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)), node=node)
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     ctx.push_loop(loop_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(Branch(label=loop_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_namespace_def(ctx: TreeSitterEmitContext, node) -> None:
@@ -131,12 +129,7 @@ def lower_template_decl(ctx: TreeSitterEmitContext, node) -> None:
         ctx.lower_stmt(inner_decls[-1])
     else:
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=[f"template:{ctx.node_text(node)[:60]}"],
-            node=node,
-        )
+        ctx.emit_inst(Symbolic(result_reg=reg, hint=f"template:{ctx.node_text(node)[:60]}"), node=node)
 
 
 def _lower_structured_binding(
@@ -148,15 +141,10 @@ def _lower_structured_binding(
         raw_name = ctx.node_text(id_node)
         var_name = ctx.declare_block_var(raw_name)
         idx_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
         part_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.LOAD_INDEX,
-            result_reg=part_reg,
-            operands=[elem_reg, idx_reg],
-            node=id_node,
-        )
-        ctx.emit(Opcode.DECL_VAR, operands=[var_name, part_reg], node=id_node)
+        ctx.emit_inst(LoadIndex(result_reg=part_reg, arr_reg=elem_reg, index_reg=idx_reg), node=id_node)
+        ctx.emit_inst(DeclVar(name=var_name, value_reg=part_reg), node=id_node)
 
 
 def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
@@ -183,36 +171,32 @@ def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
     iter_reg = ctx.lower_expr(right_node) if right_node else ctx.fresh_reg()
 
     init_idx = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
-    ctx.emit(Opcode.DECL_VAR, operands=["__range_idx", init_idx])
+    ctx.emit_inst(Const(result_reg=init_idx, value="0"))
+    ctx.emit_inst(DeclVar(name="__range_idx", value_reg=init_idx))
     len_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
+    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
 
     loop_label = ctx.fresh_label("range_for_cond")
     body_label = ctx.fresh_label("range_for_body")
     end_label = ctx.fresh_label("range_for_end")
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     idx_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=idx_reg, operands=["__range_idx"])
+    ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__range_idx"))
     cond_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=cond_reg, operands=["<", idx_reg, len_reg])
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[body_label, end_label],
-    )
+    ctx.emit_inst(Binop(result_reg=cond_reg, operator="<", left=idx_reg, right=len_reg))
+    ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)))
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     ctx.enter_block_scope()
     elem_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
+    ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
 
     if is_structured_binding:
         _lower_structured_binding(ctx, declarator_node, elem_reg)
     else:
         var_name = ctx.declare_block_var(raw_name)
-        ctx.emit(Opcode.DECL_VAR, operands=[var_name, elem_reg])
+        ctx.emit_inst(DeclVar(name=var_name, value_reg=elem_reg))
 
     update_label = ctx.fresh_label("range_for_update")
     ctx.push_loop(update_label, end_label)
@@ -221,15 +205,15 @@ def lower_range_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.pop_loop()
     ctx.exit_block_scope()
 
-    ctx.emit(Opcode.LABEL, label=update_label)
+    ctx.emit_inst(Label_(label=update_label))
     one_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
+    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     new_idx = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=new_idx, operands=["+", idx_reg, one_reg])
-    ctx.emit(Opcode.STORE_VAR, operands=["__range_idx", new_idx])
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(Binop(result_reg=new_idx, operator="+", left=idx_reg, right=one_reg))
+    ctx.emit_inst(StoreVar(name="__range_idx", value_reg=new_idx))
+    ctx.emit_inst(Branch(label=loop_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_throw(ctx: TreeSitterEmitContext, node) -> None:

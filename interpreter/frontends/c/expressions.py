@@ -9,6 +9,28 @@ from interpreter.ir import Opcode, CodeLabel
 from interpreter.frontends.common.expressions import lower_const_literal
 from interpreter.frontends.c.node_types import CNodeType
 from interpreter.register import Register
+from interpreter.instructions import (
+    Const,
+    LoadVar,
+    DeclVar,
+    StoreVar,
+    Binop,
+    Unop,
+    CallFunction,
+    LoadField,
+    StoreField,
+    LoadIndex,
+    StoreIndex,
+    NewObject,
+    NewArray,
+    Label_,
+    Branch,
+    BranchIf,
+    AddressOf,
+    LoadIndirect,
+    StoreIndirect,
+    Symbolic,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +44,8 @@ def lower_field_expr(ctx: TreeSitterEmitContext, node) -> Register:
     obj_reg = ctx.lower_expr(obj_node)
     field_name = ctx.node_text(field_node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_FIELD,
-        result_reg=reg,
-        operands=[obj_reg, field_name],
-        node=node,
+    ctx.emit_inst(
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
     )
     return reg
 
@@ -40,11 +59,8 @@ def lower_subscript_expr(ctx: TreeSitterEmitContext, node) -> Register:
     arr_reg = ctx.lower_expr(arr_node)
     idx_reg = ctx.lower_expr(idx_node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_INDEX,
-        result_reg=reg,
-        operands=[arr_reg, idx_reg],
-        node=node,
+    ctx.emit_inst(
+        LoadIndex(result_reg=reg, arr_reg=arr_reg, index_reg=idx_reg), node=node
     )
     return reg
 
@@ -66,24 +82,24 @@ def lower_c_store_target(
         name = ctx.node_text(target)
         if ctx.symbol_table.resolve_field(ctx._current_class_name, name).name:
             this_reg = ctx.fresh_reg()
-            ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
-            ctx.emit(
-                Opcode.STORE_FIELD, operands=[this_reg, name, val_reg], node=parent_node
-            )
-        else:
-            ctx.emit(
-                Opcode.STORE_VAR,
-                operands=[name, val_reg],
+            ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"))
+            ctx.emit_inst(
+                StoreField(obj_reg=this_reg, field_name=name, value_reg=val_reg),
                 node=parent_node,
             )
+        else:
+            ctx.emit_inst(StoreVar(name=name, value_reg=val_reg), node=parent_node)
     elif target.type == CNodeType.FIELD_EXPRESSION:
         obj_node = target.child_by_field_name("argument")
         field_node = target.child_by_field_name("field")
         if obj_node and field_node:
             obj_reg = ctx.lower_expr(obj_node)
-            ctx.emit(
-                Opcode.STORE_FIELD,
-                operands=[obj_reg, ctx.node_text(field_node), val_reg],
+            ctx.emit_inst(
+                StoreField(
+                    obj_reg=obj_reg,
+                    field_name=ctx.node_text(field_node),
+                    value_reg=val_reg,
+                ),
                 node=parent_node,
             )
     elif target.type == CNodeType.SUBSCRIPT_EXPRESSION:
@@ -92,9 +108,8 @@ def lower_c_store_target(
         if arr_node and idx_node:
             arr_reg = ctx.lower_expr(arr_node)
             idx_reg = ctx.lower_expr(idx_node)
-            ctx.emit(
-                Opcode.STORE_INDEX,
-                operands=[arr_reg, idx_reg, val_reg],
+            ctx.emit_inst(
+                StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
     elif target.type == CNodeType.POINTER_EXPRESSION:
@@ -103,16 +118,12 @@ def lower_c_store_target(
         if operand_node is None:
             operand_node = next((c for c in target.children if c.is_named), None)
         ptr_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
-        ctx.emit(
-            Opcode.STORE_INDIRECT,
-            operands=[ptr_reg, val_reg],
-            node=parent_node,
+        ctx.emit_inst(
+            StoreIndirect(ptr_reg=ptr_reg, value_reg=val_reg), node=parent_node
         )
     else:
-        ctx.emit(
-            Opcode.STORE_VAR,
-            operands=[ctx.node_text(target), val_reg],
-            node=parent_node,
+        ctx.emit_inst(
+            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
         )
 
 
@@ -148,21 +159,11 @@ def lower_pointer_expr(ctx: TreeSitterEmitContext, node) -> Register:
         if operand_node and operand_node.type == CNodeType.IDENTIFIER:
             var_name = ctx.node_text(operand_node)
             reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.ADDRESS_OF,
-                result_reg=reg,
-                operands=[var_name],
-                node=node,
-            )
+            ctx.emit_inst(AddressOf(result_reg=reg, var_name=var_name), node=node)
             return reg
         inner_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.UNOP,
-            result_reg=reg,
-            operands=["&", inner_reg],
-            node=node,
-        )
+        ctx.emit_inst(Unop(result_reg=reg, operator="&", operand=inner_reg), node=node)
         return reg
 
     # Dereference *this → just load this (our VM references aren't real pointers)
@@ -172,12 +173,7 @@ def lower_pointer_expr(ctx: TreeSitterEmitContext, node) -> Register:
     # Dereference: *ptr -> LOAD_INDIRECT ptr
     inner_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_INDIRECT,
-        result_reg=reg,
-        operands=[inner_reg],
-        node=node,
-    )
+    ctx.emit_inst(LoadIndirect(result_reg=reg, ptr_reg=inner_reg), node=node)
     return reg
 
 
@@ -189,11 +185,7 @@ def lower_sizeof(ctx: TreeSitterEmitContext, node) -> Register:
     )
     if type_node:
         arg_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CONST,
-            result_reg=arg_reg,
-            operands=[ctx.node_text(type_node)],
-        )
+        ctx.emit_inst(Const(result_reg=arg_reg, value=ctx.node_text(type_node)))
     else:
         expr_node = next(
             (c for c in node.children if c.is_named and c.type != CNodeType.SIZEOF),
@@ -202,11 +194,8 @@ def lower_sizeof(ctx: TreeSitterEmitContext, node) -> Register:
         arg_reg = ctx.lower_expr(expr_node) if expr_node else ctx.fresh_reg()
 
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["sizeof", arg_reg],
-        node=node,
+    ctx.emit_inst(
+        CallFunction(result_reg=reg, func_name="sizeof", args=(arg_reg,)), node=node
     )
     return reg
 
@@ -222,25 +211,21 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> Register:
     false_label = ctx.fresh_label("ternary_false")
     end_label = ctx.fresh_label("ternary_end")
 
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[true_label, false_label],
-    )
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)))
+    ctx.emit_inst(Label_(label=true_label))
     true_reg = ctx.lower_expr(true_node)
     result_var = f"__ternary_{ctx.label_counter}"
-    ctx.emit(Opcode.DECL_VAR, operands=[result_var, true_reg])
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(DeclVar(name=result_var, value_reg=true_reg))
+    ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=false_label)
+    ctx.emit_inst(Label_(label=false_label))
     false_reg = ctx.lower_expr(false_node)
-    ctx.emit(Opcode.DECL_VAR, operands=[result_var, false_reg])
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(DeclVar(name=result_var, value_reg=false_reg))
+    ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
     result_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=result_reg, operands=[result_var])
+    ctx.emit_inst(LoadVar(result_reg=result_reg, name=result_var))
     return result_reg
 
 
@@ -248,7 +233,7 @@ def lower_comma_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower comma expression (a, b) — evaluate both, return last."""
     children = [c for c in node.children if c.is_named]
     reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=reg, operands=[ctx.constants.none_literal])
+    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
     for child in children:
         reg = ctx.lower_expr(child)
     return reg
@@ -266,21 +251,15 @@ def lower_compound_literal(ctx: TreeSitterEmitContext, node) -> Register:
     )
     type_name = ctx.node_text(type_node) if type_node else "compound"
     obj_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.NEW_OBJECT,
-        result_reg=obj_reg,
-        operands=[type_name],
-        node=node,
-    )
+    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=type_name), node=node)
     if init_node:
         elements = [c for c in init_node.children if c.is_named]
         for i, elem in enumerate(elements):
             idx_reg = ctx.fresh_reg()
-            ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
             val_reg = ctx.lower_expr(elem)
-            ctx.emit(
-                Opcode.STORE_INDEX,
-                operands=[obj_reg, idx_reg, val_reg],
+            ctx.emit_inst(
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg)
             )
     return obj_reg
 
@@ -289,19 +268,16 @@ def lower_initializer_list(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower initializer_list {a, b, c} as NEW_ARRAY + STORE_INDEX per element."""
     elements = [c for c in node.children if c.is_named]
     size_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elements))])
+    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elements))))
     arr_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.NEW_ARRAY,
-        result_reg=arr_reg,
-        operands=["array", size_reg],
-        node=node,
+    ctx.emit_inst(
+        NewArray(result_reg=arr_reg, type_hint="array", size_reg=size_reg), node=node
     )
     for i, elem in enumerate(elements):
         idx_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
         val_reg = ctx.lower_expr(elem)
-        ctx.emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+        ctx.emit_inst(StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg))
     return arr_reg
 
 

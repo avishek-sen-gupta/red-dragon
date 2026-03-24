@@ -7,6 +7,19 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode, CodeLabel
 from interpreter.frontends.lua.node_types import LuaNodeType
+from interpreter.instructions import (
+    Const,
+    LoadVar,
+    DeclVar,
+    StoreVar,
+    Binop,
+    Unop,
+    CallFunction,
+    LoadIndex,
+    Label_,
+    Branch,
+    BranchIf,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,23 +40,20 @@ def lower_lua_if(ctx: TreeSitterEmitContext, node) -> None:
     has_alternative = len(elseif_nodes) > 0 or else_node is not None
     false_label = ctx.fresh_label("if_false") if has_alternative else end_label
 
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[true_label, false_label],
-        node=node,
+    ctx.emit_inst(
+        BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)), node=node
     )
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     if consequence_node:
         ctx.lower_block(consequence_node)
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
 
     if has_alternative:
-        ctx.emit(Opcode.LABEL, label=false_label)
+        ctx.emit_inst(Label_(label=false_label))
         _lower_lua_elseif_chain(ctx, elseif_nodes, else_node, end_label)
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def _lower_lua_elseif_chain(
@@ -68,20 +78,18 @@ def _lower_lua_elseif_chain(
     has_more = len(remaining) > 0 or else_node is not None
     false_label = ctx.fresh_label("elseif_false") if has_more else end_label
 
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[true_label, false_label],
+    ctx.emit_inst(
+        BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)),
         node=current,
     )
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     if body_node:
         ctx.lower_block(body_node)
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
 
     if has_more:
-        ctx.emit(Opcode.LABEL, label=false_label)
+        ctx.emit_inst(Label_(label=false_label))
         _lower_lua_elseif_chain(ctx, remaining, else_node, end_label)
 
 
@@ -94,23 +102,20 @@ def lower_lua_while(ctx: TreeSitterEmitContext, node) -> None:
     body_label = ctx.fresh_label("while_body")
     end_label = ctx.fresh_label("while_end")
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     cond_reg = ctx.lower_expr(cond_node)
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[body_label, end_label],
-        node=node,
+    ctx.emit_inst(
+        BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)), node=node
     )
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     ctx.push_loop(loop_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(Branch(label=loop_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_lua_for(ctx: TreeSitterEmitContext, node) -> None:
@@ -147,54 +152,48 @@ def _lower_lua_for_numeric(
     start_reg = ctx.lower_expr(start_node) if start_node else ctx.fresh_reg()
     end_reg = ctx.lower_expr(end_node) if end_node else ctx.fresh_reg()
 
-    ctx.emit(Opcode.DECL_VAR, operands=[var_name, start_reg])
+    ctx.emit_inst(DeclVar(name=var_name, value_reg=start_reg))
 
     step_reg = ctx.fresh_reg()
     if step_node:
         step_reg = ctx.lower_expr(step_node)
     else:
-        ctx.emit(Opcode.CONST, result_reg=step_reg, operands=["1"])
+        ctx.emit_inst(Const(result_reg=step_reg, value="1"))
 
     loop_label = ctx.fresh_label("for_cond")
     body_label = ctx.fresh_label("for_body")
     end_label = ctx.fresh_label("for_end")
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     current_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=current_reg, operands=[var_name])
+    ctx.emit_inst(LoadVar(result_reg=current_reg, name=var_name))
     cond_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=cond_reg,
-        operands=["<=", current_reg, end_reg],
+    ctx.emit_inst(
+        Binop(result_reg=cond_reg, operator="<=", left=current_reg, right=end_reg)
     )
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[body_label, end_label],
+    ctx.emit_inst(
+        BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)),
         node=for_node,
     )
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     update_label = ctx.fresh_label("for_update")
     ctx.push_loop(update_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
 
-    ctx.emit(Opcode.LABEL, label=update_label)
+    ctx.emit_inst(Label_(label=update_label))
     next_reg = ctx.fresh_reg()
     cur_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=cur_reg, operands=[var_name])
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=next_reg,
-        operands=["+", cur_reg, step_reg],
+    ctx.emit_inst(LoadVar(result_reg=cur_reg, name=var_name))
+    ctx.emit_inst(
+        Binop(result_reg=next_reg, operator="+", left=cur_reg, right=step_reg)
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[var_name, next_reg])
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(StoreVar(name=var_name, value_reg=next_reg))
+    ctx.emit_inst(Branch(label=loop_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 _ITERATOR_WRAPPERS = frozenset({"ipairs", "pairs"})
@@ -243,38 +242,32 @@ def _lower_lua_for_generic(
     iter_reg = ctx.lower_expr(iterable_node) if iterable_node else ctx.fresh_reg()
 
     init_idx = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
-    ctx.emit(Opcode.DECL_VAR, operands=["__for_idx", init_idx])
+    ctx.emit_inst(Const(result_reg=init_idx, value="0"))
+    ctx.emit_inst(DeclVar(name="__for_idx", value_reg=init_idx))
     len_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
+    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
 
     loop_label = ctx.fresh_label("generic_for_cond")
     body_label = ctx.fresh_label("generic_for_body")
     end_label = ctx.fresh_label("generic_for_end")
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     idx_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=idx_reg, operands=["__for_idx"])
+    ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
     cond_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=cond_reg, operands=["<", idx_reg, len_reg])
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[body_label, end_label],
-    )
+    ctx.emit_inst(Binop(result_reg=cond_reg, operator="<", left=idx_reg, right=len_reg))
+    ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)))
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     # First var = index, second var = element
     if len(var_names) >= 1:
-        ctx.emit(Opcode.DECL_VAR, operands=[var_names[0], idx_reg])
+        ctx.emit_inst(DeclVar(name=var_names[0], value_reg=idx_reg))
     if len(var_names) >= 2:
         elem_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.LOAD_INDEX,
-            result_reg=elem_reg,
-            operands=[iter_reg, idx_reg],
+        ctx.emit_inst(
+            LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg)
         )
-        ctx.emit(Opcode.DECL_VAR, operands=[var_names[1], elem_reg])
+        ctx.emit_inst(DeclVar(name=var_names[1], value_reg=elem_reg))
 
     update_label = ctx.fresh_label("generic_for_update")
     ctx.push_loop(update_label, end_label)
@@ -282,15 +275,15 @@ def _lower_lua_for_generic(
         ctx.lower_block(body_node)
     ctx.pop_loop()
 
-    ctx.emit(Opcode.LABEL, label=update_label)
+    ctx.emit_inst(Label_(label=update_label))
     one_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
+    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     new_idx = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=new_idx, operands=["+", idx_reg, one_reg])
-    ctx.emit(Opcode.STORE_VAR, operands=["__for_idx", new_idx])
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(Binop(result_reg=new_idx, operator="+", left=idx_reg, right=one_reg))
+    ctx.emit_inst(StoreVar(name="__for_idx", value_reg=new_idx))
+    ctx.emit_inst(Branch(label=loop_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_lua_repeat(ctx: TreeSitterEmitContext, node) -> None:
@@ -301,7 +294,7 @@ def lower_lua_repeat(ctx: TreeSitterEmitContext, node) -> None:
     body_label = ctx.fresh_label("repeat_body")
     end_label = ctx.fresh_label("repeat_end")
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     ctx.push_loop(body_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
@@ -310,20 +303,15 @@ def lower_lua_repeat(ctx: TreeSitterEmitContext, node) -> None:
     cond_reg = ctx.lower_expr(cond_node)
     # repeat-until: loop continues while condition is FALSE
     negated_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.UNOP,
-        result_reg=negated_reg,
-        operands=["not", cond_reg],
-        node=node,
+    ctx.emit_inst(
+        Unop(result_reg=negated_reg, operator="not", operand=cond_reg), node=node
     )
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[negated_reg],
-        branch_targets=[body_label, end_label],
+    ctx.emit_inst(
+        BranchIf(cond_reg=negated_reg, branch_targets=(body_label, end_label)),
         node=node,
     )
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_lua_do(ctx: TreeSitterEmitContext, node) -> None:
@@ -342,11 +330,7 @@ def lower_lua_goto(ctx: TreeSitterEmitContext, node) -> None:
     named_children = [c for c in node.children if c.is_named]
     label_name = ctx.node_text(named_children[0]) if named_children else "unknown"
     logger.debug("Lowering goto -> %s at %s", label_name, ctx.source_loc(node))
-    ctx.emit(
-        Opcode.BRANCH,
-        label=CodeLabel(label_name),
-        node=node,
-    )
+    ctx.emit_inst(Branch(label=CodeLabel(label_name)), node=node)
 
 
 def lower_lua_label(ctx: TreeSitterEmitContext, node) -> None:
@@ -354,4 +338,4 @@ def lower_lua_label(ctx: TreeSitterEmitContext, node) -> None:
     named_children = [c for c in node.children if c.is_named]
     label_name = ctx.node_text(named_children[0]) if named_children else "unknown"
     logger.debug("Lowering label :: %s :: at %s", label_name, ctx.source_loc(node))
-    ctx.emit(Opcode.LABEL, label=CodeLabel(label_name))
+    ctx.emit_inst(Label_(label=CodeLabel(label_name)))

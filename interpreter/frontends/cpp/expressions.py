@@ -6,6 +6,19 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.instructions import (
+    Const,
+    LoadVar,
+    CallFunction,
+    CallMethod,
+    LoadIndex,
+    StoreIndex,
+    Throw_,
+    Symbolic,
+    Label_,
+    Branch,
+    Return_,
+)
 from interpreter.frontends.common.expressions import (
     extract_call_args_unwrap,
     lower_const_literal,
@@ -25,10 +38,8 @@ def lower_new_expr(ctx: TreeSitterEmitContext, node) -> Register:
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
     type_name = ctx.node_text(type_node) if type_node else "Object"
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=[type_name] + arg_regs,
+    ctx.emit_inst(
+        CallFunction(result_reg=reg, func_name=type_name, args=tuple(arg_regs)),
         node=node,
     )
     ctx.seed_register_type(reg, ScalarType(type_name))
@@ -41,11 +52,8 @@ def lower_delete_expr(ctx: TreeSitterEmitContext, node) -> Register:
     operand_node = named_children[0] if named_children else None
     ptr_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["delete", ptr_reg],
-        node=node,
+    ctx.emit_inst(
+        CallFunction(result_reg=reg, func_name="delete", args=(ptr_reg,)), node=node
     )
     return reg
 
@@ -61,8 +69,8 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> Register:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=func_label))
 
     if params_node:
         param_list = next(
@@ -76,16 +84,12 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> Register:
             ctx.lower_block(body_node)
         else:
             val_reg = ctx.lower_expr(body_node)
-            ctx.emit(Opcode.RETURN, operands=[val_reg])
+            ctx.emit_inst(Return_(value_reg=val_reg))
 
     none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
@@ -95,12 +99,7 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> Register:
 def lower_qualified_id(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower qualified_identifier (e.g., std::cout) as LOAD_VAR."""
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_VAR,
-        result_reg=reg,
-        operands=[ctx.node_text(node)],
-        node=node,
-    )
+    ctx.emit_inst(LoadVar(result_reg=reg, name=ctx.node_text(node)), node=node)
     return reg
 
 
@@ -153,18 +152,16 @@ def lower_cpp_call(ctx: TreeSitterEmitContext, node) -> Register:
         if parts is not None:
             class_name, method_name = parts
             obj_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.LOAD_VAR,
-                result_reg=obj_reg,
-                operands=[class_name],
-                node=func_node,
-            )
+            ctx.emit_inst(LoadVar(result_reg=obj_reg, name=class_name), node=func_node)
             arg_regs = extract_call_args(ctx, args_node)
             result_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CALL_METHOD,
-                result_reg=result_reg,
-                operands=[obj_reg, method_name] + arg_regs,
+            ctx.emit_inst(
+                CallMethod(
+                    result_reg=result_reg,
+                    obj_reg=obj_reg,
+                    method_name=method_name,
+                    args=tuple(arg_regs),
+                ),
                 node=node,
             )
             return result_reg
@@ -181,16 +178,10 @@ def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> Register:
         val_reg = ctx.lower_expr(children[0])
     else:
         val_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CONST,
-            result_reg=val_reg,
-            operands=[ctx.constants.default_return_value],
+        ctx.emit_inst(
+            Const(result_reg=val_reg, value=ctx.constants.default_return_value)
         )
-    ctx.emit(
-        Opcode.THROW,
-        operands=[val_reg],
-        node=node,
-    )
+    ctx.emit_inst(Throw_(value_reg=val_reg), node=node)
     return val_reg
 
 
@@ -244,11 +235,8 @@ def lower_cpp_subscript_expr(ctx: TreeSitterEmitContext, node) -> Register:
     else:
         idx_reg = ctx.fresh_reg()
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_INDEX,
-        result_reg=reg,
-        operands=[obj_reg, idx_reg],
-        node=node,
+    ctx.emit_inst(
+        LoadIndex(result_reg=reg, arr_reg=obj_reg, index_reg=idx_reg), node=node
     )
     return reg
 
@@ -292,9 +280,8 @@ def lower_cpp_store_target(
             )
         else:
             idx_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.STORE_INDEX,
-            operands=[obj_reg, idx_reg, val_reg],
+        ctx.emit_inst(
+            StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
             node=parent_node,
         )
     else:
