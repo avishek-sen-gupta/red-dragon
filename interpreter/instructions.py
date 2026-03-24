@@ -75,9 +75,9 @@ def _is_label_tuple(hint: object) -> bool:
 def _as_register(val: Any) -> Register | Any:
     """Wrap a value as Register if it looks like a register reference (%…).
 
-    COBOL emit_context.py still places literal ints/floats directly in call
-    operands (issue oczk); those must NOT be wrapped.  Only strings that begin
-    with '%' are register refs.  Remove once oczk is done.
+    Still needed for ``to_typed()`` conversions on flat IRInstructions
+    produced by ``EmitContext.inline_ir()`` and test helpers.  Only strings
+    that begin with '%' are register refs; literals are kept as-is.
     """
     if isinstance(val, Register):
         return val

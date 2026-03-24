@@ -27,6 +27,7 @@ from interpreter.cobol.lower_procedure import lower_procedure_division
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.frontend import Frontend
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
+from interpreter.instructions import Label_
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 
 logger = logging.getLogger(__name__)
@@ -129,7 +130,7 @@ class CobolFrontend(Frontend):
             condition_index=condition_index,
         )
 
-        self._ctx.emit(Opcode.LABEL, label=CodeLabel("entry"))
+        self._ctx.emit_inst(Label_(label=CodeLabel("entry")))
 
         region_reg = lower_data_division(self._ctx, layout)
         lower_procedure_division(self._ctx, asg, layout, region_reg)
