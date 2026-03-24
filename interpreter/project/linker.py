@@ -19,12 +19,20 @@ executes, all imported names are already in scope — exactly like single-file.
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from pathlib import Path
 
 from interpreter.cfg import build_cfg
-from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
-from interpreter.instructions import to_typed, TryPush, CallFunction, DeclVar
+from interpreter.ir import IRInstruction, CodeLabel
+from interpreter.instructions import (
+    to_typed,
+    to_flat,
+    CallFunction,
+    DeclVar,
+    Const,
+    Label_,
+)
 from interpreter.project.types import ExportTable, LinkedProgram, ModuleUnit
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
@@ -78,80 +86,41 @@ def max_register_number(ir: tuple[IRInstruction, ...] | list[IRInstruction]) -> 
 # ── IR transformation ───────────────────────────────────────────
 
 
-def _rebase_operand(operand, offset: int):
-    """Rebase a single operand if it's a register."""
-    if isinstance(operand, str):
-        return rebase_register(operand, offset)
-    return operand
-
-
 def _transform_instruction(
     inst: IRInstruction,
     prefix: str,
     reg_offset: int,
 ) -> IRInstruction:
     """Namespace labels, rebase registers, namespace CONST func/class refs."""
-    # ── Label ──
-    new_label: CodeLabel = NO_LABEL
-    if inst.label.is_present():
-        if inst.opcode == Opcode.BRANCH:
-            new_label = inst.label.namespace(prefix)
-        else:
-            new_label = inst.label.namespace(prefix)
+    typed = to_typed(inst)
 
-    # ── Branch targets ──
-    new_branch_targets = [t.namespace(prefix) for t in inst.branch_targets]
+    # map_labels handles all CodeLabel fields (label, branch_targets, catch_labels, etc.)
+    transformed = typed.map_labels(lambda l: l.namespace(prefix))
 
-    # ── Result register ──
-    new_result_reg = (
-        rebase_register(inst.result_reg, reg_offset)
-        if inst.result_reg.is_present()
-        else None
-    )
+    # map_registers handles all Register fields (result_reg, operand regs, etc.)
+    transformed = transformed.map_registers(lambda r: r.rebase(reg_offset))
 
-    # ── Operands ──
-    if inst.opcode == Opcode.TRY_PUSH:
-        # operands = [catch_labels: list[CodeLabel], finally: CodeLabel, end: CodeLabel]
-        t = to_typed(inst)
-        assert isinstance(t, TryPush)
-        new_operands = [
-            [cl.namespace(prefix) for cl in t.catch_labels],
-            t.finally_label.namespace(prefix),
-            t.end_label.namespace(prefix),
-        ]
-    else:
-        new_operands = []
-        for i, op in enumerate(inst.operands):
-            rebased = _rebase_operand(op, reg_offset)
-            # Namespace func/class label refs in CONST operands
-            if (
-                isinstance(rebased, str)
-                and inst.opcode == Opcode.CONST
-                and i == 0
-                and (
-                    rebased.startswith(constants.FUNC_LABEL_PREFIX)
-                    or rebased.startswith(constants.CLASS_LABEL_PREFIX)
-                )
-            ):
-                rebased = namespace_label(rebased, prefix)
-            new_operands.append(rebased)
+    # Special case: CONST with func/class label refs stored as string values
+    if (
+        isinstance(transformed, Const)
+        and transformed.value
+        and (
+            transformed.value.startswith(constants.FUNC_LABEL_PREFIX)
+            or transformed.value.startswith(constants.CLASS_LABEL_PREFIX)
+        )
+    ):
+        transformed = dataclasses.replace(
+            transformed, value=namespace_label(transformed.value, prefix)
+        )
 
-    return IRInstruction(
-        opcode=inst.opcode,
-        result_reg=new_result_reg,
-        operands=new_operands,
-        label=new_label,
-        branch_targets=new_branch_targets,
-        source_location=inst.source_location,
-    )
+    return to_flat(transformed)
 
 
 def _is_import_call(inst: IRInstruction) -> bool:
     """Is this a CALL_FUNCTION 'import' ... instruction?"""
-    if inst.opcode != Opcode.CALL_FUNCTION or len(inst.operands) < 1:
-        return False
     t = to_typed(inst)
-    assert isinstance(t, CallFunction)
+    if not isinstance(t, CallFunction):
+        return False
     return str(t.func_name) == "import"
 
 
@@ -179,7 +148,8 @@ def _transform_module(
 
     for inst in module.ir:
         # Skip the per-module "entry:" label — we'll add a single one
-        if inst.opcode == Opcode.LABEL and inst.label.is_entry():
+        typed = to_typed(inst)
+        if isinstance(typed, Label_) and typed.label.is_entry():
             continue
 
         # Drop import stubs for resolved names
@@ -191,15 +161,9 @@ def _transform_module(
             result.append(_transform_instruction(inst, prefix, reg_offset))
             continue
 
-        if (
-            skip_next_decl_for_reg
-            and inst.opcode == Opcode.DECL_VAR
-            and len(inst.operands) >= 2
-        ):
-            t = to_typed(inst)
-            assert isinstance(t, DeclVar)
-            var_name = str(t.name)
-            reg = rebase_register(str(t.value_reg), reg_offset)
+        if skip_next_decl_for_reg and isinstance(typed, DeclVar):
+            var_name = str(typed.name)
+            reg = rebase_register(str(typed.value_reg), reg_offset)
             if reg == skip_next_decl_for_reg and var_name in resolved_imports:
                 # Drop both the import CALL and this DECL_VAR
                 result.pop()  # remove the tentatively-added CALL_FUNCTION
@@ -290,9 +254,7 @@ def link_modules(
     ]
 
     # Build merged IR with a single entry label
-    all_ir: list[IRInstruction] = [
-        IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry"))
-    ]
+    all_ir: list[IRInstruction] = [to_flat(Label_(label=CodeLabel("entry")))]
     reg_offset = 0
 
     for file_path in processing_order:
