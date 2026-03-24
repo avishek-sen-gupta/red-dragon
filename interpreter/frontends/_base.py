@@ -21,6 +21,32 @@ from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends.base_node_types import BaseNodeType
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.instructions import (
+    Binop,
+    Branch,
+    BranchIf,
+    CallFunction,
+    CallMethod,
+    CallUnknown,
+    Const,
+    DeclVar,
+    Instruction,
+    Label_,
+    LoadField,
+    LoadIndex,
+    LoadVar,
+    NewArray,
+    NewObject,
+    Return_,
+    StoreField,
+    StoreIndex,
+    StoreVar,
+    Symbolic,
+    Throw_,
+    TryPop,
+    TryPush,
+    Unop,
+)
 from interpreter.ir import (
     NO_SOURCE_LOCATION,
     IRInstruction,
@@ -164,6 +190,18 @@ class BaseFrontend(Frontend):
         self._instructions.append(inst)
         return inst
 
+    def _emit_inst(self, inst: Instruction, *, node=None) -> Instruction:
+        """Emit a typed instruction directly (legacy-mode counterpart of ctx.emit_inst)."""
+        import dataclasses
+
+        loc = inst.source_location
+        if loc.is_unknown() and node is not None:
+            loc = self._source_loc(node)
+            inst = dataclasses.replace(inst, source_location=loc)
+
+        self._instructions.append(inst)
+        return inst
+
     def _node_text(self, node) -> str:
         return self._source[node.start_byte : node.end_byte].decode("utf-8")
 
@@ -270,7 +308,7 @@ class BaseFrontend(Frontend):
             self._source = source
             self._loop_stack = []
             self._break_target_stack = []
-            self._emit(Opcode.LABEL, label=CodeLabel(constants.CFG_ENTRY_LABEL))
+            self._emit_inst(Label_(label=CodeLabel(constants.CFG_ENTRY_LABEL)))
             self._lower_block(root)
             result = self._instructions
 
@@ -292,7 +330,7 @@ class BaseFrontend(Frontend):
             block_scoped=self.BLOCK_SCOPED,
             symbol_table=symbol_table,
         )
-        ctx.emit(Opcode.LABEL, label=CodeLabel(constants.CFG_ENTRY_LABEL))
+        ctx.emit_inst(Label_(label=CodeLabel(constants.CFG_ENTRY_LABEL)))
         self._emit_prelude(ctx)
         ctx.lower_block(root)
         self._type_env_builder = ctx.type_env_builder
@@ -349,10 +387,8 @@ class BaseFrontend(Frontend):
             return handler(node)
         # Fallback: symbolic
         reg = self._fresh_reg()
-        self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=[f"unsupported:{node.type}"],
+        self._emit_inst(
+            Symbolic(result_reg=reg, hint=f"unsupported:{node.type}"),
             node=node,
         )
         return reg
@@ -366,10 +402,8 @@ class BaseFrontend(Frontend):
         result = parts[0]
         for part in parts[1:]:
             new_reg = self._fresh_reg()
-            self._emit(
-                Opcode.BINOP,
-                result_reg=new_reg,
-                operands=["+", result, part],
+            self._emit_inst(
+                Binop(result_reg=new_reg, operator="+", left=result, right=part),
                 node=node,
             )
             result = new_reg
@@ -377,10 +411,8 @@ class BaseFrontend(Frontend):
 
     def _lower_const_literal(self, node) -> Register:
         reg = self._fresh_reg()
-        self._emit(
-            Opcode.CONST,
-            result_reg=reg,
-            operands=[self._node_text(node)],
+        self._emit_inst(
+            Const(result_reg=reg, value=self._node_text(node)),
             node=node,
         )
         return reg
@@ -388,25 +420,19 @@ class BaseFrontend(Frontend):
     def _lower_canonical_none(self, node) -> Register:
         """Emit canonical ``CONST "None"`` for any language's null/nil/undefined."""
         reg = self._fresh_reg()
-        self._emit(
-            Opcode.CONST, result_reg=reg, operands=[self.NONE_LITERAL], node=node
-        )
+        self._emit_inst(Const(result_reg=reg, value=self.NONE_LITERAL), node=node)
         return reg
 
     def _lower_canonical_true(self, node) -> Register:
         """Emit canonical ``CONST "True"``."""
         reg = self._fresh_reg()
-        self._emit(
-            Opcode.CONST, result_reg=reg, operands=[self.TRUE_LITERAL], node=node
-        )
+        self._emit_inst(Const(result_reg=reg, value=self.TRUE_LITERAL), node=node)
         return reg
 
     def _lower_canonical_false(self, node) -> Register:
         """Emit canonical ``CONST "False"``."""
         reg = self._fresh_reg()
-        self._emit(
-            Opcode.CONST, result_reg=reg, operands=[self.FALSE_LITERAL], node=node
-        )
+        self._emit_inst(Const(result_reg=reg, value=self.FALSE_LITERAL), node=node)
         return reg
 
     def _lower_canonical_bool(self, node) -> Register:
@@ -418,10 +444,8 @@ class BaseFrontend(Frontend):
 
     def _lower_identifier(self, node) -> Register:
         reg = self._fresh_reg()
-        self._emit(
-            Opcode.LOAD_VAR,
-            result_reg=reg,
-            operands=[self._node_text(node)],
+        self._emit_inst(
+            LoadVar(result_reg=reg, name=self._node_text(node)),
             node=node,
         )
         return reg
@@ -449,10 +473,8 @@ class BaseFrontend(Frontend):
         op = self._node_text(children[1])
         rhs_reg = self._lower_expr(children[2])
         reg = self._fresh_reg()
-        self._emit(
-            Opcode.BINOP,
-            result_reg=reg,
-            operands=[op, lhs_reg, rhs_reg],
+        self._emit_inst(
+            Binop(result_reg=reg, operator=op, left=lhs_reg, right=rhs_reg),
             node=node,
         )
         return reg
@@ -467,10 +489,8 @@ class BaseFrontend(Frontend):
         op = self._node_text(children[1])
         rhs_reg = self._lower_expr(children[2])
         reg = self._fresh_reg()
-        self._emit(
-            Opcode.BINOP,
-            result_reg=reg,
-            operands=[op, lhs_reg, rhs_reg],
+        self._emit_inst(
+            Binop(result_reg=reg, operator=op, left=lhs_reg, right=rhs_reg),
             node=node,
         )
         return reg
@@ -484,10 +504,8 @@ class BaseFrontend(Frontend):
         op = self._node_text(children[0])
         operand_reg = self._lower_expr(children[1])
         reg = self._fresh_reg()
-        self._emit(
-            Opcode.UNOP,
-            result_reg=reg,
-            operands=[op, operand_reg],
+        self._emit_inst(
+            Unop(result_reg=reg, operator=op, operand=operand_reg),
             node=node,
         )
         return reg
@@ -521,10 +539,13 @@ class BaseFrontend(Frontend):
                 obj_reg = self._lower_expr(obj_node)
                 method_name = self._node_text(attr_node)
                 reg = self._fresh_reg()
-                self._emit(
-                    Opcode.CALL_METHOD,
-                    result_reg=reg,
-                    operands=[obj_reg, method_name] + arg_regs,
+                self._emit_inst(
+                    CallMethod(
+                        result_reg=reg,
+                        obj_reg=obj_reg,
+                        method_name=method_name,
+                        args=tuple(arg_regs),
+                    ),
                     node=node,
                 )
                 return reg
@@ -533,10 +554,12 @@ class BaseFrontend(Frontend):
         if func_node and func_node.type == BaseNodeType.IDENTIFIER:
             func_name = self._node_text(func_node)
             reg = self._fresh_reg()
-            self._emit(
-                Opcode.CALL_FUNCTION,
-                result_reg=reg,
-                operands=[func_name] + arg_regs,
+            self._emit_inst(
+                CallFunction(
+                    result_reg=reg,
+                    func_name=func_name,
+                    args=tuple(arg_regs),
+                ),
                 node=node,
             )
             return reg
@@ -546,16 +569,16 @@ class BaseFrontend(Frontend):
             target_reg = self._lower_expr(func_node)
         else:
             target_reg = self._fresh_reg()
-            self._emit(
-                Opcode.SYMBOLIC,
-                result_reg=target_reg,
-                operands=["unknown_call_target"],
+            self._emit_inst(
+                Symbolic(result_reg=target_reg, hint="unknown_call_target"),
             )
         reg = self._fresh_reg()
-        self._emit(
-            Opcode.CALL_UNKNOWN,
-            result_reg=reg,
-            operands=[target_reg] + arg_regs,
+        self._emit_inst(
+            CallUnknown(
+                result_reg=reg,
+                target_reg=target_reg,
+                args=tuple(arg_regs),
+            ),
             node=node,
         )
         return reg
@@ -613,10 +636,8 @@ class BaseFrontend(Frontend):
         obj_reg = self._lower_expr(obj_node)
         field_name = self._node_text(attr_node)
         reg = self._fresh_reg()
-        self._emit(
-            Opcode.LOAD_FIELD,
-            result_reg=reg,
-            operands=[obj_reg, field_name],
+        self._emit_inst(
+            LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name),
             node=node,
         )
         return reg
@@ -629,10 +650,8 @@ class BaseFrontend(Frontend):
         obj_reg = self._lower_expr(obj_node)
         idx_reg = self._lower_expr(idx_node)
         reg = self._fresh_reg()
-        self._emit(
-            Opcode.LOAD_INDEX,
-            result_reg=reg,
-            operands=[obj_reg, idx_reg],
+        self._emit_inst(
+            LoadIndex(result_reg=reg, arr_reg=obj_reg, index_reg=idx_reg),
             node=node,
         )
         return reg
@@ -641,9 +660,8 @@ class BaseFrontend(Frontend):
 
     def _lower_store_target(self, target, val_reg: str, parent_node):
         if target.type == BaseNodeType.IDENTIFIER:
-            self._emit(
-                Opcode.STORE_VAR,
-                operands=[self._node_text(target), val_reg],
+            self._emit_inst(
+                StoreVar(name=self._node_text(target), value_reg=val_reg),
                 node=parent_node,
             )
         elif target.type in (
@@ -661,9 +679,12 @@ class BaseFrontend(Frontend):
                 attr_node = target.children[-1] if len(target.children) > 1 else None
             if obj_node and attr_node:
                 obj_reg = self._lower_expr(obj_node)
-                self._emit(
-                    Opcode.STORE_FIELD,
-                    operands=[obj_reg, self._node_text(attr_node), val_reg],
+                self._emit_inst(
+                    StoreField(
+                        obj_reg=obj_reg,
+                        field_name=self._node_text(attr_node),
+                        value_reg=val_reg,
+                    ),
                     node=parent_node,
                 )
         elif target.type == BaseNodeType.SUBSCRIPT:
@@ -672,16 +693,14 @@ class BaseFrontend(Frontend):
             if obj_node and idx_node:
                 obj_reg = self._lower_expr(obj_node)
                 idx_reg = self._lower_expr(idx_node)
-                self._emit(
-                    Opcode.STORE_INDEX,
-                    operands=[obj_reg, idx_reg, val_reg],
+                self._emit_inst(
+                    StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                     node=parent_node,
                 )
         else:
             # Fallback: just store to the text of the target
-            self._emit(
-                Opcode.STORE_VAR,
-                operands=[self._node_text(target), val_reg],
+            self._emit_inst(
+                StoreVar(name=self._node_text(target), value_reg=val_reg),
                 node=parent_node,
             )
 
@@ -701,10 +720,8 @@ class BaseFrontend(Frontend):
         lhs_reg = self._lower_expr(left)
         rhs_reg = self._lower_expr(right)
         result = self._fresh_reg()
-        self._emit(
-            Opcode.BINOP,
-            result_reg=result,
-            operands=[op_text, lhs_reg, rhs_reg],
+        self._emit_inst(
+            Binop(result_reg=result, operator=op_text, left=lhs_reg, right=rhs_reg),
             node=node,
         )
         self._lower_store_target(left, result, node)
@@ -716,14 +733,11 @@ class BaseFrontend(Frontend):
             val_reg = self._lower_expr(children[0])
         else:
             val_reg = self._fresh_reg()
-            self._emit(
-                Opcode.CONST,
-                result_reg=val_reg,
-                operands=[self.DEFAULT_RETURN_VALUE],
+            self._emit_inst(
+                Const(result_reg=val_reg, value=self.DEFAULT_RETURN_VALUE),
             )
-        self._emit(
-            Opcode.RETURN,
-            operands=[val_reg],
+        self._emit_inst(
+            Return_(value_reg=val_reg),
             node=node,
         )
 
@@ -738,30 +752,32 @@ class BaseFrontend(Frontend):
         end_label = self._fresh_label("if_end")
 
         if alt_node:
-            self._emit(
-                Opcode.BRANCH_IF,
-                operands=[cond_reg],
-                branch_targets=[true_label, false_label],
+            self._emit_inst(
+                BranchIf(
+                    cond_reg=cond_reg,
+                    branch_targets=(true_label, false_label),
+                ),
                 node=node,
             )
         else:
-            self._emit(
-                Opcode.BRANCH_IF,
-                operands=[cond_reg],
-                branch_targets=[true_label, end_label],
+            self._emit_inst(
+                BranchIf(
+                    cond_reg=cond_reg,
+                    branch_targets=(true_label, end_label),
+                ),
                 node=node,
             )
 
-        self._emit(Opcode.LABEL, label=true_label)
+        self._emit_inst(Label_(label=true_label))
         self._lower_block(body_node)
-        self._emit(Opcode.BRANCH, label=end_label)
+        self._emit_inst(Branch(label=end_label))
 
         if alt_node:
-            self._emit(Opcode.LABEL, label=false_label)
+            self._emit_inst(Label_(label=false_label))
             self._lower_alternative(alt_node, end_label)
-            self._emit(Opcode.BRANCH, label=end_label)
+            self._emit_inst(Branch(label=end_label))
 
-        self._emit(Opcode.LABEL, label=end_label)
+        self._emit_inst(Label_(label=end_label))
 
     def _lower_alternative(self, alt_node, end_label: str):
         """Lower an else/elif/else-if alternative block."""
@@ -793,53 +809,48 @@ class BaseFrontend(Frontend):
         true_label = self._fresh_label("elif_true")
         false_label = self._fresh_label("elif_false") if alt_node else end_label
 
-        self._emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[true_label, false_label],
+        self._emit_inst(
+            BranchIf(
+                cond_reg=cond_reg,
+                branch_targets=(true_label, false_label),
+            ),
             node=node,
         )
 
-        self._emit(Opcode.LABEL, label=true_label)
+        self._emit_inst(Label_(label=true_label))
         self._lower_block(body_node)
-        self._emit(Opcode.BRANCH, label=end_label)
+        self._emit_inst(Branch(label=end_label))
 
         if alt_node:
-            self._emit(Opcode.LABEL, label=false_label)
+            self._emit_inst(Label_(label=false_label))
             self._lower_alternative(alt_node, end_label)
-            self._emit(Opcode.BRANCH, label=end_label)
+            self._emit_inst(Branch(label=end_label))
 
     def _lower_break(self, node):
         """Lower break statement as BRANCH to innermost break target."""
         if self._break_target_stack:
-            self._emit(
-                Opcode.BRANCH,
-                label=self._break_target_stack[-1],
+            self._emit_inst(
+                Branch(label=self._break_target_stack[-1]),
                 node=node,
             )
         else:
             reg = self._fresh_reg()
-            self._emit(
-                Opcode.SYMBOLIC,
-                result_reg=reg,
-                operands=["break_outside_loop_or_switch"],
+            self._emit_inst(
+                Symbolic(result_reg=reg, hint="break_outside_loop_or_switch"),
                 node=node,
             )
 
     def _lower_continue(self, node):
         """Lower continue statement as BRANCH to innermost loop continue label."""
         if self._loop_stack:
-            self._emit(
-                Opcode.BRANCH,
-                label=self._loop_stack[-1]["continue_label"],
+            self._emit_inst(
+                Branch(label=self._loop_stack[-1]["continue_label"]),
                 node=node,
             )
         else:
             reg = self._fresh_reg()
-            self._emit(
-                Opcode.SYMBOLIC,
-                result_reg=reg,
-                operands=["continue_outside_loop"],
+            self._emit_inst(
+                Symbolic(result_reg=reg, hint="continue_outside_loop"),
                 node=node,
             )
 
@@ -863,22 +874,23 @@ class BaseFrontend(Frontend):
         body_label = self._fresh_label("while_body")
         end_label = self._fresh_label("while_end")
 
-        self._emit(Opcode.LABEL, label=loop_label)
+        self._emit_inst(Label_(label=loop_label))
         cond_reg = self._lower_expr(cond_node)
-        self._emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[body_label, end_label],
+        self._emit_inst(
+            BranchIf(
+                cond_reg=cond_reg,
+                branch_targets=(body_label, end_label),
+            ),
             node=node,
         )
 
-        self._emit(Opcode.LABEL, label=body_label)
+        self._emit_inst(Label_(label=body_label))
         self._push_loop(loop_label, end_label)
         self._lower_block(body_node)
         self._pop_loop()
-        self._emit(Opcode.BRANCH, label=loop_label)
+        self._emit_inst(Branch(label=loop_label))
 
-        self._emit(Opcode.LABEL, label=end_label)
+        self._emit_inst(Label_(label=end_label))
 
     def _lower_c_style_for(self, node):
         """Lower a C-style for(init; cond; update) loop."""
@@ -894,30 +906,31 @@ class BaseFrontend(Frontend):
         body_label = self._fresh_label("for_body")
         end_label = self._fresh_label("for_end")
 
-        self._emit(Opcode.LABEL, label=loop_label)
+        self._emit_inst(Label_(label=loop_label))
         if cond_node:
             cond_reg = self._lower_expr(cond_node)
-            self._emit(
-                Opcode.BRANCH_IF,
-                operands=[cond_reg],
-                branch_targets=[body_label, end_label],
+            self._emit_inst(
+                BranchIf(
+                    cond_reg=cond_reg,
+                    branch_targets=(body_label, end_label),
+                ),
                 node=node,
             )
         else:
-            self._emit(Opcode.BRANCH, label=body_label)
+            self._emit_inst(Branch(label=body_label))
 
-        self._emit(Opcode.LABEL, label=body_label)
+        self._emit_inst(Label_(label=body_label))
         update_label = self._fresh_label("for_update") if update_node else loop_label
         self._push_loop(update_label, end_label)
         if body_node:
             self._lower_block(body_node)
         self._pop_loop()
         if update_node:
-            self._emit(Opcode.LABEL, label=update_label)
+            self._emit_inst(Label_(label=update_label))
             self._lower_expr(update_node)
-        self._emit(Opcode.BRANCH, label=loop_label)
+        self._emit_inst(Branch(label=loop_label))
 
-        self._emit(Opcode.LABEL, label=end_label)
+        self._emit_inst(Label_(label=end_label))
 
     def _lower_function_def(self, node):
         name_node = node.child_by_field_name(self.FUNC_NAME_FIELD)
@@ -928,8 +941,8 @@ class BaseFrontend(Frontend):
         func_label = self._fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
         end_label = self._fresh_label(f"end_{func_name}")
 
-        self._emit(Opcode.BRANCH, label=end_label, node=node)
-        self._emit(Opcode.LABEL, label=func_label)
+        self._emit_inst(Branch(label=end_label), node=node)
+        self._emit_inst(Label_(label=func_label))
 
         if params_node:
             self._lower_params(params_node)
@@ -939,19 +952,17 @@ class BaseFrontend(Frontend):
 
         # Implicit return at end of function
         none_reg = self._fresh_reg()
-        self._emit(
-            Opcode.CONST,
-            result_reg=none_reg,
-            operands=[self.DEFAULT_RETURN_VALUE],
+        self._emit_inst(
+            Const(result_reg=none_reg, value=self.DEFAULT_RETURN_VALUE),
             node=node,
         )
-        self._emit(Opcode.RETURN, operands=[none_reg], node=node)
+        self._emit_inst(Return_(value_reg=none_reg), node=node)
 
-        self._emit(Opcode.LABEL, label=end_label)
+        self._emit_inst(Label_(label=end_label))
 
         func_reg = self._fresh_reg()
         self._emit_func_ref(func_name, func_label, result_reg=func_reg, node=node)
-        self._emit(Opcode.DECL_VAR, operands=[func_name, func_reg], node=node)
+        self._emit_inst(DeclVar(name=func_name, value_reg=func_reg), node=node)
 
     def _lower_params(self, params_node):
         """Lower function parameters. Override for language-specific param shapes."""
@@ -971,15 +982,13 @@ class BaseFrontend(Frontend):
         pname = self._extract_param_name(child)
         if pname is None:
             return
-        self._emit(
-            Opcode.SYMBOLIC,
-            result_reg=self._fresh_reg(),
-            operands=[f"{constants.PARAM_PREFIX}{pname}"],
+        param_reg = self._fresh_reg()
+        self._emit_inst(
+            Symbolic(result_reg=param_reg, hint=f"{constants.PARAM_PREFIX}{pname}"),
             node=child,
         )
-        self._emit(
-            Opcode.DECL_VAR,
-            operands=[pname, f"%{self._reg_counter - 1}"],
+        self._emit_inst(
+            DeclVar(name=pname, value_reg=param_reg),
             node=child,
         )
 
@@ -1009,15 +1018,15 @@ class BaseFrontend(Frontend):
         class_label = self._fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
         end_label = self._fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
 
-        self._emit(Opcode.BRANCH, label=end_label, node=node)
-        self._emit(Opcode.LABEL, label=class_label)
+        self._emit_inst(Branch(label=end_label), node=node)
+        self._emit_inst(Label_(label=class_label))
         if body_node:
             self._lower_block(body_node)
-        self._emit(Opcode.LABEL, label=end_label)
+        self._emit_inst(Label_(label=end_label))
 
         cls_reg = self._fresh_reg()
         self._emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
-        self._emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
+        self._emit_inst(DeclVar(name=class_name, value_reg=cls_reg))
 
     def _lower_raise_or_throw(self, node, keyword: str = "raise"):
         children = [c for c in node.children if c.type != keyword]
@@ -1025,14 +1034,11 @@ class BaseFrontend(Frontend):
             val_reg = self._lower_expr(children[0])
         else:
             val_reg = self._fresh_reg()
-            self._emit(
-                Opcode.CONST,
-                result_reg=val_reg,
-                operands=[self.DEFAULT_RETURN_VALUE],
+            self._emit_inst(
+                Const(result_reg=val_reg, value=self.DEFAULT_RETURN_VALUE),
             )
-        self._emit(
-            Opcode.THROW,
-            operands=[val_reg],
+        self._emit_inst(
+            Throw_(value_reg=val_reg),
             node=node,
         )
 
@@ -1049,26 +1055,24 @@ class BaseFrontend(Frontend):
         ]
         arr_reg = self._fresh_reg()
         size_reg = self._fresh_reg()
-        self._emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
-        self._emit(
-            Opcode.NEW_ARRAY,
-            result_reg=arr_reg,
-            operands=["list", size_reg],
+        self._emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
+        self._emit_inst(
+            NewArray(result_reg=arr_reg, type_hint="list", size_reg=size_reg),
             node=node,
         )
         for i, elem in enumerate(elems):
             val_reg = self._lower_expr(elem)
             idx_reg = self._fresh_reg()
-            self._emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
-            self._emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+            self._emit_inst(Const(result_reg=idx_reg, value=str(i)))
+            self._emit_inst(
+                StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg)
+            )
         return arr_reg
 
     def _lower_dict_literal(self, node) -> Register:
         obj_reg = self._fresh_reg()
-        self._emit(
-            Opcode.NEW_OBJECT,
-            result_reg=obj_reg,
-            operands=["dict"],
+        self._emit_inst(
+            NewObject(result_reg=obj_reg, type_hint="dict"),
             node=node,
         )
         for child in node.children:
@@ -1077,7 +1081,9 @@ class BaseFrontend(Frontend):
                 val_node = child.child_by_field_name("value")
                 key_reg = self._lower_expr(key_node)
                 val_reg = self._lower_expr(val_node)
-                self._emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
+                self._emit_inst(
+                    StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg)
+                )
         return obj_reg
 
     def _lower_update_expr(self, node) -> Register:
@@ -1090,12 +1096,10 @@ class BaseFrontend(Frontend):
         op = "+" if "++" in text else "-"
         operand_reg = self._lower_expr(operand)
         one_reg = self._fresh_reg()
-        self._emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
+        self._emit_inst(Const(result_reg=one_reg, value="1"))
         result_reg = self._fresh_reg()
-        self._emit(
-            Opcode.BINOP,
-            result_reg=result_reg,
-            operands=[op, operand_reg, one_reg],
+        self._emit_inst(
+            Binop(result_reg=result_reg, operator=op, left=operand_reg, right=one_reg),
             node=node,
         )
         self._lower_store_target(operand, result_reg, node)
@@ -1124,67 +1128,67 @@ class BaseFrontend(Frontend):
         exit_target = finally_label if finally_label.is_present() else end_label
 
         # ── push exception handler ──
-        self._emit(
-            Opcode.TRY_PUSH,
-            operands=[
-                catch_labels,
-                finally_label,
-                end_label,
-            ],
+        self._emit_inst(
+            TryPush(
+                catch_labels=tuple(catch_labels),
+                finally_label=finally_label,
+                end_label=end_label,
+            ),
         )
 
         # ── try body ──
-        self._emit(Opcode.LABEL, label=try_body_label)
+        self._emit_inst(Label_(label=try_body_label))
         if body_node:
             self._lower_block(body_node)
         # ── pop exception handler (normal exit) ──
-        self._emit(Opcode.TRY_POP)
+        self._emit_inst(TryPop())
         # After try body: jump to else (if present), then finally/end
         if else_label:
-            self._emit(Opcode.BRANCH, label=else_label)
+            self._emit_inst(Branch(label=else_label))
         else:
-            self._emit(Opcode.BRANCH, label=exit_target)
+            self._emit_inst(Branch(label=exit_target))
 
         # ── catch clauses ──
         for i, clause in enumerate(catch_clauses):
-            self._emit(Opcode.LABEL, label=catch_labels[i])
+            self._emit_inst(Label_(label=catch_labels[i]))
             exc_type = (
                 clause.get("type", DEFAULT_EXCEPTION_TYPE) or DEFAULT_EXCEPTION_TYPE
             )
             exc_reg = self._fresh_reg()
-            self._emit(
-                Opcode.SYMBOLIC,
-                result_reg=exc_reg,
-                operands=[f"{constants.CAUGHT_EXCEPTION_PREFIX}:{exc_type}"],
+            self._emit_inst(
+                Symbolic(
+                    result_reg=exc_reg,
+                    hint=f"{constants.CAUGHT_EXCEPTION_PREFIX}:{exc_type}",
+                ),
                 node=node,
             )
             exc_var = clause.get("variable")
             if exc_var:
-                self._emit(
-                    Opcode.DECL_VAR,
-                    operands=[exc_var, exc_reg],
+                self._emit_inst(
+                    DeclVar(name=exc_var, value_reg=exc_reg),
                     node=node,
                 )
             catch_body = clause.get("body")
             if catch_body:
                 self._lower_block(catch_body)
-            self._emit(Opcode.BRANCH, label=exit_target)
+            self._emit_inst(Branch(label=exit_target))
 
         # ── else clause (Python/Ruby) ──
         if else_node:
-            self._emit(Opcode.LABEL, label=else_label)
+            self._emit_inst(Label_(label=else_label))
             self._lower_block(else_node)
-            self._emit(
-                Opcode.BRANCH,
-                label=finally_label if finally_label.is_present() else end_label,
+            self._emit_inst(
+                Branch(
+                    label=finally_label if finally_label.is_present() else end_label,
+                ),
             )
 
         # ── finally clause ──
         if finally_node:
-            self._emit(Opcode.LABEL, label=finally_label)
+            self._emit_inst(Label_(label=finally_label))
             self._lower_block(finally_node)
 
-        self._emit(Opcode.LABEL, label=end_label)
+        self._emit_inst(Label_(label=end_label))
 
     def _lower_expression_statement(self, node):
         """Lower an expression statement (unwrap and lower the inner expr).
@@ -1209,21 +1213,17 @@ class BaseFrontend(Frontend):
                 value_node = child.child_by_field_name("value")
                 if name_node and value_node:
                     val_reg = self._lower_expr(value_node)
-                    self._emit(
-                        Opcode.DECL_VAR,
-                        operands=[self._node_text(name_node), val_reg],
+                    self._emit_inst(
+                        DeclVar(name=self._node_text(name_node), value_reg=val_reg),
                         node=node,
                     )
                 elif name_node:
                     # Declaration without initializer
                     val_reg = self._fresh_reg()
-                    self._emit(
-                        Opcode.CONST,
-                        result_reg=val_reg,
-                        operands=[self.NONE_LITERAL],
+                    self._emit_inst(
+                        Const(result_reg=val_reg, value=self.NONE_LITERAL),
                     )
-                    self._emit(
-                        Opcode.DECL_VAR,
-                        operands=[self._node_text(name_node), val_reg],
+                    self._emit_inst(
+                        DeclVar(name=self._node_text(name_node), value_reg=val_reg),
                         node=node,
                     )
