@@ -24,30 +24,30 @@ is removed.
 - `InstructionBase` provides `map_registers(fn)` and `map_labels(fn)` for generic transforms
 - Each typed instruction has standalone `__str__` matching the current flat format
 
-## Current State (after Layers 1–4, as of 2026-03-24)
+## Current State (after Layers 1–5G, as of 2026-03-25)
 
-**Completed:**
-- 31 typed instruction classes in `interpreter/instructions.py`
-- All register-holding fields are `Register` (Layer 1, red-dragon-e2pj ✓)
-- `SpreadArguments.register` is `Register` (Layer 1)
-- `InstructionBase.map_registers(fn)` and `map_labels(fn)` implemented (Layer 2, red-dragon-p72n ✓)
-- `Register.rebase(offset)` method (Layer 2)
-- Type inference uses type-keyed dispatch, no `to_typed()` in handlers (Layer 3b, red-dragon-x37k ✓)
-- CFG/dataflow/interprocedural use `isinstance` checks (Layer 3c, red-dragon-3h0y ✓)
-- Linker uses `map_registers`/`map_labels` (Layer 3d, red-dragon-30vm ✓)
-- COBOL `ir_encoders.py` constructs typed instructions (Layer 3e, red-dragon-2la9 ✓)
-- LLM frontend uses `dataclasses.replace()` instead of operand mutation (Layer 3e)
-- All expression handlers return `-> Register` (Layer 4a, red-dragon-8e1x ✓)
-- All 15 tree-sitter frontends + `_base.py` + `context.py` + COBOL `emit_context.py` use `emit_inst()` (Layer 4, 17 issues ✓)
+**Migration complete.** The `IRInstruction` Pydantic class has been replaced with a factory
+function of the same name that returns typed `InstructionBase` subclasses. The compatibility
+bridge (`Register.__eq__(str)`, `to_flat()`, `emit()`) has been removed.
 
-**Remaining bridge usage:**
-- `to_typed()` still called at normalization points: `type_inference.py` dispatch, `cfg.py` `_normalize_structural()`, linker `_transform_instruction()`. These convert mixed-type lists (IRInstruction + typed) at entry points.
-- `to_flat()` still called by `InstructionBase.__str__()` and linker's `_transform_instruction()`.
-- `operands` properties still used by 4 handler call sites (`arithmetic.py`, `variables.py`) — blocked by COBOL literal operand issue (red-dragon-pyww).
-- `emit()` method still defined in `_base.py`, `context.py`, `cobol/emit_context.py` — used by 59 COBOL frontend calls (red-dragon-oczk).
-- 3 `opcode==` comparisons in `registry.py` (red-dragon-b6m4).
-- `_as_register()` workaround in `to_typed` converters (red-dragon-pyww).
-- `_resolve_reg` type annotation and `dataflow.py` `str()` coercion (red-dragon-j1o6).
+**What was done:**
+- 31 typed instruction classes in `interpreter/instructions.py`, all frozen dataclasses
+- All register-holding fields are `Register` (Layer 1)
+- `SpreadArguments.register` is `Register`
+- `InstructionBase.map_registers(fn)` and `map_labels(fn)` (Layer 2)
+- `Register.rebase(offset)` method
+- All consumers use `isinstance` checks and typed field access (Layer 3)
+- All frontends use `emit_inst()` with typed instructions (Layer 4)
+- `to_flat()` deleted; `__str__` is standalone on `InstructionBase` (Layer 5C-E)
+- `emit()` method deleted from all contexts (Layer 5C-E)
+- `Register.__eq__(str)` removed; Register only equals Register (Layer 5F)
+- `IRInstruction` class replaced with factory function; `to_typed()` renamed to `_to_typed()` (Layer 5G)
+
+**Remaining:**
+- `IRInstruction` factory function still exists (~50 construction sites in tests and COBOL `inline_ir`). Converting these to direct typed instruction construction is tracked as follow-up.
+- `_to_typed()` and `_as_register()` remain as internal helpers used only by the factory.
+- `operands` properties remain on typed instruction classes, used by `__str__` for rendering. These are read-only derived views, not the old `list[Any]` field.
+- `Opcode` enum remains as a read-only marker on typed instructions (not used for dispatch).
 
 ## Layers
 
@@ -253,8 +253,11 @@ reverted independently.
 | wd6g | 4-ruby | Ruby frontend emit migration | ✓ CLOSED |
 | um47 | 4-rust | Rust frontend emit migration | ✓ CLOSED |
 | di1g | 4-cobol | COBOL emit_context migration | ✓ CLOSED |
-| pyww | prereq | COBOL ir_encoders literal operands + _as_register | OPEN (P2) |
-| oczk | prereq | 59 COBOL frontend emit() calls | OPEN (P2) |
-| b6m4 | prereq | 3 registry.py opcode== comparisons | OPEN (P2) |
-| j1o6 | prereq | vm.py/dataflow.py boundary cleanup | OPEN (P3) |
-| ee66 | 5 | Remove the compatibility bridge | OPEN (blocked by prereqs) |
+| pyww | prereq | COBOL ir_encoders literal operands + _as_register | ✓ CLOSED |
+| oczk | prereq | 59 COBOL frontend emit() calls | ✓ CLOSED |
+| b6m4 | prereq | 3 registry.py opcode== comparisons | ✓ CLOSED |
+| j1o6 | prereq | vm.py/dataflow.py boundary cleanup | ✓ CLOSED |
+| 2z99 | 5F | Remove Register.__eq__(str) | ✓ CLOSED |
+| wqvg | 5G | Delete IRInstruction class | ✓ CLOSED |
+| ee66 | 5 | Remove the compatibility bridge | ✓ CLOSED |
+| 0ibe | epic | Eliminate IRInstruction | ✓ CLOSED |

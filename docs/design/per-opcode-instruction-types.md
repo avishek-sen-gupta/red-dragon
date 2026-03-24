@@ -175,6 +175,6 @@ is only on BranchIf.
 
 2. ~~**Pydantic or plain dataclass?** IRInstruction is currently a Pydantic BaseModel for serialization.~~ **Resolved:** IRInstruction will be deleted entirely. Typed instructions are plain frozen dataclasses. Serialization moves to explicit methods if needed.
 
-3. **`__str__` format**: Each typed instruction needs a `__str__` that matches the current `IRInstruction.__str__` output for test compatibility and debugging. **Status:** Implemented via `to_flat()` delegation. Will become standalone after IRInstruction removal.
+3. **`__str__` format**: Each typed instruction needs a `__str__` that matches the current `IRInstruction.__str__` output for test compatibility and debugging. **Status:** Implemented as standalone methods on `InstructionBase`, using `self.opcode` and `self.operands` properties. `to_flat()` has been deleted.
 
 4. **Naming conflicts**: `Return`, `Label` are Python builtins/keywords. Use `Return_`, `Label_`. **Status:** Done.
