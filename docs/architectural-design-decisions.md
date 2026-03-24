@@ -2440,3 +2440,19 @@ be transparent, but the VM's dispatch model is scope-based.
 
 The merged IR is one continuous stream that looks exactly like single-file
 compilation. No chaining, no import tables, no special variable handling.
+
+## 2026-03-24: Per-opcode typed instruction classes
+
+**Decision:** Replace `IRInstruction.operands: list[Any]` with 30 per-opcode frozen dataclasses, each with named typed fields.
+
+**Rationale:** Positional `operands[0]`, `operands[1]` indexing across handlers and analysis code was fragile and undocumented. A `Binop` instruction should expose `operator`, `left`, `right` — not `operands[0]`, `operands[1]`, `operands[2]`.
+
+**Implementation:** Four-phase migration:
+1. ✅ Define 30 typed classes + `to_typed()`/`to_flat()` round-trip adapter
+2. ✅ Migrate all 28 handler functions to use typed fields via `to_typed()`
+3. ✅ Migrate 67 `operands[N]` accesses in 12 infrastructure/analysis files
+4. ✅ Add IRInstruction-compatible interface (operands, result_reg, label, etc.) to typed classes
+
+**Current state:** Typed instructions coexist with flat `IRInstruction`. All consumers use `to_typed()` for opcode-specific access. 2,481 emit() calls still create flat `IRInstruction`; filed as follow-up (red-dragon-akv0).
+
+**Key files:** `interpreter/instructions.py` (30 classes + converters), `docs/design/per-opcode-instruction-types.md` (design doc).
