@@ -11,7 +11,7 @@ must survive ``to_typed(inst).to_flat() == inst`` for every instruction.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Union
+from typing import Any, Union
 
 from interpreter.ir import (
     CodeLabel,
@@ -44,9 +44,17 @@ class Const(InstructionBase):
     result_reg: Register = NO_REGISTER
     value: str = ""
 
+    # ── IRInstruction-compat fields ──
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.CONST
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.value] if self.value else []
 
 
 @dataclass(frozen=True)
@@ -56,9 +64,17 @@ class LoadVar(InstructionBase):
     result_reg: Register = NO_REGISTER
     name: str = ""
 
+    # ── IRInstruction-compat fields ──
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.LOAD_VAR
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.name]
 
 
 @dataclass(frozen=True)
@@ -68,9 +84,18 @@ class DeclVar(InstructionBase):
     name: str = ""
     value_reg: str = ""
 
+    # ── IRInstruction-compat fields ──
+    result_reg: Register = NO_REGISTER
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.DECL_VAR
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.name, self.value_reg]
 
 
 @dataclass(frozen=True)
@@ -80,9 +105,18 @@ class StoreVar(InstructionBase):
     name: str = ""
     value_reg: str = ""
 
+    # ── IRInstruction-compat fields ──
+    result_reg: Register = NO_REGISTER
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.STORE_VAR
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.name, self.value_reg]
 
 
 @dataclass(frozen=True)
@@ -92,9 +126,17 @@ class Symbolic(InstructionBase):
     result_reg: Register = NO_REGISTER
     hint: str = ""
 
+    # ── IRInstruction-compat fields ──
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.SYMBOLIC
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.hint] if self.hint else []
 
 
 # ── Arithmetic ───────────────────────────────────────────────────
@@ -109,9 +151,17 @@ class Binop(InstructionBase):
     left: str = ""
     right: str = ""
 
+    # ── IRInstruction-compat fields ──
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.BINOP
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.operator, self.left, self.right]
 
 
 @dataclass(frozen=True)
@@ -122,9 +172,17 @@ class Unop(InstructionBase):
     operator: str = ""
     operand: str = ""
 
+    # ── IRInstruction-compat fields ──
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.UNOP
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.operator, self.operand]
 
 
 # ── Calls ────────────────────────────────────────────────────────
@@ -138,9 +196,17 @@ class CallFunction(InstructionBase):
     func_name: str = ""
     args: tuple[str | SpreadArguments, ...] = ()
 
+    # ── IRInstruction-compat fields ──
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.CALL_FUNCTION
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.func_name, *self.args]
 
 
 @dataclass(frozen=True)
@@ -152,9 +218,17 @@ class CallMethod(InstructionBase):
     method_name: str = ""
     args: tuple[str | SpreadArguments, ...] = ()
 
+    # ── IRInstruction-compat fields ──
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.CALL_METHOD
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.obj_reg, self.method_name, *self.args]
 
 
 @dataclass(frozen=True)
@@ -165,9 +239,17 @@ class CallUnknown(InstructionBase):
     target_reg: str = ""
     args: tuple[str | SpreadArguments, ...] = ()
 
+    # ── IRInstruction-compat fields ──
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.CALL_UNKNOWN
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.target_reg, *self.args]
 
 
 # ── Memory — Fields ──────────────────────────────────────────────
@@ -181,9 +263,17 @@ class LoadField(InstructionBase):
     obj_reg: str = ""
     field_name: str = ""
 
+    # ── IRInstruction-compat fields ──
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.LOAD_FIELD
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.obj_reg, self.field_name]
 
 
 @dataclass(frozen=True)
@@ -194,9 +284,18 @@ class StoreField(InstructionBase):
     field_name: str = ""
     value_reg: str = ""
 
+    # ── IRInstruction-compat fields ──
+    result_reg: Register = NO_REGISTER
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.STORE_FIELD
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.obj_reg, self.field_name, self.value_reg]
 
 
 @dataclass(frozen=True)
@@ -207,9 +306,17 @@ class LoadFieldIndirect(InstructionBase):
     obj_reg: str = ""
     name_reg: str = ""
 
+    # ── IRInstruction-compat fields ──
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.LOAD_FIELD_INDIRECT
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.obj_reg, self.name_reg]
 
 
 # ── Memory — Indexing ────────────────────────────────────────────
@@ -223,9 +330,17 @@ class LoadIndex(InstructionBase):
     arr_reg: str = ""
     index_reg: str = ""
 
+    # ── IRInstruction-compat fields ──
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.LOAD_INDEX
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.arr_reg, self.index_reg]
 
 
 @dataclass(frozen=True)
@@ -236,9 +351,18 @@ class StoreIndex(InstructionBase):
     index_reg: str = ""
     value_reg: str = ""
 
+    # ── IRInstruction-compat fields ──
+    result_reg: Register = NO_REGISTER
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.STORE_INDEX
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.arr_reg, self.index_reg, self.value_reg]
 
 
 # ── Memory — Pointers ────────────────────────────────────────────
@@ -251,9 +375,17 @@ class LoadIndirect(InstructionBase):
     result_reg: Register = NO_REGISTER
     ptr_reg: str = ""
 
+    # ── IRInstruction-compat fields ──
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.LOAD_INDIRECT
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.ptr_reg]
 
 
 @dataclass(frozen=True)
@@ -263,9 +395,18 @@ class StoreIndirect(InstructionBase):
     ptr_reg: str = ""
     value_reg: str = ""
 
+    # ── IRInstruction-compat fields ──
+    result_reg: Register = NO_REGISTER
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.STORE_INDIRECT
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.ptr_reg, self.value_reg]
 
 
 @dataclass(frozen=True)
@@ -275,9 +416,17 @@ class AddressOf(InstructionBase):
     result_reg: Register = NO_REGISTER
     var_name: str = ""
 
+    # ── IRInstruction-compat fields ──
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.ADDRESS_OF
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.var_name]
 
 
 # ── Objects ──────────────────────────────────────────────────────
@@ -290,9 +439,17 @@ class NewObject(InstructionBase):
     result_reg: Register = NO_REGISTER
     type_hint: str = ""
 
+    # ── IRInstruction-compat fields ──
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.NEW_OBJECT
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.type_hint] if self.type_hint else []
 
 
 @dataclass(frozen=True)
@@ -303,9 +460,17 @@ class NewArray(InstructionBase):
     type_hint: str = ""
     size_reg: str = ""
 
+    # ── IRInstruction-compat fields ──
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.NEW_ARRAY
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.type_hint, self.size_reg]
 
 
 # ── Control Flow ─────────────────────────────────────────────────
@@ -317,9 +482,17 @@ class Label_(InstructionBase):
 
     label: CodeLabel = NO_LABEL
 
+    # ── IRInstruction-compat fields ──
+    result_reg: Register = NO_REGISTER
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.LABEL
+
+    @property
+    def operands(self) -> list[Any]:
+        return []
 
 
 @dataclass(frozen=True)
@@ -328,9 +501,17 @@ class Branch(InstructionBase):
 
     label: CodeLabel = NO_LABEL
 
+    # ── IRInstruction-compat fields ──
+    result_reg: Register = NO_REGISTER
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.BRANCH
+
+    @property
+    def operands(self) -> list[Any]:
+        return []
 
 
 @dataclass(frozen=True)
@@ -340,9 +521,17 @@ class BranchIf(InstructionBase):
     cond_reg: str = ""
     branch_targets: tuple[CodeLabel, ...] = ()
 
+    # ── IRInstruction-compat fields ──
+    result_reg: Register = NO_REGISTER
+    label: CodeLabel = NO_LABEL
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.BRANCH_IF
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.cond_reg]
 
 
 @dataclass(frozen=True)
@@ -351,9 +540,18 @@ class Return_(InstructionBase):
 
     value_reg: str | None = None
 
+    # ── IRInstruction-compat fields ──
+    result_reg: Register = NO_REGISTER
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.RETURN
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.value_reg] if self.value_reg is not None else []
 
 
 @dataclass(frozen=True)
@@ -362,9 +560,18 @@ class Throw_(InstructionBase):
 
     value_reg: str | None = None
 
+    # ── IRInstruction-compat fields ──
+    result_reg: Register = NO_REGISTER
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.THROW
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.value_reg] if self.value_reg is not None else []
 
 
 # ── Exceptions ───────────────────────────────────────────────────
@@ -378,18 +585,36 @@ class TryPush(InstructionBase):
     finally_label: CodeLabel = NO_LABEL
     end_label: CodeLabel = NO_LABEL
 
+    # ── IRInstruction-compat fields ──
+    result_reg: Register = NO_REGISTER
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.TRY_PUSH
+
+    @property
+    def operands(self) -> list[Any]:
+        return [list(self.catch_labels), self.finally_label, self.end_label]
 
 
 @dataclass(frozen=True)
 class TryPop(InstructionBase):
     """TRY_POP: pop the top exception handler."""
 
+    # ── IRInstruction-compat fields ──
+    result_reg: Register = NO_REGISTER
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.TRY_POP
+
+    @property
+    def operands(self) -> list[Any]:
+        return []
 
 
 # ── Regions (COBOL byte-addressable memory) ──────────────────────
@@ -402,9 +627,17 @@ class AllocRegion(InstructionBase):
     result_reg: Register = NO_REGISTER
     size_reg: str = ""
 
+    # ── IRInstruction-compat fields ──
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.ALLOC_REGION
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.size_reg]
 
 
 @dataclass(frozen=True)
@@ -416,9 +649,17 @@ class LoadRegion(InstructionBase):
     offset_reg: str = ""
     length: int = 0
 
+    # ── IRInstruction-compat fields ──
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.LOAD_REGION
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.region_reg, self.offset_reg, self.length]
 
 
 @dataclass(frozen=True)
@@ -430,9 +671,18 @@ class WriteRegion(InstructionBase):
     length: int = 0
     value_reg: str = ""
 
+    # ── IRInstruction-compat fields ──
+    result_reg: Register = NO_REGISTER
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.WRITE_REGION
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.region_reg, self.offset_reg, self.length, self.value_reg]
 
 
 # ── Continuations (COBOL PERFORM) ───────────────────────────────
@@ -445,9 +695,18 @@ class SetContinuation(InstructionBase):
     name: str = ""
     target_label: CodeLabel = NO_LABEL
 
+    # ── IRInstruction-compat fields ──
+    result_reg: Register = NO_REGISTER
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.SET_CONTINUATION
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.name, self.target_label]
 
 
 @dataclass(frozen=True)
@@ -456,9 +715,18 @@ class ResumeContinuation(InstructionBase):
 
     name: str = ""
 
+    # ── IRInstruction-compat fields ──
+    result_reg: Register = NO_REGISTER
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
     @property
     def opcode(self) -> Opcode:
         return Opcode.RESUME_CONTINUATION
+
+    @property
+    def operands(self) -> list[Any]:
+        return [self.name]
 
 
 # ── Union type ───────────────────────────────────────────────────
