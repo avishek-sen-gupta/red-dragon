@@ -15,7 +15,7 @@ from interpreter.register import Register, NoRegister, NO_REGISTER
 class SpreadArguments:
     """Marks a call operand as spread — the VM unpacks the heap array into individual args."""
 
-    register: str
+    register: Register
 
     def __str__(self) -> str:
         return f"*{self.register}"
