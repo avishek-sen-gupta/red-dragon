@@ -64,7 +64,7 @@ object M {
         consts = [
             i
             for i in func_body
-            if i.opcode == Opcode.CONST and i.result_reg == return_reg
+            if i.opcode == Opcode.CONST and str(i.result_reg) == return_reg
         ]
         assert len(consts) >= 1, "RETURN register should come from a CONST"
         assert "42" in consts[0].operands, "CONST should hold literal 42"
@@ -81,7 +81,7 @@ object M {
         # The first RETURN should NOT use the default "()" register
         return_reg = returns[0].operands[0]
         default_return_consts = [
-            i for i in default_consts if i.result_reg == return_reg
+            i for i in default_consts if str(i.result_reg) == return_reg
         ]
         assert len(default_return_consts) == 0, "RETURN should not use default () value"
 
@@ -117,7 +117,7 @@ class Dog {
         assert len(load_fields) >= 1
         assert len(returns) >= 1
         # The RETURN should reference the LOAD_FIELD result register
-        load_field_reg = load_fields[0].result_reg
+        load_field_reg = str(load_fields[0].result_reg)
         return_reg = returns[0].operands[0]
         assert (
             return_reg == load_field_reg

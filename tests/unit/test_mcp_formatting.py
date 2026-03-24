@@ -15,6 +15,7 @@ from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.types.typed_value import TypedValue
 from interpreter.constants import TypeName
 from interpreter.types.type_expr import ScalarType
+from interpreter.register import Register
 
 from mcp_server.formatting import (
     format_typed_value,
@@ -95,7 +96,7 @@ class TestFormatStateUpdate:
     def test_register_write(self):
         from interpreter.vm.vm_types import StateUpdate
 
-        update = StateUpdate(register_writes={"%0": 42})
+        update = StateUpdate(register_writes={Register("%0"): 42})
         result = format_state_update(update)
         assert result["registers"] == {"%0": 42}
 

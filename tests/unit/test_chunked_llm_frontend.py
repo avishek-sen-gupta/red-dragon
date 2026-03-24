@@ -19,6 +19,7 @@ from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.llm.llm_client import LLMClient
 from interpreter.llm.llm_frontend import LLMFrontend
 from interpreter.parser import Parser, ParserFactory, TreeSitterParserFactory
+from interpreter.register import Register
 
 
 class FakeSequentialLLMClient(LLMClient):
@@ -141,8 +142,8 @@ class TestIRRenumberer:
             ),
         ]
         result, next_offset = self.renumberer.renumber(instructions, 10, "_s")
-        assert result[0].result_reg == "%10"
-        assert result[1].result_reg == "%11"
+        assert result[0].result_reg == Register("%10")
+        assert result[1].result_reg == Register("%11")
         assert result[1].operands == ["+", "%10", "%10"]
         assert next_offset == 12
 

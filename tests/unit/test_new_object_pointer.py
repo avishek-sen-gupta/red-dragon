@@ -11,6 +11,7 @@ from interpreter.registry import FunctionRegistry
 from interpreter.vm.vm import VMState
 from interpreter.vm.vm_types import Pointer, StackFrame
 from interpreter.types.type_expr import pointer, scalar
+from interpreter.register import Register
 
 
 from dataclasses import replace as _replace
@@ -38,7 +39,7 @@ class TestNewObjectPointer:
             inst=inst, vm=vm, ctx=_ctx(cfg=cfg, registry=registry)
         )
         assert result.handled
-        tv = result.update.register_writes["%obj"]
+        tv = result.update.register_writes[Register("%obj")]
         assert isinstance(tv.value, Pointer)
         assert tv.value.base.startswith("obj_")
         assert tv.value.offset == 0
@@ -56,6 +57,6 @@ class TestNewObjectPointer:
         result = LocalExecutor.execute(
             inst=inst, vm=vm, ctx=_ctx(cfg=cfg, registry=registry)
         )
-        tv = result.update.register_writes["%obj"]
+        tv = result.update.register_writes[Register("%obj")]
         assert isinstance(tv.value, Pointer)
         assert tv.type == pointer(scalar("Object"))

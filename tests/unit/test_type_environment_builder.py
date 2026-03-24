@@ -4,6 +4,7 @@ from types import MappingProxyType
 
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
+from interpreter.register import Register
 from interpreter.types.type_expr import (
     TypeExpr,
     ScalarType,
@@ -25,11 +26,14 @@ class TestTypeEnvironmentBuilder:
 
     def test_build_preserves_register_types(self):
         builder = TypeEnvironmentBuilder(
-            register_types={"%0": scalar("Int"), "%1": scalar("Float")}
+            register_types={
+                Register("%0"): scalar("Int"),
+                Register("%1"): scalar("Float"),
+            }
         )
         env = builder.build()
-        assert env.register_types["%0"] == "Int"
-        assert env.register_types["%1"] == "Float"
+        assert env.register_types[Register("%0")] == "Int"
+        assert env.register_types[Register("%1")] == "Float"
 
     def test_build_preserves_var_types(self):
         builder = TypeEnvironmentBuilder(
@@ -69,7 +73,7 @@ class TestTypeEnvironmentBuilder:
 
     def test_build_returns_frozen_mappings(self):
         builder = TypeEnvironmentBuilder(
-            register_types={"%0": scalar("Int")},
+            register_types={Register("%0"): scalar("Int")},
             var_types={"x": scalar("Int")},
         )
         env = builder.build()
@@ -79,11 +83,11 @@ class TestTypeEnvironmentBuilder:
 
     def test_build_does_not_mutate_builder(self):
         builder = TypeEnvironmentBuilder(
-            register_types={"%0": scalar("Int")},
+            register_types={Register("%0"): scalar("Int")},
         )
         env = builder.build()
-        builder.register_types["%1"] = scalar("Float")
-        assert "%1" not in env.register_types
+        builder.register_types[Register("%1")] = scalar("Float")
+        assert Register("%1") not in env.register_types
 
     def test_func_signature_with_return_only(self):
         builder = TypeEnvironmentBuilder(func_return_types={"greet": scalar("String")})
@@ -106,10 +110,10 @@ class TestTypeEnvironmentStoresTypeExpr:
     """Verify that TypeEnvironment stores TypeExpr objects, not raw strings."""
 
     def test_register_types_are_type_expr(self):
-        builder = TypeEnvironmentBuilder(register_types={"%0": scalar("Int")})
+        builder = TypeEnvironmentBuilder(register_types={Register("%0"): scalar("Int")})
         env = builder.build()
-        assert isinstance(env.register_types["%0"], TypeExpr)
-        assert isinstance(env.register_types["%0"], ScalarType)
+        assert isinstance(env.register_types[Register("%0")], TypeExpr)
+        assert isinstance(env.register_types[Register("%0")], ScalarType)
 
     def test_var_types_are_type_expr(self):
         builder = TypeEnvironmentBuilder(var_types={"x": scalar("Float")})
@@ -142,11 +146,11 @@ class TestTypeEnvironmentStoresTypeExpr:
         assert sig.params[1][1] == "Pointer[Float]"
 
     def test_string_comparison_still_works(self):
-        """Backward compat: env.register_types['%0'] == 'Int' must hold."""
+        """Backward compat: env.register_types[Register("%0")] == 'Int' must hold."""
         builder = TypeEnvironmentBuilder(
-            register_types={"%0": scalar("Int")},
+            register_types={Register("%0"): scalar("Int")},
             var_types={"x": parse_type("Pointer[Int]")},
         )
         env = builder.build()
-        assert env.register_types["%0"] == "Int"
+        assert env.register_types[Register("%0")] == "Int"
         assert env.var_types["x"] == "Pointer[Int]"

@@ -146,7 +146,7 @@ class TestTraceRegToVar:
         for label, block in cfg.blocks.items():
             for inst in block.instructions:
                 if inst.opcode == Opcode.LOAD_VAR and inst.result_reg:
-                    traced = trace_reg_to_var(inst.result_reg, cfg, label)
+                    traced = trace_reg_to_var(str(inst.result_reg), cfg, label)
                     assert traced == str(inst.operands[0])
                     found = True
                     break

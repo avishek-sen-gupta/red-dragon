@@ -13,6 +13,7 @@ from interpreter.vm.unresolved_call import (
 )
 from interpreter.types.type_expr import scalar
 from interpreter.types.typed_value import TypedValue
+from interpreter.register import Register
 from interpreter.vm.vm_types import (
     ExecutionResult,
     StackFrame,
@@ -79,7 +80,7 @@ class TestSymbolicResolver:
         result = resolver.resolve_call("math.sqrt", [16], inst, vm)
 
         assert result.handled
-        tv = result.update.register_writes["%0"]
+        tv = result.update.register_writes[Register("%0")]
         assert isinstance(tv, TypedValue)
         sym = tv.value
         assert isinstance(sym, SymbolicValue)
@@ -92,7 +93,7 @@ class TestSymbolicResolver:
 
         result = resolver.resolve_call("foo", [1, 2], inst, vm)
 
-        tv = result.update.register_writes["%0"]
+        tv = result.update.register_writes[Register("%0")]
         assert "foo(1, 2)" in tv.value.constraints
 
     def test_resolve_method_produces_symbolic_value(self):
@@ -103,7 +104,7 @@ class TestSymbolicResolver:
         result = resolver.resolve_method("myobj", "do_thing", [42], inst, vm)
 
         assert result.handled
-        tv = result.update.register_writes["%0"]
+        tv = result.update.register_writes[Register("%0")]
         assert isinstance(tv, TypedValue)
         sym = tv.value
         assert isinstance(sym, SymbolicValue)
@@ -116,7 +117,7 @@ class TestSymbolicResolver:
 
         result = resolver.resolve_method("obj", "method", [], inst, vm)
 
-        tv = result.update.register_writes["%0"]
+        tv = result.update.register_writes[Register("%0")]
         assert "obj.method()" in tv.value.constraints
 
     def test_increments_symbolic_counter(self):
@@ -144,7 +145,7 @@ class TestLLMPlausibleResolver:
         result = resolver.resolve_call("math.sqrt", [16], inst, vm)
 
         assert result.handled
-        tv = result.update.register_writes["%0"]
+        tv = result.update.register_writes[Register("%0")]
         assert isinstance(tv, TypedValue)
         assert tv.value == 4.0
         assert "LLM plausible" in result.update.reasoning
@@ -192,7 +193,7 @@ class TestLLMPlausibleResolver:
 
         assert result.update.var_writes["status"].value == "done"
         assert isinstance(result.update.var_writes["status"], TypedValue)
-        assert result.update.register_writes["%0"].value == "ok"
+        assert result.update.register_writes[Register("%0")].value == "ok"
 
     def test_resolve_method_returns_concrete_value(self):
         response = json.dumps({"value": "HELLO", "reasoning": "upper()"})
@@ -203,7 +204,7 @@ class TestLLMPlausibleResolver:
         result = resolver.resolve_method("s", "upper", [], inst, vm)
 
         assert result.handled
-        assert result.update.register_writes["%0"].value == "HELLO"
+        assert result.update.register_writes[Register("%0")].value == "HELLO"
 
     def test_fallback_to_symbolic_on_llm_failure(self):
         resolver = LLMPlausibleResolver(llm_client=FailingLLMClient())
@@ -213,7 +214,7 @@ class TestLLMPlausibleResolver:
         result = resolver.resolve_call("broken_func", [1], inst, vm)
 
         assert result.handled
-        tv = result.update.register_writes["%0"]
+        tv = result.update.register_writes[Register("%0")]
         assert isinstance(tv, TypedValue)
         sym = tv.value
         assert isinstance(sym, SymbolicValue)
@@ -229,7 +230,7 @@ class TestLLMPlausibleResolver:
         result = resolver.resolve_call("bad_json_func", [], inst, vm)
 
         assert result.handled
-        tv = result.update.register_writes["%0"]
+        tv = result.update.register_writes[Register("%0")]
         assert isinstance(tv, TypedValue)
         assert isinstance(tv.value, SymbolicValue)
 
@@ -241,7 +242,7 @@ class TestLLMPlausibleResolver:
         result = resolver.resolve_method("obj", "broken", [], inst, vm)
 
         assert result.handled
-        tv = result.update.register_writes["%0"]
+        tv = result.update.register_writes[Register("%0")]
         assert isinstance(tv, TypedValue)
         assert isinstance(tv.value, SymbolicValue)
 
@@ -275,7 +276,7 @@ class TestLLMPlausibleResolver:
 
         result = resolver.resolve_call("fenced_func", [], inst, vm)
 
-        assert result.update.register_writes["%0"].value == 99
+        assert result.update.register_writes[Register("%0")].value == 99
 
     def test_is_instance_of_abc(self):
         response = json.dumps({"value": 1, "reasoning": "test"})

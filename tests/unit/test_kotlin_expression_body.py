@@ -60,7 +60,7 @@ class TestKotlinExpressionBodyLiteral:
         consts = [
             i
             for i in func_body
-            if i.opcode == Opcode.CONST and i.result_reg == return_reg
+            if i.opcode == Opcode.CONST and str(i.result_reg) == return_reg
         ]
         assert len(consts) >= 1, "RETURN register should come from a CONST"
         assert "42" in consts[0].operands, "CONST should hold literal 42"
@@ -76,7 +76,7 @@ class TestKotlinExpressionBodyLiteral:
             i
             for i in func_body
             if i.opcode == Opcode.CONST
-            and i.result_reg == return_reg
+            and str(i.result_reg) == return_reg
             and "None" in i.operands
         ]
         assert len(default_consts) == 0, "RETURN should not use default None value"
@@ -96,7 +96,7 @@ class TestKotlinBlockBodyUnchanged:
         consts = [
             i
             for i in func_body
-            if i.opcode == Opcode.CONST and i.result_reg == return_reg
+            if i.opcode == Opcode.CONST and str(i.result_reg) == return_reg
         ]
         assert len(consts) >= 1, "RETURN register should come from a CONST"
         assert "42" in consts[0].operands, "RETURN should carry literal 42"

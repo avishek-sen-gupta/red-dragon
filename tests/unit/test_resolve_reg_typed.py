@@ -1,5 +1,6 @@
 """Tests for _resolve_reg returning TypedValue."""
 
+from interpreter.register import Register
 from interpreter.vm.vm import _resolve_reg
 from interpreter.vm.vm_types import Pointer, StackFrame, VMState
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
@@ -9,7 +10,7 @@ from interpreter.types.type_expr import pointer, scalar, UNKNOWN
 def _make_vm(**registers: object) -> VMState:
     """Create a minimal VMState with the given registers."""
     frame = StackFrame(function_name="test")
-    frame.registers.update(registers)
+    frame.registers.update({Register(k): v for k, v in registers.items()})
     return VMState(call_stack=[frame])
 
 

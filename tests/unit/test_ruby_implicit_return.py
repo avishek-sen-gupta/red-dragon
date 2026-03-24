@@ -65,7 +65,7 @@ end
         consts = [
             i
             for i in func_body
-            if i.opcode == Opcode.CONST and i.result_reg == return_reg
+            if i.opcode == Opcode.CONST and str(i.result_reg) == return_reg
         ]
         assert len(consts) >= 1, "RETURN register should come from a CONST"
         assert "5" in consts[0].operands, "CONST should hold literal 5"
@@ -91,8 +91,8 @@ end
         returns = [i for i in func_body if i.opcode == Opcode.RETURN]
         assert len(load_fields) >= 1, "expected LOAD_FIELD for @age"
         assert len(returns) >= 1, "expected at least one RETURN"
-        assert (
-            returns[0].operands[0] == load_fields[0].result_reg
+        assert returns[0].operands[0] == str(
+            load_fields[0].result_reg
         ), "RETURN should use LOAD_FIELD result register"
 
 
@@ -116,8 +116,8 @@ end
         assert len(returns) >= 1, "expected at least one RETURN"
         load_fields = [i for i in func_body if i.opcode == Opcode.LOAD_FIELD]
         assert len(load_fields) >= 1, "expected LOAD_FIELD for @age"
-        assert (
-            returns[0].operands[0] == load_fields[0].result_reg
+        assert returns[0].operands[0] == str(
+            load_fields[0].result_reg
         ), "RETURN should reference the LOAD_FIELD result register for @age"
 
 
@@ -141,7 +141,7 @@ end
             i
             for i in func_body
             if i.opcode == Opcode.CONST
-            and i.result_reg == return_reg
+            and str(i.result_reg) == return_reg
             and "None" in i.operands
         ]
         assert len(default_consts) >= 1, "assignment-ending method should return nil"

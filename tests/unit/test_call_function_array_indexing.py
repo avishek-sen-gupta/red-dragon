@@ -16,6 +16,7 @@ from interpreter.vm.executor import (
 )
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
+from interpreter.register import Register
 
 
 def _make_vm() -> VMState:
@@ -75,7 +76,7 @@ class TestCallFunctionHeapArrayIndexing:
                 operands=["arr", "%idx"],
             ),
         )
-        assert unwrap(vm.current_frame.registers["%out"]) == 10
+        assert unwrap(vm.current_frame.registers[Register("%out")]) == 10
 
     def test_last_index_returns_element(self):
         """arr(2) on heap array [10, 20, 30] returns 30."""
@@ -90,7 +91,7 @@ class TestCallFunctionHeapArrayIndexing:
                 operands=["arr", "%idx"],
             ),
         )
-        assert unwrap(vm.current_frame.registers["%out"]) == 30
+        assert unwrap(vm.current_frame.registers[Register("%out")]) == 30
 
     def test_out_of_bounds_returns_symbolic(self):
         """arr(5) on heap array [10, 20, 30] should return symbolic, not crash."""
@@ -105,7 +106,7 @@ class TestCallFunctionHeapArrayIndexing:
                 operands=["arr", "%idx"],
             ),
         )
-        result = unwrap(vm.current_frame.registers["%out"])
+        result = unwrap(vm.current_frame.registers[Register("%out")])
         assert _is_symbolic(
             result
         ), f"Expected symbolic for out-of-bounds, got {result!r}"
@@ -123,7 +124,7 @@ class TestCallFunctionHeapArrayIndexing:
                 operands=["arr", "%idx"],
             ),
         )
-        result = unwrap(vm.current_frame.registers["%out"])
+        result = unwrap(vm.current_frame.registers[Register("%out")])
         assert _is_symbolic(
             result
         ), f"Expected symbolic for negative index, got {result!r}"
@@ -145,4 +146,4 @@ class TestCallFunctionNativeStringIndexing:
                 operands=["s", "%idx"],
             ),
         )
-        assert unwrap(vm.current_frame.registers["%out"]) == "e"
+        assert unwrap(vm.current_frame.registers[Register("%out")]) == "e"
