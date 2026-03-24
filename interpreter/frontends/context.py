@@ -175,39 +175,6 @@ class TreeSitterEmitContext:
         self.label_counter += 1
         return lbl
 
-    def emit(
-        self,
-        opcode: Opcode,
-        *,
-        result_reg: Register = NO_REGISTER,
-        operands: list[Any] = [],
-        label: CodeLabel = NO_LABEL,
-        branch_targets: list[CodeLabel] = [],
-        source_location: SourceLocation = NO_SOURCE_LOCATION,
-        node=None,
-    ) -> IRInstruction:
-        loc = (
-            source_location
-            if not source_location.is_unknown()
-            else (self.source_loc(node) if node else NO_SOURCE_LOCATION)
-        )
-        resolved_operands = [
-            str(op) if isinstance(op, Register) else op for op in (operands or [])
-        ]
-        inst = IRInstruction(
-            opcode=opcode,
-            result_reg=result_reg,
-            operands=resolved_operands,
-            label=label,
-            branch_targets=branch_targets,
-            source_location=loc,
-        )
-        self._track_label(opcode, label)
-        self.instructions.append(inst)
-        if opcode == Opcode.DECL_VAR and operands:
-            self._method_declared_names.add(operands[0])
-        return inst
-
     def emit_inst(self, inst: Instruction, *, node=None) -> Instruction:
         """Emit a typed instruction directly.
 

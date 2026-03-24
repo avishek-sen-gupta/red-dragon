@@ -347,7 +347,8 @@ def _resolve_reg(vm: VMState, operand: str | Register) -> TypedValue:
         return typed_from_runtime(val)
     if isinstance(operand, str) and operand.startswith("%"):
         frame = vm.current_frame
-        val = frame.registers.get(operand, operand)
+        reg = Register(operand)
+        val = frame.registers.get(reg, operand)
         if isinstance(val, TypedValue):
             return val
         return typed_from_runtime(val)

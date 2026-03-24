@@ -106,24 +106,6 @@ class EmitContext:
         self._label_counter += 1
         return name
 
-    def emit(
-        self,
-        opcode: Opcode,
-        *,
-        result_reg: Register = NO_REGISTER,
-        operands: list[Any] = [],
-        label: CodeLabel = NO_LABEL,
-        branch_targets: list[CodeLabel] = [],
-    ) -> None:
-        inst = IRInstruction(
-            opcode=opcode,
-            result_reg=result_reg,
-            operands=[str(op) if isinstance(op, Register) else op for op in operands],
-            label=label,
-            branch_targets=branch_targets,
-        )
-        self._instructions.append(inst)
-
     def emit_inst(self, inst: Instruction) -> Instruction:
         """Emit a typed instruction directly."""
         self._instructions.append(inst)

@@ -53,7 +53,7 @@ def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
             hint=f"{constants.PARAM_PREFIX}arguments_arr",
         ),
     )
-    ctx.emit_inst(DeclVar(name="arguments_arr", value_reg=str(arr_reg)))
+    ctx.emit_inst(DeclVar(name="arguments_arr", value_reg=arr_reg))
 
     # param: param_index
     idx_reg = ctx.fresh_reg()
@@ -63,7 +63,7 @@ def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
             hint=f"{constants.PARAM_PREFIX}param_index",
         ),
     )
-    ctx.emit_inst(DeclVar(name="param_index", value_reg=str(idx_reg)))
+    ctx.emit_inst(DeclVar(name="param_index", value_reg=idx_reg))
 
     # param: default_value
     def_reg = ctx.fresh_reg()
@@ -73,7 +73,7 @@ def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
             hint=f"{constants.PARAM_PREFIX}default_value",
         ),
     )
-    ctx.emit_inst(DeclVar(name="default_value", value_reg=str(def_reg)))
+    ctx.emit_inst(DeclVar(name="default_value", value_reg=def_reg))
 
     # len(arguments_arr)
     load_arr = ctx.fresh_reg()
@@ -83,7 +83,7 @@ def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
         CallFunction(
             result_reg=len_reg,
             func_name="len",
-            args=(str(load_arr),),
+            args=(load_arr,),
         ),
     )
 
@@ -95,14 +95,14 @@ def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
         Binop(
             result_reg=cmp_reg,
             operator=">",
-            left=str(len_reg),
-            right=str(load_idx),
+            left=len_reg,
+            right=load_idx,
         ),
     )
 
     ctx.emit_inst(
         BranchIf(
-            cond_reg=str(cmp_reg),
+            cond_reg=cmp_reg,
             branch_targets=(provided_label, use_default_label),
         ),
     )
@@ -117,23 +117,23 @@ def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
     ctx.emit_inst(
         LoadIndex(
             result_reg=elem_reg,
-            arr_reg=str(arr2),
-            index_reg=str(idx2),
+            arr_reg=arr2,
+            index_reg=idx2,
         ),
     )
-    ctx.emit_inst(Return_(value_reg=str(elem_reg)))
+    ctx.emit_inst(Return_(value_reg=elem_reg))
 
     # False branch: return default_value
     ctx.emit_inst(Label_(label=use_default_label))
     def2 = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=def2, name="default_value"))
-    ctx.emit_inst(Return_(value_reg=str(def2)))
+    ctx.emit_inst(Return_(value_reg=def2))
 
     ctx.emit_inst(Label_(label=end_label))
 
     ref_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=ref_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=str(ref_reg)))
+    ctx.emit_inst(DeclVar(name=func_name, value_reg=ref_reg))
 
 
 def emit_default_param_guard(
@@ -172,9 +172,9 @@ def emit_default_param_guard(
         CallFunction(
             result_reg=result_reg,
             func_name="__resolve_default__",
-            args=(str(args_reg), str(idx_reg), str(default_reg)),
+            args=(args_reg, idx_reg, default_reg),
         ),
     )
 
     # Reassign the parameter variable
-    ctx.emit_inst(StoreVar(name=param_name, value_reg=str(result_reg)))
+    ctx.emit_inst(StoreVar(name=param_name, value_reg=result_reg))

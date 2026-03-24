@@ -125,6 +125,6 @@ def lower_raise_or_throw(
             ),
         )
     ctx.emit_inst(
-        Throw_(value_reg=str(val_reg)),
+        Throw_(value_reg=val_reg),
         node=node,
     )

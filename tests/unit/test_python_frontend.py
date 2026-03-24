@@ -12,6 +12,7 @@ from interpreter.ir import (
     SpreadArguments,
     CodeLabel,
 )
+from interpreter.instructions import Label_
 
 
 def _parse_python(source: str) -> list[IRInstruction]:
@@ -1118,7 +1119,7 @@ class TestPythonInterpolation:
             stmt_dispatch=fe._build_stmt_dispatch(),
             expr_dispatch=fe._build_expr_dispatch(),
         )
-        ctx.emit(Opcode.LABEL, label=CodeLabel("entry"))
+        ctx.emit_inst(Label_(label=CodeLabel("entry")))
         reg = lower_interpolation(ctx, interp_node)
         assert reg.startswith("%")
         # Should have lowered the binary_operator inside

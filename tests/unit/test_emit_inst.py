@@ -14,7 +14,7 @@ from interpreter.instructions import (
     InstructionBase,
     Label_,
 )
-from interpreter.ir import CodeLabel, IRInstruction, Opcode, SourceLocation
+from interpreter.ir import CodeLabel, Opcode, SourceLocation
 from interpreter.register import Register
 
 
@@ -51,12 +51,6 @@ class TestEmitInst:
         assert isinstance(result, Binop)
         assert result.operator == "+"
 
-    def test_not_flat_ir_instruction(self):
-        ctx = _make_ctx()
-        inst = Const(result_reg=Register("%0"), value="42")
-        ctx.emit_inst(inst)
-        assert not isinstance(ctx.instructions[0], IRInstruction)
-
     def test_tracks_label(self):
         ctx = _make_ctx()
         label = CodeLabel("func_foo_0")
@@ -77,11 +71,3 @@ class TestEmitInst:
         inst = Const(result_reg=Register("%0"), value="42", source_location=loc)
         result = ctx.emit_inst(inst)
         assert result.source_location == loc
-
-    def test_old_emit_still_works(self):
-        """Old emit() path must continue to work during migration."""
-        ctx = _make_ctx()
-        reg = ctx.fresh_reg()
-        result = ctx.emit(Opcode.CONST, result_reg=reg, operands=["42"])
-        assert isinstance(result, IRInstruction)
-        assert result.opcode == Opcode.CONST
