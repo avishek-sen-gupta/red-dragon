@@ -341,7 +341,7 @@ def _resolve_reg(vm: VMState, operand: str) -> TypedValue:
         val = frame.registers.get(operand)
         if val is None:
             # Fallback: try string key
-            val = frame.registers.get(str(operand), operand)
+            val = frame.registers.get(str(operand), str(operand))
         if isinstance(val, TypedValue):
             return val
         return typed_from_runtime(val)
