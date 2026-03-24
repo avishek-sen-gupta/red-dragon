@@ -10,8 +10,18 @@ must survive ``to_typed(inst).to_flat() == inst`` for every instruction.
 
 from __future__ import annotations
 
+import dataclasses
+import types
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Union  # noqa: F401 — Union used in Instruction type alias
+from typing import (
+    Any,
+    Self,
+    Union,  # noqa: F401 — Union used in Instruction type alias
+    get_args,
+    get_origin,
+    get_type_hints,
+)
 
 from interpreter.ir import (
     CodeLabel,
@@ -23,6 +33,43 @@ from interpreter.ir import (
     SpreadArguments,
 )
 from interpreter.register import NO_REGISTER, Register
+
+
+def _is_union(origin: object) -> bool:
+    """Check if origin is a union type (typing.Union or types.UnionType for X | Y syntax)."""
+    return origin is Union or origin is types.UnionType
+
+
+def _is_optional_register(hint: object) -> bool:
+    """Check if hint is Register | None."""
+    origin = get_origin(hint)
+    if _is_union(origin):
+        args = get_args(hint)
+        return Register in args and type(None) in args
+    return False
+
+
+def _is_register_args_tuple(hint: object) -> bool:
+    """Check if hint is tuple[Register | SpreadArguments, ...]."""
+    origin = get_origin(hint)
+    if origin is tuple:
+        args = get_args(hint)
+        if len(args) == 2 and args[1] is Ellipsis:
+            inner = args[0]
+            inner_origin = get_origin(inner)
+            if _is_union(inner_origin):
+                inner_args = get_args(inner)
+                return Register in inner_args and SpreadArguments in inner_args
+    return False
+
+
+def _is_label_tuple(hint: object) -> bool:
+    """Check if hint is tuple[CodeLabel, ...]."""
+    origin = get_origin(hint)
+    if origin is tuple:
+        args = get_args(hint)
+        return len(args) == 2 and args[0] is CodeLabel and args[1] is Ellipsis
+    return False
 
 
 def _as_register(val: Any) -> Register | Any:
@@ -46,6 +93,41 @@ class InstructionBase:
     """Shared metadata carried by every instruction."""
 
     source_location: SourceLocation = field(default_factory=lambda: NO_SOURCE_LOCATION)
+
+    def map_registers(self, fn: Callable[[Register], Register]) -> Self:
+        """Apply fn to every Register-typed field, return a new instruction."""
+        changes: dict[str, object] = {}
+        hints = get_type_hints(type(self))
+        for f in dataclasses.fields(self):
+            hint = hints.get(f.name, f.type)
+            val = getattr(self, f.name)
+            if isinstance(val, Register):
+                changes[f.name] = fn(val)
+            elif val is None and _is_optional_register(hint):
+                pass  # None stays None
+            elif isinstance(val, tuple) and _is_register_args_tuple(hint):
+                changes[f.name] = tuple(
+                    (
+                        SpreadArguments(register=fn(a.register))
+                        if isinstance(a, SpreadArguments)
+                        else fn(a)
+                    )
+                    for a in val
+                )
+        return dataclasses.replace(self, **changes) if changes else self
+
+    def map_labels(self, fn: Callable[[CodeLabel], CodeLabel]) -> Self:
+        """Apply fn to every CodeLabel-typed field, return a new instruction."""
+        changes: dict[str, object] = {}
+        hints = get_type_hints(type(self))
+        for f in dataclasses.fields(self):
+            hint = hints.get(f.name, f.type)
+            val = getattr(self, f.name)
+            if isinstance(val, CodeLabel):
+                changes[f.name] = fn(val)
+            elif isinstance(val, tuple) and _is_label_tuple(hint):
+                changes[f.name] = tuple(fn(lbl) for lbl in val)
+        return dataclasses.replace(self, **changes) if changes else self
 
     def __str__(self) -> str:
         """Render in the same format as IRInstruction.__str__."""
