@@ -16,7 +16,8 @@ from interpreter.cobol.condition_name import ConditionValue
 from interpreter.cobol.condition_name_index import ConditionNameIndex
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.ir import Opcode
+from interpreter.instructions import Binop, Const
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +40,13 @@ def _emit_single_value_test(
     if cv.is_range:
         from_reg = ctx.const_to_reg(ctx.parse_literal(cv.from_val))
         ge_result = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.BINOP,
-            result_reg=ge_result,
-            operands=[">=", parent_reg, from_reg],
+        ctx.emit_inst(
+            Binop(
+                result_reg=ge_result,
+                operator=">=",
+                left=Register(str(parent_reg)),
+                right=Register(str(from_reg)),
+            )
         )
 
         parent_ref2 = ctx.resolve_field_ref(parent_field_name, layout, region_reg)
@@ -51,26 +55,35 @@ def _emit_single_value_test(
         )
         to_reg = ctx.const_to_reg(ctx.parse_literal(cv.to_val))
         le_result = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.BINOP,
-            result_reg=le_result,
-            operands=["<=", parent_reg2, to_reg],
+        ctx.emit_inst(
+            Binop(
+                result_reg=le_result,
+                operator="<=",
+                left=Register(str(parent_reg2)),
+                right=Register(str(to_reg)),
+            )
         )
 
         and_result = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.BINOP,
-            result_reg=and_result,
-            operands=["and", ge_result, le_result],
+        ctx.emit_inst(
+            Binop(
+                result_reg=and_result,
+                operator="and",
+                left=ge_result,
+                right=le_result,
+            )
         )
         return and_result
 
     value_reg = ctx.const_to_reg(ctx.parse_literal(cv.from_val))
     eq_result = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=eq_result,
-        operands=["==", parent_reg, value_reg],
+    ctx.emit_inst(
+        Binop(
+            result_reg=eq_result,
+            operator="==",
+            left=Register(str(parent_reg)),
+            right=Register(str(value_reg)),
+        )
     )
     return eq_result
 
@@ -87,10 +100,13 @@ def _emit_or_chain(ctx: EmitContext, regs: list[str]) -> str:
 def _emit_or(ctx: EmitContext, left_reg: str, right_reg: str) -> str:
     """Emit a single OR between two boolean registers."""
     result = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=result,
-        operands=["or", left_reg, right_reg],
+    ctx.emit_inst(
+        Binop(
+            result_reg=result,
+            operator="or",
+            left=Register(str(left_reg)),
+            right=Register(str(right_reg)),
+        )
     )
     return result
 
@@ -117,7 +133,7 @@ def _expand_condition_name(
 
     if not value_regs:
         result = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=result, operands=[True])
+        ctx.emit_inst(Const(result_reg=result, value=True))
         return result
 
     return _emit_or_chain(ctx, value_regs)
@@ -172,15 +188,18 @@ def lower_condition(
             right_reg = ctx.const_to_reg(right_parsed)
 
         result = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.BINOP,
-            result_reg=result,
-            operands=[op, left_reg, right_reg],
+        ctx.emit_inst(
+            Binop(
+                result_reg=result,
+                operator=op,
+                left=Register(str(left_reg)),
+                right=Register(str(right_reg)),
+            )
         )
         return result
 
     result = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=result, operands=[True])
+    ctx.emit_inst(Const(result_reg=result, value=True))
     return result
 
 
@@ -202,10 +221,13 @@ def lower_expr_node(
         left_reg = lower_expr_node(ctx, node.left, layout, region_reg)
         right_reg = lower_expr_node(ctx, node.right, layout, region_reg)
         result_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.BINOP,
-            result_reg=result_reg,
-            operands=[node.op, left_reg, right_reg],
+        ctx.emit_inst(
+            Binop(
+                result_reg=result_reg,
+                operator=node.op,
+                left=Register(str(left_reg)),
+                right=Register(str(right_reg)),
+            )
         )
         return result_reg
     logger.warning("Unknown expression node type: %s", type(node).__name__)

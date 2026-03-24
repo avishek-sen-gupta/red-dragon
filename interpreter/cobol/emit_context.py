@@ -310,12 +310,14 @@ class EmitContext:
 
     def _emit_ebcdic_spaces(self, byte_length: int) -> str:
         """Emit IR to create a list of EBCDIC spaces (0x40). Returns result register."""
+        length_reg = self.const_to_reg(byte_length)
+        space_reg = self.const_to_reg(ByteConstants.EBCDIC_SPACE)
         result = self.fresh_reg()
         self.emit_inst(
             CallFunction(
                 result_reg=result,
                 func_name=BuiltinName.MAKE_LIST,
-                args=(byte_length, ByteConstants.EBCDIC_SPACE),
+                args=(Register(str(length_reg)), Register(str(space_reg))),
             ),
         )
         return result
@@ -457,7 +459,11 @@ class EmitContext:
         """Emit IR to convert a value to a string."""
         result = self.fresh_reg()
         self.emit_inst(
-            CallFunction(result_reg=result, func_name="str", args=(value_reg,)),
+            CallFunction(
+                result_reg=result,
+                func_name="str",
+                args=(Register(str(value_reg)),),
+            ),
         )
         return result
 
@@ -471,7 +477,11 @@ class EmitContext:
             CallFunction(
                 result_reg=result,
                 func_name=BuiltinName.COBOL_BLANK_WHEN_ZERO,
-                args=(encoded_reg, value_str_reg, length_reg),
+                args=(
+                    Register(str(encoded_reg)),
+                    Register(str(value_str_reg)),
+                    Register(str(length_reg)),
+                ),
             ),
         )
         return result
@@ -495,7 +505,9 @@ class EmitContext:
             float_reg = self.fresh_reg()
             self.emit_inst(
                 CallFunction(
-                    result_reg=float_reg, func_name="float", args=(value_str_reg,)
+                    result_reg=float_reg,
+                    func_name="float",
+                    args=(Register(str(value_str_reg)),),
                 ),
             )
             ir = build_encode_float_ir(f"enc_float_{fl.name}", td.byte_length)
@@ -518,21 +530,30 @@ class EmitContext:
     ) -> str:
         """Emit IR to parse a string into digits + sign, then encode numerically."""
         td = fl.type_descriptor
+        total_digits_reg = self.const_to_reg(td.total_digits)
+        decimal_digits_reg = self.const_to_reg(td.decimal_digits)
+        signed_reg = self.const_to_reg(td.signed)
         digits_reg = self.fresh_reg()
         self.emit_inst(
             CallFunction(
                 result_reg=digits_reg,
                 func_name=BuiltinName.COBOL_PREPARE_DIGITS,
-                args=(value_str_reg, td.total_digits, td.decimal_digits, td.signed),
+                args=(
+                    Register(str(value_str_reg)),
+                    Register(str(total_digits_reg)),
+                    Register(str(decimal_digits_reg)),
+                    Register(str(signed_reg)),
+                ),
             ),
         )
 
+        signed_reg2 = self.const_to_reg(td.signed)
         sign_reg = self.fresh_reg()
         self.emit_inst(
             CallFunction(
                 result_reg=sign_reg,
                 func_name=BuiltinName.COBOL_PREPARE_SIGN,
-                args=(value_str_reg, td.signed),
+                args=(Register(str(value_str_reg)), Register(str(signed_reg2))),
             ),
         )
 

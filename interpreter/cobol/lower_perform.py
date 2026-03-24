@@ -12,7 +12,17 @@ from interpreter.cobol.cobol_statements import (
 )
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.instructions import (
+    Binop,
+    Branch,
+    BranchIf,
+    Label_,
+    LoadVar,
+    SetContinuation,
+    StoreVar,
+)
+from interpreter.ir import CodeLabel
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
@@ -74,12 +84,11 @@ def emit_perform_branch(
     """Emit SET_CONTINUATION + BRANCH + return LABEL for a simple procedure PERFORM."""
     branch_label, continuation_key = resolve_perform_target(ctx, stmt)
     return_label = ctx.fresh_label("perform_return")
-    ctx.emit(
-        Opcode.SET_CONTINUATION,
-        operands=[continuation_key, return_label],
+    ctx.emit_inst(
+        SetContinuation(name=str(continuation_key), target_label=return_label)
     )
-    ctx.emit(Opcode.BRANCH, label=branch_label)
-    ctx.emit(Opcode.LABEL, label=return_label)
+    ctx.emit_inst(Branch(label=branch_label))
+    ctx.emit_inst(Label_(label=return_label))
 
 
 def lower_perform_body(
@@ -112,7 +121,7 @@ def lower_perform_times(
     exit_label = ctx.fresh_label("perform_times_exit")
 
     zero_reg = ctx.const_to_reg(0)
-    ctx.emit(Opcode.STORE_VAR, operands=[counter_var, zero_reg])
+    ctx.emit_inst(StoreVar(name=counter_var, value_reg=Register(str(zero_reg))))
 
     if ctx.has_field(spec.times, layout):
         times_ref = ctx.resolve_field_ref(spec.times, layout, region_reg)
@@ -122,33 +131,44 @@ def lower_perform_times(
     else:
         times_reg = ctx.const_to_reg(ctx.parse_literal(spec.times))
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     ctr_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=ctr_reg, operands=[counter_var])
+    ctx.emit_inst(LoadVar(result_reg=ctr_reg, name=counter_var))
     cond_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=cond_reg,
-        operands=[">=", ctr_reg, times_reg],
+    ctx.emit_inst(
+        Binop(
+            result_reg=cond_reg,
+            operator=">=",
+            left=ctr_reg,
+            right=Register(str(times_reg)),
+        )
     )
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[exit_label, body_label],
+    ctx.emit_inst(
+        BranchIf(
+            cond_reg=Register(str(cond_reg)),
+            branch_targets=(exit_label, body_label),
+        )
     )
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     lower_perform_body(ctx, stmt, layout, region_reg)
 
     ctr_reg2 = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=ctr_reg2, operands=[counter_var])
+    ctx.emit_inst(LoadVar(result_reg=ctr_reg2, name=counter_var))
     one_reg = ctx.const_to_reg(1)
     inc_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=inc_reg, operands=["+", ctr_reg2, one_reg])
-    ctx.emit(Opcode.STORE_VAR, operands=[counter_var, inc_reg])
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(
+        Binop(
+            result_reg=inc_reg,
+            operator="+",
+            left=ctr_reg2,
+            right=Register(str(one_reg)),
+        )
+    )
+    ctx.emit_inst(StoreVar(name=counter_var, value_reg=inc_reg))
+    ctx.emit_inst(Branch(label=loop_label))
 
-    ctx.emit(Opcode.LABEL, label=exit_label)
+    ctx.emit_inst(Label_(label=exit_label))
 
 
 def lower_perform_until(
@@ -166,27 +186,29 @@ def lower_perform_until(
     exit_label = ctx.fresh_label("perform_until_exit")
 
     if spec.test_before:
-        ctx.emit(Opcode.LABEL, label=loop_label)
+        ctx.emit_inst(Label_(label=loop_label))
         cond_reg = ctx.lower_condition(spec.condition, layout, region_reg)
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[exit_label, body_label],
+        ctx.emit_inst(
+            BranchIf(
+                cond_reg=Register(str(cond_reg)),
+                branch_targets=(exit_label, body_label),
+            )
         )
-        ctx.emit(Opcode.LABEL, label=body_label)
+        ctx.emit_inst(Label_(label=body_label))
         lower_perform_body(ctx, stmt, layout, region_reg)
-        ctx.emit(Opcode.BRANCH, label=loop_label)
-        ctx.emit(Opcode.LABEL, label=exit_label)
+        ctx.emit_inst(Branch(label=loop_label))
+        ctx.emit_inst(Label_(label=exit_label))
     else:
-        ctx.emit(Opcode.LABEL, label=loop_label)
+        ctx.emit_inst(Label_(label=loop_label))
         lower_perform_body(ctx, stmt, layout, region_reg)
         cond_reg = ctx.lower_condition(spec.condition, layout, region_reg)
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[exit_label, loop_label],
+        ctx.emit_inst(
+            BranchIf(
+                cond_reg=Register(str(cond_reg)),
+                branch_targets=(exit_label, loop_label),
+            )
         )
-        ctx.emit(Opcode.LABEL, label=exit_label)
+        ctx.emit_inst(Label_(label=exit_label))
 
 
 def lower_perform_varying(
@@ -211,29 +233,31 @@ def lower_perform_varying(
         )
 
     if spec.test_before:
-        ctx.emit(Opcode.LABEL, label=loop_label)
+        ctx.emit_inst(Label_(label=loop_label))
         cond_reg = ctx.lower_condition(spec.condition, layout, region_reg)
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[exit_label, body_label],
+        ctx.emit_inst(
+            BranchIf(
+                cond_reg=Register(str(cond_reg)),
+                branch_targets=(exit_label, body_label),
+            )
         )
-        ctx.emit(Opcode.LABEL, label=body_label)
+        ctx.emit_inst(Label_(label=body_label))
         lower_perform_body(ctx, stmt, layout, region_reg)
         emit_varying_increment(ctx, spec, layout, region_reg)
-        ctx.emit(Opcode.BRANCH, label=loop_label)
-        ctx.emit(Opcode.LABEL, label=exit_label)
+        ctx.emit_inst(Branch(label=loop_label))
+        ctx.emit_inst(Label_(label=exit_label))
     else:
-        ctx.emit(Opcode.LABEL, label=loop_label)
+        ctx.emit_inst(Label_(label=loop_label))
         lower_perform_body(ctx, stmt, layout, region_reg)
         emit_varying_increment(ctx, spec, layout, region_reg)
         cond_reg = ctx.lower_condition(spec.condition, layout, region_reg)
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[exit_label, loop_label],
+        ctx.emit_inst(
+            BranchIf(
+                cond_reg=Register(str(cond_reg)),
+                branch_targets=(exit_label, loop_label),
+            )
         )
-        ctx.emit(Opcode.LABEL, label=exit_label)
+        ctx.emit_inst(Label_(label=exit_label))
 
 
 def emit_varying_increment(
@@ -252,10 +276,13 @@ def emit_varying_increment(
 
     by_reg = ctx.const_to_reg(ctx.parse_literal(spec.varying_by))
     new_val_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=new_val_reg,
-        operands=["+", val_reg, by_reg],
+    ctx.emit_inst(
+        Binop(
+            result_reg=new_val_reg,
+            operator="+",
+            left=Register(str(val_reg)),
+            right=Register(str(by_reg)),
+        )
     )
 
     new_str_reg = ctx.emit_to_string(new_val_reg)

@@ -7,7 +7,8 @@ import logging
 from interpreter.cobol.asg_types import CobolASG, CobolParagraph, CobolSection
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.instructions import Label_, ResumeContinuation
+from interpreter.ir import CodeLabel
 
 logger = logging.getLogger(__name__)
 
@@ -39,15 +40,12 @@ def lower_section(
     layout: DataLayout,
     region_reg: str,
 ) -> None:
-    ctx.emit(Opcode.LABEL, label=CodeLabel(f"section_{section.name}"))
+    ctx.emit_inst(Label_(label=CodeLabel(f"section_{section.name}")))
     for stmt in section.statements:
         ctx.lower_statement(stmt, layout, region_reg)
     for para in section.paragraphs:
         lower_paragraph(ctx, para, layout, region_reg)
-    ctx.emit(
-        Opcode.RESUME_CONTINUATION,
-        operands=[f"section_{section.name}_end"],
-    )
+    ctx.emit_inst(ResumeContinuation(name=f"section_{section.name}_end"))
 
 
 def lower_paragraph(
@@ -56,7 +54,7 @@ def lower_paragraph(
     layout: DataLayout,
     region_reg: str,
 ) -> None:
-    ctx.emit(Opcode.LABEL, label=CodeLabel(f"para_{para.name}"))
+    ctx.emit_inst(Label_(label=CodeLabel(f"para_{para.name}")))
     for stmt in para.statements:
         ctx.lower_statement(stmt, layout, region_reg)
-    ctx.emit(Opcode.RESUME_CONTINUATION, operands=[f"para_{para.name}_end"])
+    ctx.emit_inst(ResumeContinuation(name=f"para_{para.name}_end"))
