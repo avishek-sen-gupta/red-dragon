@@ -19,6 +19,7 @@ from interpreter.cfg_types import (
     CFG,
 )  # noqa: F401 — re-exported for backwards compatibility
 
+
 def build_cfg(instructions: list[InstructionBase]) -> CFG:
     """Partition instructions into basic blocks and wire edges."""
     cfg = CFG()
