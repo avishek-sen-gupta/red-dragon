@@ -13,6 +13,7 @@ from interpreter.api import (
 )
 from interpreter.cfg import CFG
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.instructions import InstructionBase
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import scalar
 
@@ -49,7 +50,9 @@ class TestLowerSource:
     def test_returns_list_of_ir_instructions(self):
         result = lower_source(SIMPLE_SOURCE)
         assert isinstance(result, list)
-        assert all(isinstance(inst, IRInstruction) for inst in result)
+        assert all(
+            isinstance(inst, (IRInstruction, InstructionBase)) for inst in result
+        )
 
     def test_contains_expected_opcodes(self):
         result = lower_source(SIMPLE_SOURCE)
@@ -231,7 +234,9 @@ class TestLowerAndInfer:
     def test_returns_instructions_and_env(self):
         instructions, env = lower_and_infer(SIMPLE_SOURCE)
         assert isinstance(instructions, list)
-        assert all(isinstance(inst, IRInstruction) for inst in instructions)
+        assert all(
+            isinstance(inst, (IRInstruction, InstructionBase)) for inst in instructions
+        )
         assert isinstance(env, TypeEnvironment)
 
     def test_default_language_is_python(self):

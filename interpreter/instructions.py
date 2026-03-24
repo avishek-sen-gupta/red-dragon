@@ -58,7 +58,7 @@ class Const(InstructionBase):
 
     @property
     def operands(self) -> list[Any]:
-        return [self.value] if self.value else []
+        return [self.value] if self.value != "" else []
 
 
 @dataclass(frozen=True)

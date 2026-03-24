@@ -8,7 +8,20 @@ from __future__ import annotations
 
 from interpreter import constants
 from interpreter.frontends.context import TreeSitterEmitContext
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.instructions import (
+    Binop,
+    Branch,
+    BranchIf,
+    CallFunction,
+    Const,
+    DeclVar,
+    Label_,
+    LoadIndex,
+    LoadVar,
+    Return_,
+    StoreVar,
+    Symbolic,
+)
 
 
 def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
@@ -29,75 +42,98 @@ def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
     provided_label = ctx.fresh_label("default_provided")
     use_default_label = ctx.fresh_label("use_default")
 
-    ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Label_(label=func_label))
 
     # param: arguments_arr
     arr_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.SYMBOLIC,
-        result_reg=arr_reg,
-        operands=[f"{constants.PARAM_PREFIX}arguments_arr"],
+    ctx.emit_inst(
+        Symbolic(
+            result_reg=arr_reg,
+            hint=f"{constants.PARAM_PREFIX}arguments_arr",
+        ),
     )
-    ctx.emit(Opcode.DECL_VAR, operands=["arguments_arr", arr_reg])
+    ctx.emit_inst(DeclVar(name="arguments_arr", value_reg=str(arr_reg)))
 
     # param: param_index
     idx_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.SYMBOLIC,
-        result_reg=idx_reg,
-        operands=[f"{constants.PARAM_PREFIX}param_index"],
+    ctx.emit_inst(
+        Symbolic(
+            result_reg=idx_reg,
+            hint=f"{constants.PARAM_PREFIX}param_index",
+        ),
     )
-    ctx.emit(Opcode.DECL_VAR, operands=["param_index", idx_reg])
+    ctx.emit_inst(DeclVar(name="param_index", value_reg=str(idx_reg)))
 
     # param: default_value
     def_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.SYMBOLIC,
-        result_reg=def_reg,
-        operands=[f"{constants.PARAM_PREFIX}default_value"],
+    ctx.emit_inst(
+        Symbolic(
+            result_reg=def_reg,
+            hint=f"{constants.PARAM_PREFIX}default_value",
+        ),
     )
-    ctx.emit(Opcode.DECL_VAR, operands=["default_value", def_reg])
+    ctx.emit_inst(DeclVar(name="default_value", value_reg=str(def_reg)))
 
     # len(arguments_arr)
     load_arr = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=load_arr, operands=["arguments_arr"])
+    ctx.emit_inst(LoadVar(result_reg=load_arr, name="arguments_arr"))
     len_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", load_arr])
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=len_reg,
+            func_name="len",
+            args=(str(load_arr),),
+        ),
+    )
 
     # len > param_index?
     load_idx = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=load_idx, operands=["param_index"])
+    ctx.emit_inst(LoadVar(result_reg=load_idx, name="param_index"))
     cmp_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=cmp_reg, operands=[">", len_reg, load_idx])
+    ctx.emit_inst(
+        Binop(
+            result_reg=cmp_reg,
+            operator=">",
+            left=str(len_reg),
+            right=str(load_idx),
+        ),
+    )
 
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cmp_reg],
-        branch_targets=[provided_label, use_default_label],
+    ctx.emit_inst(
+        BranchIf(
+            cond_reg=str(cmp_reg),
+            branch_targets=(provided_label, use_default_label),
+        ),
     )
 
     # True branch: return arguments_arr[param_index]
-    ctx.emit(Opcode.LABEL, label=provided_label)
+    ctx.emit_inst(Label_(label=provided_label))
     arr2 = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=arr2, operands=["arguments_arr"])
+    ctx.emit_inst(LoadVar(result_reg=arr2, name="arguments_arr"))
     idx2 = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=idx2, operands=["param_index"])
+    ctx.emit_inst(LoadVar(result_reg=idx2, name="param_index"))
     elem_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[arr2, idx2])
-    ctx.emit(Opcode.RETURN, operands=[elem_reg])
+    ctx.emit_inst(
+        LoadIndex(
+            result_reg=elem_reg,
+            arr_reg=str(arr2),
+            index_reg=str(idx2),
+        ),
+    )
+    ctx.emit_inst(Return_(value_reg=str(elem_reg)))
 
     # False branch: return default_value
-    ctx.emit(Opcode.LABEL, label=use_default_label)
+    ctx.emit_inst(Label_(label=use_default_label))
     def2 = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=def2, operands=["default_value"])
-    ctx.emit(Opcode.RETURN, operands=[def2])
+    ctx.emit_inst(LoadVar(result_reg=def2, name="default_value"))
+    ctx.emit_inst(Return_(value_reg=str(def2)))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
     ref_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=ref_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[func_name, ref_reg])
+    ctx.emit_inst(DeclVar(name=func_name, value_reg=str(ref_reg)))
 
 
 def emit_default_param_guard(
@@ -125,18 +161,20 @@ def emit_default_param_guard(
 
     # Load arguments array and param index constant
     args_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=args_reg, operands=["arguments"])
+    ctx.emit_inst(LoadVar(result_reg=args_reg, name="arguments"))
 
     idx_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[param_index])
+    ctx.emit_inst(Const(result_reg=idx_reg, value=param_index))
 
     # Call __resolve_default__(arguments, param_index, default_value)
     result_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=result_reg,
-        operands=["__resolve_default__", args_reg, idx_reg, default_reg],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=result_reg,
+            func_name="__resolve_default__",
+            args=(str(args_reg), str(idx_reg), str(default_reg)),
+        ),
     )
 
     # Reassign the parameter variable
-    ctx.emit(Opcode.STORE_VAR, operands=[param_name, result_reg])
+    ctx.emit_inst(StoreVar(name=param_name, value_reg=str(result_reg)))
