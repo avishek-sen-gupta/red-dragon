@@ -4,7 +4,28 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.instructions import (
+    Binop,
+    Branch,
+    BranchIf,
+    CallFunction,
+    CallMethod,
+    CallUnknown,
+    Const,
+    DeclVar,
+    Label_,
+    LoadField,
+    LoadIndex,
+    LoadVar,
+    NewArray,
+    NewObject,
+    Return_,
+    StoreField,
+    StoreIndex,
+    StoreVar,
+    Symbolic,
+    Throw_,
+)
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
     extract_call_args,
@@ -27,21 +48,13 @@ def lower_scope_resolution(ctx: TreeSitterEmitContext, node) -> Register:
     if scope_node is None:
         # ::TopLevel — root scope resolution
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.LOAD_VAR,
-            result_reg=reg,
-            operands=[name_text],
-            node=node,
-        )
+        ctx.emit_inst(LoadVar(result_reg=reg, name=name_text), node=node)
         return reg
 
     scope_reg = ctx.lower_expr(scope_node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_FIELD,
-        result_reg=reg,
-        operands=[scope_reg, name_text],
-        node=node,
+    ctx.emit_inst(
+        LoadField(result_reg=reg, obj_reg=scope_reg, field_name=name_text), node=node
     )
     return reg
 
@@ -51,15 +64,10 @@ def lower_instance_variable(ctx: TreeSitterEmitContext, node) -> Register:
     raw = ctx.node_text(node)
     field_name = raw.lstrip("@")
     self_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_VAR, result_reg=self_reg, operands=[constants.PARAM_SELF], node=node
-    )
+    ctx.emit_inst(LoadVar(result_reg=self_reg, name=constants.PARAM_SELF), node=node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_FIELD,
-        result_reg=reg,
-        operands=[self_reg, field_name],
-        node=node,
+    ctx.emit_inst(
+        LoadField(result_reg=reg, obj_reg=self_reg, field_name=field_name), node=node
     )
     return reg
 
@@ -74,11 +82,8 @@ def lower_ruby_string(ctx: TreeSitterEmitContext, node) -> Register:
     for child in node.children:
         if child.type == RubyNodeType.STRING_CONTENT:
             frag_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CONST,
-                result_reg=frag_reg,
-                operands=[ctx.node_text(child)],
-                node=child,
+            ctx.emit_inst(
+                Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
             )
             parts.append(frag_reg)
         elif child.type == RubyNodeType.INTERPOLATION:
@@ -99,11 +104,8 @@ def lower_ruby_heredoc_body(ctx: TreeSitterEmitContext, node) -> Register:
     for child in node.children:
         if child.type == RubyNodeType.HEREDOC_CONTENT:
             frag_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CONST,
-                result_reg=frag_reg,
-                operands=[ctx.node_text(child)],
-                node=child,
+            ctx.emit_inst(
+                Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
             )
             parts.append(frag_reg)
         elif child.type == RubyNodeType.INTERPOLATION:
@@ -140,17 +142,17 @@ def lower_ruby_call(ctx: TreeSitterEmitContext, node) -> Register:
         receiver_text = ctx.node_text(receiver_node)
         if method_name == "new" and receiver_text[0:1].isupper():
             obj_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.NEW_OBJECT,
-                result_reg=obj_reg,
-                operands=[receiver_text],
-                node=node,
+            ctx.emit_inst(
+                NewObject(result_reg=obj_reg, type_hint=receiver_text), node=node
             )
             ctor_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CALL_METHOD,
-                result_reg=ctor_reg,
-                operands=[obj_reg, "__init__"] + arg_regs,
+            ctx.emit_inst(
+                CallMethod(
+                    result_reg=ctor_reg,
+                    obj_reg=obj_reg,
+                    method_name="__init__",
+                    args=tuple(arg_regs),
+                ),
                 node=node,
             )
             return obj_reg
@@ -158,10 +160,13 @@ def lower_ruby_call(ctx: TreeSitterEmitContext, node) -> Register:
         # Method call on receiver: obj.method(...)
         obj_reg = ctx.lower_expr(receiver_node)
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_METHOD,
-            result_reg=reg,
-            operands=[obj_reg, method_name] + arg_regs,
+        ctx.emit_inst(
+            CallMethod(
+                result_reg=reg,
+                obj_reg=obj_reg,
+                method_name=method_name,
+                args=tuple(arg_regs),
+            ),
             node=node,
         )
         return reg
@@ -172,29 +177,21 @@ def lower_ruby_call(ctx: TreeSitterEmitContext, node) -> Register:
         # Ruby raise -> THROW
         if func_name == "raise":
             val_reg = arg_regs[0] if arg_regs else ctx.fresh_reg()
-            ctx.emit(Opcode.THROW, operands=[val_reg], node=node)
+            ctx.emit_inst(Throw_(value_reg=val_reg), node=node)
             return val_reg
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=reg,
-            operands=[func_name] + arg_regs,
+        ctx.emit_inst(
+            CallFunction(result_reg=reg, func_name=func_name, args=tuple(arg_regs)),
             node=node,
         )
         return reg
 
     # Fallback: unknown call
     target_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.SYMBOLIC,
-        result_reg=target_reg,
-        operands=["unknown_call_target"],
-    )
+    ctx.emit_inst(Symbolic(result_reg=target_reg, hint="unknown_call_target"))
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_UNKNOWN,
-        result_reg=reg,
-        operands=[target_reg] + arg_regs,
+    ctx.emit_inst(
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -206,21 +203,14 @@ def lower_ruby_argument_list(ctx: TreeSitterEmitContext, node) -> Register:
     if named:
         return ctx.lower_expr(named[0])
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST, result_reg=reg, operands=[ctx.constants.default_return_value]
-    )
+    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.default_return_value))
     return reg
 
 
 def lower_ruby_hash(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower Ruby hash literal as NEW_OBJECT + STORE_INDEX per pair."""
     obj_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.NEW_OBJECT,
-        result_reg=obj_reg,
-        operands=["hash"],
-        node=node,
-    )
+    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint="hash"), node=node)
     for child in node.children:
         if child.type == RubyNodeType.PAIR:
             key_node = child.child_by_field_name("key")
@@ -228,7 +218,9 @@ def lower_ruby_hash(ctx: TreeSitterEmitContext, node) -> Register:
             if key_node and val_node:
                 key_reg = ctx.lower_expr(key_node)
                 val_reg = ctx.lower_expr(val_node)
-                ctx.emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
+                ctx.emit_inst(
+                    StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg)
+                )
     return obj_reg
 
 
@@ -238,10 +230,15 @@ def lower_ruby_range(ctx: TreeSitterEmitContext, node) -> Register:
     start_reg = ctx.lower_expr(named[0]) if len(named) > 0 else ctx.fresh_reg()
     end_reg = ctx.lower_expr(named[1]) if len(named) > 1 else ctx.fresh_reg()
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["range", start_reg, end_reg],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=reg,
+            func_name="range",
+            args=(
+                start_reg,
+                end_reg,
+            ),
+        ),
         node=node,
     )
     return reg
@@ -253,8 +250,8 @@ def lower_ruby_lambda(ctx: TreeSitterEmitContext, node) -> Register:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Label_(label=func_label))
 
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     if params_node:
@@ -298,13 +295,9 @@ def lower_ruby_lambda(ctx: TreeSitterEmitContext, node) -> Register:
                 ctx.lower_stmt(child)
 
     nil_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=nil_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[nil_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Const(result_reg=nil_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Return_(value_reg=nil_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     ref_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=ref_reg)
@@ -327,23 +320,16 @@ def lower_ruby_word_array(ctx: TreeSitterEmitContext, node) -> Register:
     ]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
-    ctx.emit(
-        Opcode.NEW_ARRAY,
-        result_reg=arr_reg,
-        operands=["list", size_reg],
-        node=node,
+    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
+    ctx.emit_inst(
+        NewArray(result_reg=arr_reg, type_hint="list", size_reg=size_reg), node=node
     )
     for i, elem in enumerate(elems):
         val_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CONST,
-            result_reg=val_reg,
-            operands=[ctx.node_text(elem)],
-        )
+        ctx.emit_inst(Const(result_reg=val_reg, value=ctx.node_text(elem)))
         idx_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
-        ctx.emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg))
     return arr_reg
 
 
@@ -364,11 +350,8 @@ def lower_element_reference(ctx: TreeSitterEmitContext, node) -> Register:
         else ctx.fresh_reg()
     )
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_INDEX,
-        result_reg=reg,
-        operands=[obj_reg, idx_reg],
-        node=node,
+    ctx.emit_inst(
+        LoadIndex(result_reg=reg, arr_reg=obj_reg, index_reg=idx_reg), node=node
     )
     return reg
 
@@ -393,19 +376,24 @@ def _lower_range_slice(
     if not is_exclusive and len(named) > 1:
         one_reg = _make_const(ctx, "1")
         adjusted_end = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.BINOP,
-            result_reg=adjusted_end,
-            operands=["+", end_reg, one_reg],
+        ctx.emit_inst(
+            Binop(result_reg=adjusted_end, operator="+", left=end_reg, right=one_reg),
             node=range_node,
         )
         end_reg = adjusted_end
     none_reg = _make_const(ctx, ctx.constants.none_literal)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["slice", collection_reg, start_reg, end_reg, none_reg],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=reg,
+            func_name="slice",
+            args=(
+                collection_reg,
+                start_reg,
+                end_reg,
+                none_reg,
+            ),
+        ),
         node=range_node,
     )
     return reg
@@ -418,18 +406,23 @@ def _lower_positional_slice(
     start_reg = ctx.lower_expr(named_children[1])
     length_reg = ctx.lower_expr(named_children[2])
     stop_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=stop_reg,
-        operands=["+", start_reg, length_reg],
+    ctx.emit_inst(
+        Binop(result_reg=stop_reg, operator="+", left=start_reg, right=length_reg),
         node=node,
     )
     none_reg = _make_const(ctx, ctx.constants.none_literal)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["slice", collection_reg, start_reg, stop_reg, none_reg],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=reg,
+            func_name="slice",
+            args=(
+                collection_reg,
+                start_reg,
+                stop_reg,
+                none_reg,
+            ),
+        ),
         node=node,
     )
     return reg
@@ -438,7 +431,7 @@ def _lower_positional_slice(
 def _make_const(ctx: TreeSitterEmitContext, value: str) -> Register:
     """Emit a CONST and return the register."""
     reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=reg, operands=[value])
+    ctx.emit_inst(Const(result_reg=reg, value=value))
     return reg
 
 
@@ -453,38 +446,29 @@ def lower_ruby_conditional(ctx: TreeSitterEmitContext, node) -> Register:
     false_label = ctx.fresh_label("ternary_false")
     end_label = ctx.fresh_label("ternary_end")
 
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[true_label, false_label],
-    )
+    ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)))
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     true_reg = ctx.lower_expr(true_node) if true_node else ctx.fresh_reg()
     result_var = f"__ternary_{ctx.label_counter}"
-    ctx.emit(Opcode.DECL_VAR, operands=[result_var, true_reg])
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(DeclVar(name=result_var, value_reg=true_reg))
+    ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=false_label)
+    ctx.emit_inst(Label_(label=false_label))
     false_reg = ctx.lower_expr(false_node) if false_node else ctx.fresh_reg()
-    ctx.emit(Opcode.DECL_VAR, operands=[result_var, false_reg])
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(DeclVar(name=result_var, value_reg=false_reg))
+    ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
     result_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=result_reg, operands=[result_var])
+    ctx.emit_inst(LoadVar(result_reg=result_reg, name=result_var))
     return result_reg
 
 
 def lower_ruby_self(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `self` as LOAD_VAR('self')."""
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_VAR,
-        result_reg=reg,
-        operands=[constants.PARAM_SELF],
-        node=node,
-    )
+    ctx.emit_inst(LoadVar(result_reg=reg, name=constants.PARAM_SELF), node=node)
     return reg
 
 
@@ -496,11 +480,8 @@ def lower_ruby_super(ctx: TreeSitterEmitContext, node) -> Register:
     )
     arg_regs = extract_call_args(ctx, args_node) if args_node else []
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["super"] + arg_regs,
-        node=node,
+    ctx.emit_inst(
+        CallFunction(result_reg=reg, func_name="super", args=tuple(arg_regs)), node=node
     )
     return reg
 
@@ -513,11 +494,8 @@ def lower_ruby_yield(ctx: TreeSitterEmitContext, node) -> Register:
     )
     arg_regs = extract_call_args(ctx, args_node) if args_node else []
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["yield"] + arg_regs,
-        node=node,
+    ctx.emit_inst(
+        CallFunction(result_reg=reg, func_name="yield", args=tuple(arg_regs)), node=node
     )
     return reg
 
@@ -541,8 +519,8 @@ def lower_ruby_block(ctx: TreeSitterEmitContext, node) -> Register:
     block_label = ctx.fresh_label("block")
     end_label = ctx.fresh_label("block_end")
 
-    ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=block_label)
+    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Label_(label=block_label))
 
     # Lower block parameters from block_parameters or |x, y| syntax
     params_node = next(
@@ -582,22 +560,13 @@ def lower_ruby_block(ctx: TreeSitterEmitContext, node) -> Register:
                 ctx.lower_stmt(child)
 
     nil_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=nil_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[nil_reg])
+    ctx.emit_inst(Const(result_reg=nil_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Return_(value_reg=nil_reg))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
     ref_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=ref_reg,
-        operands=[f"func:{block_label}"],
-        node=node,
-    )
+    ctx.emit_inst(Const(result_reg=ref_reg, value=f"func:{block_label}"), node=node)
     return ref_reg
 
 
@@ -625,16 +594,13 @@ def lower_ruby_params(ctx: TreeSitterEmitContext, params_node) -> None:
             pname = _extract_param_name(ctx, child)
         if pname is None:
             continue
-        ctx.emit(
-            Opcode.SYMBOLIC,
-            result_reg=ctx.fresh_reg(),
-            operands=[f"{constants.PARAM_PREFIX}{pname}"],
+        ctx.emit_inst(
+            Symbolic(
+                result_reg=ctx.fresh_reg(), hint=f"{constants.PARAM_PREFIX}{pname}"
+            ),
             node=child,
         )
-        ctx.emit(
-            Opcode.DECL_VAR,
-            operands=[pname, f"%{ctx.reg_counter - 1}"],
-        )
+        ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
         if default_value_node is not None:
             from interpreter.frontends.common.default_params import (
                 emit_default_param_guard,
@@ -674,15 +640,11 @@ def lower_ruby_store_target(
         raw = ctx.node_text(target)
         field_name = raw.lstrip("@")
         self_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.LOAD_VAR,
-            result_reg=self_reg,
-            operands=[constants.PARAM_SELF],
-            node=parent_node,
+        ctx.emit_inst(
+            LoadVar(result_reg=self_reg, name=constants.PARAM_SELF), node=parent_node
         )
-        ctx.emit(
-            Opcode.STORE_FIELD,
-            operands=[self_reg, field_name, val_reg],
+        ctx.emit_inst(
+            StoreField(obj_reg=self_reg, field_name=field_name, value_reg=val_reg),
             node=parent_node,
         )
     elif target.type in (
@@ -691,19 +653,16 @@ def lower_ruby_store_target(
         RubyNodeType.GLOBAL_VARIABLE,
         RubyNodeType.CLASS_VARIABLE,
     ):
-        ctx.emit(
-            Opcode.STORE_VAR,
-            operands=[ctx.node_text(target), val_reg],
-            node=parent_node,
+        ctx.emit_inst(
+            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
         )
     elif target.type == RubyNodeType.ELEMENT_REFERENCE:
         named_children = [c for c in target.children if c.is_named]
         if len(named_children) >= 2:
             obj_reg = ctx.lower_expr(named_children[0])
             idx_reg = ctx.lower_expr(named_children[1])
-            ctx.emit(
-                Opcode.STORE_INDEX,
-                operands=[obj_reg, idx_reg, val_reg],
+            ctx.emit_inst(
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
         else:

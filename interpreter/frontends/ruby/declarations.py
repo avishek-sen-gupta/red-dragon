@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode
+from interpreter.instructions import (
+    Branch,
+    Const,
+    DeclVar,
+    Label_,
+    Return_,
+    Symbolic,
+)
 from interpreter import constants
 from interpreter.frontends.ruby.expressions import lower_ruby_params
 from interpreter.frontends.ruby.node_types import RubyNodeType
@@ -42,14 +49,11 @@ def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> R
 
 def _emit_self_param(ctx: TreeSitterEmitContext) -> None:
     """Emit ``SYMBOLIC param:self`` + ``STORE_VAR self`` for instance methods."""
-    ctx.emit(
-        Opcode.SYMBOLIC,
-        result_reg=ctx.fresh_reg(),
-        operands=[f"{constants.PARAM_PREFIX}self"],
+    ctx.emit_inst(
+        Symbolic(result_reg=ctx.fresh_reg(), hint=f"{constants.PARAM_PREFIX}self")
     )
-    ctx.emit(
-        Opcode.DECL_VAR,
-        operands=[constants.PARAM_SELF, f"%{ctx.reg_counter - 1}"],
+    ctx.emit_inst(
+        DeclVar(name=constants.PARAM_SELF, value_reg=f"%{ctx.reg_counter - 1}")
     )
 
 
@@ -66,8 +70,8 @@ def lower_ruby_method(
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=func_label))
 
     if inject_self:
         _emit_self_param(ctx)
@@ -80,20 +84,18 @@ def lower_ruby_method(
         expr_reg = _lower_body_with_implicit_return(ctx, body_node)
 
     if expr_reg:
-        ctx.emit(Opcode.RETURN, operands=[expr_reg])
+        ctx.emit_inst(Return_(value_reg=expr_reg))
     else:
         none_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CONST,
-            result_reg=none_reg,
-            operands=[ctx.constants.default_return_value],
+        ctx.emit_inst(
+            Const(result_reg=none_reg, value=ctx.constants.default_return_value)
         )
-        ctx.emit(Opcode.RETURN, operands=[none_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+        ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
 
 
 def lower_ruby_method_stmt(ctx: TreeSitterEmitContext, node) -> None:
@@ -125,19 +127,19 @@ def lower_ruby_class(ctx: TreeSitterEmitContext, node) -> None:
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=class_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=class_label))
     if body_node:
         for child in body_node.children:
             if child.type == RubyNodeType.METHOD:
                 lower_ruby_method(ctx, child, inject_self=True)
             elif child.is_named:
                 ctx.lower_stmt(child)
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
+    ctx.emit_inst(DeclVar(name=class_name, value_reg=cls_reg))
 
 
 def lower_ruby_singleton_class(ctx: TreeSitterEmitContext, node) -> None:
@@ -148,8 +150,8 @@ def lower_ruby_singleton_class(ctx: TreeSitterEmitContext, node) -> None:
     class_label = ctx.fresh_label("singleton_class")
     end_label = ctx.fresh_label("singleton_class_end")
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=class_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=class_label))
 
     if value_node:
         ctx.lower_expr(value_node)
@@ -157,7 +159,7 @@ def lower_ruby_singleton_class(ctx: TreeSitterEmitContext, node) -> None:
     if body_node:
         ctx.lower_block(body_node)
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_ruby_singleton_method(ctx: TreeSitterEmitContext, node) -> None:
@@ -176,8 +178,8 @@ def lower_ruby_singleton_method(ctx: TreeSitterEmitContext, node) -> None:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{method_name}")
     end_label = ctx.fresh_label(f"end_{method_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=func_label))
 
     if params_node:
         lower_ruby_params(ctx, params_node)
@@ -187,20 +189,18 @@ def lower_ruby_singleton_method(ctx: TreeSitterEmitContext, node) -> None:
         expr_reg = _lower_body_with_implicit_return(ctx, body_node)
 
     if expr_reg:
-        ctx.emit(Opcode.RETURN, operands=[expr_reg])
+        ctx.emit_inst(Return_(value_reg=expr_reg))
     else:
         none_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CONST,
-            result_reg=none_reg,
-            operands=[ctx.constants.default_return_value],
+        ctx.emit_inst(
+            Const(result_reg=none_reg, value=ctx.constants.default_return_value)
         )
-        ctx.emit(Opcode.RETURN, operands=[none_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+        ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(method_name, func_label, result_reg=func_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[method_name, func_reg])
+    ctx.emit_inst(DeclVar(name=method_name, value_reg=func_reg))
 
 
 def lower_ruby_module(ctx: TreeSitterEmitContext, node) -> None:
@@ -212,15 +212,15 @@ def lower_ruby_module(ctx: TreeSitterEmitContext, node) -> None:
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{module_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{module_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=class_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=class_label))
     if body_node:
         ctx.lower_block(body_node)
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(module_name, class_label, [], result_reg=cls_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[module_name, cls_reg])
+    ctx.emit_inst(DeclVar(name=module_name, value_reg=cls_reg))
 
 
 # ---------------------------------------------------------------------------
