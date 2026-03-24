@@ -8,6 +8,7 @@ from interpreter.registry import build_registry
 from interpreter.run import execute_cfg
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import unwrap
+from interpreter.register import Register
 
 
 def _build_call_function_ir(func_name: str, *arg_literals) -> list[IRInstruction]:
@@ -54,7 +55,7 @@ class TestExecutorIOProviderDispatch:
         provider = StubIOProvider(accept_values=["HELLO"])
         vm = _execute_with_provider(ir, provider)
 
-        result = unwrap(vm.current_frame.registers.get("%result"))
+        result = unwrap(vm.current_frame.registers.get(Register("%result")))
         assert result == "HELLO"
 
     def test_stub_accept_empty_returns_symbolic(self):
@@ -62,7 +63,7 @@ class TestExecutorIOProviderDispatch:
         provider = StubIOProvider(accept_values=[])
         vm = _execute_with_provider(ir, provider)
 
-        result = unwrap(vm.current_frame.registers.get("%result"))
+        result = unwrap(vm.current_frame.registers.get(Register("%result")))
         assert isinstance(
             result, SymbolicValue
         ), f"expected SymbolicValue, got {type(result).__name__}: {result}"
@@ -72,7 +73,7 @@ class TestExecutorIOProviderDispatch:
         provider = NullIOProvider()
         vm = _execute_with_provider(ir, provider)
 
-        result = unwrap(vm.current_frame.registers.get("%result"))
+        result = unwrap(vm.current_frame.registers.get(Register("%result")))
         assert isinstance(
             result, SymbolicValue
         ), f"expected SymbolicValue, got {type(result).__name__}: {result}"
@@ -82,7 +83,7 @@ class TestExecutorIOProviderDispatch:
         provider = StubIOProvider(files={"CUST-FILE": {"records": ["RECORD-DATA"]}})
         vm = _execute_with_provider(ir, provider)
 
-        result = unwrap(vm.current_frame.registers.get("%result"))
+        result = unwrap(vm.current_frame.registers.get(Register("%result")))
         assert result == "RECORD-DATA"
 
     def test_stub_write_captures_data(self):
@@ -132,7 +133,7 @@ class TestExecutorIOProviderDispatch:
         ir = _build_call_function_ir("__cobol_prepare_digits", "123", 5, 2, True)
         # No provider — should fall through to builtins
         vm = _execute_with_provider(ir, None)
-        result = unwrap(vm.current_frame.registers.get("%result"))
+        result = unwrap(vm.current_frame.registers.get(Register("%result")))
         # Should get a concrete list of digit ints from the builtin, not symbolic
         assert isinstance(
             result, list
@@ -144,5 +145,5 @@ class TestExecutorIOProviderDispatch:
         provider = StubIOProvider()
         vm = _execute_with_provider(ir, provider)
         # print returns None (the builtin handles it, not the provider)
-        result = unwrap(vm.current_frame.registers.get("%result"))
+        result = unwrap(vm.current_frame.registers.get(Register("%result")))
         assert result is None

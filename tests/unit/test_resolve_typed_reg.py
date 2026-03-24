@@ -11,6 +11,7 @@ from interpreter.types.coercion.identity_conversion_rules import IdentityConvers
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.vm.vm import VMState, _resolve_typed_reg, runtime_type_name
 from interpreter.vm.vm_types import StackFrame
+from interpreter.register import Register
 
 
 def _make_vm() -> VMState:
@@ -19,9 +20,14 @@ def _make_vm() -> VMState:
     return vm
 
 
-def _type_env_with(register_types: dict[str, str]) -> TypeEnvironment:
+def _type_env_with(register_types: dict) -> TypeEnvironment:
     return TypeEnvironment(
-        register_types=MappingProxyType(register_types),
+        register_types=MappingProxyType(
+            {
+                (k if isinstance(k, Register) else Register(k)): v
+                for k, v in register_types.items()
+            }
+        ),
         var_types=MappingProxyType({}),
     )
 
@@ -54,7 +60,7 @@ class TestRuntimeTypeName:
 class TestResolveTypedReg:
     def test_float_coerced_to_int_when_type_env_says_int(self):
         vm = _make_vm()
-        vm.current_frame.registers["%0"] = 2.0
+        vm.current_frame.registers[Register("%0")] = 2.0
         type_env = _type_env_with({"%0": TypeName.INT})
 
         result = _resolve_typed_reg(vm, "%0", type_env, _DEFAULT_RULES)
@@ -64,7 +70,7 @@ class TestResolveTypedReg:
 
     def test_int_coerced_to_float_when_type_env_says_float(self):
         vm = _make_vm()
-        vm.current_frame.registers["%0"] = 2
+        vm.current_frame.registers[Register("%0")] = 2
         type_env = _type_env_with({"%0": TypeName.FLOAT})
 
         result = _resolve_typed_reg(vm, "%0", type_env, _DEFAULT_RULES)
@@ -74,7 +80,7 @@ class TestResolveTypedReg:
 
     def test_no_coercion_when_type_env_empty(self):
         vm = _make_vm()
-        vm.current_frame.registers["%0"] = 2.0
+        vm.current_frame.registers[Register("%0")] = 2.0
 
         result = _resolve_typed_reg(vm, "%0", _EMPTY_TYPE_ENV, _DEFAULT_RULES)
 
@@ -83,7 +89,7 @@ class TestResolveTypedReg:
 
     def test_no_coercion_when_runtime_matches_target(self):
         vm = _make_vm()
-        vm.current_frame.registers["%0"] = 42
+        vm.current_frame.registers[Register("%0")] = 42
         type_env = _type_env_with({"%0": TypeName.INT})
 
         result = _resolve_typed_reg(vm, "%0", type_env, _DEFAULT_RULES)
@@ -101,7 +107,7 @@ class TestResolveTypedReg:
 
     def test_identity_rules_do_not_coerce(self):
         vm = _make_vm()
-        vm.current_frame.registers["%0"] = 2.0
+        vm.current_frame.registers[Register("%0")] = 2.0
         type_env = _type_env_with({"%0": TypeName.INT})
 
         result = _resolve_typed_reg(vm, "%0", type_env, _IDENTITY_RULES)
@@ -111,7 +117,7 @@ class TestResolveTypedReg:
 
     def test_bool_coerced_to_int(self):
         vm = _make_vm()
-        vm.current_frame.registers["%0"] = True
+        vm.current_frame.registers[Register("%0")] = True
         type_env = _type_env_with({"%0": TypeName.INT})
 
         result = _resolve_typed_reg(vm, "%0", type_env, _DEFAULT_RULES)

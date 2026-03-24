@@ -21,6 +21,7 @@ from interpreter.refs.func_ref import FuncRef, BoundFuncRef
 from interpreter.types.typed_value import typed, typed_from_runtime, unwrap
 from interpreter.types.type_expr import scalar, UNKNOWN
 from interpreter.constants import TypeName
+from interpreter.register import Register
 
 
 from dataclasses import replace as _replace
@@ -62,7 +63,7 @@ def _build_callable_field_vm():
     vm.call_stack.append(
         StackFrame(
             function_name="<main>",
-            registers={"%obj": typed_from_runtime(ptr)},
+            registers={Register("%obj"): typed_from_runtime(ptr)},
         )
     )
     return vm, cfg, registry
@@ -73,7 +74,7 @@ class TestHeapFieldMethodCall:
         """CALL_METHOD on an object with a callable field should dispatch
         to the function (push a frame), not produce a symbolic value."""
         vm, cfg, registry = _build_callable_field_vm()
-        vm.current_frame.registers["%arg"] = typed_from_runtime(42)
+        vm.current_frame.registers[Register("%arg")] = typed_from_runtime(42)
         inst = IRInstruction(
             opcode=Opcode.CALL_METHOD,
             result_reg="%result",
@@ -103,7 +104,9 @@ class TestHeapFieldMethodCall:
         )
         assert result.handled
         assert result.update.call_push is None, "Should fall back, not dispatch"
-        assert isinstance(result.update.register_writes["%result"].value, SymbolicValue)
+        assert isinstance(
+            result.update.register_writes[Register("%result")].value, SymbolicValue
+        )
 
     def test_call_method_missing_field_falls_back(self):
         """CALL_METHOD for a method not in fields should fall back to resolver."""
@@ -118,4 +121,6 @@ class TestHeapFieldMethodCall:
         )
         assert result.handled
         assert result.update.call_push is None, "Should fall back, not dispatch"
-        assert isinstance(result.update.register_writes["%result"].value, SymbolicValue)
+        assert isinstance(
+            result.update.register_writes[Register("%result")].value, SymbolicValue
+        )

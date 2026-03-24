@@ -401,8 +401,8 @@ void f() {
             len(load_indices) == 2
         ), "grid[i][j] should produce 2 LOAD_INDEX instructions"
         # Second LOAD_INDEX should chain off the first (nested subscript)
-        assert (
-            load_indices[1].operands[0] == load_indices[0].result_reg
+        assert load_indices[1].operands[0] == str(
+            load_indices[0].result_reg
         ), "grid[i][j]: second subscript should use result of first as base"
 
     def test_struct_field_access_and_mutation(self):

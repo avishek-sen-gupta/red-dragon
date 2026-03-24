@@ -31,6 +31,7 @@ from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.types.type_inference import infer_types, _infer_const_type
 from interpreter.types.type_resolver import TypeResolver
+from interpreter.register import Register
 
 
 def _make_inst(
@@ -135,14 +136,14 @@ class TestSymbolicInference:
             _make_inst(Opcode.LABEL, label=CodeLabel("entry")),
             _make_inst(Opcode.SYMBOLIC, result_reg="%0", operands=["param:x"]),
         ]
-        builder = TypeEnvironmentBuilder(register_types={"%0": scalar("Int")})
+        builder = TypeEnvironmentBuilder(register_types={Register("%0"): scalar("Int")})
         env = infer_types(
             instructions,
             _default_resolver(),
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == "Int"
+        assert env.register_types[Register("%0")] == "Int"
 
     def test_symbolic_without_type_hint(self):
         instructions = [
@@ -154,7 +155,7 @@ class TestSymbolicInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "%0" not in env.register_types
+        assert Register("%0") not in env.register_types
 
 
 # ---------------------------------------------------------------------------
@@ -173,7 +174,7 @@ class TestConstInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == TypeName.INT
+        assert env.register_types[Register("%0")] == TypeName.INT
 
     def test_const_float(self):
         instructions = [
@@ -185,7 +186,7 @@ class TestConstInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == TypeName.FLOAT
+        assert env.register_types[Register("%0")] == TypeName.FLOAT
 
     def test_const_bool(self):
         instructions = [
@@ -197,7 +198,7 @@ class TestConstInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == TypeName.BOOL
+        assert env.register_types[Register("%0")] == TypeName.BOOL
 
     def test_const_string(self):
         instructions = [
@@ -209,7 +210,7 @@ class TestConstInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == TypeName.STRING
+        assert env.register_types[Register("%0")] == TypeName.STRING
 
     def test_const_none_not_typed(self):
         instructions = [
@@ -221,7 +222,7 @@ class TestConstInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "%0" not in env.register_types
+        assert Register("%0") not in env.register_types
 
     def test_const_func_ref_not_typed(self):
         instructions = [
@@ -233,7 +234,7 @@ class TestConstInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "%0" not in env.register_types
+        assert Register("%0") not in env.register_types
 
 
 # ---------------------------------------------------------------------------
@@ -307,7 +308,7 @@ class TestLoadVarInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%1"] == "Int"
+        assert env.register_types[Register("%1")] == "Int"
 
     def test_load_var_unknown_variable(self):
         instructions = [
@@ -319,7 +320,7 @@ class TestLoadVarInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "%0" not in env.register_types
+        assert Register("%0") not in env.register_types
 
 
 # ---------------------------------------------------------------------------
@@ -340,7 +341,7 @@ class TestBinopInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%2"] == TypeName.INT
+        assert env.register_types[Register("%2")] == TypeName.INT
 
     def test_int_plus_float(self):
         instructions = [
@@ -354,7 +355,7 @@ class TestBinopInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%2"] == TypeName.FLOAT
+        assert env.register_types[Register("%2")] == TypeName.FLOAT
 
     def test_int_div_int_produces_int(self):
         instructions = [
@@ -368,7 +369,7 @@ class TestBinopInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%2"] == TypeName.INT
+        assert env.register_types[Register("%2")] == TypeName.INT
 
     def test_comparison_produces_bool(self):
         instructions = [
@@ -382,7 +383,7 @@ class TestBinopInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%2"] == TypeName.BOOL
+        assert env.register_types[Register("%2")] == TypeName.BOOL
 
     def test_untyped_operands_no_result_type(self):
         instructions = [
@@ -396,7 +397,7 @@ class TestBinopInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "%2" not in env.register_types
+        assert Register("%2") not in env.register_types
 
 
 # ---------------------------------------------------------------------------
@@ -416,7 +417,7 @@ class TestUnopInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%1"] == TypeName.INT
+        assert env.register_types[Register("%1")] == TypeName.INT
 
     def test_not_produces_bool(self):
         """UNOP `not` → Bool regardless of operand type."""
@@ -430,7 +431,7 @@ class TestUnopInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%1"] == TypeName.BOOL
+        assert env.register_types[Register("%1")] == TypeName.BOOL
 
     def test_bang_produces_bool(self):
         """UNOP `!` → Bool regardless of operand type."""
@@ -444,7 +445,7 @@ class TestUnopInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%1"] == TypeName.BOOL
+        assert env.register_types[Register("%1")] == TypeName.BOOL
 
     def test_hash_produces_int(self):
         """UNOP `#` (Lua length) → Int."""
@@ -458,7 +459,7 @@ class TestUnopInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%1"] == TypeName.INT
+        assert env.register_types[Register("%1")] == TypeName.INT
 
     def test_negation_passes_through(self):
         """UNOP `-` passes through operand type (unchanged behaviour)."""
@@ -472,7 +473,7 @@ class TestUnopInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%1"] == TypeName.FLOAT
+        assert env.register_types[Register("%1")] == TypeName.FLOAT
 
     def test_not_on_untyped_operand_still_produces_bool(self):
         """UNOP `not` with untyped operand → Bool."""
@@ -485,7 +486,7 @@ class TestUnopInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%1"] == TypeName.BOOL
+        assert env.register_types[Register("%1")] == TypeName.BOOL
 
     def test_bitwise_not_produces_int(self):
         """UNOP `~` → Int regardless of operand type."""
@@ -499,7 +500,7 @@ class TestUnopInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%1"] == TypeName.INT
+        assert env.register_types[Register("%1")] == TypeName.INT
 
     def test_bitwise_not_on_untyped_operand_still_produces_int(self):
         """UNOP `~` with untyped operand → Int."""
@@ -512,7 +513,7 @@ class TestUnopInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%1"] == TypeName.INT
+        assert env.register_types[Register("%1")] == TypeName.INT
 
 
 # ---------------------------------------------------------------------------
@@ -531,7 +532,7 @@ class TestNewObjectArrayInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == "Dog"
+        assert env.register_types[Register("%0")] == "Dog"
 
     def test_new_array(self):
         instructions = [
@@ -543,7 +544,7 @@ class TestNewObjectArrayInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == TypeName.ARRAY
+        assert env.register_types[Register("%0")] == TypeName.ARRAY
 
 
 # ---------------------------------------------------------------------------
@@ -578,11 +579,11 @@ class TestFullChain:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
 
-        assert env.register_types["%0"] == TypeName.INT
-        assert env.register_types["%1"] == TypeName.INT
-        assert env.register_types["%2"] == "Int"
-        assert env.register_types["%3"] == "Int"
-        assert env.register_types["%4"] == TypeName.INT
+        assert env.register_types[Register("%0")] == TypeName.INT
+        assert env.register_types[Register("%1")] == TypeName.INT
+        assert env.register_types[Register("%2")] == "Int"
+        assert env.register_types[Register("%3")] == "Int"
+        assert env.register_types[Register("%4")] == TypeName.INT
         assert env.var_types["x"] == "Int"
         assert env.var_types["y"] == "Int"
         assert env.var_types["z"] == "Int"
@@ -603,7 +604,8 @@ class TestNullTypeResolver:
             _make_inst(Opcode.CONST, result_reg="%1", operands=["3.14"]),
         ]
         builder = TypeEnvironmentBuilder(
-            register_types={"%0": scalar("Int")}, var_types={"x": scalar("Int")}
+            register_types={Register("%0"): scalar("Int")},
+            var_types={"x": scalar("Int")},
         )
         env = infer_types(
             instructions,
@@ -611,8 +613,8 @@ class TestNullTypeResolver:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == "Int"
-        assert env.register_types["%1"] == TypeName.FLOAT
+        assert env.register_types[Register("%0")] == "Int"
+        assert env.register_types[Register("%1")] == TypeName.FLOAT
         assert env.var_types["x"] == "Int"
 
     def test_binop_result_type_empty(self):
@@ -629,10 +631,10 @@ class TestNullTypeResolver:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         # CONST types are still inferred
-        assert env.register_types["%0"] == TypeName.INT
-        assert env.register_types["%1"] == TypeName.INT
+        assert env.register_types[Register("%0")] == TypeName.INT
+        assert env.register_types[Register("%1")] == TypeName.INT
         # But BINOP result has no type (NullTypeResolver returns empty result_type)
-        assert "%2" not in env.register_types
+        assert Register("%2") not in env.register_types
 
 
 # ---------------------------------------------------------------------------
@@ -656,14 +658,14 @@ class TestCallFunctionInference:
                 operands=["Dog", "%1", "%2"],
             ),
         ]
-        builder = TypeEnvironmentBuilder(register_types={"%0": scalar("Dog")})
+        builder = TypeEnvironmentBuilder(register_types={Register("%0"): scalar("Dog")})
         env = infer_types(
             instructions,
             _default_resolver(),
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == "Dog"
+        assert env.register_types[Register("%0")] == "Dog"
 
     def test_call_function_without_type_hint_leaves_register_untyped(self):
         """Regular CALL_FUNCTION (no type_hint) → register has no type."""
@@ -680,7 +682,7 @@ class TestCallFunctionInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "%0" not in env.register_types
+        assert Register("%0") not in env.register_types
 
 
 # ---------------------------------------------------------------------------
@@ -721,7 +723,7 @@ class TestForwardReferenceResolution:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == TypeName.INT
+        assert env.register_types[Register("%0")] == TypeName.INT
 
     def test_forward_ref_cascades_to_caller_return_type(self):
         """main() returns helper() result → main's return type also resolves."""
@@ -778,7 +780,7 @@ class TestForwardReferenceResolution:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == TypeName.STRING
+        assert env.register_types[Register("%0")] == TypeName.STRING
         assert env.var_types["result"] == TypeName.STRING
 
     def test_three_function_chain_resolves(self):
@@ -849,7 +851,7 @@ class TestForwardReferenceResolution:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%2"] == TypeName.INT
+        assert env.register_types[Register("%2")] == TypeName.INT
 
 
 # ---------------------------------------------------------------------------
@@ -916,7 +918,7 @@ class TestReturnTypeInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%4"] == "Int"
+        assert env.register_types[Register("%4")] == "Int"
 
     def test_constructor_pre_seeded_type_overrides_return_type(self):
         """Pre-seeded register type (constructor) overrides inferred return type."""
@@ -939,7 +941,7 @@ class TestReturnTypeInference:
         ]
         builder = TypeEnvironmentBuilder(
             func_return_types={"func_Dog_0": scalar("void")},
-            register_types={"%2": scalar("Dog")},
+            register_types={Register("%2"): scalar("Dog")},
         )
         env = infer_types(
             instructions,
@@ -948,7 +950,7 @@ class TestReturnTypeInference:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         # Pre-seeded register type wins
-        assert env.register_types["%2"] == "Dog"
+        assert env.register_types[Register("%2")] == "Dog"
 
     def test_unknown_function_stays_untyped(self):
         """CALL_FUNCTION for an unknown function leaves register untyped."""
@@ -965,7 +967,7 @@ class TestReturnTypeInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "%0" not in env.register_types
+        assert Register("%0") not in env.register_types
 
 
 # ---------------------------------------------------------------------------
@@ -985,7 +987,7 @@ class TestBuiltinReturnTypes:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == TypeName.INT
+        assert env.register_types[Register("%0")] == TypeName.INT
 
     def test_str_returns_string(self):
         """CALL_FUNCTION `str` → String via builtin table."""
@@ -998,7 +1000,7 @@ class TestBuiltinReturnTypes:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == TypeName.STRING
+        assert env.register_types[Register("%0")] == TypeName.STRING
 
     def test_range_returns_array(self):
         """CALL_FUNCTION `range` → Array via builtin table."""
@@ -1011,7 +1013,7 @@ class TestBuiltinReturnTypes:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == TypeName.ARRAY
+        assert env.register_types[Register("%0")] == TypeName.ARRAY
 
     def test_int_builtin_returns_int(self):
         """CALL_FUNCTION `int` → Int via builtin table."""
@@ -1024,7 +1026,7 @@ class TestBuiltinReturnTypes:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == TypeName.INT
+        assert env.register_types[Register("%0")] == TypeName.INT
 
     def test_float_builtin_returns_float(self):
         """CALL_FUNCTION `float` → Float via builtin table."""
@@ -1037,7 +1039,7 @@ class TestBuiltinReturnTypes:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == TypeName.FLOAT
+        assert env.register_types[Register("%0")] == TypeName.FLOAT
 
     def test_bool_builtin_returns_bool(self):
         """CALL_FUNCTION `bool` → Bool via builtin table."""
@@ -1050,7 +1052,7 @@ class TestBuiltinReturnTypes:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == TypeName.BOOL
+        assert env.register_types[Register("%0")] == TypeName.BOOL
 
     def test_abs_returns_number(self):
         """CALL_FUNCTION `abs` → Number via builtin table."""
@@ -1063,7 +1065,7 @@ class TestBuiltinReturnTypes:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == TypeName.NUMBER
+        assert env.register_types[Register("%0")] == TypeName.NUMBER
 
     def test_unknown_function_stays_untyped_with_builtins(self):
         """Unknown function not in builtin table → untyped."""
@@ -1078,7 +1080,7 @@ class TestBuiltinReturnTypes:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "%0" not in env.register_types
+        assert Register("%0") not in env.register_types
 
     def test_pre_seeded_type_takes_precedence_over_builtin(self):
         """Pre-seeded register type on CALL_FUNCTION overrides builtin table."""
@@ -1090,14 +1092,16 @@ class TestBuiltinReturnTypes:
                 operands=["len", "%1"],
             ),
         ]
-        builder = TypeEnvironmentBuilder(register_types={"%0": scalar("CustomType")})
+        builder = TypeEnvironmentBuilder(
+            register_types={Register("%0"): scalar("CustomType")}
+        )
         env = infer_types(
             instructions,
             _default_resolver(),
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == "CustomType"
+        assert env.register_types[Register("%0")] == "CustomType"
 
     def test_user_defined_function_takes_precedence_over_builtin(self):
         """User-defined `len` function overrides builtin table."""
@@ -1122,7 +1126,7 @@ class TestBuiltinReturnTypes:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%2"] == "String"
+        assert env.register_types[Register("%2")] == "String"
 
 
 # ---------------------------------------------------------------------------
@@ -1181,7 +1185,7 @@ class TestReturnBackfill:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%2"] == TypeName.INT
+        assert env.register_types[Register("%2")] == TypeName.INT
 
     def test_annotated_function_not_overwritten_by_return(self):
         """Annotated function's return type should NOT be overwritten by RETURN backfill."""
@@ -1274,7 +1278,7 @@ class TestCallMethodReturnTypes:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%3"] == "Int"
+        assert env.register_types[Register("%3")] == "Int"
 
     def test_unknown_method_stays_untyped(self):
         """CALL_METHOD on unknown method → untyped."""
@@ -1292,7 +1296,7 @@ class TestCallMethodReturnTypes:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "%1" not in env.register_types
+        assert Register("%1") not in env.register_types
 
     def test_fallback_to_func_return_types_for_unique_method(self):
         """CALL_METHOD falls back to func_return_types when object type unknown."""
@@ -1324,7 +1328,7 @@ class TestCallMethodReturnTypes:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%3"] == "Int"
+        assert env.register_types[Register("%3")] == "Int"
 
     def test_builtin_string_method_upper_returns_string(self):
         """CALL_METHOD .upper() on any object → String."""
@@ -1342,7 +1346,7 @@ class TestCallMethodReturnTypes:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%1"] == TypeName.STRING
+        assert env.register_types[Register("%1")] == TypeName.STRING
 
     def test_builtin_string_method_split_returns_array(self):
         """CALL_METHOD .split() → Array."""
@@ -1360,7 +1364,7 @@ class TestCallMethodReturnTypes:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%1"] == TypeName.ARRAY
+        assert env.register_types[Register("%1")] == TypeName.ARRAY
 
     def test_builtin_method_keys_returns_array(self):
         """CALL_METHOD .keys() → Array."""
@@ -1377,7 +1381,7 @@ class TestCallMethodReturnTypes:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%1"] == TypeName.ARRAY
+        assert env.register_types[Register("%1")] == TypeName.ARRAY
 
     def test_builtin_method_find_returns_int(self):
         """CALL_METHOD .find() → Int."""
@@ -1395,7 +1399,7 @@ class TestCallMethodReturnTypes:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%1"] == TypeName.INT
+        assert env.register_types[Register("%1")] == TypeName.INT
 
     def test_builtin_method_startswith_returns_bool(self):
         """CALL_METHOD .startswith() → Bool."""
@@ -1413,7 +1417,7 @@ class TestCallMethodReturnTypes:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%1"] == TypeName.BOOL
+        assert env.register_types[Register("%1")] == TypeName.BOOL
 
     def test_user_defined_method_takes_priority_over_builtin(self):
         """User-defined class method return type overrides builtin method table."""
@@ -1447,7 +1451,7 @@ class TestCallMethodReturnTypes:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         # User-defined Widget.split() returns Int, not the builtin Array
-        assert env.register_types["%3"] == "Int"
+        assert env.register_types[Register("%3")] == "Int"
 
     def test_class_scope_reset_on_new_class(self):
         """When a new class_ label is hit, scope switches to the new class."""
@@ -1496,8 +1500,8 @@ class TestCallMethodReturnTypes:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%4"] == "String"
-        assert env.register_types["%6"] == "Int"
+        assert env.register_types[Register("%4")] == "String"
+        assert env.register_types[Register("%6")] == "Int"
 
 
 # ---------------------------------------------------------------------------
@@ -1522,7 +1526,7 @@ class TestFieldTypeTable:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%3"] == TypeName.INT
+        assert env.register_types[Register("%3")] == TypeName.INT
 
     def test_load_field_unknown_class_untyped(self):
         """LOAD_FIELD on untyped object → untyped."""
@@ -1535,7 +1539,7 @@ class TestFieldTypeTable:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "%1" not in env.register_types
+        assert Register("%1") not in env.register_types
 
     def test_load_field_unknown_field_untyped(self):
         """LOAD_FIELD on known class but unknown field → untyped."""
@@ -1551,7 +1555,7 @@ class TestFieldTypeTable:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "%2" not in env.register_types
+        assert Register("%2") not in env.register_types
 
     def test_multiple_fields_on_same_class(self):
         """Multiple fields stored on same class → each loaded with correct type."""
@@ -1570,8 +1574,8 @@ class TestFieldTypeTable:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%3"] == TypeName.INT
-        assert env.register_types["%4"] == TypeName.STRING
+        assert env.register_types[Register("%3")] == TypeName.INT
+        assert env.register_types[Register("%4")] == TypeName.STRING
 
 
 # ---------------------------------------------------------------------------
@@ -1591,7 +1595,7 @@ class TestRegionInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == "Region"
+        assert env.register_types[Register("%0")] == "Region"
 
     def test_load_region_produces_array_type(self):
         """LOAD_REGION → register typed as Array."""
@@ -1604,7 +1608,7 @@ class TestRegionInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == TypeName.ARRAY
+        assert env.register_types[Register("%0")] == TypeName.ARRAY
 
 
 class TestImmutability:
@@ -1619,7 +1623,7 @@ class TestImmutability:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         with pytest.raises(TypeError):
-            env.register_types["%99"] = "Bogus"
+            env.register_types[Register("%99")] = "Bogus"
 
 
 # ---------------------------------------------------------------------------
@@ -1646,7 +1650,10 @@ class TestFunctionSignatures:
             _make_inst(Opcode.STORE_VAR, operands=["add", "%3"]),
         ]
         builder = TypeEnvironmentBuilder(
-            register_types={"%0": scalar("Int"), "%1": scalar("Int")},
+            register_types={
+                Register("%0"): scalar("Int"),
+                Register("%1"): scalar("Int"),
+            },
             func_return_types={"func_add_0": scalar("Int")},
             func_param_types={
                 "func_add_0": [("a", scalar("Int")), ("b", scalar("Int"))]
@@ -1706,7 +1713,7 @@ class TestFunctionSignatures:
             _make_inst(Opcode.STORE_VAR, operands=["add", "%1"]),
         ]
         builder = TypeEnvironmentBuilder(
-            register_types={"%0": scalar("Int")},
+            register_types={Register("%0"): scalar("Int")},
             func_return_types={"func_add_0": scalar("Int")},
             func_param_types={"func_add_0": [("a", scalar("Int"))]},
         )
@@ -1779,9 +1786,9 @@ class TestFunctionSignatures:
         ]
         builder = TypeEnvironmentBuilder(
             register_types={
-                "%0": scalar("Int"),
-                "%1": scalar("Int"),
-                "%4": scalar("String"),
+                Register("%0"): scalar("Int"),
+                Register("%1"): scalar("Int"),
+                Register("%4"): scalar("String"),
             },
             func_return_types={
                 "func_add_0": scalar("Int"),
@@ -1861,7 +1868,7 @@ class TestSelfThisTyping:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == "Dog"
+        assert env.register_types[Register("%0")] == "Dog"
 
     def test_param_this_inside_class_typed_as_class_name(self):
         """param:this inside class_Cat scope → register typed as 'Cat'."""
@@ -1885,7 +1892,7 @@ class TestSelfThisTyping:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == "Cat"
+        assert env.register_types[Register("%0")] == "Cat"
 
     def test_param_dollar_this_inside_class_typed_as_class_name(self):
         """param:$this inside class_User scope → register typed as 'User' (PHP)."""
@@ -1909,7 +1916,7 @@ class TestSelfThisTyping:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == "User"
+        assert env.register_types[Register("%0")] == "User"
 
     def test_param_self_outside_class_not_typed(self):
         """param:self outside any class scope → no type assigned."""
@@ -1931,7 +1938,7 @@ class TestSelfThisTyping:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "%0" not in env.register_types
+        assert Register("%0") not in env.register_types
 
     def test_self_typing_enables_field_tracking(self):
         """param:self typed → STORE_FIELD on self register → field_types populated."""
@@ -1971,10 +1978,10 @@ class TestSelfThisTyping:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         # self register typed as Dog
-        assert env.register_types["%0"] == "Dog"
-        assert env.register_types["%2"] == "Dog"
+        assert env.register_types[Register("%0")] == "Dog"
+        assert env.register_types[Register("%2")] == "Dog"
         # LOAD_FIELD on self.age → Int
-        assert env.register_types["%3"] == TypeName.INT
+        assert env.register_types[Register("%3")] == TypeName.INT
 
     def test_param_self_with_pre_seeded_type_uses_pre_seeded(self):
         """If param:self already has a pre-seeded type, that takes priority."""
@@ -1993,7 +2000,9 @@ class TestSelfThisTyping:
             ),
             _make_inst(Opcode.LABEL, label=CodeLabel("end_class_Dog_0")),
         ]
-        builder = TypeEnvironmentBuilder(register_types={"%0": scalar("SpecialDog")})
+        builder = TypeEnvironmentBuilder(
+            register_types={Register("%0"): scalar("SpecialDog")}
+        )
         env = infer_types(
             instructions,
             _default_resolver(),
@@ -2001,7 +2010,7 @@ class TestSelfThisTyping:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         # Pre-seeded type takes priority over class name
-        assert env.register_types["%0"] == "SpecialDog"
+        assert env.register_types[Register("%0")] == "SpecialDog"
 
 
 # ---------------------------------------------------------------------------
@@ -2042,7 +2051,7 @@ class TestCallUnknown:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%3"] == "Int"
+        assert env.register_types[Register("%3")] == "Int"
 
     def test_target_resolves_to_builtin(self):
         """CALL_UNKNOWN target register → var_types name → builtin → typed."""
@@ -2074,7 +2083,7 @@ class TestCallUnknown:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         # 'len' is in _BUILTIN_RETURN_TYPES → Int
-        assert env.register_types["%2"] == TypeName.INT
+        assert env.register_types[Register("%2")] == TypeName.INT
 
     def test_unknown_target_stays_untyped(self):
         """CALL_UNKNOWN with unresolvable target → untyped."""
@@ -2091,7 +2100,7 @@ class TestCallUnknown:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "%1" not in env.register_types
+        assert Register("%1") not in env.register_types
 
     def test_no_result_reg_leaves_state_clean(self):
         """CALL_UNKNOWN without result_reg does not pollute register or var types."""
@@ -2104,7 +2113,7 @@ class TestCallUnknown:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "%0" not in env.register_types
+        assert Register("%0") not in env.register_types
         assert len(env.var_types) == 0
 
 
@@ -2129,7 +2138,7 @@ class TestStoreIndexLoadIndex:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%3"] == TypeName.INT
+        assert env.register_types[Register("%3")] == TypeName.INT
 
     def test_load_index_unknown_array_untyped(self):
         """LOAD_INDEX on array with no prior STORE_INDEX → untyped."""
@@ -2144,7 +2153,7 @@ class TestStoreIndexLoadIndex:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "%2" not in env.register_types
+        assert Register("%2") not in env.register_types
 
     def test_last_store_wins(self):
         """Multiple STORE_INDEX with different types → last one wins."""
@@ -2164,7 +2173,7 @@ class TestStoreIndexLoadIndex:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%4"] == TypeName.STRING
+        assert env.register_types[Register("%4")] == TypeName.STRING
 
     def test_store_index_untyped_value_no_tracking(self):
         """STORE_INDEX with untyped value → no element type tracked."""
@@ -2181,7 +2190,7 @@ class TestStoreIndexLoadIndex:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "%3" not in env.register_types
+        assert Register("%3") not in env.register_types
 
     def test_store_index_no_result_reg(self):
         """STORE_INDEX never produces a result register."""
@@ -2198,7 +2207,11 @@ class TestStoreIndexLoadIndex:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         # STORE_INDEX should not add any new register beyond %0, %1, %2
-        assert set(env.register_types.keys()) == {"%0", "%1", "%2"}
+        assert set(env.register_types.keys()) == {
+            Register("%0"),
+            Register("%1"),
+            Register("%2"),
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -2233,11 +2246,11 @@ class TestVarTypeScoping:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == TypeName.INT
-        assert env.register_types["%2"] == TypeName.STRING
+        assert env.register_types[Register("%0")] == TypeName.INT
+        assert env.register_types[Register("%2")] == TypeName.STRING
         # LOAD_VAR x in f should be Int, in g should be String
-        assert env.register_types["%1"] == TypeName.INT
-        assert env.register_types["%3"] == TypeName.STRING
+        assert env.register_types[Register("%1")] == TypeName.INT
+        assert env.register_types[Register("%3")] == TypeName.STRING
 
     def test_global_var_visible_inside_function(self):
         """A top-level variable should be visible from within a function."""
@@ -2258,9 +2271,9 @@ class TestVarTypeScoping:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == TypeName.INT
+        assert env.register_types[Register("%0")] == TypeName.INT
         # y loaded inside f should inherit the global type
-        assert env.register_types["%1"] == TypeName.INT
+        assert env.register_types[Register("%1")] == TypeName.INT
 
     def test_function_var_does_not_leak_to_global(self):
         """A variable defined inside a function should not affect global scope."""
@@ -2281,9 +2294,9 @@ class TestVarTypeScoping:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%0"] == TypeName.FLOAT
+        assert env.register_types[Register("%0")] == TypeName.FLOAT
         # z at global scope was never defined, so %1 should have no type
-        assert "%1" not in env.register_types
+        assert Register("%1") not in env.register_types
 
 
 # ---------------------------------------------------------------------------
@@ -2352,7 +2365,7 @@ class TestInferenceInternalTypeExpr:
             _null_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        reg_type = env.register_types["%0"]
+        reg_type = env.register_types[Register("%0")]
         assert isinstance(reg_type, TypeExpr)
         assert isinstance(reg_type, ScalarType)
 
@@ -2370,7 +2383,7 @@ class TestInferenceInternalTypeExpr:
             _null_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        arr_type = env.register_types["%arr"]
+        arr_type = env.register_types[Register("%arr")]
         assert isinstance(arr_type, ParameterizedType)
         assert arr_type.constructor == "Array"
         assert arr_type.arguments == (ScalarType("Int"),)
@@ -2388,8 +2401,8 @@ class TestInferenceInternalTypeExpr:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert isinstance(env.register_types["%2"], ScalarType)
-        assert env.register_types["%2"] == TypeName.INT
+        assert isinstance(env.register_types[Register("%2")], ScalarType)
+        assert env.register_types[Register("%2")] == TypeName.INT
 
     def test_store_var_type_is_type_expr(self):
         """Variable types stored during inference should be TypeExpr."""
@@ -2409,7 +2422,7 @@ class TestInferenceInternalTypeExpr:
     def test_seeded_register_type_becomes_type_expr(self):
         """Seeded string types from builder should be parsed to TypeExpr."""
         builder = TypeEnvironmentBuilder(
-            register_types={"%0": parse_type("List[String]")}
+            register_types={Register("%0"): parse_type("List[String]")}
         )
         instructions = [_make_inst(Opcode.LABEL, label=CodeLabel("entry"))]
         env = infer_types(
@@ -2418,7 +2431,7 @@ class TestInferenceInternalTypeExpr:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        reg_type = env.register_types["%0"]
+        reg_type = env.register_types[Register("%0")]
         assert isinstance(reg_type, ParameterizedType)
         assert reg_type.constructor == "List"
         assert reg_type.arguments == (ScalarType("String"),)
@@ -2450,8 +2463,8 @@ class TestInferenceInternalTypeExpr:
             _null_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert isinstance(env.register_types["%0"], ScalarType)
-        assert env.register_types["%0"] == "Dog"
+        assert isinstance(env.register_types[Register("%0")], ScalarType)
+        assert env.register_types[Register("%0")] == "Dog"
 
     def test_unop_fixed_type_is_type_expr(self):
         """UNOP with fixed result type (e.g., 'not' → Bool) stores TypeExpr."""
@@ -2465,8 +2478,8 @@ class TestInferenceInternalTypeExpr:
             _null_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert isinstance(env.register_types["%1"], ScalarType)
-        assert env.register_types["%1"] == TypeName.BOOL
+        assert isinstance(env.register_types[Register("%1")], ScalarType)
+        assert env.register_types[Register("%1")] == TypeName.BOOL
 
     def test_alloc_region_is_scalar_type(self):
         """ALLOC_REGION stores 'Region' as ScalarType."""
@@ -2479,8 +2492,8 @@ class TestInferenceInternalTypeExpr:
             _null_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert isinstance(env.register_types["%0"], ScalarType)
-        assert env.register_types["%0"] == "Region"
+        assert isinstance(env.register_types[Register("%0")], ScalarType)
+        assert env.register_types[Register("%0")] == "Region"
 
     def test_load_region_is_scalar_type(self):
         """LOAD_REGION stores 'Array' as ScalarType."""
@@ -2494,8 +2507,8 @@ class TestInferenceInternalTypeExpr:
             _null_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert isinstance(env.register_types["%1"], ScalarType)
-        assert env.register_types["%1"] == TypeName.ARRAY
+        assert isinstance(env.register_types[Register("%1")], ScalarType)
+        assert env.register_types[Register("%1")] == TypeName.ARRAY
 
 
 # ---------------------------------------------------------------------------
@@ -2521,8 +2534,8 @@ class TestFieldTypeTableUsesTypeExprKeys:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         # The result type should be TypeExpr, not str
-        assert isinstance(env.register_types["%2"], TypeExpr)
-        assert env.register_types["%2"] == "Int"
+        assert isinstance(env.register_types[Register("%2")], TypeExpr)
+        assert env.register_types[Register("%2")] == "Int"
 
     def test_self_typed_field_store_uses_type_expr_key(self):
         """param:self typed as Dog → STORE_FIELD → LOAD_FIELD uses TypeExpr class key."""
@@ -2561,11 +2574,11 @@ class TestFieldTypeTableUsesTypeExprKeys:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         # self registers typed as TypeExpr Dog
-        assert isinstance(env.register_types["%0"], ScalarType)
-        assert env.register_types["%0"] == "Dog"
+        assert isinstance(env.register_types[Register("%0")], ScalarType)
+        assert env.register_types[Register("%0")] == "Dog"
         # LOAD_FIELD result is TypeExpr
-        assert isinstance(env.register_types["%3"], TypeExpr)
-        assert env.register_types["%3"] == "Int"
+        assert isinstance(env.register_types[Register("%3")], TypeExpr)
+        assert env.register_types[Register("%3")] == "Int"
 
     def test_class_method_type_resolution_uses_type_expr_key(self):
         """CALL_METHOD on typed object → resolves return type via TypeExpr class key."""
@@ -2600,8 +2613,8 @@ class TestFieldTypeTableUsesTypeExprKeys:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         # Method return type resolved as TypeExpr
-        assert isinstance(env.register_types["%3"], TypeExpr)
-        assert env.register_types["%3"] == "Int"
+        assert isinstance(env.register_types[Register("%3")], TypeExpr)
+        assert env.register_types[Register("%3")] == "Int"
 
 
 # ---------------------------------------------------------------------------
@@ -2709,7 +2722,10 @@ class TestFunctionTypeInference:
             ),
         ]
         builder = TypeEnvironmentBuilder(
-            register_types={"%0": scalar("Int"), "%1": scalar("Int")},
+            register_types={
+                Register("%0"): scalar("Int"),
+                Register("%1"): scalar("Int"),
+            },
             func_return_types={"func_add_0": scalar("Int")},
             func_param_types={
                 "func_add_0": [("a", scalar("Int")), ("b", scalar("Int"))]
@@ -2721,9 +2737,9 @@ class TestFunctionTypeInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert "%3" in env.register_types
+        assert Register("%3") in env.register_types
         expected = fn_type([scalar("Int"), scalar("Int")], scalar("Int"))
-        assert env.register_types["%3"] == expected
+        assert env.register_types[Register("%3")] == expected
 
     def test_const_func_ref_no_params_known(self):
         """CONST func ref with no param types known → no FunctionType inferred."""
@@ -2745,7 +2761,7 @@ class TestFunctionTypeInference:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         # Without known param or return types, no FunctionType is produced
-        assert "%1" not in env.register_types
+        assert Register("%1") not in env.register_types
 
     def test_const_func_ref_only_return_known_infers_function_type(self):
         """CONST func ref with return type but no param types → FunctionType with empty params."""
@@ -2770,9 +2786,9 @@ class TestFunctionTypeInference:
             func_symbol_table=_build_func_symbol_table(instructions),
         )
         # With return type known, FunctionType should be inferred
-        assert "%1" in env.register_types
+        assert Register("%1") in env.register_types
         expected = fn_type([], scalar("Int"))
-        assert env.register_types["%1"] == expected
+        assert env.register_types[Register("%1")] == expected
 
     def test_call_unknown_with_function_type_uses_return_type(self):
         """CALL_UNKNOWN on register with FunctionType → result gets return_type."""
@@ -2801,7 +2817,10 @@ class TestFunctionTypeInference:
             ),
         ]
         builder = TypeEnvironmentBuilder(
-            register_types={"%0": scalar("Int"), "%1": scalar("Int")},
+            register_types={
+                Register("%0"): scalar("Int"),
+                Register("%1"): scalar("Int"),
+            },
             func_return_types={"func_add_0": scalar("Int")},
             func_param_types={
                 "func_add_0": [("a", scalar("Int")), ("b", scalar("Int"))]
@@ -2813,7 +2832,7 @@ class TestFunctionTypeInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%5"] == "Int"
+        assert env.register_types[Register("%5")] == "Int"
 
     def test_call_unknown_uses_function_type_from_register(self):
         """CALL_UNKNOWN on register with FunctionType (no var name) → uses return_type."""
@@ -2843,7 +2862,7 @@ class TestFunctionTypeInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%2"] == "Bool"
+        assert env.register_types[Register("%2")] == "Bool"
 
 
 class TestTupleTypeInference:
@@ -2861,7 +2880,7 @@ class TestTupleTypeInference:
             _default_resolver(),
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%1"] == "Tuple"
+        assert env.register_types[Register("%1")] == "Tuple"
 
     def test_tuple_promotion_with_element_types(self):
         """Tuple register promoted to Tuple[Int, String] after STORE_INDEX."""
@@ -3047,7 +3066,7 @@ class TestTypeAliasInference:
             type_env_builder=builder,
             func_symbol_table=_build_func_symbol_table(instructions),
         )
-        assert env.register_types["%2"] == scalar("Int")
+        assert env.register_types[Register("%2")] == scalar("Int")
 
 
 # ---------------------------------------------------------------------------

@@ -49,7 +49,7 @@ def format_state_update(update: StateUpdate) -> dict[str, Any]:
     result: dict[str, Any] = {}
     if update.register_writes:
         result["registers"] = {
-            k: format_typed_value(v) for k, v in update.register_writes.items()
+            str(k): format_typed_value(v) for k, v in update.register_writes.items()
         }
     if update.var_writes:
         result["variables"] = {

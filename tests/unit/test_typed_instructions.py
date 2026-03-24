@@ -7,6 +7,8 @@ original ``str(inst)`` output.
 
 from __future__ import annotations
 
+from interpreter.register import Register
+
 import pytest
 
 from interpreter.ir import (
@@ -490,8 +492,8 @@ class TestTypedFieldAccess:
         )
         typed = to_typed(inst)
         assert typed.operator == "+"
-        assert typed.left == "%0"
-        assert typed.right == "%1"
+        assert typed.left == Register("%0")
+        assert typed.right == Register("%1")
         assert typed.result_reg == Register("%2")
 
     def test_call_function_fields(self):
@@ -504,7 +506,7 @@ class TestTypedFieldAccess:
         )
         typed = to_typed(inst)
         assert typed.func_name == "add"
-        assert typed.args == ("%0", "%1")
+        assert typed.args == (Register("%0"), Register("%1"))
 
     def test_store_field_fields(self):
         from interpreter.instructions import to_typed
@@ -514,9 +516,9 @@ class TestTypedFieldAccess:
             operands=["%0", "count", "%1"],
         )
         typed = to_typed(inst)
-        assert typed.obj_reg == "%0"
+        assert typed.obj_reg == Register("%0")
         assert typed.field_name == "count"
-        assert typed.value_reg == "%1"
+        assert typed.value_reg == Register("%1")
 
     def test_branch_if_fields(self):
         from interpreter.instructions import to_typed
@@ -527,7 +529,7 @@ class TestTypedFieldAccess:
             branch_targets=[CodeLabel("L_true"), CodeLabel("L_false")],
         )
         typed = to_typed(inst)
-        assert typed.cond_reg == "%0"
+        assert typed.cond_reg == Register("%0")
         assert typed.branch_targets == (CodeLabel("L_true"), CodeLabel("L_false"))
 
     def test_write_region_length_is_int(self):
@@ -553,4 +555,4 @@ class TestTypedFieldAccess:
 
         inst = IRInstruction(opcode=Opcode.RETURN, operands=["%0"])
         typed = to_typed(inst)
-        assert typed.value_reg == "%0"
+        assert typed.value_reg == Register("%0")

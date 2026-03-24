@@ -8,6 +8,7 @@ from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.ir import CodeLabel
 from interpreter.vm.vm import materialize_raw_update, apply_update
+from interpreter.register import Register
 from interpreter.vm.vm_types import (
     StateUpdate,
     VMState,
@@ -26,9 +27,9 @@ class TestMaterializeRawUpdate:
     def test_int_register_write(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
-        raw = StateUpdate(register_writes={"%0": 42}, reasoning="test")
+        raw = StateUpdate(register_writes={Register("%0"): 42}, reasoning="test")
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
-        tv = result.register_writes["%0"]
+        tv = result.register_writes[Register("%0")]
         assert isinstance(tv, TypedValue)
         assert tv.value == 42
         assert tv.type == scalar("Int")
@@ -36,9 +37,9 @@ class TestMaterializeRawUpdate:
     def test_string_register_write(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
-        raw = StateUpdate(register_writes={"%0": "hello"}, reasoning="test")
+        raw = StateUpdate(register_writes={Register("%0"): "hello"}, reasoning="test")
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
-        tv = result.register_writes["%0"]
+        tv = result.register_writes[Register("%0")]
         assert isinstance(tv, TypedValue)
         assert tv.value == "hello"
         assert tv.type == scalar("String")
@@ -52,9 +53,9 @@ class TestMaterializeRawUpdate:
             "type_hint": "Int",
             "constraints": [],
         }
-        raw = StateUpdate(register_writes={"%0": sym_dict}, reasoning="test")
+        raw = StateUpdate(register_writes={Register("%0"): sym_dict}, reasoning="test")
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
-        tv = result.register_writes["%0"]
+        tv = result.register_writes[Register("%0")]
         assert isinstance(tv, TypedValue)
         assert isinstance(tv.value, SymbolicValue)
         assert tv.value.name == "sym_0"
@@ -63,9 +64,9 @@ class TestMaterializeRawUpdate:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         ptr_dict = {"__pointer__": True, "base": "mem_0", "offset": 4}
-        raw = StateUpdate(register_writes={"%0": ptr_dict}, reasoning="test")
+        raw = StateUpdate(register_writes={Register("%0"): ptr_dict}, reasoning="test")
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
-        tv = result.register_writes["%0"]
+        tv = result.register_writes[Register("%0")]
         assert isinstance(tv, TypedValue)
         assert isinstance(tv.value, Pointer)
         assert tv.value.base == "mem_0"
@@ -85,7 +86,7 @@ class TestMaterializeRawUpdate:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         raw = StateUpdate(
-            register_writes={"%0": 42},
+            register_writes={Register("%0"): 42},
             reasoning="test",
             next_label=CodeLabel("block_1"),
             path_condition="x > 0",
@@ -99,9 +100,9 @@ class TestMaterializeRawUpdate:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         tv = typed(42, scalar("Int"))
-        raw = StateUpdate(register_writes={"%0": tv}, reasoning="test")
+        raw = StateUpdate(register_writes={Register("%0"): tv}, reasoning="test")
         result = materialize_raw_update(raw, vm, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
-        assert result.register_writes["%0"] is tv
+        assert result.register_writes[Register("%0")] is tv
 
     def test_register_coercion_applied(self):
         """Register values get coerced via _coerce_value during materialization."""
@@ -110,15 +111,15 @@ class TestMaterializeRawUpdate:
         )
 
         type_env = TypeEnvironment(
-            register_types=MappingProxyType({"%0": scalar("Float")}),
+            register_types=MappingProxyType({Register("%0"): scalar("Float")}),
             var_types=MappingProxyType({}),
         )
         rules = DefaultTypeConversionRules()
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
-        raw = StateUpdate(register_writes={"%0": 42}, reasoning="test")
+        raw = StateUpdate(register_writes={Register("%0"): 42}, reasoning="test")
         result = materialize_raw_update(raw, vm, type_env, rules)
-        tv = result.register_writes["%0"]
+        tv = result.register_writes[Register("%0")]
         assert isinstance(tv, TypedValue)
         assert isinstance(tv.value, float)
         assert tv.type == scalar("Float")
@@ -139,11 +140,11 @@ class TestApplyUpdateTypedPath:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         tv = typed(42, scalar("Int"))
-        update = StateUpdate(register_writes={"%0": tv}, reasoning="test")
+        update = StateUpdate(register_writes={Register("%0"): tv}, reasoning="test")
         apply_update(
             vm, update, type_env=_EMPTY_TYPE_ENV, conversion_rules=_IDENTITY_RULES
         )
-        assert vm.current_frame.registers["%0"] is tv
+        assert vm.current_frame.registers[Register("%0")] is tv
 
     def test_stores_typed_var_directly(self):
         vm = VMState()
@@ -198,16 +199,16 @@ class TestApplyUpdateTypedPath:
         )
 
         type_env = TypeEnvironment(
-            register_types=MappingProxyType({"%0": scalar("Float")}),
+            register_types=MappingProxyType({Register("%0"): scalar("Float")}),
             var_types=MappingProxyType({}),
         )
         rules = DefaultTypeConversionRules()
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         tv = typed(42, scalar("Int"))
-        update = StateUpdate(register_writes={"%0": tv}, reasoning="test")
+        update = StateUpdate(register_writes={Register("%0"): tv}, reasoning="test")
         apply_update(vm, update, type_env=type_env, conversion_rules=rules)
-        result = vm.current_frame.registers["%0"]
+        result = vm.current_frame.registers[Register("%0")]
         assert isinstance(result, TypedValue)
         assert isinstance(result.value, float)
         assert result.type == scalar("Float")
