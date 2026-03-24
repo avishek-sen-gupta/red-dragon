@@ -4,7 +4,25 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.instructions import (
+    Branch,
+    BranchIf,
+    CallFunction,
+    CallMethod,
+    Const,
+    DeclVar,
+    Label_,
+    LoadField,
+    LoadIndex,
+    LoadVar,
+    NewArray,
+    Return_,
+    StoreField,
+    StoreIndex,
+    StoreVar,
+    Symbolic,
+    Throw_,
+)
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
     extract_call_args_unwrap,
@@ -29,20 +47,21 @@ def lower_method_invocation(ctx: TreeSitterEmitContext, node) -> Register:
         obj_reg = ctx.lower_expr(obj_node)
         method_name = ctx.node_text(name_node) if name_node else "unknown"
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_METHOD,
-            result_reg=reg,
-            operands=[obj_reg, method_name] + arg_regs,
+        ctx.emit_inst(
+            CallMethod(
+                result_reg=reg,
+                obj_reg=obj_reg,
+                method_name=method_name,
+                args=tuple(arg_regs),
+            ),
             node=node,
         )
         return reg
 
     func_name = ctx.node_text(name_node) if name_node else "unknown"
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=[func_name] + arg_regs,
+    ctx.emit_inst(
+        CallFunction(result_reg=reg, func_name=func_name, args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -54,10 +73,8 @@ def lower_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
     type_name = ctx.node_text(type_node) if type_node else "Object"
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=[type_name] + arg_regs,
+    ctx.emit_inst(
+        CallFunction(result_reg=reg, func_name=type_name, args=tuple(arg_regs)),
         node=node,
     )
     ctx.seed_register_type(reg, ScalarType(type_name))
@@ -72,11 +89,8 @@ def lower_field_access(ctx: TreeSitterEmitContext, node) -> Register:
     obj_reg = ctx.lower_expr(obj_node)
     field_name = ctx.node_text(field_node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_FIELD,
-        result_reg=reg,
-        operands=[obj_reg, field_name],
-        node=node,
+    ctx.emit_inst(
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
     )
     return reg
 
@@ -88,11 +102,8 @@ def lower_method_reference(ctx: TreeSitterEmitContext, node) -> Register:
     obj_reg = ctx.lower_expr(obj_node)
     method_name = ctx.node_text(method_node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_FIELD,
-        result_reg=reg,
-        operands=[obj_reg, method_name],
-        node=node,
+    ctx.emit_inst(
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=method_name), node=node
     )
     return reg
 
@@ -101,12 +112,7 @@ def lower_scoped_identifier(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower scoped_identifier (e.g., java.lang.System) as LOAD_VAR."""
     qualified_name = ctx.node_text(node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_VAR,
-        result_reg=reg,
-        operands=[qualified_name],
-        node=node,
-    )
+    ctx.emit_inst(LoadVar(result_reg=reg, name=qualified_name), node=node)
     return reg
 
 
@@ -115,11 +121,8 @@ def lower_class_literal(ctx: TreeSitterEmitContext, node) -> Register:
     type_node = node.children[0]
     type_reg = ctx.lower_expr(type_node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_FIELD,
-        result_reg=reg,
-        operands=[type_reg, "class"],
-        node=node,
+    ctx.emit_inst(
+        LoadField(result_reg=reg, obj_reg=type_reg, field_name="class"), node=node
     )
     return reg
 
@@ -129,8 +132,8 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> Register:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}__lambda")
     end_label = ctx.fresh_label("lambda_end")
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=func_label))
 
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     if params_node:
@@ -140,17 +143,15 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> Register:
     if body_node and body_node.type == JavaNodeType.BLOCK:
         ctx.lower_block(body_node)
         none_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CONST,
-            result_reg=none_reg,
-            operands=[ctx.constants.default_return_value],
+        ctx.emit_inst(
+            Const(result_reg=none_reg, value=ctx.constants.default_return_value)
         )
-        ctx.emit(Opcode.RETURN, operands=[none_reg])
+        ctx.emit_inst(Return_(value_reg=none_reg))
     elif body_node:
         body_reg = ctx.lower_expr(body_node)
-        ctx.emit(Opcode.RETURN, operands=[body_reg])
+        ctx.emit_inst(Return_(value_reg=body_reg))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
     ref_reg = ctx.fresh_reg()
     ctx.emit_func_ref("__lambda", func_label, result_reg=ref_reg, node=node)
@@ -165,16 +166,14 @@ def _lower_lambda_params(ctx: TreeSitterEmitContext, params_node) -> None:
         for child in params_node.children:
             if child.type == JavaNodeType.IDENTIFIER:
                 pname = ctx.node_text(child)
-                ctx.emit(
-                    Opcode.SYMBOLIC,
-                    result_reg=ctx.fresh_reg(),
-                    operands=[f"{constants.PARAM_PREFIX}{pname}"],
+                ctx.emit_inst(
+                    Symbolic(
+                        result_reg=ctx.fresh_reg(),
+                        hint=f"{constants.PARAM_PREFIX}{pname}",
+                    ),
                     node=child,
                 )
-                ctx.emit(
-                    Opcode.DECL_VAR,
-                    operands=[pname, f"%{ctx.reg_counter - 1}"],
-                )
+                ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
 
 
 def lower_array_access(ctx: TreeSitterEmitContext, node) -> Register:
@@ -185,11 +184,8 @@ def lower_array_access(ctx: TreeSitterEmitContext, node) -> Register:
     arr_reg = ctx.lower_expr(arr_node)
     idx_reg = ctx.lower_expr(idx_node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_INDEX,
-        result_reg=reg,
-        operands=[arr_reg, idx_reg],
-        node=node,
+    ctx.emit_inst(
+        LoadIndex(result_reg=reg, arr_reg=arr_reg, index_reg=idx_reg), node=node
     )
     return reg
 
@@ -200,19 +196,19 @@ def lower_array_creation(ctx: TreeSitterEmitContext, node) -> Register:
     if node.type == JavaNodeType.ARRAY_INITIALIZER:
         elements = [c for c in node.children if c.is_named]
         size_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elements))])
+        ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elements))))
         arr_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.NEW_ARRAY,
-            result_reg=arr_reg,
-            operands=["array", size_reg],
+        ctx.emit_inst(
+            NewArray(result_reg=arr_reg, type_hint="array", size_reg=size_reg),
             node=node,
         )
         for i, elem in enumerate(elements):
             idx_reg = ctx.fresh_reg()
-            ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
             val_reg = ctx.lower_expr(elem)
-            ctx.emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+            ctx.emit_inst(
+                StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg)
+            )
         return arr_reg
 
     # array_creation_expression: look for array_initializer child
@@ -223,19 +219,19 @@ def lower_array_creation(ctx: TreeSitterEmitContext, node) -> Register:
     if init_node is not None:
         elements = [c for c in init_node.children if c.is_named]
         size_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elements))])
+        ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elements))))
         arr_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.NEW_ARRAY,
-            result_reg=arr_reg,
-            operands=["array", size_reg],
+        ctx.emit_inst(
+            NewArray(result_reg=arr_reg, type_hint="array", size_reg=size_reg),
             node=node,
         )
         for i, elem in enumerate(elements):
             idx_reg = ctx.fresh_reg()
-            ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+            ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
             val_reg = ctx.lower_expr(elem)
-            ctx.emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+            ctx.emit_inst(
+                StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg)
+            )
         return arr_reg
 
     # Sized array without initializer: new int[5]
@@ -248,13 +244,10 @@ def lower_array_creation(ctx: TreeSitterEmitContext, node) -> Register:
         size_reg = ctx.lower_expr(dim_children[0]) if dim_children else ctx.fresh_reg()
     else:
         size_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=size_reg, operands=["0"])
+        ctx.emit_inst(Const(result_reg=size_reg, value="0"))
     arr_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.NEW_ARRAY,
-        result_reg=arr_reg,
-        operands=["array", size_reg],
-        node=node,
+    ctx.emit_inst(
+        NewArray(result_reg=arr_reg, type_hint="array", size_reg=size_reg), node=node
     )
     return arr_reg
 
@@ -274,24 +267,24 @@ def lower_java_store_target(
         name = ctx.node_text(target)
         if ctx.symbol_table.resolve_field(ctx._current_class_name, name).name:
             this_reg = ctx.fresh_reg()
-            ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
-            ctx.emit(
-                Opcode.STORE_FIELD, operands=[this_reg, name, val_reg], node=parent_node
-            )
-        else:
-            ctx.emit(
-                Opcode.STORE_VAR,
-                operands=[name, val_reg],
+            ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"))
+            ctx.emit_inst(
+                StoreField(obj_reg=this_reg, field_name=name, value_reg=val_reg),
                 node=parent_node,
             )
+        else:
+            ctx.emit_inst(StoreVar(name=name, value_reg=val_reg), node=parent_node)
     elif target.type == JavaNodeType.FIELD_ACCESS:
         obj_node = target.child_by_field_name(ctx.constants.attr_object_field)
         field_node = target.child_by_field_name("field")
         if obj_node and field_node:
             obj_reg = ctx.lower_expr(obj_node)
-            ctx.emit(
-                Opcode.STORE_FIELD,
-                operands=[obj_reg, ctx.node_text(field_node), val_reg],
+            ctx.emit_inst(
+                StoreField(
+                    obj_reg=obj_reg,
+                    field_name=ctx.node_text(field_node),
+                    value_reg=val_reg,
+                ),
                 node=parent_node,
             )
     elif target.type == JavaNodeType.ARRAY_ACCESS:
@@ -300,16 +293,13 @@ def lower_java_store_target(
         if arr_node and idx_node:
             arr_reg = ctx.lower_expr(arr_node)
             idx_reg = ctx.lower_expr(idx_node)
-            ctx.emit(
-                Opcode.STORE_INDEX,
-                operands=[arr_reg, idx_reg, val_reg],
+            ctx.emit_inst(
+                StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
     else:
-        ctx.emit(
-            Opcode.STORE_VAR,
-            operands=[ctx.node_text(target), val_reg],
-            node=parent_node,
+        ctx.emit_inst(
+            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
         )
 
 
@@ -356,19 +346,24 @@ def lower_instanceof(ctx: TreeSitterEmitContext, node) -> Register:
 
     type_reg = ctx.fresh_reg()
     type_name = ctx.node_text(type_node) if type_node else "Object"
-    ctx.emit(Opcode.CONST, result_reg=type_reg, operands=[type_name])
+    ctx.emit_inst(Const(result_reg=type_reg, value=type_name))
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["isinstance", obj_reg, type_reg],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=reg,
+            func_name="isinstance",
+            args=(
+                obj_reg,
+                type_reg,
+            ),
+        ),
         node=node,
     )
     # Java 16+ type pattern binding: o instanceof String s → bind s = o
     if binding_node:
         binding_name = ctx.node_text(binding_node)
         if binding_name != "_":
-            ctx.emit(Opcode.STORE_VAR, operands=[binding_name, obj_reg], node=node)
+            ctx.emit_inst(StoreVar(name=binding_name, value_reg=obj_reg), node=node)
     return reg
 
 
@@ -382,25 +377,21 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> Register:
     false_label = ctx.fresh_label("ternary_false")
     end_label = ctx.fresh_label("ternary_end")
 
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[true_label, false_label],
-    )
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)))
+    ctx.emit_inst(Label_(label=true_label))
     true_reg = ctx.lower_expr(true_node)
     result_var = f"__ternary_{ctx.label_counter}"
-    ctx.emit(Opcode.DECL_VAR, operands=[result_var, true_reg])
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(DeclVar(name=result_var, value_reg=true_reg))
+    ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=false_label)
+    ctx.emit_inst(Label_(label=false_label))
     false_reg = ctx.lower_expr(false_node)
-    ctx.emit(Opcode.DECL_VAR, operands=[result_var, false_reg])
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(DeclVar(name=result_var, value_reg=false_reg))
+    ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
     result_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=result_reg, operands=[result_var])
+    ctx.emit_inst(LoadVar(result_reg=result_reg, name=result_var))
     return result_reg
 
 
@@ -419,12 +410,10 @@ def lower_throw_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
         val_reg = ctx.lower_expr(named_children[0])
     else:
         val_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CONST,
-            result_reg=val_reg,
-            operands=[ctx.constants.default_return_value],
+        ctx.emit_inst(
+            Const(result_reg=val_reg, value=ctx.constants.default_return_value)
         )
-    ctx.emit(Opcode.THROW, operands=[val_reg], node=node)
+    ctx.emit_inst(Throw_(value_reg=val_reg), node=node)
     return val_reg
 
 
@@ -439,30 +428,25 @@ def lower_java_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 pname = ctx.node_text(name_node)
                 type_hint = extract_normalized_type(ctx, child, "type", ctx.type_map)
                 param_reg = ctx.fresh_reg()
-                ctx.emit(
-                    Opcode.SYMBOLIC,
-                    result_reg=param_reg,
-                    operands=[f"{constants.PARAM_PREFIX}{pname}"],
+                ctx.emit_inst(
+                    Symbolic(
+                        result_reg=param_reg, hint=f"{constants.PARAM_PREFIX}{pname}"
+                    ),
                     node=child,
                 )
                 ctx.seed_register_type(param_reg, type_hint)
                 ctx.seed_param_type(pname, type_hint)
-                ctx.emit(
-                    Opcode.DECL_VAR,
-                    operands=[pname, f"%{ctx.reg_counter - 1}"],
-                )
+                ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
                 ctx.seed_var_type(pname, type_hint)
         elif child.type == JavaNodeType.SPREAD_PARAMETER:
             name_node = child.child_by_field_name("name")
             if name_node:
                 pname = ctx.node_text(name_node)
-                ctx.emit(
-                    Opcode.SYMBOLIC,
-                    result_reg=ctx.fresh_reg(),
-                    operands=[f"{constants.PARAM_PREFIX}{pname}"],
+                ctx.emit_inst(
+                    Symbolic(
+                        result_reg=ctx.fresh_reg(),
+                        hint=f"{constants.PARAM_PREFIX}{pname}",
+                    ),
                     node=child,
                 )
-                ctx.emit(
-                    Opcode.DECL_VAR,
-                    operands=[pname, f"%{ctx.reg_counter - 1}"],
-                )
+                ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
