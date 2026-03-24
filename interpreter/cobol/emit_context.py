@@ -38,7 +38,17 @@ from interpreter.cobol.ir_encoders import (
     build_decode_float_ir,
 )
 from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
-from interpreter.instructions import to_typed, Return_, Label_
+from interpreter.instructions import (
+    Binop,
+    CallFunction,
+    Const,
+    Instruction,
+    Label_,
+    LoadRegion,
+    Return_,
+    WriteRegion,
+    to_typed,
+)
 from interpreter.register import Register, NO_REGISTER
 
 logger = logging.getLogger(__name__)
@@ -114,10 +124,15 @@ class EmitContext:
         )
         self._instructions.append(inst)
 
+    def emit_inst(self, inst: Instruction) -> Instruction:
+        """Emit a typed instruction directly."""
+        self._instructions.append(inst)
+        return inst
+
     def const_to_reg(self, value: Any) -> str:
         """Emit a CONST and return its register."""
         reg = self.fresh_reg()
-        self.emit(Opcode.CONST, result_reg=reg, operands=[value])
+        self.emit_inst(Const(result_reg=reg, value=value))
         return reg
 
     def inline_ir(
@@ -188,7 +203,7 @@ class EmitContext:
 
         if not subscript:
             offset_reg = self.fresh_reg()
-            self.emit(Opcode.CONST, result_reg=offset_reg, operands=[fl.offset])
+            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
             return ResolvedFieldRef(fl=fl, offset_reg=offset_reg)
 
         # Resolve subscript value: literal or field
@@ -211,27 +226,31 @@ class EmitContext:
         # Compute offset: fl.offset + (idx - 1) * element_size
         one_reg = self.const_to_reg(1)
         idx_minus_one = self.fresh_reg()
-        self.emit(
-            Opcode.BINOP,
-            result_reg=idx_minus_one,
-            operands=["-", idx_reg, one_reg],
+        self.emit_inst(
+            Binop(result_reg=idx_minus_one, operator="-", left=idx_reg, right=one_reg),
         )
 
         elem_size = fl.element_size if fl.element_size > 0 else fl.byte_length
         elem_size_reg = self.const_to_reg(elem_size)
         displacement = self.fresh_reg()
-        self.emit(
-            Opcode.BINOP,
-            result_reg=displacement,
-            operands=["*", idx_minus_one, elem_size_reg],
+        self.emit_inst(
+            Binop(
+                result_reg=displacement,
+                operator="*",
+                left=idx_minus_one,
+                right=elem_size_reg,
+            ),
         )
 
         base_offset_reg = self.const_to_reg(fl.offset)
         final_offset_reg = self.fresh_reg()
-        self.emit(
-            Opcode.BINOP,
-            result_reg=final_offset_reg,
-            operands=["+", base_offset_reg, displacement],
+        self.emit_inst(
+            Binop(
+                result_reg=final_offset_reg,
+                operator="+",
+                left=base_offset_reg,
+                right=displacement,
+            ),
         )
 
         # For subscripted access, use element-level FieldLayout
@@ -259,10 +278,14 @@ class EmitContext:
         encoded_reg = self.emit_encode_value(fl, value)
         if not offset_reg:
             offset_reg = self.fresh_reg()
-            self.emit(Opcode.CONST, result_reg=offset_reg, operands=[fl.offset])
-        self.emit(
-            Opcode.WRITE_REGION,
-            operands=[region_reg, offset_reg, fl.byte_length, encoded_reg],
+            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
+        self.emit_inst(
+            WriteRegion(
+                region_reg=region_reg,
+                offset_reg=offset_reg,
+                length=fl.byte_length,
+                value_reg=encoded_reg,
+            ),
         )
 
     def emit_encode_value(self, fl: FieldLayout, value: str) -> str:
@@ -288,10 +311,12 @@ class EmitContext:
     def _emit_ebcdic_spaces(self, byte_length: int) -> str:
         """Emit IR to create a list of EBCDIC spaces (0x40). Returns result register."""
         result = self.fresh_reg()
-        self.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=result,
-            operands=[BuiltinName.MAKE_LIST, byte_length, ByteConstants.EBCDIC_SPACE],
+        self.emit_inst(
+            CallFunction(
+                result_reg=result,
+                func_name=BuiltinName.MAKE_LIST,
+                args=(byte_length, ByteConstants.EBCDIC_SPACE),
+            ),
         )
         return result
 
@@ -304,7 +329,7 @@ class EmitContext:
     ) -> str:
         """Emit inline alphanumeric encoding IR. Returns result register."""
         value_reg = self.fresh_reg()
-        self.emit(Opcode.CONST, result_reg=value_reg, operands=[value])
+        self.emit_inst(Const(result_reg=value_reg, value=value))
 
         if justified_right:
             ir = build_encode_alphanumeric_justified_ir(
@@ -318,7 +343,7 @@ class EmitContext:
         """Emit inline float encoding IR for COMP-1/COMP-2. Returns result register."""
         float_val = float(value)
         value_reg = self.fresh_reg()
-        self.emit(Opcode.CONST, result_reg=value_reg, operands=[float_val])
+        self.emit_inst(Const(result_reg=value_reg, value=float_val))
 
         ir = build_encode_float_ir(f"enc_float_{field_name}", td.byte_length)
         return self.inline_ir(ir, {"%p_float_value": value_reg})
@@ -344,10 +369,10 @@ class EmitContext:
             sign_nibble = ByteConstants.SIGN_NIBBLE_POSITIVE
 
         digits_reg = self.fresh_reg()
-        self.emit(Opcode.CONST, result_reg=digits_reg, operands=[digits])
+        self.emit_inst(Const(result_reg=digits_reg, value=digits))
 
         sign_reg = self.fresh_reg()
-        self.emit(Opcode.CONST, result_reg=sign_reg, operands=[sign_nibble])
+        self.emit_inst(Const(result_reg=sign_reg, value=sign_nibble))
 
         if td.category == CobolDataCategory.ZONED_DECIMAL:
             if td.sign_separate:
@@ -380,13 +405,16 @@ class EmitContext:
         """Emit IR to load and decode a field from the region. Returns decoded value register."""
         if not offset_reg:
             offset_reg = self.fresh_reg()
-            self.emit(Opcode.CONST, result_reg=offset_reg, operands=[fl.offset])
+            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
 
         data_reg = self.fresh_reg()
-        self.emit(
-            Opcode.LOAD_REGION,
-            result_reg=data_reg,
-            operands=[region_reg, offset_reg, fl.byte_length],
+        self.emit_inst(
+            LoadRegion(
+                result_reg=data_reg,
+                region_reg=region_reg,
+                offset_reg=offset_reg,
+                length=fl.byte_length,
+            ),
         )
 
         td = fl.type_descriptor
@@ -428,10 +456,8 @@ class EmitContext:
     def emit_to_string(self, value_reg: str) -> str:
         """Emit IR to convert a value to a string."""
         result = self.fresh_reg()
-        self.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=result,
-            operands=["str", value_reg],
+        self.emit_inst(
+            CallFunction(result_reg=result, func_name="str", args=(value_reg,)),
         )
         return result
 
@@ -441,15 +467,12 @@ class EmitContext:
         """Wrap encoded bytes with BLANK WHEN ZERO check via builtin."""
         result = self.fresh_reg()
         length_reg = self.const_to_reg(byte_length)
-        self.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=result,
-            operands=[
-                BuiltinName.COBOL_BLANK_WHEN_ZERO,
-                encoded_reg,
-                value_str_reg,
-                length_reg,
-            ],
+        self.emit_inst(
+            CallFunction(
+                result_reg=result,
+                func_name=BuiltinName.COBOL_BLANK_WHEN_ZERO,
+                args=(encoded_reg, value_str_reg, length_reg),
+            ),
         )
         return result
 
@@ -470,10 +493,10 @@ class EmitContext:
         if td.category in (CobolDataCategory.COMP1, CobolDataCategory.COMP2):
             # Convert string to float, then encode
             float_reg = self.fresh_reg()
-            self.emit(
-                Opcode.CALL_FUNCTION,
-                result_reg=float_reg,
-                operands=["float", value_str_reg],
+            self.emit_inst(
+                CallFunction(
+                    result_reg=float_reg, func_name="float", args=(value_str_reg,)
+                ),
             )
             ir = build_encode_float_ir(f"enc_float_{fl.name}", td.byte_length)
             encoded = self.inline_ir(ir, {"%p_float_value": float_reg})
@@ -496,27 +519,21 @@ class EmitContext:
         """Emit IR to parse a string into digits + sign, then encode numerically."""
         td = fl.type_descriptor
         digits_reg = self.fresh_reg()
-        self.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=digits_reg,
-            operands=[
-                BuiltinName.COBOL_PREPARE_DIGITS,
-                value_str_reg,
-                td.total_digits,
-                td.decimal_digits,
-                td.signed,
-            ],
+        self.emit_inst(
+            CallFunction(
+                result_reg=digits_reg,
+                func_name=BuiltinName.COBOL_PREPARE_DIGITS,
+                args=(value_str_reg, td.total_digits, td.decimal_digits, td.signed),
+            ),
         )
 
         sign_reg = self.fresh_reg()
-        self.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=sign_reg,
-            operands=[
-                BuiltinName.COBOL_PREPARE_SIGN,
-                value_str_reg,
-                td.signed,
-            ],
+        self.emit_inst(
+            CallFunction(
+                result_reg=sign_reg,
+                func_name=BuiltinName.COBOL_PREPARE_SIGN,
+                args=(value_str_reg, td.signed),
+            ),
         )
 
         if td.category == CobolDataCategory.ZONED_DECIMAL:
@@ -555,10 +572,14 @@ class EmitContext:
         encoded_reg = self.emit_encode_from_string(fl, value_str_reg)
         if not offset_reg:
             offset_reg = self.fresh_reg()
-            self.emit(Opcode.CONST, result_reg=offset_reg, operands=[fl.offset])
-        self.emit(
-            Opcode.WRITE_REGION,
-            operands=[region_reg, offset_reg, fl.byte_length, encoded_reg],
+            self.emit_inst(Const(result_reg=offset_reg, value=fl.offset))
+        self.emit_inst(
+            WriteRegion(
+                region_reg=region_reg,
+                offset_reg=offset_reg,
+                length=fl.byte_length,
+                value_reg=encoded_reg,
+            ),
         )
 
     # ── Condition Lowering ───────────────────────────────────────
