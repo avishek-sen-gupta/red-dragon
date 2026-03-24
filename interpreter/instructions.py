@@ -33,6 +33,10 @@ class InstructionBase:
 
     source_location: SourceLocation = field(default_factory=lambda: NO_SOURCE_LOCATION)
 
+    def __str__(self) -> str:
+        """Render in the same format as IRInstruction.__str__."""
+        return str(to_flat(self))
+
 
 # ── Variables & Constants ────────────────────────────────────────
 
