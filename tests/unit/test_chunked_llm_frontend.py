@@ -165,10 +165,10 @@ class TestIRRenumberer:
             ),
         ]
         result, _ = self.renumberer.renumber(instructions, 0, "_chunk1")
-        assert result[0].branch_targets == [
+        assert result[0].branch_targets == (
             CodeLabel("if_true_0_chunk1"),
             CodeLabel("if_false_1_chunk1"),
-        ]
+        )
 
     def test_function_ref_label_renaming(self):
         instructions = [

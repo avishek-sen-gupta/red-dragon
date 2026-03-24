@@ -22,7 +22,7 @@ from interpreter.ir import (
     CodeLabel,
     NO_LABEL,
 )
-from interpreter.instructions import to_typed, Const, Label_
+from interpreter.instructions import InstructionBase, Const, Label_
 from interpreter.llm.llm_client import LLMClient
 from interpreter import constants
 
@@ -235,7 +235,7 @@ def _strip_markdown_fences(text: str) -> str:
     return text.strip()
 
 
-def _parse_single_instruction(raw: dict[str, Any]) -> IRInstruction:
+def _parse_single_instruction(raw: dict[str, Any]) -> InstructionBase:
     """Map a raw dict from the LLM response to an IRInstruction."""
     opcode_str = raw.get("opcode", "")
     try:
@@ -255,7 +255,7 @@ def _parse_single_instruction(raw: dict[str, Any]) -> IRInstruction:
     )
 
 
-def _parse_ir_response(raw_text: str) -> list[IRInstruction]:
+def _parse_ir_response(raw_text: str) -> list[InstructionBase]:
     """Parse the LLM's raw text response into a list of IRInstructions."""
     cleaned = _strip_markdown_fences(raw_text)
     try:
@@ -270,7 +270,7 @@ def _parse_ir_response(raw_text: str) -> list[IRInstruction]:
     return [_parse_single_instruction(item) for item in data]
 
 
-def _validate_ir(instructions: list[IRInstruction]) -> list[IRInstruction]:
+def _validate_ir(instructions: list[InstructionBase]) -> list[InstructionBase]:
     """Validate and fix up the IR instruction list.
 
     - Ensures the list is non-empty
@@ -293,7 +293,7 @@ def _validate_ir(instructions: list[IRInstruction]) -> list[IRInstruction]:
 
 
 def _convert_llm_func_refs(
-    instructions: list[IRInstruction],
+    instructions: list[InstructionBase],
     func_symbol_table: dict[CodeLabel, FuncRef],
 ) -> None:
     """Convert LLM-emitted <function:name@label> strings to plain labels.
@@ -303,7 +303,7 @@ def _convert_llm_func_refs(
     """
     for i, inst in enumerate(instructions):
         if inst.opcode == Opcode.CONST and inst.operands:
-            t = to_typed(inst)
+            t = inst
             assert isinstance(t, Const)
             operand = str(t.value)
             m = _LLM_FUNC_REF_RE.search(operand)
@@ -314,7 +314,7 @@ def _convert_llm_func_refs(
 
 
 def _convert_llm_class_refs(
-    instructions: list[IRInstruction],
+    instructions: list[InstructionBase],
     class_symbol_table: dict[CodeLabel, ClassRef],
 ) -> None:
     """Convert LLM-emitted <class:name@label> strings to plain labels.
@@ -324,7 +324,7 @@ def _convert_llm_class_refs(
     """
     for i, inst in enumerate(instructions):
         if inst.opcode == Opcode.CONST and inst.operands:
-            t = to_typed(inst)
+            t = inst
             assert isinstance(t, Const)
             operand = str(t.value)
             m = _LLM_CLASS_REF_RE.search(operand)
@@ -371,7 +371,7 @@ class LLMFrontend(Frontend):
     def class_symbol_table(self) -> dict[CodeLabel, ClassRef]:
         return self._class_symbol_table
 
-    def lower(self, source: bytes) -> list[IRInstruction]:
+    def lower(self, source: bytes) -> list[InstructionBase]:
         """Lower source code to IR via LLM.
 
         Args:

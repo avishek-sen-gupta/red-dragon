@@ -238,29 +238,54 @@ class NoCodeLabel(CodeLabel):
 NO_LABEL = NoCodeLabel()
 
 
-class IRInstruction(BaseModel):
-    opcode: Opcode
-    result_reg: Register = NO_REGISTER
-    operands: list[Any] = []
-    label: CodeLabel = NO_LABEL
-    branch_targets: list[CodeLabel] = []
-    source_location: SourceLocation = NO_SOURCE_LOCATION
+def IRInstruction(
+    opcode: Opcode,
+    result_reg: Register = NO_REGISTER,
+    operands: list[Any] = [],
+    label: CodeLabel = NO_LABEL,
+    branch_targets: list[CodeLabel] = [],
+    source_location: SourceLocation = NO_SOURCE_LOCATION,
+) -> Any:
+    """Factory: construct a typed instruction from flat (opcode, operands) form.
 
-    def __str__(self) -> str:
-        parts: list[str] = []
-        if self.label.is_present() and self.opcode == Opcode.LABEL:
-            base = f"{self.label}:"
-        else:
-            if self.result_reg.is_present():
-                parts.append(f"{self.result_reg} =")
-            parts.append(self.opcode.value.lower())
-            for op in self.operands:
-                parts.append(str(op))
-            if self.branch_targets:
-                parts.append(",".join(str(t) for t in self.branch_targets))
-            elif self.label.is_present() and self.opcode != Opcode.LABEL:
-                parts.append(str(self.label))
-            base = " ".join(parts)
-        if not self.source_location.is_unknown():
-            return f"{base}  # {self.source_location}"
-        return base
+    Drop-in replacement for the old ``IRInstruction`` Pydantic class.
+    Callers keep the same keyword interface; the return value is now a
+    frozen dataclass from ``interpreter.instructions``.
+    """
+    # Import here to avoid circular imports (ir ← instructions ← ir)
+    from interpreter.instructions import _to_typed
+
+    class _Flat:
+        """Minimal shim carrying the fields ``_to_typed`` needs."""
+
+        __slots__ = (
+            "opcode",
+            "result_reg",
+            "operands",
+            "label",
+            "branch_targets",
+            "source_location",
+        )
+
+        def __init__(
+            self, opcode, result_reg, operands, label, branch_targets, source_location
+        ):
+            self.opcode = opcode
+            self.result_reg = (
+                result_reg
+                if isinstance(result_reg, Register)
+                else (Register(result_reg) if result_reg else NO_REGISTER)
+            )
+            self.operands = operands
+            self.label = (
+                label
+                if isinstance(label, CodeLabel)
+                else (CodeLabel(label) if label else NO_LABEL)
+            )
+            self.branch_targets = [
+                t if isinstance(t, CodeLabel) else CodeLabel(t) for t in branch_targets
+            ]
+            self.source_location = source_location
+
+    flat = _Flat(opcode, result_reg, operands, label, branch_targets, source_location)
+    return _to_typed(flat)

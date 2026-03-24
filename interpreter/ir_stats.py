@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from collections import Counter
 
-from interpreter.ir import IRInstruction
 
-
-def count_opcodes(instructions: list[IRInstruction]) -> dict[str, int]:
+def count_opcodes(instructions: list[InstructionBase]) -> dict[str, int]:
     """Return a frequency map of opcode names in the given instruction list.
 
     Args:

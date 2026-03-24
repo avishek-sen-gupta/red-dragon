@@ -19,16 +19,17 @@ from interpreter.frontends.typescript import TypeScriptFrontend
 from interpreter.frontends.python import PythonFrontend
 from interpreter.frontends.javascript import JavaScriptFrontend
 from interpreter.frontends.ruby import RubyFrontend
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import Opcode
+from interpreter.instructions import InstructionBase
 from interpreter.parser import TreeSitterParserFactory
 
 
-def _lower(frontend_class, lang: str, source: str) -> list[IRInstruction]:
+def _lower(frontend_class, lang: str, source: str) -> list[InstructionBase]:
     frontend = frontend_class(TreeSitterParserFactory(), lang)
     return frontend.lower(source.encode("utf-8"))
 
 
-def _store_var_names(instructions: list[IRInstruction]) -> list[str]:
+def _store_var_names(instructions: list[InstructionBase]) -> list[str]:
     """Extract all variable names from STORE_VAR and DECL_VAR instructions."""
     return [
         str(inst.operands[0])
@@ -37,7 +38,7 @@ def _store_var_names(instructions: list[IRInstruction]) -> list[str]:
     ]
 
 
-def _load_var_names(instructions: list[IRInstruction]) -> list[str]:
+def _load_var_names(instructions: list[InstructionBase]) -> list[str]:
     """Extract all variable names from LOAD_VAR instructions."""
     return [
         str(inst.operands[0])
@@ -47,11 +48,11 @@ def _load_var_names(instructions: list[IRInstruction]) -> list[str]:
 
 
 def _instructions_in_inline_function(
-    instructions: list[IRInstruction], label_prefix: str
-) -> list[IRInstruction]:
+    instructions: list[InstructionBase], label_prefix: str
+) -> list[InstructionBase]:
     """Extract instructions between a LABEL matching *label_prefix* and the next RETURN."""
     collecting = False
-    result: list[IRInstruction] = []
+    result: list[InstructionBase] = []
     for inst in instructions:
         if (
             inst.opcode == Opcode.LABEL

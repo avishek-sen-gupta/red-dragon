@@ -14,10 +14,15 @@ from typing import Any, Callable
 from interpreter import constants
 from interpreter.constants import CanonicalLiteral, Language
 from interpreter.frontend_observer import FrontendObserver
-from interpreter.instructions import Const, DeclVar, Instruction, Symbolic
+from interpreter.instructions import (
+    InstructionBase,
+    Const,
+    DeclVar,
+    Instruction,
+    Symbolic,
+)
 from interpreter.ir import (
     NO_SOURCE_LOCATION,
-    IRInstruction,
     Opcode,
     SourceLocation,
     CodeLabel,
@@ -111,7 +116,7 @@ class TreeSitterEmitContext:
     # Mutable state
     reg_counter: int = 0
     label_counter: int = 0
-    instructions: list[IRInstruction] = field(default_factory=list)
+    instructions: list[InstructionBase] = field(default_factory=list)
     loop_stack: list[dict[str, str]] = field(default_factory=list)
     break_target_stack: list[str] = field(default_factory=list)
     switch_result_stack: list[str] = field(default_factory=list)

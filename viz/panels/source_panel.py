@@ -6,8 +6,6 @@ from rich.text import Text
 from textual.reactive import reactive
 from textual.widgets import Static
 
-from interpreter.ir import IRInstruction
-
 
 class SourcePanel(Static):
     """Displays source code with the current instruction's source span highlighted."""
@@ -24,7 +22,7 @@ class SourcePanel(Static):
         self._lines = source.splitlines() if source else []
         self._render_source()
 
-    def watch_current_instruction(self, inst: IRInstruction | None) -> None:
+    def watch_current_instruction(self, inst: InstructionBase | None) -> None:
         self._render_source()
 
     def highlight_lines(self, start_line: int, end_line: int) -> None:

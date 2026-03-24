@@ -4,30 +4,33 @@ from __future__ import annotations
 
 from interpreter.frontends.typescript import TypeScriptFrontend
 from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import Opcode
+from interpreter.instructions import InstructionBase
 
 
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 
 
-def _parse_ts(source: str) -> list[IRInstruction]:
+def _parse_ts(source: str) -> list[InstructionBase]:
     frontend = TypeScriptFrontend(TreeSitterParserFactory(), "typescript")
     return frontend.lower(source.encode("utf-8"))
 
 
 def _parse_ts_with_types(
     source: str,
-) -> tuple[list[IRInstruction], TypeEnvironmentBuilder]:
+) -> tuple[list[InstructionBase], TypeEnvironmentBuilder]:
     frontend = TypeScriptFrontend(TreeSitterParserFactory(), "typescript")
     instructions = frontend.lower(source.encode("utf-8"))
     return instructions, frontend.type_env_builder
 
 
-def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:
+def _opcodes(instructions: list[InstructionBase]) -> list[Opcode]:
     return [inst.opcode for inst in instructions]
 
 
-def _find_all(instructions: list[IRInstruction], opcode: Opcode) -> list[IRInstruction]:
+def _find_all(
+    instructions: list[InstructionBase], opcode: Opcode
+) -> list[InstructionBase]:
     return [inst for inst in instructions if inst.opcode == opcode]
 
 
@@ -231,7 +234,7 @@ class TestTypeScriptControlFlow:
         ), f"Unreachable targets: {branch_targets - label_set}"
 
 
-def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
+def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
     return [str(inst.label) for inst in instructions if inst.opcode == Opcode.LABEL]
 
 

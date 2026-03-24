@@ -38,8 +38,9 @@ from interpreter.cobol.ir_encoders import (
     build_encode_float_ir,
     build_decode_float_ir,
 )
-from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
+from interpreter.ir import Opcode, CodeLabel, NO_LABEL
 from interpreter.instructions import (
+    InstructionBase,
     Binop,
     CallFunction,
     Const,
@@ -69,7 +70,7 @@ class EmitContext:
         self._dispatch_fn = dispatch_fn
         self._observer = observer
         self._condition_index = condition_index
-        self._instructions: list[IRInstruction] = []
+        self._instructions: list[InstructionBase] = []
         self._reg_counter: int = 0
         self._label_counter: int = 0
         self._section_paragraphs: dict[str, list[str]] = {}
@@ -77,7 +78,7 @@ class EmitContext:
     # ── Properties ────────────────────────────────────────────────
 
     @property
-    def instructions(self) -> list[IRInstruction]:
+    def instructions(self) -> list[InstructionBase]:
         return self._instructions
 
     @property

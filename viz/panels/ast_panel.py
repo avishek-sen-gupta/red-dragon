@@ -5,7 +5,6 @@ from __future__ import annotations
 from textual.reactive import reactive
 from textual.widgets import Tree
 
-from interpreter.ir import IRInstruction
 from viz.pipeline import ASTNode
 
 
@@ -50,7 +49,7 @@ class ASTPanel(Tree):
             return f"{type_part}: {text}"
         return type_part
 
-    def watch_current_instruction(self, inst: IRInstruction | None) -> None:
+    def watch_current_instruction(self, inst: InstructionBase | None) -> None:
         """When the current instruction changes, highlight the matching AST node."""
         if not inst or inst.source_location.is_unknown():
             return

@@ -8,6 +8,7 @@ and decodes — validating COBOL REDEFINES byte-overlay semantics.
 from typing import Any
 
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.instructions import InstructionBase
 from interpreter.types.typed_value import unwrap
 from interpreter.vm.vm import VMState, apply_update
 from interpreter.vm.vm_types import StackFrame
@@ -35,7 +36,7 @@ def _make_vm() -> VMState:
     return vm
 
 
-def _execute(vm: VMState, inst: IRInstruction) -> Any:
+def _execute(vm: VMState, inst: InstructionBase) -> Any:
     """Execute a single instruction and apply its update."""
     result = LocalExecutor.execute(inst=inst, vm=vm, ctx=_default_handler_context())
     assert result.handled, f"Instruction not handled: {inst}"
@@ -43,7 +44,7 @@ def _execute(vm: VMState, inst: IRInstruction) -> Any:
     return result
 
 
-def _execute_ir_sequence(vm: VMState, instructions: list[IRInstruction]) -> Any:
+def _execute_ir_sequence(vm: VMState, instructions: list[InstructionBase]) -> Any:
     """Execute a sequence of IR instructions, return the RETURN value."""
     for inst in instructions:
         if inst.opcode == Opcode.LABEL:

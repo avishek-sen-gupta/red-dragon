@@ -11,8 +11,8 @@ from pathlib import Path
 
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
-from interpreter.ir import IRInstruction, CodeLabel
-from interpreter.instructions import to_typed, DeclVar, StoreVar, Label_
+from interpreter.ir import CodeLabel
+from interpreter.instructions import InstructionBase, DeclVar, StoreVar, Label_
 from interpreter.project.types import ExportTable, ImportRef, ModuleUnit, LinkedProgram
 from interpreter.project.imports import extract_imports
 from interpreter.project.resolver import (
@@ -28,7 +28,7 @@ from interpreter import constants
 
 
 def build_export_table(
-    ir: list[IRInstruction] | tuple[IRInstruction, ...],
+    ir: list[InstructionBase] | tuple[...],
     func_symbol_table: dict[CodeLabel, FuncRef],
     class_symbol_table: dict[CodeLabel, ClassRef],
 ) -> ExportTable:
@@ -45,7 +45,7 @@ def build_export_table(
     variables: dict[str, str] = {}
     in_scope = True  # True while at module top-level
     for inst in ir:
-        typed = to_typed(inst)
+        typed = inst
         if isinstance(typed, Label_) and typed.label.is_present():
             is_func_start = typed.label.is_function()
             is_class_start = typed.label.is_class()

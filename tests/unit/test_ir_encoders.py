@@ -6,7 +6,8 @@ results to the reference Python implementations when executed through the VM.
 
 from typing import Any
 
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import Opcode
+from interpreter.instructions import InstructionBase
 from interpreter.types.typed_value import unwrap
 from interpreter.vm.vm import VMState, apply_update
 from interpreter.vm.vm_types import StackFrame
@@ -47,7 +48,7 @@ from interpreter.cobol.data_filters import align_decimal, left_adjust
 from interpreter.register import Register
 
 
-def _execute_ir(instructions: list[IRInstruction], registers: dict[str, Any]) -> Any:
+def _execute_ir(instructions: list[InstructionBase], registers: dict[str, Any]) -> Any:
     """Execute straight-line IR and return the RETURN value."""
     vm = VMState()
     vm.call_stack.append(StackFrame(function_name="test", registers=dict(registers)))

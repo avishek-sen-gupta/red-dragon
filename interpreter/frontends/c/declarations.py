@@ -7,7 +7,6 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter.instructions import (
-    to_typed,
     Const,
     LoadVar,
     DeclVar,
@@ -204,7 +203,7 @@ def _extract_struct_field_names(
         ):
             break
         if in_body and inst.opcode == Opcode.STORE_FIELD:
-            t = to_typed(inst)
+            t = inst
             assert isinstance(t, StoreField)
             field_names.append(t.field_name)
     return field_names

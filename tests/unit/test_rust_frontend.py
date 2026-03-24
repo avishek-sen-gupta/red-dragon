@@ -4,19 +4,22 @@ from __future__ import annotations
 
 from interpreter.frontends.rust import RustFrontend
 from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import Opcode
+from interpreter.instructions import InstructionBase
 
 
-def _parse_rust(source: str) -> list[IRInstruction]:
+def _parse_rust(source: str) -> list[InstructionBase]:
     frontend = RustFrontend(TreeSitterParserFactory(), "rust")
     return frontend.lower(source.encode("utf-8"))
 
 
-def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:
+def _opcodes(instructions: list[InstructionBase]) -> list[Opcode]:
     return [inst.opcode for inst in instructions]
 
 
-def _find_all(instructions: list[IRInstruction], opcode: Opcode) -> list[IRInstruction]:
+def _find_all(
+    instructions: list[InstructionBase], opcode: Opcode
+) -> list[InstructionBase]:
     return [inst for inst in instructions if inst.opcode == opcode]
 
 
@@ -239,7 +242,7 @@ class TestRustSpecial:
         assert any("v" in inst.operands for inst in stores)
 
 
-def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
+def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
     return [str(inst.label) for inst in instructions if inst.opcode == Opcode.LABEL]
 
 

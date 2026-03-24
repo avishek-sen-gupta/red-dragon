@@ -12,8 +12,8 @@ from interpreter.cfg import build_cfg
 from interpreter.cobol.asg_types import CobolASG
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.subprocess_runner import SubprocessRunner
-from interpreter.instructions import AllocRegion, Const
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.instructions import InstructionBase, AllocRegion, Const
+from interpreter.ir import Opcode
 from interpreter.registry import build_registry
 from interpreter.run import VMConfig, execute_cfg
 from interpreter.vm.vm import VMState, apply_update
@@ -44,7 +44,7 @@ def _load_fixture(name: str) -> CobolASG:
 
 
 def _execute_straight_line(
-    instructions: list[IRInstruction],
+    instructions: list[InstructionBase],
 ) -> VMState:
     """Execute IR straight-line (no branches). Good for Data Division only."""
     vm = VMState()

@@ -1,10 +1,11 @@
 """Per-opcode typed instruction classes.
 
-Replaces the flat ``IRInstruction.operands: list[Any]`` with named, typed
-fields on per-opcode frozen dataclasses.
+Each IR opcode has a frozen dataclass with named, typed fields replacing
+the old flat ``operands: list[Any]`` representation.
 
-``to_typed()`` converts legacy flat IRInstruction → typed.  Already-typed
-instructions pass through unchanged.
+The ``IRInstruction()`` factory function in ``ir.py`` uses the private
+``_to_typed()`` converter to build typed instructions from flat
+(opcode, operands) arguments.
 """
 
 from __future__ import annotations
@@ -24,7 +25,6 @@ from typing import (
 
 from interpreter.ir import (
     CodeLabel,
-    IRInstruction,
     NO_LABEL,
     NO_SOURCE_LOCATION,
     Opcode,
@@ -1271,11 +1271,13 @@ _TO_TYPED: dict[Opcode, object] = {
 }
 
 
-def to_typed(inst: IRInstruction | InstructionBase) -> Instruction:
-    """Convert a flat IRInstruction to a per-opcode typed instruction.
+def _to_typed(inst: Any) -> Instruction:
+    """Convert a flat instruction-like object to a per-opcode typed instruction.
 
     If *inst* is already a typed instruction (InstructionBase subclass),
-    it is returned as-is.
+    it is returned as-is.  Otherwise *inst* must be duck-typed with
+    ``.opcode``, ``.result_reg``, ``.operands``, ``.label``,
+    ``.branch_targets``, and ``.source_location`` attributes.
     """
     if isinstance(inst, InstructionBase):
         return inst

@@ -1,6 +1,6 @@
 """Tests for typed instruction classes.
 
-Verifies that ``to_typed(inst)`` produces correct typed instructions
+Verifies that ``inst`` produces correct typed instructions
 from flat IRInstruction objects, and that ``str(typed)`` matches the
 original ``str(inst)`` output.
 """
@@ -20,6 +20,7 @@ from interpreter.ir import (
     SourceLocation,
     SpreadArguments,
 )
+from interpreter.instructions import InstructionBase
 from interpreter.register import NO_REGISTER, Register
 
 
@@ -30,11 +31,10 @@ def _loc() -> SourceLocation:
 # ── Helper: to_typed assertion ─────────────────────────────────
 
 
-def _assert_to_typed(inst: IRInstruction) -> None:
+def _assert_to_typed(inst: InstructionBase) -> None:
     """Assert flat → typed produces a correct instruction with matching str."""
-    from interpreter.instructions import to_typed
 
-    typed = to_typed(inst)
+    typed = inst
     # Typed instruction must expose the correct opcode
     assert typed.opcode == inst.opcode
     # str() output must match
@@ -483,76 +483,69 @@ class TestTypedFieldAccess:
     """Verify that typed instructions expose named fields, not positional operands."""
 
     def test_binop_fields(self):
-        from interpreter.instructions import to_typed
 
         inst = IRInstruction(
             opcode=Opcode.BINOP,
             result_reg="%2",
             operands=["+", "%0", "%1"],
         )
-        typed = to_typed(inst)
+        typed = inst
         assert typed.operator == "+"
         assert typed.left == Register("%0")
         assert typed.right == Register("%1")
         assert typed.result_reg == Register("%2")
 
     def test_call_function_fields(self):
-        from interpreter.instructions import to_typed
 
         inst = IRInstruction(
             opcode=Opcode.CALL_FUNCTION,
             result_reg="%3",
             operands=["add", "%0", "%1"],
         )
-        typed = to_typed(inst)
+        typed = inst
         assert typed.func_name == "add"
         assert typed.args == (Register("%0"), Register("%1"))
 
     def test_store_field_fields(self):
-        from interpreter.instructions import to_typed
 
         inst = IRInstruction(
             opcode=Opcode.STORE_FIELD,
             operands=["%0", "count", "%1"],
         )
-        typed = to_typed(inst)
+        typed = inst
         assert typed.obj_reg == Register("%0")
         assert typed.field_name == "count"
         assert typed.value_reg == Register("%1")
 
     def test_branch_if_fields(self):
-        from interpreter.instructions import to_typed
 
         inst = IRInstruction(
             opcode=Opcode.BRANCH_IF,
             operands=["%0"],
             branch_targets=[CodeLabel("L_true"), CodeLabel("L_false")],
         )
-        typed = to_typed(inst)
+        typed = inst
         assert typed.cond_reg == Register("%0")
         assert typed.branch_targets == (CodeLabel("L_true"), CodeLabel("L_false"))
 
     def test_write_region_length_is_int(self):
-        from interpreter.instructions import to_typed
 
         inst = IRInstruction(
             opcode=Opcode.WRITE_REGION,
             operands=["%0", "%1", 8, "%2"],
         )
-        typed = to_typed(inst)
+        typed = inst
         assert typed.length == 8
         assert isinstance(typed.length, int)
 
     def test_return_void_has_none_value_reg(self):
-        from interpreter.instructions import to_typed
 
         inst = IRInstruction(opcode=Opcode.RETURN, operands=[])
-        typed = to_typed(inst)
+        typed = inst
         assert typed.value_reg is None
 
     def test_return_with_value(self):
-        from interpreter.instructions import to_typed
 
         inst = IRInstruction(opcode=Opcode.RETURN, operands=["%0"])
-        typed = to_typed(inst)
+        typed = inst
         assert typed.value_reg == Register("%0")

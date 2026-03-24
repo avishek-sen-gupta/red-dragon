@@ -6,14 +6,13 @@ import logging
 from typing import Any
 
 from interpreter.instructions import (
-    to_typed,
+    InstructionBase,
     Const,
     LoadVar,
     DeclVar,
     StoreVar,
     Symbolic,
 )
-from interpreter.ir import IRInstruction
 from interpreter.vm.vm import (
     VMState,
     ClosureEnvironment,
@@ -33,8 +32,8 @@ from interpreter.handlers._common import _write_var_to_frame
 logger = logging.getLogger(__name__)
 
 
-def _handle_const(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    t = to_typed(inst)
+def _handle_const(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+    t = inst
     assert isinstance(t, Const)
     func_symbol_table = ctx.func_symbol_table
     class_symbol_table = ctx.class_symbol_table
@@ -87,8 +86,8 @@ def _handle_const(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult
     )
 
 
-def _handle_load_var(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    t = to_typed(inst)
+def _handle_load_var(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+    t = inst
     assert isinstance(t, LoadVar)
     name = t.name
     # Alias-aware: if variable is backed by a heap object, read from heap
@@ -129,9 +128,9 @@ def _handle_load_var(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionRes
     )
 
 
-def _handle_decl_var(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_decl_var(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
     """DECL_VAR: always create/overwrite in the current frame (declaration)."""
-    t = to_typed(inst)
+    t = inst
     assert isinstance(t, DeclVar)
     name = t.name
     tv = _resolve_reg(vm, t.value_reg)
@@ -143,9 +142,9 @@ def _handle_decl_var(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionRes
     )
 
 
-def _handle_store_var(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
+def _handle_store_var(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
     """STORE_VAR: assignment — walk scope chain to find existing variable."""
-    t = to_typed(inst)
+    t = inst
     assert isinstance(t, StoreVar)
     name = t.name
     tv = _resolve_reg(vm, t.value_reg)
@@ -175,8 +174,8 @@ def _handle_store_var(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionRe
     )
 
 
-def _handle_symbolic(inst: IRInstruction, vm: VMState, ctx: Any) -> ExecutionResult:
-    t = to_typed(inst)
+def _handle_symbolic(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
+    t = inst
     assert isinstance(t, Symbolic)
     hint = t.hint
     frame = vm.current_frame

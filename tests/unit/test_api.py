@@ -50,9 +50,7 @@ class TestLowerSource:
     def test_returns_list_of_ir_instructions(self):
         result = lower_source(SIMPLE_SOURCE)
         assert isinstance(result, list)
-        assert all(
-            isinstance(inst, (IRInstruction, InstructionBase)) for inst in result
-        )
+        assert all(isinstance(inst, InstructionBase) for inst in result)
 
     def test_contains_expected_opcodes(self):
         result = lower_source(SIMPLE_SOURCE)
@@ -179,7 +177,7 @@ class TestExtractFunctionSource:
 class FakeFrontend:
     """Stub frontend that records calls and returns canned instructions."""
 
-    def __init__(self, instructions: list[IRInstruction]) -> None:
+    def __init__(self, instructions: list[InstructionBase]) -> None:
         self.instructions = instructions
         self.lower_calls: list[tuple] = []
 
@@ -234,9 +232,7 @@ class TestLowerAndInfer:
     def test_returns_instructions_and_env(self):
         instructions, env = lower_and_infer(SIMPLE_SOURCE)
         assert isinstance(instructions, list)
-        assert all(
-            isinstance(inst, (IRInstruction, InstructionBase)) for inst in instructions
-        )
+        assert all(isinstance(inst, InstructionBase) for inst in instructions)
         assert isinstance(env, TypeEnvironment)
 
     def test_default_language_is_python(self):

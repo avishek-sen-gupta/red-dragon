@@ -27,8 +27,8 @@ from interpreter.cobol.lower_procedure import lower_procedure_division
 from interpreter.cobol.statement_dispatch import dispatch_statement
 from interpreter.frontend import Frontend
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
-from interpreter.instructions import Label_
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.instructions import InstructionBase, Label_
+from interpreter.ir import Opcode, CodeLabel
 
 logger = logging.getLogger(__name__)
 
@@ -80,11 +80,11 @@ class CobolFrontend(Frontend):
         self._ctx._label_counter = value
 
     @property
-    def _instructions(self) -> list[IRInstruction]:
+    def _instructions(self) -> list[InstructionBase]:
         return self._ctx._instructions
 
     @_instructions.setter
-    def _instructions(self, value: list[IRInstruction]) -> None:
+    def _instructions(self, value: list[InstructionBase]) -> None:
         self._ctx._instructions = value
 
     def _resolve_field_ref(
@@ -116,7 +116,7 @@ class CobolFrontend(Frontend):
             for name, fl in self._layout.fields.items()
         }
 
-    def lower(self, source: bytes) -> list[IRInstruction]:
+    def lower(self, source: bytes) -> list[InstructionBase]:
         """Lower COBOL source to IR via the ProLeap bridge."""
         asg = self._parser.parse(source)
         layout = build_data_layout(asg.data_fields)
