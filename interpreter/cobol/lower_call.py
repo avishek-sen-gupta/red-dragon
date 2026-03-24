@@ -12,7 +12,13 @@ from interpreter.cobol.cobol_statements import (
 )
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.instructions import (
+    CallFunction,
+    Label_,
+    StoreVar,
+)
+from interpreter.ir import CodeLabel
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +39,12 @@ def lower_call(
             arg_regs.append(ctx.const_to_reg(param.name))
 
     result_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=result_reg,
-        operands=[stmt.program, *arg_regs],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=result_reg,
+            func_name=stmt.program,
+            args=tuple(Register(str(a)) for a in arg_regs),
+        )
     )
 
     if stmt.giving and ctx.has_field(stmt.giving, layout):
@@ -58,7 +66,9 @@ def lower_alter(
     """ALTER para-1 TO PROCEED TO para-2."""
     for pt in stmt.proceed_tos:
         target_reg = ctx.const_to_reg(f"para_{pt.target}")
-        ctx.emit(Opcode.STORE_VAR, operands=[f"__alter_{pt.source}", target_reg])
+        ctx.emit_inst(
+            StoreVar(name=f"__alter_{pt.source}", value_reg=Register(str(target_reg)))
+        )
         logger.info("ALTER %s TO PROCEED TO %s", pt.source, pt.target)
 
 
@@ -70,7 +80,7 @@ def lower_entry(
 ) -> None:
     """ENTRY 'name' — alternate entry point for a subprogram."""
     if stmt.entry_name:
-        ctx.emit(Opcode.LABEL, label=CodeLabel(f"entry_{stmt.entry_name}"))
+        ctx.emit_inst(Label_(label=CodeLabel(f"entry_{stmt.entry_name}")))
         logger.info("ENTRY %s", stmt.entry_name)
 
 
