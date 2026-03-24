@@ -399,8 +399,13 @@ def lower_field_initializer_list(ctx: TreeSitterEmitContext, node) -> None:
                 )
             else:
                 val_reg = ctx.fresh_reg()
-                ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.default_return_value))
-            ctx.emit_inst(StoreField(obj_reg=this_reg, field_name=field_name, value_reg=val_reg), node=child)
+                ctx.emit_inst(
+                    Const(result_reg=val_reg, value=ctx.constants.default_return_value)
+                )
+            ctx.emit_inst(
+                StoreField(obj_reg=this_reg, field_name=field_name, value_reg=val_reg),
+                node=child,
+            )
 
 
 def lower_cpp_function_def(ctx: TreeSitterEmitContext, node) -> None:
