@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
     lower_const_literal,
@@ -13,13 +12,29 @@ from interpreter.frontends.common.expressions import (
 )
 from interpreter.frontends.go.node_types import GoNodeType
 from interpreter.register import Register
+from interpreter.instructions import (
+    Const,
+    CallFunction,
+    CallMethod,
+    CallUnknown,
+    LoadField,
+    LoadIndex,
+    NewArray,
+    NewObject,
+    StoreField,
+    StoreIndex,
+    StoreVar,
+    Branch,
+    Label_,
+    Return_,
+)
 
 
 def lower_go_iota(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `iota` to CONST with current iota counter value."""
     iota_val = getattr(ctx, "_go_iota_value", 0)
     reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=reg, operands=[str(iota_val)], node=node)
+    ctx.emit_inst(Const(result_reg=reg, value=str(iota_val)), node=node)
     return reg
 
 
@@ -52,20 +67,13 @@ def lower_go_call(ctx: TreeSitterEmitContext, node) -> Register:
                     if len(type_args) > 1
                     else ctx.fresh_reg()
                 )
-                ctx.emit(
-                    Opcode.NEW_ARRAY,
-                    result_reg=reg,
-                    operands=[type_text, size_reg],
+                ctx.emit_inst(
+                    NewArray(result_reg=reg, type_hint=type_text, size_reg=size_reg),
                     node=node,
                 )
                 return reg
             reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.NEW_OBJECT,
-                result_reg=reg,
-                operands=[type_text],
-                node=node,
-            )
+            ctx.emit_inst(NewObject(result_reg=reg, type_hint=type_text), node=node)
             return reg
 
     arg_regs = extract_call_args(ctx, args_node) if args_node else []
@@ -78,10 +86,13 @@ def lower_go_call(ctx: TreeSitterEmitContext, node) -> Register:
             obj_reg = ctx.lower_expr(operand_node)
             method_name = ctx.node_text(field_node)
             reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CALL_METHOD,
-                result_reg=reg,
-                operands=[obj_reg, method_name] + arg_regs,
+            ctx.emit_inst(
+                CallMethod(
+                    result_reg=reg,
+                    obj_reg=obj_reg,
+                    method_name=method_name,
+                    args=tuple(arg_regs),
+                ),
                 node=node,
             )
             return reg
@@ -91,10 +102,8 @@ def lower_go_call(ctx: TreeSitterEmitContext, node) -> Register:
         func_name = ctx.node_text(func_node)
 
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=reg,
-            operands=[func_name] + arg_regs,
+        ctx.emit_inst(
+            CallFunction(result_reg=reg, func_name=func_name, args=tuple(arg_regs)),
             node=node,
         )
         return reg
@@ -102,10 +111,8 @@ def lower_go_call(ctx: TreeSitterEmitContext, node) -> Register:
     # Dynamic / unknown call
     target_reg = ctx.lower_expr(func_node) if func_node else ctx.fresh_reg()
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_UNKNOWN,
-        result_reg=reg,
-        operands=[target_reg] + arg_regs,
+    ctx.emit_inst(
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -122,11 +129,8 @@ def lower_selector(ctx: TreeSitterEmitContext, node) -> Register:
     obj_reg = ctx.lower_expr(operand_node)
     field_name = ctx.node_text(field_node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_FIELD,
-        result_reg=reg,
-        operands=[obj_reg, field_name],
-        node=node,
+    ctx.emit_inst(
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
     )
     return reg
 
@@ -142,11 +146,8 @@ def lower_go_index(ctx: TreeSitterEmitContext, node) -> Register:
     obj_reg = ctx.lower_expr(operand_node)
     idx_reg = ctx.lower_expr(index_node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_INDEX,
-        result_reg=reg,
-        operands=[obj_reg, idx_reg],
-        node=node,
+    ctx.emit_inst(
+        LoadIndex(result_reg=reg, arr_reg=obj_reg, index_reg=idx_reg), node=node
     )
     return reg
 
@@ -163,12 +164,7 @@ def lower_composite_literal(ctx: TreeSitterEmitContext, node) -> Register:
 
     type_name = ctx.node_text(type_node) if type_node else "Object"
     obj_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.NEW_OBJECT,
-        result_reg=obj_reg,
-        operands=[type_name],
-        node=node,
-    )
+    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=type_name), node=node)
 
     if not body_node:
         return obj_reg
@@ -194,9 +190,8 @@ def lower_composite_literal(ctx: TreeSitterEmitContext, node) -> Register:
                 if val_elem
                 else ctx.fresh_reg()
             )
-            ctx.emit(
-                Opcode.STORE_FIELD,
-                operands=[obj_reg, key_name, val_reg],
+            ctx.emit_inst(
+                StoreField(obj_reg=obj_reg, field_name=key_name, value_reg=val_reg),
                 node=elem,
             )
         elif elem.type == GoNodeType.LITERAL_ELEMENT:
@@ -204,20 +199,18 @@ def lower_composite_literal(ctx: TreeSitterEmitContext, node) -> Register:
             inner = next((c for c in elem.children if c.is_named), elem)
             val_reg = ctx.lower_expr(inner)
             idx_reg = ctx.fresh_reg()
-            ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
-            ctx.emit(
-                Opcode.STORE_INDEX,
-                operands=[obj_reg, idx_reg, val_reg],
+            ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+            ctx.emit_inst(
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=elem,
             )
         else:
             # Direct expression element
             val_reg = ctx.lower_expr(elem)
             idx_reg = ctx.fresh_reg()
-            ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
-            ctx.emit(
-                Opcode.STORE_INDEX,
-                operands=[obj_reg, idx_reg, val_reg],
+            ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+            ctx.emit_inst(
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=elem,
             )
 
@@ -239,10 +232,8 @@ def lower_type_conversion(ctx: TreeSitterEmitContext, node) -> Register:
     type_name = ctx.node_text(type_node) if type_node else "unknown_type"
     operand_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=[type_name, operand_reg],
+    ctx.emit_inst(
+        CallFunction(result_reg=reg, func_name=type_name, args=(operand_reg,)),
         node=node,
     )
     return reg
@@ -273,10 +264,10 @@ def lower_type_assertion(ctx: TreeSitterEmitContext, node) -> Register:
         ctx.node_text(named_children[-1]) if len(named_children) > 1 else "interface{}"
     )
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["type_assert", expr_reg, type_text],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=reg, func_name="type_assert", args=(expr_reg, type_text)
+        ),
         node=node,
     )
     return reg
@@ -288,7 +279,7 @@ def lower_type_assertion(ctx: TreeSitterEmitContext, node) -> Register:
 def _make_const(ctx: TreeSitterEmitContext, value: str) -> Register:
     """Emit a CONST and return its register."""
     reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=reg, operands=[value])
+    ctx.emit_inst(Const(result_reg=reg, value=value))
     return reg
 
 
@@ -308,10 +299,12 @@ def lower_slice_expr(ctx: TreeSitterEmitContext, node) -> Register:
     )
 
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["slice", obj_reg, start_reg, end_reg],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=reg,
+            func_name="slice",
+            args=(obj_reg, start_reg, end_reg),
+        ),
         node=node,
     )
     return reg
@@ -331,8 +324,8 @@ def lower_func_literal(ctx: TreeSitterEmitContext, node) -> Register:
     params_node = node.child_by_field_name(ctx.constants.func_params_field)
     body_node = node.child_by_field_name(ctx.constants.func_body_field)
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=func_label))
 
     if params_node:
         lower_go_params(ctx, params_node)
@@ -341,11 +334,9 @@ def lower_func_literal(ctx: TreeSitterEmitContext, node) -> Register:
         ctx.lower_block(body_node)
 
     none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST, result_reg=none_reg, operands=[ctx.constants.default_return_value]
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=reg)
@@ -399,9 +390,8 @@ def lower_go_store_target(
     ctx: TreeSitterEmitContext, target, val_reg: str, parent_node
 ) -> None:
     if target.type == GoNodeType.IDENTIFIER:
-        ctx.emit(
-            Opcode.STORE_VAR,
-            operands=[ctx.node_text(target), val_reg],
+        ctx.emit_inst(
+            StoreVar(name=ctx.node_text(target), value_reg=val_reg),
             node=parent_node,
         )
     elif target.type == GoNodeType.SELECTOR_EXPRESSION:
@@ -409,9 +399,12 @@ def lower_go_store_target(
         field_node = target.child_by_field_name("field")
         if operand_node and field_node:
             obj_reg = ctx.lower_expr(operand_node)
-            ctx.emit(
-                Opcode.STORE_FIELD,
-                operands=[obj_reg, ctx.node_text(field_node), val_reg],
+            ctx.emit_inst(
+                StoreField(
+                    obj_reg=obj_reg,
+                    field_name=ctx.node_text(field_node),
+                    value_reg=val_reg,
+                ),
                 node=parent_node,
             )
     elif target.type == GoNodeType.INDEX_EXPRESSION:
@@ -420,14 +413,12 @@ def lower_go_store_target(
         if operand_node and index_node:
             obj_reg = ctx.lower_expr(operand_node)
             idx_reg = ctx.lower_expr(index_node)
-            ctx.emit(
-                Opcode.STORE_INDEX,
-                operands=[obj_reg, idx_reg, val_reg],
+            ctx.emit_inst(
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
     else:
-        ctx.emit(
-            Opcode.STORE_VAR,
-            operands=[ctx.node_text(target), val_reg],
+        ctx.emit_inst(
+            StoreVar(name=ctx.node_text(target), value_reg=val_reg),
             node=parent_node,
         )
