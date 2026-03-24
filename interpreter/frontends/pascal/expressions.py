@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode
 from interpreter.frontends.common.expressions import lower_const_literal
 from interpreter.frontends.common.property_accessors import emit_field_load_or_getter
 from interpreter.frontends.pascal.pascal_constants import (
@@ -16,6 +15,18 @@ from interpreter.frontends.pascal.pascal_constants import (
 from interpreter.frontends.pascal.node_types import PascalNodeType
 from interpreter.frontends.pascal.declarations import _resolve_object_class
 from interpreter.register import Register
+from interpreter.instructions import (
+    Const,
+    Binop,
+    Unop,
+    CallFunction,
+    CallUnknown,
+    LoadField,
+    LoadIndex,
+    StoreIndex,
+    NewArray,
+    Symbolic,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +55,8 @@ def lower_pascal_binop(ctx: TreeSitterEmitContext, node) -> Register:
     lhs_reg = ctx.lower_expr(lhs_node)
     rhs_reg = ctx.lower_expr(rhs_node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=reg,
-        operands=[op_symbol, lhs_reg, rhs_reg],
+    ctx.emit_inst(
+        Binop(result_reg=reg, operator=op_symbol, left=lhs_reg, right=rhs_reg),
         node=node,
     )
     return reg
@@ -66,25 +75,17 @@ def lower_pascal_call(ctx: TreeSitterEmitContext, node) -> Register:
     if id_node:
         func_name = ctx.node_text(id_node)
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=reg,
-            operands=[func_name] + arg_regs,
+        ctx.emit_inst(
+            CallFunction(result_reg=reg, func_name=func_name, args=tuple(arg_regs)),
             node=node,
         )
         return reg
 
     target_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.SYMBOLIC,
-        result_reg=target_reg,
-        operands=["unknown_call_target"],
-    )
+    ctx.emit_inst(Symbolic(result_reg=target_reg, hint="unknown_call_target"))
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_UNKNOWN,
-        result_reg=reg,
-        operands=[target_reg] + arg_regs,
+    ctx.emit_inst(
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -134,11 +135,8 @@ def lower_pascal_dot(ctx: TreeSitterEmitContext, node) -> Register:
         return emit_field_load_or_getter(ctx, obj_reg, obj_class, field_name, node)
 
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_FIELD,
-        result_reg=reg,
-        operands=[obj_reg, field_name],
-        node=node,
+    ctx.emit_inst(
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
     )
     return reg
 
@@ -162,10 +160,8 @@ def lower_pascal_subscript(ctx: TreeSitterEmitContext, node) -> Register:
         if idx_children:
             idx_reg = ctx.lower_expr(idx_children[0])
             reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.LOAD_INDEX,
-                result_reg=reg,
-                operands=[obj_reg, idx_reg],
+            ctx.emit_inst(
+                LoadIndex(result_reg=reg, arr_reg=obj_reg, index_reg=idx_reg),
                 node=node,
             )
             return reg
@@ -187,11 +183,8 @@ def lower_pascal_unary(ctx: TreeSitterEmitContext, node) -> Register:
         return lower_const_literal(ctx, node)
     operand_reg = ctx.lower_expr(named_children[0])
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.UNOP,
-        result_reg=reg,
-        operands=[op_symbol, operand_reg],
-        node=node,
+    ctx.emit_inst(
+        Unop(result_reg=reg, operator=op_symbol, operand=operand_reg), node=node
     )
     return reg
 
@@ -201,18 +194,15 @@ def lower_pascal_brackets(ctx: TreeSitterEmitContext, node) -> Register:
     elems = [c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
-    ctx.emit(
-        Opcode.NEW_ARRAY,
-        result_reg=arr_reg,
-        operands=["set", size_reg],
-        node=node,
+    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
+    ctx.emit_inst(
+        NewArray(result_reg=arr_reg, type_hint="set", size_reg=size_reg), node=node
     )
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)
         idx_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
-        ctx.emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg))
     return arr_reg
 
 
@@ -221,10 +211,8 @@ def lower_pascal_range(ctx: TreeSitterEmitContext, node) -> Register:
     nums = [c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE]
     arg_regs = [ctx.lower_expr(c) for c in nums]
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["range"] + arg_regs,
+    ctx.emit_inst(
+        CallFunction(result_reg=reg, func_name="range", args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -240,10 +228,8 @@ def lower_pascal_inherited_expr(ctx: TreeSitterEmitContext, node) -> Register:
     else:
         method_name = "inherited"
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["inherited", method_name],
+    ctx.emit_inst(
+        CallFunction(result_reg=reg, func_name="inherited", args=(method_name,)),
         node=node,
     )
     return reg
