@@ -23,9 +23,10 @@ from interpreter.cfg import build_cfg
 class TestConvertLLMClassRefs:
     def test_class_ref_without_parents(self):
         inst = IRInstruction(opcode=Opcode.CONST, operands=["<class:Dog@class_Dog_0>"])
+        instructions = [inst]
         table: dict[str, ClassRef] = {}
-        _convert_llm_class_refs([inst], table)
-        assert inst.operands[0] == "class_Dog_0"
+        _convert_llm_class_refs(instructions, table)
+        assert instructions[0].operands[0] == "class_Dog_0"
         assert table["class_Dog_0"] == ClassRef(
             name="Dog", label=CodeLabel("class_Dog_0"), parents=()
         )
@@ -34,25 +35,28 @@ class TestConvertLLMClassRefs:
         inst = IRInstruction(
             opcode=Opcode.CONST, operands=["<class:Dog@class_Dog_0:Animal>"]
         )
+        instructions = [inst]
         table: dict[str, ClassRef] = {}
-        _convert_llm_class_refs([inst], table)
-        assert inst.operands[0] == "class_Dog_0"
+        _convert_llm_class_refs(instructions, table)
+        assert instructions[0].operands[0] == "class_Dog_0"
         assert table["class_Dog_0"] == ClassRef(
             name="Dog", label=CodeLabel("class_Dog_0"), parents=("Animal",)
         )
 
     def test_class_ref_with_multiple_parents(self):
         inst = IRInstruction(opcode=Opcode.CONST, operands=["<class:C@class_C_0:A,B>"])
+        instructions = [inst]
         table: dict[str, ClassRef] = {}
-        _convert_llm_class_refs([inst], table)
-        assert inst.operands[0] == "class_C_0"
+        _convert_llm_class_refs(instructions, table)
+        assert instructions[0].operands[0] == "class_C_0"
         assert table["class_C_0"].parents == ("A", "B")
 
     def test_non_matching_operand_unchanged(self):
         inst = IRInstruction(opcode=Opcode.CONST, operands=["not a class ref"])
+        instructions = [inst]
         table: dict[str, ClassRef] = {}
-        _convert_llm_class_refs([inst], table)
-        assert inst.operands[0] == "not a class ref"
+        _convert_llm_class_refs(instructions, table)
+        assert instructions[0].operands[0] == "not a class ref"
         assert table == {}
 
     def test_non_const_opcode_skipped(self):
@@ -60,9 +64,10 @@ class TestConvertLLMClassRefs:
             opcode=Opcode.STORE_VAR,
             operands=["Dog", "<class:Dog@class_Dog_0>"],
         )
+        instructions = [inst]
         table: dict[str, ClassRef] = {}
-        _convert_llm_class_refs([inst], table)
-        assert inst.operands[1] == "<class:Dog@class_Dog_0>"
+        _convert_llm_class_refs(instructions, table)
+        assert instructions[0].operands[1] == "<class:Dog@class_Dog_0>"
         assert table == {}
 
 

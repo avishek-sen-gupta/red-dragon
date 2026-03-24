@@ -13,6 +13,8 @@ from interpreter.frontend import Frontend
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
+import dataclasses
+
 from interpreter.ir import (
     NO_SOURCE_LOCATION,
     IRInstruction,
@@ -20,7 +22,7 @@ from interpreter.ir import (
     CodeLabel,
     NO_LABEL,
 )
-from interpreter.instructions import to_typed, Const
+from interpreter.instructions import to_typed, Const, Label_
 from interpreter.llm.llm_client import LLMClient
 from interpreter import constants
 
@@ -278,14 +280,13 @@ def _validate_ir(instructions: list[IRInstruction]) -> list[IRInstruction]:
         raise IRParsingError("LLM returned an empty instruction list")
 
     first = instructions[0]
-    has_entry_label = first.opcode == Opcode.LABEL and first.label.is_entry()
+    has_entry_label = (
+        isinstance(first, Label_) or first.opcode == Opcode.LABEL
+    ) and first.label.is_entry()
 
     if not has_entry_label:
         logger.warning("LLM response missing entry label — auto-prepending")
-        entry_label = IRInstruction(
-            opcode=Opcode.LABEL,
-            label=CodeLabel(constants.CFG_ENTRY_LABEL),
-        )
+        entry_label = Label_(label=CodeLabel(constants.CFG_ENTRY_LABEL))
         instructions = [entry_label] + instructions
 
     return instructions
@@ -297,10 +298,10 @@ def _convert_llm_func_refs(
 ) -> None:
     """Convert LLM-emitted <function:name@label> strings to plain labels.
 
-    Mutates instructions in place: replaces operands and populates the symbol table.
+    Replaces instructions in the list and populates the symbol table.
     This is the ONLY place regex is used for function references — at the LLM boundary.
     """
-    for inst in instructions:
+    for i, inst in enumerate(instructions):
         if inst.opcode == Opcode.CONST and inst.operands:
             t = to_typed(inst)
             assert isinstance(t, Const)
@@ -309,7 +310,7 @@ def _convert_llm_func_refs(
             if m:
                 name, label = m.group(1), CodeLabel(m.group(2))
                 func_symbol_table[label] = FuncRef(name=name, label=label)
-                inst.operands[0] = str(label)
+                instructions[i] = dataclasses.replace(t, value=str(label))
 
 
 def _convert_llm_class_refs(
@@ -318,10 +319,10 @@ def _convert_llm_class_refs(
 ) -> None:
     """Convert LLM-emitted <class:name@label> strings to plain labels.
 
-    Mutates instructions in place: replaces operands and populates the symbol table.
+    Replaces instructions in the list and populates the symbol table.
     This is the ONLY place regex is used for class references — at the LLM boundary.
     """
-    for inst in instructions:
+    for i, inst in enumerate(instructions):
         if inst.opcode == Opcode.CONST and inst.operands:
             t = to_typed(inst)
             assert isinstance(t, Const)
@@ -334,7 +335,7 @@ def _convert_llm_class_refs(
                 class_symbol_table[label] = ClassRef(
                     name=name, label=label, parents=parents
                 )
-                inst.operands[0] = str(label)
+                instructions[i] = dataclasses.replace(t, value=str(label))
 
 
 class LLMFrontend(Frontend):
