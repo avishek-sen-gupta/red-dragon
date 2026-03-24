@@ -1121,7 +1121,7 @@ class TestPythonInterpolation:
         )
         ctx.emit_inst(Label_(label=CodeLabel("entry")))
         reg = lower_interpolation(ctx, interp_node)
-        assert reg.startswith("%")
+        assert reg.name.startswith("%")
         # Should have lowered the binary_operator inside
         binops = _find_all(ctx.instructions, Opcode.BINOP)
         assert len(binops) >= 1

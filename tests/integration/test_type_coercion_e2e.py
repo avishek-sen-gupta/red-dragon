@@ -21,6 +21,7 @@ from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
 from interpreter.types.typed_value import unwrap
+from interpreter.register import Register
 
 
 def _build_division_index_program() -> list[IRInstruction]:
@@ -65,7 +66,7 @@ class TestTypeCoecionEndToEnd:
         type_env = infer_types(instructions, type_resolver)
 
         # Verify type inference assigned Int to %idx (Int / Int → Int via floor division)
-        assert type_env.register_types.get("%idx") == TypeName.INT
+        assert type_env.register_types.get(Register("%idx")) == TypeName.INT
 
         vm, stats = execute_cfg(
             cfg,

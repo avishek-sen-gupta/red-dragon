@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
+from interpreter.register import Register
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.types.type_expr import TypeExpr, UNBOUND, UNKNOWN
 from interpreter.types.var_scope_info import VarScopeInfo
@@ -21,16 +22,16 @@ class TypeEnvironment:
 
     Types are stored as ``TypeExpr`` objects (``ScalarType`` or
     ``ParameterizedType``).  ``TypeExpr`` compares equal to its string
-    representation, so ``env.register_types["%0"] == "Int"`` still works.
+    representation, so ``env.register_types[Register("%0")] == "Int"`` works.
 
-    register_types: "%0" → ScalarType("Int"), "%4" → ScalarType("Float"), etc.
+    register_types: Register("%0") → ScalarType("Int"), Register("%4") → ScalarType("Float"), etc.
     var_types:      "x"  → ScalarType("Int"), "ptr" → ParameterizedType("Pointer", ...), etc.
     method_signatures: TypeExpr → {"name" → [FunctionSignature(...), ...]}
         Unified container for all signatures. Class methods keyed by class
         TypeExpr (e.g. ScalarType("Dog")), standalone functions keyed by UNKNOWN.
     """
 
-    register_types: MappingProxyType[str, TypeExpr]
+    register_types: MappingProxyType[Register, TypeExpr]
     var_types: MappingProxyType[str, TypeExpr]
     method_signatures: MappingProxyType[
         TypeExpr, MappingProxyType[str, list[FunctionSignature]]

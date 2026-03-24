@@ -20,6 +20,7 @@ from interpreter.refs.func_ref import FuncRef, BoundFuncRef
 from interpreter.types.typed_value import TypedValue, typed_from_runtime, typed, unwrap
 from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.constants import METHOD_MISSING
+from interpreter.register import Register
 
 
 from dataclasses import replace as _replace
@@ -79,7 +80,7 @@ class TestLoadFieldIndirect:
         )
         _execute(vm, inst)
 
-        assert unwrap(vm.current_frame.registers["%out"]) == 42
+        assert unwrap(vm.current_frame.registers[Register("%out")]) == 42
 
     def test_missing_field_returns_symbolic(self):
         """Heap object exists but field 'y' is absent — result is SymbolicValue."""
@@ -99,7 +100,9 @@ class TestLoadFieldIndirect:
         )
         _execute(vm, inst)
 
-        assert isinstance(unwrap(vm.current_frame.registers["%out"]), SymbolicValue)
+        assert isinstance(
+            unwrap(vm.current_frame.registers[Register("%out")]), SymbolicValue
+        )
 
     def test_non_heap_object_returns_symbolic(self):
         """%obj points to an integer (not a heap address) — result is SymbolicValue."""
@@ -114,7 +117,9 @@ class TestLoadFieldIndirect:
         )
         _execute(vm, inst)
 
-        assert isinstance(unwrap(vm.current_frame.registers["%out"]), SymbolicValue)
+        assert isinstance(
+            unwrap(vm.current_frame.registers[Register("%out")]), SymbolicValue
+        )
 
     def test_method_missing_dispatches_function_call(self):
         """Object has __method_missing__ with BoundFuncRef — triggers call dispatch."""

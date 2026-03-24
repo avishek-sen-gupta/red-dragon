@@ -39,7 +39,7 @@ class TestConditionLoweringBasic:
         ]
         ctx, layout, region_reg, idx = _setup_with_fields(fields)
         result_reg = lower_condition(ctx, "WS-A > 10", layout, region_reg, idx)
-        assert result_reg.startswith("%r")
+        assert str(result_reg).startswith("%r")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         assert any(i.operands[0] == ">" for i in binop_insts)
         # Verify the comparison value 10 appears as a CONST
@@ -81,7 +81,7 @@ class TestConditionNameExpansion:
         ]
         ctx, layout, region_reg, idx = _setup_with_fields(fields)
         result_reg = lower_condition(ctx, "STATUS-ACTIVE", layout, region_reg, idx)
-        assert result_reg.startswith("%r")
+        assert str(result_reg).startswith("%r")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
         assert len(eq_ops) == 1
@@ -114,7 +114,7 @@ class TestConditionNameExpansion:
         ]
         ctx, layout, region_reg, idx = _setup_with_fields(fields)
         result_reg = lower_condition(ctx, "STATUS-VALID", layout, region_reg, idx)
-        assert result_reg.startswith("%r")
+        assert str(result_reg).startswith("%r")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
         or_ops = [i for i in binop_insts if i.operands[0] == "or"]
@@ -140,7 +140,7 @@ class TestConditionNameExpansion:
         ]
         ctx, layout, region_reg, idx = _setup_with_fields(fields)
         result_reg = lower_condition(ctx, "STATUS-ALPHA", layout, region_reg, idx)
-        assert result_reg.startswith("%r")
+        assert str(result_reg).startswith("%r")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         ge_ops = [i for i in binop_insts if i.operands[0] == ">="]
         le_ops = [i for i in binop_insts if i.operands[0] == "<="]
@@ -177,7 +177,7 @@ class TestConditionNameExpansion:
         ]
         ctx, layout, region_reg, idx = _setup_with_fields(fields)
         result_reg = lower_condition(ctx, "VALID-CODE", layout, region_reg, idx)
-        assert result_reg.startswith("%r")
+        assert str(result_reg).startswith("%r")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
         ge_ops = [i for i in binop_insts if i.operands[0] == ">="]
@@ -236,7 +236,7 @@ class TestConditionNameExpansion:
         ]
         ctx, layout, region_reg, idx = _setup_with_fields(fields)
         result_reg = lower_condition(ctx, "WS-STATUS = A", layout, region_reg, idx)
-        assert result_reg.startswith("%r")
+        assert str(result_reg).startswith("%r")
         binop_insts = [i for i in ctx.instructions if i.opcode == Opcode.BINOP]
         eq_ops = [i for i in binop_insts if i.operands[0] == "=="]
         assert len(eq_ops) == 1

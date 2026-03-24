@@ -19,6 +19,7 @@ from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.vm.vm import apply_update, materialize_raw_update
+from interpreter.register import Register
 from interpreter.vm.vm_types import (
     HeapObject,
     HeapWrite,
@@ -43,8 +44,8 @@ class TestStoreFieldTypedValue:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         vm.heap["obj_0"] = HeapObject(type_hint=scalar("Point"))
-        vm.current_frame.registers["%0"] = typed("obj_0", UNKNOWN)
-        vm.current_frame.registers["%1"] = typed(42, scalar(TypeName.INT))
+        vm.current_frame.registers[Register("%0")] = typed("obj_0", UNKNOWN)
+        vm.current_frame.registers[Register("%1")] = typed(42, scalar(TypeName.INT))
         inst = IRInstruction(opcode=Opcode.STORE_FIELD, operands=["%0", "x", "%1"])
         result = _handle_store_field(inst, vm, _CTX)
         hw = result.update.heap_writes[0]
@@ -55,10 +56,10 @@ class TestStoreFieldTypedValue:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         vm.heap["mem_0"] = HeapObject(fields={"0": 0})
-        vm.current_frame.registers["%0"] = typed(
+        vm.current_frame.registers[Register("%0")] = typed(
             Pointer(base="mem_0", offset=0), UNKNOWN
         )
-        vm.current_frame.registers["%1"] = typed(99, scalar(TypeName.INT))
+        vm.current_frame.registers[Register("%1")] = typed(99, scalar(TypeName.INT))
         inst = IRInstruction(opcode=Opcode.STORE_INDIRECT, operands=["%0", "%1"])
         result = _handle_store_indirect(inst, vm, _CTX)
         hw = result.update.heap_writes[0]
@@ -69,8 +70,10 @@ class TestStoreFieldTypedValue:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         vm.heap["obj_0"] = HeapObject(type_hint=scalar("Person"))
-        vm.current_frame.registers["%0"] = typed("obj_0", UNKNOWN)
-        vm.current_frame.registers["%1"] = typed("Alice", scalar(TypeName.STRING))
+        vm.current_frame.registers[Register("%0")] = typed("obj_0", UNKNOWN)
+        vm.current_frame.registers[Register("%1")] = typed(
+            "Alice", scalar(TypeName.STRING)
+        )
         inst = IRInstruction(opcode=Opcode.STORE_FIELD, operands=["%0", "name", "%1"])
         result = _handle_store_field(inst, vm, _CTX)
         hw = result.update.heap_writes[0]
@@ -85,9 +88,9 @@ class TestStoreIndexTypedValue:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         vm.heap["arr_0"] = HeapObject(type_hint=scalar("array"), fields={"length": 3})
-        vm.current_frame.registers["%0"] = typed("arr_0", UNKNOWN)
-        vm.current_frame.registers["%1"] = typed(0, scalar(TypeName.INT))
-        vm.current_frame.registers["%2"] = typed(100, scalar(TypeName.INT))
+        vm.current_frame.registers[Register("%0")] = typed("arr_0", UNKNOWN)
+        vm.current_frame.registers[Register("%1")] = typed(0, scalar(TypeName.INT))
+        vm.current_frame.registers[Register("%2")] = typed(100, scalar(TypeName.INT))
         inst = IRInstruction(
             opcode=Opcode.STORE_INDEX, operands=["%0", "%1", "%2"], result_reg="%3"
         )
@@ -192,7 +195,7 @@ class TestHeapFieldsStoreTypedValue:
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
         vm.heap["obj_0"] = HeapObject(type_hint=scalar("Foo"))
-        vm.current_frame.registers["%0"] = typed("obj_0", UNKNOWN)
+        vm.current_frame.registers[Register("%0")] = typed("obj_0", UNKNOWN)
         inst = IRInstruction(
             opcode=Opcode.LOAD_FIELD, operands=["%0", "bar"], result_reg="%1"
         )
@@ -221,12 +224,12 @@ class TestHeapFieldsStoreTypedValue:
         vm.heap["obj_0"] = HeapObject(
             type_hint=scalar("Point"), fields={"x": original_tv}
         )
-        vm.current_frame.registers["%0"] = typed("obj_0", UNKNOWN)
+        vm.current_frame.registers[Register("%0")] = typed("obj_0", UNKNOWN)
         inst = IRInstruction(
             opcode=Opcode.LOAD_FIELD, operands=["%0", "x"], result_reg="%1"
         )
         result = _handle_load_field(inst, vm, _CTX)
-        loaded_tv = result.update.register_writes["%1"]
+        loaded_tv = result.update.register_writes[Register("%1")]
         assert loaded_tv is original_tv
 
     def test_load_index_passes_through_typed_value(self):
@@ -241,13 +244,13 @@ class TestHeapFieldsStoreTypedValue:
                 "length": typed(1, scalar(TypeName.INT)),
             },
         )
-        vm.current_frame.registers["%0"] = typed("arr_0", UNKNOWN)
-        vm.current_frame.registers["%1"] = typed(0, scalar(TypeName.INT))
+        vm.current_frame.registers[Register("%0")] = typed("arr_0", UNKNOWN)
+        vm.current_frame.registers[Register("%1")] = typed(0, scalar(TypeName.INT))
         inst = IRInstruction(
             opcode=Opcode.LOAD_INDEX, operands=["%0", "%1"], result_reg="%2"
         )
         result = _handle_load_index(inst, vm, _CTX)
-        loaded_tv = result.update.register_writes["%2"]
+        loaded_tv = result.update.register_writes[Register("%2")]
         assert loaded_tv is original_tv
 
     def test_load_var_alias_passes_through_typed_value(self):
@@ -260,5 +263,5 @@ class TestHeapFieldsStoreTypedValue:
         vm.current_frame.var_heap_aliases["x"] = ptr
         inst = IRInstruction(opcode=Opcode.LOAD_VAR, operands=["x"], result_reg="%0")
         result = _handle_load_var(inst, vm, _CTX)
-        loaded_tv = result.update.register_writes["%0"]
+        loaded_tv = result.update.register_writes[Register("%0")]
         assert loaded_tv is original_tv

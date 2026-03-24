@@ -11,6 +11,7 @@ from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
 from interpreter.vm.vm import materialize_raw_update
 from interpreter.vm.vm_types import StateUpdate, SymbolicValue, VMState, StackFrame
+from interpreter.register import Register
 
 _EMPTY_TYPE_ENV = TypeEnvironment(
     register_types=MappingProxyType({}),
@@ -25,7 +26,7 @@ class TestHandleReturnTypedValue:
     def test_return_with_int_operand(self):
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
-        vm.current_frame.registers["%0"] = typed(42, scalar(TypeName.INT))
+        vm.current_frame.registers[Register("%0")] = typed(42, scalar(TypeName.INT))
         inst = IRInstruction(opcode=Opcode.RETURN, operands=["%0"])
         result = _handle_return(inst, vm, _default_handler_context())
         rv = result.update.return_value
@@ -36,7 +37,7 @@ class TestHandleReturnTypedValue:
         """return None -> typed(None, UNKNOWN), distinguishable from Void."""
         vm = VMState()
         vm.call_stack.append(StackFrame(function_name="main"))
-        vm.current_frame.registers["%0"] = typed(None, UNKNOWN)
+        vm.current_frame.registers[Register("%0")] = typed(None, UNKNOWN)
         inst = IRInstruction(opcode=Opcode.RETURN, operands=["%0"])
         result = _handle_return(inst, vm, _default_handler_context())
         rv = result.update.return_value
@@ -67,7 +68,7 @@ class TestHandleReturnTypedValue:
         void_rv = void_result.update.return_value
 
         # None (explicit return None)
-        vm.current_frame.registers["%0"] = typed(None, UNKNOWN)
+        vm.current_frame.registers[Register("%0")] = typed(None, UNKNOWN)
         none_inst = IRInstruction(opcode=Opcode.RETURN, operands=["%0"])
         none_result = _handle_return(none_inst, vm, _default_handler_context())
         none_rv = none_result.update.return_value
