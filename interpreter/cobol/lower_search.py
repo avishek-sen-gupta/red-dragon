@@ -7,7 +7,15 @@ import logging
 from interpreter.cobol.cobol_statements import SearchStatement
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.instructions import (
+    Binop,
+    Branch,
+    BranchIf,
+    Label_,
+    LoadVar,
+    StoreVar,
+)
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
@@ -27,47 +35,52 @@ def lower_search(
     max_iterations = 256
     counter_var = ctx.fresh_name("__search_ctr")
     zero_reg = ctx.const_to_reg(0)
-    ctx.emit(Opcode.STORE_VAR, operands=[counter_var, zero_reg])
+    ctx.emit_inst(StoreVar(name=counter_var, value_reg=Register(str(zero_reg))))
 
     max_reg = ctx.const_to_reg(max_iterations)
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
 
     ctr_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=ctr_reg, operands=[counter_var])
+    ctx.emit_inst(LoadVar(result_reg=ctr_reg, name=counter_var))
     bound_cond = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=bound_cond,
-        operands=[">=", ctr_reg, max_reg],
+    ctx.emit_inst(
+        Binop(
+            result_reg=bound_cond,
+            operator=">=",
+            left=ctr_reg,
+            right=Register(str(max_reg)),
+        )
     )
     body_label = ctx.fresh_label("search_body")
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[bound_cond],
-        branch_targets=[at_end_label, body_label],
+    ctx.emit_inst(
+        BranchIf(
+            cond_reg=Register(str(bound_cond)),
+            branch_targets=(at_end_label, body_label),
+        )
     )
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     for when in stmt.whens:
         if not when.condition:
             continue
         cond_reg = ctx.lower_condition(when.condition, layout, region_reg)
         when_true = ctx.fresh_label("search_when_true")
         when_next = ctx.fresh_label("search_when_next")
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[when_true, when_next],
+        ctx.emit_inst(
+            BranchIf(
+                cond_reg=Register(str(cond_reg)),
+                branch_targets=(when_true, when_next),
+            )
         )
-        ctx.emit(Opcode.LABEL, label=when_true)
+        ctx.emit_inst(Label_(label=when_true))
         for child in when.children:
             ctx.lower_statement(child, layout, region_reg)
-        ctx.emit(Opcode.BRANCH, label=end_label)
-        ctx.emit(Opcode.LABEL, label=when_next)
+        ctx.emit_inst(Branch(label=end_label))
+        ctx.emit_inst(Label_(label=when_next))
 
-    ctx.emit(Opcode.BRANCH, label=increment_label)
-    ctx.emit(Opcode.LABEL, label=increment_label)
+    ctx.emit_inst(Branch(label=increment_label))
+    ctx.emit_inst(Label_(label=increment_label))
 
     if stmt.varying and ctx.has_field(stmt.varying, layout):
         varying_ref = ctx.resolve_field_ref(stmt.varying, layout, region_reg)
@@ -76,22 +89,36 @@ def lower_search(
         )
         one_reg = ctx.const_to_reg(1)
         inc_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.BINOP, result_reg=inc_reg, operands=["+", decoded_reg, one_reg])
+        ctx.emit_inst(
+            Binop(
+                result_reg=inc_reg,
+                operator="+",
+                left=Register(str(decoded_reg)),
+                right=Register(str(one_reg)),
+            )
+        )
         str_reg = ctx.emit_to_string(inc_reg)
         ctx.emit_encode_and_write(
             region_reg, varying_ref.fl, str_reg, varying_ref.offset_reg
         )
 
     ctr_reg2 = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=ctr_reg2, operands=[counter_var])
+    ctx.emit_inst(LoadVar(result_reg=ctr_reg2, name=counter_var))
     one_ctr = ctx.const_to_reg(1)
     inc_ctr = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=inc_ctr, operands=["+", ctr_reg2, one_ctr])
-    ctx.emit(Opcode.STORE_VAR, operands=[counter_var, inc_ctr])
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(
+        Binop(
+            result_reg=inc_ctr,
+            operator="+",
+            left=ctr_reg2,
+            right=Register(str(one_ctr)),
+        )
+    )
+    ctx.emit_inst(StoreVar(name=counter_var, value_reg=inc_ctr))
+    ctx.emit_inst(Branch(label=loop_label))
 
-    ctx.emit(Opcode.LABEL, label=at_end_label)
+    ctx.emit_inst(Label_(label=at_end_label))
     for child in stmt.at_end:
         ctx.lower_statement(child, layout, region_reg)
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
