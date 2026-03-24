@@ -12,9 +12,10 @@ from interpreter.frontends.common.expressions import (
     extract_call_args,
 )
 from interpreter.frontends.go.node_types import GoNodeType
+from interpreter.register import Register
 
 
-def lower_go_iota(ctx: TreeSitterEmitContext, node) -> str:
+def lower_go_iota(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `iota` to CONST with current iota counter value."""
     iota_val = getattr(ctx, "_go_iota_value", 0)
     reg = ctx.fresh_reg()
@@ -28,7 +29,7 @@ logger = logging.getLogger(__name__)
 # -- Go: call expression ---------------------------------------------------
 
 
-def lower_go_call(ctx: TreeSitterEmitContext, node) -> str:
+def lower_go_call(ctx: TreeSitterEmitContext, node) -> Register:
     func_node = node.child_by_field_name(ctx.constants.call_function_field)
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
 
@@ -113,7 +114,7 @@ def lower_go_call(ctx: TreeSitterEmitContext, node) -> str:
 # -- Go: selector expression (obj.field) -----------------------------------
 
 
-def lower_selector(ctx: TreeSitterEmitContext, node) -> str:
+def lower_selector(ctx: TreeSitterEmitContext, node) -> Register:
     operand_node = node.child_by_field_name("operand")
     field_node = node.child_by_field_name("field")
     if operand_node is None or field_node is None:
@@ -133,7 +134,7 @@ def lower_selector(ctx: TreeSitterEmitContext, node) -> str:
 # -- Go: index expression (arr[i]) -----------------------------------------
 
 
-def lower_go_index(ctx: TreeSitterEmitContext, node) -> str:
+def lower_go_index(ctx: TreeSitterEmitContext, node) -> Register:
     operand_node = node.child_by_field_name("operand")
     index_node = node.child_by_field_name("index")
     if operand_node is None or index_node is None:
@@ -153,7 +154,7 @@ def lower_go_index(ctx: TreeSitterEmitContext, node) -> str:
 # -- Go: composite literal -------------------------------------------------
 
 
-def lower_composite_literal(ctx: TreeSitterEmitContext, node) -> str:
+def lower_composite_literal(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower Go composite literal: Point{X: 1} or []int{1, 2, 3}."""
     type_node = node.child_by_field_name("type")
     body_node = node.child_by_field_name("body") or next(
@@ -226,7 +227,7 @@ def lower_composite_literal(ctx: TreeSitterEmitContext, node) -> str:
 # -- Go: type conversion expression ----------------------------------------
 
 
-def lower_type_conversion(ctx: TreeSitterEmitContext, node) -> str:
+def lower_type_conversion(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower type_conversion_expression: []byte(s), Foo[int](y) -> CALL_FUNCTION.
 
     The node has a ``type`` field (the target type, e.g. ``[]byte``,
@@ -250,7 +251,7 @@ def lower_type_conversion(ctx: TreeSitterEmitContext, node) -> str:
 # -- Go: generic type (Foo[int]) as expression reference ------------------
 
 
-def lower_generic_type(ctx: TreeSitterEmitContext, node) -> str:
+def lower_generic_type(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower generic_type: Foo[int] -> lower as identifier using the full text.
 
     When generic_type appears in expression context (e.g. inside
@@ -262,7 +263,7 @@ def lower_generic_type(ctx: TreeSitterEmitContext, node) -> str:
 # -- Go: type assertion expression -----------------------------------------
 
 
-def lower_type_assertion(ctx: TreeSitterEmitContext, node) -> str:
+def lower_type_assertion(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower type_assertion_expression: x.(Type) -> CALL_FUNCTION('type_assert', x, Type)."""
     named_children = [c for c in node.children if c.is_named]
     if not named_children:
@@ -284,14 +285,14 @@ def lower_type_assertion(ctx: TreeSitterEmitContext, node) -> str:
 # -- Go: slice expression --------------------------------------------------
 
 
-def _make_const(ctx: TreeSitterEmitContext, value: str) -> str:
+def _make_const(ctx: TreeSitterEmitContext, value: str) -> Register:
     """Emit a CONST and return its register."""
     reg = ctx.fresh_reg()
     ctx.emit(Opcode.CONST, result_reg=reg, operands=[value])
     return reg
 
 
-def lower_slice_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_slice_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower slice_expression: a[low:high] -> CALL_FUNCTION('slice', a, low, high)."""
     operand_node = node.child_by_field_name("operand")
     obj_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
@@ -319,7 +320,7 @@ def lower_slice_expr(ctx: TreeSitterEmitContext, node) -> str:
 # -- Go: func literal (anonymous function) ---------------------------------
 
 
-def lower_func_literal(ctx: TreeSitterEmitContext, node) -> str:
+def lower_func_literal(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower func_literal as an anonymous function."""
     from interpreter.frontends.go.declarations import lower_go_params
 

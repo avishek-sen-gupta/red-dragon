@@ -17,6 +17,7 @@ from interpreter.frontends.common.declarations import (
 )
 from interpreter.types.type_expr import ScalarType
 from interpreter.frontends.common.property_accessors import register_property_accessor
+from interpreter.register import Register
 
 # -- property declaration ----------------------------------------------
 
@@ -192,7 +193,7 @@ def _lower_kotlin_params(ctx: TreeSitterEmitContext, params_node) -> None:
         i += 1
 
 
-def _lower_function_body(ctx: TreeSitterEmitContext, body_node) -> str:
+def _lower_function_body(ctx: TreeSitterEmitContext, body_node) -> Register:
     """Lower function_body which wraps the actual block or expression.
 
     Returns the register of the last expression if the body is

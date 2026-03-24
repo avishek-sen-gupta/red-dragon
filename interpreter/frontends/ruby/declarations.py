@@ -8,9 +8,10 @@ from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.ruby.expressions import lower_ruby_params
 from interpreter.frontends.ruby.node_types import RubyNodeType
+from interpreter.register import Register
 
 
-def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> str:
+def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> Register:
     """Lower a Ruby method body, returning the last expression's register if implicit return applies.
 
     If the last named child is an expression (not a statement), it is lowered

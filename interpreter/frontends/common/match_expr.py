@@ -19,6 +19,7 @@ from interpreter.frontends.common.patterns import (
     _needs_pre_guard_bindings,
 )
 from interpreter.frontends.context import TreeSitterEmitContext
+from interpreter.register import Register
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -50,7 +51,7 @@ def lower_match_as_expr(
     subject_reg: str,
     body_node: object,
     spec: MatchArmSpec,
-) -> str:
+) -> Register:
     """Emit IR for expression-style match. Returns result register."""
     result_var = f"__match_result_{ctx.label_counter}"
     end_label = ctx.fresh_label("match_end")
