@@ -13,7 +13,6 @@ from interpreter.cfg_types import BasicBlock, CFG
 from interpreter.dataflow import DataflowResult, Definition, analyze
 from interpreter.ir import CodeLabel
 from interpreter.instructions import (
-    to_typed,
     DeclVar,
     StoreVar,
     Symbolic,
@@ -50,7 +49,7 @@ def _collect_boundary_labels(cfg: CFG) -> frozenset[str]:
         if label.starts_with("end_"):
             boundaries.add(label)
         elif label.starts_with("func_") and any(
-            isinstance((t := to_typed(inst)), Symbolic)
+            isinstance((t := inst), Symbolic)
             and str(t.hint).startswith(constants.PARAM_PREFIX)
             for inst in block.instructions
         ):
@@ -106,19 +105,19 @@ def _find_param_names(cfg: CFG) -> frozenset[str]:
         t.name
         for block in cfg.blocks.values()
         for inst in block.instructions
-        if isinstance((t := to_typed(inst)), (DeclVar, StoreVar))
+        if isinstance((t := inst), (DeclVar, StoreVar))
         and _is_param_store(cfg, block, inst)
     )
 
 
 def _is_param_store(cfg: CFG, block: BasicBlock, store_inst) -> bool:
     """Check if a DECL_VAR/STORE_VAR's RHS register was produced by a SYMBOLIC param: instruction."""
-    t_store = to_typed(store_inst)
+    t_store = store_inst
     assert isinstance(t_store, (DeclVar, StoreVar))
     raw_reg = t_store.value_reg
     rhs_reg = raw_reg if isinstance(raw_reg, Register) else Register(raw_reg)
     return any(
-        isinstance((t := to_typed(inst)), Symbolic)
+        isinstance((t := inst), Symbolic)
         and t.result_reg == rhs_reg
         and str(t.hint).startswith(constants.PARAM_PREFIX)
         for inst in block.instructions
@@ -134,7 +133,7 @@ def _find_return_operands(cfg: CFG) -> list[tuple[str, str, int]]:
         (label, str(t.value_reg), idx)
         for label, block in cfg.blocks.items()
         for idx, inst in enumerate(block.instructions)
-        if isinstance((t := to_typed(inst)), Return_) and t.value_reg.is_present()
+        if isinstance((t := inst), Return_) and t.value_reg.is_present()
     ]
 
 
@@ -154,7 +153,7 @@ def _find_store_fields(cfg: CFG) -> list[tuple[str, int, str, str, str]]:
         )
         for label, block in cfg.blocks.items()
         for idx, inst in enumerate(block.instructions)
-        if isinstance((t := to_typed(inst)), StoreField)
+        if isinstance((t := inst), StoreField)
     ]
 
 
@@ -174,7 +173,7 @@ def _find_load_fields(cfg: CFG) -> list[tuple[str, int, str, str, str]]:
         )
         for label, block in cfg.blocks.items()
         for idx, inst in enumerate(block.instructions)
-        if isinstance((t := to_typed(inst)), LoadField) and t.result_reg.is_present()
+        if isinstance((t := inst), LoadField) and t.result_reg.is_present()
     ]
 
 
@@ -208,7 +207,7 @@ def _trace_register_to_named_var(
     Returns the variable name, or None if not traceable.
     """
     for defn in dataflow.definitions:
-        t = to_typed(defn.instruction)
+        t = defn.instruction
         if defn.variable == register and isinstance(t, LoadVar):
             return str(t.name)
     return None
@@ -221,7 +220,7 @@ def _find_register_source_var(
     """Find the named variable that a register was loaded from via LOAD_VAR."""
     for block in cfg.blocks.values():
         for inst in block.instructions:
-            t = to_typed(inst)
+            t = inst
             if isinstance(t, LoadVar) and str(t.result_reg) == register:
                 return str(t.name)
     return None
@@ -245,7 +244,7 @@ def _trace_register_to_source_vars(register: str, cfg: CFG) -> frozenset[str]:
 
         for block in cfg.blocks.values():
             for inst in block.instructions:
-                t = to_typed(inst)
+                t = inst
                 if str(t.result_reg) != reg:
                     continue
                 if isinstance(t, LoadVar):
@@ -331,7 +330,7 @@ def _add_field_to_return_flows(
     # Find DECL_VAR/STORE_VAR instructions for this variable where the RHS comes from a LOAD_FIELD
     for block in cfg.blocks.values():
         for inst in block.instructions:
-            t = to_typed(inst)
+            t = inst
             if isinstance(t, (DeclVar, StoreVar)):
                 if t.name != var_name:
                     continue

@@ -26,8 +26,13 @@ from interpreter.cobol.cobol_constants import (
     CobolEncoding,
     NibblePosition,
 )
-from interpreter.ir import IRInstruction
-from interpreter.instructions import Binop, CallFunction, Const, Return_
+from interpreter.instructions import (
+    InstructionBase,
+    Binop,
+    CallFunction,
+    Const,
+    Return_,
+)
 from interpreter.register import Register
 
 
@@ -44,7 +49,7 @@ class _RegCounter:
         return name
 
 
-def _lit(rc: _RegCounter, instructions: list[IRInstruction], value: Any) -> Register:
+def _lit(rc: _RegCounter, instructions: list[InstructionBase], value: Any) -> Register:
     """Emit a CONST instruction for a literal value, return the register."""
     reg = rc.next()
     instructions.append(Const(result_reg=reg, value=str(value)))
@@ -54,9 +59,9 @@ def _lit(rc: _RegCounter, instructions: list[IRInstruction], value: Any) -> Regi
 def _encode_digit_step(
     rc: _RegCounter,
     source_list: Register,
-    acc: tuple[Register, list[IRInstruction]],
+    acc: tuple[Register, list[InstructionBase]],
     i: int,
-) -> tuple[Register, list[IRInstruction]]:
+) -> tuple[Register, list[InstructionBase]]:
     """One step of zoned digit encoding: get digit, nibble_set, list_set.
 
     Returns (new_result_reg, accumulated_instructions).
@@ -106,10 +111,10 @@ def _decode_digit_step(
     rc: _RegCounter,
     source_list: Register,
     total_digits: int,
-    acc: tuple[Register, list[IRInstruction]],
+    acc: tuple[Register, list[InstructionBase]],
     i: int,
     offset: int = 0,
-) -> tuple[Register, list[IRInstruction]]:
+) -> tuple[Register, list[InstructionBase]]:
     """One step of zoned digit decoding: get byte, nibble_get, multiply, add.
 
     Returns (new_accum_reg, accumulated_instructions).
@@ -158,9 +163,9 @@ def _accumulate_digit_step(
     rc: _RegCounter,
     source_list: Register,
     total_digits: int,
-    acc: tuple[Register, list[IRInstruction]],
+    acc: tuple[Register, list[InstructionBase]],
     i: int,
-) -> tuple[Register, list[IRInstruction]]:
+) -> tuple[Register, list[InstructionBase]]:
     """One step of raw digit accumulation (no nibble_get): get digit, multiply, add.
 
     Returns (new_accum_reg, accumulated_instructions).
@@ -197,7 +202,7 @@ def _accumulate_digit_step(
 
 def build_encode_zoned_ir(
     func_name: str, total_digits: int, sign_leading: bool = False
-) -> list[IRInstruction]:
+) -> list[InstructionBase]:
     """Generate IR for zoned decimal encoding (embedded sign).
 
     Inputs: %p_digits (list[int]), %p_sign_nibble (int: 0xF/0xC/0xD)
@@ -207,7 +212,7 @@ def build_encode_zoned_ir(
     Otherwise (default), sign nibble is in high nibble of last byte.
     """
     rc = _RegCounter(func_name)
-    instructions: list[IRInstruction] = []
+    instructions: list[InstructionBase] = []
     sign_byte_index = 0 if sign_leading else total_digits - 1
 
     # Create result list filled with 0xF0 (zone nibble for unsigned digits)
@@ -287,7 +292,7 @@ def build_decode_zoned_ir(
     total_digits: int,
     decimal_digits: int,
     sign_leading: bool = False,
-) -> list[IRInstruction]:
+) -> list[InstructionBase]:
     """Generate IR for zoned decimal decoding (embedded sign).
 
     Inputs: %p_data (list[int] of bytes)
@@ -297,7 +302,7 @@ def build_decode_zoned_ir(
     Otherwise (default), sign nibble is extracted from the last byte.
     """
     rc = _RegCounter(func_name)
-    instructions: list[IRInstruction] = []
+    instructions: list[InstructionBase] = []
     sign_byte_index = 0 if sign_leading else total_digits - 1
     p_data = Register("%p_data")
 
@@ -393,7 +398,7 @@ def build_decode_zoned_ir(
 
 def build_encode_zoned_separate_ir(
     func_name: str, total_digits: int, sign_leading: bool = False
-) -> list[IRInstruction]:
+) -> list[InstructionBase]:
     """Generate IR for zoned decimal encoding with SEPARATE sign character.
 
     Inputs: %p_digits (list[int]), %p_sign_nibble (int: 0xF/0xC/0xD)
@@ -404,7 +409,7 @@ def build_encode_zoned_separate_ir(
     EBCDIC: '+' = 0x4E, '-' = 0x60.
     """
     rc = _RegCounter(func_name)
-    instructions: list[IRInstruction] = []
+    instructions: list[InstructionBase] = []
     p_digits = Register("%p_digits")
     p_sign_nibble = Register("%p_sign_nibble")
 
@@ -529,7 +534,7 @@ def build_decode_zoned_separate_ir(
     total_digits: int,
     decimal_digits: int,
     sign_leading: bool = False,
-) -> list[IRInstruction]:
+) -> list[InstructionBase]:
     """Generate IR for zoned decimal decoding with SEPARATE sign character.
 
     Inputs: %p_data (list[int] of bytes, length = total_digits + 1)
@@ -540,7 +545,7 @@ def build_decode_zoned_separate_ir(
     EBCDIC: 0x60 = '-', anything else = '+'.
     """
     rc = _RegCounter(func_name)
-    instructions: list[IRInstruction] = []
+    instructions: list[InstructionBase] = []
     p_data = Register("%p_data")
 
     # Extract sign byte
@@ -623,14 +628,14 @@ def build_decode_zoned_separate_ir(
     return instructions
 
 
-def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstruction]:
+def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[InstructionBase]:
     """Generate IR for COMP-3 packed BCD encoding.
 
     Inputs: %p_digits (list[int]), %p_sign_nibble (int: 0xF/0xC/0xD)
     Output: list[int] of packed BCD bytes (length = total_digits // 2 + 1)
     """
     rc = _RegCounter(func_name)
-    instructions: list[IRInstruction] = []
+    instructions: list[InstructionBase] = []
     byte_count = (total_digits // 2) + 1
     p_digits = Register("%p_digits")
     p_sign_nibble = Register("%p_sign_nibble")
@@ -723,8 +728,8 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
 
     # Pack nibble pairs into bytes (unrolled loop)
     def _pack_nibble_pair(
-        acc: tuple[Register, list[IRInstruction]], i: int
-    ) -> tuple[Register, list[IRInstruction]]:
+        acc: tuple[Register, list[InstructionBase]], i: int
+    ) -> tuple[Register, list[InstructionBase]]:
         current_result, insts = acc
         high_nibble = rc.next()
         low_nibble = rc.next()
@@ -799,21 +804,21 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
 
 def build_decode_comp3_ir(
     func_name: str, total_digits: int, decimal_digits: int
-) -> list[IRInstruction]:
+) -> list[InstructionBase]:
     """Generate IR for COMP-3 packed BCD decoding.
 
     Inputs: %p_data (list[int] of bytes)
     Output: float
     """
     rc = _RegCounter(func_name)
-    instructions: list[IRInstruction] = []
+    instructions: list[InstructionBase] = []
     byte_count = (total_digits // 2) + 1
     p_data = Register("%p_data")
 
     # Extract all nibbles from all bytes
     def _extract_nibbles(
-        acc: tuple[list[Register], list[IRInstruction]], i: int
-    ) -> tuple[list[Register], list[IRInstruction]]:
+        acc: tuple[list[Register], list[InstructionBase]], i: int
+    ) -> tuple[list[Register], list[InstructionBase]]:
         regs, insts = acc
         byte_reg = rc.next()
         high = rc.next()
@@ -866,8 +871,8 @@ def build_decode_comp3_ir(
     instructions.append(Const(result_reg=accum, value="0"))
 
     def _accumulate_dreg(
-        acc: tuple[Register, list[IRInstruction]], pair: tuple[int, Register]
-    ) -> tuple[Register, list[IRInstruction]]:
+        acc: tuple[Register, list[InstructionBase]], pair: tuple[int, Register]
+    ) -> tuple[Register, list[InstructionBase]]:
         current_accum, insts = acc
         i, dreg = pair
         power = 10 ** (len(digit_regs) - 1 - i)
@@ -947,7 +952,7 @@ def build_decode_comp3_ir(
 
 def build_encode_binary_ir(
     func_name: str, total_digits: int, byte_count: int, signed: bool
-) -> list[IRInstruction]:
+) -> list[InstructionBase]:
     """Generate IR for COMP/BINARY encoding.
 
     Inputs: %p_digits (list[int]), %p_sign_nibble (int: 0xF/0xC/0xD)
@@ -957,7 +962,7 @@ def build_encode_binary_ir(
     the sign nibble, then packs via __int_to_binary_bytes.
     """
     rc = _RegCounter(func_name)
-    instructions: list[IRInstruction] = []
+    instructions: list[InstructionBase] = []
     p_digits = Register("%p_digits")
     p_sign_nibble = Register("%p_sign_nibble")
 
@@ -1023,14 +1028,14 @@ def build_encode_binary_ir(
 
 def build_decode_binary_ir(
     func_name: str, byte_count: int, decimal_digits: int, signed: bool
-) -> list[IRInstruction]:
+) -> list[InstructionBase]:
     """Generate IR for COMP/BINARY decoding.
 
     Inputs: %p_data (list[int] of bytes)
     Output: float
     """
     rc = _RegCounter(func_name)
-    instructions: list[IRInstruction] = []
+    instructions: list[InstructionBase] = []
     p_data = Register("%p_data")
 
     # Unpack bytes to integer
@@ -1067,14 +1072,14 @@ def build_decode_binary_ir(
     return instructions
 
 
-def build_encode_float_ir(func_name: str, byte_count: int) -> list[IRInstruction]:
+def build_encode_float_ir(func_name: str, byte_count: int) -> list[InstructionBase]:
     """Generate IR for COMP-1/COMP-2 float encoding.
 
     Inputs: %p_float_value (float or int)
     Output: list[int] of IEEE 754 bytes
     """
     rc = _RegCounter(func_name)
-    instructions: list[IRInstruction] = []
+    instructions: list[InstructionBase] = []
     p_float_value = Register("%p_float_value")
 
     result = rc.next()
@@ -1094,14 +1099,14 @@ def build_encode_float_ir(func_name: str, byte_count: int) -> list[IRInstruction
     return instructions
 
 
-def build_decode_float_ir(func_name: str, byte_count: int) -> list[IRInstruction]:
+def build_decode_float_ir(func_name: str, byte_count: int) -> list[InstructionBase]:
     """Generate IR for COMP-1/COMP-2 float decoding.
 
     Inputs: %p_data (list[int] of bytes)
     Output: float
     """
     rc = _RegCounter(func_name)
-    instructions: list[IRInstruction] = []
+    instructions: list[InstructionBase] = []
     p_data = Register("%p_data")
 
     result = rc.next()
@@ -1121,14 +1126,14 @@ def build_decode_float_ir(func_name: str, byte_count: int) -> list[IRInstruction
     return instructions
 
 
-def build_encode_alphanumeric_ir(func_name: str, length: int) -> list[IRInstruction]:
+def build_encode_alphanumeric_ir(func_name: str, length: int) -> list[InstructionBase]:
     """Generate IR for alphanumeric EBCDIC encoding.
 
     Inputs: %p_value (str)
     Output: list[int] of EBCDIC bytes (length = `length`)
     """
     rc = _RegCounter(func_name)
-    instructions: list[IRInstruction] = []
+    instructions: list[InstructionBase] = []
     p_value = Register("%p_value")
 
     # Convert string to EBCDIC bytes
@@ -1196,7 +1201,7 @@ def build_encode_alphanumeric_ir(func_name: str, length: int) -> list[IRInstruct
 
 def build_encode_alphanumeric_justified_ir(
     func_name: str, length: int
-) -> list[IRInstruction]:
+) -> list[InstructionBase]:
     """Generate IR for right-justified alphanumeric EBCDIC encoding.
 
     Inputs: %p_value (str)
@@ -1206,7 +1211,7 @@ def build_encode_alphanumeric_justified_ir(
     Long values are truncated from the left (rightmost `length` bytes kept).
     """
     rc = _RegCounter(func_name)
-    instructions: list[IRInstruction] = []
+    instructions: list[InstructionBase] = []
     p_value = Register("%p_value")
 
     # Convert string to EBCDIC bytes
@@ -1291,14 +1296,14 @@ def build_encode_alphanumeric_justified_ir(
     return instructions
 
 
-def build_decode_alphanumeric_ir(func_name: str) -> list[IRInstruction]:
+def build_decode_alphanumeric_ir(func_name: str) -> list[InstructionBase]:
     """Generate IR for alphanumeric EBCDIC decoding.
 
     Inputs: %p_data (list[int] of EBCDIC bytes)
     Output: str
     """
     rc = _RegCounter(func_name)
-    instructions: list[IRInstruction] = []
+    instructions: list[InstructionBase] = []
     p_data = Register("%p_data")
 
     result = rc.next()
@@ -1322,7 +1327,7 @@ def build_decode_alphanumeric_ir(func_name: str) -> list[IRInstruction]:
 # ── String operation IR builders ──────────────────────────────────
 
 
-def build_string_delimit_ir(func_name: str) -> list[IRInstruction]:
+def build_string_delimit_ir(func_name: str) -> list[InstructionBase]:
     """Generate IR to delimit a string value.
 
     Inputs: %p_source (str), %p_delimiter (str)
@@ -1331,7 +1336,7 @@ def build_string_delimit_ir(func_name: str) -> list[IRInstruction]:
     Uses __string_find to locate delimiter, then slices.
     """
     rc = _RegCounter(func_name)
-    instructions: list[IRInstruction] = []
+    instructions: list[InstructionBase] = []
     p_source = Register("%p_source")
     p_delimiter = Register("%p_delimiter")
 
@@ -1360,14 +1365,14 @@ def build_string_delimit_ir(func_name: str) -> list[IRInstruction]:
     return instructions
 
 
-def build_string_split_ir(func_name: str) -> list[IRInstruction]:
+def build_string_split_ir(func_name: str) -> list[InstructionBase]:
     """Generate IR to split a string by delimiter.
 
     Inputs: %p_source (str), %p_delimiter (str)
     Output: list[str]
     """
     rc = _RegCounter(func_name)
-    instructions: list[IRInstruction] = []
+    instructions: list[InstructionBase] = []
     p_source = Register("%p_source")
     p_delimiter = Register("%p_delimiter")
 
@@ -1388,14 +1393,14 @@ def build_string_split_ir(func_name: str) -> list[IRInstruction]:
     return instructions
 
 
-def build_inspect_tally_ir(func_name: str) -> list[IRInstruction]:
+def build_inspect_tally_ir(func_name: str) -> list[InstructionBase]:
     """Generate IR for INSPECT TALLYING — count pattern occurrences.
 
     Inputs: %p_source (str), %p_pattern (str), %p_mode (str)
     Output: int (count)
     """
     rc = _RegCounter(func_name)
-    instructions: list[IRInstruction] = []
+    instructions: list[InstructionBase] = []
     p_source = Register("%p_source")
     p_pattern = Register("%p_pattern")
     p_mode = Register("%p_mode")
@@ -1418,14 +1423,14 @@ def build_inspect_tally_ir(func_name: str) -> list[IRInstruction]:
     return instructions
 
 
-def build_inspect_replace_ir(func_name: str) -> list[IRInstruction]:
+def build_inspect_replace_ir(func_name: str) -> list[InstructionBase]:
     """Generate IR for INSPECT REPLACING — replace pattern occurrences.
 
     Inputs: %p_source (str), %p_from (str), %p_to (str), %p_mode (str)
     Output: str (modified string)
     """
     rc = _RegCounter(func_name)
-    instructions: list[IRInstruction] = []
+    instructions: list[InstructionBase] = []
     p_source = Register("%p_source")
     p_from = Register("%p_from")
     p_to = Register("%p_to")

@@ -2485,3 +2485,5 @@ compilation. No chaining, no import tables, no special variable handling.
 **Consequences:** After Layer 5, the IR is a `list[Instruction]` of frozen typed dataclasses with full `Register`/`CodeLabel` type safety. No stringly-typed register references anywhere. Instruction dispatch via `isinstance` or `type()` dict lookup. `Opcode` enum retained as read-only marker for serialization/debugging. Generic register/label transformations via `map_registers`/`map_labels`. ~2500 lines of bridge code (`IRInstruction`, converters, `operands` properties) are removed.
 
 **Key files:** `docs/design/eliminate-irinstruction-plan.md` (full plan with 26 sub-issues, dependency graph, and file counts).
+
+**Update (2026-03-24):** Layer 5G complete. The `IRInstruction` Pydantic class is replaced by a factory function of the same name that returns typed `InstructionBase` subclasses. The `to_typed()` function is renamed to `_to_typed()` (private, used only by the factory). All 400+ call sites continue working unchanged via the factory. Type annotations across ~90 files migrated from `IRInstruction` to `InstructionBase`. `Register.__eq__(str)` was removed in the prior layer (5F).

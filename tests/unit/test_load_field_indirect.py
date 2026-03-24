@@ -6,6 +6,7 @@ needed by __method_missing__ to forward field access by dynamic name.
 """
 
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.instructions import InstructionBase
 from interpreter.vm.vm import VMState, HeapObject, apply_update
 from interpreter.vm.vm_types import StackFrame, StateUpdate, SymbolicValue
 from interpreter.vm.executor import (
@@ -49,7 +50,7 @@ def _set_reg(vm: VMState, reg: str, val: object) -> None:
     apply_update(vm, StateUpdate(register_writes={reg: tv}))
 
 
-def _execute(vm: VMState, inst: IRInstruction):
+def _execute(vm: VMState, inst: InstructionBase):
     result = LocalExecutor.execute(
         inst=inst,
         vm=vm,

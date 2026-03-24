@@ -8,6 +8,7 @@ from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
 from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
+from interpreter.instructions import InstructionBase
 from interpreter.types.null_type_resolver import NullTypeResolver
 from interpreter.types.function_kind import FunctionKind
 from interpreter.types.function_signature import FunctionSignature
@@ -56,7 +57,7 @@ _FUNC_LABEL_RE = _re.compile(r"^func_(.+?)_(\d+)$")
 
 
 def _build_func_symbol_table(
-    instructions: list[IRInstruction],
+    instructions: list[InstructionBase],
 ) -> dict[str, FuncRef]:
     """Auto-build a func_symbol_table from CONST instructions with func_ labels."""
     table: dict[str, FuncRef] = {}

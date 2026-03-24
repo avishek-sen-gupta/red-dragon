@@ -4,19 +4,22 @@ from __future__ import annotations
 
 from interpreter.frontends.pascal import PascalFrontend
 from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import Opcode
+from interpreter.instructions import InstructionBase
 
 
-def _parse_pascal(source: str) -> list[IRInstruction]:
+def _parse_pascal(source: str) -> list[InstructionBase]:
     frontend = PascalFrontend(TreeSitterParserFactory(), "pascal")
     return frontend.lower(source.encode("utf-8"))
 
 
-def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:
+def _opcodes(instructions: list[InstructionBase]) -> list[Opcode]:
     return [inst.opcode for inst in instructions]
 
 
-def _find_all(instructions: list[IRInstruction], opcode: Opcode) -> list[IRInstruction]:
+def _find_all(
+    instructions: list[InstructionBase], opcode: Opcode
+) -> list[InstructionBase]:
     return [inst for inst in instructions if inst.opcode == opcode]
 
 
@@ -230,7 +233,7 @@ class TestPascalFallback:
         ), f"SYMBOLIC should be 'unsupported:' kind, got {[s.operands for s in symbolics]}"
 
 
-def _labels_in_order(instructions: list[IRInstruction]) -> list[str]:
+def _labels_in_order(instructions: list[InstructionBase]) -> list[str]:
     return [str(inst.label) for inst in instructions if inst.opcode == Opcode.LABEL]
 
 

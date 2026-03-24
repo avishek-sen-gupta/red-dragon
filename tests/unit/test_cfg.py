@@ -11,12 +11,12 @@ from interpreter.cfg import (
     BasicBlock,
 )
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
-from interpreter.instructions import to_typed, Label_
+from interpreter.instructions import Label_
 
 
 def _make_instructions(*specs):
     """Helper: build IRInstruction list from (opcode, kwargs) tuples."""
-    return [to_typed(IRInstruction(opcode=op, **kw)) for op, kw in specs]
+    return [IRInstruction(opcode=op, **kw) for op, kw in specs]
 
 
 class TestCfgToMermaidBasic:

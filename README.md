@@ -359,8 +359,8 @@ vm, stats = execute_cfg(cfg, "entry", registry, VMConfig(max_steps=200))
 
 | Function | Returns | Purpose |
 |---|---|---|
-| `lower_source(source, language, frontend_type, backend)` | `list[IRInstruction]` | Parse + lower source to IR |
-| `lower_and_infer(source, language, frontend_type, backend)` | `(list[IRInstruction], TypeEnvironment)` | Lower + type inference with frontend type seeds |
+| `lower_source(source, language, frontend_type, backend)` | `list[InstructionBase]` | Parse + lower source to IR |
+| `lower_and_infer(source, language, frontend_type, backend)` | `(list[InstructionBase], TypeEnvironment)` | Lower + type inference with frontend type seeds |
 | `dump_ir(source, language, frontend_type, backend)` | `str` | IR text output |
 | `build_cfg_from_source(source, language, frontend_type, backend, function_name)` | `CFG` | Parse → lower → optionally slice → build CFG |
 | `dump_cfg(source, language, frontend_type, backend, function_name)` | `str` | CFG text output |

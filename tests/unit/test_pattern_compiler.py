@@ -22,7 +22,8 @@ from interpreter.frontends.common.patterns import (
 )
 from interpreter.frontends.python import PythonFrontend
 from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import Opcode
+from interpreter.instructions import InstructionBase
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.constants import Language
@@ -44,7 +45,7 @@ def _make_ctx():
     return ctx
 
 
-def _opcodes(instructions: list[IRInstruction]) -> list[Opcode]:
+def _opcodes(instructions: list[InstructionBase]) -> list[Opcode]:
     return [inst.opcode for inst in instructions]
 
 

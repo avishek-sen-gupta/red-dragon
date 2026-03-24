@@ -4,15 +4,18 @@ from __future__ import annotations
 
 from interpreter.frontends.java import JavaFrontend
 from interpreter.frontends.go import GoFrontend
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import Opcode
+from interpreter.instructions import InstructionBase
 from interpreter.parser import TreeSitterParserFactory
 
 
-def _find_all(instructions: list[IRInstruction], opcode: Opcode) -> list[IRInstruction]:
+def _find_all(
+    instructions: list[InstructionBase], opcode: Opcode
+) -> list[InstructionBase]:
     return [inst for inst in instructions if inst.opcode == opcode]
 
 
-def _find_symbolic_params(instructions: list[IRInstruction]) -> list[IRInstruction]:
+def _find_symbolic_params(instructions: list[InstructionBase]) -> list[InstructionBase]:
     return [
         inst
         for inst in instructions

@@ -13,7 +13,8 @@ from typing import Sequence
 
 from interpreter.cfg_types import CFG
 from interpreter.constants import Language
-from interpreter.ir import IRInstruction, CodeLabel
+from interpreter.ir import CodeLabel
+from interpreter.instructions import InstructionBase
 from interpreter.registry import FunctionRegistry
 
 # ── Errors ───────────────────────────────────────────────────────
@@ -121,7 +122,7 @@ class ModuleUnit:
 
     path: Path
     language: Language
-    ir: tuple[IRInstruction, ...]
+    ir: tuple[...]
     exports: ExportTable
     imports: tuple[ImportRef, ...]
 
@@ -139,7 +140,7 @@ class LinkedProgram:
     """
 
     modules: dict[Path, ModuleUnit]
-    merged_ir: list[IRInstruction]
+    merged_ir: list[InstructionBase]
     merged_cfg: CFG
     merged_registry: FunctionRegistry
     entry_module: Path

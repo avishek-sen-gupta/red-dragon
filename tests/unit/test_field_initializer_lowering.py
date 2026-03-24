@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import pytest
 
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import Opcode
+from interpreter.instructions import InstructionBase
 from interpreter.frontends.java import JavaFrontend
 from interpreter.frontends.csharp import CSharpFrontend
 from interpreter.frontends.kotlin import KotlinFrontend
@@ -21,7 +22,7 @@ from interpreter.frontends.scala import ScalaFrontend
 from interpreter.parser import TreeSitterParserFactory
 
 
-def _parse(language: str, source: str) -> list[IRInstruction]:
+def _parse(language: str, source: str) -> list[InstructionBase]:
     frontends = {
         "java": JavaFrontend,
         "csharp": CSharpFrontend,
@@ -32,15 +33,17 @@ def _parse(language: str, source: str) -> list[IRInstruction]:
     return frontend.lower(source.encode("utf-8"))
 
 
-def _find_all(instructions: list[IRInstruction], opcode: Opcode) -> list[IRInstruction]:
+def _find_all(
+    instructions: list[InstructionBase], opcode: Opcode
+) -> list[InstructionBase]:
     return [inst for inst in instructions if inst.opcode == opcode]
 
 
 def _instructions_between_labels(
-    instructions: list[IRInstruction], start_prefix: str, end_prefix: str
-) -> list[IRInstruction]:
+    instructions: list[InstructionBase], start_prefix: str, end_prefix: str
+) -> list[InstructionBase]:
     """Extract instructions between a label matching start_prefix and one matching end_prefix."""
-    result: list[IRInstruction] = []
+    result: list[InstructionBase] = []
     capturing = False
     for inst in instructions:
         if (
@@ -62,13 +65,13 @@ def _instructions_between_labels(
     return result
 
 
-def _constructor_body(instructions: list[IRInstruction]) -> list[IRInstruction]:
+def _constructor_body(instructions: list[InstructionBase]) -> list[InstructionBase]:
     """Extract instructions inside the __init__ function body."""
     return _instructions_between_labels(instructions, "func___init__", "end___init__")
 
 
 def _has_store_field_in_constructor(
-    instructions: list[IRInstruction], field_name: str
+    instructions: list[InstructionBase], field_name: str
 ) -> bool:
     """Check if the constructor body contains a STORE_FIELD for the given field."""
     body = _constructor_body(instructions)
@@ -79,7 +82,7 @@ def _has_store_field_in_constructor(
 
 
 def _has_store_var_at_top_level_for_field(
-    instructions: list[IRInstruction], field_name: str
+    instructions: list[InstructionBase], field_name: str
 ) -> bool:
     """Check if there's a top-level STORE_VAR for a field name (outside any function)."""
     in_func = False
