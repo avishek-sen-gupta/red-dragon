@@ -2453,6 +2453,33 @@ compilation. No chaining, no import tables, no special variable handling.
 3. ✅ Migrate 67 `operands[N]` accesses in 12 infrastructure/analysis files
 4. ✅ Add IRInstruction-compatible interface (operands, result_reg, label, etc.) to typed classes
 
-**Current state:** Typed instructions coexist with flat `IRInstruction`. All consumers use `to_typed()` for opcode-specific access. 2,481 emit() calls still create flat `IRInstruction`; filed as follow-up (red-dragon-akv0).
+**Current state:** Typed instructions coexist with flat `IRInstruction`. All consumers use `to_typed()` for opcode-specific access. `common/` frontend migrated to `emit_inst()` (190 calls). All other frontends still use flat `emit(Opcode.X, ...)`.
+
+**Next:** Eliminate `IRInstruction` entirely — see ADR-121 and `docs/design/eliminate-irinstruction-plan.md`.
 
 **Key files:** `interpreter/instructions.py` (30 classes + converters), `docs/design/per-opcode-instruction-types.md` (design doc).
+
+---
+
+### ADR-121: Eliminate IRInstruction — full Register/Label type safety (2026-03-24)
+
+**Context:** The per-opcode typed instruction classes (ADR-120) coexist with the flat `IRInstruction`. Register-holding fields like `obj_reg`, `value_reg`, `left`, `right` are typed as `str`, not `Register`. The `operands: list[Any]` bag persists as a compatibility bridge. Consumers call `to_typed()` at every use site. `Register.__eq__(str)` papers over the type gap. This half-migrated state prevents real type safety — passing a bare string where a `Register` is expected is silently accepted.
+
+**Decision:** Eliminate `IRInstruction` entirely. The `Instruction` union of frozen dataclasses becomes the sole instruction representation. All register-holding fields become `Register`. All label-holding fields remain `CodeLabel`. The `Opcode` enum is removed — instruction type is the discriminant (`isinstance` replaces opcode switches). `Register.__eq__(str)` is removed — `Register` only equals `Register`. No mutation of instructions — transformations return new instances via `dataclasses.replace()`.
+
+**Rationale:**
+- Type safety: a `Register` field cannot silently accept a non-register string.
+- No dual representation: one instruction type, no `to_typed()`/`to_flat()` conversion overhead.
+- Generic transforms: `InstructionBase.map_registers(fn)` and `map_labels(fn)` replace the linker's fragile operand-by-operand iteration.
+- Frozen immutability: instructions are values, not mutable bags. The 2 mutation sites in `llm_frontend.py` become `dataclasses.replace()`.
+
+**Implementation:** Five-layer migration, each independently testable:
+1. Change field types in `instructions.py` (`str` → `Register`), update converters, keep `operands` compat bridge
+2. Add `map_registers()`/`map_labels()` to `InstructionBase`, `Register.rebase()` method
+3. Migrate all consumers (~20 files, ~250 sites) to typed field access and `isinstance` checks
+4. Migrate all producers (~48 frontend files, ~2200 sites) to `emit_inst()` with `Register` objects
+5. Delete `IRInstruction`, `Opcode`, `to_typed()`/`to_flat()`, `operands` properties, `Register.__eq__(str)`
+
+**Consequences:** After Layer 5, the IR is a `list[Instruction]` of frozen typed dataclasses with full `Register`/`CodeLabel` type safety. No stringly-typed register references anywhere. Instruction dispatch via `isinstance` or `type()` dict lookup instead of `Opcode` enum. Generic register/label transformations via `map_registers`/`map_labels`. ~2500 lines of bridge code (`IRInstruction`, converters, `operands` properties, `Opcode` dispatch tables) are removed.
+
+**Key files:** `docs/design/eliminate-irinstruction-plan.md` (full plan with layer details and file counts).
