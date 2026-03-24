@@ -10,6 +10,7 @@ from functools import reduce
 from interpreter import constants
 from interpreter.cfg import BasicBlock, CFG
 from interpreter.ir import IRInstruction, Opcode, VAR_DEFINITION_OPCODES
+from interpreter.instructions import to_typed, DeclVar, StoreVar
 from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
@@ -114,7 +115,9 @@ class DataflowResult:
 def _defs_of(instruction: IRInstruction) -> list[str]:
     """Return variable/register names defined by an instruction."""
     if instruction.opcode in VAR_DEFINITION_OPCODES and len(instruction.operands) >= 1:
-        return [instruction.operands[0]]
+        t = to_typed(instruction)
+        assert isinstance(t, (DeclVar, StoreVar))
+        return [t.name]
     if instruction.opcode in _VALUE_PRODUCERS and instruction.result_reg.is_present():
         return [str(instruction.result_reg)]
     if instruction.opcode == Opcode.SYMBOLIC and instruction.result_reg.is_present():
@@ -353,10 +356,11 @@ def _build_raw_dependency_graph(
 
     # Collect all variable definitions (DECL_VAR + STORE_VAR)
     store_var_defs: set[tuple[str, str]] = {
-        (use_inst.operands[0], use_inst.operands[1])
+        (t.name, t.value_reg)
         for link in def_use_chains
         if (use_inst := link.use.instruction).opcode in VAR_DEFINITION_OPCODES
         and len(use_inst.operands) >= 2
+        and isinstance((t := to_typed(use_inst)), (DeclVar, StoreVar))
     }
 
     # For each STORE_VAR, trace the RHS register backward to named variables

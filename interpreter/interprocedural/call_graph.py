@@ -6,6 +6,7 @@ import logging
 
 from interpreter.cfg_types import CFG
 from interpreter.ir import Opcode, CodeLabel
+from interpreter.instructions import to_typed, CallFunction, CallMethod, CallUnknown
 from interpreter.registry import FunctionRegistry
 from interpreter import constants
 from interpreter.interprocedural.types import (
@@ -111,23 +112,29 @@ def build_call_graph(cfg: CFG, registry: FunctionRegistry) -> CallGraph:
             location = InstructionLocation(block_label=label, instruction_index=idx)
 
             if inst.opcode == Opcode.CALL_FUNCTION:
-                target_label = str(inst.operands[0])
+                t = to_typed(inst)
+                assert isinstance(t, CallFunction)
+                target_label = str(t.func_name)
                 callees = _resolve_call_function_callees(
                     target_label, function_entries, registry
                 )
-                arg_operands = tuple(str(op) for op in inst.operands[1:])
+                arg_operands = tuple(str(a) for a in t.args)
 
             elif inst.opcode == Opcode.CALL_METHOD:
                 # operands: [object_reg, method_name, arg1, arg2, ...]
-                method_name = str(inst.operands[1])
+                t = to_typed(inst)
+                assert isinstance(t, CallMethod)
+                method_name = str(t.method_name)
                 callees = _resolve_call_method_callees_cha(
                     method_name, registry, function_entries
                 )
-                arg_operands = tuple(str(op) for op in inst.operands[2:])
+                arg_operands = tuple(str(a) for a in t.args)
 
             else:  # CALL_UNKNOWN
+                t = to_typed(inst)
+                assert isinstance(t, CallUnknown)
                 callees = frozenset()
-                arg_operands = tuple(str(op) for op in inst.operands)
+                arg_operands = (str(t.target_reg),) + tuple(str(a) for a in t.args)
 
             site = CallSite(
                 caller=caller,
