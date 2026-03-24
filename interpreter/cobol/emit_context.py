@@ -10,6 +10,7 @@ is broken by injecting a *dispatch callback* at construction time.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 from typing import Any, Callable
 
@@ -47,7 +48,6 @@ from interpreter.instructions import (
     LoadRegion,
     Return_,
     WriteRegion,
-    to_typed,
 )
 from interpreter.register import Register, NO_REGISTER
 
@@ -136,7 +136,7 @@ class EmitContext:
         return reg
 
     def inline_ir(
-        self, ir_instructions: list[IRInstruction], param_regs: dict[str, str]
+        self, ir_instructions: list[Instruction], param_regs: dict[str, str]
     ) -> str:
         """Inline a generated IR function body, mapping parameter registers.
 
@@ -145,46 +145,36 @@ class EmitContext:
         reg_map: dict[str, str] = dict(param_regs)
         return_reg = ""
 
+        def remap(r: Register) -> Register:
+            mapped = reg_map.get(str(r))
+            return Register(str(mapped)) if mapped else r
+
         for inst in ir_instructions:
-            if isinstance(inst, Label_) or inst.opcode == Opcode.LABEL:
+            if isinstance(inst, Label_):
                 continue
-            if isinstance(inst, Return_) or inst.opcode == Opcode.RETURN:
-                t = to_typed(inst)
-                assert isinstance(t, Return_)
-                resolved_operand = self.resolve_inline_operand(t.value_reg, reg_map)
-                resolved_str = str(resolved_operand)
+            if isinstance(inst, Return_):
+                resolved = remap(inst.value_reg)
+                resolved_str = str(resolved)
                 return_reg = (
                     resolved_str
                     if resolved_str.startswith("%")
-                    else self.const_to_reg(resolved_operand)
+                    else self.const_to_reg(resolved)
                 )
                 continue
 
-            mapped_operands = [
-                self.resolve_inline_operand(op, reg_map) for op in inst.operands
-            ]
-
-            new_result = (
-                self.fresh_reg() if inst.result_reg.is_present() else NO_REGISTER
-            )
+            # Allocate fresh result register and record the mapping
             if inst.result_reg.is_present():
+                new_result = self.fresh_reg()
                 reg_map[str(inst.result_reg)] = str(new_result)
+            else:
+                new_result = NO_REGISTER
 
-            self.emit(
-                inst.opcode,
-                result_reg=new_result,
-                operands=mapped_operands,
-                label=inst.label,
-            )
+            # Remap all register operands, then override result_reg with the fresh one
+            remapped = inst.map_registers(remap)
+            remapped = dataclasses.replace(remapped, result_reg=new_result)
+            self.emit_inst(remapped)
 
         return return_reg
-
-    def resolve_inline_operand(self, operand: Any, reg_map: dict[str, str]) -> Any:
-        """Resolve an operand through the register mapping."""
-        key = str(operand) if isinstance(operand, Register) else operand
-        if isinstance(key, str) and key.startswith("%"):
-            return reg_map.get(key, key)
-        return operand
 
     # ── Statement Dispatch ────────────────────────────────────────
 

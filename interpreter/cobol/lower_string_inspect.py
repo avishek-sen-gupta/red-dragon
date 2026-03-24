@@ -18,7 +18,8 @@ from interpreter.cobol.ir_encoders import (
     build_inspect_tally_ir,
     build_string_split_ir,
 )
-from interpreter.ir import Opcode
+from interpreter.instructions import Binop, CallFunction
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
@@ -48,22 +49,28 @@ def lower_string(
                 translate_cobol_figurative(str(sending.delimited_by))
             )
             find_pos = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CALL_FUNCTION,
-                result_reg=find_pos,
-                operands=[BuiltinName.STRING_FIND, src_str_reg, delim_reg],
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=find_pos,
+                    func_name=BuiltinName.STRING_FIND,
+                    args=(Register(str(src_str_reg)), Register(str(delim_reg))),
+                ),
             )
             parts = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CALL_FUNCTION,
-                result_reg=parts,
-                operands=[BuiltinName.STRING_SPLIT, src_str_reg, delim_reg],
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=parts,
+                    func_name=BuiltinName.STRING_SPLIT,
+                    args=(Register(str(src_str_reg)), Register(str(delim_reg))),
+                ),
             )
             first_part = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CALL_FUNCTION,
-                result_reg=first_part,
-                operands=[BuiltinName.LIST_GET, parts, 0],
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=first_part,
+                    func_name=BuiltinName.LIST_GET,
+                    args=(Register(str(parts)), 0),
+                ),
             )
             part_regs.append(first_part)
 
@@ -75,10 +82,12 @@ def lower_string(
         concat_reg = part_regs[0]
         for next_reg in part_regs[1:]:
             new_concat = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CALL_FUNCTION,
-                result_reg=new_concat,
-                operands=[BuiltinName.STRING_CONCAT_PAIR, concat_reg, next_reg],
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=new_concat,
+                    func_name=BuiltinName.STRING_CONCAT_PAIR,
+                    args=(Register(str(concat_reg)), Register(str(next_reg))),
+                ),
             )
             concat_reg = new_concat
 
@@ -119,10 +128,12 @@ def lower_unstring(
         target_ref = ctx.resolve_field_ref(target_name, layout, region_reg)
         idx_reg = ctx.const_to_reg(i)
         part_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=part_reg,
-            operands=[BuiltinName.LIST_GET, parts_reg, idx_reg],
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=part_reg,
+                func_name=BuiltinName.LIST_GET,
+                args=(Register(str(parts_reg)), Register(str(idx_reg))),
+            ),
         )
         ctx.emit_encode_and_write(
             region_reg, target_ref.fl, part_reg, target_ref.offset_reg
@@ -173,10 +184,13 @@ def lower_inspect_tallying(
             },
         )
         new_total = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.BINOP,
-            result_reg=new_total,
-            operands=["+", total_count_reg, count_reg],
+        ctx.emit_inst(
+            Binop(
+                result_reg=new_total,
+                operator="+",
+                left=Register(str(total_count_reg)),
+                right=Register(str(count_reg)),
+            ),
         )
         total_count_reg = new_total
 
