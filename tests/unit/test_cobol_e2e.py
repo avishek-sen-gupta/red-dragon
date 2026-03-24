@@ -12,6 +12,7 @@ from interpreter.cfg import build_cfg
 from interpreter.cobol.asg_types import CobolASG
 from interpreter.cobol.cobol_frontend import CobolFrontend
 from interpreter.cobol.subprocess_runner import SubprocessRunner
+from interpreter.instructions import AllocRegion, Const
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.registry import build_registry
 from interpreter.run import VMConfig, execute_cfg
@@ -83,9 +84,16 @@ class TestHelloWorldFixture:
         frontend = CobolFrontend(_FakeParser(asg))
         instructions = frontend.lower(b"")
 
-        allocs = [i for i in instructions if i.opcode == Opcode.ALLOC_REGION]
+        allocs = [i for i in instructions if isinstance(i, AllocRegion)]
         assert len(allocs) == 1
-        assert allocs[0].operands[0] == 11  # X(11)
+        # The size is stored in a preceding CONST instruction
+        size_const = [
+            i
+            for i in instructions
+            if isinstance(i, Const) and i.result_reg == allocs[0].size_reg
+        ]
+        assert len(size_const) == 1
+        assert size_const[0].value == 11  # X(11)
 
     def test_initial_value_written_to_region(self):
         """Verify that the initial VALUE "HELLO WORLD" is written into the region."""
@@ -125,8 +133,13 @@ class TestMoveFieldsFixture:
         frontend = CobolFrontend(_FakeParser(asg))
         instructions = frontend.lower(b"")
 
-        allocs = [i for i in instructions if i.opcode == Opcode.ALLOC_REGION]
-        assert allocs[0].operands[0] == 6  # 9(3) + 9(3) = 3 + 3
+        allocs = [i for i in instructions if isinstance(i, AllocRegion)]
+        size_const = [
+            i
+            for i in instructions
+            if isinstance(i, Const) and i.result_reg == allocs[0].size_reg
+        ]
+        assert size_const[0].value == 6  # 9(3) + 9(3) = 3 + 3
 
 
 class TestArithmeticFixture:

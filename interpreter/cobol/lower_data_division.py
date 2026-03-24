@@ -6,18 +6,19 @@ import logging
 
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.ir import Opcode
+from interpreter.instructions import AllocRegion, Const
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
 
 def lower_data_division(ctx: EmitContext, layout: DataLayout) -> str:
     """Emit ALLOC_REGION + initial VALUE encodings. Returns region register."""
+    size_reg = ctx.fresh_reg()
+    ctx.emit_inst(Const(result_reg=size_reg, value=layout.total_bytes))
     region_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.ALLOC_REGION,
-        result_reg=region_reg,
-        operands=[layout.total_bytes],
+    ctx.emit_inst(
+        AllocRegion(result_reg=region_reg, size_reg=size_reg),
     )
 
     fields_with_values = [fl for fl in layout.fields.values() if fl.value]

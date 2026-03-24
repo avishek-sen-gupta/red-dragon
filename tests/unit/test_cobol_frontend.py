@@ -9,6 +9,7 @@ from interpreter.cobol.asg_types import (
     CobolSection,
 )
 from interpreter.cobol.cobol_frontend import CobolFrontend
+from interpreter.instructions import AllocRegion, Const
 from interpreter.cobol.cobol_statements import (
     AcceptStatement,
     AlterStatement,
@@ -80,9 +81,14 @@ class TestDataDivisionLowering:
         frontend = CobolFrontend(_FakeParser(asg))
         instructions = frontend.lower(b"")
 
-        allocs = _find_opcodes(instructions, Opcode.ALLOC_REGION)
+        allocs = [i for i in instructions if isinstance(i, AllocRegion)]
         assert len(allocs) == 1
-        assert allocs[0].operands[0] == 5  # 5 bytes for 9(5)
+        size_const = [
+            i
+            for i in instructions
+            if isinstance(i, Const) and i.result_reg == allocs[0].size_reg
+        ]
+        assert size_const[0].value == 5  # 5 bytes for 9(5)
 
     def test_initial_value_encoding(self):
         asg = CobolASG(
@@ -146,8 +152,13 @@ class TestDataDivisionLowering:
         frontend = CobolFrontend(_FakeParser(asg))
         instructions = frontend.lower(b"")
 
-        allocs = _find_opcodes(instructions, Opcode.ALLOC_REGION)
-        assert allocs[0].operands[0] == 8  # 5 + 3
+        allocs = [i for i in instructions if isinstance(i, AllocRegion)]
+        size_const = [
+            i
+            for i in instructions
+            if isinstance(i, Const) and i.result_reg == allocs[0].size_reg
+        ]
+        assert size_const[0].value == 8  # 5 + 3
 
     def test_multiple_fields_with_values(self):
         asg = CobolASG(
