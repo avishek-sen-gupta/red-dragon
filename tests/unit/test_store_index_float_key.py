@@ -24,6 +24,7 @@ from interpreter.vm.executor import (
 )
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
+from interpreter.register import Register
 
 
 def _make_vm() -> VMState:
@@ -40,9 +41,14 @@ def _empty_registry() -> FunctionRegistry:
     return FunctionRegistry()
 
 
-def _type_env_with(register_types: dict[str, str]) -> TypeEnvironment:
+def _type_env_with(register_types: dict) -> TypeEnvironment:
     return TypeEnvironment(
-        register_types=MappingProxyType(register_types),
+        register_types=MappingProxyType(
+            {
+                (k if isinstance(k, Register) else Register(k)): v
+                for k, v in register_types.items()
+            }
+        ),
         var_types=MappingProxyType({}),
     )
 
@@ -120,12 +126,12 @@ class TestFloatIndexHeapKeyMismatch:
             conversion_rules=rules,
         )
 
-        assert unwrap(vm.current_frame.registers["%out"]) == 42
+        assert unwrap(vm.current_frame.registers[Register("%out")]) == 42
 
     def test_int_store_float_load_reads_back_stored_value(self):
         """STORE_INDEX with int 2, then LOAD_INDEX with float 2.0 — value should round-trip."""
         vm = _setup_array(_make_vm())
-        type_env = _type_env_with({"%idx_i": "Int", "%idx_f": "Int"})
+        type_env = _type_env_with({"%idx_i": "Int", Register("%idx_f"): "Int"})
         rules = DefaultTypeConversionRules()
 
         # Store value 99 at int index 2
@@ -154,7 +160,7 @@ class TestFloatIndexHeapKeyMismatch:
             conversion_rules=rules,
         )
 
-        assert unwrap(vm.current_frame.registers["%out"]) == 99
+        assert unwrap(vm.current_frame.registers[Register("%out")]) == 99
 
     def test_heap_key_written_by_float_index_with_type_coercion(self):
         """After STORE_INDEX with float 2.0 and type env saying Int, heap key is '2' not '2.0'."""
@@ -174,7 +180,7 @@ class TestFloatIndexHeapKeyMismatch:
             conversion_rules=rules,
         )
 
-        arr_addr = _heap_addr(unwrap(vm.current_frame.registers["%arr"]))
+        arr_addr = _heap_addr(unwrap(vm.current_frame.registers[Register("%arr")]))
         heap_obj = vm.heap[arr_addr]
         assert "2" in heap_obj.fields, "Expected int key '2' in heap fields"
         assert (

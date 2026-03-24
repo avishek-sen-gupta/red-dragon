@@ -8,6 +8,7 @@ import pytest
 
 from interpreter.llm.backend import LLMInterpreterBackend, get_backend
 from interpreter.llm.llm_client import LLMClient
+from interpreter.register import Register
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.vm.vm import VMState, StackFrame
 
@@ -50,7 +51,7 @@ class TestLLMInterpreterBackend:
         vm = _make_vm_with_frame()
         update = backend.interpret_instruction(inst, vm)
 
-        assert update.register_writes == {"%0": 42}
+        assert update.register_writes == {Register("%0"): 42}
         assert update.reasoning == "test"
 
     def test_passes_system_prompt(self):

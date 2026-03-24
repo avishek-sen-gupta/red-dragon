@@ -8,6 +8,7 @@ from interpreter.constants import Language
 from interpreter.refs.class_ref import ClassRef
 from interpreter.ir import CodeLabel
 from interpreter.ir import Opcode
+from interpreter.register import Register
 
 
 def _make_ctx(lang: Language = Language.PYTHON) -> TreeSitterEmitContext:
@@ -39,7 +40,7 @@ class TestEmitClassRef:
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         assert len(const_insts) == 1
         assert const_insts[0].operands == ["class_Dog_0"]
-        assert const_insts[0].result_reg == "%0"
+        assert str(const_insts[0].result_reg) == "%0"
 
     def test_no_angle_brackets_in_operand(self):
         ctx = _make_ctx()

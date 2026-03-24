@@ -37,7 +37,7 @@ class TestInterfaceChainWalk:
     def test_method_resolved_via_interface(self):
         """Class 'Dog' implements 'Animal'; Dog has no 'speak', but Animal does."""
         ctx = _InferenceContext(
-            register_types={"%0": scalar("Dog")},
+            register_types={Register("%0"): scalar("Dog")},
             class_method_types={
                 scalar("Animal"): {"speak": scalar("String")},
                 scalar("Dog"): {},  # Dog has no methods of its own
@@ -46,12 +46,12 @@ class TestInterfaceChainWalk:
         )
         inst = _make_call_method_inst("%1", "%0", "speak")
         _infer_call_method(inst, ctx, _resolver())
-        assert ctx.register_types["%1"] == scalar("String")
+        assert ctx.register_types[Register("%1")] == scalar("String")
 
     def test_method_on_class_takes_priority(self):
         """Direct class method should be preferred over interface fallback."""
         ctx = _InferenceContext(
-            register_types={"%0": scalar("Dog")},
+            register_types={Register("%0"): scalar("Dog")},
             class_method_types={
                 scalar("Animal"): {"speak": scalar("String")},
                 scalar("Dog"): {"speak": scalar("Int")},
@@ -60,12 +60,12 @@ class TestInterfaceChainWalk:
         )
         inst = _make_call_method_inst("%1", "%0", "speak")
         _infer_call_method(inst, ctx, _resolver())
-        assert ctx.register_types["%1"] == scalar("Int")
+        assert ctx.register_types[Register("%1")] == scalar("Int")
 
     def test_multiple_interfaces_first_match_wins(self):
         """Walk interfaces in order; first one with the method wins."""
         ctx = _InferenceContext(
-            register_types={"%0": scalar("Widget")},
+            register_types={Register("%0"): scalar("Widget")},
             class_method_types={
                 scalar("Drawable"): {"draw": scalar("Void")},
                 scalar("Clickable"): {"draw": scalar("Bool")},
@@ -75,12 +75,12 @@ class TestInterfaceChainWalk:
         )
         inst = _make_call_method_inst("%1", "%0", "draw")
         _infer_call_method(inst, ctx, _resolver())
-        assert ctx.register_types["%1"] == scalar("Void")
+        assert ctx.register_types[Register("%1")] == scalar("Void")
 
     def test_no_interface_no_crash(self):
         """Class not in interface_implementations — no crash, no type."""
         ctx = _InferenceContext(
-            register_types={"%0": scalar("Foo")},
+            register_types={Register("%0"): scalar("Foo")},
             class_method_types={scalar("Foo"): {}},
             interface_implementations={},
         )

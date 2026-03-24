@@ -59,7 +59,7 @@ class TestArrowOperatorLowering:
         assert len(field_stores) == 2
         # Verify the arrow write stores the value 5 (not the struct field init)
         consts = {
-            inst.result_reg: inst.operands[0]
+            str(inst.result_reg): inst.operands[0]
             for inst in ir
             if inst.opcode == Opcode.CONST
         }

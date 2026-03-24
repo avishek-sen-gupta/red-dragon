@@ -9,6 +9,7 @@ from interpreter.vm.vm_types import HeapObject, Pointer, StackFrame
 from interpreter.types.typed_value import typed, typed_from_runtime
 from interpreter.types.type_expr import scalar
 from interpreter.constants import TypeName
+from interpreter.register import Register
 
 
 class TestResolveCallArgs:
@@ -24,7 +25,7 @@ class TestResolveCallArgs:
         vm.call_stack.append(
             StackFrame(
                 function_name="test",
-                registers={"%arr": typed_from_runtime(ptr)},
+                registers={Register("%arr"): typed_from_runtime(ptr)},
             )
         )
         return vm, ptr
@@ -36,8 +37,8 @@ class TestResolveCallArgs:
             StackFrame(
                 function_name="test",
                 registers={
-                    "%a": typed_from_runtime(1),
-                    "%b": typed_from_runtime(2),
+                    Register("%a"): typed_from_runtime(1),
+                    Register("%b"): typed_from_runtime(2),
                 },
             )
         )
@@ -59,8 +60,8 @@ class TestResolveCallArgs:
     def test_spread_mixed_with_plain_args(self):
         """SpreadArguments can be mixed with plain register args."""
         vm, _ = self._make_vm_with_array([2, 3])
-        vm.current_frame.registers["%x"] = typed_from_runtime(1)
-        vm.current_frame.registers["%y"] = typed_from_runtime(4)
+        vm.current_frame.registers[Register("%x")] = typed_from_runtime(1)
+        vm.current_frame.registers[Register("%y")] = typed_from_runtime(4)
         args = _resolve_call_args(vm, ["%x", SpreadArguments(register="%arr"), "%y"])
         assert [a.value for a in args] == [1, 2, 3, 4]
 

@@ -586,11 +586,11 @@ class TestComputeLowering:
         assert len(writes) >= 4
         # Verify both target fields (WS-C at offset 3, WS-D at offset 6) are written
         const_map = {
-            i.result_reg: i.operands[0]
+            str(i.result_reg): i.operands[0]
             for i in instructions
             if i.opcode == Opcode.CONST
         }
-        write_offsets = [const_map.get(w.operands[1]) for w in writes]
+        write_offsets = [const_map.get(str(w.operands[1])) for w in writes]
         assert (
             3 in write_offsets
         ), f"Expected write at offset 3 (WS-C), got offsets: {write_offsets}"

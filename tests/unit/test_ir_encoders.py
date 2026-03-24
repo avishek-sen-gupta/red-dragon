@@ -44,6 +44,7 @@ from interpreter.cobol.float_encoding import (
 )
 from interpreter.cobol.alphanumeric import encode_alphanumeric, decode_alphanumeric
 from interpreter.cobol.data_filters import align_decimal, left_adjust
+from interpreter.register import Register
 
 
 def _execute_ir(instructions: list[IRInstruction], registers: dict[str, Any]) -> Any:
@@ -109,7 +110,9 @@ class TestEncodeZonedIR:
         sign_nib = _sign_nibble(signed, negative, has_nonzero)
 
         ir = build_encode_zoned_ir("enc_z", total_digits=total_digits)
-        result = _execute_ir(ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        result = _execute_ir(
+            ir, {"%p_digits": digits, Register("%p_sign_nibble"): sign_nib}
+        )
         return result
 
     def test_unsigned_integer(self):
@@ -183,7 +186,9 @@ class TestZonedRoundTripIR:
         sign_nib = 0x0F
 
         enc_ir = build_encode_zoned_ir("enc", total_digits=5)
-        encoded = _execute_ir(enc_ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        encoded = _execute_ir(
+            enc_ir, {"%p_digits": digits, Register("%p_sign_nibble"): sign_nib}
+        )
 
         dec_ir = build_decode_zoned_ir("dec", total_digits=5, decimal_digits=0)
         decoded = _execute_ir(dec_ir, {"%p_data": encoded})
@@ -206,7 +211,9 @@ class TestEncodeComp3IR:
         sign_nib = _sign_nibble(signed, negative, has_nonzero)
 
         ir = build_encode_comp3_ir("enc_c3", total_digits=total_digits)
-        return _execute_ir(ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        return _execute_ir(
+            ir, {"%p_digits": digits, Register("%p_sign_nibble"): sign_nib}
+        )
 
     def test_unsigned_integer(self):
         ir_result = self._run_encode("12345", 5, 0, signed=False)
@@ -264,7 +271,9 @@ class TestComp3RoundTripIR:
         sign_nib = 0x0F
 
         enc_ir = build_encode_comp3_ir("enc", total_digits=5)
-        encoded = _execute_ir(enc_ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        encoded = _execute_ir(
+            enc_ir, {"%p_digits": digits, Register("%p_sign_nibble"): sign_nib}
+        )
 
         dec_ir = build_decode_comp3_ir("dec", total_digits=5, decimal_digits=0)
         decoded = _execute_ir(dec_ir, {"%p_data": encoded})
@@ -360,7 +369,9 @@ class TestEncodeBinaryIR:
         ir = build_encode_binary_ir(
             "enc_bin", total_digits=total_digits, byte_count=byte_count, signed=signed
         )
-        return _execute_ir(ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        return _execute_ir(
+            ir, {"%p_digits": digits, Register("%p_sign_nibble"): sign_nib}
+        )
 
     def test_unsigned_small(self):
         ir_result = self._run_encode("1234", 4, 0, signed=False)
@@ -432,7 +443,9 @@ class TestBinaryRoundTripIR:
         enc_ir = build_encode_binary_ir(
             "enc", total_digits=4, byte_count=byte_count, signed=False
         )
-        encoded = _execute_ir(enc_ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        encoded = _execute_ir(
+            enc_ir, {"%p_digits": digits, Register("%p_sign_nibble"): sign_nib}
+        )
 
         dec_ir = build_decode_binary_ir(
             "dec", byte_count=byte_count, decimal_digits=0, signed=False
@@ -449,7 +462,9 @@ class TestBinaryRoundTripIR:
         enc_ir = build_encode_binary_ir(
             "enc", total_digits=4, byte_count=byte_count, signed=True
         )
-        encoded = _execute_ir(enc_ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        encoded = _execute_ir(
+            enc_ir, {"%p_digits": digits, Register("%p_sign_nibble"): sign_nib}
+        )
 
         dec_ir = build_decode_binary_ir(
             "dec", byte_count=byte_count, decimal_digits=0, signed=True
@@ -532,7 +547,9 @@ class TestEncodeZonedLeadingIR:
         digits = [1, 2, 3, 4, 5]
         sign_nib = 0x0C  # positive
         ir = build_encode_zoned_ir("enc_zl", total_digits=5, sign_leading=True)
-        result = _execute_ir(ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        result = _execute_ir(
+            ir, {"%p_digits": digits, Register("%p_sign_nibble"): sign_nib}
+        )
         # Byte 0: sign 0xC in high nibble, digit 1 in low → 0xC1
         assert result[0] == 0xC1
         # Remaining bytes: zone 0xF, digit in low
@@ -543,7 +560,9 @@ class TestEncodeZonedLeadingIR:
         digits = [0, 0, 0, 4, 2]
         sign_nib = 0x0D  # negative
         ir = build_encode_zoned_ir("enc_zl", total_digits=5, sign_leading=True)
-        result = _execute_ir(ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        result = _execute_ir(
+            ir, {"%p_digits": digits, Register("%p_sign_nibble"): sign_nib}
+        )
         assert result[0] == 0xD0  # sign D, digit 0
         assert result[4] == 0xF2
 
@@ -578,7 +597,9 @@ class TestEncodeZonedSeparateIR:
         ir = build_encode_zoned_separate_ir(
             "enc_zs", total_digits=3, sign_leading=False
         )
-        result = _execute_ir(ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        result = _execute_ir(
+            ir, {"%p_digits": digits, Register("%p_sign_nibble"): sign_nib}
+        )
         # 3 digit bytes + 1 sign byte
         assert len(result) == 4
         assert result[0] == 0xF1  # pure unsigned digit
@@ -592,7 +613,9 @@ class TestEncodeZonedSeparateIR:
         ir = build_encode_zoned_separate_ir(
             "enc_zs", total_digits=3, sign_leading=False
         )
-        result = _execute_ir(ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        result = _execute_ir(
+            ir, {"%p_digits": digits, Register("%p_sign_nibble"): sign_nib}
+        )
         assert len(result) == 4
         assert result[3] == 0x60  # EBCDIC '-'
 
@@ -600,7 +623,9 @@ class TestEncodeZonedSeparateIR:
         digits = [4, 5]
         sign_nib = 0x0C
         ir = build_encode_zoned_separate_ir("enc_zs", total_digits=2, sign_leading=True)
-        result = _execute_ir(ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        result = _execute_ir(
+            ir, {"%p_digits": digits, Register("%p_sign_nibble"): sign_nib}
+        )
         assert len(result) == 3
         assert result[0] == 0x4E  # sign first
         assert result[1] == 0xF4
@@ -610,7 +635,9 @@ class TestEncodeZonedSeparateIR:
         digits = [4, 5]
         sign_nib = 0x0D
         ir = build_encode_zoned_separate_ir("enc_zs", total_digits=2, sign_leading=True)
-        result = _execute_ir(ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        result = _execute_ir(
+            ir, {"%p_digits": digits, Register("%p_sign_nibble"): sign_nib}
+        )
         assert result[0] == 0x60  # '-' sign first
 
 
@@ -669,7 +696,9 @@ class TestZonedSeparateRoundTripIR:
         enc_ir = build_encode_zoned_separate_ir(
             "enc", total_digits=5, sign_leading=False
         )
-        encoded = _execute_ir(enc_ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        encoded = _execute_ir(
+            enc_ir, {"%p_digits": digits, Register("%p_sign_nibble"): sign_nib}
+        )
 
         dec_ir = build_decode_zoned_separate_ir(
             "dec", total_digits=5, decimal_digits=0, sign_leading=False
@@ -684,7 +713,9 @@ class TestZonedSeparateRoundTripIR:
         enc_ir = build_encode_zoned_separate_ir(
             "enc", total_digits=3, sign_leading=True
         )
-        encoded = _execute_ir(enc_ir, {"%p_digits": digits, "%p_sign_nibble": sign_nib})
+        encoded = _execute_ir(
+            enc_ir, {"%p_digits": digits, Register("%p_sign_nibble"): sign_nib}
+        )
 
         dec_ir = build_decode_zoned_separate_ir(
             "dec", total_digits=3, decimal_digits=0, sign_leading=True

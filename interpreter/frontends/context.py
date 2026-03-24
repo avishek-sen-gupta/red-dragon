@@ -265,10 +265,11 @@ class TreeSitterEmitContext:
         if return_type:
             self.type_env_builder.func_return_types[str(func_label)] = return_type
 
-    def seed_register_type(self, reg: str, type_name: TypeExpr) -> None:
+    def seed_register_type(self, reg: str | Register, type_name: TypeExpr) -> None:
         """Seed the type for a register."""
         if reg and type_name:
-            self.type_env_builder.register_types[reg] = type_name
+            key = reg if isinstance(reg, Register) else Register(reg)
+            self.type_env_builder.register_types[key] = type_name
 
     def seed_var_type(self, var_name: str, type_name: TypeExpr) -> None:
         """Seed the type for a variable."""

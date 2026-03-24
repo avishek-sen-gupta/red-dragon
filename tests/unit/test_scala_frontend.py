@@ -1122,7 +1122,7 @@ object M {
         load_vars = [
             inst
             for inst in ir
-            if inst.opcode == Opcode.LOAD_VAR and inst.result_reg == ret_reg
+            if inst.opcode == Opcode.LOAD_VAR and str(inst.result_reg) == ret_reg
         ]
         assert (
             len(load_vars) >= 1
@@ -1152,7 +1152,7 @@ object M {
         assert len(binops) >= 1, "Expected BINOP for a + b"
         binop_reg = binops[-1].result_reg
         returns = _find_all(ir, Opcode.RETURN)
-        binop_returned = any(r.operands[0] == binop_reg for r in returns)
+        binop_returned = any(r.operands[0] == str(binop_reg) for r in returns)
         assert binop_returned, f"Expected RETURN of BINOP result {binop_reg}"
 
     def test_method_implicit_return_this(self):
