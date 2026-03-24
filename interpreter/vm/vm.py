@@ -327,7 +327,7 @@ def _heap_addr(val: Any) -> str:
     return ""
 
 
-def _resolve_reg(vm: VMState, operand: str) -> TypedValue:
+def _resolve_reg(vm: VMState, operand: str | Register) -> TypedValue:
     """Resolve a register name to its TypedValue.
 
     Returns the TypedValue as-is if the register holds one, otherwise
