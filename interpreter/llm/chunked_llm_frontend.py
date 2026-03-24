@@ -12,6 +12,8 @@ from interpreter.frontend import Frontend
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
 from interpreter.ir import CodeLabel, IRInstruction, NoCodeLabel, Opcode, NO_LABEL
+from interpreter.instructions import Label_, Symbolic
+from interpreter.register import Register
 from interpreter.llm.llm_frontend import (
     IRParsingError,
     LLMFrontend,
@@ -292,11 +294,7 @@ class ChunkedLLMFrontend(Frontend):
             logger.warning(
                 "ChunkedLLMFrontend: no chunks extracted, returning entry label only"
             )
-            return [
-                IRInstruction(
-                    opcode=Opcode.LABEL, label=CodeLabel(constants.CFG_ENTRY_LABEL)
-                )
-            ]
+            return [Label_(label=CodeLabel(constants.CFG_ENTRY_LABEL))]
 
         all_instructions: list[IRInstruction] = []
         reg_offset = 0
@@ -322,10 +320,9 @@ class ChunkedLLMFrontend(Frontend):
                     chunk.name,
                     exc,
                 )
-                placeholder = IRInstruction(
-                    opcode=Opcode.SYMBOLIC,
-                    result_reg=f"%{reg_offset}",
-                    operands=[f"chunk_error:{chunk.name}"],
+                placeholder = Symbolic(
+                    result_reg=Register(f"%{reg_offset}"),
+                    hint=f"chunk_error:{chunk.name}",
                 )
                 all_instructions.append(placeholder)
                 reg_offset += 1
@@ -335,7 +332,10 @@ class ChunkedLLMFrontend(Frontend):
             chunk_instructions = [
                 inst
                 for inst in chunk_instructions
-                if not (inst.opcode == Opcode.LABEL and inst.label.is_entry())
+                if not (
+                    (isinstance(inst, Label_) or inst.opcode == Opcode.LABEL)
+                    and inst.label.is_entry()
+                )
             ]
 
             label_suffix = f"_chunk{i}"
@@ -345,9 +345,7 @@ class ChunkedLLMFrontend(Frontend):
             all_instructions.extend(renumbered)
 
         # Prepend the single entry label
-        entry = IRInstruction(
-            opcode=Opcode.LABEL, label=CodeLabel(constants.CFG_ENTRY_LABEL)
-        )
+        entry = Label_(label=CodeLabel(constants.CFG_ENTRY_LABEL))
         combined = [entry] + all_instructions
 
         # Convert LLM-emitted <function:...> and <class:...> strings to plain labels after renumbering

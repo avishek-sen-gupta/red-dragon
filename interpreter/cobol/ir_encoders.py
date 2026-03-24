@@ -25,7 +25,9 @@ from interpreter.cobol.cobol_constants import (
     CobolEncoding,
     NibblePosition,
 )
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import IRInstruction
+from interpreter.instructions import Binop, CallFunction, Const, Return_
+from interpreter.register import Register
 
 
 class _RegCounter:
@@ -35,8 +37,8 @@ class _RegCounter:
         self._prefix = prefix
         self._count = 0
 
-    def next(self) -> str:
-        name = f"%{self._prefix}_r{self._count}"
+    def next(self) -> Register:
+        name = Register(f"%{self._prefix}_r{self._count}")
         self._count += 1
         return name
 
@@ -59,25 +61,31 @@ def _encode_digit_step(
         new_result,
         instructions
         + [
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
+            CallFunction(
                 result_reg=digit,
-                operands=[BuiltinName.LIST_GET, source_list, i],
+                func_name=BuiltinName.LIST_GET,
+                args=(
+                    source_list,
+                    i,
+                ),
             ),
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
+            CallFunction(
                 result_reg=byte_val,
-                operands=[
-                    BuiltinName.NIBBLE_SET,
+                func_name=BuiltinName.NIBBLE_SET,
+                args=(
                     ByteConstants.ZONE_NIBBLE_UNSIGNED,
                     NibblePosition.LOW,
                     digit,
-                ],
+                ),
             ),
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
+            CallFunction(
                 result_reg=new_result,
-                operands=[BuiltinName.LIST_SET, current_result, i, byte_val],
+                func_name=BuiltinName.LIST_SET,
+                args=(
+                    current_result,
+                    i,
+                    byte_val,
+                ),
             ),
         ],
     )
@@ -105,25 +113,28 @@ def _decode_digit_step(
         new_accum,
         instructions
         + [
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
+            CallFunction(
                 result_reg=byte_reg,
-                operands=[BuiltinName.LIST_GET, source_list, offset + i],
+                func_name=BuiltinName.LIST_GET,
+                args=(
+                    source_list,
+                    offset + i,
+                ),
             ),
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
+            CallFunction(
                 result_reg=digit,
-                operands=[BuiltinName.NIBBLE_GET, byte_reg, NibblePosition.LOW],
+                func_name=BuiltinName.NIBBLE_GET,
+                args=(
+                    byte_reg,
+                    NibblePosition.LOW,
+                ),
             ),
-            IRInstruction(
-                opcode=Opcode.BINOP,
-                result_reg=contribution,
-                operands=["*", digit, power],
-            ),
-            IRInstruction(
-                opcode=Opcode.BINOP,
+            Binop(result_reg=contribution, operator="*", left=digit, right=power),
+            Binop(
                 result_reg=new_accum,
-                operands=["+", current_accum, contribution],
+                operator="+",
+                left=current_accum,
+                right=contribution,
             ),
         ],
     )
@@ -149,20 +160,20 @@ def _accumulate_digit_step(
         new_accum,
         instructions
         + [
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
+            CallFunction(
                 result_reg=digit,
-                operands=[BuiltinName.LIST_GET, source_list, i],
+                func_name=BuiltinName.LIST_GET,
+                args=(
+                    source_list,
+                    i,
+                ),
             ),
-            IRInstruction(
-                opcode=Opcode.BINOP,
-                result_reg=contribution,
-                operands=["*", digit, power],
-            ),
-            IRInstruction(
-                opcode=Opcode.BINOP,
+            Binop(result_reg=contribution, operator="*", left=digit, right=power),
+            Binop(
                 result_reg=new_accum,
-                operands=["+", current_accum, contribution],
+                operator="+",
+                left=current_accum,
+                right=contribution,
             ),
         ],
     )
@@ -186,14 +197,13 @@ def build_encode_zoned_ir(
     # Create result list filled with 0xF0 (zone nibble for unsigned digits)
     result = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=result,
-            operands=[
-                BuiltinName.MAKE_LIST,
+            func_name=BuiltinName.MAKE_LIST,
+            args=(
                 total_digits,
                 ByteConstants.ZONE_NIBBLE_UNSIGNED,
-            ],
+            ),
         )
     )
 
@@ -208,42 +218,43 @@ def build_encode_zoned_ir(
     # Set sign nibble on the sign byte (high nibble)
     sign_byte = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=sign_byte,
-            operands=[BuiltinName.LIST_GET, result, sign_byte_index],
+            func_name=BuiltinName.LIST_GET,
+            args=(
+                result,
+                sign_byte_index,
+            ),
         )
     )
 
     signed_byte = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=signed_byte,
-            operands=[
-                BuiltinName.NIBBLE_SET,
+            func_name=BuiltinName.NIBBLE_SET,
+            args=(
                 sign_byte,
                 NibblePosition.HIGH,
                 "%p_sign_nibble",
-            ],
+            ),
         )
     )
 
     final_result = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=final_result,
-            operands=[BuiltinName.LIST_SET, result, sign_byte_index, signed_byte],
+            func_name=BuiltinName.LIST_SET,
+            args=(
+                result,
+                sign_byte_index,
+                signed_byte,
+            ),
         )
     )
 
-    instructions.append(
-        IRInstruction(
-            opcode=Opcode.RETURN,
-            operands=[final_result],
-        )
-    )
+    instructions.append(Return_(value_reg=final_result))
 
     return instructions
 
@@ -268,9 +279,7 @@ def build_decode_zoned_ir(
 
     # Accumulate digit values: value = sum(digit[i] * 10^(n-1-i))
     accum = rc.next()
-    instructions.append(
-        IRInstruction(opcode=Opcode.CONST, result_reg=accum, operands=[0])
-    )
+    instructions.append(Const(result_reg=accum, value=0))
 
     accum, decode_instructions = reduce(
         lambda acc, i: _decode_digit_step(rc, "%p_data", total_digits, acc, i),
@@ -284,88 +293,68 @@ def build_decode_zoned_ir(
         divisor = 10**decimal_digits
         scaled = rc.next()
         instructions.append(
-            IRInstruction(
-                opcode=Opcode.BINOP,
-                result_reg=scaled,
-                operands=["/", accum, divisor],
-            )
+            Binop(result_reg=scaled, operator="/", left=accum, right=divisor)
         )
         accum = scaled
     else:
         # Convert to float for consistency
         as_float = rc.next()
         instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=as_float,
-                operands=["float", accum],
-            )
+            CallFunction(result_reg=as_float, func_name="float", args=(accum,))
         )
         accum = as_float
 
     # Extract sign from the sign byte's high nibble
     sign_byte = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=sign_byte,
-            operands=[BuiltinName.LIST_GET, "%p_data", sign_byte_index],
+            func_name=BuiltinName.LIST_GET,
+            args=(
+                "%p_data",
+                sign_byte_index,
+            ),
         )
     )
 
     sign_nibble = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=sign_nibble,
-            operands=[BuiltinName.NIBBLE_GET, sign_byte, NibblePosition.HIGH],
+            func_name=BuiltinName.NIBBLE_GET,
+            args=(
+                sign_byte,
+                NibblePosition.HIGH,
+            ),
         )
     )
 
     # is_negative = (sign_nibble == 0xD)
     is_neg = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
+        Binop(
             result_reg=is_neg,
-            operands=["==", sign_nibble, ByteConstants.SIGN_NIBBLE_NEGATIVE],
+            operator="==",
+            left=sign_nibble,
+            right=ByteConstants.SIGN_NIBBLE_NEGATIVE,
         )
     )
 
     # sign_multiplier = 1 - 2 * is_negative
     two_neg = rc.next()
-    instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
-            result_reg=two_neg,
-            operands=["*", 2, is_neg],
-        )
-    )
+    instructions.append(Binop(result_reg=two_neg, operator="*", left=2, right=is_neg))
 
     sign_mult = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
-            result_reg=sign_mult,
-            operands=["-", 1, two_neg],
-        )
+        Binop(result_reg=sign_mult, operator="-", left=1, right=two_neg)
     )
 
     final_result = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
-            result_reg=final_result,
-            operands=["*", accum, sign_mult],
-        )
+        Binop(result_reg=final_result, operator="*", left=accum, right=sign_mult)
     )
 
-    instructions.append(
-        IRInstruction(
-            opcode=Opcode.RETURN,
-            operands=[final_result],
-        )
-    )
+    instructions.append(Return_(value_reg=final_result))
 
     return instructions
 
@@ -388,14 +377,13 @@ def build_encode_zoned_separate_ir(
     # Build digit bytes (no embedded sign — all zones are 0xF)
     digits_list = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=digits_list,
-            operands=[
-                BuiltinName.MAKE_LIST,
+            func_name=BuiltinName.MAKE_LIST,
+            args=(
                 total_digits,
                 ByteConstants.ZONE_NIBBLE_UNSIGNED,
-            ],
+            ),
         )
     )
 
@@ -409,48 +397,58 @@ def build_encode_zoned_separate_ir(
     # Compute sign byte: 0xD → 0x60 ('-'), else → 0x4E ('+')
     is_neg = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
+        Binop(
             result_reg=is_neg,
-            operands=["==", "%p_sign_nibble", ByteConstants.SIGN_NIBBLE_NEGATIVE],
+            operator="==",
+            left="%p_sign_nibble",
+            right=ByteConstants.SIGN_NIBBLE_NEGATIVE,
         )
     )
 
     # sign_byte = 0x4E + is_neg * (0x60 - 0x4E) = 0x4E + is_neg * 0x12
     neg_offset = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
+        Binop(
             result_reg=neg_offset,
-            operands=["*", is_neg, ByteConstants.EBCDIC_SIGN_OFFSET],
+            operator="*",
+            left=is_neg,
+            right=ByteConstants.EBCDIC_SIGN_OFFSET,
         )
     )
 
     sign_byte_val = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
+        Binop(
             result_reg=sign_byte_val,
-            operands=["+", ByteConstants.EBCDIC_PLUS, neg_offset],
+            operator="+",
+            left=ByteConstants.EBCDIC_PLUS,
+            right=neg_offset,
         )
     )
 
     # Build single-element sign list
     sign_list = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=sign_list,
-            operands=[BuiltinName.MAKE_LIST, 1, 0],
+            func_name=BuiltinName.MAKE_LIST,
+            args=(
+                1,
+                0,
+            ),
         )
     )
 
     sign_list_set = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=sign_list_set,
-            operands=[BuiltinName.LIST_SET, sign_list, 0, sign_byte_val],
+            func_name=BuiltinName.LIST_SET,
+            args=(
+                sign_list,
+                0,
+                sign_byte_val,
+            ),
         )
     )
 
@@ -458,23 +456,29 @@ def build_encode_zoned_separate_ir(
     if sign_leading:
         final_result = rc.next()
         instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
+            CallFunction(
                 result_reg=final_result,
-                operands=[BuiltinName.LIST_CONCAT, sign_list_set, digits_list],
+                func_name=BuiltinName.LIST_CONCAT,
+                args=(
+                    sign_list_set,
+                    digits_list,
+                ),
             )
         )
     else:
         final_result = rc.next()
         instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
+            CallFunction(
                 result_reg=final_result,
-                operands=[BuiltinName.LIST_CONCAT, digits_list, sign_list_set],
+                func_name=BuiltinName.LIST_CONCAT,
+                args=(
+                    digits_list,
+                    sign_list_set,
+                ),
             )
         )
 
-    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[final_result]))
+    instructions.append(Return_(value_reg=final_result))
     return instructions
 
 
@@ -500,10 +504,13 @@ def build_decode_zoned_separate_ir(
     sign_byte_index = 0 if sign_leading else total_digits
     sign_byte = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=sign_byte,
-            operands=[BuiltinName.LIST_GET, "%p_data", sign_byte_index],
+            func_name=BuiltinName.LIST_GET,
+            args=(
+                "%p_data",
+                sign_byte_index,
+            ),
         )
     )
 
@@ -512,9 +519,7 @@ def build_decode_zoned_separate_ir(
 
     # Accumulate digit values
     accum = rc.next()
-    instructions.append(
-        IRInstruction(opcode=Opcode.CONST, result_reg=accum, operands=[0])
-    )
+    instructions.append(Const(result_reg=accum, value=0))
 
     accum, decode_instructions = reduce(
         lambda acc, i: _decode_digit_step(
@@ -530,62 +535,41 @@ def build_decode_zoned_separate_ir(
         divisor = 10**decimal_digits
         scaled = rc.next()
         instructions.append(
-            IRInstruction(
-                opcode=Opcode.BINOP,
-                result_reg=scaled,
-                operands=["/", accum, divisor],
-            )
+            Binop(result_reg=scaled, operator="/", left=accum, right=divisor)
         )
         accum = scaled
     else:
         as_float = rc.next()
         instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=as_float,
-                operands=["float", accum],
-            )
+            CallFunction(result_reg=as_float, func_name="float", args=(accum,))
         )
         accum = as_float
 
     # Apply sign: 0x60 = negative
     is_neg = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
+        Binop(
             result_reg=is_neg,
-            operands=["==", sign_byte, ByteConstants.EBCDIC_MINUS],
+            operator="==",
+            left=sign_byte,
+            right=ByteConstants.EBCDIC_MINUS,
         )
     )
 
     two_neg = rc.next()
-    instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
-            result_reg=two_neg,
-            operands=["*", 2, is_neg],
-        )
-    )
+    instructions.append(Binop(result_reg=two_neg, operator="*", left=2, right=is_neg))
 
     sign_mult = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
-            result_reg=sign_mult,
-            operands=["-", 1, two_neg],
-        )
+        Binop(result_reg=sign_mult, operator="-", left=1, right=two_neg)
     )
 
     final_result = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
-            result_reg=final_result,
-            operands=["*", accum, sign_mult],
-        )
+        Binop(result_reg=final_result, operator="*", left=accum, right=sign_mult)
     )
 
-    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[final_result]))
+    instructions.append(Return_(value_reg=final_result))
     return instructions
 
 
@@ -603,19 +587,25 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
     if total_digits % 2 == 0:
         zero_list = rc.next()
         instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
+            CallFunction(
                 result_reg=zero_list,
-                operands=[BuiltinName.MAKE_LIST, 1, 0],
+                func_name=BuiltinName.MAKE_LIST,
+                args=(
+                    1,
+                    0,
+                ),
             )
         )
 
         nibbles = rc.next()
         instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
+            CallFunction(
                 result_reg=nibbles,
-                operands=[BuiltinName.LIST_CONCAT, zero_list, "%p_digits"],
+                func_name=BuiltinName.LIST_CONCAT,
+                args=(
+                    zero_list,
+                    "%p_digits",
+                ),
             )
         )
     else:
@@ -624,38 +614,51 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
     # Append sign nibble: wrap it in a single-element list, then concat
     sign_list = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=sign_list,
-            operands=[BuiltinName.MAKE_LIST, 1, 0],
+            func_name=BuiltinName.MAKE_LIST,
+            args=(
+                1,
+                0,
+            ),
         )
     )
 
     sign_list_set = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=sign_list_set,
-            operands=[BuiltinName.LIST_SET, sign_list, 0, "%p_sign_nibble"],
+            func_name=BuiltinName.LIST_SET,
+            args=(
+                sign_list,
+                0,
+                "%p_sign_nibble",
+            ),
         )
     )
 
     all_nibbles = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=all_nibbles,
-            operands=[BuiltinName.LIST_CONCAT, nibbles, sign_list_set],
+            func_name=BuiltinName.LIST_CONCAT,
+            args=(
+                nibbles,
+                sign_list_set,
+            ),
         )
     )
 
     # Create result buffer
     result = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=result,
-            operands=[BuiltinName.MAKE_LIST, byte_count, 0],
+            func_name=BuiltinName.MAKE_LIST,
+            args=(
+                byte_count,
+                0,
+            ),
         )
     )
 
@@ -673,40 +676,48 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
             new_result,
             insts
             + [
-                IRInstruction(
-                    opcode=Opcode.CALL_FUNCTION,
+                CallFunction(
                     result_reg=high_nibble,
-                    operands=[BuiltinName.LIST_GET, all_nibbles, i * 2],
+                    func_name=BuiltinName.LIST_GET,
+                    args=(
+                        all_nibbles,
+                        i * 2,
+                    ),
                 ),
-                IRInstruction(
-                    opcode=Opcode.CALL_FUNCTION,
+                CallFunction(
                     result_reg=low_nibble,
-                    operands=[BuiltinName.LIST_GET, all_nibbles, i * 2 + 1],
+                    func_name=BuiltinName.LIST_GET,
+                    args=(
+                        all_nibbles,
+                        i * 2 + 1,
+                    ),
                 ),
-                IRInstruction(
-                    opcode=Opcode.CALL_FUNCTION,
+                CallFunction(
                     result_reg=byte_with_high,
-                    operands=[
-                        BuiltinName.NIBBLE_SET,
+                    func_name=BuiltinName.NIBBLE_SET,
+                    args=(
                         0,
                         NibblePosition.HIGH,
                         high_nibble,
-                    ],
+                    ),
                 ),
-                IRInstruction(
-                    opcode=Opcode.CALL_FUNCTION,
+                CallFunction(
                     result_reg=byte_complete,
-                    operands=[
-                        BuiltinName.NIBBLE_SET,
+                    func_name=BuiltinName.NIBBLE_SET,
+                    args=(
                         byte_with_high,
                         NibblePosition.LOW,
                         low_nibble,
-                    ],
+                    ),
                 ),
-                IRInstruction(
-                    opcode=Opcode.CALL_FUNCTION,
+                CallFunction(
                     result_reg=new_result,
-                    operands=[BuiltinName.LIST_SET, current_result, i, byte_complete],
+                    func_name=BuiltinName.LIST_SET,
+                    args=(
+                        current_result,
+                        i,
+                        byte_complete,
+                    ),
                 ),
             ],
         )
@@ -716,7 +727,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
     )
     instructions.extend(pack_instructions)
 
-    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
+    instructions.append(Return_(value_reg=result))
 
     return instructions
 
@@ -745,20 +756,29 @@ def build_decode_comp3_ir(
             regs + [high, low],
             insts
             + [
-                IRInstruction(
-                    opcode=Opcode.CALL_FUNCTION,
+                CallFunction(
                     result_reg=byte_reg,
-                    operands=[BuiltinName.LIST_GET, "%p_data", i],
+                    func_name=BuiltinName.LIST_GET,
+                    args=(
+                        "%p_data",
+                        i,
+                    ),
                 ),
-                IRInstruction(
-                    opcode=Opcode.CALL_FUNCTION,
+                CallFunction(
                     result_reg=high,
-                    operands=[BuiltinName.NIBBLE_GET, byte_reg, NibblePosition.HIGH],
+                    func_name=BuiltinName.NIBBLE_GET,
+                    args=(
+                        byte_reg,
+                        NibblePosition.HIGH,
+                    ),
                 ),
-                IRInstruction(
-                    opcode=Opcode.CALL_FUNCTION,
+                CallFunction(
                     result_reg=low,
-                    operands=[BuiltinName.NIBBLE_GET, byte_reg, NibblePosition.LOW],
+                    func_name=BuiltinName.NIBBLE_GET,
+                    args=(
+                        byte_reg,
+                        NibblePosition.LOW,
+                    ),
                 ),
             ],
         )
@@ -774,9 +794,7 @@ def build_decode_comp3_ir(
 
     # Accumulate digits into a value
     accum = rc.next()
-    instructions.append(
-        IRInstruction(opcode=Opcode.CONST, result_reg=accum, operands=[0])
-    )
+    instructions.append(Const(result_reg=accum, value=0))
 
     def _accumulate_dreg(
         acc: tuple[str, list[IRInstruction]], pair: tuple[int, str]
@@ -790,15 +808,12 @@ def build_decode_comp3_ir(
             new_accum,
             insts
             + [
-                IRInstruction(
-                    opcode=Opcode.BINOP,
-                    result_reg=contribution,
-                    operands=["*", dreg, power],
-                ),
-                IRInstruction(
-                    opcode=Opcode.BINOP,
+                Binop(result_reg=contribution, operator="*", left=dreg, right=power),
+                Binop(
                     result_reg=new_accum,
-                    operands=["+", current_accum, contribution],
+                    operator="+",
+                    left=current_accum,
+                    right=contribution,
                 ),
             ],
         )
@@ -813,62 +828,41 @@ def build_decode_comp3_ir(
         divisor = 10**decimal_digits
         scaled = rc.next()
         instructions.append(
-            IRInstruction(
-                opcode=Opcode.BINOP,
-                result_reg=scaled,
-                operands=["/", accum, divisor],
-            )
+            Binop(result_reg=scaled, operator="/", left=accum, right=divisor)
         )
         accum = scaled
     else:
         as_float = rc.next()
         instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=as_float,
-                operands=["float", accum],
-            )
+            CallFunction(result_reg=as_float, func_name="float", args=(accum,))
         )
         accum = as_float
 
     # Apply sign: sign_nibble == 0xD → negative
     is_neg = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
+        Binop(
             result_reg=is_neg,
-            operands=["==", sign_reg, ByteConstants.SIGN_NIBBLE_NEGATIVE],
+            operator="==",
+            left=sign_reg,
+            right=ByteConstants.SIGN_NIBBLE_NEGATIVE,
         )
     )
 
     two_neg = rc.next()
-    instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
-            result_reg=two_neg,
-            operands=["*", 2, is_neg],
-        )
-    )
+    instructions.append(Binop(result_reg=two_neg, operator="*", left=2, right=is_neg))
 
     sign_mult = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
-            result_reg=sign_mult,
-            operands=["-", 1, two_neg],
-        )
+        Binop(result_reg=sign_mult, operator="-", left=1, right=two_neg)
     )
 
     final_result = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
-            result_reg=final_result,
-            operands=["*", accum, sign_mult],
-        )
+        Binop(result_reg=final_result, operator="*", left=accum, right=sign_mult)
     )
 
-    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[final_result]))
+    instructions.append(Return_(value_reg=final_result))
 
     return instructions
 
@@ -889,9 +883,7 @@ def build_encode_binary_ir(
 
     # Accumulate digits into integer value
     accum = rc.next()
-    instructions.append(
-        IRInstruction(opcode=Opcode.CONST, result_reg=accum, operands=[0])
-    )
+    instructions.append(Const(result_reg=accum, value=0))
 
     accum, accum_instructions = reduce(
         lambda acc, i: _accumulate_digit_step(rc, "%p_digits", total_digits, acc, i),
@@ -903,56 +895,42 @@ def build_encode_binary_ir(
     # Apply sign: sign_nibble == 0xD → negate
     is_neg = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
+        Binop(
             result_reg=is_neg,
-            operands=["==", "%p_sign_nibble", ByteConstants.SIGN_NIBBLE_NEGATIVE],
+            operator="==",
+            left="%p_sign_nibble",
+            right=ByteConstants.SIGN_NIBBLE_NEGATIVE,
         )
     )
 
     two_neg = rc.next()
-    instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
-            result_reg=two_neg,
-            operands=["*", 2, is_neg],
-        )
-    )
+    instructions.append(Binop(result_reg=two_neg, operator="*", left=2, right=is_neg))
 
     sign_mult = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
-            result_reg=sign_mult,
-            operands=["-", 1, two_neg],
-        )
+        Binop(result_reg=sign_mult, operator="-", left=1, right=two_neg)
     )
 
     signed_value = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
-            result_reg=signed_value,
-            operands=["*", accum, sign_mult],
-        )
+        Binop(result_reg=signed_value, operator="*", left=accum, right=sign_mult)
     )
 
     # Pack as big-endian binary bytes
     result = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=result,
-            operands=[
-                BuiltinName.INT_TO_BINARY_BYTES,
+            func_name=BuiltinName.INT_TO_BINARY_BYTES,
+            args=(
                 signed_value,
                 byte_count,
                 signed,
-            ],
+            ),
         )
     )
 
-    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
+    instructions.append(Return_(value_reg=result))
     return instructions
 
 
@@ -970,10 +948,13 @@ def build_decode_binary_ir(
     # Unpack bytes to integer
     int_val = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=int_val,
-            operands=[BuiltinName.BINARY_BYTES_TO_INT, "%p_data", signed],
+            func_name=BuiltinName.BINARY_BYTES_TO_INT,
+            args=(
+                "%p_data",
+                signed,
+            ),
         )
     )
 
@@ -982,25 +963,17 @@ def build_decode_binary_ir(
         divisor = 10**decimal_digits
         scaled = rc.next()
         instructions.append(
-            IRInstruction(
-                opcode=Opcode.BINOP,
-                result_reg=scaled,
-                operands=["/", int_val, divisor],
-            )
+            Binop(result_reg=scaled, operator="/", left=int_val, right=divisor)
         )
         int_val = scaled
     else:
         as_float = rc.next()
         instructions.append(
-            IRInstruction(
-                opcode=Opcode.CALL_FUNCTION,
-                result_reg=as_float,
-                operands=["float", int_val],
-            )
+            CallFunction(result_reg=as_float, func_name="float", args=(int_val,))
         )
         int_val = as_float
 
-    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[int_val]))
+    instructions.append(Return_(value_reg=int_val))
     return instructions
 
 
@@ -1015,14 +988,17 @@ def build_encode_float_ir(func_name: str, byte_count: int) -> list[IRInstruction
 
     result = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=result,
-            operands=[BuiltinName.FLOAT_TO_BYTES, "%p_float_value", byte_count],
+            func_name=BuiltinName.FLOAT_TO_BYTES,
+            args=(
+                "%p_float_value",
+                byte_count,
+            ),
         )
     )
 
-    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
+    instructions.append(Return_(value_reg=result))
     return instructions
 
 
@@ -1037,14 +1013,17 @@ def build_decode_float_ir(func_name: str, byte_count: int) -> list[IRInstruction
 
     result = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=result,
-            operands=[BuiltinName.BYTES_TO_FLOAT, "%p_data", byte_count],
+            func_name=BuiltinName.BYTES_TO_FLOAT,
+            args=(
+                "%p_data",
+                byte_count,
+            ),
         )
     )
 
-    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
+    instructions.append(Return_(value_reg=result))
     return instructions
 
 
@@ -1060,20 +1039,26 @@ def build_encode_alphanumeric_ir(func_name: str, length: int) -> list[IRInstruct
     # Convert string to EBCDIC bytes
     ebcdic_bytes = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=ebcdic_bytes,
-            operands=[BuiltinName.STRING_TO_BYTES, "%p_value", CobolEncoding.EBCDIC],
+            func_name=BuiltinName.STRING_TO_BYTES,
+            args=(
+                "%p_value",
+                CobolEncoding.EBCDIC,
+            ),
         )
     )
 
     # Create padding (EBCDIC spaces = 0x40)
     padding = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=padding,
-            operands=[BuiltinName.MAKE_LIST, length, ByteConstants.EBCDIC_SPACE],
+            func_name=BuiltinName.MAKE_LIST,
+            args=(
+                length,
+                ByteConstants.EBCDIC_SPACE,
+            ),
         )
     )
 
@@ -1081,23 +1066,30 @@ def build_encode_alphanumeric_ir(func_name: str, length: int) -> list[IRInstruct
     # This handles both truncation (input too long) and padding (input too short)
     combined = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=combined,
-            operands=[BuiltinName.LIST_CONCAT, ebcdic_bytes, padding],
+            func_name=BuiltinName.LIST_CONCAT,
+            args=(
+                ebcdic_bytes,
+                padding,
+            ),
         )
     )
 
     result = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=result,
-            operands=[BuiltinName.LIST_SLICE, combined, 0, length],
+            func_name=BuiltinName.LIST_SLICE,
+            args=(
+                combined,
+                0,
+                length,
+            ),
         )
     )
 
-    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
+    instructions.append(Return_(value_reg=result))
 
     return instructions
 
@@ -1119,71 +1111,74 @@ def build_encode_alphanumeric_justified_ir(
     # Convert string to EBCDIC bytes
     ebcdic_bytes = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=ebcdic_bytes,
-            operands=[BuiltinName.STRING_TO_BYTES, "%p_value", CobolEncoding.EBCDIC],
+            func_name=BuiltinName.STRING_TO_BYTES,
+            args=(
+                "%p_value",
+                CobolEncoding.EBCDIC,
+            ),
         )
     )
 
     # Create padding (EBCDIC spaces = 0x40)
     padding = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=padding,
-            operands=[BuiltinName.MAKE_LIST, length, ByteConstants.EBCDIC_SPACE],
+            func_name=BuiltinName.MAKE_LIST,
+            args=(
+                length,
+                ByteConstants.EBCDIC_SPACE,
+            ),
         )
     )
 
     # Concatenate padding + input (right-justify: padding on the left)
     combined = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=combined,
-            operands=[BuiltinName.LIST_CONCAT, padding, ebcdic_bytes],
+            func_name=BuiltinName.LIST_CONCAT,
+            args=(
+                padding,
+                ebcdic_bytes,
+            ),
         )
     )
 
     # Take the LAST `length` bytes: slice from (len(combined) - length)
     combined_len = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
-            result_reg=combined_len,
-            operands=[BuiltinName.LIST_LEN, combined],
+        CallFunction(
+            result_reg=combined_len, func_name=BuiltinName.LIST_LEN, args=(combined,)
         )
     )
 
     start_offset = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
-            result_reg=start_offset,
-            operands=["-", combined_len, length],
-        )
+        Binop(result_reg=start_offset, operator="-", left=combined_len, right=length)
     )
 
     end_offset = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.BINOP,
-            result_reg=end_offset,
-            operands=["+", start_offset, length],
-        )
+        Binop(result_reg=end_offset, operator="+", left=start_offset, right=length)
     )
 
     result = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=result,
-            operands=[BuiltinName.LIST_SLICE, combined, start_offset, end_offset],
+            func_name=BuiltinName.LIST_SLICE,
+            args=(
+                combined,
+                start_offset,
+                end_offset,
+            ),
         )
     )
 
-    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
+    instructions.append(Return_(value_reg=result))
 
     return instructions
 
@@ -1199,14 +1194,17 @@ def build_decode_alphanumeric_ir(func_name: str) -> list[IRInstruction]:
 
     result = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=result,
-            operands=[BuiltinName.BYTES_TO_STRING, "%p_data", CobolEncoding.EBCDIC],
+            func_name=BuiltinName.BYTES_TO_STRING,
+            args=(
+                "%p_data",
+                CobolEncoding.EBCDIC,
+            ),
         )
     )
 
-    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
+    instructions.append(Return_(value_reg=result))
 
     return instructions
 
@@ -1228,10 +1226,13 @@ def build_string_delimit_ir(func_name: str) -> list[IRInstruction]:
     # Find delimiter position
     pos = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=pos,
-            operands=[BuiltinName.STRING_FIND, "%p_source", "%p_delimiter"],
+            func_name=BuiltinName.STRING_FIND,
+            args=(
+                "%p_source",
+                "%p_delimiter",
+            ),
         )
     )
 
@@ -1242,7 +1243,7 @@ def build_string_delimit_ir(func_name: str) -> list[IRInstruction]:
     # on the source as a list of chars. But strings aren't lists...
     # Simpler: use the builtin directly — the frontend will use CALL_FUNCTION.
 
-    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[pos]))
+    instructions.append(Return_(value_reg=pos))
 
     return instructions
 
@@ -1258,14 +1259,17 @@ def build_string_split_ir(func_name: str) -> list[IRInstruction]:
 
     result = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=result,
-            operands=[BuiltinName.STRING_SPLIT, "%p_source", "%p_delimiter"],
+            func_name=BuiltinName.STRING_SPLIT,
+            args=(
+                "%p_source",
+                "%p_delimiter",
+            ),
         )
     )
 
-    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
+    instructions.append(Return_(value_reg=result))
 
     return instructions
 
@@ -1281,14 +1285,18 @@ def build_inspect_tally_ir(func_name: str) -> list[IRInstruction]:
 
     result = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=result,
-            operands=[BuiltinName.STRING_COUNT, "%p_source", "%p_pattern", "%p_mode"],
+            func_name=BuiltinName.STRING_COUNT,
+            args=(
+                "%p_source",
+                "%p_pattern",
+                "%p_mode",
+            ),
         )
     )
 
-    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
+    instructions.append(Return_(value_reg=result))
 
     return instructions
 
@@ -1304,19 +1312,18 @@ def build_inspect_replace_ir(func_name: str) -> list[IRInstruction]:
 
     result = rc.next()
     instructions.append(
-        IRInstruction(
-            opcode=Opcode.CALL_FUNCTION,
+        CallFunction(
             result_reg=result,
-            operands=[
-                BuiltinName.STRING_REPLACE,
+            func_name=BuiltinName.STRING_REPLACE,
+            args=(
                 "%p_source",
                 "%p_from",
                 "%p_to",
                 "%p_mode",
-            ],
+            ),
         )
     )
 
-    instructions.append(IRInstruction(opcode=Opcode.RETURN, operands=[result]))
+    instructions.append(Return_(value_reg=result))
 
     return instructions

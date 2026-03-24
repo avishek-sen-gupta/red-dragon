@@ -263,7 +263,11 @@ class Binop(InstructionBase):
 
     @property
     def operands(self) -> list[Any]:
-        return [self.operator, str(self.left), str(self.right)]
+        return [
+            self.operator,
+            str(self.left) if isinstance(self.left, Register) else self.left,
+            str(self.right) if isinstance(self.right, Register) else self.right,
+        ]
 
 
 @dataclass(frozen=True)
