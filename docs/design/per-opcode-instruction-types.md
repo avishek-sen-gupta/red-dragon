@@ -171,10 +171,10 @@ is only on BranchIf.
 
 ## Open questions
 
-1. **Pydantic or plain dataclass?** IRInstruction is currently a Pydantic BaseModel for serialization. Typed instructions could be plain frozen dataclasses if serialization moves to explicit `to_dict()`/`from_dict()`.
+1. ~~**Register refs in operand fields**: Should `left: str` in Binop become `left: Register`?~~ **Resolved: Yes.** All register-holding fields will become `Register`. See `docs/design/eliminate-irinstruction-plan.md`.
 
-2. **Register refs in operand fields**: Should `left: str` in Binop become `left: Register`? This would be the natural next step after this migration. Deferred — keep as `str` for now, migrate later.
+2. ~~**Pydantic or plain dataclass?** IRInstruction is currently a Pydantic BaseModel for serialization.~~ **Resolved:** IRInstruction will be deleted entirely. Typed instructions are plain frozen dataclasses. Serialization moves to explicit methods if needed.
 
-3. **`__str__` format**: Each typed instruction needs a `__str__` that matches the current `IRInstruction.__str__` output for test compatibility and debugging.
+3. **`__str__` format**: Each typed instruction needs a `__str__` that matches the current `IRInstruction.__str__` output for test compatibility and debugging. **Status:** Implemented via `to_flat()` delegation. Will become standalone after IRInstruction removal.
 
-4. **Naming conflicts**: `Return`, `Label` are Python builtins/keywords. Use `Return_`, `Label_` or `ReturnInst`, `LabelInst`.
+4. **Naming conflicts**: `Return`, `Label` are Python builtins/keywords. Use `Return_`, `Label_`. **Status:** Done.
