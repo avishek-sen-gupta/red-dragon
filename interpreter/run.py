@@ -16,6 +16,7 @@ from interpreter.types.coercion.default_conversion_rules import (
 )
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
+from interpreter.instructions import Label_, Return_, Throw_
 from interpreter.frontend import get_frontend
 from interpreter.frontend_observer import FrontendObserver
 from interpreter.cfg import CFG, build_cfg
@@ -335,7 +336,7 @@ def execute_cfg(
         if config.verbose:
             logger.info("[step %d] %s:%d  %s", step, current_label, ip, instruction)
 
-        if instruction.opcode == Opcode.LABEL:
+        if isinstance(instruction, Label_):
             ip += 1
             continue
 
@@ -355,8 +356,8 @@ def execute_cfg(
         if config.verbose:
             _log_update(step, current_label, ip, instruction, update, used_llm)
 
-        is_return = instruction.opcode == Opcode.RETURN
-        is_throw = instruction.opcode == Opcode.THROW
+        is_return = isinstance(instruction, Return_)
+        is_throw = isinstance(instruction, Throw_)
         is_caught_throw = is_throw and update.next_label is not None
         return_frame = (
             vm.current_frame
@@ -487,7 +488,7 @@ def execute_cfg_traced(
         if config.verbose:
             logger.info("[step %d] %s:%d  %s", step, current_label, ip, instruction)
 
-        if instruction.opcode == Opcode.LABEL:
+        if isinstance(instruction, Label_):
             ip += 1
             continue
 
@@ -507,8 +508,8 @@ def execute_cfg_traced(
         if config.verbose:
             _log_update(step, current_label, ip, instruction, update, used_llm)
 
-        is_return = instruction.opcode == Opcode.RETURN
-        is_throw = instruction.opcode == Opcode.THROW
+        is_return = isinstance(instruction, Return_)
+        is_throw = isinstance(instruction, Throw_)
         return_frame = vm.current_frame if (is_return or is_throw) else None
 
         is_call_dispatch = (
