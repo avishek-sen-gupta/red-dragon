@@ -6,7 +6,8 @@ when the concrete class's class_method_types lacks the method.
 
 from __future__ import annotations
 
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.instructions import CallMethod
+from interpreter.register import Register
 from interpreter.types.type_expr import scalar, UNKNOWN
 from interpreter.types.type_inference import _InferenceContext, _infer_call_method
 from interpreter.types.type_graph import TypeGraph, DEFAULT_TYPE_NODES
@@ -21,11 +22,12 @@ def _resolver():
 
 
 def _make_call_method_inst(result_reg: str, obj_reg: str, method: str, *arg_regs):
-    """Build a synthetic CALL_METHOD instruction."""
-    return IRInstruction(
-        opcode=Opcode.CALL_METHOD,
-        result_reg=result_reg,
-        operands=[obj_reg, method, *arg_regs],
+    """Build a synthetic CALL_METHOD typed instruction."""
+    return CallMethod(
+        result_reg=Register(result_reg),
+        obj_reg=Register(obj_reg),
+        method_name=method,
+        args=tuple(Register(r) for r in arg_regs),
     )
 
 
