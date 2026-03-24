@@ -4,7 +4,19 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.ir import CodeLabel
+from interpreter.instructions import (
+    Binop,
+    Branch,
+    BranchIf,
+    CallFunction,
+    Const,
+    DeclVar,
+    Label_,
+    LoadIndex,
+    StoreVar,
+    Throw_,
+)
 from interpreter.frontends.common.exceptions import (
     lower_raise_or_throw,
     lower_try_catch,
@@ -29,36 +41,32 @@ def lower_if(ctx: TreeSitterEmitContext, node) -> None:
     end_label = ctx.fresh_label("if_end")
 
     if alt_node:
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[true_label, false_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)),
             node=node,
         )
     else:
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[true_label, end_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=cond_reg, branch_targets=(true_label, end_label)),
             node=node,
         )
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     if body_node:
         ctx.lower_block(body_node)
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
 
     if alt_node:
-        ctx.emit(Opcode.LABEL, label=false_label)
+        ctx.emit_inst(Label_(label=false_label))
         if alt_node.type == NT.IF_STATEMENT:
             lower_if(ctx, alt_node)
         else:
             for child in alt_node.children:
                 if child.type not in (NT.ELSE,) and child.is_named:
                     ctx.lower_stmt(child)
-        ctx.emit(Opcode.BRANCH, label=end_label)
+        ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_foreach(ctx: TreeSitterEmitContext, node) -> None:
@@ -71,29 +79,25 @@ def lower_foreach(ctx: TreeSitterEmitContext, node) -> None:
     raw_name = ctx.node_text(left_node) if left_node else "__foreach_var"
 
     idx_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=["0"])
+    ctx.emit_inst(Const(result_reg=idx_reg, value="0"))
     len_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
+    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
 
     loop_label = ctx.fresh_label("foreach_cond")
     body_label = ctx.fresh_label("foreach_body")
     end_label = ctx.fresh_label("foreach_end")
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     cond_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=cond_reg, operands=["<", idx_reg, len_reg])
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[body_label, end_label],
-    )
+    ctx.emit_inst(Binop(result_reg=cond_reg, operator="<", left=idx_reg, right=len_reg))
+    ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)))
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     ctx.enter_block_scope()
     var_name = ctx.declare_block_var(raw_name)
     elem_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
-    ctx.emit(Opcode.DECL_VAR, operands=[var_name, elem_reg])
+    ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
+    ctx.emit_inst(DeclVar(name=var_name, value_reg=elem_reg))
 
     update_label = ctx.fresh_label("foreach_update")
     ctx.push_loop(update_label, end_label)
@@ -102,15 +106,15 @@ def lower_foreach(ctx: TreeSitterEmitContext, node) -> None:
     ctx.pop_loop()
     ctx.exit_block_scope()
 
-    ctx.emit(Opcode.LABEL, label=update_label)
+    ctx.emit_inst(Label_(label=update_label))
     one_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
+    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     new_idx = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=new_idx, operands=["+", idx_reg, one_reg])
-    ctx.emit(Opcode.STORE_VAR, operands=["__foreach_idx", new_idx])
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(Binop(result_reg=new_idx, operator="+", left=idx_reg, right=one_reg))
+    ctx.emit_inst(StoreVar(name="__foreach_idx", value_reg=new_idx))
+    ctx.emit_inst(Branch(label=loop_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_throw(ctx: TreeSitterEmitContext, node) -> None:
@@ -125,7 +129,7 @@ def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """
     children = [c for c in node.children if c.is_named]
     val_reg = ctx.lower_expr(children[0]) if children else ctx.fresh_reg()
-    ctx.emit(Opcode.THROW, operands=[val_reg], node=node)
+    ctx.emit_inst(Throw_(value_reg=val_reg), node=node)
     return ctx.fresh_reg()
 
 
@@ -135,7 +139,7 @@ def lower_goto(ctx: TreeSitterEmitContext, node) -> None:
         (c for c in node.children if c.type in (NT.IDENTIFIER, NT.LABEL_NAME)), None
     )
     label_name = ctx.node_text(id_node) if id_node else "unknown"
-    ctx.emit(Opcode.BRANCH, label=CodeLabel(label_name), node=node)
+    ctx.emit_inst(Branch(label=CodeLabel(label_name)), node=node)
 
 
 def lower_labeled_stmt(ctx: TreeSitterEmitContext, node) -> None:
@@ -144,7 +148,7 @@ def lower_labeled_stmt(ctx: TreeSitterEmitContext, node) -> None:
         (c for c in node.children if c.type in (NT.IDENTIFIER, NT.LABEL_NAME)), None
     )
     label_name = ctx.node_text(id_node) if id_node else "unknown"
-    ctx.emit(Opcode.LABEL, label=CodeLabel(label_name), node=node)
+    ctx.emit_inst(Label_(label=CodeLabel(label_name)), node=node)
     body_children = [
         c
         for c in node.children
@@ -162,25 +166,23 @@ def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
     cond_label = ctx.fresh_label("do_cond")
     end_label = ctx.fresh_label("do_end")
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     ctx.push_loop(cond_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
 
-    ctx.emit(Opcode.LABEL, label=cond_label)
+    ctx.emit_inst(Label_(label=cond_label))
     if cond_node:
         cond_reg = ctx.lower_expr(cond_node)
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[body_label, end_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)),
             node=node,
         )
     else:
-        ctx.emit(Opcode.BRANCH, label=body_label)
+        ctx.emit_inst(Branch(label=body_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
@@ -240,28 +242,26 @@ def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
         next_label = ctx.fresh_label("case_next")
 
         if is_default or pattern_node is None:
-            ctx.emit(Opcode.BRANCH, label=arm_label)
+            ctx.emit_inst(Branch(label=arm_label))
         else:
             pattern = parse_csharp_pattern(ctx, pattern_node)
             if isinstance(pattern, (WildcardPattern, CapturePattern)):
                 compile_pattern_bindings(ctx, subject_reg, pattern)
-                ctx.emit(Opcode.BRANCH, label=arm_label)
+                ctx.emit_inst(Branch(label=arm_label))
             else:
                 test_reg = compile_pattern_test(ctx, subject_reg, pattern)
-                ctx.emit(
-                    Opcode.BRANCH_IF,
-                    operands=[test_reg],
-                    branch_targets=[arm_label, next_label],
+                ctx.emit_inst(
+                    BranchIf(cond_reg=test_reg, branch_targets=(arm_label, next_label))
                 )
 
-        ctx.emit(Opcode.LABEL, label=arm_label)
+        ctx.emit_inst(Label_(label=arm_label))
         for stmt in body_stmts:
             ctx.lower_stmt(stmt)
-        ctx.emit(Opcode.BRANCH, label=end_label)
-        ctx.emit(Opcode.LABEL, label=next_label)
+        ctx.emit_inst(Branch(label=end_label))
+        ctx.emit_inst(Label_(label=next_label))
 
     ctx.break_target_stack.pop()
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def _csharp_switch_expr_pattern_of(ctx, arm):
@@ -417,26 +417,16 @@ def lower_yield_stmt(ctx: TreeSitterEmitContext, node) -> None:
     node_text = ctx.node_text(node)
     if "break" in node_text and not children:
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=reg,
-            operands=["yield_break"],
-            node=node,
+        ctx.emit_inst(
+            CallFunction(result_reg=reg, func_name="yield_break", args=()), node=node
         )
     else:
         if children:
             val_reg = ctx.lower_expr(children[0])
         else:
             val_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CONST,
-                result_reg=val_reg,
-                operands=[ctx.constants.none_literal],
-            )
+            ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=reg,
-            operands=["yield", val_reg],
-            node=node,
+        ctx.emit_inst(
+            CallFunction(result_reg=reg, func_name="yield", args=(val_reg,)), node=node
         )

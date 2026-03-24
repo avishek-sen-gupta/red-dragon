@@ -4,7 +4,19 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode
+from interpreter.instructions import (
+    Branch,
+    CallMethod,
+    Const,
+    DeclVar,
+    Label_,
+    LoadVar,
+    NewObject,
+    Return_,
+    StoreField,
+    StoreIndex,
+    Symbolic,
+)
 from interpreter import constants
 from interpreter.frontends.csharp.expressions import lower_csharp_params
 from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
@@ -70,16 +82,8 @@ def _lower_csharp_declarator(
         val_reg = ctx.lower_expr(value_node)
     else:
         val_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CONST,
-            result_reg=val_reg,
-            operands=[ctx.constants.none_literal],
-        )
-    ctx.emit(
-        Opcode.DECL_VAR,
-        operands=[var_name, val_reg],
-        node=node,
-    )
+        ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
+    ctx.emit_inst(DeclVar(name=var_name, value_reg=val_reg), node=node)
     ctx.seed_var_type(var_name, type_hint)
     if is_ref:
         ctx.byref_params.add(var_name)
@@ -89,17 +93,10 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     """Emit ``SYMBOLIC param:this`` + ``STORE_VAR this`` for instance methods."""
     param_reg = ctx.fresh_reg()
     class_type = ScalarType(ctx._current_class_name)
-    ctx.emit(
-        Opcode.SYMBOLIC,
-        result_reg=param_reg,
-        operands=[f"{constants.PARAM_PREFIX}this"],
-    )
+    ctx.emit_inst(Symbolic(result_reg=param_reg, hint=f"{constants.PARAM_PREFIX}this"))
     ctx.seed_register_type(param_reg, class_type)
     ctx.seed_param_type("this", class_type)
-    ctx.emit(
-        Opcode.DECL_VAR,
-        operands=["this", param_reg],
-    )
+    ctx.emit_inst(DeclVar(name="this", value_reg=param_reg))
     ctx.seed_var_type("this", class_type)
 
 
@@ -123,8 +120,8 @@ def lower_method_decl(
 
     return_hint = extract_normalized_type(ctx, node, "returns", ctx.type_map)
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=func_label))
     ctx.seed_func_return_type(func_label, return_hint)
     ctx.reset_method_scope()
 
@@ -141,17 +138,13 @@ def lower_method_decl(
     ctx.byref_params = saved_byref
 
     none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
 
 
 def lower_constructor_decl(
@@ -168,8 +161,8 @@ def lower_constructor_decl(
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Label_(label=func_label))
     ctx.reset_method_scope()
 
     saved_byref = ctx.byref_params.copy()
@@ -191,17 +184,13 @@ def lower_constructor_decl(
     ctx.byref_params = saved_byref
 
     none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
 
 
 def _lower_constructor_initializer(ctx: TreeSitterEmitContext, node) -> None:
@@ -222,11 +211,14 @@ def _lower_constructor_initializer(ctx: TreeSitterEmitContext, node) -> None:
         if arg.type == NT.ARGUMENT
     ]
     this_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
-    ctx.emit(
-        Opcode.CALL_METHOD,
-        result_reg=ctx.fresh_reg(),
-        operands=[this_reg, "__init__"] + arg_regs,
+    ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"))
+    ctx.emit_inst(
+        CallMethod(
+            result_reg=ctx.fresh_reg(),
+            obj_reg=this_reg,
+            method_name="__init__",
+            args=tuple(arg_regs),
+        ),
         node=node,
     )
 
@@ -290,14 +282,14 @@ def lower_class_def(ctx: TreeSitterEmitContext, node) -> None:
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{class_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{class_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=class_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=class_label))
     deferred = _lower_class_body(ctx, body_node) if body_node else []
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[class_name, cls_reg])
+    ctx.emit_inst(DeclVar(name=class_name, value_reg=cls_reg))
 
     saved_class = ctx._current_class_name
     ctx._current_class_name = class_name
@@ -368,7 +360,7 @@ def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
     prop_name = ctx.node_text(name_node)
 
     this_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+    ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"))
 
     # Check for an initializer (e.g. ``= 42``)
     initializer_node = _find_property_initializer(ctx, node)
@@ -376,17 +368,12 @@ def lower_property_decl(ctx: TreeSitterEmitContext, node) -> None:
         val_reg = ctx.lower_expr(initializer_node)
     else:
         val_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CONST,
-            result_reg=val_reg,
-            operands=[ctx.constants.none_literal],
-            node=node,
+        ctx.emit_inst(
+            Const(result_reg=val_reg, value=ctx.constants.none_literal), node=node
         )
 
-    ctx.emit(
-        Opcode.STORE_FIELD,
-        operands=[this_reg, prop_name, val_reg],
-        node=node,
+    ctx.emit_inst(
+        StoreField(obj_reg=this_reg, field_name=prop_name, value_reg=val_reg), node=node
     )
 
     # Lower accessor bodies (get { ... } / set { ... }) if present
@@ -429,14 +416,14 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
     class_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{iface_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{iface_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=class_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=class_label))
     deferred = _lower_class_body(ctx, body_node) if body_node else []
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[iface_name, cls_reg])
+    ctx.emit_inst(DeclVar(name=iface_name, value_reg=cls_reg))
 
     saved_class = ctx._current_class_name
     ctx._current_class_name = iface_name
@@ -455,11 +442,8 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
     if name_node:
         enum_name = ctx.node_text(name_node)
         obj_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.NEW_OBJECT,
-            result_reg=obj_reg,
-            operands=[f"enum:{enum_name}"],
-            node=node,
+        ctx.emit_inst(
+            NewObject(result_reg=obj_reg, type_hint=f"enum:{enum_name}"), node=node
         )
         if body_node:
             for i, child in enumerate(
@@ -472,11 +456,13 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
                     else ctx.node_text(child)
                 )
                 key_reg = ctx.fresh_reg()
-                ctx.emit(Opcode.CONST, result_reg=key_reg, operands=[member_name])
+                ctx.emit_inst(Const(result_reg=key_reg, value=member_name))
                 val_reg = ctx.fresh_reg()
-                ctx.emit(Opcode.CONST, result_reg=val_reg, operands=[str(i)])
-                ctx.emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
-        ctx.emit(Opcode.DECL_VAR, operands=[enum_name, obj_reg])
+                ctx.emit_inst(Const(result_reg=val_reg, value=str(i)))
+                ctx.emit_inst(
+                    StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg)
+                )
+        ctx.emit_inst(DeclVar(name=enum_name, value_reg=obj_reg))
 
 
 def lower_namespace(ctx: TreeSitterEmitContext, node) -> None:
@@ -515,8 +501,8 @@ def lower_local_function_stmt(ctx: TreeSitterEmitContext, node) -> None:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=func_label))
 
     saved_byref = ctx.byref_params.copy()
     if params_node:
@@ -528,17 +514,13 @@ def lower_local_function_stmt(ctx: TreeSitterEmitContext, node) -> None:
     ctx.byref_params = saved_byref
 
     none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
 
 
 def lower_event_field_decl(ctx: TreeSitterEmitContext, node) -> None:
@@ -555,17 +537,8 @@ def lower_event_decl(ctx: TreeSitterEmitContext, node) -> None:
         return
     event_name = ctx.node_text(name_node)
     val_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=val_reg,
-        operands=[f"event:{event_name}"],
-        node=node,
-    )
-    ctx.emit(
-        Opcode.DECL_VAR,
-        operands=[event_name, val_reg],
-        node=node,
-    )
+    ctx.emit_inst(Const(result_reg=val_reg, value=f"event:{event_name}"), node=node)
+    ctx.emit_inst(DeclVar(name=event_name, value_reg=val_reg), node=node)
 
 
 def lower_delegate_declaration(ctx: TreeSitterEmitContext, node) -> None:
@@ -575,21 +548,17 @@ def lower_delegate_declaration(ctx: TreeSitterEmitContext, node) -> None:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=func_label))
 
     none_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=none_reg,
-        operands=[ctx.constants.default_return_value],
-    )
-    ctx.emit(Opcode.RETURN, operands=[none_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.default_return_value))
+    ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit(Opcode.DECL_VAR, operands=[func_name, func_reg])
+    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
 
 
 # ---------------------------------------------------------------------------
