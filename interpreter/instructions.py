@@ -110,7 +110,9 @@ class InstructionBase:
                     (
                         SpreadArguments(register=fn(a.register))
                         if isinstance(a, SpreadArguments)
-                        else fn(a)
+                        else (
+                            fn(a) if isinstance(a, Register) else a
+                        )  # literal (str/int/float) — keep as-is
                     )
                     for a in val
                 )
