@@ -2465,21 +2465,23 @@ compilation. No chaining, no import tables, no special variable handling.
 
 **Context:** The per-opcode typed instruction classes (ADR-120) coexist with the flat `IRInstruction`. Register-holding fields like `obj_reg`, `value_reg`, `left`, `right` are typed as `str`, not `Register`. The `operands: list[Any]` bag persists as a compatibility bridge. Consumers call `to_typed()` at every use site. `Register.__eq__(str)` papers over the type gap. This half-migrated state prevents real type safety — passing a bare string where a `Register` is expected is silently accepted.
 
-**Decision:** Eliminate `IRInstruction` entirely. The `Instruction` union of frozen dataclasses becomes the sole instruction representation. All register-holding fields become `Register`. All label-holding fields remain `CodeLabel`. The `Opcode` enum is removed — instruction type is the discriminant (`isinstance` replaces opcode switches). `Register.__eq__(str)` is removed — `Register` only equals `Register`. No mutation of instructions — transformations return new instances via `dataclasses.replace()`.
+**Decision:** Eliminate `IRInstruction` entirely. The `Instruction` union of frozen dataclasses becomes the sole instruction representation. All register-holding fields become `Register`. All label-holding fields remain `CodeLabel`. The `Opcode` enum is retained as a read-only marker on typed instructions but is not used for dispatch — instruction type (`isinstance`/`type()` dict) is the primary discriminant. `Register.__eq__(str)` is removed — `Register` only equals `Register`. No mutation of instructions — transformations return new instances via `dataclasses.replace()`. Each typed instruction gets a standalone `__str__` matching the current flat format.
 
 **Rationale:**
 - Type safety: a `Register` field cannot silently accept a non-register string.
 - No dual representation: one instruction type, no `to_typed()`/`to_flat()` conversion overhead.
 - Generic transforms: `InstructionBase.map_registers(fn)` and `map_labels(fn)` replace the linker's fragile operand-by-operand iteration.
 - Frozen immutability: instructions are values, not mutable bags. The 2 mutation sites in `llm_frontend.py` become `dataclasses.replace()`.
+- Opcode as marker: retaining `Opcode` on typed instructions preserves serialization and debugging labels without coupling dispatch to it.
 
-**Implementation:** Five-layer migration, each independently testable:
-1. Change field types in `instructions.py` (`str` → `Register`), update converters, keep `operands` compat bridge
-2. Add `map_registers()`/`map_labels()` to `InstructionBase`, `Register.rebase()` method
-3. Migrate all consumers (~20 files, ~250 sites) to typed field access and `isinstance` checks
-4. Migrate all producers (~48 frontend files, ~2200 sites) to `emit_inst()` with `Register` objects
-5. Delete `IRInstruction`, `Opcode`, `to_typed()`/`to_flat()`, `operands` properties, `Register.__eq__(str)`
+**Implementation:** Five-layer migration (26 sub-issues), each independently testable:
+1. Change field types in `instructions.py` (`str` → `Register`), update converters, keep `operands` compat bridge (red-dragon-e2pj)
+2. Add `map_registers()`/`map_labels()` to `InstructionBase`, `Register.rebase()` method (red-dragon-p72n)
+3. Migrate consumers — decomposed into 5 sub-issues: handlers+executor (ufnx), type inference (x37k), CFG/dataflow/interprocedural (3h0y), linker/compiler (30vm), LLM/COBOL/registry/misc (2la9)
+4a. Change `lower_expr() -> str` to `-> Register` across all frontends — single atomic commit (8e1x)
+4. Migrate producers — decomposed into 17 per-frontend sub-issues (one per language + _base.py + COBOL), all independent of each other
+5. Delete `IRInstruction`, `to_typed()`/`to_flat()`, `operands` properties, `emit()`, `Register.__eq__(str)`. Add standalone `__str__` to each typed instruction. `Opcode` stays as marker. (red-dragon-ee66)
 
-**Consequences:** After Layer 5, the IR is a `list[Instruction]` of frozen typed dataclasses with full `Register`/`CodeLabel` type safety. No stringly-typed register references anywhere. Instruction dispatch via `isinstance` or `type()` dict lookup instead of `Opcode` enum. Generic register/label transformations via `map_registers`/`map_labels`. ~2500 lines of bridge code (`IRInstruction`, converters, `operands` properties, `Opcode` dispatch tables) are removed.
+**Consequences:** After Layer 5, the IR is a `list[Instruction]` of frozen typed dataclasses with full `Register`/`CodeLabel` type safety. No stringly-typed register references anywhere. Instruction dispatch via `isinstance` or `type()` dict lookup. `Opcode` enum retained as read-only marker for serialization/debugging. Generic register/label transformations via `map_registers`/`map_labels`. ~2500 lines of bridge code (`IRInstruction`, converters, `operands` properties) are removed.
 
-**Key files:** `docs/design/eliminate-irinstruction-plan.md` (full plan with layer details and file counts).
+**Key files:** `docs/design/eliminate-irinstruction-plan.md` (full plan with 26 sub-issues, dependency graph, and file counts).
