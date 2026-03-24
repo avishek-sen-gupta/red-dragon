@@ -75,8 +75,9 @@ def _is_label_tuple(hint: object) -> bool:
 def _as_register(val: Any) -> Register | Any:
     """Wrap a value as Register if it looks like a register reference (%…).
 
-    COBOL IR places literal ints/floats directly in call operands; those
-    must NOT be wrapped.  Only strings that begin with '%' are register refs.
+    COBOL emit_context.py still places literal ints/floats directly in call
+    operands (issue oczk); those must NOT be wrapped.  Only strings that begin
+    with '%' are register refs.  Remove once oczk is done.
     """
     if isinstance(val, Register):
         return val
@@ -103,6 +104,8 @@ class InstructionBase:
             val = getattr(self, f.name)
             if isinstance(val, Register):
                 changes[f.name] = fn(val)
+            elif isinstance(val, SpreadArguments):
+                changes[f.name] = SpreadArguments(register=fn(val.register))
             elif val is None and _is_optional_register(hint):
                 pass  # None stays None
             elif isinstance(val, tuple) and _is_register_args_tuple(hint):
@@ -465,7 +468,7 @@ class StoreIndex(InstructionBase):
 
     arr_reg: Register = NO_REGISTER
     index_reg: Register = NO_REGISTER
-    value_reg: Register = NO_REGISTER
+    value_reg: Register | SpreadArguments = NO_REGISTER
 
     # ── IRInstruction-compat fields ──
     result_reg: Register = NO_REGISTER

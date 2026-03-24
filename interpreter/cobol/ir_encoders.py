@@ -18,6 +18,7 @@ Function parameter conventions (received via pre-populated registers):
 from __future__ import annotations
 
 from functools import reduce
+from typing import Any
 
 from interpreter.cobol.cobol_constants import (
     BuiltinName,
@@ -43,12 +44,19 @@ class _RegCounter:
         return name
 
 
+def _lit(rc: _RegCounter, instructions: list[IRInstruction], value: Any) -> Register:
+    """Emit a CONST instruction for a literal value, return the register."""
+    reg = rc.next()
+    instructions.append(Const(result_reg=reg, value=str(value)))
+    return reg
+
+
 def _encode_digit_step(
     rc: _RegCounter,
-    source_list: str,
-    acc: tuple[str, list[IRInstruction]],
+    source_list: Register,
+    acc: tuple[Register, list[IRInstruction]],
     i: int,
-) -> tuple[str, list[IRInstruction]]:
+) -> tuple[Register, list[IRInstruction]]:
     """One step of zoned digit encoding: get digit, nibble_set, list_set.
 
     Returns (new_result_reg, accumulated_instructions).
@@ -57,6 +65,9 @@ def _encode_digit_step(
     digit = rc.next()
     byte_val = rc.next()
     new_result = rc.next()
+    i_reg = _lit(rc, instructions, i)
+    zone_reg = _lit(rc, instructions, ByteConstants.ZONE_NIBBLE_UNSIGNED)
+    low_reg = _lit(rc, instructions, NibblePosition.LOW)
     return (
         new_result,
         instructions
@@ -66,15 +77,15 @@ def _encode_digit_step(
                 func_name=BuiltinName.LIST_GET,
                 args=(
                     source_list,
-                    i,
+                    i_reg,
                 ),
             ),
             CallFunction(
                 result_reg=byte_val,
                 func_name=BuiltinName.NIBBLE_SET,
                 args=(
-                    ByteConstants.ZONE_NIBBLE_UNSIGNED,
-                    NibblePosition.LOW,
+                    zone_reg,
+                    low_reg,
                     digit,
                 ),
             ),
@@ -83,7 +94,7 @@ def _encode_digit_step(
                 func_name=BuiltinName.LIST_SET,
                 args=(
                     current_result,
-                    i,
+                    i_reg,
                     byte_val,
                 ),
             ),
@@ -93,12 +104,12 @@ def _encode_digit_step(
 
 def _decode_digit_step(
     rc: _RegCounter,
-    source_list: str,
+    source_list: Register,
     total_digits: int,
-    acc: tuple[str, list[IRInstruction]],
+    acc: tuple[Register, list[IRInstruction]],
     i: int,
     offset: int = 0,
-) -> tuple[str, list[IRInstruction]]:
+) -> tuple[Register, list[IRInstruction]]:
     """One step of zoned digit decoding: get byte, nibble_get, multiply, add.
 
     Returns (new_accum_reg, accumulated_instructions).
@@ -109,6 +120,9 @@ def _decode_digit_step(
     power = 10 ** (total_digits - 1 - i)
     contribution = rc.next()
     new_accum = rc.next()
+    idx_reg = _lit(rc, instructions, offset + i)
+    low_reg = _lit(rc, instructions, NibblePosition.LOW)
+    power_reg = _lit(rc, instructions, power)
     return (
         new_accum,
         instructions
@@ -118,7 +132,7 @@ def _decode_digit_step(
                 func_name=BuiltinName.LIST_GET,
                 args=(
                     source_list,
-                    offset + i,
+                    idx_reg,
                 ),
             ),
             CallFunction(
@@ -126,10 +140,10 @@ def _decode_digit_step(
                 func_name=BuiltinName.NIBBLE_GET,
                 args=(
                     byte_reg,
-                    NibblePosition.LOW,
+                    low_reg,
                 ),
             ),
-            Binop(result_reg=contribution, operator="*", left=digit, right=power),
+            Binop(result_reg=contribution, operator="*", left=digit, right=power_reg),
             Binop(
                 result_reg=new_accum,
                 operator="+",
@@ -142,11 +156,11 @@ def _decode_digit_step(
 
 def _accumulate_digit_step(
     rc: _RegCounter,
-    source_list: str,
+    source_list: Register,
     total_digits: int,
-    acc: tuple[str, list[IRInstruction]],
+    acc: tuple[Register, list[IRInstruction]],
     i: int,
-) -> tuple[str, list[IRInstruction]]:
+) -> tuple[Register, list[IRInstruction]]:
     """One step of raw digit accumulation (no nibble_get): get digit, multiply, add.
 
     Returns (new_accum_reg, accumulated_instructions).
@@ -156,6 +170,8 @@ def _accumulate_digit_step(
     power = 10 ** (total_digits - 1 - i)
     contribution = rc.next()
     new_accum = rc.next()
+    i_reg = _lit(rc, instructions, i)
+    power_reg = _lit(rc, instructions, power)
     return (
         new_accum,
         instructions
@@ -165,10 +181,10 @@ def _accumulate_digit_step(
                 func_name=BuiltinName.LIST_GET,
                 args=(
                     source_list,
-                    i,
+                    i_reg,
                 ),
             ),
-            Binop(result_reg=contribution, operator="*", left=digit, right=power),
+            Binop(result_reg=contribution, operator="*", left=digit, right=power_reg),
             Binop(
                 result_reg=new_accum,
                 operator="+",
@@ -196,20 +212,23 @@ def build_encode_zoned_ir(
 
     # Create result list filled with 0xF0 (zone nibble for unsigned digits)
     result = rc.next()
+    total_digits_reg = _lit(rc, instructions, total_digits)
+    zone_reg = _lit(rc, instructions, ByteConstants.ZONE_NIBBLE_UNSIGNED)
     instructions.append(
         CallFunction(
             result_reg=result,
             func_name=BuiltinName.MAKE_LIST,
             args=(
-                total_digits,
-                ByteConstants.ZONE_NIBBLE_UNSIGNED,
+                total_digits_reg,
+                zone_reg,
             ),
         )
     )
 
     # For each digit position, set the low nibble to the digit value
+    p_digits = Register("%p_digits")
     result, digit_instructions = reduce(
-        lambda acc, i: _encode_digit_step(rc, "%p_digits", acc, i),
+        lambda acc, i: _encode_digit_step(rc, p_digits, acc, i),
         range(total_digits),
         (result, []),
     )
@@ -217,38 +236,42 @@ def build_encode_zoned_ir(
 
     # Set sign nibble on the sign byte (high nibble)
     sign_byte = rc.next()
+    sign_idx_reg = _lit(rc, instructions, sign_byte_index)
     instructions.append(
         CallFunction(
             result_reg=sign_byte,
             func_name=BuiltinName.LIST_GET,
             args=(
                 result,
-                sign_byte_index,
+                sign_idx_reg,
             ),
         )
     )
 
     signed_byte = rc.next()
+    high_reg = _lit(rc, instructions, NibblePosition.HIGH)
+    p_sign_nibble = Register("%p_sign_nibble")
     instructions.append(
         CallFunction(
             result_reg=signed_byte,
             func_name=BuiltinName.NIBBLE_SET,
             args=(
                 sign_byte,
-                NibblePosition.HIGH,
-                "%p_sign_nibble",
+                high_reg,
+                p_sign_nibble,
             ),
         )
     )
 
     final_result = rc.next()
+    sign_idx_reg2 = _lit(rc, instructions, sign_byte_index)
     instructions.append(
         CallFunction(
             result_reg=final_result,
             func_name=BuiltinName.LIST_SET,
             args=(
                 result,
-                sign_byte_index,
+                sign_idx_reg2,
                 signed_byte,
             ),
         )
@@ -276,13 +299,14 @@ def build_decode_zoned_ir(
     rc = _RegCounter(func_name)
     instructions: list[IRInstruction] = []
     sign_byte_index = 0 if sign_leading else total_digits - 1
+    p_data = Register("%p_data")
 
     # Accumulate digit values: value = sum(digit[i] * 10^(n-1-i))
     accum = rc.next()
-    instructions.append(Const(result_reg=accum, value=0))
+    instructions.append(Const(result_reg=accum, value="0"))
 
     accum, decode_instructions = reduce(
-        lambda acc, i: _decode_digit_step(rc, "%p_data", total_digits, acc, i),
+        lambda acc, i: _decode_digit_step(rc, p_data, total_digits, acc, i),
         range(total_digits),
         (accum, []),
     )
@@ -292,8 +316,9 @@ def build_decode_zoned_ir(
     if decimal_digits > 0:
         divisor = 10**decimal_digits
         scaled = rc.next()
+        divisor_reg = _lit(rc, instructions, divisor)
         instructions.append(
-            Binop(result_reg=scaled, operator="/", left=accum, right=divisor)
+            Binop(result_reg=scaled, operator="/", left=accum, right=divisor_reg)
         )
         accum = scaled
     else:
@@ -306,47 +331,54 @@ def build_decode_zoned_ir(
 
     # Extract sign from the sign byte's high nibble
     sign_byte = rc.next()
+    sign_idx_reg = _lit(rc, instructions, sign_byte_index)
     instructions.append(
         CallFunction(
             result_reg=sign_byte,
             func_name=BuiltinName.LIST_GET,
             args=(
-                "%p_data",
-                sign_byte_index,
+                p_data,
+                sign_idx_reg,
             ),
         )
     )
 
     sign_nibble = rc.next()
+    high_reg = _lit(rc, instructions, NibblePosition.HIGH)
     instructions.append(
         CallFunction(
             result_reg=sign_nibble,
             func_name=BuiltinName.NIBBLE_GET,
             args=(
                 sign_byte,
-                NibblePosition.HIGH,
+                high_reg,
             ),
         )
     )
 
     # is_negative = (sign_nibble == 0xD)
     is_neg = rc.next()
+    neg_const = _lit(rc, instructions, ByteConstants.SIGN_NIBBLE_NEGATIVE)
     instructions.append(
         Binop(
             result_reg=is_neg,
             operator="==",
             left=sign_nibble,
-            right=ByteConstants.SIGN_NIBBLE_NEGATIVE,
+            right=neg_const,
         )
     )
 
     # sign_multiplier = 1 - 2 * is_negative
     two_neg = rc.next()
-    instructions.append(Binop(result_reg=two_neg, operator="*", left=2, right=is_neg))
+    two_reg = _lit(rc, instructions, 2)
+    instructions.append(
+        Binop(result_reg=two_neg, operator="*", left=two_reg, right=is_neg)
+    )
 
     sign_mult = rc.next()
+    one_reg = _lit(rc, instructions, 1)
     instructions.append(
-        Binop(result_reg=sign_mult, operator="-", left=1, right=two_neg)
+        Binop(result_reg=sign_mult, operator="-", left=one_reg, right=two_neg)
     )
 
     final_result = rc.next()
@@ -373,22 +405,26 @@ def build_encode_zoned_separate_ir(
     """
     rc = _RegCounter(func_name)
     instructions: list[IRInstruction] = []
+    p_digits = Register("%p_digits")
+    p_sign_nibble = Register("%p_sign_nibble")
 
     # Build digit bytes (no embedded sign — all zones are 0xF)
     digits_list = rc.next()
+    total_digits_reg = _lit(rc, instructions, total_digits)
+    zone_reg = _lit(rc, instructions, ByteConstants.ZONE_NIBBLE_UNSIGNED)
     instructions.append(
         CallFunction(
             result_reg=digits_list,
             func_name=BuiltinName.MAKE_LIST,
             args=(
-                total_digits,
-                ByteConstants.ZONE_NIBBLE_UNSIGNED,
+                total_digits_reg,
+                zone_reg,
             ),
         )
     )
 
     digits_list, digit_instructions = reduce(
-        lambda acc, i: _encode_digit_step(rc, "%p_digits", acc, i),
+        lambda acc, i: _encode_digit_step(rc, p_digits, acc, i),
         range(total_digits),
         (digits_list, []),
     )
@@ -396,57 +432,63 @@ def build_encode_zoned_separate_ir(
 
     # Compute sign byte: 0xD → 0x60 ('-'), else → 0x4E ('+')
     is_neg = rc.next()
+    neg_const = _lit(rc, instructions, ByteConstants.SIGN_NIBBLE_NEGATIVE)
     instructions.append(
         Binop(
             result_reg=is_neg,
             operator="==",
-            left="%p_sign_nibble",
-            right=ByteConstants.SIGN_NIBBLE_NEGATIVE,
+            left=p_sign_nibble,
+            right=neg_const,
         )
     )
 
     # sign_byte = 0x4E + is_neg * (0x60 - 0x4E) = 0x4E + is_neg * 0x12
     neg_offset = rc.next()
+    sign_offset_reg = _lit(rc, instructions, ByteConstants.EBCDIC_SIGN_OFFSET)
     instructions.append(
         Binop(
             result_reg=neg_offset,
             operator="*",
             left=is_neg,
-            right=ByteConstants.EBCDIC_SIGN_OFFSET,
+            right=sign_offset_reg,
         )
     )
 
     sign_byte_val = rc.next()
+    plus_reg = _lit(rc, instructions, ByteConstants.EBCDIC_PLUS)
     instructions.append(
         Binop(
             result_reg=sign_byte_val,
             operator="+",
-            left=ByteConstants.EBCDIC_PLUS,
+            left=plus_reg,
             right=neg_offset,
         )
     )
 
     # Build single-element sign list
     sign_list = rc.next()
+    one_reg = _lit(rc, instructions, 1)
+    zero_reg = _lit(rc, instructions, 0)
     instructions.append(
         CallFunction(
             result_reg=sign_list,
             func_name=BuiltinName.MAKE_LIST,
             args=(
-                1,
-                0,
+                one_reg,
+                zero_reg,
             ),
         )
     )
 
     sign_list_set = rc.next()
+    zero_reg2 = _lit(rc, instructions, 0)
     instructions.append(
         CallFunction(
             result_reg=sign_list_set,
             func_name=BuiltinName.LIST_SET,
             args=(
                 sign_list,
-                0,
+                zero_reg2,
                 sign_byte_val,
             ),
         )
@@ -499,17 +541,19 @@ def build_decode_zoned_separate_ir(
     """
     rc = _RegCounter(func_name)
     instructions: list[IRInstruction] = []
+    p_data = Register("%p_data")
 
     # Extract sign byte
     sign_byte_index = 0 if sign_leading else total_digits
     sign_byte = rc.next()
+    sign_idx_reg = _lit(rc, instructions, sign_byte_index)
     instructions.append(
         CallFunction(
             result_reg=sign_byte,
             func_name=BuiltinName.LIST_GET,
             args=(
-                "%p_data",
-                sign_byte_index,
+                p_data,
+                sign_idx_reg,
             ),
         )
     )
@@ -519,11 +563,11 @@ def build_decode_zoned_separate_ir(
 
     # Accumulate digit values
     accum = rc.next()
-    instructions.append(Const(result_reg=accum, value=0))
+    instructions.append(Const(result_reg=accum, value="0"))
 
     accum, decode_instructions = reduce(
         lambda acc, i: _decode_digit_step(
-            rc, "%p_data", total_digits, acc, i, offset=digit_start
+            rc, p_data, total_digits, acc, i, offset=digit_start
         ),
         range(total_digits),
         (accum, []),
@@ -534,8 +578,9 @@ def build_decode_zoned_separate_ir(
     if decimal_digits > 0:
         divisor = 10**decimal_digits
         scaled = rc.next()
+        divisor_reg = _lit(rc, instructions, divisor)
         instructions.append(
-            Binop(result_reg=scaled, operator="/", left=accum, right=divisor)
+            Binop(result_reg=scaled, operator="/", left=accum, right=divisor_reg)
         )
         accum = scaled
     else:
@@ -547,21 +592,26 @@ def build_decode_zoned_separate_ir(
 
     # Apply sign: 0x60 = negative
     is_neg = rc.next()
+    minus_reg = _lit(rc, instructions, ByteConstants.EBCDIC_MINUS)
     instructions.append(
         Binop(
             result_reg=is_neg,
             operator="==",
             left=sign_byte,
-            right=ByteConstants.EBCDIC_MINUS,
+            right=minus_reg,
         )
     )
 
     two_neg = rc.next()
-    instructions.append(Binop(result_reg=two_neg, operator="*", left=2, right=is_neg))
+    two_reg = _lit(rc, instructions, 2)
+    instructions.append(
+        Binop(result_reg=two_neg, operator="*", left=two_reg, right=is_neg)
+    )
 
     sign_mult = rc.next()
+    one_reg = _lit(rc, instructions, 1)
     instructions.append(
-        Binop(result_reg=sign_mult, operator="-", left=1, right=two_neg)
+        Binop(result_reg=sign_mult, operator="-", left=one_reg, right=two_neg)
     )
 
     final_result = rc.next()
@@ -582,17 +632,21 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
     rc = _RegCounter(func_name)
     instructions: list[IRInstruction] = []
     byte_count = (total_digits // 2) + 1
+    p_digits = Register("%p_digits")
+    p_sign_nibble = Register("%p_sign_nibble")
 
     # Build nibble list: for even total_digits, prepend a 0
     if total_digits % 2 == 0:
         zero_list = rc.next()
+        one_reg = _lit(rc, instructions, 1)
+        zero_reg = _lit(rc, instructions, 0)
         instructions.append(
             CallFunction(
                 result_reg=zero_list,
                 func_name=BuiltinName.MAKE_LIST,
                 args=(
-                    1,
-                    0,
+                    one_reg,
+                    zero_reg,
                 ),
             )
         )
@@ -604,35 +658,38 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
                 func_name=BuiltinName.LIST_CONCAT,
                 args=(
                     zero_list,
-                    "%p_digits",
+                    p_digits,
                 ),
             )
         )
     else:
-        nibbles = "%p_digits"
+        nibbles = p_digits
 
     # Append sign nibble: wrap it in a single-element list, then concat
     sign_list = rc.next()
+    one_reg2 = _lit(rc, instructions, 1)
+    zero_reg2 = _lit(rc, instructions, 0)
     instructions.append(
         CallFunction(
             result_reg=sign_list,
             func_name=BuiltinName.MAKE_LIST,
             args=(
-                1,
-                0,
+                one_reg2,
+                zero_reg2,
             ),
         )
     )
 
     sign_list_set = rc.next()
+    zero_reg3 = _lit(rc, instructions, 0)
     instructions.append(
         CallFunction(
             result_reg=sign_list_set,
             func_name=BuiltinName.LIST_SET,
             args=(
                 sign_list,
-                0,
-                "%p_sign_nibble",
+                zero_reg3,
+                p_sign_nibble,
             ),
         )
     )
@@ -651,27 +708,35 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
 
     # Create result buffer
     result = rc.next()
+    byte_count_reg = _lit(rc, instructions, byte_count)
+    zero_reg4 = _lit(rc, instructions, 0)
     instructions.append(
         CallFunction(
             result_reg=result,
             func_name=BuiltinName.MAKE_LIST,
             args=(
-                byte_count,
-                0,
+                byte_count_reg,
+                zero_reg4,
             ),
         )
     )
 
     # Pack nibble pairs into bytes (unrolled loop)
     def _pack_nibble_pair(
-        acc: tuple[str, list[IRInstruction]], i: int
-    ) -> tuple[str, list[IRInstruction]]:
+        acc: tuple[Register, list[IRInstruction]], i: int
+    ) -> tuple[Register, list[IRInstruction]]:
         current_result, insts = acc
         high_nibble = rc.next()
         low_nibble = rc.next()
         byte_with_high = rc.next()
         byte_complete = rc.next()
         new_result = rc.next()
+        hi_idx = _lit(rc, insts, i * 2)
+        lo_idx = _lit(rc, insts, i * 2 + 1)
+        zero_base = _lit(rc, insts, 0)
+        high_pos = _lit(rc, insts, NibblePosition.HIGH)
+        low_pos = _lit(rc, insts, NibblePosition.LOW)
+        i_reg = _lit(rc, insts, i)
         return (
             new_result,
             insts
@@ -681,7 +746,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
                     func_name=BuiltinName.LIST_GET,
                     args=(
                         all_nibbles,
-                        i * 2,
+                        hi_idx,
                     ),
                 ),
                 CallFunction(
@@ -689,15 +754,15 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
                     func_name=BuiltinName.LIST_GET,
                     args=(
                         all_nibbles,
-                        i * 2 + 1,
+                        lo_idx,
                     ),
                 ),
                 CallFunction(
                     result_reg=byte_with_high,
                     func_name=BuiltinName.NIBBLE_SET,
                     args=(
-                        0,
-                        NibblePosition.HIGH,
+                        zero_base,
+                        high_pos,
                         high_nibble,
                     ),
                 ),
@@ -706,7 +771,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
                     func_name=BuiltinName.NIBBLE_SET,
                     args=(
                         byte_with_high,
-                        NibblePosition.LOW,
+                        low_pos,
                         low_nibble,
                     ),
                 ),
@@ -715,7 +780,7 @@ def build_encode_comp3_ir(func_name: str, total_digits: int) -> list[IRInstructi
                     func_name=BuiltinName.LIST_SET,
                     args=(
                         current_result,
-                        i,
+                        i_reg,
                         byte_complete,
                     ),
                 ),
@@ -743,15 +808,19 @@ def build_decode_comp3_ir(
     rc = _RegCounter(func_name)
     instructions: list[IRInstruction] = []
     byte_count = (total_digits // 2) + 1
+    p_data = Register("%p_data")
 
     # Extract all nibbles from all bytes
     def _extract_nibbles(
-        acc: tuple[list[str], list[IRInstruction]], i: int
-    ) -> tuple[list[str], list[IRInstruction]]:
+        acc: tuple[list[Register], list[IRInstruction]], i: int
+    ) -> tuple[list[Register], list[IRInstruction]]:
         regs, insts = acc
         byte_reg = rc.next()
         high = rc.next()
         low = rc.next()
+        i_reg = _lit(rc, insts, i)
+        high_pos = _lit(rc, insts, NibblePosition.HIGH)
+        low_pos = _lit(rc, insts, NibblePosition.LOW)
         return (
             regs + [high, low],
             insts
@@ -760,8 +829,8 @@ def build_decode_comp3_ir(
                     result_reg=byte_reg,
                     func_name=BuiltinName.LIST_GET,
                     args=(
-                        "%p_data",
-                        i,
+                        p_data,
+                        i_reg,
                     ),
                 ),
                 CallFunction(
@@ -769,7 +838,7 @@ def build_decode_comp3_ir(
                     func_name=BuiltinName.NIBBLE_GET,
                     args=(
                         byte_reg,
-                        NibblePosition.HIGH,
+                        high_pos,
                     ),
                 ),
                 CallFunction(
@@ -777,7 +846,7 @@ def build_decode_comp3_ir(
                     func_name=BuiltinName.NIBBLE_GET,
                     args=(
                         byte_reg,
-                        NibblePosition.LOW,
+                        low_pos,
                     ),
                 ),
             ],
@@ -794,21 +863,24 @@ def build_decode_comp3_ir(
 
     # Accumulate digits into a value
     accum = rc.next()
-    instructions.append(Const(result_reg=accum, value=0))
+    instructions.append(Const(result_reg=accum, value="0"))
 
     def _accumulate_dreg(
-        acc: tuple[str, list[IRInstruction]], pair: tuple[int, str]
-    ) -> tuple[str, list[IRInstruction]]:
+        acc: tuple[Register, list[IRInstruction]], pair: tuple[int, Register]
+    ) -> tuple[Register, list[IRInstruction]]:
         current_accum, insts = acc
         i, dreg = pair
         power = 10 ** (len(digit_regs) - 1 - i)
         contribution = rc.next()
         new_accum = rc.next()
+        power_reg = _lit(rc, insts, power)
         return (
             new_accum,
             insts
             + [
-                Binop(result_reg=contribution, operator="*", left=dreg, right=power),
+                Binop(
+                    result_reg=contribution, operator="*", left=dreg, right=power_reg
+                ),
                 Binop(
                     result_reg=new_accum,
                     operator="+",
@@ -827,8 +899,9 @@ def build_decode_comp3_ir(
     if decimal_digits > 0:
         divisor = 10**decimal_digits
         scaled = rc.next()
+        divisor_reg = _lit(rc, instructions, divisor)
         instructions.append(
-            Binop(result_reg=scaled, operator="/", left=accum, right=divisor)
+            Binop(result_reg=scaled, operator="/", left=accum, right=divisor_reg)
         )
         accum = scaled
     else:
@@ -840,21 +913,26 @@ def build_decode_comp3_ir(
 
     # Apply sign: sign_nibble == 0xD → negative
     is_neg = rc.next()
+    neg_const = _lit(rc, instructions, ByteConstants.SIGN_NIBBLE_NEGATIVE)
     instructions.append(
         Binop(
             result_reg=is_neg,
             operator="==",
             left=sign_reg,
-            right=ByteConstants.SIGN_NIBBLE_NEGATIVE,
+            right=neg_const,
         )
     )
 
     two_neg = rc.next()
-    instructions.append(Binop(result_reg=two_neg, operator="*", left=2, right=is_neg))
+    two_reg = _lit(rc, instructions, 2)
+    instructions.append(
+        Binop(result_reg=two_neg, operator="*", left=two_reg, right=is_neg)
+    )
 
     sign_mult = rc.next()
+    one_reg = _lit(rc, instructions, 1)
     instructions.append(
-        Binop(result_reg=sign_mult, operator="-", left=1, right=two_neg)
+        Binop(result_reg=sign_mult, operator="-", left=one_reg, right=two_neg)
     )
 
     final_result = rc.next()
@@ -880,13 +958,15 @@ def build_encode_binary_ir(
     """
     rc = _RegCounter(func_name)
     instructions: list[IRInstruction] = []
+    p_digits = Register("%p_digits")
+    p_sign_nibble = Register("%p_sign_nibble")
 
     # Accumulate digits into integer value
     accum = rc.next()
-    instructions.append(Const(result_reg=accum, value=0))
+    instructions.append(Const(result_reg=accum, value="0"))
 
     accum, accum_instructions = reduce(
-        lambda acc, i: _accumulate_digit_step(rc, "%p_digits", total_digits, acc, i),
+        lambda acc, i: _accumulate_digit_step(rc, p_digits, total_digits, acc, i),
         range(total_digits),
         (accum, []),
     )
@@ -894,21 +974,26 @@ def build_encode_binary_ir(
 
     # Apply sign: sign_nibble == 0xD → negate
     is_neg = rc.next()
+    neg_const = _lit(rc, instructions, ByteConstants.SIGN_NIBBLE_NEGATIVE)
     instructions.append(
         Binop(
             result_reg=is_neg,
             operator="==",
-            left="%p_sign_nibble",
-            right=ByteConstants.SIGN_NIBBLE_NEGATIVE,
+            left=p_sign_nibble,
+            right=neg_const,
         )
     )
 
     two_neg = rc.next()
-    instructions.append(Binop(result_reg=two_neg, operator="*", left=2, right=is_neg))
+    two_reg = _lit(rc, instructions, 2)
+    instructions.append(
+        Binop(result_reg=two_neg, operator="*", left=two_reg, right=is_neg)
+    )
 
     sign_mult = rc.next()
+    one_reg = _lit(rc, instructions, 1)
     instructions.append(
-        Binop(result_reg=sign_mult, operator="-", left=1, right=two_neg)
+        Binop(result_reg=sign_mult, operator="-", left=one_reg, right=two_neg)
     )
 
     signed_value = rc.next()
@@ -918,14 +1003,16 @@ def build_encode_binary_ir(
 
     # Pack as big-endian binary bytes
     result = rc.next()
+    byte_count_reg = _lit(rc, instructions, byte_count)
+    signed_reg = _lit(rc, instructions, signed)
     instructions.append(
         CallFunction(
             result_reg=result,
             func_name=BuiltinName.INT_TO_BINARY_BYTES,
             args=(
                 signed_value,
-                byte_count,
-                signed,
+                byte_count_reg,
+                signed_reg,
             ),
         )
     )
@@ -944,16 +1031,18 @@ def build_decode_binary_ir(
     """
     rc = _RegCounter(func_name)
     instructions: list[IRInstruction] = []
+    p_data = Register("%p_data")
 
     # Unpack bytes to integer
     int_val = rc.next()
+    signed_reg = _lit(rc, instructions, signed)
     instructions.append(
         CallFunction(
             result_reg=int_val,
             func_name=BuiltinName.BINARY_BYTES_TO_INT,
             args=(
-                "%p_data",
-                signed,
+                p_data,
+                signed_reg,
             ),
         )
     )
@@ -962,8 +1051,9 @@ def build_decode_binary_ir(
     if decimal_digits > 0:
         divisor = 10**decimal_digits
         scaled = rc.next()
+        divisor_reg = _lit(rc, instructions, divisor)
         instructions.append(
-            Binop(result_reg=scaled, operator="/", left=int_val, right=divisor)
+            Binop(result_reg=scaled, operator="/", left=int_val, right=divisor_reg)
         )
         int_val = scaled
     else:
@@ -985,15 +1075,17 @@ def build_encode_float_ir(func_name: str, byte_count: int) -> list[IRInstruction
     """
     rc = _RegCounter(func_name)
     instructions: list[IRInstruction] = []
+    p_float_value = Register("%p_float_value")
 
     result = rc.next()
+    byte_count_reg = _lit(rc, instructions, byte_count)
     instructions.append(
         CallFunction(
             result_reg=result,
             func_name=BuiltinName.FLOAT_TO_BYTES,
             args=(
-                "%p_float_value",
-                byte_count,
+                p_float_value,
+                byte_count_reg,
             ),
         )
     )
@@ -1010,15 +1102,17 @@ def build_decode_float_ir(func_name: str, byte_count: int) -> list[IRInstruction
     """
     rc = _RegCounter(func_name)
     instructions: list[IRInstruction] = []
+    p_data = Register("%p_data")
 
     result = rc.next()
+    byte_count_reg = _lit(rc, instructions, byte_count)
     instructions.append(
         CallFunction(
             result_reg=result,
             func_name=BuiltinName.BYTES_TO_FLOAT,
             args=(
-                "%p_data",
-                byte_count,
+                p_data,
+                byte_count_reg,
             ),
         )
     )
@@ -1035,29 +1129,33 @@ def build_encode_alphanumeric_ir(func_name: str, length: int) -> list[IRInstruct
     """
     rc = _RegCounter(func_name)
     instructions: list[IRInstruction] = []
+    p_value = Register("%p_value")
 
     # Convert string to EBCDIC bytes
     ebcdic_bytes = rc.next()
+    encoding_reg = _lit(rc, instructions, CobolEncoding.EBCDIC)
     instructions.append(
         CallFunction(
             result_reg=ebcdic_bytes,
             func_name=BuiltinName.STRING_TO_BYTES,
             args=(
-                "%p_value",
-                CobolEncoding.EBCDIC,
+                p_value,
+                encoding_reg,
             ),
         )
     )
 
     # Create padding (EBCDIC spaces = 0x40)
     padding = rc.next()
+    length_reg = _lit(rc, instructions, length)
+    space_reg = _lit(rc, instructions, ByteConstants.EBCDIC_SPACE)
     instructions.append(
         CallFunction(
             result_reg=padding,
             func_name=BuiltinName.MAKE_LIST,
             args=(
-                length,
-                ByteConstants.EBCDIC_SPACE,
+                length_reg,
+                space_reg,
             ),
         )
     )
@@ -1077,14 +1175,16 @@ def build_encode_alphanumeric_ir(func_name: str, length: int) -> list[IRInstruct
     )
 
     result = rc.next()
+    zero_reg = _lit(rc, instructions, 0)
+    length_reg2 = _lit(rc, instructions, length)
     instructions.append(
         CallFunction(
             result_reg=result,
             func_name=BuiltinName.LIST_SLICE,
             args=(
                 combined,
-                0,
-                length,
+                zero_reg,
+                length_reg2,
             ),
         )
     )
@@ -1107,29 +1207,33 @@ def build_encode_alphanumeric_justified_ir(
     """
     rc = _RegCounter(func_name)
     instructions: list[IRInstruction] = []
+    p_value = Register("%p_value")
 
     # Convert string to EBCDIC bytes
     ebcdic_bytes = rc.next()
+    encoding_reg = _lit(rc, instructions, CobolEncoding.EBCDIC)
     instructions.append(
         CallFunction(
             result_reg=ebcdic_bytes,
             func_name=BuiltinName.STRING_TO_BYTES,
             args=(
-                "%p_value",
-                CobolEncoding.EBCDIC,
+                p_value,
+                encoding_reg,
             ),
         )
     )
 
     # Create padding (EBCDIC spaces = 0x40)
     padding = rc.next()
+    length_reg = _lit(rc, instructions, length)
+    space_reg = _lit(rc, instructions, ByteConstants.EBCDIC_SPACE)
     instructions.append(
         CallFunction(
             result_reg=padding,
             func_name=BuiltinName.MAKE_LIST,
             args=(
-                length,
-                ByteConstants.EBCDIC_SPACE,
+                length_reg,
+                space_reg,
             ),
         )
     )
@@ -1156,13 +1260,17 @@ def build_encode_alphanumeric_justified_ir(
     )
 
     start_offset = rc.next()
+    length_reg2 = _lit(rc, instructions, length)
     instructions.append(
-        Binop(result_reg=start_offset, operator="-", left=combined_len, right=length)
+        Binop(
+            result_reg=start_offset, operator="-", left=combined_len, right=length_reg2
+        )
     )
 
     end_offset = rc.next()
+    length_reg3 = _lit(rc, instructions, length)
     instructions.append(
-        Binop(result_reg=end_offset, operator="+", left=start_offset, right=length)
+        Binop(result_reg=end_offset, operator="+", left=start_offset, right=length_reg3)
     )
 
     result = rc.next()
@@ -1191,15 +1299,17 @@ def build_decode_alphanumeric_ir(func_name: str) -> list[IRInstruction]:
     """
     rc = _RegCounter(func_name)
     instructions: list[IRInstruction] = []
+    p_data = Register("%p_data")
 
     result = rc.next()
+    encoding_reg = _lit(rc, instructions, CobolEncoding.EBCDIC)
     instructions.append(
         CallFunction(
             result_reg=result,
             func_name=BuiltinName.BYTES_TO_STRING,
             args=(
-                "%p_data",
-                CobolEncoding.EBCDIC,
+                p_data,
+                encoding_reg,
             ),
         )
     )
@@ -1222,6 +1332,8 @@ def build_string_delimit_ir(func_name: str) -> list[IRInstruction]:
     """
     rc = _RegCounter(func_name)
     instructions: list[IRInstruction] = []
+    p_source = Register("%p_source")
+    p_delimiter = Register("%p_delimiter")
 
     # Find delimiter position
     pos = rc.next()
@@ -1230,8 +1342,8 @@ def build_string_delimit_ir(func_name: str) -> list[IRInstruction]:
             result_reg=pos,
             func_name=BuiltinName.STRING_FIND,
             args=(
-                "%p_source",
-                "%p_delimiter",
+                p_source,
+                p_delimiter,
             ),
         )
     )
@@ -1256,6 +1368,8 @@ def build_string_split_ir(func_name: str) -> list[IRInstruction]:
     """
     rc = _RegCounter(func_name)
     instructions: list[IRInstruction] = []
+    p_source = Register("%p_source")
+    p_delimiter = Register("%p_delimiter")
 
     result = rc.next()
     instructions.append(
@@ -1263,8 +1377,8 @@ def build_string_split_ir(func_name: str) -> list[IRInstruction]:
             result_reg=result,
             func_name=BuiltinName.STRING_SPLIT,
             args=(
-                "%p_source",
-                "%p_delimiter",
+                p_source,
+                p_delimiter,
             ),
         )
     )
@@ -1282,6 +1396,9 @@ def build_inspect_tally_ir(func_name: str) -> list[IRInstruction]:
     """
     rc = _RegCounter(func_name)
     instructions: list[IRInstruction] = []
+    p_source = Register("%p_source")
+    p_pattern = Register("%p_pattern")
+    p_mode = Register("%p_mode")
 
     result = rc.next()
     instructions.append(
@@ -1289,9 +1406,9 @@ def build_inspect_tally_ir(func_name: str) -> list[IRInstruction]:
             result_reg=result,
             func_name=BuiltinName.STRING_COUNT,
             args=(
-                "%p_source",
-                "%p_pattern",
-                "%p_mode",
+                p_source,
+                p_pattern,
+                p_mode,
             ),
         )
     )
@@ -1309,6 +1426,10 @@ def build_inspect_replace_ir(func_name: str) -> list[IRInstruction]:
     """
     rc = _RegCounter(func_name)
     instructions: list[IRInstruction] = []
+    p_source = Register("%p_source")
+    p_from = Register("%p_from")
+    p_to = Register("%p_to")
+    p_mode = Register("%p_mode")
 
     result = rc.next()
     instructions.append(
@@ -1316,10 +1437,10 @@ def build_inspect_replace_ir(func_name: str) -> list[IRInstruction]:
             result_reg=result,
             func_name=BuiltinName.STRING_REPLACE,
             args=(
-                "%p_source",
-                "%p_from",
-                "%p_to",
-                "%p_mode",
+                p_source,
+                p_from,
+                p_to,
+                p_mode,
             ),
         )
     )
