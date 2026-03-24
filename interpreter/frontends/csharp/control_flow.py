@@ -10,6 +10,7 @@ from interpreter.frontends.common.exceptions import (
     lower_try_catch,
 )
 from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
+from interpreter.register import Register
 
 
 def lower_if(ctx: TreeSitterEmitContext, node) -> None:
@@ -116,7 +117,7 @@ def lower_throw(ctx: TreeSitterEmitContext, node) -> None:
     lower_raise_or_throw(ctx, node, keyword="throw")
 
 
-def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower C# throw expression (``throw new Exception()`` used as an expression).
 
     Emits THROW and returns a fresh register (unreachable but satisfies
@@ -279,7 +280,7 @@ def _csharp_switch_expr_body_of(ctx, arm):
     return ctx.lower_expr(named[-1])
 
 
-def lower_switch_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_switch_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower C# 8 switch expression: subject switch { pattern => expr, ... }."""
     from interpreter.frontends.common.match_expr import (
         MatchArmSpec,

@@ -383,7 +383,7 @@ class TreeSitterEmitContext:
         # Fallback: try as expression
         self.lower_expr(node)
 
-    def lower_expr(self, node) -> str:
+    def lower_expr(self, node) -> Register:
         """Lower an expression, return the register holding its value."""
         handler = self.expr_dispatch.get(node.type)
         if handler:

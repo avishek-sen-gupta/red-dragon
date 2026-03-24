@@ -15,6 +15,7 @@ from interpreter.frontends.java.expressions import (
     lower_java_store_target,
 )
 from interpreter.frontends.java.node_types import JavaNodeType
+from interpreter.register import Register
 
 
 def lower_if(ctx: TreeSitterEmitContext, node) -> None:
@@ -184,7 +185,7 @@ def lower_java_switch(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit(Opcode.LABEL, label=end_label)
 
 
-def lower_java_switch_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_java_switch_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower switch expression as if/else chain, returning last arm value."""
     cond_node = node.child_by_field_name("condition")
     body_node = node.child_by_field_name("body")

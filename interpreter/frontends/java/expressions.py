@@ -16,9 +16,10 @@ from interpreter.frontends.type_extraction import (
 )
 from interpreter.frontends.java.node_types import JavaNodeType
 from interpreter.types.type_expr import ScalarType
+from interpreter.register import Register
 
 
-def lower_method_invocation(ctx: TreeSitterEmitContext, node) -> str:
+def lower_method_invocation(ctx: TreeSitterEmitContext, node) -> Register:
     name_node = node.child_by_field_name("name")
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
@@ -47,7 +48,7 @@ def lower_method_invocation(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_object_creation(ctx: TreeSitterEmitContext, node) -> str:
+def lower_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
     type_node = node.child_by_field_name("type")
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
@@ -63,7 +64,7 @@ def lower_object_creation(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_field_access(ctx: TreeSitterEmitContext, node) -> str:
+def lower_field_access(ctx: TreeSitterEmitContext, node) -> Register:
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     field_node = node.child_by_field_name("field")
     if obj_node is None or field_node is None:
@@ -80,7 +81,7 @@ def lower_field_access(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_method_reference(ctx: TreeSitterEmitContext, node) -> str:
+def lower_method_reference(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower method_reference: Type::method or obj::method or Type::new."""
     obj_node = node.children[0]
     method_node = node.children[-1]
@@ -96,7 +97,7 @@ def lower_method_reference(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_scoped_identifier(ctx: TreeSitterEmitContext, node) -> str:
+def lower_scoped_identifier(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower scoped_identifier (e.g., java.lang.System) as LOAD_VAR."""
     qualified_name = ctx.node_text(node)
     reg = ctx.fresh_reg()
@@ -109,7 +110,7 @@ def lower_scoped_identifier(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_class_literal(ctx: TreeSitterEmitContext, node) -> str:
+def lower_class_literal(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower class_literal: Type.class -> LOAD_FIELD(type_reg, 'class')."""
     type_node = node.children[0]
     type_reg = ctx.lower_expr(type_node)
@@ -123,7 +124,7 @@ def lower_class_literal(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
+def lower_lambda(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower lambda_expression: (params) -> expr or (params) -> { body }."""
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}__lambda")
     end_label = ctx.fresh_label("lambda_end")
@@ -176,7 +177,7 @@ def _lower_lambda_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 )
 
 
-def lower_array_access(ctx: TreeSitterEmitContext, node) -> str:
+def lower_array_access(ctx: TreeSitterEmitContext, node) -> Register:
     arr_node = node.child_by_field_name("array")
     idx_node = node.child_by_field_name("index")
     if arr_node is None or idx_node is None:
@@ -193,7 +194,7 @@ def lower_array_access(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_array_creation(ctx: TreeSitterEmitContext, node) -> str:
+def lower_array_creation(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower array_creation_expression or standalone array_initializer."""
     # Handle standalone array_initializer: {1, 2, 3}
     if node.type == JavaNodeType.ARRAY_INITIALIZER:
@@ -258,7 +259,7 @@ def lower_array_creation(ctx: TreeSitterEmitContext, node) -> str:
     return arr_reg
 
 
-def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
@@ -312,7 +313,7 @@ def lower_java_store_target(
         )
 
 
-def lower_cast_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_cast_expr(ctx: TreeSitterEmitContext, node) -> Register:
     value_node = node.child_by_field_name("value")
     if value_node:
         return ctx.lower_expr(value_node)
@@ -322,7 +323,7 @@ def lower_cast_expr(ctx: TreeSitterEmitContext, node) -> str:
     return lower_const_literal(ctx, node)
 
 
-def lower_instanceof(ctx: TreeSitterEmitContext, node) -> str:
+def lower_instanceof(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower instanceof_expression: operand instanceof Type [binding].
 
     Java 16+ type patterns: ``o instanceof String s`` binds ``s`` to
@@ -371,7 +372,7 @@ def lower_instanceof(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_ternary(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ternary(ctx: TreeSitterEmitContext, node) -> Register:
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     true_node = node.child_by_field_name(ctx.constants.if_consequence_field)
     false_node = node.child_by_field_name(ctx.constants.if_alternative_field)
@@ -403,7 +404,7 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> str:
     return result_reg
 
 
-def lower_expr_stmt_as_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_expr_stmt_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower expression_statement in expr context (e.g., inside switch expression)."""
     named_children = [c for c in node.children if c.is_named]
     if named_children:
@@ -411,7 +412,7 @@ def lower_expr_stmt_as_expr(ctx: TreeSitterEmitContext, node) -> str:
     return lower_const_literal(ctx, node)
 
 
-def lower_throw_as_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_throw_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower throw_statement in expr context (e.g., switch expression arm)."""
     named_children = [c for c in node.children if c.is_named]
     if named_children:

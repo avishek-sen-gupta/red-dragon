@@ -10,6 +10,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.node_types import CommonNodeType
 
 from interpreter.ir import SpreadArguments
+from interpreter.register import Register
 from interpreter.instructions import (
     Binop,
     CallFunction,
@@ -29,7 +30,7 @@ from interpreter.instructions import (
 )
 
 
-def lower_const_literal(ctx: TreeSitterEmitContext, node) -> str:
+def lower_const_literal(ctx: TreeSitterEmitContext, node) -> Register:
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         Const(
@@ -41,7 +42,7 @@ def lower_const_literal(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_canonical_none(ctx: TreeSitterEmitContext, node) -> str:
+def lower_canonical_none(ctx: TreeSitterEmitContext, node) -> Register:
     """Emit canonical ``CONST "None"`` for any language's null/nil/undefined."""
     reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -54,7 +55,7 @@ def lower_canonical_none(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_canonical_true(ctx: TreeSitterEmitContext, node) -> str:
+def lower_canonical_true(ctx: TreeSitterEmitContext, node) -> Register:
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         Const(
@@ -66,7 +67,7 @@ def lower_canonical_true(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_canonical_false(ctx: TreeSitterEmitContext, node) -> str:
+def lower_canonical_false(ctx: TreeSitterEmitContext, node) -> Register:
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         Const(
@@ -78,7 +79,7 @@ def lower_canonical_false(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_canonical_bool(ctx: TreeSitterEmitContext, node) -> str:
+def lower_canonical_bool(ctx: TreeSitterEmitContext, node) -> Register:
     """Emit canonical True/False based on node text."""
     text = ctx.node_text(node).strip().lower()
     if text == "true":
@@ -86,7 +87,7 @@ def lower_canonical_bool(ctx: TreeSitterEmitContext, node) -> str:
     return lower_canonical_false(ctx, node)
 
 
-def lower_identifier(ctx: TreeSitterEmitContext, node) -> str:
+def lower_identifier(ctx: TreeSitterEmitContext, node) -> Register:
     name = ctx.node_text(node)
     resolved_name = ctx.resolve_var(name)
     # Implicit this: bare identifier that's a class field and not a local/param
@@ -118,7 +119,7 @@ def lower_identifier(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_paren(ctx: TreeSitterEmitContext, node) -> str:
+def lower_paren(ctx: TreeSitterEmitContext, node) -> Register:
     inner = next(
         (
             c
@@ -148,7 +149,7 @@ def lower_spread_arg(ctx: TreeSitterEmitContext, node) -> SpreadArguments:
     return SpreadArguments(register=inner_reg)
 
 
-def lower_binop(ctx: TreeSitterEmitContext, node) -> str:
+def lower_binop(ctx: TreeSitterEmitContext, node) -> Register:
     children = [
         c
         for c in node.children
@@ -170,7 +171,7 @@ def lower_binop(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_comparison(ctx: TreeSitterEmitContext, node) -> str:
+def lower_comparison(ctx: TreeSitterEmitContext, node) -> Register:
     children = [
         c
         for c in node.children
@@ -192,7 +193,7 @@ def lower_comparison(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_unop(ctx: TreeSitterEmitContext, node) -> str:
+def lower_unop(ctx: TreeSitterEmitContext, node) -> Register:
     children = [
         c
         for c in node.children
@@ -212,13 +213,13 @@ def lower_unop(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_call(ctx: TreeSitterEmitContext, node) -> str:
+def lower_call(ctx: TreeSitterEmitContext, node) -> Register:
     func_node = node.child_by_field_name(ctx.constants.call_function_field)
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     return lower_call_impl(ctx, func_node, args_node, node)
 
 
-def lower_call_impl(ctx: TreeSitterEmitContext, func_node, args_node, node) -> str:
+def lower_call_impl(ctx: TreeSitterEmitContext, func_node, args_node, node) -> Register:
     arg_regs = extract_call_args(ctx, args_node)
 
     # Method call: obj.method(...)
@@ -339,7 +340,7 @@ def extract_call_args_unwrap(ctx: TreeSitterEmitContext, args_node) -> list[str]
     return regs
 
 
-def lower_attribute(ctx: TreeSitterEmitContext, node) -> str:
+def lower_attribute(ctx: TreeSitterEmitContext, node) -> Register:
     obj_node = node.child_by_field_name(ctx.constants.attr_object_field)
     attr_node = node.child_by_field_name(ctx.constants.attr_attribute_field)
     if obj_node is None:
@@ -362,7 +363,7 @@ def lower_attribute(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_subscript(ctx: TreeSitterEmitContext, node) -> str:
+def lower_subscript(ctx: TreeSitterEmitContext, node) -> Register:
     obj_node = node.child_by_field_name(ctx.constants.subscript_value_field)
     idx_node = node.child_by_field_name(ctx.constants.subscript_index_field)
     if obj_node is None or idx_node is None:
@@ -383,7 +384,7 @@ def lower_subscript(ctx: TreeSitterEmitContext, node) -> str:
 
 def lower_interpolated_string_parts(
     ctx: TreeSitterEmitContext, parts: list[str], node
-) -> str:
+) -> Register:
     """Chain a list of string-part registers with BINOP '+' concatenation."""
     if not parts:
         return lower_const_literal(ctx, node)
@@ -403,7 +404,7 @@ def lower_interpolated_string_parts(
     return result
 
 
-def lower_update_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_update_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower i++ / i-- / ++i / --i update expressions."""
     children = [c for c in node.children if c.is_named]
     if not children:
@@ -428,7 +429,7 @@ def lower_update_expr(ctx: TreeSitterEmitContext, node) -> str:
     return result_reg
 
 
-def lower_list_literal(ctx: TreeSitterEmitContext, node) -> str:
+def lower_list_literal(ctx: TreeSitterEmitContext, node) -> Register:
     elems = [
         c
         for c in node.children
@@ -466,7 +467,7 @@ def lower_list_literal(ctx: TreeSitterEmitContext, node) -> str:
     return arr_reg
 
 
-def lower_dict_literal(ctx: TreeSitterEmitContext, node) -> str:
+def lower_dict_literal(ctx: TreeSitterEmitContext, node) -> Register:
     obj_reg = ctx.fresh_reg()
     ctx.emit_inst(
         NewObject(

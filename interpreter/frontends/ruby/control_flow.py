@@ -8,6 +8,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.ir import Opcode, CodeLabel, NO_LABEL
 from interpreter import constants
 from interpreter.frontends.ruby.node_types import RubyNodeType
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
@@ -699,7 +700,7 @@ def _get_case_match_spec():
     return _RUBY_CASE_MATCH_SPEC
 
 
-def lower_case_match(ctx: TreeSitterEmitContext, node) -> str:
+def lower_case_match(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower Ruby case/in using unified match framework."""
     from interpreter.frontends.common.match_expr import lower_match_as_expr
 
@@ -747,7 +748,7 @@ def lower_ruby_retry(ctx: TreeSitterEmitContext, node) -> None:
 # ── rescue_modifier (expr rescue fallback) ────────────────────────
 
 
-def lower_ruby_rescue_modifier_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ruby_rescue_modifier_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower ``expr rescue fallback`` as an expression — inline exception handling.
 
     Wraps the body expression in TRY_PUSH / TRY_POP; on exception,

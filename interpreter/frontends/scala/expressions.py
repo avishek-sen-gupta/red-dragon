@@ -16,9 +16,10 @@ from interpreter.frontends.common.match_expr import MatchArmSpec, lower_match_as
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 from interpreter.frontends.scala.patterns import parse_scala_pattern
 from interpreter.types.type_expr import ScalarType
+from interpreter.register import Register
 
 
-def lower_scala_call(ctx: TreeSitterEmitContext, node) -> str:
+def lower_scala_call(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower call_expression, unwrapping generic_function to its inner function.
 
     In Scala, foo[Int](x) parses as call_expression(generic_function(foo, [Int]), (x)).
@@ -50,7 +51,9 @@ def lower_scala_call(ctx: TreeSitterEmitContext, node) -> str:
     return lower_call_impl(ctx, unwrapped_func, args_node, node)
 
 
-def _lower_this_call_as_delegation(ctx: TreeSitterEmitContext, args_node, node) -> str:
+def _lower_this_call_as_delegation(
+    ctx: TreeSitterEmitContext, args_node, node
+) -> Register:
     """Lower ``this(args)`` as CALL_METHOD on this for __init__."""
     from interpreter.frontends.common.expressions import extract_call_args_unwrap
 
@@ -67,7 +70,7 @@ def _lower_this_call_as_delegation(ctx: TreeSitterEmitContext, args_node, node) 
     return result_reg
 
 
-def lower_field_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_field_expr(ctx: TreeSitterEmitContext, node) -> Register:
     value_node = node.child_by_field_name(ctx.constants.attr_object_field)
     field_node = node.child_by_field_name("field")
     if value_node is None or field_node is None:
@@ -84,7 +87,7 @@ def lower_field_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
@@ -131,7 +134,7 @@ def lower_scala_store_target(
         )
 
 
-def lower_if_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_if_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower if as a value-producing expression."""
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     body_node = node.child_by_field_name(ctx.constants.if_consequence_field)
@@ -175,7 +178,7 @@ def lower_if_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def _lower_body_as_expr(ctx: TreeSitterEmitContext, body_node) -> str:
+def _lower_body_as_expr(ctx: TreeSitterEmitContext, body_node) -> Register:
     """Lower a body node as an expression, returning the last expression's reg."""
     if body_node is None:
         reg = ctx.fresh_reg()
@@ -213,7 +216,7 @@ _SCALA_MATCH_SPEC = MatchArmSpec(
 )
 
 
-def lower_match_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_match_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower Scala match expression using Pattern ADT."""
     value_node = node.child_by_field_name("value")
     body_node = node.child_by_field_name("body")
@@ -221,7 +224,7 @@ def lower_match_expr(ctx: TreeSitterEmitContext, node) -> str:
     return lower_match_as_expr(ctx, subject_reg, body_node, _SCALA_MATCH_SPEC)
 
 
-def lower_block_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_block_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower a block `{ ... }` as an expression (last expr is value)."""
     children = [
         c
@@ -244,7 +247,7 @@ def lower_block_expr(ctx: TreeSitterEmitContext, node) -> str:
     return ctx.lower_expr(children[-1])
 
 
-def lower_loop_as_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_loop_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower while/for/do-while in expression position (returns unit)."""
     ctx.lower_stmt(node)
     reg = ctx.fresh_reg()
@@ -256,7 +259,7 @@ def lower_loop_as_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_break_as_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_break_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower break in expression position."""
     from interpreter.frontends.common.control_flow import lower_break
 
@@ -270,7 +273,7 @@ def lower_break_as_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_continue_as_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_continue_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower continue in expression position."""
     from interpreter.frontends.common.control_flow import lower_continue
 
@@ -284,7 +287,7 @@ def lower_continue_as_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_return_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_return_expr(ctx: TreeSitterEmitContext, node) -> Register:
     children = [c for c in node.children if c.type != NT.RETURN]
     if children:
         val_reg = ctx.lower_expr(children[0])
@@ -303,7 +306,7 @@ def lower_return_expr(ctx: TreeSitterEmitContext, node) -> str:
     return val_reg
 
 
-def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> Register:
     elems = [c for c in node.children if c.type not in (NT.LPAREN, NT.RPAREN, NT.COMMA)]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
@@ -322,7 +325,7 @@ def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> str:
     return arr_reg
 
 
-def lower_lambda_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_lambda_expr(ctx: TreeSitterEmitContext, node) -> Register:
     func_name = f"__lambda_{ctx.label_counter}"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
@@ -384,7 +387,7 @@ def lower_lambda_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_new_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_new_expr(ctx: TreeSitterEmitContext, node) -> Register:
     named_children = [c for c in node.children if c.is_named]
     if named_children:
         type_name = ctx.node_text(named_children[0])
@@ -408,7 +411,7 @@ def lower_new_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_symbolic_node(ctx: TreeSitterEmitContext, node) -> str:
+def lower_symbolic_node(ctx: TreeSitterEmitContext, node) -> Register:
     reg = ctx.fresh_reg()
     ctx.emit(
         Opcode.SYMBOLIC,
@@ -419,7 +422,7 @@ def lower_symbolic_node(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_scala_interpolated_string(ctx: TreeSitterEmitContext, node) -> str:
+def lower_scala_interpolated_string(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower interpolated_string_expression: s"..." / f"..." / raw"..."."""
     interp_string = next(
         (c for c in node.children if c.type == NT.INTERPOLATED_STRING),
@@ -430,7 +433,7 @@ def lower_scala_interpolated_string(ctx: TreeSitterEmitContext, node) -> str:
     return lower_scala_interpolated_string_body(ctx, interp_string)
 
 
-def lower_scala_interpolated_string_body(ctx: TreeSitterEmitContext, node) -> str:
+def lower_scala_interpolated_string_body(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower interpolated_string, extracting literal gaps and interpolation children."""
     interpolations = [c for c in node.children if c.type == NT.INTERPOLATION]
     if not interpolations:
@@ -476,7 +479,7 @@ def lower_scala_interpolated_string_body(ctx: TreeSitterEmitContext, node) -> st
     return lower_interpolated_string_parts(ctx, parts, node)
 
 
-def lower_try_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_try_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower try_expression in expression context (returns a register)."""
     from interpreter.frontends.scala.control_flow import lower_try_stmt
 
@@ -490,7 +493,7 @@ def lower_try_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower throw_expression: throw expr -> lower expr, emit THROW, return reg."""
     children = [c for c in node.children if c.type != NT.THROW and c.is_named]
     if children:
@@ -510,7 +513,7 @@ def lower_throw_expr(ctx: TreeSitterEmitContext, node) -> str:
     return val_reg
 
 
-def lower_generic_function(ctx: TreeSitterEmitContext, node) -> str:
+def lower_generic_function(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower generic_function: foo[Int] -> delegate to the inner function expression.
 
     The generic_function node has field 'function' (the base expression) and
@@ -522,7 +525,7 @@ def lower_generic_function(ctx: TreeSitterEmitContext, node) -> str:
     return ctx.lower_expr(func_node)
 
 
-def lower_postfix_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_postfix_expression(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower postfix_expression: 'list sorted' -> CALL_METHOD(sorted) on list with 0 args.
 
     The node has two named children: child[0] is the receiver, child[1] is the method name.
@@ -542,7 +545,7 @@ def lower_postfix_expression(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_stable_type_identifier(ctx: TreeSitterEmitContext, node) -> str:
+def lower_stable_type_identifier(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower stable_type_identifier: pkg.MyClass -> LOAD_VAR(pkg), LOAD_FIELD(MyClass).
 
     The node has named children: identifier(s) separated by '.', ending with type_identifier.

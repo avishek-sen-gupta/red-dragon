@@ -16,6 +16,7 @@ from interpreter.frontends.common.declarations import (
     emit_synthetic_init,
 )
 from interpreter.types.type_expr import ScalarType
+from interpreter.register import Register
 
 
 def lower_enum_def(ctx: TreeSitterEmitContext, node) -> None:
@@ -190,7 +191,7 @@ def lower_scala_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 param_index += 1
 
 
-def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> str:
+def _lower_body_with_implicit_return(ctx: TreeSitterEmitContext, body_node) -> Register:
     """Lower a Scala function body, returning the last expression's register.
 
     In Scala, the last expression in a block is the implicit return value.

@@ -16,6 +16,7 @@ from interpreter.frontends.type_extraction import (
     extract_normalized_type,
 )
 from interpreter.types.type_expr import ScalarType
+from interpreter.register import Register
 
 _BYREF_KEYWORDS = frozenset({"out", "ref", "in"})
 
@@ -55,7 +56,7 @@ def extract_csharp_call_args(ctx: TreeSitterEmitContext, args_node) -> list[str]
     return regs
 
 
-def lower_invocation(ctx: TreeSitterEmitContext, node) -> str:
+def lower_invocation(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower invocation_expression (function field, arguments field)."""
     func_node = node.child_by_field_name(ctx.constants.call_function_field)
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
@@ -107,7 +108,7 @@ def lower_invocation(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_object_creation(ctx: TreeSitterEmitContext, node) -> str:
+def lower_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
     type_node = node.child_by_field_name("type")
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = extract_csharp_call_args(ctx, args_node) if args_node else []
@@ -123,7 +124,7 @@ def lower_object_creation(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_member_access(ctx: TreeSitterEmitContext, node) -> str:
+def lower_member_access(ctx: TreeSitterEmitContext, node) -> Register:
     obj_node = node.child_by_field_name("expression")
     name_node = node.child_by_field_name("name")
     if obj_node is None or name_node is None:
@@ -140,7 +141,7 @@ def lower_member_access(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def _extract_bracket_index(ctx: TreeSitterEmitContext, bracket_node) -> str:
+def _extract_bracket_index(ctx: TreeSitterEmitContext, bracket_node) -> Register:
     """Unwrap bracketed_argument_list -> argument -> inner expression."""
     if bracket_node is None:
         reg = ctx.fresh_reg()
@@ -173,7 +174,7 @@ def _extract_bracket_index(ctx: TreeSitterEmitContext, bracket_node) -> str:
     return ctx.lower_expr(bracket_node)
 
 
-def lower_element_access(ctx: TreeSitterEmitContext, node) -> str:
+def lower_element_access(ctx: TreeSitterEmitContext, node) -> Register:
     obj_node = node.child_by_field_name("expression")
     bracket_node = node.child_by_field_name("subscript")
     if obj_node is None:
@@ -199,7 +200,7 @@ def lower_element_access(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_initializer_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_initializer_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower initializer_expression {a, b, c} as NEW_ARRAY + STORE_INDEX."""
     elems = [
         c
@@ -223,7 +224,7 @@ def lower_initializer_expr(ctx: TreeSitterEmitContext, node) -> str:
     return arr_reg
 
 
-def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
     left = node.child_by_field_name(ctx.constants.assign_left_field)
     right = node.child_by_field_name(ctx.constants.assign_right_field)
     val_reg = ctx.lower_expr(right)
@@ -231,7 +232,7 @@ def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> str:
     return val_reg
 
 
-def lower_cast_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_cast_expr(ctx: TreeSitterEmitContext, node) -> Register:
     value_node = node.child_by_field_name("value")
     if value_node:
         return ctx.lower_expr(value_node)
@@ -241,7 +242,7 @@ def lower_cast_expr(ctx: TreeSitterEmitContext, node) -> str:
     return lower_const_literal(ctx, node)
 
 
-def lower_ternary(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ternary(ctx: TreeSitterEmitContext, node) -> Register:
     cond_node = node.child_by_field_name(ctx.constants.if_condition_field)
     true_node = node.child_by_field_name(ctx.constants.if_consequence_field)
     false_node = node.child_by_field_name(ctx.constants.if_alternative_field)
@@ -273,7 +274,7 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> str:
     return result_reg
 
 
-def lower_typeof(ctx: TreeSitterEmitContext, node) -> str:
+def lower_typeof(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower typeof_expression: typeof(Type)."""
     named_children = [c for c in node.children if c.is_named]
     type_node = next(
@@ -293,7 +294,7 @@ def lower_typeof(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_is_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_is_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower is_expression: operand is Type."""
     named_children = [c for c in node.children if c.is_named]
     operand_node = named_children[0] if named_children else None
@@ -313,7 +314,7 @@ def lower_is_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_as_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower 'as' cast -- lower the left operand, treat cast as passthrough."""
     children = [c for c in node.children if c.is_named]
     if children:
@@ -321,7 +322,7 @@ def lower_as_expr(ctx: TreeSitterEmitContext, node) -> str:
     return lower_const_literal(ctx, node)
 
 
-def emit_byref_load(ctx: TreeSitterEmitContext, name: str, *, node=None) -> str:
+def emit_byref_load(ctx: TreeSitterEmitContext, name: str, *, node=None) -> Register:
     """Load a variable, dereferencing if it's a byref (out/ref/in) param."""
     reg = ctx.fresh_reg()
     resolved = ctx.resolve_var(name)
@@ -346,7 +347,7 @@ def emit_byref_store(
         ctx.emit(Opcode.STORE_VAR, operands=[ctx.resolve_var(name), val_reg], node=node)
 
 
-def lower_ref_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_ref_expression(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower ``ref <expr>`` — emit ADDRESS_OF for identifier targets."""
     inner = next((c for c in node.children if c.is_named), None)
     if inner is not None and inner.type == NT.IDENTIFIER:
@@ -362,13 +363,13 @@ def lower_ref_expression(ctx: TreeSitterEmitContext, node) -> str:
     return ctx.lower_expr(inner) if inner else ctx.fresh_reg()
 
 
-def lower_csharp_identifier(ctx: TreeSitterEmitContext, node) -> str:
+def lower_csharp_identifier(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower identifier with byref dereference support."""
     name = ctx.node_text(node)
     return emit_byref_load(ctx, name, node=node)
 
 
-def lower_declaration_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_declaration_expression(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `out int x` / `out var x` declaration_expression.
 
     Declares the variable in the current scope with a default value (0)
@@ -387,7 +388,7 @@ def lower_declaration_expression(ctx: TreeSitterEmitContext, node) -> str:
     return result_reg
 
 
-def lower_declaration_pattern(ctx: TreeSitterEmitContext, node) -> str:
+def lower_declaration_pattern(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `int i` declaration pattern -> CONST type + STORE_VAR binding."""
     named_children = [c for c in node.children if c.is_named]
     type_node = named_children[0] if named_children else None
@@ -407,7 +408,7 @@ def lower_declaration_pattern(ctx: TreeSitterEmitContext, node) -> str:
     return type_reg
 
 
-def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
+def lower_lambda(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower C# lambda: (params) => expr or (params) => { body }."""
     func_name = f"__lambda_{ctx.label_counter}"
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
@@ -449,7 +450,7 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> str:
     return ref_reg
 
 
-def lower_array_creation(ctx: TreeSitterEmitContext, node) -> str:
+def lower_array_creation(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower array_creation_expression / implicit_array_creation_expression."""
     # Find initializer: initializer_expression for both explicit and implicit
     init_node = node.child_by_field_name("initializer")
@@ -500,7 +501,7 @@ def lower_array_creation(ctx: TreeSitterEmitContext, node) -> str:
     return arr_reg
 
 
-def lower_csharp_interpolated_string(ctx: TreeSitterEmitContext, node) -> str:
+def lower_csharp_interpolated_string(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower C# $\"...{expr}...\" into CONST + expr + BINOP '+' chain."""
     has_interpolation = any(c.type == NT.INTERPOLATION for c in node.children)
     if not has_interpolation:
@@ -537,7 +538,7 @@ def lower_csharp_interpolated_string(ctx: TreeSitterEmitContext, node) -> str:
     return lower_interpolated_string_parts(ctx, parts, node)
 
 
-def lower_await_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_await_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower await_expression as CALL_FUNCTION('await', expr)."""
     children = [c for c in node.children if c.is_named]
     if children:
@@ -559,7 +560,7 @@ def lower_await_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_conditional_access(ctx: TreeSitterEmitContext, node) -> str:
+def lower_conditional_access(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower obj?.Field as LOAD_FIELD (null-safety is semantic)."""
     named = [c for c in node.children if c.is_named]
     if len(named) < 2:
@@ -585,7 +586,7 @@ def lower_conditional_access(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_member_binding(ctx: TreeSitterEmitContext, node) -> str:
+def lower_member_binding(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower .Field part of conditional access -- standalone fallback."""
     field_node = next((c for c in node.children if c.type == NT.IDENTIFIER), None)
     field_name = ctx.node_text(field_node) if field_node else "unknown"
@@ -599,7 +600,7 @@ def lower_member_binding(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower tuple (a, b, c) as NEW_ARRAY with elements."""
     arguments = [c for c in node.children if c.type == NT.ARGUMENT]
     elem_regs = [
@@ -623,7 +624,7 @@ def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> str:
     return arr_reg
 
 
-def lower_is_pattern_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_is_pattern_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `x is int y` as CALL_FUNCTION('is_check', expr, type)."""
     named = [c for c in node.children if c.is_named]
     operand_node = named[0] if named else None
@@ -646,7 +647,7 @@ def lower_is_pattern_expr(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_implicit_object_creation(ctx: TreeSitterEmitContext, node) -> str:
+def lower_implicit_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `new()` or `new() { ... }` as NEW_OBJECT + CALL_METHOD constructor."""
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = (
@@ -675,7 +676,7 @@ def lower_implicit_object_creation(ctx: TreeSitterEmitContext, node) -> str:
     return result_reg
 
 
-def lower_with_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_with_expression(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `p1 with { Age = 31 }` as clone(p1) + STORE_FIELD per override."""
     named = [c for c in node.children if c.is_named]
     obj_reg = ctx.lower_expr(named[0]) if named else ctx.fresh_reg()
@@ -705,7 +706,7 @@ def lower_with_expression(ctx: TreeSitterEmitContext, node) -> str:
     return clone_reg
 
 
-def lower_anonymous_object_creation(ctx: TreeSitterEmitContext, node) -> str:
+def lower_anonymous_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `new { Name = expr, Age = expr }` as NEW_OBJECT + STORE_FIELD per property."""
     obj_reg = ctx.fresh_reg()
     ctx.emit(
@@ -729,7 +730,7 @@ def lower_anonymous_object_creation(ctx: TreeSitterEmitContext, node) -> str:
     return obj_reg
 
 
-def lower_query_expression(ctx: TreeSitterEmitContext, node) -> str:
+def lower_query_expression(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower LINQ `from n in nums where ... select ...` as CALL_FUNCTION chain."""
     named_children = [c for c in node.children if c.is_named]
     arg_regs = [ctx.lower_expr(c) for c in named_children]
@@ -743,7 +744,7 @@ def lower_query_expression(ctx: TreeSitterEmitContext, node) -> str:
     return reg
 
 
-def lower_linq_clause(ctx: TreeSitterEmitContext, node) -> str:
+def lower_linq_clause(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower LINQ clause (from/select/where) -- lower named children only."""
     named_children = [c for c in node.children if c.is_named]
     last_reg = ctx.fresh_reg()
@@ -869,7 +870,7 @@ def lower_csharp_params(ctx: TreeSitterEmitContext, params_node) -> None:
 # -- P1 gap handlers ------------------------------------------------------
 
 
-def lower_checked_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_checked_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower checked(expr) / unchecked(expr) — just lower the inner expression."""
     named_children = [c for c in node.children if c.is_named]
     return (
@@ -879,7 +880,7 @@ def lower_checked_expr(ctx: TreeSitterEmitContext, node) -> str:
     )
 
 
-def lower_range_expr(ctx: TreeSitterEmitContext, node) -> str:
+def lower_range_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `0..5` or `..5` or `0..` as CALL_FUNCTION("range", start, end)."""
     named_children = [c for c in node.children if c.is_named]
     if len(named_children) >= 2:
