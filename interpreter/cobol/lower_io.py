@@ -16,7 +16,8 @@ from interpreter.cobol.cobol_statements import (
 )
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.ir import Opcode
+from interpreter.instructions import CallFunction
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +31,12 @@ def lower_accept(
     """ACCEPT target [FROM device] — read input via __cobol_accept."""
     device_reg = ctx.const_to_reg(stmt.from_device)
     result_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=result_reg,
-        operands=["__cobol_accept", device_reg],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=result_reg,
+            func_name="__cobol_accept",
+            args=(Register(str(device_reg)),),
+        ),
     )
     if stmt.target and ctx.has_field(stmt.target, layout):
         target_ref = ctx.resolve_field_ref(stmt.target, layout, region_reg)
@@ -55,10 +58,12 @@ def lower_open(
         fn_reg = ctx.const_to_reg(filename)
         mode_reg = ctx.const_to_reg(stmt.mode)
         result_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=result_reg,
-            operands=["__cobol_open_file", fn_reg, mode_reg],
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=result_reg,
+                func_name="__cobol_open_file",
+                args=(Register(str(fn_reg)), Register(str(mode_reg))),
+            ),
         )
         logger.info("OPEN %s %s", stmt.mode, filename)
 
@@ -73,10 +78,12 @@ def lower_close(
     for filename in stmt.files:
         fn_reg = ctx.const_to_reg(filename)
         result_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=result_reg,
-            operands=["__cobol_close_file", fn_reg],
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=result_reg,
+                func_name="__cobol_close_file",
+                args=(Register(str(fn_reg)),),
+            ),
         )
         logger.info("CLOSE %s", filename)
 
@@ -90,10 +97,12 @@ def lower_read(
     """READ file-name [INTO target] — read record via __cobol_read_record."""
     fn_reg = ctx.const_to_reg(stmt.file_name)
     result_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=result_reg,
-        operands=["__cobol_read_record", fn_reg],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=result_reg,
+            func_name="__cobol_read_record",
+            args=(Register(str(fn_reg)),),
+        ),
     )
     if stmt.into and ctx.has_field(stmt.into, layout):
         target_ref = ctx.resolve_field_ref(stmt.into, layout, region_reg)
@@ -122,10 +131,12 @@ def lower_write(
 
     fn_reg = ctx.const_to_reg(stmt.record_name)
     result_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=result_reg,
-        operands=["__cobol_write_record", fn_reg, data_reg],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=result_reg,
+            func_name="__cobol_write_record",
+            args=(Register(str(fn_reg)), Register(str(data_reg))),
+        ),
     )
     logger.info("WRITE %s FROM %s", stmt.record_name, stmt.from_field or "(none)")
 
@@ -148,10 +159,12 @@ def lower_rewrite(
 
     fn_reg = ctx.const_to_reg(stmt.record_name)
     result_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=result_reg,
-        operands=["__cobol_rewrite_record", fn_reg, data_reg],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=result_reg,
+            func_name="__cobol_rewrite_record",
+            args=(Register(str(fn_reg)), Register(str(data_reg))),
+        ),
     )
     logger.info("REWRITE %s FROM %s", stmt.record_name, stmt.from_field or "(none)")
 
@@ -166,10 +179,12 @@ def lower_start(
     fn_reg = ctx.const_to_reg(stmt.file_name)
     key_reg = ctx.const_to_reg(stmt.key or "")
     result_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=result_reg,
-        operands=["__cobol_start_file", fn_reg, key_reg],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=result_reg,
+            func_name="__cobol_start_file",
+            args=(Register(str(fn_reg)), Register(str(key_reg))),
+        ),
     )
     logger.info("START %s KEY %s", stmt.file_name, stmt.key or "(none)")
 
@@ -183,9 +198,11 @@ def lower_delete(
     """DELETE file-name — delete record via __cobol_delete_record."""
     fn_reg = ctx.const_to_reg(stmt.file_name)
     result_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=result_reg,
-        operands=["__cobol_delete_record", fn_reg],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=result_reg,
+            func_name="__cobol_delete_record",
+            args=(Register(str(fn_reg)),),
+        ),
     )
     logger.info("DELETE %s", stmt.file_name)
