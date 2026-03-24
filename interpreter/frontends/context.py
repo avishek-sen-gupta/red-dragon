@@ -14,6 +14,7 @@ from typing import Any, Callable
 from interpreter import constants
 from interpreter.constants import CanonicalLiteral, Language
 from interpreter.frontend_observer import FrontendObserver
+from interpreter.instructions import DeclVar, Instruction
 from interpreter.ir import (
     NO_SOURCE_LOCATION,
     IRInstruction,
@@ -205,6 +206,27 @@ class TreeSitterEmitContext:
         self.instructions.append(inst)
         if opcode == Opcode.DECL_VAR and operands:
             self._method_declared_names.add(operands[0])
+        return inst
+
+    def emit_inst(self, inst: Instruction, *, node=None) -> Instruction:
+        """Emit a typed instruction directly.
+
+        Resolves source_location from *node* if the instruction carries
+        NO_SOURCE_LOCATION.  Tracks labels and declared names the same
+        way the legacy ``emit()`` does.
+        """
+        import dataclasses
+
+        loc = inst.source_location
+        if loc.is_unknown() and node is not None:
+            loc = self.source_loc(node)
+            inst = dataclasses.replace(inst, source_location=loc)
+
+        self._track_label(inst.opcode, inst.label)
+        self.instructions.append(inst)
+
+        if isinstance(inst, DeclVar):
+            self._method_declared_names.add(inst.name)
         return inst
 
     def emit_decl_var(self, name: str, val_reg: str, *, node=None) -> IRInstruction:
