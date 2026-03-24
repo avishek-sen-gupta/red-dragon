@@ -8,7 +8,6 @@ if TYPE_CHECKING:
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode, CodeLabel
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
     lower_const_literal,
@@ -21,6 +20,25 @@ from interpreter.frontends.type_extraction import (
 )
 from interpreter.frontends.python.node_types import PythonNodeType
 from interpreter.register import Register
+from interpreter.instructions import (
+    Const,
+    LoadVar,
+    DeclVar,
+    StoreVar,
+    Binop,
+    CallFunction,
+    CallMethod,
+    CallUnknown,
+    LoadIndex,
+    StoreIndex,
+    NewArray,
+    NewObject,
+    Symbolic,
+    Branch,
+    BranchIf,
+    Label_,
+    Return_,
+)
 
 # ── store target (with tuple unpack) ──────────────────────────
 
@@ -42,12 +60,10 @@ def lower_tuple_unpack(
         c for c in target.children if c.type != PythonNodeType.COMMA
     ):
         idx_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
+        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
         elem_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.LOAD_INDEX,
-            result_reg=elem_reg,
-            operands=[val_reg, idx_reg],
+        ctx.emit_inst(
+            LoadIndex(result_reg=elem_reg, arr_reg=val_reg, index_reg=idx_reg)
         )
         lower_store_target(ctx, child, elem_reg, parent_node)
 
@@ -84,10 +100,13 @@ def lower_call(ctx: TreeSitterEmitContext, node) -> Register:
         obj_reg = ctx.lower_expr(obj_node)
         method_name = ctx.node_text(attr_node)
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_METHOD,
-            result_reg=reg,
-            operands=[obj_reg, method_name] + arg_regs,
+        ctx.emit_inst(
+            CallMethod(
+                result_reg=reg,
+                obj_reg=obj_reg,
+                method_name=method_name,
+                args=tuple(arg_regs),
+            ),
             node=node,
         )
         return reg
@@ -96,10 +115,8 @@ def lower_call(ctx: TreeSitterEmitContext, node) -> Register:
     if func_node and func_node.type == PythonNodeType.IDENTIFIER:
         func_name = ctx.node_text(func_node)
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=reg,
-            operands=[func_name] + arg_regs,
+        ctx.emit_inst(
+            CallFunction(result_reg=reg, func_name=func_name, args=tuple(arg_regs)),
             node=node,
         )
         return reg
@@ -107,10 +124,8 @@ def lower_call(ctx: TreeSitterEmitContext, node) -> Register:
     # Dynamic / unknown call target
     target_reg = ctx.lower_expr(func_node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_UNKNOWN,
-        result_reg=reg,
-        operands=[target_reg] + arg_regs,
+    ctx.emit_inst(
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -132,18 +147,16 @@ def lower_tuple_literal(ctx: TreeSitterEmitContext, node) -> Register:
     ]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
-    ctx.emit(
-        Opcode.NEW_ARRAY,
-        result_reg=arr_reg,
-        operands=["tuple", size_reg],
+    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
+    ctx.emit_inst(
+        NewArray(result_reg=arr_reg, type_hint="tuple", size_reg=size_reg),
         node=node,
     )
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)
         idx_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
-        ctx.emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg))
     return arr_reg
 
 
@@ -165,26 +178,22 @@ def lower_conditional_expr(ctx: TreeSitterEmitContext, node) -> Register:
     false_label = ctx.fresh_label("ternary_false")
     end_label = ctx.fresh_label("ternary_end")
 
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[true_label, false_label],
-    )
+    ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)))
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     true_reg = ctx.lower_expr(true_expr)
     result_var = f"__ternary_{ctx.label_counter}"
-    ctx.emit(Opcode.DECL_VAR, operands=[result_var, true_reg])
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(DeclVar(name=result_var, value_reg=true_reg))
+    ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=false_label)
+    ctx.emit_inst(Label_(label=false_label))
     false_reg = ctx.lower_expr(false_expr)
-    ctx.emit(Opcode.DECL_VAR, operands=[result_var, false_reg])
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(DeclVar(name=result_var, value_reg=false_reg))
+    ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
     result_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=result_reg, operands=[result_var])
+    ctx.emit_inst(LoadVar(result_reg=result_reg, name=result_var))
     return result_reg
 
 
@@ -201,17 +210,15 @@ def lower_list_comprehension(ctx: TreeSitterEmitContext, node) -> Register:
     # Create result array
     result_arr = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=size_reg, operands=["0"])
-    ctx.emit(
-        Opcode.NEW_ARRAY,
-        result_reg=result_arr,
-        operands=["list", size_reg],
+    ctx.emit_inst(Const(result_reg=size_reg, value="0"))
+    ctx.emit_inst(
+        NewArray(result_reg=result_arr, type_hint="list", size_reg=size_reg),
         node=node,
     )
 
     # Result index counter
     result_idx = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=result_idx, operands=["0"])
+    ctx.emit_inst(Const(result_reg=result_idx, value="0"))
 
     end_label = ctx.fresh_label("comp_end")
 
@@ -219,7 +226,7 @@ def lower_list_comprehension(ctx: TreeSitterEmitContext, node) -> Register:
         ctx, for_clauses, if_clauses, body_expr, result_arr, result_idx, node, end_label
     )
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
     return result_arr
 
 
@@ -246,27 +253,25 @@ def _lower_comprehension_loop(
 
     iter_reg = ctx.lower_expr(iterable_node) if iterable_node else ctx.fresh_reg()
     init_idx = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
-    ctx.emit(Opcode.DECL_VAR, operands=["__for_idx", init_idx])
+    ctx.emit_inst(Const(result_reg=init_idx, value="0"))
+    ctx.emit_inst(DeclVar(name="__for_idx", value_reg=init_idx))
     len_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
+    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
 
     loop_label = ctx.fresh_label("comp_cond")
     body_label = ctx.fresh_label("comp_body")
     loop_end_label = ctx.fresh_label("comp_loop_end")
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     idx_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=idx_reg, operands=["__for_idx"])
+    ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
     cond_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=cond_reg, operands=["<", idx_reg, len_reg])
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[body_label, loop_end_label],
+    ctx.emit_inst(Binop(result_reg=cond_reg, operator="<", left=idx_reg, right=len_reg))
+    ctx.emit_inst(
+        BranchIf(cond_reg=cond_reg, branch_targets=(body_label, loop_end_label))
     )
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     # Register the loop var name as a base-level variable so that
     # declare_block_var will mangle it in the comprehension scope,
     # preventing the comprehension variable from leaking (Python 3 semantics).
@@ -274,10 +279,10 @@ def _lower_comprehension_loop(
         ctx._base_declared_vars.add(ctx.node_text(loop_var))
     ctx.enter_block_scope()
     elem_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
+    ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
     if loop_var and loop_var.type == PythonNodeType.IDENTIFIER:
         var_name = ctx.declare_block_var(ctx.node_text(loop_var))
-        ctx.emit(Opcode.DECL_VAR, operands=[var_name, elem_reg])
+        ctx.emit_inst(DeclVar(name=var_name, value_reg=elem_reg))
     else:
         lower_store_target(ctx, loop_var, elem_reg, node)
 
@@ -300,34 +305,40 @@ def _lower_comprehension_loop(
         if if_clauses:
             filter_expr = next((c for c in if_clauses[0].children if c.is_named), None)
             filter_reg = ctx.lower_expr(filter_expr)
-            ctx.emit(
-                Opcode.BRANCH_IF,
-                operands=[filter_reg],
-                branch_targets=[store_label, skip_label],
+            ctx.emit_inst(
+                BranchIf(
+                    cond_reg=filter_reg,
+                    branch_targets=(store_label, skip_label),
+                )
             )
 
-        ctx.emit(Opcode.LABEL, label=store_label)
+        ctx.emit_inst(Label_(label=store_label))
         val_reg = ctx.lower_expr(body_expr)
-        ctx.emit(Opcode.STORE_INDEX, operands=[result_arr, result_idx, val_reg])
-        one_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
-        new_result_idx = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.BINOP,
-            result_reg=new_result_idx,
-            operands=["+", result_idx, one_reg],
+        ctx.emit_inst(
+            StoreIndex(arr_reg=result_arr, index_reg=result_idx, value_reg=val_reg)
         )
-        ctx.emit(Opcode.DECL_VAR, operands=["__comp_result_idx", new_result_idx])
+        one_reg = ctx.fresh_reg()
+        ctx.emit_inst(Const(result_reg=one_reg, value="1"))
+        new_result_idx = ctx.fresh_reg()
+        ctx.emit_inst(
+            Binop(
+                result_reg=new_result_idx,
+                operator="+",
+                left=result_idx,
+                right=one_reg,
+            )
+        )
+        ctx.emit_inst(DeclVar(name="__comp_result_idx", value_reg=new_result_idx))
 
         if skip_label:
-            ctx.emit(Opcode.LABEL, label=skip_label)
+            ctx.emit_inst(Label_(label=skip_label))
 
     ctx.exit_block_scope()
 
     # Increment source index
     _emit_for_increment(ctx, idx_reg, loop_label)
 
-    ctx.emit(Opcode.LABEL, label=loop_end_label)
+    ctx.emit_inst(Label_(label=loop_end_label))
 
 
 # ── dict comprehension ────────────────────────────────────────
@@ -344,12 +355,7 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> Register:
 
     # Create result object
     result_obj = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.NEW_OBJECT,
-        result_reg=result_obj,
-        operands=["dict"],
-        node=node,
-    )
+    ctx.emit_inst(NewObject(result_reg=result_obj, type_hint="dict"), node=node)
 
     # Extract loop var and iterable from for_in_clause
     clause_named = [c for c in for_clause.children if c.is_named]
@@ -358,37 +364,33 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> Register:
 
     iter_reg = ctx.lower_expr(iterable_node) if iterable_node else ctx.fresh_reg()
     init_idx = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
-    ctx.emit(Opcode.DECL_VAR, operands=["__for_idx", init_idx])
+    ctx.emit_inst(Const(result_reg=init_idx, value="0"))
+    ctx.emit_inst(DeclVar(name="__for_idx", value_reg=init_idx))
     len_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
+    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
 
     loop_label = ctx.fresh_label("dcomp_cond")
     body_label = ctx.fresh_label("dcomp_body")
     end_label = ctx.fresh_label("dcomp_end")
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     idx_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=idx_reg, operands=["__for_idx"])
+    ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
     cond_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=cond_reg, operands=["<", idx_reg, len_reg])
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[body_label, end_label],
-    )
+    ctx.emit_inst(Binop(result_reg=cond_reg, operator="<", left=idx_reg, right=len_reg))
+    ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)))
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     # Register the loop var name as a base-level variable so that
     # declare_block_var will mangle it (Python 3 comprehension scoping).
     if loop_var and loop_var.type == PythonNodeType.IDENTIFIER:
         ctx._base_declared_vars.add(ctx.node_text(loop_var))
     ctx.enter_block_scope()
     elem_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
+    ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
     if loop_var and loop_var.type == PythonNodeType.IDENTIFIER:
         var_name = ctx.declare_block_var(ctx.node_text(loop_var))
-        ctx.emit(Opcode.DECL_VAR, operands=[var_name, elem_reg])
+        ctx.emit_inst(DeclVar(name=var_name, value_reg=elem_reg))
     else:
         lower_store_target(ctx, loop_var, elem_reg, node)
 
@@ -398,13 +400,11 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> Register:
     if if_clauses:
         filter_expr = next((c for c in if_clauses[0].children if c.is_named), None)
         filter_reg = ctx.lower_expr(filter_expr)
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[filter_reg],
-            branch_targets=[store_label, skip_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=filter_reg, branch_targets=(store_label, skip_label))
         )
 
-    ctx.emit(Opcode.LABEL, label=store_label)
+    ctx.emit_inst(Label_(label=store_label))
     # Evaluate key and value from pair
     key_node = pair_node.child_by_field_name("key") if pair_node else None
     val_node = (
@@ -414,17 +414,17 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> Register:
     )
     key_reg = ctx.lower_expr(key_node) if key_node else ctx.fresh_reg()
     val_reg = ctx.lower_expr(val_node) if val_node else ctx.fresh_reg()
-    ctx.emit(Opcode.STORE_INDEX, operands=[result_obj, key_reg, val_reg])
+    ctx.emit_inst(StoreIndex(arr_reg=result_obj, index_reg=key_reg, value_reg=val_reg))
 
     if skip_label:
-        ctx.emit(Opcode.LABEL, label=skip_label)
+        ctx.emit_inst(Label_(label=skip_label))
 
     ctx.exit_block_scope()
 
     # Increment source index
     _emit_for_increment(ctx, idx_reg, loop_label)
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
     return result_obj
 
 
@@ -438,9 +438,9 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> Register:
     end_label = ctx.fresh_label(f"end_{func_name}")
 
     # Branch past the function body
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Label_(label=func_label))
 
     # Lower parameters
     params_node = next(
@@ -462,9 +462,9 @@ def lower_lambda(ctx: TreeSitterEmitContext, node) -> Register:
         None,
     )
     body_reg = ctx.lower_expr(body_node)
-    ctx.emit(Opcode.RETURN, operands=[body_reg])
+    ctx.emit_inst(Return_(value_reg=body_reg))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
     # Reference to the lambda function
     ref_reg = ctx.fresh_reg()
@@ -516,17 +516,14 @@ def _lower_python_param(ctx: TreeSitterEmitContext, child, param_index: int) -> 
     raw_type = extract_type_from_field(ctx, child, "type")
     type_hint = normalize_type_hint(raw_type, ctx.type_map)
     param_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.SYMBOLIC,
-        result_reg=param_reg,
-        operands=[f"{constants.PARAM_PREFIX}{pname}"],
+    ctx.emit_inst(
+        Symbolic(result_reg=param_reg, hint=f"{constants.PARAM_PREFIX}{pname}"),
         node=child,
     )
     ctx.seed_register_type(param_reg, type_hint)
     ctx.seed_param_type(pname, type_hint)
-    ctx.emit(
-        Opcode.DECL_VAR,
-        operands=[pname, f"%{ctx.reg_counter - 1}"],
+    ctx.emit_inst(
+        DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"),
         node=child,
     )
     ctx.seed_var_type(pname, type_hint)
@@ -568,16 +565,14 @@ def lower_generator_expression(ctx: TreeSitterEmitContext, node) -> Register:
 
     result_arr = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=size_reg, operands=["0"])
-    ctx.emit(
-        Opcode.NEW_ARRAY,
-        result_reg=result_arr,
-        operands=["list", size_reg],
+    ctx.emit_inst(Const(result_reg=size_reg, value="0"))
+    ctx.emit_inst(
+        NewArray(result_reg=result_arr, type_hint="list", size_reg=size_reg),
         node=node,
     )
 
     result_idx = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=result_idx, operands=["0"])
+    ctx.emit_inst(Const(result_reg=result_idx, value="0"))
 
     end_label = ctx.fresh_label("gen_end")
 
@@ -592,14 +587,12 @@ def lower_generator_expression(ctx: TreeSitterEmitContext, node) -> Register:
         end_label,
     )
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
     # Wrap as generator call
     gen_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=gen_reg,
-        operands=["generator", result_arr],
+    ctx.emit_inst(
+        CallFunction(result_reg=gen_reg, func_name="generator", args=(result_arr,)),
         node=node,
     )
     return gen_reg
@@ -616,15 +609,10 @@ def lower_set_comprehension(ctx: TreeSitterEmitContext, node) -> Register:
     if_clauses = [c for c in children if c.type == PythonNodeType.IF_CLAUSE]
 
     result_obj = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.NEW_OBJECT,
-        result_reg=result_obj,
-        operands=["set"],
-        node=node,
-    )
+    ctx.emit_inst(NewObject(result_reg=result_obj, type_hint="set"), node=node)
 
     result_idx = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=result_idx, operands=["0"])
+    ctx.emit_inst(Const(result_reg=result_idx, value="0"))
 
     end_label = ctx.fresh_label("setcomp_end")
 
@@ -639,7 +627,7 @@ def lower_set_comprehension(ctx: TreeSitterEmitContext, node) -> Register:
         end_label,
     )
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
     return result_obj
 
 
@@ -659,17 +647,12 @@ def lower_set_literal(ctx: TreeSitterEmitContext, node) -> Register:
         )
     ]
     obj_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.NEW_OBJECT,
-        result_reg=obj_reg,
-        operands=["set"],
-        node=node,
-    )
+    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint="set"), node=node)
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)
         idx_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
-        ctx.emit(Opcode.STORE_INDEX, operands=[obj_reg, idx_reg, val_reg])
+        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg))
     return obj_reg
 
 
@@ -681,10 +664,8 @@ def lower_yield(ctx: TreeSitterEmitContext, node) -> Register:
     named_children = [c for c in node.children if c.is_named]
     arg_regs = [ctx.lower_expr(c) for c in named_children]
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["yield"] + arg_regs,
+    ctx.emit_inst(
+        CallFunction(result_reg=reg, func_name="yield", args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -698,10 +679,8 @@ def lower_await(ctx: TreeSitterEmitContext, node) -> Register:
     named_children = [c for c in node.children if c.is_named]
     arg_regs = [ctx.lower_expr(c) for c in named_children]
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["await"] + arg_regs,
+    ctx.emit_inst(
+        CallFunction(result_reg=reg, func_name="await", args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -726,11 +705,7 @@ def lower_named_expression(ctx: TreeSitterEmitContext, node) -> Register:
     value_node = node.child_by_field_name(ctx.constants.subscript_value_field)
     val_reg = ctx.lower_expr(value_node)
     var_name = ctx.node_text(name_node)
-    ctx.emit(
-        Opcode.DECL_VAR,
-        operands=[var_name, val_reg],
-        node=node,
-    )
+    ctx.emit_inst(DeclVar(name=var_name, value_reg=val_reg), node=node)
     return val_reg
 
 
@@ -748,11 +723,8 @@ def lower_python_subscript(ctx: TreeSitterEmitContext, node) -> Register:
         return _lower_slice_with_collection(ctx, idx_node, obj_reg)
     idx_reg = ctx.lower_expr(idx_node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_INDEX,
-        result_reg=reg,
-        operands=[obj_reg, idx_reg],
-        node=node,
+    ctx.emit_inst(
+        LoadIndex(result_reg=reg, arr_reg=obj_reg, index_reg=idx_reg), node=node
     )
     return reg
 
@@ -812,10 +784,12 @@ def _lower_slice_with_collection(
         step_reg = ctx.lower_expr(named_after_second_colon[0])
 
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["slice", collection_reg, start_reg, stop_reg, step_reg],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=reg,
+            func_name="slice",
+            args=(collection_reg, start_reg, stop_reg, step_reg),
+        ),
         node=slice_node,
     )
     return reg
@@ -824,7 +798,7 @@ def _lower_slice_with_collection(
 def _lower_slice_none(ctx: TreeSitterEmitContext) -> Register:
     """Emit a CONST('None') for a missing slice component."""
     reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=reg, operands=[ctx.constants.none_literal])
+    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
     return reg
 
 
@@ -834,12 +808,7 @@ def _lower_slice_none(ctx: TreeSitterEmitContext) -> Register:
 def lower_noop_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower a no-op expression node (e.g. keyword_separator, positional_separator)."""
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=reg,
-        operands=[ctx.constants.none_literal],
-        node=node,
-    )
+    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal), node=node)
     return reg
 
 
@@ -860,18 +829,16 @@ def lower_list_pattern(ctx: TreeSitterEmitContext, node) -> Register:
     ]
     arr_reg = ctx.fresh_reg()
     size_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=size_reg, operands=[str(len(elems))])
-    ctx.emit(
-        Opcode.NEW_ARRAY,
-        result_reg=arr_reg,
-        operands=["list", size_reg],
+    ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
+    ctx.emit_inst(
+        NewArray(result_reg=arr_reg, type_hint="list", size_reg=size_reg),
         node=node,
     )
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)
         idx_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=idx_reg, operands=[str(i)])
-        ctx.emit(Opcode.STORE_INDEX, operands=[arr_reg, idx_reg, val_reg])
+        ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
+        ctx.emit_inst(StoreIndex(arr_reg=arr_reg, index_reg=idx_reg, value_reg=val_reg))
     return arr_reg
 
 
@@ -881,12 +848,7 @@ def lower_list_pattern(ctx: TreeSitterEmitContext, node) -> Register:
 def lower_dict_pattern(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower {"key": pattern, ...} in match/case as NEW_OBJECT with key/value pairs."""
     obj_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.NEW_OBJECT,
-        result_reg=obj_reg,
-        operands=["dict_pattern"],
-        node=node,
-    )
+    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint="dict_pattern"), node=node)
     pairs = [
         c
         for c in node.children
@@ -903,12 +865,13 @@ def lower_dict_pattern(ctx: TreeSitterEmitContext, node) -> Register:
         if len(named) >= 2:
             key_reg = ctx.lower_expr(named[0])
             val_reg = ctx.lower_expr(named[1])
-            ctx.emit(Opcode.STORE_INDEX, operands=[obj_reg, key_reg, val_reg])
+            ctx.emit_inst(
+                StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg)
+            )
         elif len(named) == 1:
             key_reg = ctx.lower_expr(named[0])
-            ctx.emit(
-                Opcode.STORE_INDEX,
-                operands=[obj_reg, key_reg, key_reg],
+            ctx.emit_inst(
+                StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=key_reg)
             )
     return obj_reg
 
@@ -930,11 +893,8 @@ def lower_python_string(ctx: TreeSitterEmitContext, node) -> Register:
             parts.append(lower_interpolation(ctx, child))
         elif child.type == PythonNodeType.STRING_CONTENT:
             frag_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CONST,
-                result_reg=frag_reg,
-                operands=[ctx.node_text(child)],
-                node=child,
+            ctx.emit_inst(
+                Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
             )
             parts.append(frag_reg)
         # skip string_start, string_end delimiters
@@ -963,8 +923,8 @@ def _emit_for_increment(
     ctx: TreeSitterEmitContext, idx_reg: str, loop_label: str
 ) -> None:
     one_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
+    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     new_idx = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=new_idx, operands=["+", idx_reg, one_reg])
-    ctx.emit(Opcode.STORE_VAR, operands=["__for_idx", new_idx])
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(Binop(result_reg=new_idx, operator="+", left=idx_reg, right=one_reg))
+    ctx.emit_inst(StoreVar(name="__for_idx", value_reg=new_idx))
+    ctx.emit_inst(Branch(label=loop_label))
