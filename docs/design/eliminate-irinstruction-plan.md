@@ -24,209 +24,165 @@ is removed.
 - `InstructionBase` provides `map_registers(fn)` and `map_labels(fn)` for generic transforms
 - Each typed instruction has standalone `__str__` matching the current flat format
 
-## Current State (after phases 1–3 of the original plan)
+## Current State (after Layers 1–4, as of 2026-03-24)
 
-- 30 typed instruction classes exist in `interpreter/instructions.py`
-- All 28 VM handler functions use `to_typed()` for field access
-- 67 `operands[N]` accesses in infrastructure migrated to typed fields
-- Typed instructions carry IRInstruction-compatible interface (`operands` property, `opcode` property)
-- Frontends: `common/` migrated to `emit_inst()` (190 calls), all other frontends still use flat `emit(Opcode.X, ...)`
-- Register operand fields are `str`, not `Register`
-- Instruction lists are `list[IRInstruction]` everywhere
-- `emit_inst()` appends typed instructions directly to `list[IRInstruction]` (duck-typing)
+**Completed:**
+- 31 typed instruction classes in `interpreter/instructions.py`
+- All register-holding fields are `Register` (Layer 1, red-dragon-e2pj ✓)
+- `SpreadArguments.register` is `Register` (Layer 1)
+- `InstructionBase.map_registers(fn)` and `map_labels(fn)` implemented (Layer 2, red-dragon-p72n ✓)
+- `Register.rebase(offset)` method (Layer 2)
+- Type inference uses type-keyed dispatch, no `to_typed()` in handlers (Layer 3b, red-dragon-x37k ✓)
+- CFG/dataflow/interprocedural use `isinstance` checks (Layer 3c, red-dragon-3h0y ✓)
+- Linker uses `map_registers`/`map_labels` (Layer 3d, red-dragon-30vm ✓)
+- COBOL `ir_encoders.py` constructs typed instructions (Layer 3e, red-dragon-2la9 ✓)
+- LLM frontend uses `dataclasses.replace()` instead of operand mutation (Layer 3e)
+- All expression handlers return `-> Register` (Layer 4a, red-dragon-8e1x ✓)
+- All 15 tree-sitter frontends + `_base.py` + `context.py` + COBOL `emit_context.py` use `emit_inst()` (Layer 4, 17 issues ✓)
+
+**Remaining bridge usage:**
+- `to_typed()` still called at normalization points: `type_inference.py` dispatch, `cfg.py` `_normalize_structural()`, linker `_transform_instruction()`. These convert mixed-type lists (IRInstruction + typed) at entry points.
+- `to_flat()` still called by `InstructionBase.__str__()` and linker's `_transform_instruction()`.
+- `operands` properties still used by 4 handler call sites (`arithmetic.py`, `variables.py`) — blocked by COBOL literal operand issue (red-dragon-pyww).
+- `emit()` method still defined in `_base.py`, `context.py`, `cobol/emit_context.py` — used by 59 COBOL frontend calls (red-dragon-oczk).
+- 3 `opcode==` comparisons in `registry.py` (red-dragon-b6m4).
+- `_as_register()` workaround in `to_typed` converters (red-dragon-pyww).
+- `_resolve_reg` type annotation and `dataflow.py` `str()` coercion (red-dragon-j1o6).
 
 ## Layers
 
-### Layer 1: Register fields in instruction classes
+### Layer 1: Register fields in instruction classes ✓
 
-**Issue:** red-dragon-e2pj
-**Scope:** `interpreter/instructions.py`, `interpreter/ir.py` (SpreadArguments)
+**Issue:** red-dragon-e2pj (CLOSED)
 
-Changes:
-- All `_reg: str = ""` fields → `_reg: Register = NO_REGISTER`
-- `left: str`, `right: str`, `operand: str` → `Register`
-- `args: tuple[str | SpreadArguments, ...]` → `tuple[Register | SpreadArguments, ...]`
-- `value_reg: str | None` (Return_, Throw_) → `Register | None`
-- `SpreadArguments.register: str` → `Register`
-- `operands` properties: `str()` Register values (temporary compat bridge)
-- `to_typed()` converters: wrap operand strings as `Register(...)`
-- `to_flat()` converters: `str()` Register values back
+All register-holding operand fields changed from `str` to `Register`. `operands` properties
+emit `str()` values for backward compat. `to_typed()` converters wrap operands as `Register(...)`.
+`to_flat()` converters `str()` values back. Also fixed boundary issues in `vm.py` (`_resolve_reg`)
+and `dataflow.py` (`_is_temporary_register`).
 
-**Test gate:** All existing tests pass unchanged. Round-trip tests pass.
+**Discovery:** COBOL `ir_encoders.py` places literal ints in call operands, forcing `_as_register()`
+workaround. Filed as red-dragon-pyww. Also: `StoreIndex.value_reg` accepts `SpreadArguments`
+at runtime (from JS frontend) despite being typed as `Register`.
 
-**Why safe:** `Register.__eq__(str)` handles comparison. `str(Register)` returns name.
-Consumers that `str()` wrap continue to work. Consumers that use bare field values
-work via `Register.__eq__`.
+### Layer 2: `map_registers()` / `map_labels()` on InstructionBase ✓
 
-### Layer 2: `map_registers()` / `map_labels()` on InstructionBase
+**Issue:** red-dragon-p72n (CLOSED)
 
-**Issue:** red-dragon-p72n
-**Scope:** `interpreter/instructions.py`, `interpreter/register.py`
+`Register.rebase(offset)`, `InstructionBase.map_registers(fn)`, `InstructionBase.map_labels(fn)`
+all implemented. Handles `Register`, `Register | None`, `tuple[Register | SpreadArguments, ...]`,
+`CodeLabel`, `tuple[CodeLabel, ...]` fields. Python 3.13 `types.UnionType` handled.
 
-Changes:
-- Add `Register.rebase(offset: int) -> Register` method
-- Add `InstructionBase.map_registers(fn: Callable[[Register], Register]) -> Self`
-  - Introspects fields via `dataclasses.fields()`
-  - Applies `fn` to all `Register` fields, `Register | None` fields, and
-    `tuple[Register | SpreadArguments, ...]` fields (mapping Register elements only)
-  - Returns new instance via `dataclasses.replace()`
-- Add `InstructionBase.map_labels(fn: Callable[[CodeLabel], CodeLabel]) -> Self`
-  - Same pattern for `CodeLabel` fields and `tuple[CodeLabel, ...]` fields
-
-**Test gate:** Unit tests for map_registers/map_labels on each instruction type.
+**Discovery:** `map_registers` needed a fix to skip non-Register literals in args tuples
+(strings/ints from COBOL IR that `_as_register` leaves as-is).
 
 ### Layer 3: Migrate consumers to typed field access
 
-All non-frontend interpreter code that reads instructions. Decomposed into
-5 independently-committable sub-issues.
+#### Layer 3a: Handlers + executor dispatch — DEFERRED
 
-#### Layer 3a: Handlers + executor dispatch (~100 sites)
+**Issue:** red-dragon-ufnx (CLOSED — deferred)
 
-**Issue:** red-dragon-ufnx
-**Depends on:** Layer 2
-**Scope:** `interpreter/vm/executor.py`, `interpreter/handlers/*.py` (7 files)
+Executor dispatch was already clean (0 markers). Only 4 `operands[]` accesses remain in
+`arithmetic.py` (3) and `variables.py` (1). These cannot be replaced with typed field access
+until the COBOL literal operand issue is fixed (red-dragon-pyww), because typed fields return
+`Register` objects but the handlers need raw ints/strings from the `operands` list.
 
-Changes:
-- `interpreter/vm/executor.py`: dispatch from `dict[Opcode, handler]` → `dict[type, handler]`
-- All 7 handler files: remove `to_typed()` calls — `inst` IS the typed instruction.
-  Remove `inst.operands[N]` access. Handler signatures: `inst: IRInstruction` →
-  specific typed instruction (e.g., `inst: Binop`).
+#### Layer 3b: Type inference ✓
 
-**Test gate:** All tests pass. No `to_typed()` calls in handlers. Dispatch uses `type()`.
+**Issue:** red-dragon-x37k (CLOSED)
 
-#### Layer 3b: Type inference (~30 sites)
+Much larger than estimated (~30 → actual ~80 sites). Dispatch table changed from
+`dict[Opcode, handler]` to `dict[type, handler]`. All 16 handler functions updated
+with specific typed instruction signatures. `to_typed()` calls removed from handlers,
+centralized at dispatch point for IRInstruction normalization.
 
-**Issue:** red-dragon-x37k
-**Depends on:** Layer 1
-**Scope:** `interpreter/types/type_inference.py`
+**Discovery:** `dict[str, TypeExpr]` annotations stay as `str` — they store variable
+names, not register references.
 
-Changes:
-- Remove 16 `to_typed()` calls, use typed fields directly
-- `register_types: dict[str, TypeExpr]` → `dict[Register, TypeExpr]`
-- Remove `inst.operands` length guards
+#### Layer 3c: CFG + dataflow + interprocedural ✓
 
-**Test gate:** All tests pass. No `to_typed()` in type_inference.py.
+**Issue:** red-dragon-3h0y (CLOSED)
 
-#### Layer 3c: CFG + dataflow + interprocedural (~50 sites)
+20 `opcode==` comparisons replaced with `isinstance` across cfg.py, dataflow.py,
+interprocedural/{summaries,call_graph,propagation}.py. Also updated viz/panels/dataflow_graph_panel.py
+and tests/unit/test_cfg.py.
 
-**Issue:** red-dragon-3h0y
-**Depends on:** Layer 1
-**Scope:** `interpreter/cfg.py`, `interpreter/dataflow.py`, `interpreter/interprocedural/*`
+**Discovery:** cfg.py added `_normalize_structural()` helper that converts structural opcodes
+to typed form at `build_cfg` entry. This introduces a `to_typed()` call at a normalization
+point — cannot be removed until all instruction lists are pure typed.
 
-Changes:
-- `interpreter/cfg.py`: `inst.opcode == Opcode.LABEL` → `isinstance(inst, Label_)`.
-  `inst.opcode == Opcode.BRANCH` → `isinstance(inst, Branch)`. Etc.
-- `interpreter/dataflow.py`: typed field access, `Register` in type annotations.
-- `interpreter/interprocedural/*`: typed field access, remove `to_typed()`.
+#### Layer 3d: Project infrastructure ✓
 
-**Test gate:** All tests pass. No `to_typed()` or opcode comparisons in these files.
+**Issue:** red-dragon-30vm (CLOSED)
 
-#### Layer 3d: Project infrastructure (~30 sites)
+Linker uses `map_registers(rebase)` + `map_labels(namespace)` instead of operand-by-operand
+iteration. `isinstance` checks in linker and compiler. Dead `_rebase_operand` helper removed.
 
-**Issue:** red-dragon-30vm
-**Depends on:** Layer 2 (needs `map_registers`/`map_labels`)
-**Scope:** `interpreter/project/linker.py`, `interpreter/project/compiler.py`
+**Discovery:** Linker still calls `to_typed()` + `to_flat()` in `_transform_instruction()`
+because the instruction list is mixed-type. The `to_flat()` call at the end reconverts to
+IRInstruction for downstream compatibility. Both calls can be removed once all instruction
+lists are pure typed.
 
-Changes:
-- `interpreter/project/linker.py`: operand-by-operand iteration →
-  `map_registers(rebase)` + `map_labels(namespace)`. Construct typed instructions
-  directly instead of `IRInstruction(...)`.
-- `interpreter/project/compiler.py`: typed field access.
+#### Layer 3e: LLM + COBOL + registry + misc ✓
 
-**Test gate:** All tests pass. No `IRInstruction(...)` construction in linker/compiler.
+**Issue:** red-dragon-2la9 (CLOSED)
 
-#### Layer 3e: LLM + COBOL + registry + misc (~40 sites)
+128 sites migrated (much larger than estimated ~40). COBOL `ir_encoders.py` dominated
+with 106 `IRInstruction` constructions → typed instructions. LLM frontend mutation
+→ `dataclasses.replace()`. `run.py` uses `isinstance` checks.
 
-**Issue:** red-dragon-2la9
-**Depends on:** Layer 1
-**Scope:** `interpreter/llm/*`, `interpreter/cobol/ir_encoders.py`,
-`interpreter/registry.py`, `interpreter/run.py`, `interpreter/ir_stats.py`,
-`interpreter/cfg_types.py`, `interpreter/frontend.py`
+**Discovery:** `registry.py` left 3 `opcode==` comparisons unfixed because instruction
+list is mixed-type. Filed as red-dragon-b6m4.
 
-Changes:
-- `interpreter/llm/*`: replace `inst.operands[0] = x` mutation with
-  `instructions[i] = dataclasses.replace(inst, value=x)`.
-- `interpreter/cobol/ir_encoders.py`: construct typed instructions instead of `IRInstruction(...)`.
-- `interpreter/registry.py`: typed field access, `isinstance` checks.
-- `interpreter/run.py`: `isinstance` pattern.
-- `interpreter/ir_stats.py`: use `type(inst).__name__` or `inst.opcode` property.
-- `interpreter/cfg_types.py`, `interpreter/frontend.py`: `list[IRInstruction]` → `list[Instruction]`.
+### Layer 4a: `lower_expr() -> Register` signature change ✓
 
-**Test gate:** All tests pass. No `IRInstruction(...)` construction in these files.
+**Issue:** red-dragon-8e1x (CLOSED)
 
-### Layer 4a: `lower_expr() -> Register` signature change
+~316 expression handler signatures changed from `-> str` to `-> Register` across 33 files.
+Methods returning variable names, operators, type strings correctly excluded.
 
-**Issue:** red-dragon-8e1x
-**Depends on:** Layer 1
-**Scope:** `interpreter/frontends/_base.py`, `interpreter/frontends/context.py`,
-all 15 frontend directories, `interpreter/frontends/typescript.py`
+### Layer 4: Migrate producers (frontends) ✓
 
-Changes:
-- Change `lower_expr()` return type in `_base.py` from `-> str` to `-> Register`
-- Change all ~350 expression handler return annotations across all frontends
-- Single atomic commit — mechanical find-and-replace
+All 15 tree-sitter frontends + `_base.py` + `context.py` + COBOL `emit_context.py` migrated.
+~1,300 `emit(Opcode.X, ...)` calls converted to `emit_inst(TypedInstruction(...))`.
 
-**Why safe:** `Register.__eq__(str)` bridge handles all downstream comparisons.
-All call sites that receive the return value continue to work unchanged.
+**17 issues all CLOSED:** 9qh8, 2pd7, fa8o, i0vm, 98uv, 8tm0, fpmm, eh2q, 4soe,
+io2z, zgu9, s2d9, cwbt, nv63, wd6g, um47, di1g.
 
-**Test gate:** All tests pass. No `lower_expr` signatures returning `str`.
-
-### Layer 4: Migrate producers (frontends)
-
-All frontend `emit(Opcode.X, ...)` calls → `emit_inst(TypedInstruction(...))`.
-Decomposed into 19 independently-committable sub-issues. Each frontend migrates
-its own calls without removing the `emit()` method (removed in Layer 5).
-
-All 19 sub-issues depend on Layer 4a.
-
-#### Layer 4 sub-issues
-
-| Sub-issue | Target | Sites | Issue |
-|-----------|--------|-------|-------|
-| 4-base | `_base.py` + `context.py` | 45 | red-dragon-9qh8 |
-| 4-c | `frontends/c/` | 46 | red-dragon-2pd7 |
-| 4-lua | `frontends/lua/` | 49 | red-dragon-fa8o |
-| 4-ts | `frontends/typescript.py` | 42 | red-dragon-i0vm |
-| 4-cpp | `frontends/cpp/` | 54 | red-dragon-98uv |
-| 4-scala | `frontends/scala/` | 70 | red-dragon-8tm0 |
-| 4-go | `frontends/go/` | 83 | red-dragon-fpmm |
-| 4-python | `frontends/python/` | 84 | red-dragon-eh2q |
-| 4-js | `frontends/javascript/` | 91 | red-dragon-4soe |
-| 4-pascal | `frontends/pascal/` | 99 | red-dragon-io2z |
-| 4-php | `frontends/php/` | 103 | red-dragon-zgu9 |
-| 4-csharp | `frontends/csharp/` | 105 | red-dragon-s2d9 |
-| 4-java | `frontends/java/` | 111 | red-dragon-cwbt |
-| 4-kotlin | `frontends/kotlin/` | 119 | red-dragon-nv63 |
-| 4-ruby | `frontends/ruby/` | 120 | red-dragon-wd6g |
-| 4-rust | `frontends/rust/` | 127 | red-dragon-um47 |
-| 4-cobol | `cobol/emit_context.py` | 9 | red-dragon-di1g |
-
-Each sub-issue:
-- Converts all `emit(Opcode.X, ...)` calls to `emit_inst(TypedInstruction(...))`
-- Passes `Register` objects directly to instruction constructors (no `str()` wrapping)
-- One commit per frontend
-- All 17 sub-issues are independent of each other — any ordering works
-
-**Test gate per sub-issue:** All tests pass. No `emit(Opcode.` calls in the target files.
-
-**Test gate for Layer 4 overall:** No `emit(Opcode.` calls remaining anywhere.
-All frontends produce typed instructions directly.
+**Remaining:** 59 `emit(Opcode.` calls in COBOL-specific frontend files (red-dragon-oczk).
+The `emit()` method itself stays until these are converted.
 
 ### Layer 5: Remove the bridge
 
 **Issue:** red-dragon-ee66
-**Depends on:** All of Layer 3 (3a–3e) and all of Layer 4 (19 sub-issues)
+**Depends on:** All prerequisite issues below must be resolved first.
+
+#### Prerequisites (must resolve before Layer 5)
+
+| Issue | Description | Why blocking |
+|-------|-------------|-------------|
+| pyww | Fix COBOL ir_encoders literal operands; remove `_as_register()` | Literal ints in Register-typed fields violate type safety; `_as_register()` is a workaround |
+| oczk | Migrate 59 COBOL frontend `emit(Opcode.)` calls | Can't delete `emit()` method while callers exist |
+| b6m4 | Migrate 3 registry.py `opcode==` comparisons | Mixed-type list needs normalization |
+| j1o6 | Fix `_resolve_reg` annotation + `dataflow.py` `str()` coercion | Boundary cleanup before removing `Register.__eq__(str)` |
+
+#### Layer 5 scope
+
 **Scope:** `interpreter/ir.py`, `interpreter/instructions.py`, `interpreter/register.py`,
-`interpreter/frontends/_base.py`, `interpreter/frontends/context.py`, + import cleanup across ~30 files
+`interpreter/frontends/_base.py`, `interpreter/frontends/context.py`,
+`interpreter/cobol/emit_context.py`, + import cleanup across ~30 files
 
 Deletions:
 - `IRInstruction` class from `ir.py`
 - `to_typed()` / `to_flat()` + `_TO_TYPED` / `_TO_FLAT` dispatch tables from `instructions.py`
+- `_as_register()` helper from `instructions.py`
 - `operands` properties from all 31 typed instruction classes
-- `emit()` method from `_base.py` and `context.py`
+- `emit()` method from `_base.py`, `context.py`, `cobol/emit_context.py`
 - `Register.__eq__(str)` from `register.py`
 - `Register.startswith()` from `register.py`
 - `Register.__get_pydantic_core_schema__()` if no longer needed
+- `_normalize_structural()` from `cfg.py` (no longer needed when lists are pure typed)
+- Normalization `to_typed()` calls at dispatch points in `type_inference.py`, `cfg.py`, `linker.py`
+- `to_flat()` call in `linker.py` `_transform_instruction()`
 
 Additions:
 - Standalone `__str__` on each typed instruction class, matching the current
@@ -238,41 +194,28 @@ Opcode decision (resolved):
 - `opcode` property remains on each typed instruction class
 - **Not used for dispatch** — `isinstance`/`type()` dict is the primary discriminant
 - Useful for serialization, debugging labels, and IR dumps
-- Remove `Opcode` imports from files that used it for dispatch (handlers, cfg, executor, etc.)
+- Remove `Opcode` imports from files that used it for dispatch
 - Keep `Opcode` imports only where used for display/serialization
 
 Cleanup:
 - Remove stale `Opcode` imports across the codebase
 - `list[IRInstruction]` → `list[Instruction]` in any remaining type annotations
+- 4 handler `operands[]` accesses → typed field access (unblocked once pyww is resolved)
 
 **Test gate:** `IRInstruction` not imported anywhere. `to_typed` not called anywhere.
-`operands` not accessed anywhere outside `instructions.py`. `Register.__eq__` only
-compares `Register` to `Register`. All tests pass.
+`to_flat` not called anywhere. `operands` not accessed anywhere outside `instructions.py`.
+`Register.__eq__` only compares `Register` to `Register`. No `emit(Opcode.` calls anywhere.
+All tests pass.
 
 ## Ordering Constraints
 
 ```
-Layer 1 (Register fields)
-├── Layer 2 (map_registers/map_labels)
-│   ├── Layer 3a (handlers + executor dispatch)
-│   └── Layer 3d (project infrastructure)
-├── Layer 3b (type inference)
-├── Layer 3c (CFG + dataflow + interprocedural)
-├── Layer 3e (LLM + COBOL + registry + misc)
-└── Layer 4a (lower_expr() -> Register signature)
-    ├── 4-base, 4-c, 4-cpp, 4-csharp, 4-go, 4-java, 4-js
-    ├── 4-kotlin, 4-lua, 4-pascal, 4-php, 4-python
-    ├── 4-ruby, 4-rust, 4-scala, 4-ts, 4-cobol
-    └── (all 17 independent of each other)
+Layer 1 ✓ → Layer 2 ✓ → Layer 3a (deferred), 3d ✓
+Layer 1 ✓ → Layer 3b ✓, 3c ✓, 3e ✓
+Layer 1 ✓ → Layer 4a ✓ → Layer 4 (all 17) ✓
 
-Layer 3 (all 5) + Layer 4 (all 17) → Layer 5 (remove bridge)
+Prerequisites: pyww, oczk, b6m4, j1o6 → Layer 5 (remove bridge)
 ```
-
-Parallelism opportunities:
-- After Layer 1: Layers 2, 3b, 3c, 3e, and 4a can all start
-- After Layer 2: Layers 3a and 3d can start
-- After Layer 4a: all 17 frontend sub-issues are independent
-- Layer 3 and Layer 4 tracks are fully independent of each other
 
 ## Risk Mitigation
 
@@ -281,48 +224,37 @@ The `Register.__eq__(str)` bridge remains until Layer 5, making all preceding
 layers individually safe. If any sub-issue introduces regressions, it can be
 reverted independently.
 
-## Files Affected (approximate counts)
-
-| Layer | Files | Sites |
-|-------|-------|-------|
-| 1 | 2 (instructions.py, ir.py) | ~60 field changes + converter updates |
-| 2 | 2 (instructions.py, register.py) | 2 new methods + 1 new Register method |
-| 3a | 8 (executor.py + 7 handler files) | ~100 sites |
-| 3b | 1 (type_inference.py) | ~30 sites |
-| 3c | ~5 (cfg.py, dataflow.py, interprocedural/*) | ~50 sites |
-| 3d | 2 (linker.py, compiler.py) | ~30 sites |
-| 3e | ~7 (llm/*, cobol/ir_encoders.py, registry.py, run.py, ir_stats.py, cfg_types.py, frontend.py) | ~40 sites |
-| 4a | ~48 (all frontend files + _base.py + context.py) | ~350 signature changes |
-| 4 (all) | ~48 (all frontend files + _base.py + context.py + cobol) | ~1,357 emit() conversions |
-| 5 | ~3 (ir.py, instructions.py, register.py) + cleanup across ~30 files | ~100 import removals + 31 `__str__` methods |
-
 ## Sub-issue Summary
 
-| ID | Layer | Description | Depends on | Sites |
-|----|-------|-------------|------------|-------|
-| e2pj | 1 | Register fields in instruction classes | — | ~60 |
-| p72n | 2 | map_registers/map_labels on InstructionBase | L1 | 3 methods |
-| ufnx | 3a | Handlers + executor dispatch | L2 | ~100 |
-| x37k | 3b | Type inference | L1 | ~30 |
-| 3h0y | 3c | CFG + dataflow + interprocedural | L1 | ~50 |
-| 30vm | 3d | Project infrastructure (linker/compiler) | L2 | ~30 |
-| 2la9 | 3e | LLM + COBOL + registry + misc | L1 | ~40 |
-| 8e1x | 4a | lower_expr() -> Register signature | L1 | ~350 |
-| 9qh8 | 4-base | _base.py + context.py emit migration | L4a | 45 |
-| 2pd7 | 4-c | C frontend emit migration | L4a | 46 |
-| fa8o | 4-lua | Lua frontend emit migration | L4a | 49 |
-| i0vm | 4-ts | TypeScript frontend emit migration | L4a | 42 |
-| 98uv | 4-cpp | C++ frontend emit migration | L4a | 54 |
-| 8tm0 | 4-scala | Scala frontend emit migration | L4a | 70 |
-| fpmm | 4-go | Go frontend emit migration | L4a | 83 |
-| eh2q | 4-python | Python frontend emit migration | L4a | 84 |
-| 4soe | 4-js | JavaScript frontend emit migration | L4a | 91 |
-| io2z | 4-pascal | Pascal frontend emit migration | L4a | 99 |
-| zgu9 | 4-php | PHP frontend emit migration | L4a | 103 |
-| s2d9 | 4-csharp | C# frontend emit migration | L4a | 105 |
-| cwbt | 4-java | Java frontend emit migration | L4a | 111 |
-| nv63 | 4-kotlin | Kotlin frontend emit migration | L4a | 119 |
-| wd6g | 4-ruby | Ruby frontend emit migration | L4a | 120 |
-| um47 | 4-rust | Rust frontend emit migration | L4a | 127 |
-| di1g | 4-cobol | COBOL emit_context migration | L4a | 9 |
-| ee66 | 5 | Remove the compatibility bridge | L3 all + L4 all | ~100 |
+| ID | Layer | Description | Status |
+|----|-------|-------------|--------|
+| e2pj | 1 | Register fields in instruction classes | ✓ CLOSED |
+| p72n | 2 | map_registers/map_labels on InstructionBase | ✓ CLOSED |
+| ufnx | 3a | Handlers + executor dispatch | DEFERRED (blocked by pyww) |
+| x37k | 3b | Type inference | ✓ CLOSED |
+| 3h0y | 3c | CFG + dataflow + interprocedural | ✓ CLOSED |
+| 30vm | 3d | Project infrastructure (linker/compiler) | ✓ CLOSED |
+| 2la9 | 3e | LLM + COBOL + registry + misc | ✓ CLOSED |
+| 8e1x | 4a | lower_expr() -> Register signature | ✓ CLOSED |
+| 9qh8 | 4-base | _base.py + context.py emit migration | ✓ CLOSED |
+| 2pd7 | 4-c | C frontend emit migration | ✓ CLOSED |
+| fa8o | 4-lua | Lua frontend emit migration | ✓ CLOSED |
+| i0vm | 4-ts | TypeScript frontend emit migration | ✓ CLOSED |
+| 98uv | 4-cpp | C++ frontend emit migration | ✓ CLOSED |
+| 8tm0 | 4-scala | Scala frontend emit migration | ✓ CLOSED |
+| fpmm | 4-go | Go frontend emit migration | ✓ CLOSED |
+| eh2q | 4-python | Python frontend emit migration | ✓ CLOSED |
+| 4soe | 4-js | JavaScript frontend emit migration | ✓ CLOSED |
+| io2z | 4-pascal | Pascal frontend emit migration | ✓ CLOSED |
+| zgu9 | 4-php | PHP frontend emit migration | ✓ CLOSED |
+| s2d9 | 4-csharp | C# frontend emit migration | ✓ CLOSED |
+| cwbt | 4-java | Java frontend emit migration | ✓ CLOSED |
+| nv63 | 4-kotlin | Kotlin frontend emit migration | ✓ CLOSED |
+| wd6g | 4-ruby | Ruby frontend emit migration | ✓ CLOSED |
+| um47 | 4-rust | Rust frontend emit migration | ✓ CLOSED |
+| di1g | 4-cobol | COBOL emit_context migration | ✓ CLOSED |
+| pyww | prereq | COBOL ir_encoders literal operands + _as_register | OPEN (P2) |
+| oczk | prereq | 59 COBOL frontend emit() calls | OPEN (P2) |
+| b6m4 | prereq | 3 registry.py opcode== comparisons | OPEN (P2) |
+| j1o6 | prereq | vm.py/dataflow.py boundary cleanup | OPEN (P3) |
+| ee66 | 5 | Remove the compatibility bridge | OPEN (blocked by prereqs) |
