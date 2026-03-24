@@ -407,11 +407,12 @@ def build_dependency_graph(
 
 def _is_temporary_register(name: str) -> bool:
     """Check if a name is a temporary register (t0, t1, t_cond, %0, %1, etc.)."""
-    if name.startswith("%"):
+    s = str(name)
+    if s.startswith("%"):
         return True
-    if not name.startswith("t"):
+    if not s.startswith("t"):
         return False
-    rest = name[1:]
+    rest = s[1:]
     return rest.isdigit() or rest.startswith("_")
 
 
