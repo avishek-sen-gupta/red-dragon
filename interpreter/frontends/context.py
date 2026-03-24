@@ -14,7 +14,7 @@ from typing import Any, Callable
 from interpreter import constants
 from interpreter.constants import CanonicalLiteral, Language
 from interpreter.frontend_observer import FrontendObserver
-from interpreter.instructions import DeclVar, Instruction
+from interpreter.instructions import Const, DeclVar, Instruction, Symbolic
 from interpreter.ir import (
     NO_SOURCE_LOCATION,
     IRInstruction,
@@ -229,9 +229,9 @@ class TreeSitterEmitContext:
             self._method_declared_names.add(inst.name)
         return inst
 
-    def emit_decl_var(self, name: str, val_reg: str, *, node=None) -> IRInstruction:
+    def emit_decl_var(self, name: str, val_reg: str, *, node=None) -> Instruction:
         """Emit DECL_VAR: declare a new variable in the current scope."""
-        return self.emit(Opcode.DECL_VAR, operands=[name, val_reg], node=node)
+        return self.emit_inst(DeclVar(name=name, value_reg=val_reg), node=node)
 
     def emit_func_ref(
         self,
@@ -239,17 +239,15 @@ class TreeSitterEmitContext:
         func_label: CodeLabel,
         result_reg: str,
         node=None,
-    ) -> IRInstruction:
+    ) -> Instruction:
         """Register a function reference in the symbol table and emit CONST.
 
         Emits the plain func_label as the CONST operand.  The symbol table
         maps func_label → FuncRef(name, label) for downstream consumers.
         """
         self.func_symbol_table[func_label] = FuncRef(name=func_name, label=func_label)
-        return self.emit(
-            Opcode.CONST,
-            result_reg=result_reg,
-            operands=[str(func_label)],
+        return self.emit_inst(
+            Const(result_reg=result_reg, value=str(func_label)),
             node=node,
         )
 
@@ -260,7 +258,7 @@ class TreeSitterEmitContext:
         parents: list[str],
         result_reg: str,
         node=None,
-    ) -> IRInstruction:
+    ) -> Instruction:
         """Register a class reference in the symbol table and emit CONST.
 
         Emits the plain class_label as the CONST operand.  The symbol table
@@ -269,10 +267,8 @@ class TreeSitterEmitContext:
         self.class_symbol_table[class_label] = ClassRef(
             name=class_name, label=class_label, parents=tuple(parents)
         )
-        return self.emit(
-            Opcode.CONST,
-            result_reg=result_reg,
-            operands=[str(class_label)],
+        return self.emit_inst(
+            Const(result_reg=result_reg, value=str(class_label)),
             node=node,
         )
 
@@ -390,10 +386,8 @@ class TreeSitterEmitContext:
             return handler(self, node)
         # Fallback: symbolic
         reg = self.fresh_reg()
-        self.emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=[f"unsupported:{node.type}"],
+        self.emit_inst(
+            Symbolic(result_reg=reg, hint=f"unsupported:{node.type}"),
             node=node,
         )
         return reg
