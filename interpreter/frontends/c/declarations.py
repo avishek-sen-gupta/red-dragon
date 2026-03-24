@@ -6,6 +6,7 @@ import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
+from interpreter.instructions import to_typed, StoreField
 from interpreter import constants
 from interpreter.frontends.type_extraction import (
     extract_type_from_field,
@@ -212,7 +213,9 @@ def _extract_struct_field_names(
         ):
             break
         if in_body and inst.opcode == Opcode.STORE_FIELD:
-            field_names.append(inst.operands[1])
+            t = to_typed(inst)
+            assert isinstance(t, StoreField)
+            field_names.append(t.field_name)
     return field_names
 
 
