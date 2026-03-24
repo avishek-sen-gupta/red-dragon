@@ -13,6 +13,7 @@ from interpreter.frontend import get_frontend
 from interpreter.frontends.context import TreeSitterEmitContext, GrammarConstants
 from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.ir import IRInstruction, Opcode, SourceLocation, NO_SOURCE_LOCATION
+from interpreter.instructions import Label_
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 
@@ -173,7 +174,7 @@ def trace_lowering(
     # Lower with tracing
     from interpreter import constants as const
 
-    ctx.emit(Opcode.LABEL, label=const.CFG_ENTRY_LABEL)
+    ctx.emit_inst(Label_(label=const.CFG_ENTRY_LABEL))
     ctx.lower_block(tree.root_node)
 
     ir = ctx.instructions
