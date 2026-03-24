@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -27,6 +28,14 @@ class Register:
     def startswith(self, prefix: str) -> bool:
         """String-like startswith — delegates to the name."""
         return self.name.startswith(prefix)
+
+    def rebase(self, offset: int) -> Register:
+        """Offset the numeric suffix: %r5.rebase(10) → %r15."""
+        match = re.match(r"^(.*?)(\d+)$", self.name)
+        if not match:
+            return self
+        prefix, num = match.group(1), int(match.group(2))
+        return Register(f"{prefix}{num + offset}")
 
     def __hash__(self) -> int:
         return hash(self.name)
@@ -67,6 +76,9 @@ class NoRegister(Register):
 
     def is_present(self) -> bool:
         return False
+
+    def rebase(self, offset: int) -> Register:
+        return self
 
 
 NO_REGISTER = NoRegister()
