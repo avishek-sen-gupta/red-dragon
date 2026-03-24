@@ -1,6 +1,6 @@
 # IRInstruction Elimination — Layers 1 & 2 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status: COMPLETED** (2026-03-24). All tasks executed via subagent-driven development. See commits `4e06a96` (Layer 1), `82775c6` (Layer 2a), `f238014` (Layer 2b).
 
 **Goal:** Make all register-holding fields in typed instruction classes carry `Register` objects (Layer 1), then add generic `map_registers()`/`map_labels()` transformation methods to `InstructionBase` (Layer 2).
 
