@@ -12,6 +12,7 @@ from pathlib import Path
 from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.instructions import to_typed, DeclVar, StoreVar
 from interpreter.project.types import ExportTable, ImportRef, ModuleUnit, LinkedProgram
 from interpreter.project.imports import extract_imports
 from interpreter.project.resolver import (
@@ -59,10 +60,12 @@ def build_export_table(
             and inst.opcode in (Opcode.DECL_VAR, Opcode.STORE_VAR)
             and len(inst.operands) >= 2
         ):
-            var_name = str(inst.operands[0])
+            t = to_typed(inst)
+            assert isinstance(t, (DeclVar, StoreVar))
+            var_name = str(t.name)
             # Don't duplicate names already in functions or classes
             if var_name not in functions and var_name not in classes:
-                variables[var_name] = str(inst.operands[1])
+                variables[var_name] = str(t.value_reg)
 
     return ExportTable(functions=functions, classes=classes, variables=variables)
 

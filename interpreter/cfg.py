@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.instructions import to_typed, CallFunction
 from interpreter import constants
 from interpreter.cfg_types import (
     BasicBlock,
@@ -315,7 +316,9 @@ def cfg_to_mermaid(cfg: CFG) -> str:
         for inst in block.instructions:
             if inst.opcode != Opcode.CALL_FUNCTION or not inst.operands:
                 continue
-            func_name = inst.operands[0]
+            t = to_typed(inst)
+            assert isinstance(t, CallFunction)
+            func_name = t.func_name
             target_label = call_target_map.get(func_name)
             if target_label:
                 lines.append(f'    {src} -.->|"call"| {_node_id(target_label)}')

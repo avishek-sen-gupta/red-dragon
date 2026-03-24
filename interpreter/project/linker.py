@@ -24,6 +24,7 @@ from pathlib import Path
 
 from interpreter.cfg import build_cfg
 from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
+from interpreter.instructions import to_typed, TryPush, CallFunction, DeclVar
 from interpreter.project.types import ExportTable, LinkedProgram, ModuleUnit
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
@@ -111,13 +112,12 @@ def _transform_instruction(
     # ── Operands ──
     if inst.opcode == Opcode.TRY_PUSH:
         # operands = [catch_labels: list[CodeLabel], finally: CodeLabel, end: CodeLabel]
-        catch_list = inst.operands[0]
-        finally_lbl = inst.operands[1]
-        end_lbl = inst.operands[2]
+        t = to_typed(inst)
+        assert isinstance(t, TryPush)
         new_operands = [
-            [cl.namespace(prefix) for cl in catch_list],
-            finally_lbl.namespace(prefix),
-            end_lbl.namespace(prefix),
+            [cl.namespace(prefix) for cl in t.catch_labels],
+            t.finally_label.namespace(prefix),
+            t.end_label.namespace(prefix),
         ]
     else:
         new_operands = []
@@ -148,11 +148,11 @@ def _transform_instruction(
 
 def _is_import_call(inst: IRInstruction) -> bool:
     """Is this a CALL_FUNCTION 'import' ... instruction?"""
-    return (
-        inst.opcode == Opcode.CALL_FUNCTION
-        and len(inst.operands) >= 1
-        and str(inst.operands[0]) == "import"
-    )
+    if inst.opcode != Opcode.CALL_FUNCTION or len(inst.operands) < 1:
+        return False
+    t = to_typed(inst)
+    assert isinstance(t, CallFunction)
+    return str(t.func_name) == "import"
 
 
 def _transform_module(
@@ -196,8 +196,10 @@ def _transform_module(
             and inst.opcode == Opcode.DECL_VAR
             and len(inst.operands) >= 2
         ):
-            var_name = str(inst.operands[0])
-            reg = rebase_register(str(inst.operands[1]), reg_offset)
+            t = to_typed(inst)
+            assert isinstance(t, DeclVar)
+            var_name = str(t.name)
+            reg = rebase_register(str(t.value_reg), reg_offset)
             if reg == skip_next_decl_for_reg and var_name in resolved_imports:
                 # Drop both the import CALL and this DECL_VAR
                 result.pop()  # remove the tentatively-added CALL_FUNCTION
