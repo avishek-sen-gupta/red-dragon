@@ -61,9 +61,15 @@ def lower_cpp_if(ctx: TreeSitterEmitContext, node) -> None:
     end_label = ctx.fresh_label("if_end")
 
     if alt_node:
-        ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)), node=node)
+        ctx.emit_inst(
+            BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)),
+            node=node,
+        )
     else:
-        ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(true_label, end_label)), node=node)
+        ctx.emit_inst(
+            BranchIf(cond_reg=cond_reg, branch_targets=(true_label, end_label)),
+            node=node,
+        )
 
     ctx.emit_inst(Label_(label=true_label))
     if body_node:
@@ -94,7 +100,9 @@ def lower_cpp_while(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit_inst(Label_(label=loop_label))
     cond_reg = ctx.lower_expr(cond_node)
-    ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)), node=node)
+    ctx.emit_inst(
+        BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)), node=node
+    )
 
     ctx.emit_inst(Label_(label=body_label))
     ctx.push_loop(loop_label, end_label)
@@ -129,7 +137,10 @@ def lower_template_decl(ctx: TreeSitterEmitContext, node) -> None:
         ctx.lower_stmt(inner_decls[-1])
     else:
         reg = ctx.fresh_reg()
-        ctx.emit_inst(Symbolic(result_reg=reg, hint=f"template:{ctx.node_text(node)[:60]}"), node=node)
+        ctx.emit_inst(
+            Symbolic(result_reg=reg, hint=f"template:{ctx.node_text(node)[:60]}"),
+            node=node,
+        )
 
 
 def _lower_structured_binding(
@@ -143,7 +154,10 @@ def _lower_structured_binding(
         idx_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
         part_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadIndex(result_reg=part_reg, arr_reg=elem_reg, index_reg=idx_reg), node=id_node)
+        ctx.emit_inst(
+            LoadIndex(result_reg=part_reg, arr_reg=elem_reg, index_reg=idx_reg),
+            node=id_node,
+        )
         ctx.emit_inst(DeclVar(name=var_name, value_reg=part_reg), node=id_node)
 
 
