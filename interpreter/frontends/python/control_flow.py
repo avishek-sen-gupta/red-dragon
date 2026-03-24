@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode, CodeLabel
 from interpreter.frontends.common.exceptions import (
     lower_raise_or_throw,
     lower_try_catch,
@@ -14,6 +13,19 @@ from interpreter.frontends.python.expressions import (
     lower_store_target,
 )
 from interpreter.frontends.python.node_types import PythonNodeType
+from interpreter.instructions import (
+    Const,
+    LoadVar,
+    DeclVar,
+    StoreVar,
+    Binop,
+    CallFunction,
+    CallMethod,
+    LoadIndex,
+    Label_,
+    Branch,
+    BranchIf,
+)
 
 _WILDCARD_PATTERN = "_"
 
@@ -42,22 +54,20 @@ def lower_python_if(ctx: TreeSitterEmitContext, node) -> None:
     end_label = ctx.fresh_label("if_end")
     false_label = ctx.fresh_label("if_false") if has_alternative else end_label
 
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[true_label, false_label],
+    ctx.emit_inst(
+        BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)),
         node=node,
     )
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     ctx.lower_block(body_node)
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
 
     if has_alternative:
-        ctx.emit(Opcode.LABEL, label=false_label)
+        ctx.emit_inst(Label_(label=false_label))
         _lower_python_elif_chain(ctx, elif_clauses, else_clause, end_label)
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def _lower_python_elif_chain(
@@ -76,7 +86,7 @@ def _lower_python_elif_chain(
             body = else_clause.child_by_field_name("body")
             if body:
                 ctx.lower_block(body)
-        ctx.emit(Opcode.BRANCH, label=end_label)
+        ctx.emit_inst(Branch(label=end_label))
         return
 
     current = elif_clauses[0]
@@ -87,19 +97,17 @@ def _lower_python_elif_chain(
     true_label = ctx.fresh_label("elif_true")
     false_label = ctx.fresh_label("elif_false") if has_more else end_label
 
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[true_label, false_label],
+    ctx.emit_inst(
+        BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)),
         node=current,
     )
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     ctx.lower_block(body_node)
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
 
     if has_more:
-        ctx.emit(Opcode.LABEL, label=false_label)
+        ctx.emit_inst(Label_(label=false_label))
         _lower_python_elif_chain(ctx, remaining_elifs, else_clause, end_label)
 
 
@@ -113,29 +121,25 @@ def lower_for(ctx: TreeSitterEmitContext, node) -> None:
 
     iter_reg = ctx.lower_expr(right)
     init_idx = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=init_idx, operands=["0"])
-    ctx.emit(Opcode.DECL_VAR, operands=["__for_idx", init_idx])
+    ctx.emit_inst(Const(result_reg=init_idx, value="0"))
+    ctx.emit_inst(DeclVar(name="__for_idx", value_reg=init_idx))
     len_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CALL_FUNCTION, result_reg=len_reg, operands=["len", iter_reg])
+    ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
 
     loop_label = ctx.fresh_label("for_cond")
     body_label = ctx.fresh_label("for_body")
     end_label = ctx.fresh_label("for_end")
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     idx_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=idx_reg, operands=["__for_idx"])
+    ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
     cond_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=cond_reg, operands=["<", idx_reg, len_reg])
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[body_label, end_label],
-    )
+    ctx.emit_inst(Binop(result_reg=cond_reg, operator="<", left=idx_reg, right=len_reg))
+    ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)))
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     elem_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[iter_reg, idx_reg])
+    ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
     lower_store_target(ctx, left, elem_reg, node)
 
     update_label = ctx.fresh_label("for_update")
@@ -143,10 +147,10 @@ def lower_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.lower_block(body_node)
     ctx.pop_loop()
 
-    ctx.emit(Opcode.LABEL, label=update_label)
+    ctx.emit_inst(Label_(label=update_label))
     _emit_for_increment(ctx, idx_reg, loop_label)
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 # ── raise ─────────────────────────────────────────────────────
@@ -245,14 +249,17 @@ def lower_with(ctx: TreeSitterEmitContext, node) -> None:
 
         ctx_reg = ctx.lower_expr(ctx_expr)
         enter_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_METHOD,
-            result_reg=enter_reg,
-            operands=[ctx_reg, "__enter__"],
+        ctx.emit_inst(
+            CallMethod(
+                result_reg=enter_reg,
+                obj_reg=ctx_reg,
+                method_name="__enter__",
+                args=(),
+            ),
             node=item,
         )
         if var_name:
-            ctx.emit(Opcode.DECL_VAR, operands=[var_name, enter_reg])
+            ctx.emit_inst(DeclVar(name=var_name, value_reg=enter_reg))
         enter_info.append((ctx_reg, var_name))
 
     ctx.lower_block(body_node)
@@ -260,10 +267,13 @@ def lower_with(ctx: TreeSitterEmitContext, node) -> None:
     # Exit in reverse order (LIFO)
     for ctx_reg, _ in reversed(enter_info):
         exit_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_METHOD,
-            result_reg=exit_reg,
-            operands=[ctx_reg, "__exit__"],
+        ctx.emit_inst(
+            CallMethod(
+                result_reg=exit_reg,
+                obj_reg=ctx_reg,
+                method_name="__exit__",
+                args=(),
+            ),
             node=node,
         )
 
@@ -299,16 +309,14 @@ def lower_decorated_def(ctx: TreeSitterEmitContext, node) -> None:
             continue
 
         func_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.LOAD_VAR, result_reg=func_reg, operands=[func_name])
+        ctx.emit_inst(LoadVar(result_reg=func_reg, name=func_name))
         dec_reg = ctx.lower_expr(dec_expr)
         result_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=result_reg,
-            operands=[dec_reg, func_reg],
+        ctx.emit_inst(
+            CallFunction(result_reg=result_reg, func_name=dec_reg, args=(func_reg,)),
             node=dec,
         )
-        ctx.emit(Opcode.STORE_VAR, operands=[func_name, result_reg])
+        ctx.emit_inst(StoreVar(name=func_name, value_reg=result_reg))
 
 
 # ── assert statement ──────────────────────────────────────────
@@ -318,10 +326,10 @@ def lower_assert(ctx: TreeSitterEmitContext, node) -> None:
     """Lower assert cond [, msg] as CALL_FUNCTION('assert', cond [, msg])."""
     named_children = [c for c in node.children if c.is_named]
     arg_regs = [ctx.lower_expr(c) for c in named_children]
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=ctx.fresh_reg(),
-        operands=["assert"] + arg_regs,
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=ctx.fresh_reg(), func_name="assert", args=tuple(arg_regs)
+        ),
         node=node,
     )
 
@@ -339,18 +347,22 @@ def lower_delete(ctx: TreeSitterEmitContext, node) -> None:
             for target in child.children:
                 if target.is_named:
                     target_reg = ctx.lower_expr(target)
-                    ctx.emit(
-                        Opcode.CALL_FUNCTION,
-                        result_reg=ctx.fresh_reg(),
-                        operands=["del", target_reg],
+                    ctx.emit_inst(
+                        CallFunction(
+                            result_reg=ctx.fresh_reg(),
+                            func_name="del",
+                            args=(target_reg,),
+                        ),
                         node=node,
                     )
         else:
             target_reg = ctx.lower_expr(child)
-            ctx.emit(
-                Opcode.CALL_FUNCTION,
-                result_reg=ctx.fresh_reg(),
-                operands=["del", target_reg],
+            ctx.emit_inst(
+                CallFunction(
+                    result_reg=ctx.fresh_reg(),
+                    func_name="del",
+                    args=(target_reg,),
+                ),
                 node=node,
             )
 
@@ -363,19 +375,13 @@ def lower_import(ctx: TreeSitterEmitContext, node) -> None:
     name_node = node.child_by_field_name(ctx.constants.func_name_field)
     module_name = ctx.node_text(name_node) if name_node else "unknown"
     import_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=import_reg,
-        operands=["import", module_name],
+    ctx.emit_inst(
+        CallFunction(result_reg=import_reg, func_name="import", args=(module_name,)),
         node=node,
     )
     # Store using the top-level module name (e.g., 'os' for 'os.path')
     store_name = module_name.split(".")[0]
-    ctx.emit(
-        Opcode.DECL_VAR,
-        operands=[store_name, import_reg],
-        node=node,
-    )
+    ctx.emit_inst(DeclVar(name=store_name, value_reg=import_reg), node=node)
 
 
 # ── import from statement ─────────────────────────────────────
@@ -396,17 +402,15 @@ def lower_import_from(ctx: TreeSitterEmitContext, node) -> None:
     for name_node in imported_names:
         imported_name = ctx.node_text(name_node)
         import_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=import_reg,
-            operands=["import", f"from {module_name} import {imported_name}"],
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=import_reg,
+                func_name="import",
+                args=(f"from {module_name} import {imported_name}",),
+            ),
             node=node,
         )
-        ctx.emit(
-            Opcode.DECL_VAR,
-            operands=[imported_name, import_reg],
-            node=node,
-        )
+        ctx.emit_inst(DeclVar(name=imported_name, value_reg=import_reg), node=node)
 
 
 # ── match statement ───────────────────────────────────────────
