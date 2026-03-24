@@ -7,6 +7,12 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode, CodeLabel
 from interpreter.frontends.c.node_types import CNodeType
+from interpreter.instructions import (
+    Binop,
+    Label_,
+    Branch,
+    BranchIf,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -20,25 +26,23 @@ def lower_do_while(ctx: TreeSitterEmitContext, node) -> None:
     cond_label = ctx.fresh_label("do_cond")
     end_label = ctx.fresh_label("do_end")
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     ctx.push_loop(cond_label, end_label)
     if body_node:
         ctx.lower_block(body_node)
     ctx.pop_loop()
 
-    ctx.emit(Opcode.LABEL, label=cond_label)
+    ctx.emit_inst(Label_(label=cond_label))
     if cond_node:
         cond_reg = ctx.lower_expr(cond_node)
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[body_label, end_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)),
             node=node,
         )
     else:
-        ctx.emit(Opcode.BRANCH, label=body_label)
+        ctx.emit_inst(Branch(label=body_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
@@ -73,29 +77,27 @@ def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
         if value_node:
             case_reg = ctx.lower_expr(value_node)
             cmp_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.BINOP,
-                result_reg=cmp_reg,
-                operands=["==", subject_reg, case_reg],
+            ctx.emit_inst(
+                Binop(
+                    result_reg=cmp_reg, operator="==", left=subject_reg, right=case_reg
+                ),
                 node=case,
             )
-            ctx.emit(
-                Opcode.BRANCH_IF,
-                operands=[cmp_reg],
-                branch_targets=[arm_label, next_label],
+            ctx.emit_inst(
+                BranchIf(cond_reg=cmp_reg, branch_targets=(arm_label, next_label))
             )
         else:
             # default case
-            ctx.emit(Opcode.BRANCH, label=arm_label)
+            ctx.emit_inst(Branch(label=arm_label))
 
-        ctx.emit(Opcode.LABEL, label=arm_label)
+        ctx.emit_inst(Label_(label=arm_label))
         for stmt in body_stmts:
             ctx.lower_stmt(stmt)
-        ctx.emit(Opcode.BRANCH, label=end_label)
-        ctx.emit(Opcode.LABEL, label=next_label)
+        ctx.emit_inst(Branch(label=end_label))
+        ctx.emit_inst(Label_(label=next_label))
 
     ctx.break_target_stack.pop()
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_case_as_block(ctx: TreeSitterEmitContext, node) -> None:
@@ -118,11 +120,7 @@ def lower_goto(ctx: TreeSitterEmitContext, node) -> None:
     )
     if label_node:
         target_label = CodeLabel(f"user_{ctx.node_text(label_node)}")
-        ctx.emit(
-            Opcode.BRANCH,
-            label=target_label,
-            node=node,
-        )
+        ctx.emit_inst(Branch(label=target_label), node=node)
     else:
         logger.warning("goto without label: %s", ctx.node_text(node)[:40])
 
@@ -133,7 +131,7 @@ def lower_labeled_stmt(ctx: TreeSitterEmitContext, node) -> None:
         (c for c in node.children if c.type == CNodeType.STATEMENT_IDENTIFIER), None
     )
     if label_node:
-        ctx.emit(Opcode.LABEL, label=CodeLabel(f"user_{ctx.node_text(label_node)}"))
+        ctx.emit_inst(Label_(label=CodeLabel(f"user_{ctx.node_text(label_node)}")))
     # Lower the actual statement within the label
     for child in node.children:
         if child.is_named and child.type != CNodeType.STATEMENT_IDENTIFIER:
