@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
-from interpreter.instructions import to_typed, Symbolic, Const
+from interpreter.ir import IRInstruction, CodeLabel
+from interpreter.instructions import to_typed, Symbolic, Const, Label_
 from interpreter.cfg import CFG
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
@@ -75,8 +75,7 @@ def _scan_func_params(cfg: CFG) -> dict[CodeLabel, list[str]]:
         params = [
             str(t.hint)[len(constants.PARAM_PREFIX) :]
             for inst in block.instructions
-            if inst.opcode == Opcode.SYMBOLIC
-            and inst.operands
+            if inst.operands
             and isinstance((t := to_typed(inst)), Symbolic)
             and str(t.hint).startswith(constants.PARAM_PREFIX)
         ]
@@ -116,7 +115,7 @@ def _scan_classes(
     # *different* class will reset it.
     in_class: str = ""
     for inst in instructions:
-        if inst.opcode == Opcode.LABEL and inst.label.is_present():
+        if isinstance(to_typed(inst), Label_) and inst.label.is_present():
             is_class_start = inst.label.is_class()
             is_class_end = inst.label.is_end_class()
             if is_class_start:
@@ -130,9 +129,7 @@ def _scan_classes(
                 # Keep in_class set — hoisted methods may follow end_class
                 pass
 
-        if in_class and inst.opcode == Opcode.CONST and inst.operands:
-            t = to_typed(inst)
-            assert isinstance(t, Const)
+        if in_class and inst.operands and isinstance((t := to_typed(inst)), Const):
             operand = str(t.value)
             if operand in func_symbol_table:
                 ref = func_symbol_table[operand]
