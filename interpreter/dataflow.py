@@ -369,7 +369,7 @@ def _build_raw_dependency_graph(
     # For each STORE_VAR, trace the RHS register backward to named variables
     def _trace_deps(var_name: str, rhs_reg: str) -> tuple[str, set[str]]:
         named_deps: set[str] = set()
-        _trace_to_named_vars(rhs_reg, produced_from, named_deps, set())
+        _trace_to_named_vars(str(rhs_reg), produced_from, named_deps, set())
         return (var_name, named_deps)
 
     traced = [_trace_deps(var_name, rhs_reg) for var_name, rhs_reg in store_var_defs]
@@ -410,12 +410,11 @@ def build_dependency_graph(
 
 def _is_temporary_register(name: str) -> bool:
     """Check if a name is a temporary register (t0, t1, t_cond, %0, %1, etc.)."""
-    s = str(name)
-    if s.startswith("%"):
+    if name.startswith("%"):
         return True
-    if not s.startswith("t"):
+    if not name.startswith("t"):
         return False
-    rest = s[1:]
+    rest = name[1:]
     return rest.isdigit() or rest.startswith("_")
 
 
