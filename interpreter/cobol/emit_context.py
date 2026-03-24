@@ -38,7 +38,7 @@ from interpreter.cobol.ir_encoders import (
     build_decode_float_ir,
 )
 from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
-from interpreter.instructions import to_typed, Return_
+from interpreter.instructions import to_typed, Return_, Label_
 from interpreter.register import Register, NO_REGISTER
 
 logger = logging.getLogger(__name__)
@@ -131,9 +131,9 @@ class EmitContext:
         return_reg = ""
 
         for inst in ir_instructions:
-            if inst.opcode == Opcode.LABEL:
+            if isinstance(inst, Label_) or inst.opcode == Opcode.LABEL:
                 continue
-            if inst.opcode == Opcode.RETURN:
+            if isinstance(inst, Return_) or inst.opcode == Opcode.RETURN:
                 t = to_typed(inst)
                 assert isinstance(t, Return_)
                 resolved_operand = self.resolve_inline_operand(t.value_reg, reg_map)
