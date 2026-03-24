@@ -6,10 +6,25 @@ import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.constants import DEFAULT_EXCEPTION_TYPE
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.ir import CodeLabel
 from interpreter.frontends.common.exceptions import lower_try_catch
 from interpreter.frontends.pascal.pascal_constants import KEYWORD_NOISE
 from interpreter.frontends.pascal.node_types import PascalNodeType
+from interpreter.instructions import (
+    Const,
+    LoadVar,
+    DeclVar,
+    StoreVar,
+    Binop,
+    CallFunction,
+    LoadIndex,
+    Symbolic,
+    Label_,
+    Branch,
+    BranchIf,
+    Return_,
+    Throw_,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,30 +92,26 @@ def lower_pascal_if(ctx: TreeSitterEmitContext, node) -> None:
     end_label = ctx.fresh_label("if_end")
 
     if alt_node:
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[true_label, false_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)),
             node=node,
         )
     else:
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[true_label, end_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=cond_reg, branch_targets=(true_label, end_label)),
             node=node,
         )
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     ctx.lower_stmt(body_node)
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
 
     if alt_node:
-        ctx.emit(Opcode.LABEL, label=false_label)
+        ctx.emit_inst(Label_(label=false_label))
         ctx.lower_stmt(alt_node)
-        ctx.emit(Opcode.BRANCH, label=end_label)
+        ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_pascal_while(ctx: TreeSitterEmitContext, node) -> None:
@@ -122,30 +133,22 @@ def lower_pascal_while(ctx: TreeSitterEmitContext, node) -> None:
     body_label = ctx.fresh_label("while_body")
     end_label = ctx.fresh_label("while_end")
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     cond_reg = ctx.lower_expr(cond_node)
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[body_label, end_label],
+    ctx.emit_inst(
+        BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)),
         node=node,
     )
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     ctx.lower_stmt(body_node)
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(Branch(label=loop_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_pascal_for(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower for -- contains kFor, assignment(var := start), kTo/kDownto, end, kDo, body.
-
-    The tree-sitter AST packs the loop variable and start value into an
-    ``assignment`` node, so named non-noise children are typically 3:
-    [assignment, end_value, body].  We detect this case and extract
-    var_node / start_node from the assignment.
-    """
+    """Lower for -- contains kFor, assignment(var := start), kTo/kDownto, end, kDo, body."""
     named_children = [
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
     ]
@@ -180,7 +183,7 @@ def lower_pascal_for(ctx: TreeSitterEmitContext, node) -> None:
     start_reg = ctx.lower_expr(start_node)
     end_reg = ctx.lower_expr(end_node)
 
-    ctx.emit(Opcode.DECL_VAR, operands=[var_name, start_reg])
+    ctx.emit_inst(DeclVar(name=var_name, value_reg=start_reg))
 
     loop_label = ctx.fresh_label("for_cond")
     body_label = ctx.fresh_label("for_body")
@@ -188,40 +191,34 @@ def lower_pascal_for(ctx: TreeSitterEmitContext, node) -> None:
 
     cmp_op = ">=" if is_downto else "<="
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     current_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=current_reg, operands=[var_name])
+    ctx.emit_inst(LoadVar(result_reg=current_reg, name=var_name))
     cond_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=cond_reg,
-        operands=[cmp_op, current_reg, end_reg],
+    ctx.emit_inst(
+        Binop(result_reg=cond_reg, operator=cmp_op, left=current_reg, right=end_reg)
     )
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[body_label, end_label],
+    ctx.emit_inst(
+        BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)),
         node=node,
     )
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     ctx.lower_stmt(body_node)
 
     step_op = "-" if is_downto else "+"
     cur_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=cur_reg, operands=[var_name])
+    ctx.emit_inst(LoadVar(result_reg=cur_reg, name=var_name))
     one_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
+    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     next_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=next_reg,
-        operands=[step_op, cur_reg, one_reg],
+    ctx.emit_inst(
+        Binop(result_reg=next_reg, operator=step_op, left=cur_reg, right=one_reg)
     )
-    ctx.emit(Opcode.STORE_VAR, operands=[var_name, next_reg])
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(StoreVar(name=var_name, value_reg=next_reg))
+    ctx.emit_inst(Branch(label=loop_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_pascal_case(ctx: TreeSitterEmitContext, node) -> None:
@@ -258,7 +255,7 @@ def lower_pascal_case(ctx: TreeSitterEmitContext, node) -> None:
             if found_else and child.is_named and child.type not in KEYWORD_NOISE:
                 ctx.lower_stmt(child)
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def _lower_pascal_case_branch(
@@ -288,40 +285,47 @@ def _lower_pascal_case_branch(
         if label_values:
             cmp_reg = ctx.fresh_reg()
             first_val_reg = ctx.lower_expr(label_values[0])
-            ctx.emit(
-                Opcode.BINOP,
-                result_reg=cmp_reg,
-                operands=["==", selector_reg, first_val_reg],
+            ctx.emit_inst(
+                Binop(
+                    result_reg=cmp_reg,
+                    operator="==",
+                    left=selector_reg,
+                    right=first_val_reg,
+                ),
                 node=case_node,
             )
             for extra_val in label_values[1:]:
                 extra_reg = ctx.lower_expr(extra_val)
                 extra_cmp = ctx.fresh_reg()
-                ctx.emit(
-                    Opcode.BINOP,
-                    result_reg=extra_cmp,
-                    operands=["==", selector_reg, extra_reg],
+                ctx.emit_inst(
+                    Binop(
+                        result_reg=extra_cmp,
+                        operator="==",
+                        left=selector_reg,
+                        right=extra_reg,
+                    )
                 )
                 or_reg = ctx.fresh_reg()
-                ctx.emit(
-                    Opcode.BINOP,
-                    result_reg=or_reg,
-                    operands=["or", cmp_reg, extra_cmp],
+                ctx.emit_inst(
+                    Binop(
+                        result_reg=or_reg,
+                        operator="or",
+                        left=cmp_reg,
+                        right=extra_cmp,
+                    )
                 )
                 cmp_reg = or_reg
 
-            ctx.emit(
-                Opcode.BRANCH_IF,
-                operands=[cmp_reg],
-                branch_targets=[true_label, next_label],
+            ctx.emit_inst(
+                BranchIf(cond_reg=cmp_reg, branch_targets=(true_label, next_label)),
                 node=case_node,
             )
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     for child in body_children:
         ctx.lower_stmt(child)
-    ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=next_label)
+    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Label_(label=next_label))
 
 
 def lower_pascal_repeat(ctx: TreeSitterEmitContext, node) -> None:
@@ -343,28 +347,21 @@ def lower_pascal_repeat(ctx: TreeSitterEmitContext, node) -> None:
     body_label = ctx.fresh_label("repeat_body")
     end_label = ctx.fresh_label("repeat_end")
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     for child in body_nodes:
         ctx.lower_stmt(child)
 
     cond_reg = ctx.lower_expr(cond_node)
     # repeat-until: loop continues while condition is FALSE
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[end_label, body_label],
+    ctx.emit_inst(
+        BranchIf(cond_reg=cond_reg, branch_targets=(end_label, body_label)),
         node=node,
     )
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_pascal_try(ctx: TreeSitterEmitContext, node) -> None:
-    """Lower try/except/finally using common lower_try_catch.
-
-    Pascal AST structure:
-      try -> kTry, statements (body), kExcept|kFinally,
-            exceptionHandler* (catch), statements? (finally), kEnd
-    """
+    """Lower try/except/finally using common lower_try_catch."""
     body_node, catch_clauses, finally_node = _extract_pascal_try_parts(ctx, node)
     lower_try_catch(ctx, node, body_node, catch_clauses, finally_node)
 
@@ -448,13 +445,11 @@ def lower_pascal_exception_handler(ctx: TreeSitterEmitContext, node) -> None:
     if id_node:
         var_name = ctx.node_text(id_node)
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.SYMBOLIC,
-            result_reg=reg,
-            operands=[f"{constants.PARAM_PREFIX}{var_name}"],
+        ctx.emit_inst(
+            Symbolic(result_reg=reg, hint=f"{constants.PARAM_PREFIX}{var_name}"),
             node=id_node,
         )
-        ctx.emit(Opcode.DECL_VAR, operands=[var_name, f"%{ctx.reg_counter - 1}"])
+        ctx.emit_inst(DeclVar(name=var_name, value_reg=f"%{ctx.reg_counter - 1}"))
     # Lower body statements
     named_children = [
         c for c in node.children if c.is_named and c.type not in KEYWORD_NOISE
@@ -473,12 +468,10 @@ def lower_pascal_raise(ctx: TreeSitterEmitContext, node) -> None:
         val_reg = ctx.lower_expr(named_children[0])
     else:
         val_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CONST,
-            result_reg=val_reg,
-            operands=[ctx.constants.default_return_value],
+        ctx.emit_inst(
+            Const(result_reg=val_reg, value=ctx.constants.default_return_value)
         )
-    ctx.emit(Opcode.THROW, operands=[val_reg], node=node)
+    ctx.emit_inst(Throw_(value_reg=val_reg), node=node)
 
 
 def lower_pascal_with(ctx: TreeSitterEmitContext, node) -> None:
@@ -515,14 +508,12 @@ def lower_pascal_foreach(ctx: TreeSitterEmitContext, node) -> None:
 
     idx_var = f"__foreach_idx_{var_name}"
     zero_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=zero_reg, operands=["0"])
-    ctx.emit(Opcode.DECL_VAR, operands=[idx_var, zero_reg])
+    ctx.emit_inst(Const(result_reg=zero_reg, value="0"))
+    ctx.emit_inst(DeclVar(name=idx_var, value_reg=zero_reg))
 
     len_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=len_reg,
-        operands=["len", coll_reg],
+    ctx.emit_inst(
+        CallFunction(result_reg=len_reg, func_name="len", args=(coll_reg,)),
         node=node,
     )
 
@@ -530,34 +521,38 @@ def lower_pascal_foreach(ctx: TreeSitterEmitContext, node) -> None:
     body_label = ctx.fresh_label("foreach_body")
     end_label = ctx.fresh_label("foreach_end")
 
-    ctx.emit(Opcode.LABEL, label=loop_label)
+    ctx.emit_inst(Label_(label=loop_label))
     cur_idx_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=cur_idx_reg, operands=[idx_var])
+    ctx.emit_inst(LoadVar(result_reg=cur_idx_reg, name=idx_var))
     cond_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=cond_reg, operands=["<", cur_idx_reg, len_reg])
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[body_label, end_label],
+    ctx.emit_inst(
+        Binop(result_reg=cond_reg, operator="<", left=cur_idx_reg, right=len_reg)
+    )
+    ctx.emit_inst(
+        BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)),
         node=node,
     )
 
-    ctx.emit(Opcode.LABEL, label=body_label)
+    ctx.emit_inst(Label_(label=body_label))
     elem_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_INDEX, result_reg=elem_reg, operands=[coll_reg, cur_idx_reg])
-    ctx.emit(Opcode.DECL_VAR, operands=[var_name, elem_reg])
+    ctx.emit_inst(
+        LoadIndex(result_reg=elem_reg, arr_reg=coll_reg, index_reg=cur_idx_reg)
+    )
+    ctx.emit_inst(DeclVar(name=var_name, value_reg=elem_reg))
     ctx.lower_stmt(body_node)
 
     cur2_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=cur2_reg, operands=[idx_var])
+    ctx.emit_inst(LoadVar(result_reg=cur2_reg, name=idx_var))
     one_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=one_reg, operands=["1"])
+    ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     next_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=next_reg, operands=["+", cur2_reg, one_reg])
-    ctx.emit(Opcode.STORE_VAR, operands=[idx_var, next_reg])
-    ctx.emit(Opcode.BRANCH, label=loop_label)
+    ctx.emit_inst(
+        Binop(result_reg=next_reg, operator="+", left=cur2_reg, right=one_reg)
+    )
+    ctx.emit_inst(StoreVar(name=idx_var, value_reg=next_reg))
+    ctx.emit_inst(Branch(label=loop_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_pascal_goto(ctx: TreeSitterEmitContext, node) -> None:
@@ -566,7 +561,7 @@ def lower_pascal_goto(ctx: TreeSitterEmitContext, node) -> None:
         (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
     )
     label_name = ctx.node_text(id_node) if id_node else "unknown"
-    ctx.emit(Opcode.BRANCH, label=CodeLabel(label_name), node=node)
+    ctx.emit_inst(Branch(label=CodeLabel(label_name)), node=node)
 
 
 def lower_pascal_label(ctx: TreeSitterEmitContext, node) -> None:
@@ -575,7 +570,7 @@ def lower_pascal_label(ctx: TreeSitterEmitContext, node) -> None:
         (c for c in node.children if c.type == PascalNodeType.IDENTIFIER), None
     )
     label_name = ctx.node_text(id_node) if id_node else "unknown"
-    ctx.emit(Opcode.LABEL, label=CodeLabel(label_name))
+    ctx.emit_inst(Label_(label=CodeLabel(label_name)))
 
 
 def lower_pascal_noop(ctx: TreeSitterEmitContext, node) -> None:
