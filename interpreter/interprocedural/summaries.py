@@ -12,6 +12,16 @@ from functools import reduce
 from interpreter.cfg_types import BasicBlock, CFG
 from interpreter.dataflow import DataflowResult, Definition, analyze
 from interpreter.ir import CodeLabel, Opcode, VAR_DEFINITION_OPCODES
+from interpreter.instructions import (
+    to_typed,
+    DeclVar,
+    StoreVar,
+    Symbolic,
+    Return_,
+    StoreField,
+    LoadField,
+    LoadVar,
+)
 from interpreter import constants
 from interpreter.interprocedural.types import (
     CallContext,
@@ -41,7 +51,8 @@ def _collect_boundary_labels(cfg: CFG) -> frozenset[str]:
         elif label.starts_with("func_") and any(
             inst.opcode == Opcode.SYMBOLIC
             and len(inst.operands) >= 1
-            and str(inst.operands[0]).startswith(constants.PARAM_PREFIX)
+            and isinstance((t := to_typed(inst)), Symbolic)
+            and str(t.hint).startswith(constants.PARAM_PREFIX)
             for inst in block.instructions
         ):
             boundaries.add(label)
@@ -93,7 +104,7 @@ def extract_sub_cfg(cfg: CFG, function_entry: FunctionEntry) -> CFG:
 def _find_param_names(cfg: CFG) -> frozenset[str]:
     """Find all parameter names declared via SYMBOLIC param:x → DECL_VAR/STORE_VAR x patterns."""
     return frozenset(
-        inst.operands[0]
+        to_typed(inst).name
         for block in cfg.blocks.values()
         for inst in block.instructions
         if inst.opcode in VAR_DEFINITION_OPCODES
@@ -104,12 +115,15 @@ def _find_param_names(cfg: CFG) -> frozenset[str]:
 
 def _is_param_store(cfg: CFG, block: BasicBlock, store_inst) -> bool:
     """Check if a DECL_VAR/STORE_VAR's RHS register was produced by a SYMBOLIC param: instruction."""
-    rhs_reg = store_inst.operands[1]
+    t_store = to_typed(store_inst)
+    assert isinstance(t_store, (DeclVar, StoreVar))
+    rhs_reg = t_store.value_reg
     return any(
         inst.opcode == Opcode.SYMBOLIC
         and inst.result_reg == rhs_reg
         and len(inst.operands) >= 1
-        and str(inst.operands[0]).startswith(constants.PARAM_PREFIX)
+        and isinstance((t := to_typed(inst)), Symbolic)
+        and str(t.hint).startswith(constants.PARAM_PREFIX)
         for inst in block.instructions
     )
 
@@ -120,7 +134,7 @@ def _find_return_operands(cfg: CFG) -> list[tuple[str, str, int]]:
     Returns list of (block_label, operand_register, instruction_index).
     """
     return [
-        (label, str(inst.operands[0]), idx)
+        (label, str(to_typed(inst).value_reg), idx)
         for label, block in cfg.blocks.items()
         for idx, inst in enumerate(block.instructions)
         if inst.opcode == Opcode.RETURN and len(inst.operands) >= 1
@@ -137,9 +151,9 @@ def _find_store_fields(cfg: CFG) -> list[tuple[str, int, str, str, str]]:
         (
             label,
             idx,
-            str(inst.operands[0]),
-            str(inst.operands[1]),
-            str(inst.operands[2]),
+            str((t := to_typed(inst)).obj_reg),
+            str(t.field_name),
+            str(t.value_reg),
         )
         for label, block in cfg.blocks.items()
         for idx, inst in enumerate(block.instructions)
@@ -154,7 +168,13 @@ def _find_load_fields(cfg: CFG) -> list[tuple[str, int, str, str, str]]:
     LOAD_FIELD operands: [obj_reg, field_name], result_reg = result
     """
     return [
-        (label, idx, str(inst.operands[0]), str(inst.operands[1]), inst.result_reg)
+        (
+            label,
+            idx,
+            str((t := to_typed(inst)).obj_reg),
+            str(t.field_name),
+            inst.result_reg,
+        )
         for label, block in cfg.blocks.items()
         for idx, inst in enumerate(block.instructions)
         if inst.opcode == Opcode.LOAD_FIELD
@@ -194,7 +214,9 @@ def _trace_register_to_named_var(
     """
     for defn in dataflow.definitions:
         if defn.variable == register and defn.instruction.opcode == Opcode.LOAD_VAR:
-            return str(defn.instruction.operands[0])
+            t = to_typed(defn.instruction)
+            assert isinstance(t, LoadVar)
+            return str(t.name)
     return None
 
 
@@ -210,7 +232,9 @@ def _find_register_source_var(
                 and inst.result_reg == register
                 and len(inst.operands) >= 1
             ):
-                return str(inst.operands[0])
+                t = to_typed(inst)
+                assert isinstance(t, LoadVar)
+                return str(t.name)
     return None
 
 
@@ -235,7 +259,9 @@ def _trace_register_to_source_vars(register: str, cfg: CFG) -> frozenset[str]:
                 if inst.result_reg != reg:
                     continue
                 if inst.opcode == Opcode.LOAD_VAR and len(inst.operands) >= 1:
-                    source_vars.add(str(inst.operands[0]))
+                    t = to_typed(inst)
+                    assert isinstance(t, LoadVar)
+                    source_vars.add(str(t.name))
                 else:
                     worklist.extend(
                         str(op)
@@ -317,12 +343,12 @@ def _add_field_to_return_flows(
     # Find DECL_VAR/STORE_VAR instructions for this variable where the RHS comes from a LOAD_FIELD
     for block in cfg.blocks.values():
         for inst in block.instructions:
-            if (
-                inst.opcode in VAR_DEFINITION_OPCODES
-                and len(inst.operands) >= 2
-                and inst.operands[0] == var_name
-            ):
-                rhs_reg = inst.operands[1]
+            if inst.opcode in VAR_DEFINITION_OPCODES and len(inst.operands) >= 2:
+                t = to_typed(inst)
+                assert isinstance(t, (DeclVar, StoreVar))
+                if t.name != var_name:
+                    continue
+                rhs_reg = t.value_reg
                 # Check if rhs_reg was produced by a LOAD_FIELD
                 for lf_label, lf_idx, lf_obj_reg, lf_field, lf_result in load_fields:
                     if lf_result == rhs_reg:

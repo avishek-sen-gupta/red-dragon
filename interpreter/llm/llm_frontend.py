@@ -20,6 +20,7 @@ from interpreter.ir import (
     CodeLabel,
     NO_LABEL,
 )
+from interpreter.instructions import to_typed, Const
 from interpreter.llm.llm_client import LLMClient
 from interpreter import constants
 
@@ -301,7 +302,9 @@ def _convert_llm_func_refs(
     """
     for inst in instructions:
         if inst.opcode == Opcode.CONST and inst.operands:
-            operand = str(inst.operands[0])
+            t = to_typed(inst)
+            assert isinstance(t, Const)
+            operand = str(t.value)
             m = _LLM_FUNC_REF_RE.search(operand)
             if m:
                 name, label = m.group(1), CodeLabel(m.group(2))
@@ -320,7 +323,9 @@ def _convert_llm_class_refs(
     """
     for inst in instructions:
         if inst.opcode == Opcode.CONST and inst.operands:
-            operand = str(inst.operands[0])
+            t = to_typed(inst)
+            assert isinstance(t, Const)
+            operand = str(t.value)
             m = _LLM_CLASS_REF_RE.search(operand)
             if m:
                 name, label = m.group(1), CodeLabel(m.group(2))
