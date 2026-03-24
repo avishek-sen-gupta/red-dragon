@@ -26,8 +26,8 @@ from pathlib import Path
 from interpreter.cfg import build_cfg
 from interpreter.ir import IRInstruction, CodeLabel
 from interpreter.instructions import (
+    Instruction,
     to_typed,
-    to_flat,
     CallFunction,
     DeclVar,
     Const,
@@ -90,7 +90,7 @@ def _transform_instruction(
     inst: IRInstruction,
     prefix: str,
     reg_offset: int,
-) -> IRInstruction:
+) -> Instruction:
     """Namespace labels, rebase registers, namespace CONST func/class refs."""
     typed = to_typed(inst)
 
@@ -103,6 +103,7 @@ def _transform_instruction(
     # Special case: CONST with func/class label refs stored as string values
     if (
         isinstance(transformed, Const)
+        and isinstance(transformed.value, str)
         and transformed.value
         and (
             transformed.value.startswith(constants.FUNC_LABEL_PREFIX)
@@ -113,7 +114,7 @@ def _transform_instruction(
             transformed, value=namespace_label(transformed.value, prefix)
         )
 
-    return to_flat(transformed)
+    return transformed
 
 
 def _is_import_call(inst: IRInstruction) -> bool:
@@ -254,7 +255,7 @@ def link_modules(
     ]
 
     # Build merged IR with a single entry label
-    all_ir: list[IRInstruction] = [to_flat(Label_(label=CodeLabel("entry")))]
+    all_ir: list[IRInstruction] = [Label_(label=CodeLabel("entry"))]
     reg_offset = 0
 
     for file_path in processing_order:

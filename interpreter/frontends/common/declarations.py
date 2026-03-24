@@ -122,13 +122,13 @@ def lower_function_def(
         ),
         node=node,
     )
-    ctx.emit_inst(Return_(value_reg=str(none_reg)), node=node)
+    ctx.emit_inst(Return_(value_reg=none_reg), node=node)
 
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg, node=node)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=str(func_reg)), node=node)
+    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg), node=node)
 
 
 FieldInit = tuple  # (field_name: str, value_node)
@@ -195,12 +195,12 @@ def emit_synthetic_init(
             value=ctx.constants.default_return_value,
         ),
     )
-    ctx.emit_inst(Return_(value_reg=str(none_reg)))
+    ctx.emit_inst(Return_(value_reg=none_reg))
     ctx.emit_inst(Label_(label=end_label))
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=str(func_reg)))
+    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
 
 
 def lower_class_def(ctx: TreeSitterEmitContext, node, parents: list[str] = []) -> None:
@@ -219,7 +219,7 @@ def lower_class_def(ctx: TreeSitterEmitContext, node, parents: list[str] = []) -
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=class_name, value_reg=str(cls_reg)), node=node)
+    ctx.emit_inst(DeclVar(name=class_name, value_reg=cls_reg), node=node)
 
 
 def lower_var_declaration(ctx: TreeSitterEmitContext, node) -> None:

@@ -1,8 +1,8 @@
-"""Round-trip tests for typed instruction classes.
+"""Tests for typed instruction classes.
 
-Every instruction that the frontends and COBOL emitter produce must survive
-``to_typed(inst).to_flat()`` losslessly.  These tests define the contract
-before the implementation exists.
+Verifies that ``to_typed(inst)`` produces correct typed instructions
+from flat IRInstruction objects, and that ``str(typed)`` matches the
+original ``str(inst)`` output.
 """
 
 from __future__ import annotations
@@ -25,50 +25,26 @@ def _loc() -> SourceLocation:
     return SourceLocation(start_line=1, start_col=0, end_line=1, end_col=10)
 
 
-# ── Helper: round-trip assertion ─────────────────────────────────
+# ── Helper: to_typed assertion ─────────────────────────────────
 
 
-def _assert_round_trip(inst: IRInstruction) -> None:
-    """Assert flat → typed → flat produces an equivalent instruction."""
-    from interpreter.instructions import to_flat, to_typed
+def _assert_to_typed(inst: IRInstruction) -> None:
+    """Assert flat → typed produces a correct instruction with matching str."""
+    from interpreter.instructions import to_typed
 
     typed = to_typed(inst)
     # Typed instruction must expose the correct opcode
     assert typed.opcode == inst.opcode
-    # Round-trip back to flat
-    flat = to_flat(typed)
-    assert flat.opcode == inst.opcode
-    assert flat.result_reg == inst.result_reg
-    assert flat.label == inst.label
-    assert flat.source_location == inst.source_location
-    # Operands: compare stringified to handle type coercion
-    assert len(flat.operands) == len(inst.operands), (
-        f"Operand count mismatch for {inst.opcode}: "
-        f"expected {len(inst.operands)}, got {len(flat.operands)}"
-    )
-    for i, (a, b) in enumerate(zip(flat.operands, inst.operands)):
-        if isinstance(b, list):
-            # TRY_PUSH catch_labels: list[CodeLabel]
-            assert isinstance(a, list)
-            assert len(a) == len(b)
-            for x, y in zip(a, b):
-                assert str(x) == str(y), f"operands[{i}] list element mismatch"
-        else:
-            assert str(a) == str(b), (
-                f"operands[{i}] mismatch for {inst.opcode}: "
-                f"expected {b!r}, got {a!r}"
-            )
-    assert len(flat.branch_targets) == len(inst.branch_targets)
-    for a, b in zip(flat.branch_targets, inst.branch_targets):
-        assert str(a) == str(b)
+    # str() output must match
+    assert str(typed) == str(inst)
 
 
 # ── Variables & Constants ────────────────────────────────────────
 
 
-class TestConstRoundTrip:
+class TestConstToTyped:
     def test_string_literal(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.CONST,
                 result_reg="%0",
@@ -78,51 +54,51 @@ class TestConstRoundTrip:
         )
 
     def test_numeric_literal(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(opcode=Opcode.CONST, result_reg="%1", operands=["42"])
         )
 
     def test_boolean_literal(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(opcode=Opcode.CONST, result_reg="%2", operands=["True"])
         )
 
     def test_none_literal(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(opcode=Opcode.CONST, result_reg="%3", operands=["None"])
         )
 
     def test_no_operands(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(opcode=Opcode.CONST, result_reg="%4", operands=[])
         )
 
 
-class TestLoadVarRoundTrip:
+class TestLoadVarToTyped:
     def test_basic(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(opcode=Opcode.LOAD_VAR, result_reg="%0", operands=["x"])
         )
 
     def test_this(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(opcode=Opcode.LOAD_VAR, result_reg="%1", operands=["this"])
         )
 
 
-class TestDeclVarRoundTrip:
+class TestDeclVarToTyped:
     def test_basic(self):
-        _assert_round_trip(IRInstruction(opcode=Opcode.DECL_VAR, operands=["x", "%0"]))
+        _assert_to_typed(IRInstruction(opcode=Opcode.DECL_VAR, operands=["x", "%0"]))
 
 
-class TestStoreVarRoundTrip:
+class TestStoreVarToTyped:
     def test_basic(self):
-        _assert_round_trip(IRInstruction(opcode=Opcode.STORE_VAR, operands=["y", "%1"]))
+        _assert_to_typed(IRInstruction(opcode=Opcode.STORE_VAR, operands=["y", "%1"]))
 
 
-class TestSymbolicRoundTrip:
+class TestSymbolicToTyped:
     def test_param(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.SYMBOLIC,
                 result_reg="%0",
@@ -131,7 +107,7 @@ class TestSymbolicRoundTrip:
         )
 
     def test_empty_hint(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(opcode=Opcode.SYMBOLIC, result_reg="%1", operands=[])
         )
 
@@ -139,9 +115,9 @@ class TestSymbolicRoundTrip:
 # ── Arithmetic ───────────────────────────────────────────────────
 
 
-class TestBinopRoundTrip:
+class TestBinopToTyped:
     def test_add(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.BINOP,
                 result_reg="%2",
@@ -150,7 +126,7 @@ class TestBinopRoundTrip:
         )
 
     def test_comparison(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.BINOP,
                 result_reg="%3",
@@ -159,9 +135,9 @@ class TestBinopRoundTrip:
         )
 
 
-class TestUnopRoundTrip:
+class TestUnopToTyped:
     def test_negate(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.UNOP,
                 result_reg="%1",
@@ -173,9 +149,9 @@ class TestUnopRoundTrip:
 # ── Calls ────────────────────────────────────────────────────────
 
 
-class TestCallFunctionRoundTrip:
+class TestCallFunctionToTyped:
     def test_no_args(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg="%0",
@@ -184,7 +160,7 @@ class TestCallFunctionRoundTrip:
         )
 
     def test_with_args(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg="%2",
@@ -193,7 +169,7 @@ class TestCallFunctionRoundTrip:
         )
 
     def test_with_spread(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.CALL_FUNCTION,
                 result_reg="%3",
@@ -202,9 +178,9 @@ class TestCallFunctionRoundTrip:
         )
 
 
-class TestCallMethodRoundTrip:
+class TestCallMethodToTyped:
     def test_basic(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.CALL_METHOD,
                 result_reg="%2",
@@ -213,7 +189,7 @@ class TestCallMethodRoundTrip:
         )
 
     def test_with_args(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.CALL_METHOD,
                 result_reg="%3",
@@ -222,9 +198,9 @@ class TestCallMethodRoundTrip:
         )
 
 
-class TestCallUnknownRoundTrip:
+class TestCallUnknownToTyped:
     def test_basic(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.CALL_UNKNOWN,
                 result_reg="%1",
@@ -233,7 +209,7 @@ class TestCallUnknownRoundTrip:
         )
 
     def test_with_args(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.CALL_UNKNOWN,
                 result_reg="%3",
@@ -245,9 +221,9 @@ class TestCallUnknownRoundTrip:
 # ── Memory — Fields ──────────────────────────────────────────────
 
 
-class TestLoadFieldRoundTrip:
+class TestLoadFieldToTyped:
     def test_basic(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.LOAD_FIELD,
                 result_reg="%1",
@@ -256,9 +232,9 @@ class TestLoadFieldRoundTrip:
         )
 
 
-class TestStoreFieldRoundTrip:
+class TestStoreFieldToTyped:
     def test_basic(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.STORE_FIELD,
                 operands=["%0", "count", "%1"],
@@ -266,9 +242,9 @@ class TestStoreFieldRoundTrip:
         )
 
 
-class TestLoadFieldIndirectRoundTrip:
+class TestLoadFieldIndirectToTyped:
     def test_basic(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.LOAD_FIELD_INDIRECT,
                 result_reg="%2",
@@ -280,9 +256,9 @@ class TestLoadFieldIndirectRoundTrip:
 # ── Memory — Indexing ────────────────────────────────────────────
 
 
-class TestLoadIndexRoundTrip:
+class TestLoadIndexToTyped:
     def test_basic(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.LOAD_INDEX,
                 result_reg="%2",
@@ -291,9 +267,9 @@ class TestLoadIndexRoundTrip:
         )
 
 
-class TestStoreIndexRoundTrip:
+class TestStoreIndexToTyped:
     def test_basic(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.STORE_INDEX,
                 operands=["%0", "%1", "%2"],
@@ -304,9 +280,9 @@ class TestStoreIndexRoundTrip:
 # ── Memory — Pointers ────────────────────────────────────────────
 
 
-class TestLoadIndirectRoundTrip:
+class TestLoadIndirectToTyped:
     def test_basic(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.LOAD_INDIRECT,
                 result_reg="%1",
@@ -315,9 +291,9 @@ class TestLoadIndirectRoundTrip:
         )
 
 
-class TestStoreIndirectRoundTrip:
+class TestStoreIndirectToTyped:
     def test_basic(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.STORE_INDIRECT,
                 operands=["%0", "%1"],
@@ -325,9 +301,9 @@ class TestStoreIndirectRoundTrip:
         )
 
 
-class TestAddressOfRoundTrip:
+class TestAddressOfToTyped:
     def test_basic(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.ADDRESS_OF,
                 result_reg="%1",
@@ -339,9 +315,9 @@ class TestAddressOfRoundTrip:
 # ── Objects ──────────────────────────────────────────────────────
 
 
-class TestNewObjectRoundTrip:
+class TestNewObjectToTyped:
     def test_with_type(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.NEW_OBJECT,
                 result_reg="%0",
@@ -350,14 +326,14 @@ class TestNewObjectRoundTrip:
         )
 
     def test_empty_type(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(opcode=Opcode.NEW_OBJECT, result_reg="%0", operands=[])
         )
 
 
-class TestNewArrayRoundTrip:
+class TestNewArrayToTyped:
     def test_basic(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.NEW_ARRAY,
                 result_reg="%1",
@@ -369,19 +345,19 @@ class TestNewArrayRoundTrip:
 # ── Control Flow ─────────────────────────────────────────────────
 
 
-class TestLabelRoundTrip:
+class TestLabelToTyped:
     def test_basic(self):
-        _assert_round_trip(IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")))
+        _assert_to_typed(IRInstruction(opcode=Opcode.LABEL, label=CodeLabel("entry")))
 
 
-class TestBranchRoundTrip:
+class TestBranchToTyped:
     def test_basic(self):
-        _assert_round_trip(IRInstruction(opcode=Opcode.BRANCH, label=CodeLabel("L_1")))
+        _assert_to_typed(IRInstruction(opcode=Opcode.BRANCH, label=CodeLabel("L_1")))
 
 
-class TestBranchIfRoundTrip:
+class TestBranchIfToTyped:
     def test_two_targets(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.BRANCH_IF,
                 operands=["%0"],
@@ -390,28 +366,28 @@ class TestBranchIfRoundTrip:
         )
 
 
-class TestReturnRoundTrip:
+class TestReturnToTyped:
     def test_with_value(self):
-        _assert_round_trip(IRInstruction(opcode=Opcode.RETURN, operands=["%0"]))
+        _assert_to_typed(IRInstruction(opcode=Opcode.RETURN, operands=["%0"]))
 
     def test_void(self):
-        _assert_round_trip(IRInstruction(opcode=Opcode.RETURN, operands=[]))
+        _assert_to_typed(IRInstruction(opcode=Opcode.RETURN, operands=[]))
 
 
-class TestThrowRoundTrip:
+class TestThrowToTyped:
     def test_with_value(self):
-        _assert_round_trip(IRInstruction(opcode=Opcode.THROW, operands=["%0"]))
+        _assert_to_typed(IRInstruction(opcode=Opcode.THROW, operands=["%0"]))
 
     def test_bare(self):
-        _assert_round_trip(IRInstruction(opcode=Opcode.THROW, operands=[]))
+        _assert_to_typed(IRInstruction(opcode=Opcode.THROW, operands=[]))
 
 
 # ── Exceptions ───────────────────────────────────────────────────
 
 
-class TestTryPushRoundTrip:
+class TestTryPushToTyped:
     def test_basic(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.TRY_PUSH,
                 operands=[
@@ -423,7 +399,7 @@ class TestTryPushRoundTrip:
         )
 
     def test_multiple_catch(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.TRY_PUSH,
                 operands=[
@@ -435,17 +411,17 @@ class TestTryPushRoundTrip:
         )
 
 
-class TestTryPopRoundTrip:
+class TestTryPopToTyped:
     def test_basic(self):
-        _assert_round_trip(IRInstruction(opcode=Opcode.TRY_POP))
+        _assert_to_typed(IRInstruction(opcode=Opcode.TRY_POP))
 
 
 # ── Regions ──────────────────────────────────────────────────────
 
 
-class TestAllocRegionRoundTrip:
+class TestAllocRegionToTyped:
     def test_basic(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.ALLOC_REGION,
                 result_reg="%1",
@@ -454,9 +430,9 @@ class TestAllocRegionRoundTrip:
         )
 
 
-class TestLoadRegionRoundTrip:
+class TestLoadRegionToTyped:
     def test_basic(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.LOAD_REGION,
                 result_reg="%2",
@@ -465,9 +441,9 @@ class TestLoadRegionRoundTrip:
         )
 
 
-class TestWriteRegionRoundTrip:
+class TestWriteRegionToTyped:
     def test_basic(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.WRITE_REGION,
                 operands=["%0", "%1", 8, "%2"],
@@ -478,9 +454,9 @@ class TestWriteRegionRoundTrip:
 # ── Continuations ────────────────────────────────────────────────
 
 
-class TestSetContinuationRoundTrip:
+class TestSetContinuationToTyped:
     def test_basic(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.SET_CONTINUATION,
                 operands=["__cont", CodeLabel("L_resume")],
@@ -488,9 +464,9 @@ class TestSetContinuationRoundTrip:
         )
 
 
-class TestResumeContinuationRoundTrip:
+class TestResumeContinuationToTyped:
     def test_basic(self):
-        _assert_round_trip(
+        _assert_to_typed(
             IRInstruction(
                 opcode=Opcode.RESUME_CONTINUATION,
                 operands=["__cont"],

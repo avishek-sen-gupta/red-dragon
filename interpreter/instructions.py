@@ -3,9 +3,8 @@
 Replaces the flat ``IRInstruction.operands: list[Any]`` with named, typed
 fields on per-opcode frozen dataclasses.
 
-Migration adapter: ``to_typed()`` converts flat → typed, ``to_flat()``
-converts typed → flat.  Both directions are lossless; the full test suite
-must survive ``to_typed(inst).to_flat() == inst`` for every instruction.
+``to_typed()`` converts legacy flat IRInstruction → typed.  Already-typed
+instructions pass through unchanged.
 """
 
 from __future__ import annotations
@@ -96,7 +95,12 @@ class InstructionBase:
     source_location: SourceLocation = field(default_factory=lambda: NO_SOURCE_LOCATION)
 
     def map_registers(self, fn: Callable[[Register], Register]) -> Self:
-        """Apply fn to every Register-typed field, return a new instruction."""
+        """Apply fn to every Register-typed field, return a new instruction.
+
+        Handles string values in Register-typed fields by wrapping them as
+        Register before applying fn (legacy compatibility for construction
+        sites that still pass strings instead of Register objects).
+        """
         changes: dict[str, object] = {}
         hints = get_type_hints(type(self))
         for f in dataclasses.fields(self):
@@ -104,6 +108,12 @@ class InstructionBase:
             val = getattr(self, f.name)
             if isinstance(val, Register):
                 changes[f.name] = fn(val)
+            elif (
+                isinstance(val, str)
+                and val.startswith("%")
+                and (hint is Register or _is_optional_register(hint))
+            ):
+                changes[f.name] = fn(Register(val))
             elif isinstance(val, SpreadArguments):
                 changes[f.name] = SpreadArguments(register=fn(val.register))
             elif val is None and _is_optional_register(hint):
@@ -114,7 +124,9 @@ class InstructionBase:
                         SpreadArguments(register=fn(a.register))
                         if isinstance(a, SpreadArguments)
                         else (
-                            fn(a) if isinstance(a, Register) else a
+                            fn(Register(a))
+                            if isinstance(a, str) and a.startswith("%")
+                            else fn(a) if isinstance(a, Register) else a
                         )  # literal (str/int/float) — keep as-is
                     )
                     for a in val
@@ -136,7 +148,31 @@ class InstructionBase:
 
     def __str__(self) -> str:
         """Render in the same format as IRInstruction.__str__."""
-        return str(to_flat(self))
+        parts: list[str] = []
+        if (
+            hasattr(self, "label")
+            and self.label.is_present()
+            and self.opcode == Opcode.LABEL
+        ):
+            base = f"{self.label}:"
+        else:
+            if self.result_reg.is_present():
+                parts.append(f"{self.result_reg} =")
+            parts.append(self.opcode.value.lower())
+            for op in self.operands:
+                parts.append(str(op))
+            if hasattr(self, "branch_targets") and self.branch_targets:
+                parts.append(",".join(str(t) for t in self.branch_targets))
+            elif (
+                hasattr(self, "label")
+                and self.label.is_present()
+                and self.opcode != Opcode.LABEL
+            ):
+                parts.append(str(self.label))
+            base = " ".join(parts)
+        if not self.source_location.is_unknown():
+            return f"{base}  # {self.source_location}"
+        return base
 
 
 # ── Variables & Constants ────────────────────────────────────────
@@ -1235,343 +1271,15 @@ _TO_TYPED: dict[Opcode, object] = {
 }
 
 
-def to_typed(inst: IRInstruction) -> Instruction:
-    """Convert a flat IRInstruction to a per-opcode typed instruction."""
+def to_typed(inst: IRInstruction | InstructionBase) -> Instruction:
+    """Convert a flat IRInstruction to a per-opcode typed instruction.
+
+    If *inst* is already a typed instruction (InstructionBase subclass),
+    it is returned as-is.
+    """
+    if isinstance(inst, InstructionBase):
+        return inst
     converter = _TO_TYPED.get(inst.opcode)
     if converter is None:
         raise ValueError(f"Unknown opcode: {inst.opcode}")
     return converter(inst)
-
-
-# ── Conversion: typed → flat ─────────────────────────────────────
-
-# Dispatch table: type → converter function.
-# Each converter takes (Instruction) → IRInstruction.
-
-
-def _flat_const(t: Const) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.CONST,
-        result_reg=t.result_reg,
-        operands=[t.value] if t.value != "" else [],
-        source_location=t.source_location,
-    )
-
-
-def _flat_load_var(t: LoadVar) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.LOAD_VAR,
-        result_reg=t.result_reg,
-        operands=[t.name],
-        source_location=t.source_location,
-    )
-
-
-def _flat_decl_var(t: DeclVar) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.DECL_VAR,
-        operands=[t.name, str(t.value_reg)],
-        source_location=t.source_location,
-    )
-
-
-def _flat_store_var(t: StoreVar) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.STORE_VAR,
-        operands=[t.name, str(t.value_reg)],
-        source_location=t.source_location,
-    )
-
-
-def _flat_symbolic(t: Symbolic) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.SYMBOLIC,
-        result_reg=t.result_reg,
-        operands=[t.hint] if t.hint else [],
-        source_location=t.source_location,
-    )
-
-
-def _flat_binop(t: Binop) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.BINOP,
-        result_reg=t.result_reg,
-        operands=[t.operator, str(t.left), str(t.right)],
-        source_location=t.source_location,
-    )
-
-
-def _flat_unop(t: Unop) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.UNOP,
-        result_reg=t.result_reg,
-        operands=[t.operator, str(t.operand)],
-        source_location=t.source_location,
-    )
-
-
-def _flat_call_function(t: CallFunction) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.CALL_FUNCTION,
-        result_reg=t.result_reg,
-        operands=[
-            t.func_name,
-            *(str(a) if isinstance(a, Register) else a for a in t.args),
-        ],
-        source_location=t.source_location,
-    )
-
-
-def _flat_call_method(t: CallMethod) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.CALL_METHOD,
-        result_reg=t.result_reg,
-        operands=[
-            str(t.obj_reg),
-            t.method_name,
-            *(str(a) if isinstance(a, Register) else a for a in t.args),
-        ],
-        source_location=t.source_location,
-    )
-
-
-def _flat_call_unknown(t: CallUnknown) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.CALL_UNKNOWN,
-        result_reg=t.result_reg,
-        operands=[
-            str(t.target_reg),
-            *(str(a) if isinstance(a, Register) else a for a in t.args),
-        ],
-        source_location=t.source_location,
-    )
-
-
-def _flat_load_field(t: LoadField) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.LOAD_FIELD,
-        result_reg=t.result_reg,
-        operands=[str(t.obj_reg), t.field_name],
-        source_location=t.source_location,
-    )
-
-
-def _flat_store_field(t: StoreField) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.STORE_FIELD,
-        operands=[str(t.obj_reg), t.field_name, str(t.value_reg)],
-        source_location=t.source_location,
-    )
-
-
-def _flat_load_field_indirect(t: LoadFieldIndirect) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.LOAD_FIELD_INDIRECT,
-        result_reg=t.result_reg,
-        operands=[str(t.obj_reg), str(t.name_reg)],
-        source_location=t.source_location,
-    )
-
-
-def _flat_load_index(t: LoadIndex) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.LOAD_INDEX,
-        result_reg=t.result_reg,
-        operands=[str(t.arr_reg), str(t.index_reg)],
-        source_location=t.source_location,
-    )
-
-
-def _flat_store_index(t: StoreIndex) -> IRInstruction:
-    vr = t.value_reg if isinstance(t.value_reg, SpreadArguments) else str(t.value_reg)
-    return IRInstruction(
-        opcode=Opcode.STORE_INDEX,
-        operands=[str(t.arr_reg), str(t.index_reg), vr],
-        source_location=t.source_location,
-    )
-
-
-def _flat_load_indirect(t: LoadIndirect) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.LOAD_INDIRECT,
-        result_reg=t.result_reg,
-        operands=[str(t.ptr_reg)],
-        source_location=t.source_location,
-    )
-
-
-def _flat_store_indirect(t: StoreIndirect) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.STORE_INDIRECT,
-        operands=[str(t.ptr_reg), str(t.value_reg)],
-        source_location=t.source_location,
-    )
-
-
-def _flat_address_of(t: AddressOf) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.ADDRESS_OF,
-        result_reg=t.result_reg,
-        operands=[t.var_name],
-        source_location=t.source_location,
-    )
-
-
-def _flat_new_object(t: NewObject) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.NEW_OBJECT,
-        result_reg=t.result_reg,
-        operands=[t.type_hint] if t.type_hint else [],
-        source_location=t.source_location,
-    )
-
-
-def _flat_new_array(t: NewArray) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.NEW_ARRAY,
-        result_reg=t.result_reg,
-        operands=[t.type_hint, str(t.size_reg)],
-        source_location=t.source_location,
-    )
-
-
-def _flat_label(t: Label_) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.LABEL,
-        label=t.label,
-        source_location=t.source_location,
-    )
-
-
-def _flat_branch(t: Branch) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.BRANCH,
-        label=t.label,
-        source_location=t.source_location,
-    )
-
-
-def _flat_branch_if(t: BranchIf) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.BRANCH_IF,
-        operands=[str(t.cond_reg)],
-        branch_targets=list(t.branch_targets),
-        source_location=t.source_location,
-    )
-
-
-def _flat_return(t: Return_) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.RETURN,
-        operands=[str(t.value_reg)] if t.value_reg is not None else [],
-        source_location=t.source_location,
-    )
-
-
-def _flat_throw(t: Throw_) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.THROW,
-        operands=[str(t.value_reg)] if t.value_reg is not None else [],
-        source_location=t.source_location,
-    )
-
-
-def _flat_try_push(t: TryPush) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.TRY_PUSH,
-        operands=[list(t.catch_labels), t.finally_label, t.end_label],
-        source_location=t.source_location,
-    )
-
-
-def _flat_try_pop(t: TryPop) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.TRY_POP,
-        source_location=t.source_location,
-    )
-
-
-def _flat_alloc_region(t: AllocRegion) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.ALLOC_REGION,
-        result_reg=t.result_reg,
-        operands=[str(t.size_reg)],
-        source_location=t.source_location,
-    )
-
-
-def _flat_load_region(t: LoadRegion) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.LOAD_REGION,
-        result_reg=t.result_reg,
-        operands=[str(t.region_reg), str(t.offset_reg), t.length],
-        source_location=t.source_location,
-    )
-
-
-def _flat_write_region(t: WriteRegion) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.WRITE_REGION,
-        operands=[str(t.region_reg), str(t.offset_reg), t.length, str(t.value_reg)],
-        source_location=t.source_location,
-    )
-
-
-def _flat_set_continuation(t: SetContinuation) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.SET_CONTINUATION,
-        operands=[t.name, t.target_label],
-        source_location=t.source_location,
-    )
-
-
-def _flat_resume_continuation(t: ResumeContinuation) -> IRInstruction:
-    return IRInstruction(
-        opcode=Opcode.RESUME_CONTINUATION,
-        operands=[t.name],
-        source_location=t.source_location,
-    )
-
-
-_TO_FLAT: dict[type, object] = {
-    Const: _flat_const,
-    LoadVar: _flat_load_var,
-    DeclVar: _flat_decl_var,
-    StoreVar: _flat_store_var,
-    Symbolic: _flat_symbolic,
-    Binop: _flat_binop,
-    Unop: _flat_unop,
-    CallFunction: _flat_call_function,
-    CallMethod: _flat_call_method,
-    CallUnknown: _flat_call_unknown,
-    LoadField: _flat_load_field,
-    StoreField: _flat_store_field,
-    LoadFieldIndirect: _flat_load_field_indirect,
-    LoadIndex: _flat_load_index,
-    StoreIndex: _flat_store_index,
-    LoadIndirect: _flat_load_indirect,
-    StoreIndirect: _flat_store_indirect,
-    AddressOf: _flat_address_of,
-    NewObject: _flat_new_object,
-    NewArray: _flat_new_array,
-    Label_: _flat_label,
-    Branch: _flat_branch,
-    BranchIf: _flat_branch_if,
-    Return_: _flat_return,
-    Throw_: _flat_throw,
-    TryPush: _flat_try_push,
-    TryPop: _flat_try_pop,
-    AllocRegion: _flat_alloc_region,
-    LoadRegion: _flat_load_region,
-    WriteRegion: _flat_write_region,
-    SetContinuation: _flat_set_continuation,
-    ResumeContinuation: _flat_resume_continuation,
-}
-
-
-def to_flat(typed: Instruction) -> IRInstruction:
-    """Convert a per-opcode typed instruction back to flat IRInstruction."""
-    converter = _TO_FLAT.get(type(typed))
-    if converter is None:
-        raise ValueError(f"Unknown instruction type: {type(typed).__name__}")
-    return converter(typed)
