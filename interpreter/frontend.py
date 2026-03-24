@@ -9,7 +9,8 @@ from interpreter.constants import Language
 from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
-from interpreter.ir import IRInstruction, CodeLabel
+from interpreter.ir import CodeLabel
+from interpreter.instructions import InstructionBase
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter import constants
 from interpreter.constants import LLMProvider
@@ -22,7 +23,7 @@ _NO_REPAIR_CLIENT = object()  # sentinel — distinct from None
 
 class Frontend(ABC):
     @abstractmethod
-    def lower(self, source: bytes) -> list[IRInstruction]: ...
+    def lower(self, source: bytes) -> list[InstructionBase]: ...
 
     @property
     def data_layout(self) -> dict[str, dict]:

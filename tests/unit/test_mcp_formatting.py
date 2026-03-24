@@ -11,7 +11,7 @@ from interpreter.interprocedural.types import (
     ReturnEndpoint,
     VariableEndpoint,
 )
-from interpreter.ir import IRInstruction, Opcode, CodeLabel
+from interpreter.ir import Opcode, CodeLabel
 from interpreter.types.typed_value import TypedValue
 from interpreter.constants import TypeName
 from interpreter.types.type_expr import ScalarType

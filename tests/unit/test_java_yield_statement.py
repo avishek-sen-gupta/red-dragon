@@ -4,15 +4,18 @@ from __future__ import annotations
 
 from interpreter.frontends.java import JavaFrontend
 from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import Opcode
+from interpreter.instructions import InstructionBase
 
 
-def _parse_java(source: str) -> list[IRInstruction]:
+def _parse_java(source: str) -> list[InstructionBase]:
     frontend = JavaFrontend(TreeSitterParserFactory(), "java")
     return frontend.lower(source.encode("utf-8"))
 
 
-def _find_all(instructions: list[IRInstruction], opcode: Opcode) -> list[IRInstruction]:
+def _find_all(
+    instructions: list[InstructionBase], opcode: Opcode
+) -> list[InstructionBase]:
     return [inst for inst in instructions if inst.opcode == opcode]
 
 

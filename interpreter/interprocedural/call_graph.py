@@ -5,9 +5,8 @@ from __future__ import annotations
 import logging
 
 from interpreter.cfg_types import CFG
-from interpreter.ir import CodeLabel, IRInstruction
+from interpreter.ir import CodeLabel
 from interpreter.instructions import (
-    to_typed,
     CallFunction,
     CallMethod,
     CallUnknown,
@@ -107,7 +106,7 @@ def build_call_graph(cfg: CFG, registry: FunctionRegistry) -> CallGraph:
             continue
 
         for idx, inst in enumerate(block.instructions):
-            t = to_typed(inst) if isinstance(inst, IRInstruction) else inst
+            t = inst
             if not isinstance(t, (CallFunction, CallMethod, CallUnknown)):
                 continue
 

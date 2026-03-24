@@ -9,21 +9,24 @@ from __future__ import annotations
 
 from interpreter.frontends.ruby import RubyFrontend
 from interpreter.parser import TreeSitterParserFactory
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import Opcode
+from interpreter.instructions import InstructionBase
 
 
-def _parse_ruby(source: str) -> list[IRInstruction]:
+def _parse_ruby(source: str) -> list[InstructionBase]:
     frontend = RubyFrontend(TreeSitterParserFactory(), "ruby")
     return frontend.lower(source.encode("utf-8"))
 
 
-def _find_all(instructions: list[IRInstruction], opcode: Opcode) -> list[IRInstruction]:
+def _find_all(
+    instructions: list[InstructionBase], opcode: Opcode
+) -> list[InstructionBase]:
     return [inst for inst in instructions if inst.opcode == opcode]
 
 
 def _instructions_between_labels(
-    instructions: list[IRInstruction], start_prefix: str, end_prefix: str
-) -> list[IRInstruction]:
+    instructions: list[InstructionBase], start_prefix: str, end_prefix: str
+) -> list[InstructionBase]:
     """Extract instructions between a LABEL matching start_prefix and one matching end_prefix."""
     inside = False
     result = []

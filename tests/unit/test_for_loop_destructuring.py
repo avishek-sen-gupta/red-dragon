@@ -18,16 +18,17 @@ from interpreter.frontends.javascript import JavaScriptFrontend
 from interpreter.frontends.typescript import TypeScriptFrontend
 from interpreter.frontends.kotlin import KotlinFrontend
 from interpreter.frontends.cpp import CppFrontend
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import Opcode
+from interpreter.instructions import InstructionBase
 from interpreter.parser import TreeSitterParserFactory
 
 
-def _lower(frontend_class, lang: str, source: str) -> list[IRInstruction]:
+def _lower(frontend_class, lang: str, source: str) -> list[InstructionBase]:
     frontend = frontend_class(TreeSitterParserFactory(), lang)
     return frontend.lower(source.encode("utf-8"))
 
 
-def _store_var_names(instructions: list[IRInstruction]) -> list[str]:
+def _store_var_names(instructions: list[InstructionBase]) -> list[str]:
     return [
         str(inst.operands[0])
         for inst in instructions
@@ -35,11 +36,11 @@ def _store_var_names(instructions: list[IRInstruction]) -> list[str]:
     ]
 
 
-def _load_index_count(instructions: list[IRInstruction]) -> int:
+def _load_index_count(instructions: list[InstructionBase]) -> int:
     return sum(1 for inst in instructions if inst.opcode == Opcode.LOAD_INDEX)
 
 
-def _load_field_names(instructions: list[IRInstruction]) -> list[str]:
+def _load_field_names(instructions: list[InstructionBase]) -> list[str]:
     return [
         str(inst.operands[1])
         for inst in instructions

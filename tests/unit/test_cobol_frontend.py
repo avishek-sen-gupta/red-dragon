@@ -9,7 +9,7 @@ from interpreter.cobol.asg_types import (
     CobolSection,
 )
 from interpreter.cobol.cobol_frontend import CobolFrontend
-from interpreter.instructions import AllocRegion, Const
+from interpreter.instructions import InstructionBase, AllocRegion, Const
 from interpreter.cobol.cobol_statements import (
     AcceptStatement,
     AlterStatement,
@@ -50,7 +50,7 @@ from interpreter.cobol.cobol_statements import (
     StartStatement,
     DeleteStatement,
 )
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import Opcode
 
 
 class _FakeParser:
@@ -64,8 +64,8 @@ class _FakeParser:
 
 
 def _find_opcodes(
-    instructions: list[IRInstruction], opcode: Opcode
-) -> list[IRInstruction]:
+    instructions: list[InstructionBase], opcode: Opcode
+) -> list[InstructionBase]:
     return [inst for inst in instructions if inst.opcode == opcode]
 
 
@@ -193,7 +193,7 @@ class TestProcedureDivisionLowering:
         self,
         fields: list[CobolField],
         stmts: list[CobolStatementType],
-    ) -> list[IRInstruction]:
+    ) -> list[InstructionBase]:
         asg = CobolASG(
             data_fields=fields,
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
@@ -463,7 +463,7 @@ class TestComputeLowering:
         self,
         fields: list[CobolField],
         stmts: list[CobolStatementType],
-    ) -> list[IRInstruction]:
+    ) -> list[InstructionBase]:
         asg = CobolASG(
             data_fields=fields,
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
@@ -626,7 +626,7 @@ class TestPerformLoopLowering:
         fields: list[CobolField],
         stmts: list[CobolStatementType],
         paragraphs: list[CobolParagraph] = [],
-    ) -> list[IRInstruction]:
+    ) -> list[InstructionBase]:
         asg = CobolASG(
             data_fields=fields,
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)] + paragraphs,
@@ -884,7 +884,7 @@ class TestTier1Lowering:
         self,
         fields: list[CobolField],
         stmts: list[CobolStatementType],
-    ) -> list[IRInstruction]:
+    ) -> list[InstructionBase]:
         asg = CobolASG(
             data_fields=fields,
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
@@ -1036,7 +1036,7 @@ class TestTier2Lowering:
         self,
         fields: list[CobolField],
         stmts: list[CobolStatementType],
-    ) -> list[IRInstruction]:
+    ) -> list[InstructionBase]:
         asg = CobolASG(
             data_fields=fields,
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
@@ -1247,7 +1247,7 @@ class TestSearchLowering:
         self,
         fields: list[CobolField],
         stmts: list[CobolStatementType],
-    ) -> list[IRInstruction]:
+    ) -> list[InstructionBase]:
         asg = CobolASG(
             data_fields=fields,
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],
@@ -1390,7 +1390,7 @@ class TestCallAlterEntryCancelLowering:
         self,
         fields: list[CobolField],
         stmts: list[CobolStatementType],
-    ) -> list[IRInstruction]:
+    ) -> list[InstructionBase]:
         asg = CobolASG(
             data_fields=fields,
             paragraphs=[CobolParagraph(name="MAIN", statements=stmts)],

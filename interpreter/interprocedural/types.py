@@ -8,6 +8,7 @@ from typing import Union
 from interpreter.cfg_types import BasicBlock, CFG
 from interpreter.dataflow import Definition
 from interpreter.ir import IRInstruction, Opcode, CodeLabel, NO_LABEL
+from interpreter.instructions import InstructionBase
 
 # ---------------------------------------------------------------------------
 # 1. InstructionLocation — hashable reference to an IR instruction
@@ -21,7 +22,7 @@ class InstructionLocation:
     block_label: CodeLabel
     instruction_index: int
 
-    def resolve(self, cfg: CFG) -> IRInstruction:
+    def resolve(self, cfg: CFG) -> InstructionBase:
         return cfg.blocks[self.block_label].instructions[self.instruction_index]
 
 
@@ -111,7 +112,7 @@ class CallSite:
     callees: frozenset[FunctionEntry]
     arg_operands: tuple[str, ...]
 
-    def instruction(self, cfg: CFG) -> IRInstruction:
+    def instruction(self, cfg: CFG) -> InstructionBase:
         return self.location.resolve(cfg)
 
     def block(self, cfg: CFG) -> BasicBlock:

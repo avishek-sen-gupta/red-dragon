@@ -23,7 +23,6 @@ from interpreter.types.coercion.default_conversion_rules import (
     DefaultTypeConversionRules,
 )
 from interpreter.frontend import get_frontend
-from interpreter.ir import IRInstruction
 from interpreter.ir_stats import count_opcodes
 from interpreter.parser import Parser, TreeSitterParserFactory
 from interpreter.registry import build_registry
@@ -57,7 +56,7 @@ def lower_source(
     language: str | Language = Language.PYTHON,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
     backend: str = LLMProvider.CLAUDE,
-) -> list[IRInstruction]:
+) -> list[InstructionBase]:
     """Parse and lower source code to IR instructions.
 
     Args:
@@ -80,7 +79,7 @@ def lower_and_infer(
     language: str | Language = Language.PYTHON,
     frontend_type: str = constants.FRONTEND_DETERMINISTIC,
     backend: str = LLMProvider.CLAUDE,
-) -> tuple[list[IRInstruction], TypeEnvironment]:
+) -> tuple[list[InstructionBase], TypeEnvironment]:
     """Parse, lower, and run type inference with frontend-seeded type annotations.
 
     Composes ``lower_source`` with ``infer_types``, propagating the frontend's

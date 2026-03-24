@@ -12,8 +12,8 @@ from interpreter.constants import Language
 from interpreter.frontend import get_frontend
 from interpreter.frontends.context import TreeSitterEmitContext, GrammarConstants
 from interpreter.frontend_observer import NullFrontendObserver
-from interpreter.ir import IRInstruction, Opcode, SourceLocation, NO_SOURCE_LOCATION
-from interpreter.instructions import Label_
+from interpreter.ir import Opcode, SourceLocation, NO_SOURCE_LOCATION
+from interpreter.instructions import InstructionBase, Label_
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 
@@ -34,7 +34,7 @@ class LoweringEvent:
     handler_module: str
     is_shared: bool
     dispatch_type: str  # "expr", "stmt", "block", "fallback"
-    instructions_emitted: list[IRInstruction] = field(default_factory=list)
+    instructions_emitted: list[InstructionBase] = field(default_factory=list)
     children: list[LoweringEvent] = field(default_factory=list)
 
 
@@ -45,7 +45,7 @@ class LoweringResult:
     source: str
     language: str
     events: list[LoweringEvent] = field(default_factory=list)
-    ir: list[IRInstruction] = field(default_factory=list)
+    ir: list[InstructionBase] = field(default_factory=list)
     cfg: CFG = field(default_factory=CFG)
 
 

@@ -15,24 +15,27 @@ from interpreter.frontends.lua import LuaFrontend
 from interpreter.frontends.php import PhpFrontend
 from interpreter.frontends.kotlin import KotlinFrontend
 from interpreter.frontends.csharp import CSharpFrontend
-from interpreter.ir import IRInstruction, Opcode
+from interpreter.ir import Opcode
+from interpreter.instructions import InstructionBase
 from interpreter.parser import TreeSitterParserFactory
 
 
-def _parse_and_lower(source: str, language: str, frontend) -> list[IRInstruction]:
+def _parse_and_lower(source: str, language: str, frontend) -> list[InstructionBase]:
     source_bytes = source.encode("utf-8")
     return frontend.lower(source_bytes)
 
 
-def _find_all(instructions: list[IRInstruction], opcode: Opcode) -> list[IRInstruction]:
+def _find_all(
+    instructions: list[InstructionBase], opcode: Opcode
+) -> list[InstructionBase]:
     return [inst for inst in instructions if inst.opcode == opcode]
 
 
-def _labels(instructions: list[IRInstruction]) -> list[str]:
+def _labels(instructions: list[InstructionBase]) -> list[str]:
     return [str(inst.label) for inst in instructions if inst.opcode == Opcode.LABEL]
 
 
-def _branches(instructions: list[IRInstruction]) -> list[str]:
+def _branches(instructions: list[InstructionBase]) -> list[str]:
     return [
         inst.label
         for inst in instructions

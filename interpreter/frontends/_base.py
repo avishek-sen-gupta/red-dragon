@@ -22,6 +22,7 @@ from interpreter.frontends.base_node_types import BaseNodeType
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.symbol_table import SymbolTable
 from interpreter.instructions import (
+    InstructionBase,
     Binop,
     Branch,
     BranchIf,
@@ -142,7 +143,7 @@ class BaseFrontend(Frontend):
         # Legacy state (used only by unconverted frontends)
         self._reg_counter: int = 0
         self._label_counter: int = 0
-        self._instructions: list[IRInstruction] = []
+        self._instructions: list[InstructionBase] = []
         self._source: bytes = b""
         self._loop_stack: list[dict[str, str]] = []
         self._break_target_stack: list[str] = []
@@ -171,7 +172,7 @@ class BaseFrontend(Frontend):
         branch_targets: list[CodeLabel] = [],
         source_location: SourceLocation = NO_SOURCE_LOCATION,
         node=None,
-    ) -> IRInstruction:
+    ) -> InstructionBase:
         loc = (
             source_location
             if not source_location.is_unknown()
@@ -237,7 +238,7 @@ class BaseFrontend(Frontend):
         parents: list[str],
         result_reg: str,
         node=None,
-    ) -> IRInstruction:
+    ) -> InstructionBase:
         """Legacy-mode equivalent of ctx.emit_class_ref().
 
         Emits the plain class_label as the CONST operand.  The symbol table
@@ -255,7 +256,7 @@ class BaseFrontend(Frontend):
 
     def _emit_func_ref(
         self, func_name: str, func_label: CodeLabel, result_reg: str, node=None
-    ) -> IRInstruction:
+    ) -> InstructionBase:
         """Legacy-mode equivalent of ctx.emit_func_ref().
 
         Emits the plain func_label as the CONST operand.  The symbol table
@@ -289,7 +290,7 @@ class BaseFrontend(Frontend):
 
     # ── entry point ──────────────────────────────────────────────
 
-    def lower(self, source: bytes) -> list[IRInstruction]:
+    def lower(self, source: bytes) -> list[InstructionBase]:
         t0 = time.perf_counter()
         parser = self._parser_factory.get_parser(self._language)
         tree = parser.parse(source)
@@ -315,7 +316,7 @@ class BaseFrontend(Frontend):
         self._observer.on_lower(time.perf_counter() - t1)
         return result
 
-    def _lower_with_context(self, source: bytes, root) -> list[IRInstruction]:
+    def _lower_with_context(self, source: bytes, root) -> list[InstructionBase]:
         """Context-mode lowering using TreeSitterEmitContext and pure functions."""
         grammar_constants = self._build_constants()
         symbol_table = self._extract_symbols(root)

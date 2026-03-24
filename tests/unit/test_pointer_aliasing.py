@@ -14,6 +14,7 @@ from __future__ import annotations
 import pytest
 
 from interpreter.ir import IRInstruction, Opcode
+from interpreter.instructions import InstructionBase
 from interpreter.vm.vm_types import (
     HeapObject,
     Pointer,
@@ -50,7 +51,7 @@ def _make_vm(**local_vars: object) -> VMState:
 
 def _make_inst(
     opcode: Opcode, result_reg: str = "", operands: list = ()
-) -> IRInstruction:
+) -> InstructionBase:
     return IRInstruction(
         opcode=opcode,
         result_reg=result_reg or None,

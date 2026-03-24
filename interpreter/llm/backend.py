@@ -6,7 +6,8 @@ import json
 from abc import ABC, abstractmethod
 from typing import Any
 
-from interpreter.ir import IRInstruction, CodeLabel
+from interpreter.instructions import InstructionBase
+from interpreter.ir import CodeLabel
 from interpreter.llm.llm_client import LLMClient, get_llm_client
 from interpreter.vm.vm import VMState, StateUpdate, _resolve_reg, _serialize_value
 
@@ -81,10 +82,10 @@ Respond with ONLY valid JSON. No markdown fences. No text outside the JSON objec
 
     @abstractmethod
     def interpret_instruction(
-        self, instruction: IRInstruction, state: VMState
+        self, instruction: InstructionBase, state: VMState
     ) -> StateUpdate: ...
 
-    def _build_prompt(self, instruction: IRInstruction, state: VMState) -> str:
+    def _build_prompt(self, instruction: InstructionBase, state: VMState) -> str:
         """Build a user prompt with resolved operand values."""
         frame = state.current_frame
 
@@ -140,7 +141,7 @@ class LLMInterpreterBackend(LLMBackend):
         self._llm_client = llm_client
 
     def interpret_instruction(
-        self, instruction: IRInstruction, state: VMState
+        self, instruction: InstructionBase, state: VMState
     ) -> StateUpdate:
         user_msg = self._build_prompt(instruction, state)
         raw = self._llm_client.complete(
