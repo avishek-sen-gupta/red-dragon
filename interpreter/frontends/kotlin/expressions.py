@@ -11,7 +11,28 @@ import re
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.ir import CodeLabel
+from interpreter.instructions import (
+    Binop,
+    Branch,
+    BranchIf,
+    CallFunction,
+    CallMethod,
+    CallUnknown,
+    Const,
+    DeclVar,
+    Label_,
+    LoadField,
+    LoadIndex,
+    LoadVar,
+    NewObject,
+    Return_,
+    StoreField,
+    StoreIndex,
+    StoreVar,
+    Symbolic,
+    Unop,
+)
 from interpreter import constants
 from interpreter.frontends.common.expressions import (
     lower_const_literal,
@@ -37,12 +58,12 @@ def lower_kotlin_identifier(ctx: TreeSitterEmitContext, node) -> Register:
     text = ctx.node_text(node)
     if text == "field" and ctx._accessor_backing_field:
         this_reg = ctx.fresh_reg()
-        ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
+        ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"))
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.LOAD_FIELD,
-            result_reg=reg,
-            operands=[this_reg, ctx._accessor_backing_field],
+        ctx.emit_inst(
+            LoadField(
+                result_reg=reg, obj_reg=this_reg, field_name=ctx._accessor_backing_field
+            ),
             node=node,
         )
         return reg
@@ -65,11 +86,8 @@ def lower_kotlin_string_literal(ctx: TreeSitterEmitContext, node) -> Register:
     for child in node.children:
         if child.type == KNT.STRING_CONTENT:
             frag_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CONST,
-                result_reg=frag_reg,
-                operands=[ctx.node_text(child)],
-                node=child,
+            ctx.emit_inst(
+                Const(result_reg=frag_reg, value=ctx.node_text(child)), node=child
             )
             parts.append(frag_reg)
         elif child.type == KNT.INTERPOLATED_IDENTIFIER:
@@ -143,10 +161,13 @@ def lower_kotlin_call(ctx: TreeSitterEmitContext, node) -> Register:
             obj_reg = ctx.lower_expr(nav_children[0])
             method_name = _extract_nav_field_name(ctx, nav_children[-1])
             reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CALL_METHOD,
-                result_reg=reg,
-                operands=[obj_reg, method_name] + arg_regs,
+            ctx.emit_inst(
+                CallMethod(
+                    result_reg=reg,
+                    obj_reg=obj_reg,
+                    method_name=method_name,
+                    args=tuple(arg_regs),
+                ),
                 node=node,
             )
             return reg
@@ -155,10 +176,8 @@ def lower_kotlin_call(ctx: TreeSitterEmitContext, node) -> Register:
     if callee_node.type == KNT.SIMPLE_IDENTIFIER:
         func_name = ctx.node_text(callee_node)
         reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=reg,
-            operands=[func_name] + arg_regs,
+        ctx.emit_inst(
+            CallFunction(result_reg=reg, func_name=func_name, args=tuple(arg_regs)),
             node=node,
         )
         return reg
@@ -166,10 +185,8 @@ def lower_kotlin_call(ctx: TreeSitterEmitContext, node) -> Register:
     # Dynamic call target
     target_reg = ctx.lower_expr(callee_node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_UNKNOWN,
-        result_reg=reg,
-        operands=[target_reg] + arg_regs,
+    ctx.emit_inst(
+        CallUnknown(result_reg=reg, target_reg=target_reg, args=tuple(arg_regs)),
         node=node,
     )
     return reg
@@ -197,11 +214,8 @@ def lower_navigation_expr(ctx: TreeSitterEmitContext, node) -> Register:
         )
 
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_FIELD,
-        result_reg=reg,
-        operands=[obj_reg, field_name],
-        node=node,
+    ctx.emit_inst(
+        LoadField(result_reg=reg, obj_reg=obj_reg, field_name=field_name), node=node
     )
     return reg
 
@@ -213,7 +227,7 @@ def _lower_control_body(ctx: TreeSitterEmitContext, body_node) -> Register:
     """Lower control_structure_body or block, returning last expr reg."""
     if body_node is None:
         reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=reg, operands=[ctx.constants.none_literal])
+        ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
         return reg
     children = [
         c
@@ -225,7 +239,7 @@ def _lower_control_body(ctx: TreeSitterEmitContext, body_node) -> Register:
     ]
     if not children:
         reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=reg, operands=[ctx.constants.none_literal])
+        ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
         return reg
     # If the sole child is a block node (e.g. `statements`), unwrap it
     if len(children) == 1 and children[0].type in ctx.constants.block_node_types:
@@ -246,18 +260,10 @@ def _lower_control_body(ctx: TreeSitterEmitContext, body_node) -> Register:
         elif inner:
             ctx.lower_stmt(inner[-1])
             result = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CONST,
-                result_reg=result,
-                operands=[ctx.constants.none_literal],
-            )
+            ctx.emit_inst(Const(result_reg=result, value=ctx.constants.none_literal))
         else:
             result = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.CONST,
-                result_reg=result,
-                operands=[ctx.constants.none_literal],
-            )
+            ctx.emit_inst(Const(result_reg=result, value=ctx.constants.none_literal))
         if scope_entered:
             ctx.exit_block_scope()
         return result
@@ -281,34 +287,30 @@ def lower_if_expr(ctx: TreeSitterEmitContext, node) -> Register:
     result_var = f"__if_result_{ctx.label_counter}"
 
     if alt_node:
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[true_label, false_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=cond_reg, branch_targets=(true_label, false_label)),
             node=node,
         )
     else:
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[cond_reg],
-            branch_targets=[true_label, end_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=cond_reg, branch_targets=(true_label, end_label)),
             node=node,
         )
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     true_reg = _lower_control_body(ctx, body_node)
-    ctx.emit(Opcode.DECL_VAR, operands=[result_var, true_reg])
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(DeclVar(name=result_var, value_reg=true_reg))
+    ctx.emit_inst(Branch(label=end_label))
 
     if alt_node:
-        ctx.emit(Opcode.LABEL, label=false_label)
+        ctx.emit_inst(Label_(label=false_label))
         false_reg = _lower_control_body(ctx, alt_node)
-        ctx.emit(Opcode.DECL_VAR, operands=[result_var, false_reg])
-        ctx.emit(Opcode.BRANCH, label=end_label)
+        ctx.emit_inst(DeclVar(name=result_var, value_reg=false_reg))
+        ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[result_var])
+    ctx.emit_inst(LoadVar(result_reg=reg, name=result_var))
     return reg
 
 
@@ -386,7 +388,7 @@ def lower_when_expr(ctx: TreeSitterEmitContext, node) -> Register:
             name_node = next((c for c in subject_var_decl.children if c.is_named), None)
             raw_name = ctx.node_text(name_node) if name_node else "__when_subject"
             var_name = ctx.declare_block_var(raw_name)
-            ctx.emit(Opcode.DECL_VAR, operands=[var_name, val_reg])
+            ctx.emit_inst(DeclVar(name=var_name, value_reg=val_reg))
         else:
             inner = next((c for c in subject_node.children if c.is_named), None)
             if inner:
@@ -408,9 +410,9 @@ def lower_when_expr(ctx: TreeSitterEmitContext, node) -> Register:
     for entry in entries:
         _lower_subjectless_when_entry(ctx, entry, result_var, end_label)
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[result_var])
+    ctx.emit_inst(LoadVar(result_reg=reg, name=result_var))
     return reg
 
 
@@ -430,21 +432,19 @@ def _lower_subjectless_when_entry(
         cond_inner = next((c for c in cond_node.children if c.is_named), None)
         # Subjectless when: condition is an arbitrary boolean expression
         test_reg = ctx.lower_expr(cond_inner)
-        ctx.emit(
-            Opcode.BRANCH_IF,
-            operands=[test_reg],
-            branch_targets=[arm_label, next_label],
+        ctx.emit_inst(
+            BranchIf(cond_reg=test_reg, branch_targets=(arm_label, next_label))
         )
-        ctx.emit(Opcode.LABEL, label=arm_label)
+        ctx.emit_inst(Label_(label=arm_label))
     else:
         # else branch — no condition, unconditional
-        ctx.emit(Opcode.BRANCH, label=arm_label)
-        ctx.emit(Opcode.LABEL, label=arm_label)
+        ctx.emit_inst(Branch(label=arm_label))
+        ctx.emit_inst(Label_(label=arm_label))
 
     arm_result = _lower_when_body(ctx, entry)
-    ctx.emit(Opcode.DECL_VAR, operands=[result_var, arm_result])
-    ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=next_label)
+    ctx.emit_inst(DeclVar(name=result_var, value_reg=arm_result))
+    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Label_(label=next_label))
 
 
 def _lower_when_body(ctx: TreeSitterEmitContext, entry) -> Register:
@@ -464,7 +464,7 @@ def _lower_when_body(ctx: TreeSitterEmitContext, entry) -> Register:
     if body_children:
         return ctx.lower_expr(body_children[0])
     arm_result = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=arm_result, operands=[ctx.constants.none_literal])
+    ctx.emit_inst(Const(result_reg=arm_result, value=ctx.constants.none_literal))
     return arm_result
 
 
@@ -476,7 +476,7 @@ def lower_statements_expr(ctx: TreeSitterEmitContext, node) -> Register:
     children = [c for c in node.children if c.is_named]
     if not children:
         reg = ctx.fresh_reg()
-        ctx.emit(Opcode.CONST, result_reg=reg, operands=[ctx.constants.none_literal])
+        ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
         return reg
     for child in children[:-1]:
         ctx.lower_stmt(child)
@@ -487,7 +487,7 @@ def lower_loop_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower while/for/do-while in expression position (returns unit)."""
     ctx.lower_stmt(node)
     reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=reg, operands=[ctx.constants.none_literal])
+    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
     return reg
 
 
@@ -500,7 +500,7 @@ def lower_kotlin_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
 
     lower_kotlin_assignment(ctx, node)
     reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=reg, operands=[ctx.constants.none_literal])
+    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
     return reg
 
 
@@ -513,7 +513,7 @@ def lower_jump_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
 
     lower_jump_expr(ctx, node)
     reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=reg, operands=[ctx.constants.none_literal])
+    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
     return reg
 
 
@@ -536,12 +536,7 @@ def _lower_not_null_assertion(ctx: TreeSitterEmitContext, node) -> Register:
         return lower_const_literal(ctx, node)
     expr_reg = ctx.lower_expr(named_children[0])
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.UNOP,
-        result_reg=reg,
-        operands=["!!", expr_reg],
-        node=node,
-    )
+    ctx.emit_inst(Unop(result_reg=reg, operator="!!", operand=expr_reg), node=node)
     return reg
 
 
@@ -553,8 +548,8 @@ def lower_lambda_literal(ctx: TreeSitterEmitContext, node) -> Register:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Label_(label=func_label))
 
     # Extract lambda parameters: lambda_parameters -> variable_declaration -> simple_identifier
     lambda_params_node = next(
@@ -570,15 +565,15 @@ def lower_lambda_literal(ctx: TreeSitterEmitContext, node) -> Register:
                 )
                 if id_node:
                     pname = ctx.node_text(id_node)
-                    ctx.emit(
-                        Opcode.SYMBOLIC,
-                        result_reg=ctx.fresh_reg(),
-                        operands=[f"{constants.PARAM_PREFIX}{pname}"],
+                    ctx.emit_inst(
+                        Symbolic(
+                            result_reg=ctx.fresh_reg(),
+                            hint=f"{constants.PARAM_PREFIX}{pname}",
+                        ),
                         node=child,
                     )
-                    ctx.emit(
-                        Opcode.DECL_VAR,
-                        operands=[pname, f"%{ctx.reg_counter - 1}"],
+                    ctx.emit_inst(
+                        DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}")
                     )
 
     # Lambda body children (skip braces, arrow, lambda_parameters)
@@ -604,7 +599,7 @@ def lower_lambda_literal(ctx: TreeSitterEmitContext, node) -> Register:
             ctx.lower_stmt(stmt)
         if stmts:
             last_reg = ctx.lower_expr(stmts[-1])
-            ctx.emit(Opcode.RETURN, operands=[last_reg])
+            ctx.emit_inst(Return_(value_reg=last_reg))
             last_returned = True
     else:
         for child in body_children:
@@ -612,13 +607,11 @@ def lower_lambda_literal(ctx: TreeSitterEmitContext, node) -> Register:
 
     if not last_returned:
         none_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CONST,
-            result_reg=none_reg,
-            operands=[ctx.constants.default_return_value],
+        ctx.emit_inst(
+            Const(result_reg=none_reg, value=ctx.constants.default_return_value)
         )
-        ctx.emit(Opcode.RETURN, operands=[none_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+        ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=reg)
@@ -638,8 +631,8 @@ def lower_anonymous_function(ctx: TreeSitterEmitContext, node) -> Register:
     func_label = ctx.fresh_label(f"{constants.FUNC_LABEL_PREFIX}{func_name}")
     end_label = ctx.fresh_label(f"end_{func_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label)
-    ctx.emit(Opcode.LABEL, label=func_label)
+    ctx.emit_inst(Branch(label=end_label))
+    ctx.emit_inst(Label_(label=func_label))
 
     # Extract and lower parameters
     params_node = next(
@@ -657,16 +650,14 @@ def lower_anonymous_function(ctx: TreeSitterEmitContext, node) -> Register:
     expr_reg = _lower_anon_func_body(ctx, body_node) if body_node else ""
 
     if expr_reg:
-        ctx.emit(Opcode.RETURN, operands=[expr_reg])
+        ctx.emit_inst(Return_(value_reg=expr_reg))
     else:
         none_reg = ctx.fresh_reg()
-        ctx.emit(
-            Opcode.CONST,
-            result_reg=none_reg,
-            operands=[ctx.constants.default_return_value],
+        ctx.emit_inst(
+            Const(result_reg=none_reg, value=ctx.constants.default_return_value)
         )
-        ctx.emit(Opcode.RETURN, operands=[none_reg])
-    ctx.emit(Opcode.LABEL, label=end_label)
+        ctx.emit_inst(Return_(value_reg=none_reg))
+    ctx.emit_inst(Label_(label=end_label))
 
     reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=reg)
@@ -683,16 +674,14 @@ def _lower_anon_func_params(ctx: TreeSitterEmitContext, params_node) -> None:
             )
             if id_node:
                 pname = ctx.node_text(id_node)
-                ctx.emit(
-                    Opcode.SYMBOLIC,
-                    result_reg=ctx.fresh_reg(),
-                    operands=[f"{constants.PARAM_PREFIX}{pname}"],
+                ctx.emit_inst(
+                    Symbolic(
+                        result_reg=ctx.fresh_reg(),
+                        hint=f"{constants.PARAM_PREFIX}{pname}",
+                    ),
                     node=child,
                 )
-                ctx.emit(
-                    Opcode.DECL_VAR,
-                    operands=[pname, f"%{ctx.reg_counter - 1}"],
-                )
+                ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
 
 
 def _lower_anon_func_body(ctx: TreeSitterEmitContext, body_node) -> Register:
@@ -732,19 +721,14 @@ def lower_object_literal(ctx: TreeSitterEmitContext, node) -> Register:
     obj_label = ctx.fresh_label(f"{constants.CLASS_LABEL_PREFIX}{type_name}")
     end_label = ctx.fresh_label(f"{constants.END_CLASS_LABEL_PREFIX}{type_name}")
 
-    ctx.emit(Opcode.BRANCH, label=end_label, node=node)
-    ctx.emit(Opcode.LABEL, label=obj_label)
+    ctx.emit_inst(Branch(label=end_label), node=node)
+    ctx.emit_inst(Label_(label=obj_label))
     if body_node:
         ctx.lower_block(body_node)
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
     inst_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.NEW_OBJECT,
-        result_reg=inst_reg,
-        operands=[type_name],
-        node=node,
-    )
+    ctx.emit_inst(NewObject(result_reg=inst_reg, type_hint=type_name), node=node)
     return inst_reg
 
 
@@ -757,10 +741,15 @@ def lower_range_expr(ctx: TreeSitterEmitContext, node) -> Register:
     start_reg = ctx.lower_expr(named[0]) if len(named) > 0 else ctx.fresh_reg()
     end_reg = ctx.lower_expr(named[1]) if len(named) > 1 else ctx.fresh_reg()
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["range", start_reg, end_reg],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=reg,
+            func_name="range",
+            args=(
+                start_reg,
+                end_reg,
+            ),
+        ),
         node=node,
     )
     return reg
@@ -777,10 +766,15 @@ def lower_check_expr(ctx: TreeSitterEmitContext, node) -> Register:
     expr_reg = ctx.lower_expr(named_children[0])
     type_text = ctx.node_text(named_children[-1])
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["is", expr_reg, type_text],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=reg,
+            func_name="is",
+            args=(
+                expr_reg,
+                type_text,
+            ),
+        ),
         node=node,
     )
     return reg
@@ -795,7 +789,7 @@ def lower_try_expr(ctx: TreeSitterEmitContext, node) -> Register:
 
     lower_try_stmt(ctx, node)
     reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=reg, operands=[ctx.constants.none_literal])
+    ctx.emit_inst(Const(result_reg=reg, value=ctx.constants.none_literal))
     return reg
 
 
@@ -828,11 +822,8 @@ def lower_elvis_expr(ctx: TreeSitterEmitContext, node) -> Register:
     left_reg = ctx.lower_expr(named_children[0])
     right_reg = ctx.lower_expr(rhs_node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=reg,
-        operands=["?:", left_reg, right_reg],
-        node=node,
+    ctx.emit_inst(
+        Binop(result_reg=reg, operator="?:", left=left_reg, right=right_reg), node=node
     )
     return reg
 
@@ -844,10 +835,12 @@ def _lower_elvis_with_throw(
     left_reg = ctx.lower_expr(lhs_node)
 
     null_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=null_reg, operands=[ctx.constants.none_literal])
+    ctx.emit_inst(Const(result_reg=null_reg, value=ctx.constants.none_literal))
 
     cond_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.BINOP, result_reg=cond_reg, operands=["!=", left_reg, null_reg])
+    ctx.emit_inst(
+        Binop(result_reg=cond_reg, operator="!=", left=left_reg, right=null_reg)
+    )
 
     non_null_label = ctx.fresh_label("elvis_non_null")
     throw_label = ctx.fresh_label("elvis_throw")
@@ -855,29 +848,26 @@ def _lower_elvis_with_throw(
 
     result_var = f"__elvis_result_{ctx.label_counter}"
 
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[non_null_label, throw_label],
+    ctx.emit_inst(
+        BranchIf(cond_reg=cond_reg, branch_targets=(non_null_label, throw_label)),
         node=node,
     )
 
-    ctx.emit(Opcode.LABEL, label=non_null_label)
-    ctx.emit(Opcode.DECL_VAR, operands=[result_var, left_reg])
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(Label_(label=non_null_label))
+    ctx.emit_inst(DeclVar(name=result_var, value_reg=left_reg))
+    ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=throw_label)
+    ctx.emit_inst(Label_(label=throw_label))
     ctx.lower_expr(rhs_node)
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[result_var])
+    ctx.emit_inst(LoadVar(result_reg=reg, name=result_var))
     return reg
 
 
 # -- infix expression --------------------------------------------------
-
 
 _KOTLIN_BITWISE_INFIX: dict[str, str] = {
     "and": "&",
@@ -903,17 +893,20 @@ def lower_infix_expr(ctx: TreeSitterEmitContext, node) -> Register:
     reg = ctx.fresh_reg()
     bitwise_op = _KOTLIN_BITWISE_INFIX.get(func_name)
     if bitwise_op:
-        ctx.emit(
-            Opcode.BINOP,
-            result_reg=reg,
-            operands=[bitwise_op, left_reg, right_reg],
+        ctx.emit_inst(
+            Binop(result_reg=reg, operator=bitwise_op, left=left_reg, right=right_reg),
             node=node,
         )
     else:
-        ctx.emit(
-            Opcode.CALL_FUNCTION,
-            result_reg=reg,
-            operands=[func_name, left_reg, right_reg],
+        ctx.emit_inst(
+            CallFunction(
+                result_reg=reg,
+                func_name=func_name,
+                args=(
+                    left_reg,
+                    right_reg,
+                ),
+            ),
             node=node,
         )
     return reg
@@ -940,11 +933,8 @@ def lower_indexing_expr(ctx: TreeSitterEmitContext, node) -> Register:
         return obj_reg
     idx_reg = ctx.lower_expr(idx_children[0])
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.LOAD_INDEX,
-        result_reg=reg,
-        operands=[obj_reg, idx_reg],
-        node=node,
+    ctx.emit_inst(
+        LoadIndex(result_reg=reg, arr_reg=obj_reg, index_reg=idx_reg), node=node
     )
     return reg
 
@@ -960,10 +950,15 @@ def lower_as_expr(ctx: TreeSitterEmitContext, node) -> Register:
     expr_reg = ctx.lower_expr(named_children[0])
     type_name = ctx.node_text(named_children[-1])
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=reg,
-        operands=["as", expr_reg, type_name],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=reg,
+            func_name="as",
+            args=(
+                expr_reg,
+                type_name,
+            ),
+        ),
         node=node,
     )
     return reg
@@ -978,12 +973,7 @@ def lower_type_test(ctx: TreeSitterEmitContext, node) -> Register:
     type_node = named_children[0] if named_children else None
     type_name = ctx.node_text(type_node) if type_node else ctx.node_text(node)
     reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.CONST,
-        result_reg=reg,
-        operands=[f"is:{type_name}"],
-        node=node,
-    )
+    ctx.emit_inst(Const(result_reg=reg, value=f"is:{type_name}"), node=node)
     return reg
 
 
@@ -997,18 +987,17 @@ def lower_kotlin_store_target(
         text = ctx.node_text(target)
         if text == "field" and ctx._accessor_backing_field:
             this_reg = ctx.fresh_reg()
-            ctx.emit(Opcode.LOAD_VAR, result_reg=this_reg, operands=["this"])
-            ctx.emit(
-                Opcode.STORE_FIELD,
-                operands=[this_reg, ctx._accessor_backing_field, val_reg],
+            ctx.emit_inst(LoadVar(result_reg=this_reg, name="this"))
+            ctx.emit_inst(
+                StoreField(
+                    obj_reg=this_reg,
+                    field_name=ctx._accessor_backing_field,
+                    value_reg=val_reg,
+                ),
                 node=parent_node,
             )
             return
-        ctx.emit(
-            Opcode.STORE_VAR,
-            operands=[text, val_reg],
-            node=parent_node,
-        )
+        ctx.emit_inst(StoreVar(name=text, value_reg=val_reg), node=parent_node)
     elif target.type == KNT.NAVIGATION_EXPRESSION:
         from interpreter.frontends.common.property_accessors import (
             emit_field_store_or_setter,
@@ -1031,15 +1020,13 @@ def lower_kotlin_store_target(
                 )
                 return
 
-            ctx.emit(
-                Opcode.STORE_FIELD,
-                operands=[obj_reg, field_name, val_reg],
+            ctx.emit_inst(
+                StoreField(obj_reg=obj_reg, field_name=field_name, value_reg=val_reg),
                 node=parent_node,
             )
         else:
-            ctx.emit(
-                Opcode.STORE_VAR,
-                operands=[ctx.node_text(target), val_reg],
+            ctx.emit_inst(
+                StoreVar(name=ctx.node_text(target), value_reg=val_reg),
                 node=parent_node,
             )
     elif target.type == KNT.INDEXING_EXPRESSION:
@@ -1057,15 +1044,13 @@ def lower_kotlin_store_target(
                 )
             else:
                 idx_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.STORE_INDEX,
-                operands=[obj_reg, idx_reg, val_reg],
+            ctx.emit_inst(
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
         else:
-            ctx.emit(
-                Opcode.STORE_VAR,
-                operands=[ctx.node_text(target), val_reg],
+            ctx.emit_inst(
+                StoreVar(name=ctx.node_text(target), value_reg=val_reg),
                 node=parent_node,
             )
     elif target.type == KNT.DIRECTLY_ASSIGNABLE_EXPRESSION:
@@ -1088,9 +1073,8 @@ def lower_kotlin_store_target(
             idx_reg = (
                 ctx.lower_expr(idx_children[0]) if idx_children else ctx.fresh_reg()
             )
-            ctx.emit(
-                Opcode.STORE_INDEX,
-                operands=[obj_reg, idx_reg, val_reg],
+            ctx.emit_inst(
+                StoreIndex(arr_reg=obj_reg, index_reg=idx_reg, value_reg=val_reg),
                 node=parent_node,
             )
         elif nav_suffix:
@@ -1122,9 +1106,8 @@ def lower_kotlin_store_target(
                 )
                 return
 
-            ctx.emit(
-                Opcode.STORE_FIELD,
-                operands=[obj_reg, field_name, val_reg],
+            ctx.emit_inst(
+                StoreField(obj_reg=obj_reg, field_name=field_name, value_reg=val_reg),
                 node=parent_node,
             )
         else:
@@ -1133,16 +1116,13 @@ def lower_kotlin_store_target(
             if inner:
                 lower_kotlin_store_target(ctx, inner, val_reg, parent_node)
             else:
-                ctx.emit(
-                    Opcode.STORE_VAR,
-                    operands=[ctx.node_text(target), val_reg],
+                ctx.emit_inst(
+                    StoreVar(name=ctx.node_text(target), value_reg=val_reg),
                     node=parent_node,
                 )
     else:
-        ctx.emit(
-            Opcode.STORE_VAR,
-            operands=[ctx.node_text(target), val_reg],
-            node=parent_node,
+        ctx.emit_inst(
+            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
         )
 
 
@@ -1156,7 +1136,7 @@ def lower_callable_reference(ctx: TreeSitterEmitContext, node) -> Register:
         ctx.node_text(named_children[-1]) if named_children else ctx.node_text(node)
     )
     reg = ctx.fresh_reg()
-    ctx.emit(Opcode.LOAD_VAR, result_reg=reg, operands=[func_name], node=node)
+    ctx.emit_inst(LoadVar(result_reg=reg, name=func_name), node=node)
     return reg
 
 
@@ -1164,7 +1144,7 @@ def lower_unsigned_literal(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower Kotlin unsigned literal (42u, 10UL) by stripping the suffix."""
     text = _UNSIGNED_SUFFIX.sub("", ctx.node_text(node))
     reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=reg, operands=[text], node=node)
+    ctx.emit_inst(Const(result_reg=reg, value=text), node=node)
     return reg
 
 
