@@ -28,7 +28,17 @@ from interpreter.cobol.cobol_types import CobolDataCategory
 from interpreter.cobol.condition_lowering import lower_expr_node
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
-from interpreter.ir import Opcode, CodeLabel
+from interpreter.instructions import (
+    Binop,
+    Branch,
+    BranchIf,
+    CallFunction,
+    Const,
+    Label_,
+    Return_,
+)
+from interpreter.ir import CodeLabel
+from interpreter.register import Register
 
 logger = logging.getLogger(__name__)
 
@@ -90,10 +100,13 @@ def lower_arithmetic(
 
     op = ARITHMETIC_OPS[stmt.op]
     result_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=result_reg,
-        operands=[op, tgt_decoded, src_decoded],
+    ctx.emit_inst(
+        Binop(
+            result_reg=result_reg,
+            operator=op,
+            left=Register(str(tgt_decoded)),
+            right=Register(str(src_decoded)),
+        )
     )
 
     result_str_reg = ctx.emit_to_string(result_reg)
@@ -121,10 +134,13 @@ def lower_arithmetic_giving(
 
     op = ARITHMETIC_OPS[stmt.op]
     result_reg = ctx.fresh_reg()
-    ctx.emit(
-        Opcode.BINOP,
-        result_reg=result_reg,
-        operands=[op, left_reg, right_reg],
+    ctx.emit_inst(
+        Binop(
+            result_reg=result_reg,
+            operator=op,
+            left=Register(str(left_reg)),
+            right=Register(str(right_reg)),
+        )
     )
 
     for giving_name in stmt.giving:
@@ -168,23 +184,24 @@ def lower_if(
     false_label = ctx.fresh_label("if_false")
     end_label = ctx.fresh_label("if_end")
 
-    ctx.emit(
-        Opcode.BRANCH_IF,
-        operands=[cond_reg],
-        branch_targets=[true_label, false_label],
+    ctx.emit_inst(
+        BranchIf(
+            cond_reg=Register(str(cond_reg)),
+            branch_targets=(true_label, false_label),
+        )
     )
 
-    ctx.emit(Opcode.LABEL, label=true_label)
+    ctx.emit_inst(Label_(label=true_label))
     for child in stmt.children:
         ctx.lower_statement(child, layout, region_reg)
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=false_label)
+    ctx.emit_inst(Label_(label=false_label))
     for child in stmt.else_children:
         ctx.lower_statement(child, layout, region_reg)
-    ctx.emit(Opcode.BRANCH, label=end_label)
+    ctx.emit_inst(Branch(label=end_label))
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_evaluate(
@@ -205,21 +222,22 @@ def lower_evaluate(
             cond_reg = ctx.lower_condition(full_condition, layout, region_reg)
             when_true = ctx.fresh_label("when_true")
             when_false = ctx.fresh_label("when_false")
-            ctx.emit(
-                Opcode.BRANCH_IF,
-                operands=[cond_reg],
-                branch_targets=[when_true, when_false],
+            ctx.emit_inst(
+                BranchIf(
+                    cond_reg=Register(str(cond_reg)),
+                    branch_targets=(when_true, when_false),
+                )
             )
-            ctx.emit(Opcode.LABEL, label=when_true)
+            ctx.emit_inst(Label_(label=when_true))
             for grandchild in child.children:
                 ctx.lower_statement(grandchild, layout, region_reg)
-            ctx.emit(Opcode.BRANCH, label=end_label)
-            ctx.emit(Opcode.LABEL, label=when_false)
+            ctx.emit_inst(Branch(label=end_label))
+            ctx.emit_inst(Label_(label=when_false))
         elif isinstance(child, WhenOtherStatement):
             for grandchild in child.children:
                 ctx.lower_statement(grandchild, layout, region_reg)
 
-    ctx.emit(Opcode.LABEL, label=end_label)
+    ctx.emit_inst(Label_(label=end_label))
 
 
 def lower_continue(
@@ -293,10 +311,13 @@ def lower_set(
             )
             step_reg = ctx.const_to_reg(ctx.parse_literal(step_val))
             result_reg = ctx.fresh_reg()
-            ctx.emit(
-                Opcode.BINOP,
-                result_reg=result_reg,
-                operands=[op, tgt_decoded, step_reg],
+            ctx.emit_inst(
+                Binop(
+                    result_reg=result_reg,
+                    operator=op,
+                    left=Register(str(tgt_decoded)),
+                    right=Register(str(step_reg)),
+                )
             )
             result_str_reg = ctx.emit_to_string(result_reg)
             ctx.emit_encode_and_write(
@@ -320,10 +341,12 @@ def lower_display(
     else:
         display_reg = ctx.const_to_reg(str(operand))
 
-    ctx.emit(
-        Opcode.CALL_FUNCTION,
-        result_reg=ctx.fresh_reg(),
-        operands=["print", display_reg],
+    ctx.emit_inst(
+        CallFunction(
+            result_reg=ctx.fresh_reg(),
+            func_name="print",
+            args=(Register(str(display_reg)),),
+        )
     )
 
 
@@ -335,8 +358,8 @@ def lower_stop_run(
 ) -> None:
     """STOP RUN."""
     zero_reg = ctx.fresh_reg()
-    ctx.emit(Opcode.CONST, result_reg=zero_reg, operands=[0])
-    ctx.emit(Opcode.RETURN, operands=[zero_reg])
+    ctx.emit_inst(Const(result_reg=zero_reg, value=0))
+    ctx.emit_inst(Return_(value_reg=zero_reg))
 
 
 def lower_goto(
@@ -346,4 +369,4 @@ def lower_goto(
     region_reg: str,
 ) -> None:
     """GO TO paragraph-name."""
-    ctx.emit(Opcode.BRANCH, label=CodeLabel(f"para_{stmt.target}"))
+    ctx.emit_inst(Branch(label=CodeLabel(f"para_{stmt.target}")))
