@@ -11,6 +11,7 @@ import logging
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
+from interpreter.register import Register
 from interpreter.types.function_signature import FunctionSignature
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import TypeExpr, UNBOUND, UNKNOWN
@@ -28,7 +29,7 @@ class TypeEnvironmentBuilder:
     so that all stored values are already structured ``TypeExpr``.
     """
 
-    register_types: dict[str, TypeExpr] = field(default_factory=dict)
+    register_types: dict[Register, TypeExpr] = field(default_factory=dict)
     var_types: dict[str, TypeExpr] = field(default_factory=dict)
     func_return_types: dict[str, TypeExpr] = field(default_factory=dict)
     func_param_types: dict[str, list[tuple[str, TypeExpr]]] = field(

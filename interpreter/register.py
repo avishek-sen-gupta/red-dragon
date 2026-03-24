@@ -25,10 +25,6 @@ class Register:
     def __str__(self) -> str:
         return self.name
 
-    def startswith(self, prefix: str) -> bool:
-        """String-like startswith — delegates to the name."""
-        return self.name.startswith(prefix)
-
     def rebase(self, offset: int) -> Register:
         """Offset the numeric suffix: %r5.rebase(10) → %r15."""
         match = re.match(r"^(.*?)(\d+)$", self.name)
@@ -43,8 +39,6 @@ class Register:
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Register):
             return self.name == other.name
-        if isinstance(other, str):
-            return self.name == other
         return NotImplemented
 
     @classmethod

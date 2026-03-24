@@ -1,5 +1,6 @@
 """Tests for _heap_addr() Pointer support and ADDRESS_OF guard."""
 
+from interpreter.register import Register
 from interpreter.vm.vm import _heap_addr, HeapObject, VMState
 from interpreter.vm.vm_types import Pointer, StackFrame, SymbolicValue
 from interpreter.ir import IRInstruction, Opcode
@@ -67,7 +68,7 @@ class TestAddressOfPointerGuard:
         result = _handle_address_of(inst, vm, _CTX)
 
         # The result must be a Pointer to a NEW heap slot (mem_*), not mem_0.
-        result_ptr = result.update.register_writes["t0"].value
+        result_ptr = result.update.register_writes[Register("t0")].value
         assert isinstance(result_ptr, Pointer)
         assert result_ptr.base.startswith(
             "mem_"
@@ -107,7 +108,7 @@ class TestAddressOfPointerGuard:
 
         result = _handle_address_of(inst, vm, _CTX)
 
-        result_ptr = result.update.register_writes["t0"].value
+        result_ptr = result.update.register_writes[Register("t0")].value
         assert isinstance(result_ptr, Pointer)
         assert (
             result_ptr.base == "arr_0"
@@ -141,7 +142,7 @@ class TestAddressOfPointerGuard:
 
         result = _handle_address_of(inst, vm, _CTX)
 
-        result_ptr = result.update.register_writes["t0"].value
+        result_ptr = result.update.register_writes[Register("t0")].value
         assert isinstance(result_ptr, Pointer)
         assert (
             result_ptr.base == "obj_0"

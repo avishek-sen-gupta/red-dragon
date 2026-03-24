@@ -17,6 +17,7 @@ from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter.types.type_expr import parse_type, scalar
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
+from interpreter.register import Register
 
 
 def _resolver():
@@ -120,7 +121,10 @@ class TestCallUnknownResolution:
             func_param_types={
                 "func_add_0": [("a", scalar("Int")), ("b", scalar("Int"))]
             },
-            register_types={"%0": scalar("Int"), "%1": scalar("Int")},
+            register_types={
+                Register("%0"): scalar("Int"),
+                Register("%1"): scalar("Int"),
+            },
         )
         func_st = {"func_add_0": FuncRef(name="add", label=CodeLabel("func_add_0"))}
         env = infer_types(
@@ -130,7 +134,7 @@ class TestCallUnknownResolution:
             func_symbol_table=func_st,
         )
 
-        assert env.register_types["%5"] == "Int"
+        assert env.register_types[Register("%5")] == "Int"
 
 
 class TestStoreLoadIndex:
@@ -149,9 +153,9 @@ class TestStoreLoadIndex:
 
         env = infer_types(instructions, _resolver())
 
-        assert env.register_types["%0"] == "Array[Int]"
-        assert env.register_types["%1"] == "Int"
-        assert env.register_types["%4"] == "Int"
+        assert env.register_types[Register("%0")] == "Array[Int]"
+        assert env.register_types[Register("%1")] == "Int"
+        assert env.register_types[Register("%4")] == "Int"
 
     def test_store_load_index_last_write_wins(self):
         instructions = [
@@ -169,7 +173,7 @@ class TestStoreLoadIndex:
 
         env = infer_types(instructions, _resolver())
 
-        assert env.register_types["%3"] == "String"
+        assert env.register_types[Register("%3")] == "String"
 
 
 class TestArrayElementTypePromotion:
@@ -185,7 +189,7 @@ class TestArrayElementTypePromotion:
             IRInstruction(opcode=Opcode.STORE_INDEX, operands=["%arr", "%idx", "%val"]),
         ]
         env = infer_types(instructions, _resolver())
-        assert env.register_types["%arr"] == "Array[Int]"
+        assert env.register_types[Register("%arr")] == "Array[Int]"
 
     def test_array_var_promoted_to_array_of_int(self):
         """STORE_VAR of an array with Int elements → var type is Array[Int]."""
@@ -232,7 +236,7 @@ class TestArrayElementTypePromotion:
             ),
         ]
         env = infer_types(instructions, _resolver())
-        assert env.register_types["%elem"] == "Int"
+        assert env.register_types[Register("%elem")] == "Int"
 
     def test_seeded_type_not_overwritten_by_inference(self):
         """Seeded var type from declaration takes precedence over inferred type."""

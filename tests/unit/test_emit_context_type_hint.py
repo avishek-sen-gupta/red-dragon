@@ -51,7 +51,7 @@ class TestSeedHelpers:
         ctx = _make_ctx()
         ctx.emit_inst(Symbolic(result_reg=Register("%0"), hint="param:x"))
         ctx.seed_register_type("%0", ScalarType("Int"))
-        assert ctx.type_env_builder.register_types["%0"] == ScalarType("Int")
+        assert ctx.type_env_builder.register_types[Register("%0")] == ScalarType("Int")
 
     def test_seed_param_type_inside_function(self):
         ctx = _make_ctx()
@@ -86,7 +86,7 @@ class TestSeedHelpers:
         ctx = _make_ctx()
         ctx.emit_inst(CallFunction(result_reg=Register("%0"), func_name="Dog", args=()))
         ctx.seed_register_type("%0", ScalarType("Dog"))
-        assert ctx.type_env_builder.register_types["%0"] == ScalarType("Dog")
+        assert ctx.type_env_builder.register_types[Register("%0")] == ScalarType("Dog")
 
     def test_class_label_resets_current_func(self):
         ctx = _make_ctx()

@@ -17,6 +17,7 @@ from interpreter.types.coercion.default_conversion_rules import (
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.types.type_inference import infer_types
 from interpreter.types.type_resolver import TypeResolver
+from interpreter.register import Register
 
 
 def _resolver():
@@ -213,5 +214,5 @@ class TestRegionTagging:
 
         env = infer_types(instructions, _resolver())
 
-        assert env.register_types["%0"] == "Region"
-        assert env.register_types["%1"] == "Array"
+        assert env.register_types[Register("%0")] == "Region"
+        assert env.register_types[Register("%1")] == "Array"

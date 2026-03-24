@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 
 from interpreter import constants
+from interpreter.register import Register
 from interpreter.constants import CanonicalLiteral, TypeName
 from interpreter.refs.class_ref import ClassRef
 from interpreter.refs.func_ref import FuncRef
@@ -68,6 +69,13 @@ from interpreter.types.type_expr import (
 from interpreter.types.type_resolver import TypeResolver
 
 logger = logging.getLogger(__name__)
+
+
+def _reg_key(val: Register | str) -> Register:
+    """Normalize a register value (which may be a string from frontend) to Register."""
+    if isinstance(val, Register):
+        return val
+    return Register(str(val))
 
 
 def _try_parse_int(s: str) -> int:
@@ -167,7 +175,7 @@ _GLOBAL_SCOPE = ""
 class _InferenceContext:
     """Mutable bundle of all state accumulated during the inference walk."""
 
-    register_types: dict[str, TypeExpr] = field(default_factory=dict)
+    register_types: dict[Register, TypeExpr] = field(default_factory=dict)
     scoped_var_types: dict[str, dict[str, TypeExpr]] = field(default_factory=dict)
     func_return_types: dict[str, TypeExpr] = field(default_factory=dict)
     func_param_types: dict[str, list[tuple[str, TypeExpr]]] = field(
@@ -255,8 +263,9 @@ def _promote_array_element_types(ctx: _InferenceContext) -> None:
                     logger.debug("Promoted %s: Array → Array[%s]", var_name, elem_type)
 
     for reg, elem_type in ctx.array_element_types.items():
-        if ctx.register_types.get(reg, UNKNOWN) == TypeName.ARRAY:
-            ctx.register_types[reg] = array_of(elem_type)
+        reg_key = Register(reg) if isinstance(reg, str) else reg
+        if ctx.register_types.get(reg_key, UNKNOWN) == TypeName.ARRAY:
+            ctx.register_types[reg_key] = array_of(elem_type)
 
 
 def _promote_tuple_element_types(ctx: _InferenceContext) -> None:
@@ -274,9 +283,10 @@ def _promote_tuple_element_types(ctx: _InferenceContext) -> None:
                 logger.debug("Promoted %s: Tuple → Tuple[%s]", var_name, ordered)
 
     for reg, idx_types in ctx.tuple_element_types.items():
-        if ctx.register_types.get(reg, UNKNOWN) == TypeName.TUPLE:
+        reg_key = Register(reg) if isinstance(reg, str) else reg
+        if ctx.register_types.get(reg_key, UNKNOWN) == TypeName.TUPLE:
             ordered = tuple(idx_types[i] for i in sorted(idx_types.keys()))
-            ctx.register_types[reg] = tuple_of(*ordered)
+            ctx.register_types[reg_key] = tuple_of(*ordered)
 
 
 def _build_func_signatures(
@@ -331,9 +341,7 @@ def _resolve_alias(
     return t
 
 
-def _resolve_aliases_in_dict(
-    d: dict[str, TypeExpr], aliases: dict[str, TypeExpr]
-) -> dict[str, TypeExpr]:
+def _resolve_aliases_in_dict(d: dict, aliases: dict[str, TypeExpr]) -> dict:
     """Resolve all values in a dict through the alias registry."""
     return {k: _resolve_alias(v, aliases) for k, v in d.items()}
 
@@ -553,7 +561,7 @@ def _infer_const(
                 params=param_types, return_type=ret_type
             )
         return
-    ctx.const_values[inst.result_reg] = raw
+    ctx.const_values[str(inst.result_reg)] = raw
     inferred = _infer_const_type(
         raw,
         func_symbol_table=ctx.func_symbol_table,
@@ -570,21 +578,21 @@ def _infer_load_var(
 ) -> None:
     name = inst.name if inst.name else ""
     if inst.result_reg.is_present() and name:
-        ctx.register_source_var[inst.result_reg] = str(name)
+        ctx.register_source_var[str(inst.result_reg)] = str(name)
     var_type = ctx.lookup_var_type(str(name)) if name else UNKNOWN
     if inst.result_reg.is_present() and var_type:
         ctx.register_types[inst.result_reg] = var_type
     # Propagate array element types from variable to register
     if inst.result_reg.is_present() and str(name) in ctx.var_array_element_types:
-        ctx.array_element_types[inst.result_reg] = ctx.var_array_element_types[
+        ctx.array_element_types[str(inst.result_reg)] = ctx.var_array_element_types[
             str(name)
         ]
     # Propagate tuple element types from variable to register
     if inst.result_reg.is_present() and str(name) in ctx.var_tuple_element_types:
-        ctx.tuple_element_types[inst.result_reg] = ctx.var_tuple_element_types[
+        ctx.tuple_element_types[str(inst.result_reg)] = ctx.var_tuple_element_types[
             str(name)
         ]
-        ctx.tuple_registers.add(inst.result_reg)
+        ctx.tuple_registers.add(str(inst.result_reg))
 
 
 def _infer_store_var(
@@ -596,16 +604,17 @@ def _infer_store_var(
     name = inst.name if inst.name else ""
     if not name:
         return
-    value_reg = str(inst.value_reg)
-    if value_reg:
+    value_reg = _reg_key(inst.value_reg)
+    if value_reg.is_present():
         if value_reg in ctx.register_types:
             ctx.store_var_type(str(name), ctx.register_types[value_reg])
         # Track array element types at the variable level
-        if value_reg in ctx.array_element_types:
-            ctx.var_array_element_types[str(name)] = ctx.array_element_types[value_reg]
+        str_reg = str(value_reg)
+        if str_reg in ctx.array_element_types:
+            ctx.var_array_element_types[str(name)] = ctx.array_element_types[str_reg]
         # Track tuple element types at the variable level
-        if value_reg in ctx.tuple_element_types:
-            ctx.var_tuple_element_types[str(name)] = ctx.tuple_element_types[value_reg]
+        if str_reg in ctx.tuple_element_types:
+            ctx.var_tuple_element_types[str(name)] = ctx.tuple_element_types[str_reg]
 
 
 def _infer_binop(
@@ -616,8 +625,8 @@ def _infer_binop(
     if not inst.result_reg.is_present():
         return
     operator = str(inst.operator)
-    left_hint = ctx.register_types.get(str(inst.left), UNKNOWN)
-    right_hint = ctx.register_types.get(str(inst.right), UNKNOWN)
+    left_hint = ctx.register_types.get(_reg_key(inst.left), UNKNOWN)
+    right_hint = ctx.register_types.get(_reg_key(inst.right), UNKNOWN)
     result = type_resolver.resolve_binop(operator, left_hint, right_hint)
     if result.result_type:
         ctx.register_types[inst.result_reg] = result.result_type
@@ -643,7 +652,7 @@ def _infer_unop(
     if fixed:
         ctx.register_types[inst.result_reg] = fixed
         return
-    operand_hint = ctx.register_types.get(str(inst.operand), UNKNOWN)
+    operand_hint = ctx.register_types.get(_reg_key(str(inst.operand)), UNKNOWN)
     if operand_hint:
         ctx.register_types[inst.result_reg] = operand_hint
 
@@ -669,7 +678,7 @@ def _infer_new_array(
     is_tuple = str(inst.type_hint) == "tuple"
     if is_tuple:
         ctx.register_types[inst.result_reg] = scalar(TypeName.TUPLE)
-        ctx.tuple_registers.add(inst.result_reg)
+        ctx.tuple_registers.add(str(inst.result_reg))
     else:
         ctx.register_types[inst.result_reg] = scalar(TypeName.ARRAY)
 
@@ -723,11 +732,9 @@ def _infer_store_field(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    obj_reg = str(inst.obj_reg)
     field_name = str(inst.field_name)
-    value_reg = str(inst.value_reg)
-    class_name = ctx.register_types.get(obj_reg, UNKNOWN)
-    value_type = ctx.register_types.get(value_reg, UNKNOWN)
+    class_name = ctx.register_types.get(_reg_key(inst.obj_reg), UNKNOWN)
+    value_type = ctx.register_types.get(_reg_key(inst.value_reg), UNKNOWN)
     if class_name and value_type:
         ctx.field_types.setdefault(class_name, {})[field_name] = value_type
 
@@ -739,9 +746,8 @@ def _infer_load_field(
 ) -> None:
     if not inst.result_reg.is_present():
         return
-    obj_reg = str(inst.obj_reg)
     field_name = str(inst.field_name)
-    class_name = ctx.register_types.get(obj_reg, UNKNOWN)
+    class_name = ctx.register_types.get(_reg_key(inst.obj_reg), UNKNOWN)
     if class_name and class_name in ctx.field_types:
         field_type = ctx.field_types[class_name].get(field_name, UNKNOWN)
         if field_type:
@@ -755,9 +761,8 @@ def _infer_call_method(
 ) -> None:
     if not inst.result_reg.is_present():
         return
-    obj_reg = str(inst.obj_reg)
     method_name = str(inst.method_name)
-    class_name = ctx.register_types.get(obj_reg, UNKNOWN)
+    class_name = ctx.register_types.get(_reg_key(inst.obj_reg), UNKNOWN)
     if class_name and class_name in ctx.class_method_types:
         ret_type = ctx.class_method_types[class_name].get(method_name, UNKNOWN)
         if ret_type:
@@ -798,13 +803,12 @@ def _infer_call_unknown(
 ) -> None:
     if not inst.result_reg.is_present():
         return
-    target_reg = str(inst.target_reg)
     # Check if the target register has a FunctionType directly
-    target_type = ctx.register_types.get(target_reg, UNKNOWN)
+    target_type = ctx.register_types.get(_reg_key(inst.target_reg), UNKNOWN)
     if isinstance(target_type, FunctionType) and target_type.return_type:
         ctx.register_types[inst.result_reg] = target_type.return_type
         return
-    func_name = ctx.register_source_var.get(target_reg, "")
+    func_name = ctx.register_source_var.get(str(inst.target_reg), "")
     if not func_name:
         return
     if func_name in ctx.func_return_types:
@@ -820,8 +824,7 @@ def _infer_store_index(
 ) -> None:
     arr_reg = str(inst.arr_reg)
     index_reg = str(inst.index_reg)
-    value_reg = str(inst.value_reg)
-    value_type = ctx.register_types.get(value_reg, UNKNOWN)
+    value_type = ctx.register_types.get(_reg_key(inst.value_reg), UNKNOWN)
     if not value_type:
         return
     if arr_reg in ctx.tuple_registers:
@@ -863,8 +866,9 @@ def _infer_return(
         return
     if ctx.current_func_label in ctx.func_return_types:
         return
-    value_reg = str(inst.value_reg)
-    ret_type = ctx.register_types.get(value_reg, UNKNOWN)
+    if inst.value_reg is None:
+        return
+    ret_type = ctx.register_types.get(_reg_key(inst.value_reg), UNKNOWN)
     if ret_type:
         ctx.func_return_types[ctx.current_func_label] = ret_type
 

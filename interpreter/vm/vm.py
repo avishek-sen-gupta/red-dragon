@@ -49,9 +49,11 @@ def _coerce_value(
     Returns *val* unchanged when no coercion is needed (no declared type,
     runtime type already matches, or the register name is not in the env).
     """
-    if not isinstance(reg, (str, Register)) or not (
-        isinstance(reg, Register) or reg.startswith("%")
-    ):
+    if isinstance(reg, str):
+        if not reg.startswith("%"):
+            return val
+        reg = Register(reg)
+    elif not isinstance(reg, Register):
         return val
     target_type = type_env.register_types.get(reg, UNKNOWN)
     if not target_type:
@@ -73,7 +75,8 @@ def _materialize_single_register(
     """Deserialize, coerce, and wrap a single register value as TypedValue."""
     deserialized = _deserialize_value(val, vm)
     coerced = _coerce_value(deserialized, reg, type_env, conversion_rules)
-    declared_type = type_env.register_types.get(reg, UNKNOWN)
+    reg_key = reg if isinstance(reg, Register) else Register(reg)
+    declared_type = type_env.register_types.get(reg_key, UNKNOWN)
     inferred_type = declared_type or typed_from_runtime(coerced).type
     return typed(coerced, inferred_type)
 
@@ -103,7 +106,8 @@ def _coerce_typed_register(
     inferred type is Int — the raw value must be coerced so downstream consumers
     (STORE_INDEX, etc.) see the correct Python type.
     """
-    target_type = type_env.register_types.get(reg, tv.type)
+    reg_key = reg if isinstance(reg, Register) else Register(reg)
+    target_type = type_env.register_types.get(reg_key, tv.type)
     if not target_type:
         return tv
     rt_type_name = runtime_type_name(tv.value)

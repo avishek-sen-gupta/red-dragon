@@ -23,6 +23,7 @@ from interpreter.instructions import (
     LoadVar,
 )
 from interpreter import constants
+from interpreter.register import Register
 from interpreter.interprocedural.types import (
     CallContext,
     FieldEndpoint,
@@ -114,7 +115,8 @@ def _is_param_store(cfg: CFG, block: BasicBlock, store_inst) -> bool:
     """Check if a DECL_VAR/STORE_VAR's RHS register was produced by a SYMBOLIC param: instruction."""
     t_store = to_typed(store_inst)
     assert isinstance(t_store, (DeclVar, StoreVar))
-    rhs_reg = t_store.value_reg
+    raw_reg = t_store.value_reg
+    rhs_reg = raw_reg if isinstance(raw_reg, Register) else Register(raw_reg)
     return any(
         isinstance((t := to_typed(inst)), Symbolic)
         and t.result_reg == rhs_reg

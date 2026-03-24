@@ -17,6 +17,7 @@ from interpreter.vm.executor import (
 )
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
+from interpreter.register import Register
 
 
 def _make_vm() -> VMState:
@@ -162,7 +163,7 @@ class TestImplicitThisFieldResolution:
             IRInstruction(opcode=Opcode.LOAD_VAR, result_reg="%0", operands=["count"]),
             field_fallback=self.FALLBACK,
         )
-        assert unwrap(vm.current_frame.registers["%0"]) == 42
+        assert unwrap(vm.current_frame.registers[Register("%0")]) == 42
 
     def test_local_var_takes_precedence_over_field(self):
         """Local variable should shadow this.field."""
@@ -174,7 +175,7 @@ class TestImplicitThisFieldResolution:
             IRInstruction(opcode=Opcode.LOAD_VAR, result_reg="%0", operands=["x"]),
             field_fallback=self.FALLBACK,
         )
-        assert unwrap(vm.current_frame.registers["%0"]) == 99
+        assert unwrap(vm.current_frame.registers[Register("%0")]) == 99
 
     def test_no_this_produces_symbolic(self):
         """Without this in scope, missing var should still produce symbolic."""
@@ -186,7 +187,7 @@ class TestImplicitThisFieldResolution:
             ),
             field_fallback=self.FALLBACK,
         )
-        val = vm.current_frame.registers["%0"].value
+        val = vm.current_frame.registers[Register("%0")].value
         assert hasattr(val, "name"), f"Expected symbolic, got {val}"
 
     def test_field_not_on_heap_object_produces_symbolic(self):
@@ -199,7 +200,7 @@ class TestImplicitThisFieldResolution:
             ),
             field_fallback=self.FALLBACK,
         )
-        val = vm.current_frame.registers["%0"].value
+        val = vm.current_frame.registers[Register("%0")].value
         assert hasattr(val, "name"), f"Expected symbolic, got {val}"
 
     def test_no_fallback_strategy_produces_symbolic(self):
@@ -210,7 +211,7 @@ class TestImplicitThisFieldResolution:
             IRInstruction(opcode=Opcode.LOAD_VAR, result_reg="%0", operands=["count"]),
             # No field_fallback — uses default NoFieldFallback
         )
-        val = vm.current_frame.registers["%0"].value
+        val = vm.current_frame.registers[Register("%0")].value
         assert hasattr(val, "name"), f"Expected symbolic without fallback, got {val}"
 
     def test_store_var_writes_to_this_field(self):

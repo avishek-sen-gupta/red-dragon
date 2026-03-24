@@ -20,6 +20,7 @@ from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime,
 from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.vm.vm import HeapObject, VMState
 from interpreter.vm.vm_types import StackFrame, StateUpdate, SymbolicValue
+from interpreter.register import Register
 
 
 from dataclasses import replace as _replace
@@ -79,7 +80,9 @@ def _make_vm_with_method_missing(
             METHOD_MISSING: typed(mm_func_ref, UNKNOWN),
         },
     )
-    vm.call_stack[-1].registers["%outer"] = typed(outer_addr, scalar("Object"))
+    vm.call_stack[-1].registers[Register("%outer")] = typed(
+        outer_addr, scalar("Object")
+    )
 
     registry = FunctionRegistry()
     registry.func_params[mm_label] = ["self", "name"]
@@ -128,7 +131,7 @@ class TestMethodMissingLoadField:
 
         assert result.handled
         assert result.update.call_push is None
-        assert unwrap(result.update.register_writes["%result"]) == "obj_0"
+        assert unwrap(result.update.register_writes[Register("%result")]) == "obj_0"
 
     def test_no_method_missing_falls_through_to_symbolic(self):
         """Object WITHOUT __method_missing__; missing field returns SymbolicValue."""
@@ -140,7 +143,7 @@ class TestMethodMissingLoadField:
             type_hint="Plain",
             fields={"x": typed_from_runtime(10)},
         )
-        vm.call_stack[-1].registers["%obj"] = typed(addr, scalar("Object"))
+        vm.call_stack[-1].registers[Register("%obj")] = typed(addr, scalar("Object"))
 
         inst = IRInstruction(
             opcode=Opcode.LOAD_FIELD,
@@ -156,7 +159,7 @@ class TestMethodMissingLoadField:
         assert result.handled
         assert result.update.call_push is None
         assert isinstance(
-            unwrap(result.update.register_writes["%result"]), SymbolicValue
+            unwrap(result.update.register_writes[Register("%result")]), SymbolicValue
         )
 
 
@@ -174,7 +177,7 @@ class TestFindMethodMissingRegistryPath:
             type_hint="BoxType",
             fields={BOXED_FIELD: typed("inner_0", scalar("Object"))},
         )
-        vm.call_stack[-1].registers["%obj"] = typed(addr, scalar("Object"))
+        vm.call_stack[-1].registers[Register("%obj")] = typed(addr, scalar("Object"))
 
         mm_label = CodeLabel("func_box_mm_0")
         cfg = CFG()
@@ -232,7 +235,7 @@ class TestFindMethodMissingRegistryPath:
             type_hint="DualBox",
             fields={METHOD_MISSING: typed(instance_mm_ref, UNKNOWN)},
         )
-        vm.call_stack[-1].registers["%obj"] = typed(addr, scalar("Object"))
+        vm.call_stack[-1].registers[Register("%obj")] = typed(addr, scalar("Object"))
 
         registry = FunctionRegistry()
         registry.class_methods["DualBox"] = {METHOD_MISSING: [registry_mm_label]}
@@ -278,7 +281,7 @@ class TestMethodMissingCallMethod:
             result_reg="%result",
             operands=["%outer", "some_method", "%arg0"],
         )
-        vm.call_stack[-1].registers["%arg0"] = typed_from_runtime(99)
+        vm.call_stack[-1].registers[Register("%arg0")] = typed_from_runtime(99)
 
         result = LocalExecutor.execute(
             inst=inst,
@@ -302,7 +305,7 @@ class TestMethodMissingCallMethod:
             result_reg="%result",
             operands=["%outer", "nonexistent_method", "%arg0"],
         )
-        vm.call_stack[-1].registers["%arg0"] = typed_from_runtime(99)
+        vm.call_stack[-1].registers[Register("%arg0")] = typed_from_runtime(99)
 
         result = LocalExecutor.execute(
             inst=inst,
@@ -313,7 +316,7 @@ class TestMethodMissingCallMethod:
         assert result.handled
         assert result.update.call_push is None
         assert isinstance(
-            unwrap(result.update.register_writes["%result"]), SymbolicValue
+            unwrap(result.update.register_writes[Register("%result")]), SymbolicValue
         )
 
     def test_existing_method_does_not_trigger_method_missing(self):

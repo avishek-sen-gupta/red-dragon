@@ -26,6 +26,7 @@ from interpreter.cobol.ir_encoders import (
     build_decode_alphanumeric_ir,
 )
 from interpreter.cobol.data_filters import align_decimal, left_adjust
+from interpreter.register import Register
 
 
 def _make_vm() -> VMState:
@@ -85,12 +86,12 @@ class TestAlphanumericRedefines:
 
         # Encode "20260301" as EBCDIC alphanumeric via IR
         enc_ir = build_encode_alphanumeric_ir("enc_date", length=8)
-        vm.current_frame.registers["%p_value"] = "20260301"
+        vm.current_frame.registers[Register("%p_value")] = "20260301"
         encoded = _execute_ir_sequence(vm, enc_ir)
 
         # Write encoded bytes to region at offset 0
-        vm.current_frame.registers["%off0"] = 0
-        vm.current_frame.registers["%data"] = encoded
+        vm.current_frame.registers[Register("%off0")] = 0
+        vm.current_frame.registers[Register("%data")] = encoded
         _execute(
             vm,
             IRInstruction(
@@ -111,8 +112,8 @@ class TestAlphanumericRedefines:
 
         # Decode the 4 bytes as alphanumeric via IR
         dec_ir = build_decode_alphanumeric_ir("dec_year")
-        vm.current_frame.registers["%p_data"] = vm.current_frame.registers[
-            "%year_bytes"
+        vm.current_frame.registers[Register("%p_data")] = vm.current_frame.registers[
+            Register("%year_bytes")
         ]
         year = _execute_ir_sequence(vm, dec_ir)
 
@@ -132,11 +133,11 @@ class TestAlphanumericRedefines:
         )
 
         enc_ir = build_encode_alphanumeric_ir("enc_date", length=8)
-        vm.current_frame.registers["%p_value"] = "20260301"
+        vm.current_frame.registers[Register("%p_value")] = "20260301"
         encoded = _execute_ir_sequence(vm, enc_ir)
 
-        vm.current_frame.registers["%off0"] = 0
-        vm.current_frame.registers["%data"] = encoded
+        vm.current_frame.registers[Register("%off0")] = 0
+        vm.current_frame.registers[Register("%data")] = encoded
         _execute(
             vm,
             IRInstruction(
@@ -146,7 +147,7 @@ class TestAlphanumericRedefines:
         )
 
         # Read 2 bytes at offset 4 (month)
-        vm.current_frame.registers["%off4"] = 4
+        vm.current_frame.registers[Register("%off4")] = 4
         _execute(
             vm,
             IRInstruction(
@@ -157,8 +158,8 @@ class TestAlphanumericRedefines:
         )
 
         dec_ir = build_decode_alphanumeric_ir("dec_month")
-        vm.current_frame.registers["%p_data"] = vm.current_frame.registers[
-            "%month_bytes"
+        vm.current_frame.registers[Register("%p_data")] = vm.current_frame.registers[
+            Register("%month_bytes")
         ]
         month = _execute_ir_sequence(vm, dec_ir)
 
@@ -184,13 +185,13 @@ class TestZonedDecimalRedefines:
         # Encode zoned decimal 12345 (5 bytes, unsigned)
         digits = [1, 2, 3, 4, 5]
         enc_ir = build_encode_zoned_ir("enc_z", total_digits=5)
-        vm.current_frame.registers["%p_digits"] = digits
-        vm.current_frame.registers["%p_sign_nibble"] = 0x0F
+        vm.current_frame.registers[Register("%p_digits")] = digits
+        vm.current_frame.registers[Register("%p_sign_nibble")] = 0x0F
         encoded = _execute_ir_sequence(vm, enc_ir)
 
         # Write to region at offset 0
-        vm.current_frame.registers["%off0"] = 0
-        vm.current_frame.registers["%zdata"] = encoded
+        vm.current_frame.registers[Register("%off0")] = 0
+        vm.current_frame.registers[Register("%zdata")] = encoded
         _execute(
             vm,
             IRInstruction(
@@ -211,8 +212,8 @@ class TestZonedDecimalRedefines:
 
         # Decode as zoned decimal
         dec_ir = build_decode_zoned_ir("dec_z", total_digits=5, decimal_digits=0)
-        vm.current_frame.registers["%p_data"] = vm.current_frame.registers[
-            "%read_bytes"
+        vm.current_frame.registers[Register("%p_data")] = vm.current_frame.registers[
+            Register("%read_bytes")
         ]
         value = _execute_ir_sequence(vm, dec_ir)
 
@@ -238,12 +239,12 @@ class TestMultiFieldRedefines:
         # Write zoned decimal 99999 at offset 0
         digits = [9, 9, 9, 9, 9]
         enc_z = build_encode_zoned_ir("enc_z", total_digits=5)
-        vm.current_frame.registers["%p_digits"] = digits
-        vm.current_frame.registers["%p_sign_nibble"] = 0x0F
+        vm.current_frame.registers[Register("%p_digits")] = digits
+        vm.current_frame.registers[Register("%p_sign_nibble")] = 0x0F
         zoned_bytes = _execute_ir_sequence(vm, enc_z)
 
-        vm.current_frame.registers["%off0"] = 0
-        vm.current_frame.registers["%zdata"] = zoned_bytes
+        vm.current_frame.registers[Register("%off0")] = 0
+        vm.current_frame.registers[Register("%zdata")] = zoned_bytes
         _execute(
             vm,
             IRInstruction(
@@ -254,11 +255,11 @@ class TestMultiFieldRedefines:
 
         # Write alphanumeric "HELLO" at offset 5
         enc_a = build_encode_alphanumeric_ir("enc_a", length=5)
-        vm.current_frame.registers["%p_value"] = "HELLO"
+        vm.current_frame.registers[Register("%p_value")] = "HELLO"
         alpha_bytes = _execute_ir_sequence(vm, enc_a)
 
-        vm.current_frame.registers["%off5"] = 5
-        vm.current_frame.registers["%adata"] = alpha_bytes
+        vm.current_frame.registers[Register("%off5")] = 5
+        vm.current_frame.registers[Register("%adata")] = alpha_bytes
         _execute(
             vm,
             IRInstruction(
@@ -277,7 +278,9 @@ class TestMultiFieldRedefines:
             ),
         )
         dec_z = build_decode_zoned_ir("dec_z", total_digits=5, decimal_digits=0)
-        vm.current_frame.registers["%p_data"] = vm.current_frame.registers["%z_read"]
+        vm.current_frame.registers[Register("%p_data")] = vm.current_frame.registers[
+            Register("%z_read")
+        ]
         z_value = _execute_ir_sequence(vm, dec_z)
         assert z_value == 99999.0
 
@@ -291,7 +294,9 @@ class TestMultiFieldRedefines:
             ),
         )
         dec_a = build_decode_alphanumeric_ir("dec_a")
-        vm.current_frame.registers["%p_data"] = vm.current_frame.registers["%a_read"]
+        vm.current_frame.registers[Register("%p_data")] = vm.current_frame.registers[
+            Register("%a_read")
+        ]
         a_value = _execute_ir_sequence(vm, dec_a)
         assert a_value == "HELLO"
 
@@ -310,11 +315,11 @@ class TestMultiFieldRedefines:
 
         # Write "ABCD1234" as alphanumeric
         enc_a = build_encode_alphanumeric_ir("enc_a", length=8)
-        vm.current_frame.registers["%p_value"] = "ABCD1234"
+        vm.current_frame.registers[Register("%p_value")] = "ABCD1234"
         alpha_bytes = _execute_ir_sequence(vm, enc_a)
 
-        vm.current_frame.registers["%off0"] = 0
-        vm.current_frame.registers["%adata"] = alpha_bytes
+        vm.current_frame.registers[Register("%off0")] = 0
+        vm.current_frame.registers[Register("%adata")] = alpha_bytes
         _execute(
             vm,
             IRInstruction(
@@ -324,7 +329,7 @@ class TestMultiFieldRedefines:
         )
 
         # Read bytes [4:8] — this is the REDEFINES overlay
-        vm.current_frame.registers["%off4"] = 4
+        vm.current_frame.registers[Register("%off4")] = 4
         _execute(
             vm,
             IRInstruction(
@@ -336,7 +341,9 @@ class TestMultiFieldRedefines:
 
         # Decode overlay as alphanumeric
         dec_a = build_decode_alphanumeric_ir("dec_a")
-        vm.current_frame.registers["%p_data"] = vm.current_frame.registers["%overlay"]
+        vm.current_frame.registers[Register("%p_data")] = vm.current_frame.registers[
+            Register("%overlay")
+        ]
         overlay_value = _execute_ir_sequence(vm, dec_a)
 
         assert overlay_value == "1234"

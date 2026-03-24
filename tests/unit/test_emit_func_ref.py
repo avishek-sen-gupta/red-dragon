@@ -7,6 +7,7 @@ from interpreter.frontend_observer import NullFrontendObserver
 from interpreter.constants import Language
 from interpreter.refs.func_ref import FuncRef
 from interpreter.ir import Opcode, CodeLabel
+from interpreter.register import Register
 
 
 def _make_ctx(lang: Language = Language.PYTHON) -> TreeSitterEmitContext:
@@ -32,7 +33,7 @@ class TestEmitFuncRef:
         const_insts = [i for i in ctx.instructions if i.opcode == Opcode.CONST]
         assert len(const_insts) == 1
         assert const_insts[0].operands == ["func_add_0"]
-        assert const_insts[0].result_reg == "%0"
+        assert str(const_insts[0].result_reg) == "%0"
 
     def test_plain_label_format(self):
         ctx = _make_ctx()

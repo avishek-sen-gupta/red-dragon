@@ -1472,12 +1472,12 @@ class TestPascalFunctionResult:
             for inst in ir
             if inst.opcode == Opcode.LOAD_VAR
             and inst.operands[0] == "Result"
-            and inst.result_reg == ret_reg
+            and str(inst.result_reg) == ret_reg
         ]
         assert (
             len(load_result) == 1
         ), f"Expected LOAD_VAR Result → {ret_reg}, got: " + str(
-            [inst for inst in ir if inst.result_reg == ret_reg]
+            [inst for inst in ir if str(inst.result_reg) == ret_reg]
         )
 
     def test_procedure_still_returns_none(self):
@@ -1492,7 +1492,7 @@ class TestPascalFunctionResult:
             inst
             for inst in ir
             if inst.opcode == Opcode.CONST
-            and inst.result_reg == ret_reg
+            and str(inst.result_reg) == ret_reg
             and inst.operands[0] == "None"
         ]
         assert len(const_none) == 1

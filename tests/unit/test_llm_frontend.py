@@ -8,6 +8,7 @@ import pytest
 
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.llm.llm_client import LLMClient
+from interpreter.register import Register
 from interpreter.llm.llm_frontend import (
     IRParsingError,
     LLMFrontend,
@@ -116,7 +117,7 @@ class TestParseSingleInstruction:
         }
         inst = _parse_single_instruction(raw)
         assert inst.opcode == Opcode.CONST
-        assert inst.result_reg == "%0"
+        assert inst.result_reg == Register("%0")
         assert inst.operands == ["42"]
         assert not inst.label.is_present()
 

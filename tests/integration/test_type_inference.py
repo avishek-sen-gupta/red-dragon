@@ -8,6 +8,7 @@ from interpreter.types.coercion.default_conversion_rules import (
 )
 from interpreter.frontend import get_frontend
 from interpreter.ir import Opcode
+from interpreter.register import Register
 from interpreter.types.type_expr import (
     FunctionType,
     ParameterizedType,
@@ -1198,7 +1199,7 @@ class Dog {
         ]
         assert len(store_fields) >= 1
         # Verify the store's object register is typed as Dog
-        obj_reg = str(store_fields[0].operands[0])
+        obj_reg = Register(str(store_fields[0].operands[0]))
         assert (
             obj_reg in env.register_types
         ), f"Expected STORE_FIELD object register {obj_reg} to be typed"
