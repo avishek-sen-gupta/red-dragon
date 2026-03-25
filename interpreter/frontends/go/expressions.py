@@ -12,7 +12,7 @@ from interpreter.frontends.common.expressions import (
 )
 from interpreter.frontends.go.node_types import GoNodeType
 from interpreter.register import Register
-from interpreter.types.type_expr import scalar
+from interpreter.types.type_expr import ParameterizedType, scalar, array_of, map_of
 from interpreter.instructions import (
     Const,
     CallFunction,
@@ -42,6 +42,30 @@ def lower_go_iota(ctx: TreeSitterEmitContext, node) -> Register:
 logger = logging.getLogger(__name__)
 
 
+def _parse_go_type(ctx: TreeSitterEmitContext, type_node) -> "TypeExpr":
+    """Convert a Go tree-sitter type node into a TypeExpr.
+
+    Handles slice_type ([]T → Array[T]), map_type (map[K]V → Map[K, V]),
+    and falls back to scalar(text) for simple type identifiers.
+    """
+    from interpreter.types.type_expr import TypeExpr
+
+    if type_node.type == "slice_type":
+        named = [c for c in type_node.children if c.is_named]
+        if named:
+            elem = _parse_go_type(ctx, named[0])
+            return array_of(elem)
+        return array_of(scalar(ctx.node_text(type_node)))
+
+    if type_node.type == "map_type":
+        named = [c for c in type_node.children if c.is_named]
+        if len(named) >= 2:
+            return map_of(_parse_go_type(ctx, named[0]), _parse_go_type(ctx, named[1]))
+        return scalar(ctx.node_text(type_node))
+
+    return scalar(ctx.node_text(type_node))
+
+
 # -- Go: call expression ---------------------------------------------------
 
 
@@ -60,8 +84,8 @@ def lower_go_call(ctx: TreeSitterEmitContext, node) -> Register:
         type_args = [c for c in args_node.children if c.is_named]
         if type_args:
             type_node = type_args[0]
-            type_text = ctx.node_text(type_node)
             if type_node.type == "slice_type":
+                elem_type = _parse_go_type(ctx, type_node)
                 reg = ctx.fresh_reg()
                 size_reg = (
                     ctx.lower_expr(type_args[1])
@@ -69,16 +93,13 @@ def lower_go_call(ctx: TreeSitterEmitContext, node) -> Register:
                     else ctx.fresh_reg()
                 )
                 ctx.emit_inst(
-                    NewArray(
-                        result_reg=reg, type_hint=scalar(type_text), size_reg=size_reg
-                    ),
+                    NewArray(result_reg=reg, type_hint=elem_type, size_reg=size_reg),
                     node=node,
                 )
                 return reg
+            type_hint = _parse_go_type(ctx, type_node)
             reg = ctx.fresh_reg()
-            ctx.emit_inst(
-                NewObject(result_reg=reg, type_hint=scalar(type_text)), node=node
-            )
+            ctx.emit_inst(NewObject(result_reg=reg, type_hint=type_hint), node=node)
             return reg
 
     arg_regs = extract_call_args(ctx, args_node) if args_node else []
