@@ -33,7 +33,7 @@ from interpreter.frontends.common.expressions import (
 from interpreter.frontends.common.match_expr import MatchArmSpec, lower_match_as_expr
 from interpreter.frontends.scala.node_types import ScalaNodeType as NT
 from interpreter.frontends.scala.patterns import parse_scala_pattern
-from interpreter.types.type_expr import ScalarType
+from interpreter.types.type_expr import ScalarType, scalar
 from interpreter.register import Register
 
 
@@ -300,7 +300,8 @@ def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> Register:
     size_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint="tuple", size_reg=size_reg), node=node
+        NewArray(result_reg=arr_reg, type_hint=scalar("tuple"), size_reg=size_reg),
+        node=node,
     )
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)

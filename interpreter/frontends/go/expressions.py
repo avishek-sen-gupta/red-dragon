@@ -12,6 +12,7 @@ from interpreter.frontends.common.expressions import (
 )
 from interpreter.frontends.go.node_types import GoNodeType
 from interpreter.register import Register
+from interpreter.types.type_expr import scalar
 from interpreter.instructions import (
     Const,
     CallFunction,
@@ -68,12 +69,16 @@ def lower_go_call(ctx: TreeSitterEmitContext, node) -> Register:
                     else ctx.fresh_reg()
                 )
                 ctx.emit_inst(
-                    NewArray(result_reg=reg, type_hint=type_text, size_reg=size_reg),
+                    NewArray(
+                        result_reg=reg, type_hint=scalar(type_text), size_reg=size_reg
+                    ),
                     node=node,
                 )
                 return reg
             reg = ctx.fresh_reg()
-            ctx.emit_inst(NewObject(result_reg=reg, type_hint=type_text), node=node)
+            ctx.emit_inst(
+                NewObject(result_reg=reg, type_hint=scalar(type_text)), node=node
+            )
             return reg
 
     arg_regs = extract_call_args(ctx, args_node) if args_node else []
@@ -164,7 +169,7 @@ def lower_composite_literal(ctx: TreeSitterEmitContext, node) -> Register:
 
     type_name = ctx.node_text(type_node) if type_node else "Object"
     obj_reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=type_name), node=node)
+    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=scalar(type_name)), node=node)
 
     if not body_node:
         return obj_reg

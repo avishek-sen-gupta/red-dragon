@@ -26,7 +26,7 @@ from interpreter.frontends.common.declarations import (
     emit_field_initializers,
     emit_synthetic_init,
 )
-from interpreter.types.type_expr import ScalarType
+from interpreter.types.type_expr import ScalarType, scalar
 from interpreter.frontends.common.property_accessors import register_property_accessor
 from interpreter.register import Register
 
@@ -450,7 +450,9 @@ def _lower_enum_entry(ctx: TreeSitterEmitContext, node) -> None:
     )
     entry_name = ctx.node_text(name_node) if name_node else "__unknown_enum"
     reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=reg, type_hint=f"enum:{entry_name}"), node=node)
+    ctx.emit_inst(
+        NewObject(result_reg=reg, type_hint=scalar(f"enum:{entry_name}")), node=node
+    )
     ctx.emit_inst(DeclVar(name=entry_name, value_reg=reg))
 
 
@@ -696,7 +698,7 @@ def lower_object_decl(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=end_label))
 
     inst_reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=inst_reg, type_hint=obj_name), node=node)
+    ctx.emit_inst(NewObject(result_reg=inst_reg, type_hint=scalar(obj_name)), node=node)
     ctx.emit_inst(DeclVar(name=obj_name, value_reg=inst_reg))
 
 

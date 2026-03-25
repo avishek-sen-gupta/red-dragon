@@ -108,7 +108,8 @@ def lower_declaration(ctx: TreeSitterEmitContext, node) -> None:
             if struct_type:
                 val_reg = ctx.fresh_reg()
                 ctx.emit_inst(
-                    NewObject(result_reg=val_reg, type_hint=struct_type), node=node
+                    NewObject(result_reg=val_reg, type_hint=scalar(struct_type)),
+                    node=node,
                 )
             else:
                 val_reg = ctx.fresh_reg()
@@ -168,7 +169,9 @@ def _lower_init_declarator(
         val_reg = ctx.lower_expr(value_node)
     elif struct_type:
         val_reg = ctx.fresh_reg()
-        ctx.emit_inst(NewObject(result_reg=val_reg, type_hint=struct_type), node=node)
+        ctx.emit_inst(
+            NewObject(result_reg=val_reg, type_hint=scalar(struct_type)), node=node
+        )
     else:
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
@@ -479,7 +482,7 @@ def lower_enum_def(ctx: TreeSitterEmitContext, node) -> None:
 
     obj_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewObject(result_reg=obj_reg, type_hint=f"enum:{enum_name}"), node=node
+        NewObject(result_reg=obj_reg, type_hint=scalar(f"enum:{enum_name}")), node=node
     )
 
     if body_node:

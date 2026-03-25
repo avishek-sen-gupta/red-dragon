@@ -36,6 +36,7 @@ from interpreter.frontends.common.expressions import (
 )
 from interpreter.frontends.php.node_types import PHPNodeType
 from interpreter.register import Register
+from interpreter.types.type_expr import scalar
 
 logger = logging.getLogger(__name__)
 
@@ -353,7 +354,9 @@ def lower_php_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
         )
         arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
         obj_reg = ctx.fresh_reg()
-        ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=anon_name), node=node)
+        ctx.emit_inst(
+            NewObject(result_reg=obj_reg, type_hint=scalar(anon_name)), node=node
+        )
         ctor_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallMethod(
@@ -377,7 +380,7 @@ def lower_php_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
     type_name = ctx.node_text(name_node) if name_node else "Object"
 
     obj_reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=type_name), node=node)
+    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=scalar(type_name)), node=node)
     ctor_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallMethod(
@@ -479,7 +482,7 @@ def _lower_php_associative_array(
 ) -> Register:
     """Lower associative array as NEW_OBJECT + STORE_INDEX per key-value pair."""
     obj_reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint="array"), node=node)
+    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=scalar("array")), node=node)
     for elem in elements:
         named = [c for c in elem.children if c.is_named]
         if len(named) >= 2:
@@ -506,7 +509,8 @@ def _lower_php_indexed_array(
     ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elements))))
     arr_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint="array", size_reg=size_reg), node=node
+        NewArray(result_reg=arr_reg, type_hint=scalar("array"), size_reg=size_reg),
+        node=node,
     )
     for i, elem in enumerate(elements):
         named = [c for c in elem.children if c.is_named]
