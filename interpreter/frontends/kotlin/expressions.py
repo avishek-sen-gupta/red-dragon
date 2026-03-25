@@ -49,6 +49,7 @@ from interpreter.frontends.common.patterns import (
 from interpreter.frontends.kotlin.node_types import KotlinNodeType as KNT
 from interpreter.frontends.kotlin.patterns import parse_kotlin_pattern
 from interpreter.register import Register
+from interpreter.types.type_expr import scalar
 
 logger = logging.getLogger(__name__)
 
@@ -728,7 +729,9 @@ def lower_object_literal(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=end_label))
 
     inst_reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=inst_reg, type_hint=type_name), node=node)
+    ctx.emit_inst(
+        NewObject(result_reg=inst_reg, type_hint=scalar(type_name)), node=node
+    )
     return inst_reg
 
 

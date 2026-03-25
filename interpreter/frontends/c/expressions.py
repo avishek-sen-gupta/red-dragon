@@ -9,6 +9,7 @@ from interpreter.ir import Opcode, CodeLabel
 from interpreter.frontends.common.expressions import lower_const_literal
 from interpreter.frontends.c.node_types import CNodeType
 from interpreter.register import Register
+from interpreter.types.type_expr import scalar
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -251,7 +252,7 @@ def lower_compound_literal(ctx: TreeSitterEmitContext, node) -> Register:
     )
     type_name = ctx.node_text(type_node) if type_node else "compound"
     obj_reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=type_name), node=node)
+    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=scalar(type_name)), node=node)
     if init_node:
         elements = [c for c in init_node.children if c.is_named]
         for i, elem in enumerate(elements):
@@ -271,7 +272,8 @@ def lower_initializer_list(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elements))))
     arr_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint="array", size_reg=size_reg), node=node
+        NewArray(result_reg=arr_reg, type_hint=scalar("array"), size_reg=size_reg),
+        node=node,
     )
     for i, elem in enumerate(elements):
         idx_reg = ctx.fresh_reg()

@@ -63,6 +63,7 @@ from interpreter.refs.func_ref import FuncRef
 from interpreter.types.type_environment_builder import TypeEnvironmentBuilder
 from interpreter import constants
 from interpreter.constants import CanonicalLiteral, DEFAULT_EXCEPTION_TYPE, Language
+from interpreter.types.type_expr import scalar
 
 logger = logging.getLogger(__name__)
 
@@ -1058,7 +1059,7 @@ class BaseFrontend(Frontend):
         size_reg = self._fresh_reg()
         self._emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
         self._emit_inst(
-            NewArray(result_reg=arr_reg, type_hint="list", size_reg=size_reg),
+            NewArray(result_reg=arr_reg, type_hint=scalar("list"), size_reg=size_reg),
             node=node,
         )
         for i, elem in enumerate(elems):
@@ -1073,7 +1074,7 @@ class BaseFrontend(Frontend):
     def _lower_dict_literal(self, node) -> Register:
         obj_reg = self._fresh_reg()
         self._emit_inst(
-            NewObject(result_reg=obj_reg, type_hint="dict"),
+            NewObject(result_reg=obj_reg, type_hint=scalar("dict")),
             node=node,
         )
         for child in node.children:
