@@ -222,10 +222,10 @@ class TestCSharpFrontendMemberAccess:
 
 
 class TestCSharpFrontendObjectCreation:
-    def test_object_creation_produces_call_function(self):
+    def test_object_creation_produces_call_ctor(self):
         source = 'var dog = new Dog("Rex");'
         ir = _parse_and_lower(source)
-        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        calls = _find_all(ir, Opcode.CALL_CTOR)
         dog_calls = [c for c in calls if "Dog" in c.operands]
         assert len(dog_calls) >= 1
 

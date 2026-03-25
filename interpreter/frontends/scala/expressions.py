@@ -14,6 +14,7 @@ from interpreter.instructions import (
     StoreField,
     StoreIndex,
     LoadField,
+    CallCtorFunction,
     CallFunction,
     CallMethod,
     NewArray,
@@ -386,7 +387,12 @@ def lower_new_expr(ctx: TreeSitterEmitContext, node) -> Register:
 
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name=type_name, args=tuple(arg_regs)),
+        CallCtorFunction(
+            result_reg=reg,
+            func_name=type_name,
+            type_hint=scalar(type_name),
+            args=tuple(arg_regs),
+        ),
         node=node,
     )
     ctx.seed_register_type(reg, ScalarType(type_name))

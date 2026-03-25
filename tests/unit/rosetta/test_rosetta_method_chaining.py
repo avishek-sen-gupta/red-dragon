@@ -327,7 +327,12 @@ class TestMethodChainingLowering:
     def test_call_present(self, language_ir):
         """Languages with classes should have CALL_METHOD, CALL_FUNCTION, or CALL_UNKNOWN."""
         lang, ir = language_ir
-        call_opcodes = {Opcode.CALL_METHOD, Opcode.CALL_FUNCTION, Opcode.CALL_UNKNOWN}
+        call_opcodes = {
+            Opcode.CALL_METHOD,
+            Opcode.CALL_FUNCTION,
+            Opcode.CALL_UNKNOWN,
+            Opcode.CALL_CTOR,
+        }
         present = {inst.opcode for inst in ir}
         has_call = bool(present & call_opcodes)
         assert (

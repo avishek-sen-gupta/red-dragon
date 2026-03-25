@@ -7,6 +7,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.instructions import (
     Branch,
     BranchIf,
+    CallCtorFunction,
     CallFunction,
     CallMethod,
     Const,
@@ -74,7 +75,12 @@ def lower_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
     type_name = ctx.node_text(type_node) if type_node else "Object"
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name=type_name, args=tuple(arg_regs)),
+        CallCtorFunction(
+            result_reg=reg,
+            func_name=type_name,
+            type_hint=scalar(type_name),
+            args=tuple(arg_regs),
+        ),
         node=node,
     )
     ctx.seed_register_type(reg, ScalarType(type_name))
