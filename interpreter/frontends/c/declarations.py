@@ -25,7 +25,7 @@ from interpreter.frontends.type_extraction import (
     normalize_type_hint,
 )
 from interpreter.frontends.c.node_types import CNodeType
-from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar, pointer
+from interpreter.types.type_expr import UNKNOWN, EnumType, TypeExpr, scalar, pointer
 
 logger = logging.getLogger(__name__)
 
@@ -482,7 +482,7 @@ def lower_enum_def(ctx: TreeSitterEmitContext, node) -> None:
 
     obj_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewObject(result_reg=obj_reg, type_hint=scalar(f"enum:{enum_name}")), node=node
+        NewObject(result_reg=obj_reg, type_hint=EnumType(enum_name)), node=node
     )
 
     if body_node:

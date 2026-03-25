@@ -17,7 +17,7 @@ from interpreter.frontends.common.property_accessors import (
     register_property_accessor,
     emit_field_store_or_setter,
 )
-from interpreter.types.type_expr import scalar
+from interpreter.types.type_expr import EnumType, scalar
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -744,7 +744,7 @@ def _lower_pascal_enum(
     """Lower Pascal enum: NEW_OBJECT + STORE_INDEX per member + DECL_VAR per member."""
     obj_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewObject(result_reg=obj_reg, type_hint=scalar(f"enum:{type_name}")),
+        NewObject(result_reg=obj_reg, type_hint=EnumType(type_name)),
         node=parent_node,
     )
     members = [
