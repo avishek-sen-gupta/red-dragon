@@ -6,7 +6,7 @@ This directory contains exhaustive per-language documentation for the RedDragon 
 
 ## Architecture Overview
 
-The frontend subsystem converts source code in any of 15 supported languages into a universal flattened three-address code IR ([32 opcodes](../ir-reference.md)). The deterministic frontend strategy uses tree-sitter to parse source into an AST, then performs recursive descent over that AST to emit IR instructions.
+The frontend subsystem converts source code in any of 15 supported languages into a universal flattened three-address code IR ([33 opcodes](../ir-reference.md)). The deterministic frontend strategy uses tree-sitter to parse source into an AST, then performs recursive descent over that AST to emit IR instructions.
 
 The architecture follows a **context-mode** pattern: `BaseFrontend` subclasses return pure data (dispatch tables, grammar constants) via `_build_*()` hooks, and all lowering is performed by pure functions that receive a shared `TreeSitterEmitContext` as their first argument.
 

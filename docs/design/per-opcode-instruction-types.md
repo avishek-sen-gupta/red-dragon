@@ -27,7 +27,7 @@ All share `result_reg`, `label`, `branch_targets`, `source_location` via a base.
 Instruction = (
     Const | LoadVar | DeclVar | StoreVar |
     Binop | Unop |
-    CallFunction | CallMethod | CallUnknown |
+    CallFunction | CallMethod | CallUnknown | CallCtorFunction |
     LoadField | StoreField | LoadFieldIndirect |
     LoadIndex | StoreIndex |
     LoadIndirect | StoreIndirect |
@@ -68,9 +68,10 @@ Derived from handler destructuring and frontend emit sites.
 
 | Type | Fields | Notes |
 |------|--------|-------|
-| `CallFunction` | `result_reg: Register, func_name: str, args: list[str \| SpreadArguments]` | |
-| `CallMethod` | `result_reg: Register, obj_reg: str, method_name: str, args: list[str \| SpreadArguments]` | |
-| `CallUnknown` | `result_reg: Register, target_reg: str, args: list[str \| SpreadArguments]` | Dynamic dispatch |
+| `CallFunction` | `result_reg: Register, func_name: str, args: tuple[Register \| SpreadArguments, ...]` | |
+| `CallMethod` | `result_reg: Register, obj_reg: Register, method_name: str, args: tuple[Register \| SpreadArguments, ...]` | |
+| `CallUnknown` | `result_reg: Register, target_reg: Register, args: tuple[Register \| SpreadArguments, ...]` | Dynamic dispatch |
+| `CallCtorFunction` | `result_reg: Register, func_name: str, type_hint: TypeExpr, args: tuple[Register \| SpreadArguments, ...]` | Typed constructor call |
 
 ### Memory — Fields
 
