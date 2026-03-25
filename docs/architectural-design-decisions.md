@@ -8,7 +8,7 @@ This document captures key architectural decisions made during the development o
 
 **Context:** The project needed a single representation that all source languages lower into, enabling language-agnostic analysis and execution. A tree-based AST would require per-language walkers for every downstream pass.
 
-**Decision:** Adopt a flattened three-address code (TAC) IR with 27 opcodes (see [IR Reference](ir-reference.md)). Every instruction is a flat dataclass with an opcode, operands, and a destination register. No nested expressions — all intermediates are explicit.
+**Decision:** Adopt a flattened three-address code (TAC) IR (see [IR Reference](ir-reference.md); currently 33 opcodes, grown from the original 27). Each opcode has a dedicated frozen dataclass with named, typed fields. No nested expressions — all intermediates are explicit.
 
 **Consequences:** CFG construction, dataflow analysis, and VM execution all operate on the same flat instruction list, eliminating duplication. Adding a new language frontend only requires emitting these opcodes. The trade-off is that lowering must decompose complex expressions (e.g., `a + b * c`) into multiple instructions, increasing IR verbosity.
 
