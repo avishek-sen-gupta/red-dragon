@@ -32,6 +32,7 @@ from interpreter.ir import (
     SpreadArguments,
 )
 from interpreter.register import NO_REGISTER, Register
+from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
 
 
 def _is_union(origin: object) -> bool:
@@ -597,7 +598,7 @@ class NewObject(InstructionBase):
     """NEW_OBJECT: allocate a new object on the heap."""
 
     result_reg: Register = NO_REGISTER
-    type_hint: str = ""
+    type_hint: TypeExpr = UNKNOWN
 
     # ── IRInstruction-compat fields ──
     label: CodeLabel = NO_LABEL
@@ -609,7 +610,7 @@ class NewObject(InstructionBase):
 
     @property
     def operands(self) -> list[Any]:
-        return [self.type_hint] if self.type_hint else []
+        return [str(self.type_hint)] if self.type_hint else []
 
 
 @dataclass(frozen=True)
@@ -617,7 +618,7 @@ class NewArray(InstructionBase):
     """NEW_ARRAY: allocate a new array/list/dict on the heap."""
 
     result_reg: Register = NO_REGISTER
-    type_hint: str = ""
+    type_hint: TypeExpr = UNKNOWN
     size_reg: Register = NO_REGISTER
 
     # ── IRInstruction-compat fields ──
@@ -630,7 +631,7 @@ class NewArray(InstructionBase):
 
     @property
     def operands(self) -> list[Any]:
-        return [self.type_hint, str(self.size_reg)]
+        return [str(self.type_hint), str(self.size_reg)]
 
 
 # ── Control Flow ─────────────────────────────────────────────────
@@ -1125,18 +1126,20 @@ def _address_of(inst: IRInstruction) -> AddressOf:
 
 
 def _new_object(inst: IRInstruction) -> NewObject:
+    raw = str(inst.operands[0]) if inst.operands else ""
     return NewObject(
         result_reg=inst.result_reg,
-        type_hint=str(inst.operands[0]) if inst.operands else "",
+        type_hint=scalar(raw) if raw else UNKNOWN,
         source_location=inst.source_location,
     )
 
 
 def _new_array(inst: IRInstruction) -> NewArray:
     ops = inst.operands
+    raw = str(ops[0]) if len(ops) >= 1 else ""
     return NewArray(
         result_reg=inst.result_reg,
-        type_hint=str(ops[0]) if len(ops) >= 1 else "",
+        type_hint=scalar(raw) if raw else UNKNOWN,
         size_reg=Register(str(ops[1])) if len(ops) >= 2 else NO_REGISTER,
         source_location=inst.source_location,
     )

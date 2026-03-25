@@ -661,10 +661,8 @@ def _infer_new_object(
     ctx: _InferenceContext,
     type_resolver: TypeResolver,
 ) -> None:
-    if inst.result_reg.is_present():
-        class_name = str(inst.type_hint)
-        if class_name:
-            ctx.register_types[inst.result_reg] = scalar(class_name)
+    if inst.result_reg.is_present() and inst.type_hint:
+        ctx.register_types[inst.result_reg] = inst.type_hint
 
 
 def _infer_new_array(
