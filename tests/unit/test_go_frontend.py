@@ -928,11 +928,11 @@ class TestGoTypeConversionExpression:
     type_conversion_expression is only triggered for complex type syntax.
     """
 
-    def test_slice_byte_conversion_produces_call_function(self):
-        """[]byte(s) should produce CALL_FUNCTION with '[]byte' as function name."""
+    def test_slice_byte_conversion_produces_call_ctor(self):
+        """[]byte(s) should produce CALL_CTOR with '[]byte' as function name."""
         source = 'package main\nfunc main() { s := "hello"; x := []byte(s) }'
         ir = _parse_and_lower(source)
-        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        calls = _find_all(ir, Opcode.CALL_CTOR)
         byte_calls = [c for c in calls if "[]byte" in c.operands]
         assert len(byte_calls) >= 1
 
@@ -944,11 +944,11 @@ class TestGoTypeConversionExpression:
             "type_conversion_expression" in str(inst.operands) for inst in symbolics
         )
 
-    def test_generic_type_conversion_produces_call_function(self):
-        """Foo[int](y) should produce CALL_FUNCTION."""
+    def test_generic_type_conversion_produces_call_ctor(self):
+        """Foo[int](y) should produce CALL_CTOR."""
         source = "package main\nfunc main() { x := Foo[int](y) }"
         ir = _parse_and_lower(source)
-        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        calls = _find_all(ir, Opcode.CALL_CTOR)
         assert len(calls) >= 1
 
     def test_generic_type_conversion_no_symbolic(self):
@@ -963,7 +963,7 @@ class TestGoTypeConversionExpression:
         """The operand expression should be lowered and passed as argument."""
         source = 'package main\nfunc main() { s := "hi"; x := []byte(s) }'
         ir = _parse_and_lower(source)
-        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        calls = _find_all(ir, Opcode.CALL_CTOR)
         byte_calls = [c for c in calls if "[]byte" in c.operands]
         assert len(byte_calls) >= 1
         # The call should have 2 operands: function name + 1 arg register

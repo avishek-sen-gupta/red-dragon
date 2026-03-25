@@ -151,7 +151,7 @@ class TestCppClasses:
 class TestCppExpressions:
     def test_new_expression(self):
         instructions = _parse_cpp('int main() { Dog* d = new Dog("Rex"); }')
-        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        calls = _find_all(instructions, Opcode.CALL_CTOR)
         assert any("Dog" in inst.operands for inst in calls)
 
     def test_delete_expression(self):
@@ -236,7 +236,7 @@ int main() {
 }
 """
         instructions = _parse_cpp(source)
-        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        calls = _find_all(instructions, Opcode.CALL_CTOR)
         assert any("Dog" in inst.operands for inst in calls)
         method_calls = _find_all(instructions, Opcode.CALL_METHOD)
         assert any("bark" in inst.operands for inst in method_calls)

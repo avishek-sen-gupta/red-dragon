@@ -15,6 +15,7 @@ from interpreter.register import Register
 from interpreter.types.type_expr import ParameterizedType, scalar, array_of, map_of
 from interpreter.instructions import (
     Const,
+    CallCtorFunction,
     CallFunction,
     CallMethod,
     CallUnknown,
@@ -259,7 +260,12 @@ def lower_type_conversion(ctx: TreeSitterEmitContext, node) -> Register:
     operand_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name=type_name, args=(operand_reg,)),
+        CallCtorFunction(
+            result_reg=reg,
+            func_name=type_name,
+            type_hint=scalar(type_name),
+            args=(operand_reg,),
+        ),
         node=node,
     )
     return reg

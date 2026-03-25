@@ -25,6 +25,7 @@ from interpreter.instructions import (
     StoreVar,
     StoreField,
     StoreIndex,
+    CallCtorFunction,
     CallFunction,
     CallMethod,
     LoadField,
@@ -156,7 +157,12 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
         record_types: set[str] = getattr(ctx, "_pascal_record_types", set())
         if type_name in record_types:
             ctx.emit_inst(
-                CallFunction(result_reg=val_reg, func_name=type_name, args=()),
+                CallCtorFunction(
+                    result_reg=val_reg,
+                    func_name=type_name,
+                    type_hint=scalar(type_name),
+                    args=(),
+                ),
                 node=node,
             )
         else:
