@@ -3,7 +3,15 @@
 from interpreter.instructions import NewObject, NewArray
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.register import Register
-from interpreter.types.type_expr import UNKNOWN, ScalarType, TypeExpr, scalar
+from interpreter.types.type_expr import (
+    UNKNOWN,
+    AnnotationType,
+    EnumType,
+    ScalarType,
+    StructPatternType,
+    TypeExpr,
+    scalar,
+)
 
 
 class TestNewObjectTypeHint:
@@ -82,3 +90,55 @@ class TestNewArrayTypeHint:
         )
         assert isinstance(inst.type_hint, ScalarType)
         assert inst.type_hint == scalar("list")
+
+
+class TestEnumType:
+    def test_is_type_expr(self):
+        t = EnumType("Color")
+        assert isinstance(t, TypeExpr)
+
+    def test_str_representation(self):
+        assert str(EnumType("Color")) == "enum:Color"
+
+    def test_equality(self):
+        assert EnumType("Color") == EnumType("Color")
+        assert EnumType("Color") != EnumType("Shape")
+        assert EnumType("Color") != scalar("Color")
+
+    def test_in_new_object(self):
+        inst = NewObject(result_reg=Register("%r0"), type_hint=EnumType("Color"))
+        assert inst.operands == ["enum:Color"]
+        assert str(inst) == "%r0 = new_object enum:Color"
+
+    def test_hash(self):
+        assert hash(EnumType("Color")) == hash(EnumType("Color"))
+        s = {EnumType("Color"), EnumType("Shape")}
+        assert len(s) == 2
+
+
+class TestAnnotationType:
+    def test_is_type_expr(self):
+        assert isinstance(AnnotationType("Override"), TypeExpr)
+
+    def test_str_representation(self):
+        assert str(AnnotationType("Override")) == "annotation:Override"
+
+    def test_in_new_object(self):
+        inst = NewObject(
+            result_reg=Register("%r0"), type_hint=AnnotationType("Override")
+        )
+        assert inst.operands == ["annotation:Override"]
+
+
+class TestStructPatternType:
+    def test_is_type_expr(self):
+        assert isinstance(StructPatternType("Point"), TypeExpr)
+
+    def test_str_representation(self):
+        assert str(StructPatternType("Point")) == "struct_pattern:Point"
+
+    def test_in_new_object(self):
+        inst = NewObject(
+            result_reg=Register("%r0"), type_hint=StructPatternType("Point")
+        )
+        assert inst.operands == ["struct_pattern:Point"]

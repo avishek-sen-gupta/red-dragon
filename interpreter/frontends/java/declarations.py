@@ -27,7 +27,7 @@ from interpreter.frontends.common.declarations import (
     emit_field_initializers,
     emit_synthetic_init,
 )
-from interpreter.types.type_expr import ScalarType, scalar
+from interpreter.types.type_expr import AnnotationType, EnumType, ScalarType, scalar
 
 
 def lower_local_var_decl(ctx: TreeSitterEmitContext, node) -> None:
@@ -502,7 +502,7 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
         enum_name = ctx.node_text(name_node)
         obj_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            NewObject(result_reg=obj_reg, type_hint=scalar(f"enum:{enum_name}")),
+            NewObject(result_reg=obj_reg, type_hint=EnumType(enum_name)),
             node=node,
         )
         if body_node:
@@ -533,7 +533,7 @@ def lower_annotation_type_decl(ctx: TreeSitterEmitContext, node) -> None:
     annot_name = ctx.node_text(name_node)
     obj_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewObject(result_reg=obj_reg, type_hint=scalar(f"annotation:{annot_name}")),
+        NewObject(result_reg=obj_reg, type_hint=AnnotationType(annot_name)),
         node=node,
     )
     body_node = node.child_by_field_name(ctx.constants.class_body_field)

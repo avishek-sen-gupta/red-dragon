@@ -97,6 +97,72 @@ UNBOUND = ScalarType("__unbound__")
 
 
 @dataclass(frozen=True, eq=False)
+class EnumType(TypeExpr):
+    """An enum instance type: ``enum:Color``."""
+
+    name: str
+
+    def __str__(self) -> str:
+        return f"enum:{self.name}"
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, EnumType):
+            return self.name == other.name
+        if isinstance(other, str):
+            return str(self) == other
+        if isinstance(other, TypeExpr):
+            return False
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(str(self))
+
+
+@dataclass(frozen=True, eq=False)
+class AnnotationType(TypeExpr):
+    """A Java/Kotlin annotation type: ``annotation:Override``."""
+
+    name: str
+
+    def __str__(self) -> str:
+        return f"annotation:{self.name}"
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, AnnotationType):
+            return self.name == other.name
+        if isinstance(other, str):
+            return str(self) == other
+        if isinstance(other, TypeExpr):
+            return False
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(str(self))
+
+
+@dataclass(frozen=True, eq=False)
+class StructPatternType(TypeExpr):
+    """A Rust struct pattern type: ``struct_pattern:Point``."""
+
+    name: str
+
+    def __str__(self) -> str:
+        return f"struct_pattern:{self.name}"
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, StructPatternType):
+            return self.name == other.name
+        if isinstance(other, str):
+            return str(self) == other
+        if isinstance(other, TypeExpr):
+            return False
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(str(self))
+
+
+@dataclass(frozen=True, eq=False)
 class ParameterizedType(TypeExpr):
     """A type constructor applied to one or more type arguments.
 
