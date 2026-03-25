@@ -36,7 +36,14 @@ from interpreter.frontends.type_extraction import (
 )
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.typescript_node_types import TypeScriptNodeType
-from interpreter.types.type_expr import UNKNOWN, ScalarType, TypeExpr, metatype, scalar
+from interpreter.types.type_expr import (
+    UNKNOWN,
+    EnumType,
+    ScalarType,
+    TypeExpr,
+    metatype,
+    scalar,
+)
 from interpreter.register import Register
 
 
@@ -260,7 +267,7 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
         enum_name = ctx.node_text(name_node)
         obj_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            NewObject(result_reg=obj_reg, type_hint=scalar(f"enum:{enum_name}")),
+            NewObject(result_reg=obj_reg, type_hint=EnumType(enum_name)),
             node=node,
         )
         if body_node:

@@ -39,7 +39,7 @@ from interpreter.frontends.common.patterns import (
 )
 from interpreter.frontends.rust.patterns import parse_rust_pattern
 from interpreter.register import Register
-from interpreter.types.type_expr import scalar
+from interpreter.types.type_expr import StructPatternType, scalar
 
 logger = logging.getLogger(__name__)
 
@@ -854,7 +854,7 @@ def lower_struct_pattern_expr(ctx: TreeSitterEmitContext, node) -> Register:
     type_name = ctx.node_text(type_node) if type_node else ctx.node_text(node)
     obj_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewObject(result_reg=obj_reg, type_hint=scalar(f"struct_pattern:{type_name}")),
+        NewObject(result_reg=obj_reg, type_hint=StructPatternType(type_name)),
         node=node,
     )
     # Extract field bindings
