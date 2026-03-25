@@ -15,6 +15,7 @@ from interpreter.frontends.pascal.pascal_constants import (
 from interpreter.frontends.pascal.node_types import PascalNodeType
 from interpreter.frontends.pascal.declarations import _resolve_object_class
 from interpreter.register import Register
+from interpreter.types.type_expr import scalar
 from interpreter.instructions import (
     Const,
     Binop,
@@ -196,7 +197,8 @@ def lower_pascal_brackets(ctx: TreeSitterEmitContext, node) -> Register:
     size_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint="set", size_reg=size_reg), node=node
+        NewArray(result_reg=arr_reg, type_hint=scalar("set"), size_reg=size_reg),
+        node=node,
     )
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)

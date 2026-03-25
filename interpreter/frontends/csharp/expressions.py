@@ -37,7 +37,7 @@ from interpreter.frontends.csharp.node_types import CSharpNodeType as NT
 from interpreter.frontends.type_extraction import (
     extract_normalized_type,
 )
-from interpreter.types.type_expr import ScalarType
+from interpreter.types.type_expr import ScalarType, scalar
 from interpreter.register import Register
 
 _BYREF_KEYWORDS = frozenset({"out", "ref", "in"})
@@ -210,7 +210,8 @@ def lower_initializer_expr(ctx: TreeSitterEmitContext, node) -> Register:
     size_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint="list", size_reg=size_reg), node=node
+        NewArray(result_reg=arr_reg, type_hint=scalar("list"), size_reg=size_reg),
+        node=node,
     )
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)
@@ -453,7 +454,7 @@ def lower_array_creation(ctx: TreeSitterEmitContext, node) -> Register:
         ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elements))))
         arr_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            NewArray(result_reg=arr_reg, type_hint="array", size_reg=size_reg),
+            NewArray(result_reg=arr_reg, type_hint=scalar("array"), size_reg=size_reg),
             node=node,
         )
         for i, elem in enumerate(elements):
@@ -480,7 +481,8 @@ def lower_array_creation(ctx: TreeSitterEmitContext, node) -> Register:
         ctx.emit_inst(Const(result_reg=size_reg, value="0"))
     arr_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint="array", size_reg=size_reg), node=node
+        NewArray(result_reg=arr_reg, type_hint=scalar("array"), size_reg=size_reg),
+        node=node,
     )
     return arr_reg
 
@@ -580,7 +582,8 @@ def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elem_regs))))
     arr_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint="tuple", size_reg=size_reg), node=node
+        NewArray(result_reg=arr_reg, type_hint=scalar("tuple"), size_reg=size_reg),
+        node=node,
     )
     for i, elem_reg in enumerate(elem_regs):
         idx_reg = ctx.fresh_reg()
@@ -632,7 +635,9 @@ def lower_implicit_object_creation(ctx: TreeSitterEmitContext, node) -> Register
         else []
     )
     obj_reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint="__implicit"), node=node)
+    ctx.emit_inst(
+        NewObject(result_reg=obj_reg, type_hint=scalar("__implicit")), node=node
+    )
     result_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallMethod(
@@ -678,7 +683,9 @@ def lower_with_expression(ctx: TreeSitterEmitContext, node) -> Register:
 def lower_anonymous_object_creation(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `new { Name = expr, Age = expr }` as NEW_OBJECT + STORE_FIELD per property."""
     obj_reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint="__anon_object"), node=node)
+    ctx.emit_inst(
+        NewObject(result_reg=obj_reg, type_hint=scalar("__anon_object")), node=node
+    )
     named = [c for c in node.children if c.is_named]
     # Children alternate: identifier, value, identifier, value, ...
     i = 0

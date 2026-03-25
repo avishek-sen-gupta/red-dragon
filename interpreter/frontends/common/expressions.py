@@ -10,6 +10,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.node_types import CommonNodeType
 
 from interpreter.ir import SpreadArguments
+from interpreter.types.type_expr import scalar
 from interpreter.register import Register
 from interpreter.instructions import (
     Binop,
@@ -446,7 +447,7 @@ def lower_list_literal(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         NewArray(
             result_reg=arr_reg,
-            type_hint="list",
+            type_hint=scalar("list"),
             size_reg=str(size_reg),
         ),
         node=node,
@@ -472,7 +473,7 @@ def lower_dict_literal(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(
         NewObject(
             result_reg=obj_reg,
-            type_hint="dict",
+            type_hint=scalar("dict"),
         ),
         node=node,
     )

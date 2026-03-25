@@ -28,7 +28,7 @@ from interpreter.frontends.common.declarations import (
     emit_field_initializers,
     emit_synthetic_init,
 )
-from interpreter.types.type_expr import ScalarType
+from interpreter.types.type_expr import ScalarType, scalar
 from interpreter.frontends.symbol_table import (
     ClassInfo,
     FieldInfo,
@@ -443,7 +443,8 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
         enum_name = ctx.node_text(name_node)
         obj_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            NewObject(result_reg=obj_reg, type_hint=f"enum:{enum_name}"), node=node
+            NewObject(result_reg=obj_reg, type_hint=scalar(f"enum:{enum_name}")),
+            node=node,
         )
         if body_node:
             for i, child in enumerate(

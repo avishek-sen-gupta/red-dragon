@@ -17,6 +17,7 @@ from interpreter.frontends.common.property_accessors import (
     register_property_accessor,
     emit_field_store_or_setter,
 )
+from interpreter.types.type_expr import scalar
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -141,7 +142,7 @@ def lower_pascal_decl_var(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit_inst(Const(result_reg=size_reg, value=str(array_size)))
         arr_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            NewArray(result_reg=arr_reg, type_hint="array", size_reg=size_reg),
+            NewArray(result_reg=arr_reg, type_hint=scalar("array"), size_reg=size_reg),
             node=node,
         )
         record_types: set[str] = getattr(ctx, "_pascal_record_types", set())
@@ -743,7 +744,7 @@ def _lower_pascal_enum(
     """Lower Pascal enum: NEW_OBJECT + STORE_INDEX per member + DECL_VAR per member."""
     obj_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewObject(result_reg=obj_reg, type_hint=f"enum:{type_name}"),
+        NewObject(result_reg=obj_reg, type_hint=scalar(f"enum:{type_name}")),
         node=parent_node,
     )
     members = [
