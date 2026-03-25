@@ -590,7 +590,7 @@ class TestScalaInstanceExpression:
     def test_new_expression_produces_call(self):
         source = "object M { val dog = new Dog() }"
         instructions = _parse_scala(source)
-        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        calls = _find_all(instructions, Opcode.CALL_CTOR)
         assert len(calls) >= 1
 
     def test_new_expression_stored(self):
@@ -1226,13 +1226,13 @@ object M {
         ), "Class without primary constructor should not generate __init__"
 
     def test_new_expr_passes_arguments(self):
-        """new Node(42, null) must pass arguments to CALL_FUNCTION."""
+        """new Node(42, null) must pass arguments to CALL_CTOR."""
         ir = _parse_scala("""\
 object M {
     class Node(val value: Int, val nextNode: Node)
     val n = new Node(42, null)
 }""")
-        calls = _find_all(ir, Opcode.CALL_FUNCTION)
+        calls = _find_all(ir, Opcode.CALL_CTOR)
         # The new Node(42, null) call should have type_name + 2 args = 3 operands
         new_calls = [c for c in calls if any("Node" in str(op) for op in c.operands)]
         assert len(new_calls) >= 1, f"Expected CALL_FUNCTION for Node, got {calls}"

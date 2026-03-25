@@ -108,7 +108,7 @@ class M {
         call_fns = [
             i
             for i in instructions
-            if i.opcode == Opcode.CALL_FUNCTION
+            if i.opcode in (Opcode.CALL_FUNCTION, Opcode.CALL_CTOR)
             and i.result_reg
             and env.register_types.get(i.result_reg) == "Dog"
         ]
@@ -136,7 +136,7 @@ class M {
 
 class TestCSharpTypeInference:
     def test_new_object_constructor_typed(self):
-        """C# `new Dog(...)` → CALL_FUNCTION result register typed as Dog."""
+        """C# `new Dog(...)` → CALL_CTOR result register typed as Dog."""
         instructions, env = _lower_and_infer(
             """\
 class M {
@@ -148,7 +148,7 @@ class M {
         call_fns = [
             i
             for i in instructions
-            if i.opcode == Opcode.CALL_FUNCTION
+            if i.opcode in (Opcode.CALL_FUNCTION, Opcode.CALL_CTOR)
             and i.result_reg
             and env.register_types.get(i.result_reg) == "Dog"
         ]
@@ -162,7 +162,7 @@ class M {
 
 class TestCppTypeInference:
     def test_new_object_constructor_typed(self):
-        """C++ `new Dog(...)` → CALL_FUNCTION result register typed as Dog."""
+        """C++ `new Dog(...)` → CALL_CTOR result register typed as Dog."""
         instructions, env = _lower_and_infer(
             """\
 int main() {
@@ -174,7 +174,7 @@ int main() {
         call_fns = [
             i
             for i in instructions
-            if i.opcode == Opcode.CALL_FUNCTION
+            if i.opcode in (Opcode.CALL_FUNCTION, Opcode.CALL_CTOR)
             and i.result_reg
             and env.register_types.get(i.result_reg) == "Dog"
         ]
@@ -1844,7 +1844,7 @@ class TestNewObjectTypingOOP:
         dog_typed = [
             i
             for i in instructions
-            if i.opcode in (Opcode.CALL_FUNCTION, Opcode.NEW_OBJECT)
+            if i.opcode in (Opcode.CALL_FUNCTION, Opcode.CALL_CTOR, Opcode.NEW_OBJECT)
             and i.result_reg
             and env.register_types.get(i.result_reg) == "Dog"
         ]
