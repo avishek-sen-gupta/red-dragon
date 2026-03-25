@@ -39,6 +39,7 @@ from interpreter.frontends.common.patterns import (
 )
 from interpreter.frontends.rust.patterns import parse_rust_pattern
 from interpreter.register import Register
+from interpreter.types.type_expr import scalar
 
 logger = logging.getLogger(__name__)
 
@@ -503,7 +504,9 @@ def lower_struct_instantiation(ctx: TreeSitterEmitContext, node) -> Register:
     struct_name = ctx.node_text(name_node) if name_node else "Struct"
 
     obj_reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=struct_name), node=node)
+    ctx.emit_inst(
+        NewObject(result_reg=obj_reg, type_hint=scalar(struct_name)), node=node
+    )
 
     if body_node:
         for child in body_node.children:
@@ -625,7 +628,8 @@ def lower_tuple_expr(ctx: TreeSitterEmitContext, node) -> Register:
     size_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint="tuple", size_reg=size_reg), node=node
+        NewArray(result_reg=arr_reg, type_hint=scalar("tuple"), size_reg=size_reg),
+        node=node,
     )
     for i, elem in enumerate(elems):
         val_reg = ctx.lower_expr(elem)
@@ -850,7 +854,7 @@ def lower_struct_pattern_expr(ctx: TreeSitterEmitContext, node) -> Register:
     type_name = ctx.node_text(type_node) if type_node else ctx.node_text(node)
     obj_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewObject(result_reg=obj_reg, type_hint=f"struct_pattern:{type_name}"),
+        NewObject(result_reg=obj_reg, type_hint=scalar(f"struct_pattern:{type_name}")),
         node=node,
     )
     # Extract field bindings
