@@ -7,6 +7,7 @@ import logging
 from interpreter.cfg_types import CFG
 from interpreter.ir import CodeLabel
 from interpreter.instructions import (
+    CallCtorFunction,
     CallFunction,
     CallMethod,
     CallUnknown,
@@ -107,12 +108,14 @@ def build_call_graph(cfg: CFG, registry: FunctionRegistry) -> CallGraph:
 
         for idx, inst in enumerate(block.instructions):
             t = inst
-            if not isinstance(t, (CallFunction, CallMethod, CallUnknown)):
+            if not isinstance(
+                t, (CallFunction, CallCtorFunction, CallMethod, CallUnknown)
+            ):
                 continue
 
             location = InstructionLocation(block_label=label, instruction_index=idx)
 
-            if isinstance(t, CallFunction):
+            if isinstance(t, (CallFunction, CallCtorFunction)):
                 target_label = str(t.func_name)
                 callees = _resolve_call_function_callees(
                     target_label, function_entries, registry

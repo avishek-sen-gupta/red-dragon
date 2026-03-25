@@ -115,7 +115,7 @@ class TestJavaMethodCalls:
 
     def test_object_creation(self):
         instructions = _parse_java('class M { void m() { Dog d = new Dog("Rex"); } }')
-        calls = _find_all(instructions, Opcode.CALL_FUNCTION)
+        calls = _find_all(instructions, Opcode.CALL_CTOR)
         assert any("Dog" in inst.operands for inst in calls)
         # Constructor argument "Rex" should be loaded as a CONST
         consts = _find_all(instructions, Opcode.CONST)

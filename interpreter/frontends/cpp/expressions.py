@@ -6,9 +6,11 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.types.type_expr import scalar
 from interpreter.instructions import (
     Const,
     LoadVar,
+    CallCtorFunction,
     CallFunction,
     CallMethod,
     LoadIndex,
@@ -32,14 +34,19 @@ from interpreter.register import Register
 
 
 def lower_new_expr(ctx: TreeSitterEmitContext, node) -> Register:
-    """Lower new T(args) as CALL_FUNCTION."""
+    """Lower new T(args) as CALL_CTOR."""
     type_node = node.child_by_field_name("type")
     args_node = node.child_by_field_name(ctx.constants.call_arguments_field)
     arg_regs = extract_call_args_unwrap(ctx, args_node) if args_node else []
     type_name = ctx.node_text(type_node) if type_node else "Object"
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        CallFunction(result_reg=reg, func_name=type_name, args=tuple(arg_regs)),
+        CallCtorFunction(
+            result_reg=reg,
+            func_name=type_name,
+            type_hint=scalar(type_name),
+            args=tuple(arg_regs),
+        ),
         node=node,
     )
     ctx.seed_register_type(reg, ScalarType(type_name))
