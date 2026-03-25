@@ -24,7 +24,7 @@ def _handle_new_object(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
     assert isinstance(t, NewObjectInst)
     obj_type = (
         t.type_hint
-        if isinstance(t.type_hint, TypeExpr)
+        if isinstance(t.type_hint, TypeExpr) and t.type_hint
         else scalar(str(t.type_hint)) if t.type_hint else scalar("Object")
     )
     # Dereference: if type_hint names a variable holding a ClassRef,
@@ -61,7 +61,7 @@ def _handle_new_array(inst: InstructionBase, vm: VMState, ctx: Any) -> Execution
     vm.symbolic_counter += 1
     arr_type = (
         t.type_hint
-        if isinstance(t.type_hint, TypeExpr)
+        if isinstance(t.type_hint, TypeExpr) and t.type_hint
         else scalar(str(t.type_hint)) if t.type_hint else scalar("Array")
     )
     return ExecutionResult.success(
