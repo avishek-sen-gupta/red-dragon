@@ -34,6 +34,7 @@ from interpreter.instructions import (
     Symbolic,
     Binop,
     Unop,
+    CallCtorFunction,
     CallFunction,
     CallMethod,
     CallUnknown,
@@ -706,6 +707,16 @@ def _infer_call_function(
             ctx.register_types[inst.result_reg] = _BUILTIN_RETURN_TYPES[func_name]
 
 
+def _infer_call_ctor(
+    inst: CallCtorFunction,
+    ctx: _InferenceContext,
+    type_resolver: TypeResolver,
+) -> None:
+    """Infer type from CALL_CTOR's type_hint — the frontend already resolved it."""
+    if inst.result_reg.is_present() and inst.type_hint:
+        ctx.register_types[inst.result_reg] = inst.type_hint
+
+
 def _infer_alloc_region(
     inst: AllocRegion,
     ctx: _InferenceContext,
@@ -901,6 +912,7 @@ _DISPATCH: dict[type, callable] = {
     NewObject: _infer_new_object,
     NewArray: _infer_new_array,
     CallFunction: _infer_call_function,
+    CallCtorFunction: _infer_call_ctor,
     CallMethod: _infer_call_method,
     StoreField: _infer_store_field,
     LoadField: _infer_load_field,
