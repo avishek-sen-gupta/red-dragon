@@ -408,6 +408,31 @@ class CallUnknown(InstructionBase):
         ]
 
 
+@dataclass(frozen=True)
+class CallCtorFunction(InstructionBase):
+    """CALL_CTOR: call a class constructor with typed type hint."""
+
+    result_reg: Register = NO_REGISTER
+    func_name: str = ""
+    type_hint: TypeExpr = UNKNOWN
+    args: tuple[Register | SpreadArguments, ...] = ()
+
+    # ── IRInstruction-compat fields ──
+    label: CodeLabel = NO_LABEL
+    branch_targets: tuple[CodeLabel, ...] = ()
+
+    @property
+    def opcode(self) -> Opcode:
+        return Opcode.CALL_CTOR
+
+    @property
+    def operands(self) -> list[Any]:
+        return [
+            self.func_name,
+            *(str(a) if isinstance(a, Register) else a for a in self.args),
+        ]
+
+
 # ── Memory — Fields ──────────────────────────────────────────────
 
 
@@ -908,6 +933,7 @@ Instruction = Union[
     CallFunction,
     CallMethod,
     CallUnknown,
+    CallCtorFunction,
     LoadField,
     StoreField,
     LoadFieldIndirect,
@@ -1040,6 +1066,22 @@ def _call_unknown(inst: IRInstruction) -> CallUnknown:
     return CallUnknown(
         result_reg=inst.result_reg,
         target_reg=Register(str(ops[0])) if ops else NO_REGISTER,
+        args=args,
+        source_location=inst.source_location,
+    )
+
+
+def _call_ctor(inst: IRInstruction) -> CallCtorFunction:
+    ops = inst.operands
+    raw_args = ops[1:]
+    args = tuple(
+        a if isinstance(a, SpreadArguments) else _as_register(a) for a in raw_args
+    )
+    raw_hint = str(ops[0]) if ops else ""
+    return CallCtorFunction(
+        result_reg=inst.result_reg,
+        func_name=raw_hint,
+        type_hint=scalar(raw_hint) if raw_hint else UNKNOWN,
         args=args,
         source_location=inst.source_location,
     )
@@ -1249,6 +1291,7 @@ _TO_TYPED: dict[Opcode, object] = {
     Opcode.CALL_FUNCTION: _call_function,
     Opcode.CALL_METHOD: _call_method,
     Opcode.CALL_UNKNOWN: _call_unknown,
+    Opcode.CALL_CTOR: _call_ctor,
     Opcode.LOAD_FIELD: _load_field,
     Opcode.STORE_FIELD: _store_field,
     Opcode.LOAD_FIELD_INDIRECT: _load_field_indirect,
