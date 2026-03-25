@@ -1,16 +1,19 @@
 # IR Reference
 
-RedDragon uses a flattened high-level three-address code IR. Every program — regardless of source language or frontend — is lowered to a linear sequence of `IRInstruction`s drawn from 32 opcodes.
+RedDragon uses a flattened high-level three-address code IR. Every program — regardless of source language or frontend — is lowered to a linear sequence of typed instruction dataclasses drawn from 33 opcodes.
 
 ## Instruction format
 
+Each opcode has a dedicated frozen dataclass with named, typed fields. All share an `InstructionBase` with `source_location`. Register-holding fields are `Register` objects, label-holding fields are `CodeLabel` objects. The `Instruction` union type is the discriminant; dispatch uses `isinstance` checks.
+
 ```python
-class IRInstruction:
-    opcode: Opcode
-    result_reg: str | None     # destination register (%0, %1, ...), null for side-effect-only ops
-    operands: list[Any]        # opcode-specific arguments
-    label: str | None          # for LABEL and branch targets
-    source_location: SourceLocation  # originating AST span (or NO_SOURCE_LOCATION)
+# Example: Binop instruction
+@dataclass(frozen=True)
+class Binop(InstructionBase):
+    result_reg: Register
+    operator: str
+    left: Register
+    right: Register
 ```
 
 Text representation: `%0 = const 42` or `store_var x %0` or `entry:` (for labels).
@@ -228,7 +231,7 @@ store_indirect %ptr %val       // *ptr = val → writes through the pointer
 
 ### CALL_FUNCTION
 
-Call a named function or constructor.
+Call a named function.
 
 | Field | Value |
 |-------|-------|
@@ -237,7 +240,7 @@ Call a named function or constructor.
 
 Arguments may include `SpreadArguments(register)` operands. When the VM encounters a `SpreadArguments` in the operand list, it reads the heap array at that register's pointer and inlines the elements as individual arguments. This supports spread/splat syntax across all 5 supported languages (`*args` in Python/Ruby/Kotlin, `...arr` in JS, `...$arr` in PHP).
 
-Resolution order: I/O provider, builtins (print, len, range, ...), local variable lookup. If the value is a class reference, dispatches as a constructor (`NEW_OBJECT` + `__init__` call). If it's a function reference, pushes a call frame and branches to the function label.
+Resolution order: I/O provider, builtins (print, len, range, ...), local variable lookup. If the value is a class reference, dispatches as a constructor (`NEW_OBJECT` + `__init__` call). If it's a function reference, pushes a call frame and branches to the function label. For explicit constructor calls in statically-typed languages, prefer `CALL_CTOR` which carries a `TypeExpr` type hint.
 
 ```
 %13 = call_function fib %n
@@ -276,6 +279,23 @@ Used for higher-order functions and dynamic dispatch. Resolves `target_reg` — 
 
 ```
 %17 = call_unknown %callback %x
+```
+
+### CALL_CTOR
+
+Call a class constructor with a typed type hint.
+
+| Field | Value |
+|-------|-------|
+| `result_reg` | target register (receives the new object) |
+| `func_name` | class name (string) |
+| `type_hint` | `TypeExpr` — the type of the object being constructed |
+| `args` | `(arg1_reg, arg2_reg, ...)` |
+
+Used by Java, C#, Scala, C++, Pascal, and Go frontends for explicit constructor calls (`new Dog(...)`, `Dog{...}`, type conversions). The `type_hint` carries structured type information (e.g., `ParameterizedType("ArrayList", (scalar("Integer"),))`) that flows through to the heap object. Resolution follows the same path as CALL_FUNCTION's constructor dispatch, but with the typed type hint passed directly to the VM.
+
+```
+%obj = call_ctor Dog %x %y
 ```
 
 ---
@@ -583,11 +603,13 @@ store_var MyClass %c
 
 ### Constructor call
 
-Constructors are dispatched via `CALL_FUNCTION` on the class name. The VM allocates a `NEW_OBJECT`, calls `__init__`, and returns the object.
+Statically-typed frontends (Java, C#, Scala, C++, Pascal, Go) emit `CALL_CTOR` for constructor calls. The instruction carries a `TypeExpr` type hint that flows to the heap object, preserving parameterized type information (e.g., `ArrayList<Integer>`).
 
 ```
-%obj = call_function Point %x %y
+%obj = call_ctor Point %x %y
 ```
+
+Dynamic frontends (Python, Ruby) and the LLM frontend use `CALL_FUNCTION` on the class name, which the VM resolves to a constructor via scope lookup. JavaScript and PHP use `NEW_OBJECT` + `CALL_METHOD("constructor"/"__construct")`.
 
 ### If/else
 
