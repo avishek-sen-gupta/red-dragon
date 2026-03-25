@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from interpreter.ir import Opcode, CodeLabel
 from interpreter.instructions import (
+    CallCtorFunction,
     CallFunction,
     InstructionBase,
     Label_,
@@ -324,7 +325,7 @@ def cfg_to_mermaid(cfg: CFG) -> str:
         src = _node_id(label)
         for inst in block.instructions:
             t = inst
-            if not isinstance(t, CallFunction):
+            if not isinstance(t, (CallFunction, CallCtorFunction)):
                 continue
             func_name = t.func_name
             target_label = call_target_map.get(func_name)

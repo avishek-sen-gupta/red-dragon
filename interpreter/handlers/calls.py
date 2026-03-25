@@ -8,6 +8,7 @@ from typing import Any
 from interpreter.instructions import (
     InstructionBase,
     CallFunction,
+    CallCtorFunction,
     CallMethod,
     CallUnknown,
 )
@@ -108,7 +109,7 @@ def _try_class_constructor_call(
     current_label: CodeLabel,
     overload_resolver: OverloadResolver = NullOverloadResolver(),
     type_env: TypeEnvironment = None,
-    type_hint_source: str = "",
+    type_hint: TypeExpr = UNKNOWN,
 ) -> ExecutionResult:
     """Attempt to handle a call as a class constructor."""
     from types import MappingProxyType
@@ -142,15 +143,15 @@ def _try_class_constructor_call(
     # Allocate heap object
     addr = f"{constants.OBJ_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
-    type_hint = parse_type(type_hint_source) if type_hint_source else scalar(class_name)
-    vm.heap[addr] = HeapObject(type_hint=type_hint)
-    ptr_tv = typed(Pointer(base=addr, offset=0), pointer(type_hint))
+    resolved_type = type_hint if type_hint else scalar(class_name)
+    vm.heap[addr] = HeapObject(type_hint=resolved_type)
+    ptr_tv = typed(Pointer(base=addr, offset=0), pointer(resolved_type))
 
     if not init_label or init_label not in cfg.blocks:
         return ExecutionResult.success(
             StateUpdate(
                 register_writes={inst.result_reg: ptr_tv},
-                new_objects=[NewObject(addr=addr, type_hint=type_hint)],
+                new_objects=[NewObject(addr=addr, type_hint=resolved_type)],
                 reasoning=f"new {class_name}() → {addr} (no __init__)",
             )
         )
@@ -364,7 +365,7 @@ def _handle_call_function(
         ctx.current_label,
         overload_resolver=ctx.overload_resolver,
         type_env=ctx.type_env,
-        type_hint_source=raw_func_name,
+        type_hint=parse_type(raw_func_name) if raw_func_name else UNKNOWN,
     )
     if ctor_result.handled:
         return ctor_result
@@ -378,6 +379,55 @@ def _handle_call_function(
 
     # 5. Not a recognized function ref — resolve via configured strategy
     return ctx.call_resolver.resolve_call(base_name, [a.value for a in args], inst, vm)
+
+
+def _handle_call_ctor(
+    inst: InstructionBase,
+    vm: VMState,
+    ctx: Any,
+) -> ExecutionResult:
+    """Handle CALL_CTOR: typed constructor call with TypeExpr type_hint."""
+    t = inst
+    assert isinstance(t, CallCtorFunction)
+    func_name = t.func_name
+    arg_regs = list(t.args)
+    args = _resolve_call_args(vm, arg_regs)
+
+    # Look up the ClassRef via scope chain
+    func_val = ""
+    for f in reversed(vm.call_stack):
+        if func_name in f.local_vars:
+            func_val = f.local_vars[func_name].value
+            break
+    if not func_val:
+        return ctx.call_resolver.resolve_call(
+            func_name, [a.value for a in args], inst, vm
+        )
+
+    # Dispatch to constructor with the typed type_hint
+    ctor_result = _try_class_constructor_call(
+        func_val,
+        args,
+        inst,
+        vm,
+        ctx.cfg,
+        ctx.registry,
+        ctx.current_label,
+        overload_resolver=ctx.overload_resolver,
+        type_env=ctx.type_env,
+        type_hint=t.type_hint,
+    )
+    if ctor_result.handled:
+        return ctor_result
+
+    # Fallback: try as user function (e.g., factory functions named like classes)
+    user_result = _try_user_function_call(
+        func_val, args, inst, vm, ctx.cfg, ctx.registry, ctx.current_label
+    )
+    if user_result.handled:
+        return user_result
+
+    return ctx.call_resolver.resolve_call(func_name, [a.value for a in args], inst, vm)
 
 
 def _handle_call_method(
