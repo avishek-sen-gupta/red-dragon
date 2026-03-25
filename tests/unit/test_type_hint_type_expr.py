@@ -1,12 +1,18 @@
 """Tests for TypeExpr-valued type_hint on NewObject and NewArray."""
 
-from interpreter.instructions import NewObject, NewArray
+from interpreter.instructions import (
+    CallCtorFunction,
+    NewObject,
+    NewArray,
+    InstructionBase,
+)
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.register import Register
 from interpreter.types.type_expr import (
     UNKNOWN,
     AnnotationType,
     EnumType,
+    ParameterizedType,
     ScalarType,
     StructPatternType,
     TypeExpr,
@@ -136,6 +142,56 @@ class TestStructPatternType:
 
     def test_str_representation(self):
         assert str(StructPatternType("Point")) == "struct_pattern:Point"
+
+    def test_in_new_object(self):
+        inst = NewObject(
+            result_reg=Register("%r0"), type_hint=StructPatternType("Point")
+        )
+        assert inst.operands == ["struct_pattern:Point"]
+
+
+class TestCallCtorFunction:
+    def test_is_instruction(self):
+        inst = CallCtorFunction(
+            result_reg=Register("%r0"),
+            func_name="ArrayList",
+            type_hint=ParameterizedType("ArrayList", (scalar("Integer"),)),
+            args=(Register("%r1"),),
+        )
+        assert isinstance(inst, InstructionBase)
+        assert inst.opcode == Opcode.CALL_CTOR
+        assert inst.func_name == "ArrayList"
+        assert inst.type_hint == ParameterizedType("ArrayList", (scalar("Integer"),))
+        assert inst.args == (Register("%r1"),)
+
+    def test_non_generic_constructor(self):
+        inst = CallCtorFunction(
+            result_reg=Register("%r0"),
+            func_name="Foo",
+            type_hint=scalar("Foo"),
+            args=(),
+        )
+        assert inst.type_hint == scalar("Foo")
+        assert str(inst) == "%r0 = call_ctor Foo"
+
+    def test_with_args_str(self):
+        inst = CallCtorFunction(
+            result_reg=Register("%r0"),
+            func_name="Point",
+            type_hint=scalar("Point"),
+            args=(Register("%r1"), Register("%r2")),
+        )
+        assert str(inst) == "%r0 = call_ctor Point %r1 %r2"
+
+    def test_parameterized_type_in_operands(self):
+        inst = CallCtorFunction(
+            result_reg=Register("%r0"),
+            func_name="HashMap",
+            type_hint=ParameterizedType("HashMap", (scalar("String"), scalar("Int"))),
+            args=(),
+        )
+        # operands should render func_name as string for __str__ compat
+        assert inst.operands[0] == "HashMap"
 
     def test_in_new_object(self):
         inst = NewObject(
