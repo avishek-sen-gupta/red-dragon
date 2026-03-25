@@ -13,6 +13,7 @@ from interpreter.frontends.common.expressions import (
 )
 from interpreter.frontends.lua.node_types import LuaNodeType
 from interpreter.register import Register
+from interpreter.types.type_expr import scalar
 from interpreter.instructions import (
     Const,
     LoadField,
@@ -157,7 +158,7 @@ def lower_bracket_index(ctx: TreeSitterEmitContext, node) -> Register:
 def lower_table_constructor(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower table_constructor ({key=val, ...})."""
     obj_reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint="table"), node=node)
+    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=scalar("table")), node=node)
     positional_idx = 1
     for child in node.children:
         if child.type == LuaNodeType.FIELD:

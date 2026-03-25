@@ -34,6 +34,7 @@ from interpreter.frontends.common.expressions import (
 )
 from interpreter.frontends.ruby.node_types import RubyNodeType
 from interpreter.register import Register
+from interpreter.types.type_expr import scalar
 
 
 def lower_scope_resolution(ctx: TreeSitterEmitContext, node) -> Register:
@@ -143,7 +144,8 @@ def lower_ruby_call(ctx: TreeSitterEmitContext, node) -> Register:
         if method_name == "new" and receiver_text[0:1].isupper():
             obj_reg = ctx.fresh_reg()
             ctx.emit_inst(
-                NewObject(result_reg=obj_reg, type_hint=receiver_text), node=node
+                NewObject(result_reg=obj_reg, type_hint=scalar(receiver_text)),
+                node=node,
             )
             ctor_reg = ctx.fresh_reg()
             ctx.emit_inst(
@@ -210,7 +212,7 @@ def lower_ruby_argument_list(ctx: TreeSitterEmitContext, node) -> Register:
 def lower_ruby_hash(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower Ruby hash literal as NEW_OBJECT + STORE_INDEX per pair."""
     obj_reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint="hash"), node=node)
+    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=scalar("hash")), node=node)
     for child in node.children:
         if child.type == RubyNodeType.PAIR:
             key_node = child.child_by_field_name("key")
@@ -322,7 +324,8 @@ def lower_ruby_word_array(ctx: TreeSitterEmitContext, node) -> Register:
     size_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elems))))
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint="list", size_reg=size_reg), node=node
+        NewArray(result_reg=arr_reg, type_hint=scalar("list"), size_reg=size_reg),
+        node=node,
     )
     for i, elem in enumerate(elems):
         val_reg = ctx.fresh_reg()

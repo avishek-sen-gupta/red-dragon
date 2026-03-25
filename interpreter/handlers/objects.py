@@ -14,7 +14,7 @@ from interpreter.vm.vm import (
     NewObject,
 )
 from interpreter.refs.class_ref import ClassRef
-from interpreter.types.type_expr import pointer, scalar
+from interpreter.types.type_expr import TypeExpr, pointer, scalar
 from interpreter.types.typed_value import typed
 from interpreter import constants
 
@@ -22,18 +22,24 @@ from interpreter import constants
 def _handle_new_object(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
     t = inst
     assert isinstance(t, NewObjectInst)
-    type_hint = t.type_hint
-    # Dereference: if type_hint is a variable holding a ClassRef,
-    # extract the canonical class name (e.g. Foo → __anon_class_0).
+    obj_type = (
+        t.type_hint
+        if isinstance(t.type_hint, TypeExpr)
+        else scalar(str(t.type_hint)) if t.type_hint else scalar("Object")
+    )
+    # Dereference: if type_hint names a variable holding a ClassRef,
+    # extract the canonical class name.
+    hint_name = str(obj_type)
     for frame in reversed(vm.call_stack):
-        if type_hint in frame.local_vars:
-            raw = frame.local_vars[type_hint].value
+        if hint_name in frame.local_vars:
+            raw = frame.local_vars[hint_name].value
             if isinstance(raw, ClassRef):
-                type_hint = raw.name
+                obj_type = scalar(raw.name)
             break
     addr = f"{constants.OBJ_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
-    obj_type = scalar(type_hint or "Object")
+    if not obj_type:
+        obj_type = scalar("Object")
     return ExecutionResult.success(
         StateUpdate(
             new_objects=[NewObject(addr=addr, type_hint=obj_type)],
@@ -43,7 +49,7 @@ def _handle_new_object(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
                     pointer(obj_type),
                 )
             },
-            reasoning=f"new {type_hint} → {addr}",
+            reasoning=f"new {obj_type} → {addr}",
         )
     )
 
@@ -51,10 +57,13 @@ def _handle_new_object(inst: InstructionBase, vm: VMState, ctx: Any) -> Executio
 def _handle_new_array(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionResult:
     t = inst
     assert isinstance(t, NewArray)
-    type_hint = t.type_hint
     addr = f"{constants.ARR_ADDR_PREFIX}{vm.symbolic_counter}"
     vm.symbolic_counter += 1
-    arr_type = scalar(type_hint or "Array")
+    arr_type = (
+        t.type_hint
+        if isinstance(t.type_hint, TypeExpr)
+        else scalar(str(t.type_hint)) if t.type_hint else scalar("Array")
+    )
     return ExecutionResult.success(
         StateUpdate(
             new_objects=[NewObject(addr=addr, type_hint=arr_type)],
@@ -64,6 +73,6 @@ def _handle_new_array(inst: InstructionBase, vm: VMState, ctx: Any) -> Execution
                     pointer(arr_type),
                 )
             },
-            reasoning=f"new {type_hint}[] → {addr}",
+            reasoning=f"new {arr_type}[] → {addr}",
         )
     )
