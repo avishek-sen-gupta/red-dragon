@@ -33,7 +33,7 @@ from interpreter.frontends.type_extraction import (
     extract_normalized_type,
 )
 from interpreter.frontends.java.node_types import JavaNodeType
-from interpreter.types.type_expr import ScalarType
+from interpreter.types.type_expr import ScalarType, scalar
 from interpreter.register import Register
 
 
@@ -199,7 +199,7 @@ def lower_array_creation(ctx: TreeSitterEmitContext, node) -> Register:
         ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elements))))
         arr_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            NewArray(result_reg=arr_reg, type_hint="array", size_reg=size_reg),
+            NewArray(result_reg=arr_reg, type_hint=scalar("array"), size_reg=size_reg),
             node=node,
         )
         for i, elem in enumerate(elements):
@@ -222,7 +222,7 @@ def lower_array_creation(ctx: TreeSitterEmitContext, node) -> Register:
         ctx.emit_inst(Const(result_reg=size_reg, value=str(len(elements))))
         arr_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            NewArray(result_reg=arr_reg, type_hint="array", size_reg=size_reg),
+            NewArray(result_reg=arr_reg, type_hint=scalar("array"), size_reg=size_reg),
             node=node,
         )
         for i, elem in enumerate(elements):
@@ -247,7 +247,8 @@ def lower_array_creation(ctx: TreeSitterEmitContext, node) -> Register:
         ctx.emit_inst(Const(result_reg=size_reg, value="0"))
     arr_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        NewArray(result_reg=arr_reg, type_hint="array", size_reg=size_reg), node=node
+        NewArray(result_reg=arr_reg, type_hint=scalar("array"), size_reg=size_reg),
+        node=node,
     )
     return arr_reg
 

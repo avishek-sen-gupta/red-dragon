@@ -12,6 +12,7 @@ from interpreter import constants
 from interpreter.frontends.common.expressions import lower_const_literal
 from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
 from interpreter.register import Register
+from interpreter.types.type_expr import scalar
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -223,7 +224,7 @@ def lower_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register:
 
 def lower_js_object_literal(ctx: TreeSitterEmitContext, node) -> Register:
     obj_reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint="object"), node=node)
+    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=scalar("object")), node=node)
     for child in node.children:
         if child.type == JSN.PAIR:
             key_node = child.child_by_field_name("key")
@@ -327,7 +328,9 @@ def lower_new_expression(ctx: TreeSitterEmitContext, node) -> Register:
     arg_regs = _extract_js_call_args(ctx, args_node) if args_node else []
 
     obj_reg = ctx.fresh_reg()
-    ctx.emit_inst(NewObject(result_reg=obj_reg, type_hint=class_name), node=node)
+    ctx.emit_inst(
+        NewObject(result_reg=obj_reg, type_hint=scalar(class_name)), node=node
+    )
     ctor_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallMethod(
