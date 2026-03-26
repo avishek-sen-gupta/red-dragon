@@ -31,6 +31,7 @@ from interpreter.ir import (
     SourceLocation,
     SpreadArguments,
 )
+from interpreter.operator_kind import BinopKind, UnopKind, resolve_binop, resolve_unop
 from interpreter.register import NO_REGISTER, Register
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
 
@@ -289,7 +290,7 @@ class Binop(InstructionBase):
     """BINOP: binary operation (operator, left register, right register)."""
 
     result_reg: Register = NO_REGISTER
-    operator: str = ""
+    operator: BinopKind | str = ""
     left: Register = NO_REGISTER
     right: Register = NO_REGISTER
 
@@ -315,7 +316,7 @@ class Unop(InstructionBase):
     """UNOP: unary operation (operator, operand register)."""
 
     result_reg: Register = NO_REGISTER
-    operator: str = ""
+    operator: UnopKind | str = ""
     operand: Register = NO_REGISTER
 
     # ── IRInstruction-compat fields ──
@@ -1009,9 +1010,10 @@ def _symbolic(inst: IRInstruction) -> Symbolic:
 
 def _binop(inst: IRInstruction) -> Binop:
     ops = inst.operands
+    raw_op = getattr(ops[0], "value", str(ops[0])) if ops else ""
     return Binop(
         result_reg=inst.result_reg,
-        operator=str(ops[0]) if len(ops) >= 1 else "",
+        operator=resolve_binop(raw_op),
         left=Register(str(ops[1])) if len(ops) >= 2 else NO_REGISTER,
         right=Register(str(ops[2])) if len(ops) >= 3 else NO_REGISTER,
         source_location=inst.source_location,
@@ -1020,9 +1022,10 @@ def _binop(inst: IRInstruction) -> Binop:
 
 def _unop(inst: IRInstruction) -> Unop:
     ops = inst.operands
+    raw_op = getattr(ops[0], "value", str(ops[0])) if ops else ""
     return Unop(
         result_reg=inst.result_reg,
-        operator=str(ops[0]) if len(ops) >= 1 else "",
+        operator=resolve_unop(raw_op),
         operand=Register(str(ops[1])) if len(ops) >= 2 else NO_REGISTER,
         source_location=inst.source_location,
     )
