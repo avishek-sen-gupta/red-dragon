@@ -6,6 +6,7 @@ import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import NO_LABEL
+from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -40,7 +41,8 @@ def lower_unless(ctx: TreeSitterEmitContext, node) -> None:
     cond_reg = ctx.lower_expr(cond_node)
     negated_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Unop(result_reg=negated_reg, operator="!", operand=cond_reg), node=node
+        Unop(result_reg=negated_reg, operator=resolve_unop("!"), operand=cond_reg),
+        node=node,
     )
 
     true_label = ctx.fresh_label("unless_true")
@@ -86,7 +88,8 @@ def lower_until(ctx: TreeSitterEmitContext, node) -> None:
     cond_reg = ctx.lower_expr(cond_node)
     negated_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Unop(result_reg=negated_reg, operator="!", operand=cond_reg), node=node
+        Unop(result_reg=negated_reg, operator=resolve_unop("!"), operand=cond_reg),
+        node=node,
     )
     ctx.emit_inst(
         BranchIf(cond_reg=negated_reg, branch_targets=(body_label, end_label)),
@@ -137,7 +140,14 @@ def lower_ruby_for(ctx: TreeSitterEmitContext, node) -> None:
     idx_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
     cond_reg = ctx.fresh_reg()
-    ctx.emit_inst(Binop(result_reg=cond_reg, operator="<", left=idx_reg, right=len_reg))
+    ctx.emit_inst(
+        Binop(
+            result_reg=cond_reg,
+            operator=resolve_binop("<"),
+            left=idx_reg,
+            right=len_reg,
+        )
+    )
     ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)))
 
     ctx.emit_inst(Label_(label=body_label))
@@ -155,7 +165,11 @@ def lower_ruby_for(ctx: TreeSitterEmitContext, node) -> None:
     one_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     new_idx = ctx.fresh_reg()
-    ctx.emit_inst(Binop(result_reg=new_idx, operator="+", left=idx_reg, right=one_reg))
+    ctx.emit_inst(
+        Binop(
+            result_reg=new_idx, operator=resolve_binop("+"), left=idx_reg, right=one_reg
+        )
+    )
     ctx.emit_inst(StoreVar(name="__for_idx", value_reg=new_idx))
     ctx.emit_inst(Branch(label=loop_label))
 
@@ -218,7 +232,10 @@ def lower_case(ctx: TreeSitterEmitContext, node) -> None:
             cond_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 Binop(
-                    result_reg=cond_reg, operator="==", left=val_reg, right=pattern_reg
+                    result_reg=cond_reg,
+                    operator=resolve_binop("=="),
+                    left=val_reg,
+                    right=pattern_reg,
                 ),
                 node=when_node,
             )
@@ -376,7 +393,8 @@ def lower_ruby_unless_modifier(ctx: TreeSitterEmitContext, node) -> None:
     cond_reg = ctx.lower_expr(cond_node)
     negated_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Unop(result_reg=negated_reg, operator="!", operand=cond_reg), node=node
+        Unop(result_reg=negated_reg, operator=resolve_unop("!"), operand=cond_reg),
+        node=node,
     )
     true_label = ctx.fresh_label("unlessmod_true")
     end_label = ctx.fresh_label("unlessmod_end")
@@ -448,7 +466,8 @@ def lower_ruby_until_modifier(ctx: TreeSitterEmitContext, node) -> None:
     cond_reg = ctx.lower_expr(cond_node)
     negated_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Unop(result_reg=negated_reg, operator="!", operand=cond_reg), node=node
+        Unop(result_reg=negated_reg, operator=resolve_unop("!"), operand=cond_reg),
+        node=node,
     )
     ctx.emit_inst(
         BranchIf(cond_reg=negated_reg, branch_targets=(body_label, end_label)),

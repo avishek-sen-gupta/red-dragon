@@ -10,6 +10,7 @@ from interpreter.frontends.common.expressions import lower_const_literal
 from interpreter.frontends.c.node_types import CNodeType
 from interpreter.register import Register
 from interpreter.types.type_expr import scalar
+from interpreter.operator_kind import resolve_unop
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -164,7 +165,10 @@ def lower_pointer_expr(ctx: TreeSitterEmitContext, node) -> Register:
             return reg
         inner_reg = ctx.lower_expr(operand_node) if operand_node else ctx.fresh_reg()
         reg = ctx.fresh_reg()
-        ctx.emit_inst(Unop(result_reg=reg, operator="&", operand=inner_reg), node=node)
+        ctx.emit_inst(
+            Unop(result_reg=reg, operator=resolve_unop("&"), operand=inner_reg),
+            node=node,
+        )
         return reg
 
     # Dereference *this → just load this (our VM references aren't real pointers)

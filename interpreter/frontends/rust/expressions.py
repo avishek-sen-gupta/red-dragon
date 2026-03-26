@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
+from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.instructions import (
     AddressOf,
     Binop,
@@ -143,7 +144,9 @@ def lower_reference_expr(ctx: TreeSitterEmitContext, node) -> Register:
 
     inner_reg = ctx.lower_expr(inner)
     reg = ctx.fresh_reg()
-    ctx.emit_inst(Unop(result_reg=reg, operator="&", operand=inner_reg), node=node)
+    ctx.emit_inst(
+        Unop(result_reg=reg, operator=resolve_unop("&"), operand=inner_reg), node=node
+    )
     return reg
 
 
@@ -280,7 +283,12 @@ def _lower_if_let_chain_expr(
     for test_reg, _, _ in arms[1:]:
         and_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            Binop(result_reg=and_reg, operator="&&", left=combined, right=test_reg)
+            Binop(
+                result_reg=and_reg,
+                operator=resolve_binop("&&"),
+                left=combined,
+                right=test_reg,
+            )
         )
         combined = and_reg
 
@@ -587,7 +595,12 @@ def _lower_range_slice(
         one_reg = _make_rust_const(ctx, "1")
         adjusted = ctx.fresh_reg()
         ctx.emit_inst(
-            Binop(result_reg=adjusted, operator="+", left=end_reg, right=one_reg),
+            Binop(
+                result_reg=adjusted,
+                operator=resolve_binop("+"),
+                left=end_reg,
+                right=one_reg,
+            ),
             node=range_node,
         )
         end_reg = adjusted
@@ -776,7 +789,12 @@ def lower_compound_assignment_expr(ctx: TreeSitterEmitContext, node) -> Register
     rhs_reg = ctx.lower_expr(right)
     result = ctx.fresh_reg()
     ctx.emit_inst(
-        Binop(result_reg=result, operator=op_text, left=lhs_reg, right=rhs_reg),
+        Binop(
+            result_reg=result,
+            operator=resolve_binop(op_text),
+            left=lhs_reg,
+            right=rhs_reg,
+        ),
         node=node,
     )
     lower_rust_store_target(ctx, left, result, node)

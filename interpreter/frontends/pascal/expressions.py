@@ -16,6 +16,7 @@ from interpreter.frontends.pascal.node_types import PascalNodeType
 from interpreter.frontends.pascal.declarations import _resolve_object_class
 from interpreter.register import Register
 from interpreter.types.type_expr import scalar
+from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.instructions import (
     Const,
     Binop,
@@ -57,7 +58,12 @@ def lower_pascal_binop(ctx: TreeSitterEmitContext, node) -> Register:
     rhs_reg = ctx.lower_expr(rhs_node)
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Binop(result_reg=reg, operator=op_symbol, left=lhs_reg, right=rhs_reg),
+        Binop(
+            result_reg=reg,
+            operator=resolve_binop(op_symbol),
+            left=lhs_reg,
+            right=rhs_reg,
+        ),
         node=node,
     )
     return reg
@@ -185,7 +191,8 @@ def lower_pascal_unary(ctx: TreeSitterEmitContext, node) -> Register:
     operand_reg = ctx.lower_expr(named_children[0])
     reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Unop(result_reg=reg, operator=op_symbol, operand=operand_reg), node=node
+        Unop(result_reg=reg, operator=resolve_unop(op_symbol), operand=operand_reg),
+        node=node,
     )
     return reg
 
