@@ -6,10 +6,10 @@ through the full pipeline.
 
 from __future__ import annotations
 
+from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap, unwrap_locals
-from interpreter.var_name import VarName
 from interpreter.vm.vm_types import SymbolicValue
 
 

@@ -10,7 +10,6 @@ the LOAD_INDEX IR check but included in execution verification.
 
 import pytest
 
-from interpreter.var_name import VarName
 from interpreter.frontends import SUPPORTED_DETERMINISTIC_LANGUAGES
 from interpreter.ir import Opcode
 
@@ -191,7 +190,7 @@ end.
 }
 
 # Scala arr(i) emits CALL_FUNCTION (resolved to indexing by VM at runtime)
-LANGUAGES_WITHOUT_LOAD_INDEX: frozenset[str] = frozenset({VarName("scala")})
+LANGUAGES_WITHOUT_LOAD_INDEX: frozenset[str] = frozenset({"scala"})
 
 REQUIRED_OPCODES: set[Opcode] = {Opcode.BINOP, Opcode.BRANCH_IF}
 

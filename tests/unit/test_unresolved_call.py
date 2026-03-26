@@ -4,7 +4,6 @@ import json
 
 import pytest
 
-from interpreter.var_name import VarName
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.instructions import InstructionBase
 from interpreter.llm.llm_client import LLMClient
@@ -150,7 +149,7 @@ class TestLLMPlausibleResolver:
         tv = result.update.register_writes[Register("%0")]
         assert isinstance(tv, TypedValue)
         assert tv.value == 4.0
-        assert VarName("LLM plausible") in result.update.reasoning
+        assert "LLM plausible" in result.update.reasoning
 
     def test_resolve_call_with_side_effects(self):
         response = json.dumps(

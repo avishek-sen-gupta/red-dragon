@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from mcp_server.tools import handle_load_project
-from interpreter.var_name import VarName
 
 
 class TestHandleLoadProject:

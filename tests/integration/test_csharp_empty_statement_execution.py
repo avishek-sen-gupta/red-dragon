@@ -6,10 +6,10 @@ and that the VM completes without errors.
 
 from __future__ import annotations
 
+from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
-from interpreter.var_name import VarName
 
 
 def _run_csharp(source: str, max_steps: int = 500) -> dict:
