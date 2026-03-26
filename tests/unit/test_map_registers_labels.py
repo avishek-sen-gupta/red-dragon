@@ -2,6 +2,7 @@
 
 from interpreter.instructions import (
     Binop,
+    Branch,
     BranchIf,
     CallFunction,
     Const,
@@ -12,8 +13,8 @@ from interpreter.instructions import (
     StoreField,
     TryPush,
     WriteRegion,
-    Branch,
 )
+from interpreter.operator_kind import BinopKind
 from interpreter.ir import CodeLabel, NO_LABEL, SpreadArguments
 from interpreter.register import Register
 
@@ -32,7 +33,7 @@ class TestMapRegisters:
     def test_binop(self):
         inst = Binop(
             result_reg=Register("%r0"),
-            operator="+",
+            operator=BinopKind.ADD,
             left=Register("%r1"),
             right=Register("%r2"),
         )
@@ -157,7 +158,7 @@ class TestMapLabels:
     def test_binop_no_labels(self):
         inst = Binop(
             result_reg=Register("%r0"),
-            operator="+",
+            operator=BinopKind.ADD,
             left=Register("%r1"),
             right=Register("%r2"),
         )

@@ -42,6 +42,7 @@ class BinopKind(str, Enum):
     CONCAT_PASCAL = "."
     # Null coalescing / ternary
     NULLISH_COALESCE = "?:"
+    NULLISH_COALESCE_CSHARP = "??"
     LOGICAL_OR_SYM = "||"
     LOGICAL_AND_SYM = "&&"
 
@@ -57,17 +58,24 @@ class UnopKind(str, Enum):
     BANG = "!"
     DOUBLE_BANG = "!!"
     ADDR_OF = "&"
+    CHAN_RECEIVE = "<-"
 
 
 _BINOP_LOOKUP: dict[str, BinopKind] = {k.value: k for k in BinopKind}
 _UNOP_LOOKUP: dict[str, UnopKind] = {k.value: k for k in UnopKind}
 
 
-def resolve_binop(op: str) -> BinopKind | str:
-    """Convert a string operator to BinopKind. Returns str as-is if not found (bridge period)."""
-    return _BINOP_LOOKUP.get(op, op)
+def resolve_binop(op: str) -> BinopKind:
+    """Convert a string operator to BinopKind. Raises ValueError if not found."""
+    result = _BINOP_LOOKUP.get(op)
+    if result is None:
+        raise ValueError(f"Unknown binary operator: {op!r}")
+    return result
 
 
-def resolve_unop(op: str) -> UnopKind | str:
-    """Convert a string operator to UnopKind. Returns str as-is if not found (bridge period)."""
-    return _UNOP_LOOKUP.get(op, op)
+def resolve_unop(op: str) -> UnopKind:
+    """Convert a string operator to UnopKind. Raises ValueError if not found."""
+    result = _UNOP_LOOKUP.get(op)
+    if result is None:
+        raise ValueError(f"Unknown unary operator: {op!r}")
+    return result

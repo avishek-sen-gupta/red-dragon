@@ -7,6 +7,7 @@ import logging
 from interpreter.cobol.cobol_statements import SearchStatement
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.operator_kind import resolve_binop
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -47,7 +48,7 @@ def lower_search(
     ctx.emit_inst(
         Binop(
             result_reg=bound_cond,
-            operator=">=",
+            operator=resolve_binop(">="),
             left=ctr_reg,
             right=Register(str(max_reg)),
         )
@@ -92,7 +93,7 @@ def lower_search(
         ctx.emit_inst(
             Binop(
                 result_reg=inc_reg,
-                operator="+",
+                operator=resolve_binop("+"),
                 left=Register(str(decoded_reg)),
                 right=Register(str(one_reg)),
             )
@@ -109,7 +110,7 @@ def lower_search(
     ctx.emit_inst(
         Binop(
             result_reg=inc_ctr,
-            operator="+",
+            operator=resolve_binop("+"),
             left=ctr_reg2,
             right=Register(str(one_ctr)),
         )
