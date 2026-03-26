@@ -6,6 +6,7 @@ from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.type_expr import scalar
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer, SymbolicValue
 
 
@@ -31,10 +32,10 @@ let answer = b.x;
 """,
             max_steps=500,
         )
-        assert local_vars["answer"] == 10
-        assert _typed_locals(vm)["answer"].type == scalar("Int")
-        assert vm.heap[local_vars["b"].base].type_hint == "Box"
-        assert vm.heap[local_vars["p"].base].type_hint == "Point"
+        assert local_vars[VarName("answer")] == 10
+        assert _typed_locals(vm)[VarName("answer")].type == scalar("Int")
+        assert vm.heap[local_vars[VarName("b")].base].type_hint == "Box"
+        assert vm.heap[local_vars[VarName("p")].base].type_hint == "Point"
 
     def test_box_explicit_deref(self):
         """*box_val returns the inner value via LOAD_INDIRECT."""
@@ -48,10 +49,10 @@ let answer = inner.x;
 """,
             max_steps=500,
         )
-        assert local_vars["answer"] == 10
-        assert _typed_locals(vm)["answer"].type == scalar("Int")
+        assert local_vars[VarName("answer")] == 10
+        assert _typed_locals(vm)[VarName("answer")].type == scalar("Int")
         # *b dereferences to the inner Point heap address
-        assert vm.heap[local_vars["inner"].base].type_hint == "Point"
+        assert vm.heap[local_vars[VarName("inner")].base].type_hint == "Point"
 
 
 class TestBoxMultiLevel:
@@ -67,10 +68,10 @@ let answer = b2.x;
 """,
             max_steps=600,
         )
-        assert local_vars["answer"] == 42
-        assert _typed_locals(vm)["answer"].type == scalar("Int")
-        assert vm.heap[local_vars["b1"].base].type_hint == "Box"
-        assert vm.heap[local_vars["b2"].base].type_hint == "Box"
+        assert local_vars[VarName("answer")] == 42
+        assert _typed_locals(vm)[VarName("answer")].type == scalar("Int")
+        assert vm.heap[local_vars[VarName("b1")].base].type_hint == "Box"
+        assert vm.heap[local_vars[VarName("b2")].base].type_hint == "Box"
 
 
 class TestBoxMethodDelegation:
@@ -92,10 +93,10 @@ let answer = b.get_count();
 """,
             max_steps=600,
         )
-        assert local_vars["answer"] == 42
-        assert _typed_locals(vm)["answer"].type == scalar("Int")
-        assert vm.heap[local_vars["b"].base].type_hint == "Box"
-        assert vm.heap[local_vars["c"].base].type_hint == "Counter"
+        assert local_vars[VarName("answer")] == 42
+        assert _typed_locals(vm)[VarName("answer")].type == scalar("Int")
+        assert vm.heap[local_vars[VarName("b")].base].type_hint == "Box"
+        assert vm.heap[local_vars[VarName("c")].base].type_hint == "Counter"
 
 
 class TestBoxMultiLevelMethodDelegation:
@@ -118,9 +119,9 @@ let answer = b2.get_count();
 """,
             max_steps=800,
         )
-        assert local_vars["answer"] == 77
-        assert _typed_locals(vm)["answer"].type == scalar("Int")
-        assert vm.heap[local_vars["b2"].base].type_hint == "Box"
+        assert local_vars[VarName("answer")] == 77
+        assert _typed_locals(vm)[VarName("answer")].type == scalar("Int")
+        assert vm.heap[local_vars[VarName("b2")].base].type_hint == "Box"
 
 
 class TestBoxChainedDeref:
@@ -135,8 +136,8 @@ let answer = b.x + b.y;
 """,
             max_steps=600,
         )
-        assert local_vars["answer"] == 10
-        assert _typed_locals(vm)["answer"].type == scalar("Int")
+        assert local_vars[VarName("answer")] == 10
+        assert _typed_locals(vm)[VarName("answer")].type == scalar("Int")
 
     def test_nested_struct_field_through_box(self):
         """tree.left.value — Box in a struct field, then access inner field."""
@@ -151,9 +152,9 @@ let answer = boxed_node.value;
 """,
             max_steps=600,
         )
-        assert local_vars["answer"] == 55
-        assert _typed_locals(vm)["answer"].type == scalar("Int")
-        assert vm.heap[local_vars["t"].base].type_hint == "Tree"
+        assert local_vars[VarName("answer")] == 55
+        assert _typed_locals(vm)[VarName("answer")].type == scalar("Int")
+        assert vm.heap[local_vars[VarName("t")].base].type_hint == "Tree"
 
 
 class TestBoxNegativeCases:
@@ -168,8 +169,8 @@ let answer = b.nonexistent;
 """,
             max_steps=500,
         )
-        assert isinstance(local_vars["answer"], SymbolicValue)
-        assert vm.heap[local_vars["b"].base].type_hint == "Box"
+        assert isinstance(local_vars[VarName("answer")], SymbolicValue)
+        assert vm.heap[local_vars[VarName("b")].base].type_hint == "Box"
 
     def test_box_primitive_field_access_returns_symbolic(self):
         """Box::new(42) — accessing a field on a boxed primitive returns symbolic."""
@@ -180,8 +181,8 @@ let answer = b.x;
 """,
             max_steps=500,
         )
-        assert isinstance(local_vars["answer"], SymbolicValue)
-        assert vm.heap[local_vars["b"].base].type_hint == "Box"
+        assert isinstance(local_vars[VarName("answer")], SymbolicValue)
+        assert vm.heap[local_vars[VarName("b")].base].type_hint == "Box"
 
 
 class TestBoxOptionInteraction:
@@ -197,5 +198,5 @@ let answer = inner.value;
 """,
             max_steps=600,
         )
-        assert local_vars["answer"] == 99
-        assert _typed_locals(vm)["answer"].type == scalar("Int")
+        assert local_vars[VarName("answer")] == 99
+        assert _typed_locals(vm)[VarName("answer")].type == scalar("Int")

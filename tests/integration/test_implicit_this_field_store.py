@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run(source: str, language: Language, max_steps: int = 2000) -> dict:
@@ -27,7 +28,10 @@ class M {
 """,
             Language.CSHARP,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 5
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 5
+        )
 
     def test_multiple_field_assignments(self):
         local_vars = _run(
@@ -45,8 +49,14 @@ class M {
 """,
             Language.CSHARP,
         )
-        assert isinstance(local_vars["rx"], int) and local_vars["rx"] == 3
-        assert isinstance(local_vars["ry"], int) and local_vars["ry"] == 4
+        assert (
+            isinstance(local_vars[VarName("rx")], int)
+            and local_vars[VarName("rx")] == 3
+        )
+        assert (
+            isinstance(local_vars[VarName("ry")], int)
+            and local_vars[VarName("ry")] == 4
+        )
 
 
 class TestJavaImplicitThis:
@@ -64,7 +74,10 @@ class M {
 """,
             Language.JAVA,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 5
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 5
+        )
 
     def test_multiple_field_assignments(self):
         local_vars = _run(
@@ -82,8 +95,14 @@ class M {
 """,
             Language.JAVA,
         )
-        assert isinstance(local_vars["rx"], int) and local_vars["rx"] == 3
-        assert isinstance(local_vars["ry"], int) and local_vars["ry"] == 4
+        assert (
+            isinstance(local_vars[VarName("rx")], int)
+            and local_vars[VarName("rx")] == 3
+        )
+        assert (
+            isinstance(local_vars[VarName("ry")], int)
+            and local_vars[VarName("ry")] == 4
+        )
 
 
 class TestCrossClassFieldResolution:
@@ -104,7 +123,10 @@ class M {
 """,
             Language.JAVA,
         )
-        assert isinstance(local_vars["result"], str) and local_vars["result"] == "Rex"
+        assert (
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "Rex"
+        )
 
     def test_multi_level_inheritance(self):
         """C extends B extends A — field from A assigned in C constructor."""
@@ -126,7 +148,10 @@ class M {
             Language.JAVA,
             max_steps=3000,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 42
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 42
+        )
 
 
 class TestCppImplicitThis:
@@ -142,7 +167,10 @@ int result = c->radius;
 """,
             Language.CPP,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 5
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 5
+        )
 
 
 class TestImplicitThisFieldReads:
@@ -162,7 +190,10 @@ class M {
 """,
             Language.JAVA,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 5
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 5
+        )
 
     def test_param_shadows_field(self):
         """Parameter with same name as field — parameter wins."""
@@ -180,7 +211,10 @@ class M {
 """,
             Language.JAVA,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 99
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 99
+        )
 
     def test_local_shadows_field(self):
         """Local variable with same name as field — local wins."""
@@ -198,7 +232,10 @@ class M {
 """,
             Language.JAVA,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 99
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 99
+        )
 
     def test_cross_class_field_read(self):
         """Method in subclass reads parent field."""
@@ -219,4 +256,7 @@ class M {
 """,
             Language.JAVA,
         )
-        assert isinstance(local_vars["result"], str) and local_vars["result"] == "Rex"
+        assert (
+            isinstance(local_vars[VarName("result")], str)
+            and local_vars[VarName("result")] == "Rex"
+        )

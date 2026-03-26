@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run(source: str, language: Language, max_steps: int = 2000) -> dict:
@@ -25,7 +26,10 @@ class M {
 """,
             Language.JAVA,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 25
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 25
+        )
 
     def test_static_method_multiple_args(self):
         local_vars = _run(
@@ -39,7 +43,10 @@ class M {
 """,
             Language.JAVA,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 7
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 7
+        )
 
 
 class TestCSharpStaticMethod:
@@ -55,7 +62,10 @@ class M {
 """,
             Language.CSHARP,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 25
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 25
+        )
 
 
 class TestCppStaticMethod:
@@ -69,4 +79,7 @@ int result = Util::square(5);
 """,
             Language.CPP,
         )
-        assert isinstance(local_vars["result"], int) and local_vars["result"] == 25
+        assert (
+            isinstance(local_vars[VarName("result")], int)
+            and local_vars[VarName("result")] == 25
+        )

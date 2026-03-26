@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_python(source: str, max_steps: int = 200):
@@ -23,7 +24,7 @@ def add(a, b):
 result = add(3, 4)
 """)
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert locals_["result"] == 7
+        assert locals_[VarName("result")] == 7
 
     def test_function_returns_none(self):
         """Function returning None stores None value (not Void) in caller's register."""
@@ -33,7 +34,7 @@ def get_none():
 result = get_none()
 """)
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert locals_["result"] is None
+        assert locals_[VarName("result")] is None
 
     def test_void_function_result_not_used(self):
         """Void function (no return) executes without error; other vars unaffected."""
@@ -45,7 +46,7 @@ side_effect()
 y = x + 5
 """)
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert locals_["y"] == 15
+        assert locals_[VarName("y")] == 15
 
     def test_function_returns_string(self):
         """Function returning a string stores TypedValue in caller's register."""
@@ -55,4 +56,4 @@ def greet(name):
 msg = greet("world")
 """)
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert locals_["msg"] == "hello world"
+        assert locals_[VarName("msg")] == "hello world"

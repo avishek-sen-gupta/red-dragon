@@ -7,6 +7,7 @@ import pytest
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_java(source: str, max_steps: int = 1000) -> dict:
@@ -29,7 +30,7 @@ class M {
 M.test("hello");
 """,
         )
-        assert local_vars["result"] == "hello"
+        assert local_vars[VarName("result")] == "hello"
 
     def test_instanceof_no_match(self):
         local_vars = _run_java(
@@ -45,7 +46,7 @@ class M {
 M.test(42);
 """,
         )
-        assert local_vars["result"] == "none"
+        assert local_vars[VarName("result")] == "none"
 
 
 class TestJavaSwitchTypePattern:
@@ -63,7 +64,7 @@ class M {
 }
 """,
         )
-        assert local_vars["result"] == "string:hi"
+        assert local_vars[VarName("result")] == "string:hi"
 
     def test_switch_type_pattern_default(self):
         local_vars = _run_java(
@@ -79,7 +80,7 @@ class M {
 }
 """,
         )
-        assert local_vars["result"] == "other"
+        assert local_vars[VarName("result")] == "other"
 
 
 class TestJavaSwitchWildcard:
@@ -97,7 +98,7 @@ class M {
 }
 """,
         )
-        assert local_vars["result"] == "string"
+        assert local_vars[VarName("result")] == "string"
 
 
 class TestJavaSwitchGuard:
@@ -116,7 +117,7 @@ class M {
 }
 """,
         )
-        assert local_vars["result"] == "short"
+        assert local_vars[VarName("result")] == "short"
 
     def test_guard_passes(self):
         local_vars = _run_java(
@@ -133,4 +134,4 @@ class M {
 }
 """,
         )
-        assert local_vars["result"] == "long"
+        assert local_vars[VarName("result")] == "long"

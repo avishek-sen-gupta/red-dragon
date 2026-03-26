@@ -7,6 +7,7 @@ import pytest
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run(source: str, language: Language, max_steps: int = 500) -> dict:
@@ -26,7 +27,7 @@ answer = add(*arr)
 """,
             Language.PYTHON,
         )
-        assert vars_["answer"] == 6
+        assert vars_[VarName("answer")] == 6
 
 
 class TestJavaScriptSpread:
@@ -40,7 +41,7 @@ var answer = add(...arr);
 """,
             Language.JAVASCRIPT,
         )
-        assert vars_["answer"] == 6
+        assert vars_[VarName("answer")] == 6
 
 
 class TestRubySpread:
@@ -56,7 +57,7 @@ answer = add(*arr)
 """,
             Language.RUBY,
         )
-        assert vars_["answer"] == 6
+        assert vars_[VarName("answer")] == 6
 
 
 class TestPHPSpread:
@@ -71,7 +72,7 @@ $answer = add(...$arr);
 """,
             Language.PHP,
         )
-        assert vars_["$answer"] == 6
+        assert vars_[VarName("$answer")] == 6
 
 
 class TestKotlinSpread:
@@ -85,4 +86,4 @@ val answer = add(*arr)
 """,
             Language.KOTLIN,
         )
-        assert vars_["answer"] == 6
+        assert vars_[VarName("answer")] == 6

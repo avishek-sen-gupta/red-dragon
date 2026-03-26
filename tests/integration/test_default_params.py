@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run(source: str, language: Language, max_steps: int = 500) -> tuple:
@@ -26,7 +27,7 @@ def two_fer(name="you"):
     return "One for " + name + ", one for me."
 
 answer = two_fer()""")
-        assert vars_["answer"] == "One for you, one for me."
+        assert vars_[VarName("answer")] == "One for you, one for me."
 
     def test_string_default_overridden_by_arg(self):
         _, vars_ = _run_python("""\
@@ -34,7 +35,7 @@ def two_fer(name="you"):
     return "One for " + name + ", one for me."
 
 answer = two_fer("Alice")""")
-        assert vars_["answer"] == "One for Alice, one for me."
+        assert vars_[VarName("answer")] == "One for Alice, one for me."
 
     def test_integer_default(self):
         _, vars_ = _run_python("""\
@@ -42,7 +43,7 @@ def add_one(x=42):
     return x + 1
 
 answer = add_one()""")
-        assert vars_["answer"] == 43
+        assert vars_[VarName("answer")] == 43
 
     def test_integer_default_overridden(self):
         _, vars_ = _run_python("""\
@@ -50,7 +51,7 @@ def add_one(x=42):
     return x + 1
 
 answer = add_one(10)""")
-        assert vars_["answer"] == 11
+        assert vars_[VarName("answer")] == 11
 
     def test_mixed_required_and_default(self):
         _, vars_ = _run_python("""\
@@ -58,7 +59,7 @@ def greet(greeting, name="world"):
     return greeting + " " + name
 
 answer = greet("hello")""")
-        assert vars_["answer"] == "hello world"
+        assert vars_[VarName("answer")] == "hello world"
 
     def test_mixed_required_and_default_both_provided(self):
         _, vars_ = _run_python("""\
@@ -66,7 +67,7 @@ def greet(greeting, name="world"):
     return greeting + " " + name
 
 answer = greet("hi", "Alice")""")
-        assert vars_["answer"] == "hi Alice"
+        assert vars_[VarName("answer")] == "hi Alice"
 
     def test_multiple_defaults(self):
         _, vars_ = _run_python("""\
@@ -74,7 +75,7 @@ def pair(a="x", b="y"):
     return a + b
 
 answer = pair()""")
-        assert vars_["answer"] == "xy"
+        assert vars_[VarName("answer")] == "xy"
 
     def test_multiple_defaults_first_overridden(self):
         _, vars_ = _run_python("""\
@@ -82,13 +83,13 @@ def pair(a="x", b="y"):
     return a + b
 
 answer = pair("A")""")
-        assert vars_["answer"] == "Ay"
+        assert vars_[VarName("answer")] == "Ay"
 
     def test_lambda_default_param(self):
         _, vars_ = _run_python("""\
 f = lambda x="hi": x
 answer = f()""")
-        assert vars_["answer"] == "hi"
+        assert vars_[VarName("answer")] == "hi"
 
     def test_function_without_defaults_unchanged(self):
         _, vars_ = _run_python("""\
@@ -96,7 +97,7 @@ def add(a, b):
     return a + b
 
 answer = add(3, 4)""")
-        assert vars_["answer"] == 7
+        assert vars_[VarName("answer")] == 7
 
 
 class TestJavaScriptDefaultParamExecution:
@@ -108,7 +109,7 @@ class TestJavaScriptDefaultParamExecution:
             "let answer = greet();",
             Language.JAVASCRIPT,
         )
-        assert vars_["answer"] == "hello you"
+        assert vars_[VarName("answer")] == "hello you"
 
     def test_string_default_overridden(self):
         _, vars_ = _run(
@@ -116,7 +117,7 @@ class TestJavaScriptDefaultParamExecution:
             'let answer = greet("Alice");',
             Language.JAVASCRIPT,
         )
-        assert vars_["answer"] == "hello Alice"
+        assert vars_[VarName("answer")] == "hello Alice"
 
     def test_mixed_required_and_default(self):
         _, vars_ = _run(
@@ -126,7 +127,7 @@ class TestJavaScriptDefaultParamExecution:
             'let answer = greet("hi");',
             Language.JAVASCRIPT,
         )
-        assert vars_["answer"] == "hi world"
+        assert vars_[VarName("answer")] == "hi world"
 
 
 class TestTypeScriptDefaultParamExecution:
@@ -140,7 +141,7 @@ class TestTypeScriptDefaultParamExecution:
             "let answer: string = greet();",
             Language.TYPESCRIPT,
         )
-        assert vars_["answer"] == "hello you"
+        assert vars_[VarName("answer")] == "hello you"
 
     def test_string_default_overridden(self):
         _, vars_ = _run(
@@ -150,7 +151,7 @@ class TestTypeScriptDefaultParamExecution:
             'let answer: string = greet("Alice");',
             Language.TYPESCRIPT,
         )
-        assert vars_["answer"] == "hello Alice"
+        assert vars_[VarName("answer")] == "hello Alice"
 
     def test_mixed_required_and_default(self):
         _, vars_ = _run(
@@ -160,7 +161,7 @@ class TestTypeScriptDefaultParamExecution:
             'let answer: string = greet("hi");',
             Language.TYPESCRIPT,
         )
-        assert vars_["answer"] == "hi world"
+        assert vars_[VarName("answer")] == "hi world"
 
 
 class TestRubyDefaultParamExecution:
@@ -174,7 +175,7 @@ class TestRubyDefaultParamExecution:
             "answer = greet()",
             Language.RUBY,
         )
-        assert vars_["answer"] == "hello you"
+        assert vars_[VarName("answer")] == "hello you"
 
     def test_string_default_overridden(self):
         _, vars_ = _run(
@@ -184,7 +185,7 @@ class TestRubyDefaultParamExecution:
             'answer = greet("Alice")',
             Language.RUBY,
         )
-        assert vars_["answer"] == "hello Alice"
+        assert vars_[VarName("answer")] == "hello Alice"
 
     def test_mixed_required_and_default(self):
         _, vars_ = _run(
@@ -194,7 +195,7 @@ class TestRubyDefaultParamExecution:
             'answer = greet("hi")',
             Language.RUBY,
         )
-        assert vars_["answer"] == "hi world"
+        assert vars_[VarName("answer")] == "hi world"
 
 
 class TestCppDefaultParamExecution:
@@ -208,7 +209,7 @@ class TestCppDefaultParamExecution:
             "string answer = greet();",
             Language.CPP,
         )
-        assert vars_["answer"] == "hello you"
+        assert vars_[VarName("answer")] == "hello you"
 
     def test_string_default_overridden(self):
         _, vars_ = _run(
@@ -218,7 +219,7 @@ class TestCppDefaultParamExecution:
             'string answer = greet("Alice");',
             Language.CPP,
         )
-        assert vars_["answer"] == "hello Alice"
+        assert vars_[VarName("answer")] == "hello Alice"
 
     def test_mixed_required_and_default(self):
         _, vars_ = _run(
@@ -228,7 +229,7 @@ class TestCppDefaultParamExecution:
             'string answer = greet("hi");',
             Language.CPP,
         )
-        assert vars_["answer"] == "hi world"
+        assert vars_[VarName("answer")] == "hi world"
 
 
 class TestScalaDefaultParamExecution:
@@ -244,7 +245,7 @@ class TestScalaDefaultParamExecution:
             "}",
             Language.SCALA,
         )
-        assert vars_["answer"] == "hello you"
+        assert vars_[VarName("answer")] == "hello you"
 
     def test_string_default_overridden(self):
         _, vars_ = _run(
@@ -256,7 +257,7 @@ class TestScalaDefaultParamExecution:
             "}",
             Language.SCALA,
         )
-        assert vars_["answer"] == "hello Alice"
+        assert vars_[VarName("answer")] == "hello Alice"
 
     def test_mixed_required_and_default(self):
         _, vars_ = _run(
@@ -268,7 +269,7 @@ class TestScalaDefaultParamExecution:
             "}",
             Language.SCALA,
         )
-        assert vars_["answer"] == "hi world"
+        assert vars_[VarName("answer")] == "hi world"
 
 
 class TestPhpDefaultParamExecution:
@@ -284,7 +285,7 @@ class TestPhpDefaultParamExecution:
             "?>",
             Language.PHP,
         )
-        assert vars_["$answer"] == "hello you"
+        assert vars_[VarName("$answer")] == "hello you"
 
     def test_string_default_overridden(self):
         _, vars_ = _run(
@@ -296,7 +297,7 @@ class TestPhpDefaultParamExecution:
             "?>",
             Language.PHP,
         )
-        assert vars_["$answer"] == "hello Alice"
+        assert vars_[VarName("$answer")] == "hello Alice"
 
     def test_mixed_required_and_default(self):
         _, vars_ = _run(
@@ -308,7 +309,7 @@ class TestPhpDefaultParamExecution:
             "?>",
             Language.PHP,
         )
-        assert vars_["$answer"] == "hi world"
+        assert vars_[VarName("$answer")] == "hi world"
 
 
 class TestCsharpDefaultParamExecution:
@@ -324,7 +325,7 @@ class TestCsharpDefaultParamExecution:
             "}",
             Language.CSHARP,
         )
-        assert vars_["answer"] == "hello you"
+        assert vars_[VarName("answer")] == "hello you"
 
     def test_string_default_overridden(self):
         _, vars_ = _run(
@@ -336,7 +337,7 @@ class TestCsharpDefaultParamExecution:
             "}",
             Language.CSHARP,
         )
-        assert vars_["answer"] == "hello Alice"
+        assert vars_[VarName("answer")] == "hello Alice"
 
     def test_mixed_required_and_default(self):
         _, vars_ = _run(
@@ -348,7 +349,7 @@ class TestCsharpDefaultParamExecution:
             "}",
             Language.CSHARP,
         )
-        assert vars_["answer"] == "hi world"
+        assert vars_[VarName("answer")] == "hi world"
 
 
 class TestKotlinDefaultParamExecution:
@@ -362,7 +363,7 @@ class TestKotlinDefaultParamExecution:
             "val answer = greet()",
             Language.KOTLIN,
         )
-        assert vars_["answer"] == "hello you"
+        assert vars_[VarName("answer")] == "hello you"
 
     def test_string_default_overridden(self):
         _, vars_ = _run(
@@ -372,7 +373,7 @@ class TestKotlinDefaultParamExecution:
             'val answer = greet("Alice")',
             Language.KOTLIN,
         )
-        assert vars_["answer"] == "hello Alice"
+        assert vars_[VarName("answer")] == "hello Alice"
 
     def test_mixed_required_and_default(self):
         _, vars_ = _run(
@@ -382,7 +383,7 @@ class TestKotlinDefaultParamExecution:
             'val answer = greet("hi")',
             Language.KOTLIN,
         )
-        assert vars_["answer"] == "hi world"
+        assert vars_[VarName("answer")] == "hi world"
 
 
 class TestPascalDefaultParamExecution:
@@ -402,7 +403,7 @@ class TestPascalDefaultParamExecution:
             Language.PASCAL,
             max_steps=1000,
         )
-        assert vars_["answer"] == "hello you"
+        assert vars_[VarName("answer")] == "hello you"
 
     def test_string_default_overridden(self):
         _, vars_ = _run(
@@ -418,7 +419,7 @@ class TestPascalDefaultParamExecution:
             Language.PASCAL,
             max_steps=1000,
         )
-        assert vars_["answer"] == "hello Alice"
+        assert vars_[VarName("answer")] == "hello Alice"
 
     def test_mixed_required_and_default(self):
         _, vars_ = _run(
@@ -434,4 +435,4 @@ class TestPascalDefaultParamExecution:
             Language.PASCAL,
             max_steps=1000,
         )
-        assert vars_["answer"] == "hi world"
+        assert vars_[VarName("answer")] == "hi world"
