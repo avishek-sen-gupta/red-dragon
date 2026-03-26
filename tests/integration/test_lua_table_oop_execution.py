@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
@@ -26,7 +27,7 @@ end
 
 counter = Counter.new()
 """)
-        counter = result["counter"]
+        counter = result[VarName("counter")]
         assert isinstance(counter, Pointer) and counter.base.startswith(
             "obj_"
         ), f"counter should be a Pointer to a heap address, got {counter!r}"
@@ -59,7 +60,7 @@ Counter.increment(counter)
 Counter.increment(counter)
 answer = Counter.get_value(counter)
 """)
-        assert result["answer"] == 6
+        assert result[VarName("answer")] == 6
 
     def test_method_modifies_table_field(self):
         """Calling a method that modifies self.count should persist the change."""
@@ -78,4 +79,4 @@ end
 b = Box.new(42)
 answer = Box.get(b)
 """)
-        assert result["answer"] == 42
+        assert result[VarName("answer")] == 42

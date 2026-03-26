@@ -7,6 +7,7 @@ independent — add/remove without affecting others.
 
 from __future__ import annotations
 
+from interpreter.var_name import VarName
 from interpreter.types.typed_value import unwrap
 from tests.unit.rosetta.conftest import (
     execute_for_language,
@@ -156,7 +157,7 @@ func main() {
     def test_string_slice(self):
         vm, _stats = execute_for_language("go", self.PROGRAM)
         frame = vm.call_stack[0]
-        t_val = unwrap(frame.local_vars.get("t"))
+        t_val = unwrap(frame.local_vars.get(VarName("t")))
         assert t_val == "he", f"expected 'he', got {t_val}"
 
 
@@ -287,5 +288,5 @@ val answer = 1
     def test_substring(self):
         vm, _stats = execute_for_language("kotlin", self.PROGRAM)
         frame = vm.call_stack[0]
-        t_val = unwrap(frame.local_vars.get("t"))
+        t_val = unwrap(frame.local_vars.get(VarName("t")))
         assert t_val == "el", f"expected 'el', got {t_val}"

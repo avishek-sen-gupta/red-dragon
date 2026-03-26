@@ -7,6 +7,7 @@ the correct overload based on call-site argument arity and types.
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap, unwrap_locals
+from interpreter.var_name import VarName
 
 
 class TestCppOverloadResolutionByArity:
@@ -24,7 +25,7 @@ int x = c.add(5);
 """
         vm = run(source, language=Language.CPP, max_steps=2000)
         lv = unwrap_locals(vm.call_stack[0].local_vars)
-        assert lv["x"] == 5
+        assert lv[VarName("x")] == 5
 
     def test_unary_vs_binary_picks_binary(self):
         source = """\
@@ -38,7 +39,7 @@ int y = c.add(3, 4);
 """
         vm = run(source, language=Language.CPP, max_steps=2000)
         lv = unwrap_locals(vm.call_stack[0].local_vars)
-        assert lv["y"] == 7
+        assert lv[VarName("y")] == 7
 
     def test_three_arity_overloads(self):
         source = """\
@@ -55,9 +56,9 @@ int r3 = c.add(1, 2, 3);
 """
         vm = run(source, language=Language.CPP, max_steps=2000)
         lv = unwrap_locals(vm.call_stack[0].local_vars)
-        assert lv["r1"] == 5
-        assert lv["r2"] == 7
-        assert lv["r3"] == 6
+        assert lv[VarName("r1")] == 5
+        assert lv[VarName("r2")] == 7
+        assert lv[VarName("r3")] == 6
 
 
 class TestCppOverloadResolutionByType:
@@ -75,7 +76,7 @@ int result = p.show(42);
 """
         vm = run(source, language=Language.CPP, max_steps=2000)
         lv = unwrap_locals(vm.call_stack[0].local_vars)
-        assert lv["result"] == 43
+        assert lv[VarName("result")] == 43
 
     def test_int_vs_string_picks_string(self):
         source = """\
@@ -89,4 +90,4 @@ std::string result = p.show("hello");
 """
         vm = run(source, language=Language.CPP, max_steps=2000)
         lv = unwrap_locals(vm.call_stack[0].local_vars)
-        assert lv["result"] == "str:hello"
+        assert lv[VarName("result")] == "str:hello"

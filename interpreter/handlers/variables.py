@@ -120,7 +120,7 @@ def _handle_load_var(inst: InstructionBase, vm: VMState, ctx: Any) -> ExecutionR
             )
         )
     # Not found anywhere — create symbolic
-    sym = vm.fresh_symbolic(hint=name)
+    sym = vm.fresh_symbolic(hint=str(name))
     return ExecutionResult.success(
         StateUpdate(
             register_writes={t.result_reg: typed(sym, UNKNOWN)},

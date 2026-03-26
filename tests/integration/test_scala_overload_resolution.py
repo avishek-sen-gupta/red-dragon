@@ -4,6 +4,7 @@ Tests that when Scala source code defines overloaded methods, the executor picks
 the correct overload based on call-site argument arity and types.
 """
 
+from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap
@@ -22,7 +23,7 @@ val c = new Calc()
 val x = c.add(5)
 """
         vm = run(source, language=Language.SCALA, max_steps=2000)
-        assert unwrap(vm.call_stack[0].local_vars.get("x")) == 5
+        assert unwrap(vm.call_stack[0].local_vars.get(VarName("x"))) == 5
 
     def test_unary_vs_binary_picks_binary(self):
         source = """\
@@ -34,7 +35,7 @@ val c = new Calc()
 val y = c.add(3, 4)
 """
         vm = run(source, language=Language.SCALA, max_steps=2000)
-        assert unwrap(vm.call_stack[0].local_vars.get("y")) == 7
+        assert unwrap(vm.call_stack[0].local_vars.get(VarName("y"))) == 7
 
     def test_three_arity_overloads(self):
         source = """\
@@ -68,7 +69,7 @@ val p = new Printer()
 val result = p.show(42)
 """
         vm = run(source, language=Language.SCALA, max_steps=2000)
-        assert unwrap(vm.call_stack[0].local_vars.get("result")) == 43
+        assert unwrap(vm.call_stack[0].local_vars.get(VarName("result"))) == 43
 
     def test_int_vs_string_picks_string(self):
         source = """\
@@ -80,4 +81,4 @@ val p = new Printer()
 val result = p.show("hello")
 """
         vm = run(source, language=Language.SCALA, max_steps=2000)
-        assert unwrap(vm.call_stack[0].local_vars.get("result")) == "str:hello"
+        assert unwrap(vm.call_stack[0].local_vars.get(VarName("result"))) == "str:hello"
