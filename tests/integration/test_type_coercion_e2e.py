@@ -7,6 +7,7 @@ so that STORE_INDEX and LOAD_INDEX use matching heap keys.
 
 from types import MappingProxyType
 
+from interpreter.var_name import VarName
 from interpreter.cfg import build_cfg
 from interpreter.constants import TypeName
 from interpreter.types.coercion.default_conversion_rules import (
@@ -81,7 +82,7 @@ class TestTypeCoecionEndToEnd:
         )
 
         # The stored value should be retrievable via the integer key
-        assert unwrap(vm.current_frame.local_vars.get("result")) == 99
+        assert unwrap(vm.current_frame.local_vars.get(VarName("result"))) == 99
 
     def test_division_index_without_type_env_mismatches(self):
         """Without type coercion, float division index produces key '2.0' not '2'."""
@@ -99,5 +100,5 @@ class TestTypeCoecionEndToEnd:
 
         # Without coercion, 4/2 = 2.0 (float), stored at key "2.0"
         # Load with int 2 looks for key "2" — won't find it, gets symbolic
-        result = unwrap(vm.current_frame.local_vars.get("result"))
+        result = unwrap(vm.current_frame.local_vars.get(VarName("result")))
         assert result != 99, "Without type coercion, the round-trip should fail"

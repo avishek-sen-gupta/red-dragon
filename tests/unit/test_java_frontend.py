@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from interpreter.var_name import VarName
 from interpreter.frontends.java import JavaFrontend
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.ir import Opcode
@@ -1100,4 +1101,4 @@ class TestJavaStringLengthExecution:
             max_steps=100,
         )
         local_vars = unwrap_locals(vm.call_stack[0].local_vars)
-        assert local_vars["result"] == 5
+        assert local_vars[VarName("result")] == 5
