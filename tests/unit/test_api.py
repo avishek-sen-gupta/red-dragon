@@ -2,7 +2,6 @@
 
 import pytest
 
-from interpreter.var_name import VarName
 from interpreter.api import (
     lower_source,
     lower_and_infer,
@@ -77,8 +76,8 @@ class TestDumpIr:
 
     def test_contains_instruction_text(self):
         result = dump_ir(SIMPLE_SOURCE)
-        assert VarName("CONST") in result or VarName("const") in result.lower()
-        assert VarName("42") in result
+        assert "CONST" in result or "const" in result.lower()
+        assert "42" in result
 
     def test_multiline_output(self):
         result = dump_ir(SIMPLE_SOURCE)
@@ -93,7 +92,7 @@ class TestBuildCfgFromSource:
 
     def test_cfg_has_entry_block(self):
         result = build_cfg_from_source(SIMPLE_SOURCE)
-        assert VarName("entry") in result.blocks
+        assert "entry" in result.blocks
 
     def test_cfg_has_instructions(self):
         result = build_cfg_from_source(SIMPLE_SOURCE)
@@ -120,12 +119,12 @@ class TestDumpCfg:
 
     def test_contains_block_info(self):
         result = dump_cfg(SIMPLE_SOURCE)
-        assert VarName("entry") in result
+        assert "entry" in result
 
     def test_function_scoping(self):
         result = dump_cfg(FUNCTION_SOURCE, function_name="greet")
         assert isinstance(result, str)
-        assert VarName("greet") in result
+        assert "greet" in result
 
 
 class TestDumpMermaid:
@@ -139,29 +138,29 @@ class TestDumpMermaid:
 
     def test_contains_entry_node(self):
         result = dump_mermaid(SIMPLE_SOURCE)
-        assert VarName("entry") in result
+        assert "entry" in result
 
     def test_function_scoping(self):
         result = dump_mermaid(FUNCTION_SOURCE, function_name="greet")
-        assert VarName("flowchart TD") in result
-        assert VarName("greet") in result
+        assert "flowchart TD" in result
+        assert "greet" in result
 
 
 class TestExtractFunctionSource:
     def test_top_level_function(self):
         result = extract_function_source(FUNCTION_SOURCE, "greet")
-        assert VarName("def greet(name):") in result
-        assert VarName("return name") in result
+        assert "def greet(name):" in result
+        assert "return name" in result
 
     def test_class_method(self):
         result = extract_function_source(CLASS_WITH_METHOD_SOURCE, "hello")
-        assert VarName("def hello(self, name):") in result
+        assert "def hello(self, name):" in result
         assert 'return f"Hello, {name}"' in result
 
     def test_nested_function(self):
         result = extract_function_source(NESTED_FUNCTION_SOURCE, "inner")
-        assert VarName("def inner():") in result
-        assert VarName("return 42") in result
+        assert "def inner():" in result
+        assert "return 42" in result
 
     def test_not_found_raises_value_error(self):
         with pytest.raises(ValueError, match="not found"):
@@ -171,8 +170,8 @@ class TestExtractFunctionSource:
         result = extract_function_source(
             JS_FUNCTION_SOURCE, "add", language="javascript"
         )
-        assert VarName("function add(a, b)") in result
-        assert VarName("return a + b") in result
+        assert "function add(a, b)" in result
+        assert "return a + b" in result
 
 
 class FakeFrontend:

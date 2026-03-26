@@ -15,7 +15,6 @@ from mcp_server.tools import (
     handle_get_ir,
 )
 from mcp_server.session import clear_session
-from interpreter.var_name import VarName
 
 
 class TestAnalyzeProgram:

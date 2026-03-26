@@ -51,9 +51,9 @@ int r3 = c.Add(1, 2, 3);
 """
         vm = run(source, language=Language.CSHARP, max_steps=2000)
         lv = vm.call_stack[0].local_vars
-        assert unwrap(lv.get("r1")) == 5
-        assert unwrap(lv.get("r2")) == 7
-        assert unwrap(lv.get("r3")) == 6
+        assert unwrap(lv.get(VarName("r1"))) == 5
+        assert unwrap(lv.get(VarName("r2"))) == 7
+        assert unwrap(lv.get(VarName("r3"))) == 6
 
 
 class TestCSharpOverloadResolutionByType:

@@ -4,12 +4,12 @@ import logging
 
 import pytest
 
+from interpreter.var_name import VarName
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.cfg import CFG, BasicBlock, build_cfg
 from interpreter.registry import FunctionRegistry, build_registry
 from interpreter.run import execute_cfg, VMConfig, ExecutionStats
 from interpreter.types.typed_value import unwrap
-from interpreter.var_name import VarName
 
 
 def _make_instructions(*specs):

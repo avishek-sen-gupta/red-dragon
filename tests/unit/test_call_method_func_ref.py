@@ -9,12 +9,12 @@ the function directly.
 
 from __future__ import annotations
 
+from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.frontends import get_deterministic_frontend
 from interpreter.ir import Opcode
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
-from interpreter.var_name import VarName
 
 
 def _run_program(source: str, language: Language, max_steps: int = 200) -> dict:

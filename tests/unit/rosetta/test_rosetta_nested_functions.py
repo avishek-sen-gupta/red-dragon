@@ -22,6 +22,7 @@ Program:
 import pytest
 
 from interpreter.ir import Opcode
+from interpreter.var_name import VarName
 from interpreter.instructions import InstructionBase
 from interpreter.types.typed_value import unwrap
 from interpreter.vm.vm_types import SymbolicValue, VMState
@@ -505,7 +506,7 @@ EXPECTED_RESULT = 11
 
 def _extract_var(vm: VMState, var_name: str, language: str = "") -> object:
     """Extract a variable from frame 0 locals, handling PHP ``$`` prefix."""
-    name = _var_name_for_language(var_name, language)
+    name = VarName(_var_name_for_language(var_name, language))
     frame = vm.call_stack[0]
     assert name in frame.local_vars, (
         f"[{language}] expected '{name}' in frame 0 locals, "

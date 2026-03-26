@@ -10,12 +10,12 @@ from pathlib import Path
 
 import pytest
 
+from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.project.compiler import compile_project
 from interpreter.run import execute_cfg, ExecutionStrategies
 from interpreter.run_types import VMConfig
 from interpreter.types.typed_value import TypedValue
-from interpreter.var_name import VarName
 
 
 def _run_project_vm(tmp_path, files, entry, language):

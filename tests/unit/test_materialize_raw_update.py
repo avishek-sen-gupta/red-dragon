@@ -2,6 +2,7 @@
 
 from types import MappingProxyType
 
+from interpreter.var_name import VarName
 from interpreter.types.type_environment import TypeEnvironment
 from interpreter.types.type_expr import UNKNOWN, scalar
 from interpreter.types.typed_value import TypedValue, typed, typed_from_runtime
@@ -16,7 +17,6 @@ from interpreter.vm.vm_types import (
     SymbolicValue,
     Pointer,
 )
-from interpreter.var_name import VarName
 
 _EMPTY_TYPE_ENV = TypeEnvironment(
     register_types=MappingProxyType({}), var_types=MappingProxyType({})

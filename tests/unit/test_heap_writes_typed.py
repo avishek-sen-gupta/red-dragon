@@ -2,6 +2,7 @@
 
 from types import MappingProxyType
 
+from interpreter.var_name import VarName
 from interpreter.constants import TypeName
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.ir import IRInstruction, Opcode
@@ -28,7 +29,6 @@ from interpreter.vm.vm_types import (
     StateUpdate,
     VMState,
 )
-from interpreter.var_name import VarName
 
 _EMPTY_TYPE_ENV = TypeEnvironment(
     register_types=MappingProxyType({}),

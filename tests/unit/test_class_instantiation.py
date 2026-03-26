@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from interpreter.var_name import VarName
 from interpreter.ir import Opcode
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap, unwrap_locals
-from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
 
 
