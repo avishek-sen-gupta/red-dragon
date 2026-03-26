@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from interpreter.var_name import VarName
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap, unwrap_locals
-from interpreter.var_name import VarName
 
 
 def _run_program(source: str, max_steps: int = 200) -> dict:
