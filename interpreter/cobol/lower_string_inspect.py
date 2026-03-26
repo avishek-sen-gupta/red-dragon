@@ -18,6 +18,7 @@ from interpreter.cobol.ir_encoders import (
     build_inspect_tally_ir,
     build_string_split_ir,
 )
+from interpreter.operator_kind import resolve_binop
 from interpreter.instructions import Binop, CallFunction
 from interpreter.register import Register
 
@@ -187,7 +188,7 @@ def lower_inspect_tallying(
         ctx.emit_inst(
             Binop(
                 result_reg=new_total,
-                operator="+",
+                operator=resolve_binop("+"),
                 left=Register(str(total_count_reg)),
                 right=Register(str(count_reg)),
             ),
