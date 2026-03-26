@@ -5,6 +5,7 @@ as array indexing. Out-of-bounds indices should produce symbolic values,
 not crash by falling through to native string indexing.
 """
 
+from interpreter.var_name import VarName
 from interpreter.ir import IRInstruction, Opcode
 from interpreter.types.typed_value import typed_from_runtime, unwrap
 from interpreter.vm.vm import VMState, _is_symbolic, apply_update
@@ -17,7 +18,6 @@ from interpreter.vm.executor import (
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
 from interpreter.register import Register
-from interpreter.var_name import VarName
 
 
 def _make_vm() -> VMState:

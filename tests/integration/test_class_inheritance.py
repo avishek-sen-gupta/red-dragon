@@ -6,10 +6,10 @@ chain across languages with class inheritance support.
 
 from __future__ import annotations
 
+from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
-from interpreter.var_name import VarName
 
 
 def _run(source: str, language: Language, max_steps: int = 500) -> dict:

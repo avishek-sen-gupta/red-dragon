@@ -1,12 +1,12 @@
 """Tests for execute_cfg_traced and execute_traced — traced execution with step snapshots."""
 
+from interpreter.var_name import VarName
 from interpreter.ir import IRInstruction, Opcode, CodeLabel
 from interpreter.cfg import build_cfg
 from interpreter.registry import FunctionRegistry, build_registry
 from interpreter.run import execute_cfg_traced, VMConfig
 from interpreter.trace_types import TraceStep, ExecutionTrace
 from interpreter.types.typed_value import unwrap
-from interpreter.var_name import VarName
 
 
 def _make_instructions(*specs):
@@ -64,12 +64,8 @@ class TestExecuteCfgTracedBasic:
 
         # Mutating one snapshot must not affect others
         trace.steps[0].vm_state.call_stack[0].local_vars[VarName("INJECTED")] = "bad"
-        assert (
-            VarName("INJECTED") not in trace.steps[1].vm_state.call_stack[0].local_vars
-        )
-        assert (
-            VarName("INJECTED") not in trace.steps[-1].vm_state.call_stack[0].local_vars
-        )
+        assert "INJECTED" not in trace.steps[1].vm_state.call_stack[0].local_vars
+        assert "INJECTED" not in trace.steps[-1].vm_state.call_stack[0].local_vars
 
     def test_block_label_and_instruction_index_are_correct(self):
         instructions = _make_instructions(

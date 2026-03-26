@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from interpreter.var_name import VarName
 from interpreter.constants import Language
 from interpreter.frontends.javascript import JavaScriptFrontend
 from interpreter.frontends.typescript import TypeScriptFrontend
@@ -9,7 +10,6 @@ from interpreter.parser import TreeSitterParserFactory
 from interpreter.run import run
 from interpreter.types.type_expr import ParameterizedType, ScalarType, metatype
 from interpreter.types.typed_value import unwrap_locals
-from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
 
 
