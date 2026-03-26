@@ -9,6 +9,7 @@ from interpreter.vm.vm_types import StackFrame
 from interpreter.types.type_expr import UNKNOWN, TypeExpr, scalar
 from interpreter.types.typed_value import TypedValue, typed
 from interpreter.ir import SpreadArguments
+from interpreter.var_name import VarName
 
 
 def _resolve_call_args(vm: VMState, arg_operands: list) -> list[TypedValue]:
@@ -52,7 +53,7 @@ def _symbolic_type_hint(val: Any) -> TypeExpr:
 
 
 def _write_var_to_frame(
-    vm: VMState, frame: StackFrame, name: str, tv: TypedValue
+    vm: VMState, frame: StackFrame, name: VarName, tv: TypedValue
 ) -> None:
     """Write a variable to a specific frame, handling aliases and closure envs."""
     alias_ptr = frame.var_heap_aliases.get(name)
