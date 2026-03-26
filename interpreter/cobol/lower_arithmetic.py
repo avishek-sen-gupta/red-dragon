@@ -28,6 +28,7 @@ from interpreter.cobol.cobol_types import CobolDataCategory
 from interpreter.cobol.condition_lowering import lower_expr_node
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.operator_kind import resolve_binop
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -103,7 +104,7 @@ def lower_arithmetic(
     ctx.emit_inst(
         Binop(
             result_reg=result_reg,
-            operator=op,
+            operator=resolve_binop(op),
             left=Register(str(tgt_decoded)),
             right=Register(str(src_decoded)),
         )
@@ -137,7 +138,7 @@ def lower_arithmetic_giving(
     ctx.emit_inst(
         Binop(
             result_reg=result_reg,
-            operator=op,
+            operator=resolve_binop(op),
             left=Register(str(left_reg)),
             right=Register(str(right_reg)),
         )
@@ -314,7 +315,7 @@ def lower_set(
             ctx.emit_inst(
                 Binop(
                     result_reg=result_reg,
-                    operator=op,
+                    operator=resolve_binop(op),
                     left=Register(str(tgt_decoded)),
                     right=Register(str(step_reg)),
                 )
