@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from interpreter.frontends.context import TreeSitterEmitContext
-
+from interpreter.operator_kind import resolve_binop
 from interpreter.ir import Opcode, CodeLabel
 from interpreter.frontends.c.node_types import CNodeType
 from interpreter.instructions import (
@@ -79,7 +79,10 @@ def lower_switch(ctx: TreeSitterEmitContext, node) -> None:
             cmp_reg = ctx.fresh_reg()
             ctx.emit_inst(
                 Binop(
-                    result_reg=cmp_reg, operator="==", left=subject_reg, right=case_reg
+                    result_reg=cmp_reg,
+                    operator=resolve_binop("=="),
+                    left=subject_reg,
+                    right=case_reg,
                 ),
                 node=case,
             )

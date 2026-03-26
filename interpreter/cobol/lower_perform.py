@@ -12,6 +12,7 @@ from interpreter.cobol.cobol_statements import (
 )
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
+from interpreter.operator_kind import resolve_binop
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -138,7 +139,7 @@ def lower_perform_times(
     ctx.emit_inst(
         Binop(
             result_reg=cond_reg,
-            operator=">=",
+            operator=resolve_binop(">="),
             left=ctr_reg,
             right=Register(str(times_reg)),
         )
@@ -160,7 +161,7 @@ def lower_perform_times(
     ctx.emit_inst(
         Binop(
             result_reg=inc_reg,
-            operator="+",
+            operator=resolve_binop("+"),
             left=ctr_reg2,
             right=Register(str(one_reg)),
         )
@@ -279,7 +280,7 @@ def emit_varying_increment(
     ctx.emit_inst(
         Binop(
             result_reg=new_val_reg,
-            operator="+",
+            operator=resolve_binop("+"),
             left=Register(str(val_reg)),
             right=Register(str(by_reg)),
         )

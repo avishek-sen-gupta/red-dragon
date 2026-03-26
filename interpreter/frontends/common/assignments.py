@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.node_types import CommonNodeType
+from interpreter.operator_kind import resolve_binop
 from interpreter.instructions import Binop, Const, Return_
 
 
@@ -31,7 +32,7 @@ def lower_augmented_assignment(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(
         Binop(
             result_reg=result,
-            operator=op_text,
+            operator=resolve_binop(op_text),
             left=str(lhs_reg),
             right=str(rhs_reg),
         ),
