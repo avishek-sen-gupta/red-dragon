@@ -11,6 +11,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter import constants
 from interpreter.frontends.common.expressions import lower_const_literal
 from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
+from interpreter.operator_kind import resolve_binop
 from interpreter.register import Register
 from interpreter.types.type_expr import scalar
 from interpreter.instructions import (
@@ -51,7 +52,12 @@ def _emit_optional_guard(
     ctx.emit_inst(Const(result_reg=null_reg, value=ctx.constants.none_literal))
     cmp_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Binop(result_reg=cmp_reg, operator="==", left=obj_reg, right=null_reg)
+        Binop(
+            result_reg=cmp_reg,
+            operator=resolve_binop("=="),
+            left=obj_reg,
+            right=null_reg,
+        )
     )
 
     null_label = ctx.fresh_label("optchain_null")
@@ -450,7 +456,9 @@ def lower_template_string(ctx: TreeSitterEmitContext, node) -> Register:
     for part in parts[1:]:
         new_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            Binop(result_reg=new_reg, operator="+", left=result, right=part),
+            Binop(
+                result_reg=new_reg, operator=resolve_binop("+"), left=result, right=part
+            ),
             node=node,
         )
         result = new_reg

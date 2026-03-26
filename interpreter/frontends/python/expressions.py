@@ -21,6 +21,7 @@ from interpreter.frontends.type_extraction import (
 from interpreter.frontends.python.node_types import PythonNodeType
 from interpreter.register import Register
 from interpreter.types.type_expr import scalar
+from interpreter.operator_kind import resolve_binop
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -267,7 +268,14 @@ def _lower_comprehension_loop(
     idx_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
     cond_reg = ctx.fresh_reg()
-    ctx.emit_inst(Binop(result_reg=cond_reg, operator="<", left=idx_reg, right=len_reg))
+    ctx.emit_inst(
+        Binop(
+            result_reg=cond_reg,
+            operator=resolve_binop("<"),
+            left=idx_reg,
+            right=len_reg,
+        )
+    )
     ctx.emit_inst(
         BranchIf(cond_reg=cond_reg, branch_targets=(body_label, loop_end_label))
     )
@@ -324,7 +332,7 @@ def _lower_comprehension_loop(
         ctx.emit_inst(
             Binop(
                 result_reg=new_result_idx,
-                operator="+",
+                operator=resolve_binop("+"),
                 left=result_idx,
                 right=one_reg,
             )
@@ -378,7 +386,14 @@ def lower_dict_comprehension(ctx: TreeSitterEmitContext, node) -> Register:
     idx_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
     cond_reg = ctx.fresh_reg()
-    ctx.emit_inst(Binop(result_reg=cond_reg, operator="<", left=idx_reg, right=len_reg))
+    ctx.emit_inst(
+        Binop(
+            result_reg=cond_reg,
+            operator=resolve_binop("<"),
+            left=idx_reg,
+            right=len_reg,
+        )
+    )
     ctx.emit_inst(BranchIf(cond_reg=cond_reg, branch_targets=(body_label, end_label)))
 
     ctx.emit_inst(Label_(label=body_label))
@@ -928,6 +943,10 @@ def _emit_for_increment(
     one_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=one_reg, value="1"))
     new_idx = ctx.fresh_reg()
-    ctx.emit_inst(Binop(result_reg=new_idx, operator="+", left=idx_reg, right=one_reg))
+    ctx.emit_inst(
+        Binop(
+            result_reg=new_idx, operator=resolve_binop("+"), left=idx_reg, right=one_reg
+        )
+    )
     ctx.emit_inst(StoreVar(name="__for_idx", value_reg=new_idx))
     ctx.emit_inst(Branch(label=loop_label))

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
+from interpreter.operator_kind import resolve_binop
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -380,7 +381,12 @@ def _lower_range_slice(
         one_reg = _make_const(ctx, "1")
         adjusted_end = ctx.fresh_reg()
         ctx.emit_inst(
-            Binop(result_reg=adjusted_end, operator="+", left=end_reg, right=one_reg),
+            Binop(
+                result_reg=adjusted_end,
+                operator=resolve_binop("+"),
+                left=end_reg,
+                right=one_reg,
+            ),
             node=range_node,
         )
         end_reg = adjusted_end
@@ -410,7 +416,12 @@ def _lower_positional_slice(
     length_reg = ctx.lower_expr(named_children[2])
     stop_reg = ctx.fresh_reg()
     ctx.emit_inst(
-        Binop(result_reg=stop_reg, operator="+", left=start_reg, right=length_reg),
+        Binop(
+            result_reg=stop_reg,
+            operator=resolve_binop("+"),
+            left=start_reg,
+            right=length_reg,
+        ),
         node=node,
     )
     none_reg = _make_const(ctx, ctx.constants.none_literal)

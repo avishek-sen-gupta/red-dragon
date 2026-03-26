@@ -21,6 +21,7 @@ from interpreter.frontend_observer import FrontendObserver, NullFrontendObserver
 from interpreter.frontends.base_node_types import BaseNodeType
 from interpreter.frontends.context import GrammarConstants, TreeSitterEmitContext
 from interpreter.frontends.symbol_table import SymbolTable
+from interpreter.operator_kind import resolve_binop, resolve_unop
 from interpreter.instructions import (
     InstructionBase,
     Binop,
@@ -405,7 +406,12 @@ class BaseFrontend(Frontend):
         for part in parts[1:]:
             new_reg = self._fresh_reg()
             self._emit_inst(
-                Binop(result_reg=new_reg, operator="+", left=result, right=part),
+                Binop(
+                    result_reg=new_reg,
+                    operator=resolve_binop("+"),
+                    left=result,
+                    right=part,
+                ),
                 node=node,
             )
             result = new_reg
@@ -476,7 +482,9 @@ class BaseFrontend(Frontend):
         rhs_reg = self._lower_expr(children[2])
         reg = self._fresh_reg()
         self._emit_inst(
-            Binop(result_reg=reg, operator=op, left=lhs_reg, right=rhs_reg),
+            Binop(
+                result_reg=reg, operator=resolve_binop(op), left=lhs_reg, right=rhs_reg
+            ),
             node=node,
         )
         return reg
@@ -492,7 +500,9 @@ class BaseFrontend(Frontend):
         rhs_reg = self._lower_expr(children[2])
         reg = self._fresh_reg()
         self._emit_inst(
-            Binop(result_reg=reg, operator=op, left=lhs_reg, right=rhs_reg),
+            Binop(
+                result_reg=reg, operator=resolve_binop(op), left=lhs_reg, right=rhs_reg
+            ),
             node=node,
         )
         return reg
@@ -507,7 +517,7 @@ class BaseFrontend(Frontend):
         operand_reg = self._lower_expr(children[1])
         reg = self._fresh_reg()
         self._emit_inst(
-            Unop(result_reg=reg, operator=op, operand=operand_reg),
+            Unop(result_reg=reg, operator=resolve_unop(op), operand=operand_reg),
             node=node,
         )
         return reg
@@ -723,7 +733,12 @@ class BaseFrontend(Frontend):
         rhs_reg = self._lower_expr(right)
         result = self._fresh_reg()
         self._emit_inst(
-            Binop(result_reg=result, operator=op_text, left=lhs_reg, right=rhs_reg),
+            Binop(
+                result_reg=result,
+                operator=resolve_binop(op_text),
+                left=lhs_reg,
+                right=rhs_reg,
+            ),
             node=node,
         )
         self._lower_store_target(left, result, node)
@@ -1101,7 +1116,12 @@ class BaseFrontend(Frontend):
         self._emit_inst(Const(result_reg=one_reg, value="1"))
         result_reg = self._fresh_reg()
         self._emit_inst(
-            Binop(result_reg=result_reg, operator=op, left=operand_reg, right=one_reg),
+            Binop(
+                result_reg=result_reg,
+                operator=resolve_binop(op),
+                left=operand_reg,
+                right=one_reg,
+            ),
             node=node,
         )
         self._lower_store_target(operand, result_reg, node)

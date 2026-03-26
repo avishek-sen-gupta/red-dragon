@@ -26,6 +26,7 @@ from interpreter.cobol.cobol_constants import (
     CobolEncoding,
     NibblePosition,
 )
+from interpreter.operator_kind import resolve_binop
 from interpreter.instructions import (
     InstructionBase,
     Binop,
@@ -148,10 +149,15 @@ def _decode_digit_step(
                     low_reg,
                 ),
             ),
-            Binop(result_reg=contribution, operator="*", left=digit, right=power_reg),
+            Binop(
+                result_reg=contribution,
+                operator=resolve_binop("*"),
+                left=digit,
+                right=power_reg,
+            ),
             Binop(
                 result_reg=new_accum,
-                operator="+",
+                operator=resolve_binop("+"),
                 left=current_accum,
                 right=contribution,
             ),
@@ -189,10 +195,15 @@ def _accumulate_digit_step(
                     i_reg,
                 ),
             ),
-            Binop(result_reg=contribution, operator="*", left=digit, right=power_reg),
+            Binop(
+                result_reg=contribution,
+                operator=resolve_binop("*"),
+                left=digit,
+                right=power_reg,
+            ),
             Binop(
                 result_reg=new_accum,
-                operator="+",
+                operator=resolve_binop("+"),
                 left=current_accum,
                 right=contribution,
             ),
@@ -323,7 +334,12 @@ def build_decode_zoned_ir(
         scaled = rc.next()
         divisor_reg = _lit(rc, instructions, divisor)
         instructions.append(
-            Binop(result_reg=scaled, operator="/", left=accum, right=divisor_reg)
+            Binop(
+                result_reg=scaled,
+                operator=resolve_binop("/"),
+                left=accum,
+                right=divisor_reg,
+            )
         )
         accum = scaled
     else:
@@ -367,7 +383,7 @@ def build_decode_zoned_ir(
     instructions.append(
         Binop(
             result_reg=is_neg,
-            operator="==",
+            operator=resolve_binop("=="),
             left=sign_nibble,
             right=neg_const,
         )
@@ -377,18 +393,30 @@ def build_decode_zoned_ir(
     two_neg = rc.next()
     two_reg = _lit(rc, instructions, 2)
     instructions.append(
-        Binop(result_reg=two_neg, operator="*", left=two_reg, right=is_neg)
+        Binop(
+            result_reg=two_neg, operator=resolve_binop("*"), left=two_reg, right=is_neg
+        )
     )
 
     sign_mult = rc.next()
     one_reg = _lit(rc, instructions, 1)
     instructions.append(
-        Binop(result_reg=sign_mult, operator="-", left=one_reg, right=two_neg)
+        Binop(
+            result_reg=sign_mult,
+            operator=resolve_binop("-"),
+            left=one_reg,
+            right=two_neg,
+        )
     )
 
     final_result = rc.next()
     instructions.append(
-        Binop(result_reg=final_result, operator="*", left=accum, right=sign_mult)
+        Binop(
+            result_reg=final_result,
+            operator=resolve_binop("*"),
+            left=accum,
+            right=sign_mult,
+        )
     )
 
     instructions.append(Return_(value_reg=final_result))
@@ -441,7 +469,7 @@ def build_encode_zoned_separate_ir(
     instructions.append(
         Binop(
             result_reg=is_neg,
-            operator="==",
+            operator=resolve_binop("=="),
             left=p_sign_nibble,
             right=neg_const,
         )
@@ -453,7 +481,7 @@ def build_encode_zoned_separate_ir(
     instructions.append(
         Binop(
             result_reg=neg_offset,
-            operator="*",
+            operator=resolve_binop("*"),
             left=is_neg,
             right=sign_offset_reg,
         )
@@ -464,7 +492,7 @@ def build_encode_zoned_separate_ir(
     instructions.append(
         Binop(
             result_reg=sign_byte_val,
-            operator="+",
+            operator=resolve_binop("+"),
             left=plus_reg,
             right=neg_offset,
         )
@@ -585,7 +613,12 @@ def build_decode_zoned_separate_ir(
         scaled = rc.next()
         divisor_reg = _lit(rc, instructions, divisor)
         instructions.append(
-            Binop(result_reg=scaled, operator="/", left=accum, right=divisor_reg)
+            Binop(
+                result_reg=scaled,
+                operator=resolve_binop("/"),
+                left=accum,
+                right=divisor_reg,
+            )
         )
         accum = scaled
     else:
@@ -601,7 +634,7 @@ def build_decode_zoned_separate_ir(
     instructions.append(
         Binop(
             result_reg=is_neg,
-            operator="==",
+            operator=resolve_binop("=="),
             left=sign_byte,
             right=minus_reg,
         )
@@ -610,18 +643,30 @@ def build_decode_zoned_separate_ir(
     two_neg = rc.next()
     two_reg = _lit(rc, instructions, 2)
     instructions.append(
-        Binop(result_reg=two_neg, operator="*", left=two_reg, right=is_neg)
+        Binop(
+            result_reg=two_neg, operator=resolve_binop("*"), left=two_reg, right=is_neg
+        )
     )
 
     sign_mult = rc.next()
     one_reg = _lit(rc, instructions, 1)
     instructions.append(
-        Binop(result_reg=sign_mult, operator="-", left=one_reg, right=two_neg)
+        Binop(
+            result_reg=sign_mult,
+            operator=resolve_binop("-"),
+            left=one_reg,
+            right=two_neg,
+        )
     )
 
     final_result = rc.next()
     instructions.append(
-        Binop(result_reg=final_result, operator="*", left=accum, right=sign_mult)
+        Binop(
+            result_reg=final_result,
+            operator=resolve_binop("*"),
+            left=accum,
+            right=sign_mult,
+        )
     )
 
     instructions.append(Return_(value_reg=final_result))
@@ -884,11 +929,14 @@ def build_decode_comp3_ir(
             insts
             + [
                 Binop(
-                    result_reg=contribution, operator="*", left=dreg, right=power_reg
+                    result_reg=contribution,
+                    operator=resolve_binop("*"),
+                    left=dreg,
+                    right=power_reg,
                 ),
                 Binop(
                     result_reg=new_accum,
-                    operator="+",
+                    operator=resolve_binop("+"),
                     left=current_accum,
                     right=contribution,
                 ),
@@ -906,7 +954,12 @@ def build_decode_comp3_ir(
         scaled = rc.next()
         divisor_reg = _lit(rc, instructions, divisor)
         instructions.append(
-            Binop(result_reg=scaled, operator="/", left=accum, right=divisor_reg)
+            Binop(
+                result_reg=scaled,
+                operator=resolve_binop("/"),
+                left=accum,
+                right=divisor_reg,
+            )
         )
         accum = scaled
     else:
@@ -922,7 +975,7 @@ def build_decode_comp3_ir(
     instructions.append(
         Binop(
             result_reg=is_neg,
-            operator="==",
+            operator=resolve_binop("=="),
             left=sign_reg,
             right=neg_const,
         )
@@ -931,18 +984,30 @@ def build_decode_comp3_ir(
     two_neg = rc.next()
     two_reg = _lit(rc, instructions, 2)
     instructions.append(
-        Binop(result_reg=two_neg, operator="*", left=two_reg, right=is_neg)
+        Binop(
+            result_reg=two_neg, operator=resolve_binop("*"), left=two_reg, right=is_neg
+        )
     )
 
     sign_mult = rc.next()
     one_reg = _lit(rc, instructions, 1)
     instructions.append(
-        Binop(result_reg=sign_mult, operator="-", left=one_reg, right=two_neg)
+        Binop(
+            result_reg=sign_mult,
+            operator=resolve_binop("-"),
+            left=one_reg,
+            right=two_neg,
+        )
     )
 
     final_result = rc.next()
     instructions.append(
-        Binop(result_reg=final_result, operator="*", left=accum, right=sign_mult)
+        Binop(
+            result_reg=final_result,
+            operator=resolve_binop("*"),
+            left=accum,
+            right=sign_mult,
+        )
     )
 
     instructions.append(Return_(value_reg=final_result))
@@ -983,7 +1048,7 @@ def build_encode_binary_ir(
     instructions.append(
         Binop(
             result_reg=is_neg,
-            operator="==",
+            operator=resolve_binop("=="),
             left=p_sign_nibble,
             right=neg_const,
         )
@@ -992,18 +1057,30 @@ def build_encode_binary_ir(
     two_neg = rc.next()
     two_reg = _lit(rc, instructions, 2)
     instructions.append(
-        Binop(result_reg=two_neg, operator="*", left=two_reg, right=is_neg)
+        Binop(
+            result_reg=two_neg, operator=resolve_binop("*"), left=two_reg, right=is_neg
+        )
     )
 
     sign_mult = rc.next()
     one_reg = _lit(rc, instructions, 1)
     instructions.append(
-        Binop(result_reg=sign_mult, operator="-", left=one_reg, right=two_neg)
+        Binop(
+            result_reg=sign_mult,
+            operator=resolve_binop("-"),
+            left=one_reg,
+            right=two_neg,
+        )
     )
 
     signed_value = rc.next()
     instructions.append(
-        Binop(result_reg=signed_value, operator="*", left=accum, right=sign_mult)
+        Binop(
+            result_reg=signed_value,
+            operator=resolve_binop("*"),
+            left=accum,
+            right=sign_mult,
+        )
     )
 
     # Pack as big-endian binary bytes
@@ -1058,7 +1135,12 @@ def build_decode_binary_ir(
         scaled = rc.next()
         divisor_reg = _lit(rc, instructions, divisor)
         instructions.append(
-            Binop(result_reg=scaled, operator="/", left=int_val, right=divisor_reg)
+            Binop(
+                result_reg=scaled,
+                operator=resolve_binop("/"),
+                left=int_val,
+                right=divisor_reg,
+            )
         )
         int_val = scaled
     else:
@@ -1268,14 +1350,22 @@ def build_encode_alphanumeric_justified_ir(
     length_reg2 = _lit(rc, instructions, length)
     instructions.append(
         Binop(
-            result_reg=start_offset, operator="-", left=combined_len, right=length_reg2
+            result_reg=start_offset,
+            operator=resolve_binop("-"),
+            left=combined_len,
+            right=length_reg2,
         )
     )
 
     end_offset = rc.next()
     length_reg3 = _lit(rc, instructions, length)
     instructions.append(
-        Binop(result_reg=end_offset, operator="+", left=start_offset, right=length_reg3)
+        Binop(
+            result_reg=end_offset,
+            operator=resolve_binop("+"),
+            left=start_offset,
+            right=length_reg3,
+        )
     )
 
     result = rc.next()
