@@ -9,6 +9,7 @@ C is excluded — it has no classes or method chaining.
 
 import pytest
 
+from interpreter.var_name import VarName
 from interpreter.frontends import SUPPORTED_DETERMINISTIC_LANGUAGES
 from interpreter.ir import Opcode
 
@@ -370,7 +371,7 @@ class TestMethodChainingCrossLanguage:
 # Languages where method chaining returns symbolic (known gaps)
 # Lua: table-based OOP, return-this chaining symbolic (red-dragon-0vp)
 # Pascal: TCounter.Create returns symbolic (red-dragon-q6e)
-_CHAINING_SYMBOLIC_LANGUAGES: frozenset[str] = frozenset({"pascal"})
+_CHAINING_SYMBOLIC_LANGUAGES: frozenset[str] = frozenset({VarName("pascal")})
 # C excluded from PROGRAMS entirely (no classes)
 METHOD_CHAINING_EXECUTABLE_LANGUAGES: frozenset[str] = (
     STANDARD_EXECUTABLE_LANGUAGES - _CHAINING_SYMBOLIC_LANGUAGES - {"c"}

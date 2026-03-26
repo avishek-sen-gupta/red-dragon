@@ -181,7 +181,7 @@ class TestApplyUpdateStoresTypedValue:
         ptr = Pointer(base="mem_0", offset=0)
         vm.current_frame.var_heap_aliases[VarName("x")] = ptr
         tv = typed(99, scalar(TypeName.INT))
-        update = StateUpdate(var_writes={"x": tv}, reasoning="test")
+        update = StateUpdate(var_writes={VarName("x"): tv}, reasoning="test")
         apply_update(vm, update, _EMPTY_TYPE_ENV, _IDENTITY_RULES)
         field_val = vm.heap["mem_0"].fields["0"]
         assert isinstance(field_val, TypedValue)

@@ -4,6 +4,7 @@ Tests that when source code defines overloaded methods, the executor picks
 the correct overload based on call-site argument arity and types.
 """
 
+from interpreter.var_name import VarName
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap
 
@@ -25,7 +26,7 @@ Greeter g = new Greeter();
 String result = g.greet();
 """
         vm = run(source, language="java", max_steps=2000)
-        assert unwrap(vm.call_stack[0].local_vars.get("result")) == "hello"
+        assert unwrap(vm.call_stack[0].local_vars.get(VarName("result"))) == "hello"
 
     def test_nullary_vs_unary_picks_unary(self):
         source = """\
@@ -41,7 +42,9 @@ Greeter g = new Greeter();
 String result = g.greet("world");
 """
         vm = run(source, language="java", max_steps=2000)
-        assert unwrap(vm.call_stack[0].local_vars.get("result")) == "hello world"
+        assert (
+            unwrap(vm.call_stack[0].local_vars.get(VarName("result"))) == "hello world"
+        )
 
     def test_three_arity_overloads(self):
         source = """\
@@ -79,7 +82,7 @@ Printer p = new Printer();
 int result = p.show(42);
 """
         vm = run(source, language="java", max_steps=2000)
-        assert unwrap(vm.call_stack[0].local_vars.get("result")) == 43
+        assert unwrap(vm.call_stack[0].local_vars.get(VarName("result"))) == 43
 
     def test_int_vs_string_picks_string(self):
         source = """\
@@ -95,7 +98,7 @@ Printer p = new Printer();
 String result = p.show("hello");
 """
         vm = run(source, language="java", max_steps=2000)
-        assert unwrap(vm.call_stack[0].local_vars.get("result")) == "str:hello"
+        assert unwrap(vm.call_stack[0].local_vars.get(VarName("result"))) == "str:hello"
 
 
 class TestJavaConstructorOverload:
@@ -120,8 +123,8 @@ int px = p.x;
 int py = p.y;
 """
         vm = run(source, language="java", max_steps=2000)
-        assert unwrap(vm.call_stack[0].local_vars.get("px")) == 3
-        assert unwrap(vm.call_stack[0].local_vars.get("py")) == 4
+        assert unwrap(vm.call_stack[0].local_vars.get(VarName("px"))) == 3
+        assert unwrap(vm.call_stack[0].local_vars.get(VarName("py"))) == 4
 
 
 class TestJavaOverloadResolutionByHierarchy:
@@ -140,4 +143,4 @@ Kennel k = new Kennel();
 String result = k.accept(d);
 """
         vm = run(source, language="java", max_steps=2000)
-        assert unwrap(vm.call_stack[0].local_vars.get("result")) == "dog"
+        assert unwrap(vm.call_stack[0].local_vars.get(VarName("result"))) == "dog"
