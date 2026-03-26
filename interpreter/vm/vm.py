@@ -7,6 +7,7 @@ from typing import Any
 
 from interpreter.constants import CanonicalLiteral, TypeName
 from interpreter.register import Register
+from interpreter.var_name import VarName
 from interpreter.types.coercion.conversion_rules import TypeConversionRules
 from interpreter.types.coercion.identity_conversion_rules import IdentityConversionRules
 from interpreter.types.type_environment import TypeEnvironment
@@ -262,7 +263,10 @@ def apply_update(
                 function_name=update.call_push.function_name,
                 return_label=update.call_push.return_label,
                 closure_env_id=update.call_push.closure_env_id,
-                captured_var_names=frozenset(update.call_push.captured_var_names),
+                captured_var_names=frozenset(
+                    v if isinstance(v, VarName) else VarName(v)
+                    for v in update.call_push.captured_var_names
+                ),
                 is_ctor=update.call_push.is_ctor,
             )
         )
@@ -270,7 +274,8 @@ def apply_update(
     # Variable writes — go to the CURRENT frame (which is the new frame
     # if call_push just fired, i.e. parameter bindings)
     target_frame = vm.current_frame
-    for var, val in update.var_writes.items():
+    for raw_var, val in update.var_writes.items():
+        var = raw_var if isinstance(raw_var, VarName) else VarName(raw_var)
         tv = val
         # Alias-aware: if variable is backed by a heap object, write TypedValue
         alias_ptr = target_frame.var_heap_aliases.get(var)
