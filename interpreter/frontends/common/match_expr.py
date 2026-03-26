@@ -21,6 +21,7 @@ from interpreter.frontends.common.patterns import (
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.register import Register
 from interpreter.operator_kind import resolve_binop
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -62,7 +63,7 @@ def lower_match_as_expr(
 
     ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=reg, name=result_var))
+    ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(result_var)))
     return reg
 
 
@@ -85,7 +86,7 @@ def _lower_arm(
     if is_irrefutable:
         compile_pattern_bindings(ctx, subject_reg, pattern)
         body_reg = spec.body_of(ctx, arm)
-        ctx.emit_inst(DeclVar(name=result_var, value_reg=str(body_reg)))
+        ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=str(body_reg)))
         ctx.emit_inst(Branch(label=end_label))
         return
 
@@ -120,6 +121,6 @@ def _lower_arm(
         compile_pattern_bindings(ctx, subject_reg, pattern)
 
     body_reg = spec.body_of(ctx, arm)
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=str(body_reg)))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=str(body_reg)))
     ctx.emit_inst(Branch(label=end_label))
     ctx.emit_inst(Label_(label=next_label))

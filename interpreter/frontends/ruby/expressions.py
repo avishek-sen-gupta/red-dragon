@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from interpreter.var_name import VarName
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.operator_kind import resolve_binop
@@ -50,7 +51,7 @@ def lower_scope_resolution(ctx: TreeSitterEmitContext, node) -> Register:
     if scope_node is None:
         # ::TopLevel — root scope resolution
         reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=reg, name=name_text), node=node)
+        ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(name_text)), node=node)
         return reg
 
     scope_reg = ctx.lower_expr(scope_node)
@@ -66,7 +67,9 @@ def lower_instance_variable(ctx: TreeSitterEmitContext, node) -> Register:
     raw = ctx.node_text(node)
     field_name = raw.lstrip("@")
     self_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=self_reg, name=constants.PARAM_SELF), node=node)
+    ctx.emit_inst(
+        LoadVar(result_reg=self_reg, name=VarName(constants.PARAM_SELF)), node=node
+    )
     reg = ctx.fresh_reg()
     ctx.emit_inst(
         LoadField(result_reg=reg, obj_reg=self_reg, field_name=field_name), node=node
@@ -465,24 +468,26 @@ def lower_ruby_conditional(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=true_label))
     true_reg = ctx.lower_expr(true_node) if true_node else ctx.fresh_reg()
     result_var = f"__ternary_{ctx.label_counter}"
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=true_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=true_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=false_label))
     false_reg = ctx.lower_expr(false_node) if false_node else ctx.fresh_reg()
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=false_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=false_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
     result_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=result_reg, name=result_var))
+    ctx.emit_inst(LoadVar(result_reg=result_reg, name=VarName(result_var)))
     return result_reg
 
 
 def lower_ruby_self(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower `self` as LOAD_VAR('self')."""
     reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=reg, name=constants.PARAM_SELF), node=node)
+    ctx.emit_inst(
+        LoadVar(result_reg=reg, name=VarName(constants.PARAM_SELF)), node=node
+    )
     return reg
 
 
@@ -614,7 +619,7 @@ def lower_ruby_params(ctx: TreeSitterEmitContext, params_node) -> None:
             ),
             node=child,
         )
-        ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
+        ctx.emit_inst(DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}"))
         if default_value_node is not None:
             from interpreter.frontends.common.default_params import (
                 emit_default_param_guard,
@@ -655,7 +660,8 @@ def lower_ruby_store_target(
         field_name = raw.lstrip("@")
         self_reg = ctx.fresh_reg()
         ctx.emit_inst(
-            LoadVar(result_reg=self_reg, name=constants.PARAM_SELF), node=parent_node
+            LoadVar(result_reg=self_reg, name=VarName(constants.PARAM_SELF)),
+            node=parent_node,
         )
         ctx.emit_inst(
             StoreField(obj_reg=self_reg, field_name=field_name, value_reg=val_reg),
@@ -668,7 +674,8 @@ def lower_ruby_store_target(
         RubyNodeType.CLASS_VARIABLE,
     ):
         ctx.emit_inst(
-            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            node=parent_node,
         )
     elif target.type == RubyNodeType.ELEMENT_REFERENCE:
         named_children = [c for c in target.children if c.is_named]

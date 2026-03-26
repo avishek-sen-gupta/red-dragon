@@ -13,6 +13,7 @@ from interpreter.cobol.cobol_statements import (
 from interpreter.cobol.data_layout import DataLayout
 from interpreter.cobol.emit_context import EmitContext
 from interpreter.operator_kind import resolve_binop
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -122,7 +123,9 @@ def lower_perform_times(
     exit_label = ctx.fresh_label("perform_times_exit")
 
     zero_reg = ctx.const_to_reg(0)
-    ctx.emit_inst(StoreVar(name=counter_var, value_reg=Register(str(zero_reg))))
+    ctx.emit_inst(
+        StoreVar(name=VarName(counter_var), value_reg=Register(str(zero_reg)))
+    )
 
     if ctx.has_field(spec.times, layout):
         times_ref = ctx.resolve_field_ref(spec.times, layout, region_reg)
@@ -134,7 +137,7 @@ def lower_perform_times(
 
     ctx.emit_inst(Label_(label=loop_label))
     ctr_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=ctr_reg, name=counter_var))
+    ctx.emit_inst(LoadVar(result_reg=ctr_reg, name=VarName(counter_var)))
     cond_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -155,7 +158,7 @@ def lower_perform_times(
     lower_perform_body(ctx, stmt, layout, region_reg)
 
     ctr_reg2 = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=ctr_reg2, name=counter_var))
+    ctx.emit_inst(LoadVar(result_reg=ctr_reg2, name=VarName(counter_var)))
     one_reg = ctx.const_to_reg(1)
     inc_reg = ctx.fresh_reg()
     ctx.emit_inst(
@@ -166,7 +169,7 @@ def lower_perform_times(
             right=Register(str(one_reg)),
         )
     )
-    ctx.emit_inst(StoreVar(name=counter_var, value_reg=inc_reg))
+    ctx.emit_inst(StoreVar(name=VarName(counter_var), value_reg=inc_reg))
     ctx.emit_inst(Branch(label=loop_label))
 
     ctx.emit_inst(Label_(label=exit_label))

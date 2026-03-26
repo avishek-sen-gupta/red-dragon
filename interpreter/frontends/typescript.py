@@ -13,6 +13,7 @@ from interpreter.frontends.context import GrammarConstants
 from interpreter.frontends.common import expressions as common_expr
 from interpreter.ir import Opcode
 from interpreter import constants
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -217,7 +218,7 @@ def lower_interface_decl(ctx: TreeSitterEmitContext, node) -> None:
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)
     ctx.seed_var_type(iface_name, metatype(ScalarType(iface_name)))
-    ctx.emit_inst(DeclVar(name=iface_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(iface_name), value_reg=cls_reg))
 
 
 def _lower_ts_interface_method(ctx: TreeSitterEmitContext, node) -> None:
@@ -241,7 +242,7 @@ def _lower_ts_interface_method(ctx: TreeSitterEmitContext, node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def _lower_ts_interface_property(ctx: TreeSitterEmitContext, node) -> None:
@@ -256,7 +257,7 @@ def _lower_ts_interface_property(ctx: TreeSitterEmitContext, node) -> None:
     type_hint = normalize_type_hint(raw_type.lstrip(": "), ctx.type_map)
     val_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
-    ctx.emit_inst(DeclVar(name=prop_name, value_reg=val_reg), node=node)
+    ctx.emit_inst(DeclVar(name=VarName(prop_name), value_reg=val_reg), node=node)
     ctx.seed_var_type(prop_name, type_hint)
 
 
@@ -280,7 +281,7 @@ def lower_enum_decl(ctx: TreeSitterEmitContext, node) -> None:
                 ctx.emit_inst(
                     StoreIndex(arr_reg=obj_reg, index_reg=key_reg, value_reg=val_reg)
                 )
-        ctx.emit_inst(DeclVar(name=enum_name, value_reg=obj_reg))
+        ctx.emit_inst(DeclVar(name=VarName(enum_name), value_reg=obj_reg))
 
 
 def lower_ts_field_definition(ctx: TreeSitterEmitContext, node) -> None:
@@ -304,7 +305,7 @@ def lower_ts_field_definition(ctx: TreeSitterEmitContext, node) -> None:
     else:
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
-    ctx.emit_inst(DeclVar(name=field_name, value_reg=val_reg), node=node)
+    ctx.emit_inst(DeclVar(name=VarName(field_name), value_reg=val_reg), node=node)
 
 
 def lower_ts_export_statement(ctx: TreeSitterEmitContext, node) -> None:
@@ -388,7 +389,7 @@ def lower_ts_class_def(ctx: TreeSitterEmitContext, node) -> None:
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
     ctx.seed_var_type(class_name, metatype(ScalarType(class_name)))
-    ctx.emit_inst(DeclVar(name=class_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
 def _lower_ts_method_def(ctx: TreeSitterEmitContext, node) -> None:
@@ -429,7 +430,7 @@ def _lower_ts_method_def(ctx: TreeSitterEmitContext, node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def lower_ts_abstract_method(ctx: TreeSitterEmitContext, node) -> None:
@@ -449,7 +450,7 @@ def lower_ts_abstract_method(ctx: TreeSitterEmitContext, node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def lower_ts_internal_module(ctx: TreeSitterEmitContext, node) -> None:
@@ -503,7 +504,9 @@ def lower_ts_param(ctx: TreeSitterEmitContext, child, param_index: int) -> None:
             )
             ctx.seed_register_type(sym_reg, type_hint)
             ctx.seed_param_type(pname, type_hint)
-            ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
+            ctx.emit_inst(
+                DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+            )
             ctx.seed_var_type(pname, type_hint)
             default_value_node = child.child_by_field_name("value")
             if default_value_node:
@@ -530,7 +533,9 @@ def lower_ts_param(ctx: TreeSitterEmitContext, child, param_index: int) -> None:
             )
             ctx.seed_register_type(sym_reg, type_hint)
             ctx.seed_param_type(pname, type_hint)
-            ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
+            ctx.emit_inst(
+                DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+            )
             ctx.seed_var_type(pname, type_hint)
         return
     # Fall back to JS param handling
@@ -647,7 +652,7 @@ def lower_ts_function_def(ctx: TreeSitterEmitContext, node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def lower_import_alias(ctx: TreeSitterEmitContext, node) -> None:
@@ -661,7 +666,7 @@ def lower_import_alias(ctx: TreeSitterEmitContext, node) -> None:
 
     alias_name = ctx.node_text(alias_node)
     target_reg = _lower_nested_identifier(ctx, target_node)
-    ctx.emit_inst(StoreVar(name=alias_name, value_reg=target_reg), node=node)
+    ctx.emit_inst(StoreVar(name=VarName(alias_name), value_reg=target_reg), node=node)
 
 
 def _lower_nested_identifier(ctx: TreeSitterEmitContext, node) -> Register:

@@ -14,6 +14,7 @@ from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JS
 from interpreter.operator_kind import resolve_binop
 from interpreter.register import Register
 from interpreter.types.type_expr import scalar
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -70,17 +71,17 @@ def _emit_optional_guard(
     ctx.emit_inst(Label_(label=null_label))
     none_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=none_reg, value=ctx.constants.none_literal))
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=none_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=none_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=access_label))
     access_reg = emit_access()
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=access_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=access_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
     result_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=result_reg, name=result_var))
+    ctx.emit_inst(LoadVar(result_reg=result_reg, name=VarName(result_var)))
     return result_reg
 
 
@@ -187,7 +188,7 @@ def lower_js_store_target(
 ) -> None:
     if target.type == JSN.IDENTIFIER:
         ctx.emit_inst(
-            StoreVar(name=ctx.node_text(target), value_reg=val_reg),
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )
     elif target.type == JSN.MEMBER_EXPRESSION:
@@ -215,7 +216,7 @@ def lower_js_store_target(
             )
     else:
         ctx.emit_inst(
-            StoreVar(name=ctx.node_text(target), value_reg=val_reg),
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
             node=parent_node,
         )
 
@@ -312,17 +313,17 @@ def lower_ternary(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=true_label))
     true_reg = ctx.lower_expr(true_node)
     result_var = f"__ternary_{ctx.label_counter}"
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=true_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=true_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=false_label))
     false_reg = ctx.lower_expr(false_node)
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=false_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=false_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
     result_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=result_reg, name=result_var))
+    ctx.emit_inst(LoadVar(result_reg=result_reg, name=VarName(result_var)))
     return result_reg
 
 
@@ -493,7 +494,7 @@ def lower_js_field_definition(ctx: TreeSitterEmitContext, node) -> Register:
     else:
         val_reg = ctx.fresh_reg()
         ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
-    ctx.emit_inst(DeclVar(name=field_name, value_reg=val_reg), node=node)
+    ctx.emit_inst(DeclVar(name=VarName(field_name), value_reg=val_reg), node=node)
     # Return val_reg so this can be used in both stmt and expr contexts
     return val_reg
 
@@ -529,7 +530,7 @@ def lower_js_param(ctx: TreeSitterEmitContext, child, param_index: int) -> None:
         ),
         node=child,
     )
-    ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
+    ctx.emit_inst(DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}"))
     if default_value_node is not None:
         from interpreter.frontends.common.default_params import (
             emit_default_param_guard,
@@ -558,7 +559,7 @@ def _lower_rest_param(ctx: TreeSitterEmitContext, child, start_index: int) -> No
     if rest_name is None:
         return
     args_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=args_reg, name="arguments"))
+    ctx.emit_inst(LoadVar(result_reg=args_reg, name=VarName("arguments")))
     idx_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=idx_reg, value=str(start_index)))
     rest_reg = ctx.fresh_reg()
@@ -570,4 +571,4 @@ def _lower_rest_param(ctx: TreeSitterEmitContext, child, start_index: int) -> No
         ),
         node=child,
     )
-    ctx.emit_inst(DeclVar(name=rest_name, value_reg=rest_reg))
+    ctx.emit_inst(DeclVar(name=VarName(rest_name), value_reg=rest_reg))

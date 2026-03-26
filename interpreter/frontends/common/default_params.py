@@ -9,6 +9,7 @@ from __future__ import annotations
 from interpreter import constants
 from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.operator_kind import resolve_binop
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -54,7 +55,7 @@ def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
             hint=f"{constants.PARAM_PREFIX}arguments_arr",
         ),
     )
-    ctx.emit_inst(DeclVar(name="arguments_arr", value_reg=arr_reg))
+    ctx.emit_inst(DeclVar(name=VarName("arguments_arr"), value_reg=arr_reg))
 
     # param: param_index
     idx_reg = ctx.fresh_reg()
@@ -64,7 +65,7 @@ def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
             hint=f"{constants.PARAM_PREFIX}param_index",
         ),
     )
-    ctx.emit_inst(DeclVar(name="param_index", value_reg=idx_reg))
+    ctx.emit_inst(DeclVar(name=VarName("param_index"), value_reg=idx_reg))
 
     # param: default_value
     def_reg = ctx.fresh_reg()
@@ -74,11 +75,11 @@ def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
             hint=f"{constants.PARAM_PREFIX}default_value",
         ),
     )
-    ctx.emit_inst(DeclVar(name="default_value", value_reg=def_reg))
+    ctx.emit_inst(DeclVar(name=VarName("default_value"), value_reg=def_reg))
 
     # len(arguments_arr)
     load_arr = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=load_arr, name="arguments_arr"))
+    ctx.emit_inst(LoadVar(result_reg=load_arr, name=VarName("arguments_arr")))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(
         CallFunction(
@@ -90,7 +91,7 @@ def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
 
     # len > param_index?
     load_idx = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=load_idx, name="param_index"))
+    ctx.emit_inst(LoadVar(result_reg=load_idx, name=VarName("param_index")))
     cmp_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -111,9 +112,9 @@ def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
     # True branch: return arguments_arr[param_index]
     ctx.emit_inst(Label_(label=provided_label))
     arr2 = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=arr2, name="arguments_arr"))
+    ctx.emit_inst(LoadVar(result_reg=arr2, name=VarName("arguments_arr")))
     idx2 = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=idx2, name="param_index"))
+    ctx.emit_inst(LoadVar(result_reg=idx2, name=VarName("param_index")))
     elem_reg = ctx.fresh_reg()
     ctx.emit_inst(
         LoadIndex(
@@ -127,14 +128,14 @@ def emit_resolve_default_func(ctx: TreeSitterEmitContext) -> None:
     # False branch: return default_value
     ctx.emit_inst(Label_(label=use_default_label))
     def2 = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=def2, name="default_value"))
+    ctx.emit_inst(LoadVar(result_reg=def2, name=VarName("default_value")))
     ctx.emit_inst(Return_(value_reg=def2))
 
     ctx.emit_inst(Label_(label=end_label))
 
     ref_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=ref_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=ref_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=ref_reg))
 
 
 def emit_default_param_guard(
@@ -162,7 +163,7 @@ def emit_default_param_guard(
 
     # Load arguments array and param index constant
     args_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=args_reg, name="arguments"))
+    ctx.emit_inst(LoadVar(result_reg=args_reg, name=VarName("arguments")))
 
     idx_reg = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=idx_reg, value=param_index))
@@ -178,4 +179,4 @@ def emit_default_param_guard(
     )
 
     # Reassign the parameter variable
-    ctx.emit_inst(StoreVar(name=param_name, value_reg=result_reg))
+    ctx.emit_inst(StoreVar(name=VarName(param_name), value_reg=result_reg))

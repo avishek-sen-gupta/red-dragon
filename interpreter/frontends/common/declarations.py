@@ -11,6 +11,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 from interpreter.frontends.common.node_types import CommonNodeType
 
 from interpreter import constants
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Branch,
     Const,
@@ -73,7 +74,7 @@ def lower_param(ctx: TreeSitterEmitContext, child) -> None:
     ctx.seed_param_type(pname, type_hint)
     ctx.emit_inst(
         DeclVar(
-            name=pname,
+            name=VarName(pname),
             value_reg=f"%{ctx.reg_counter - 1}",
         ),
         node=child,
@@ -128,7 +129,7 @@ def lower_function_def(
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg, node=node)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg), node=node)
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg), node=node)
 
 
 FieldInit = tuple  # (field_name: str, value_node)
@@ -152,7 +153,7 @@ def emit_field_initializers(
     for field_name, value_node in field_inits:
         val_reg = ctx.lower_expr(value_node)
         this_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=this_reg, name=this_var))
+        ctx.emit_inst(LoadVar(result_reg=this_reg, name=VarName(this_var)))
         ctx.emit_inst(
             StoreField(
                 obj_reg=str(this_reg),
@@ -200,7 +201,7 @@ def emit_synthetic_init(
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def lower_class_def(ctx: TreeSitterEmitContext, node, parents: list[str] = []) -> None:
@@ -219,7 +220,7 @@ def lower_class_def(ctx: TreeSitterEmitContext, node, parents: list[str] = []) -
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=class_name, value_reg=cls_reg), node=node)
+    ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg), node=node)
 
 
 def lower_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
@@ -232,7 +233,7 @@ def lower_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 val_reg = ctx.lower_expr(value_node)
                 ctx.emit_inst(
                     DeclVar(
-                        name=ctx.node_text(name_node),
+                        name=VarName(ctx.node_text(name_node)),
                         value_reg=str(val_reg),
                     ),
                     node=node,
@@ -248,7 +249,7 @@ def lower_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 )
                 ctx.emit_inst(
                     DeclVar(
-                        name=ctx.node_text(name_node),
+                        name=VarName(ctx.node_text(name_node)),
                         value_reg=str(val_reg),
                     ),
                     node=node,

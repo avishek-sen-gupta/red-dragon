@@ -6,6 +6,7 @@ from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import CodeLabel
 from interpreter.operator_kind import resolve_binop
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -105,7 +106,7 @@ def lower_foreach(ctx: TreeSitterEmitContext, node) -> None:
     var_name = ctx.declare_block_var(raw_name)
     elem_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
-    ctx.emit_inst(DeclVar(name=var_name, value_reg=elem_reg))
+    ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("foreach_update")
     ctx.push_loop(update_label, end_label)
@@ -123,7 +124,7 @@ def lower_foreach(ctx: TreeSitterEmitContext, node) -> None:
             result_reg=new_idx, operator=resolve_binop("+"), left=idx_reg, right=one_reg
         )
     )
-    ctx.emit_inst(StoreVar(name="__foreach_idx", value_reg=new_idx))
+    ctx.emit_inst(StoreVar(name=VarName("__foreach_idx"), value_reg=new_idx))
     ctx.emit_inst(Branch(label=loop_label))
 
     ctx.emit_inst(Label_(label=end_label))

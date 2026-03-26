@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import Opcode, CodeLabel
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     CallFunction,
     DeclVar,
@@ -101,7 +102,7 @@ def lower_for_expr(ctx: TreeSitterEmitContext, node) -> None:
         ctx.emit_inst(
             CallFunction(result_reg=next_reg, func_name="next", args=()), node=gen
         )
-        ctx.emit_inst(DeclVar(name=var_name, value_reg=next_reg), node=gen)
+        ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=next_reg), node=gen)
 
     # Lower guards as BRANCH_IF
     for guard in guards:

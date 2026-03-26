@@ -13,6 +13,7 @@ from interpreter.frontends.type_extraction import (
 )
 from interpreter.types.type_expr import ScalarType, metatype
 from interpreter.register import Register
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
     DeclVar,
@@ -45,12 +46,12 @@ def lower_js_var_declaration(ctx: TreeSitterEmitContext, node) -> None:
         elif value_node:
             var_name = ctx.declare_block_var(ctx.node_text(name_node))
             val_reg = ctx.lower_expr(value_node)
-            ctx.emit_inst(DeclVar(name=var_name, value_reg=val_reg), node=node)
+            ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
         else:
             var_name = ctx.declare_block_var(ctx.node_text(name_node))
             val_reg = ctx.fresh_reg()
             ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
-            ctx.emit_inst(DeclVar(name=var_name, value_reg=val_reg), node=node)
+            ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=val_reg), node=node)
 
 
 def _lower_object_destructure(
@@ -70,7 +71,7 @@ def _lower_object_destructure(
                 node=child,
             )
             ctx.emit_inst(
-                DeclVar(name=prop_name, value_reg=field_reg), node=parent_node
+                DeclVar(name=VarName(prop_name), value_reg=field_reg), node=parent_node
             )
         elif child.type == JSN.PAIR_PATTERN:
             key_node = child.child_by_field_name("key")
@@ -87,7 +88,8 @@ def _lower_object_destructure(
                     node=child,
                 )
                 ctx.emit_inst(
-                    DeclVar(name=local_name, value_reg=field_reg), node=parent_node
+                    DeclVar(name=VarName(local_name), value_reg=field_reg),
+                    node=parent_node,
                 )
         elif child.type == JSN.REST_PATTERN:
             rest_child = child
@@ -105,7 +107,9 @@ def _lower_object_destructure(
                 ),
                 node=rest_child,
             )
-            ctx.emit_inst(DeclVar(name=rest_name, value_reg=rest_reg), node=parent_node)
+            ctx.emit_inst(
+                DeclVar(name=VarName(rest_name), value_reg=rest_reg), node=parent_node
+            )
 
 
 def _const_reg(ctx: TreeSitterEmitContext, value: str) -> str:
@@ -143,7 +147,9 @@ def _lower_array_destructure(
                 ),
                 node=child,
             )
-            ctx.emit_inst(DeclVar(name=rest_name, value_reg=rest_reg), node=parent_node)
+            ctx.emit_inst(
+                DeclVar(name=VarName(rest_name), value_reg=rest_reg), node=parent_node
+            )
         else:
             idx_reg = ctx.fresh_reg()
             ctx.emit_inst(Const(result_reg=idx_reg, value=str(i)))
@@ -153,7 +159,7 @@ def _lower_array_destructure(
                 node=child,
             )
             ctx.emit_inst(
-                DeclVar(name=ctx.node_text(child), value_reg=elem_reg),
+                DeclVar(name=VarName(ctx.node_text(child)), value_reg=elem_reg),
                 node=parent_node,
             )
 
@@ -241,7 +247,7 @@ def lower_js_class_def(ctx: TreeSitterEmitContext, node) -> None:
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
     ctx.seed_var_type(class_name, metatype(ScalarType(class_name)))
-    ctx.emit_inst(DeclVar(name=class_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
 def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
@@ -251,7 +257,7 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     ctx.emit_inst(Symbolic(result_reg=param_reg, hint=f"{constants.PARAM_PREFIX}this"))
     ctx.seed_register_type(param_reg, class_type)
     ctx.seed_param_type(constants.PARAM_THIS, class_type)
-    ctx.emit_inst(DeclVar(name=constants.PARAM_THIS, value_reg=param_reg))
+    ctx.emit_inst(DeclVar(name=VarName(constants.PARAM_THIS), value_reg=param_reg))
     ctx.seed_var_type(constants.PARAM_THIS, class_type)
 
 
@@ -292,7 +298,7 @@ def _lower_method_def(ctx: TreeSitterEmitContext, node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def lower_js_function_def(ctx: TreeSitterEmitContext, node) -> None:
@@ -326,7 +332,7 @@ def lower_js_function_def(ctx: TreeSitterEmitContext, node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def lower_export_statement(ctx: TreeSitterEmitContext, node) -> None:
