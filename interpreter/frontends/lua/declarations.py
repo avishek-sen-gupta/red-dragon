@@ -9,6 +9,7 @@ from interpreter.ir import Opcode
 from interpreter import constants
 from interpreter.frontends.common.declarations import lower_params
 from interpreter.frontends.lua.node_types import LuaNodeType
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -36,7 +37,8 @@ def lower_lua_variable_declaration(ctx: TreeSitterEmitContext, node) -> None:
             val_reg = ctx.fresh_reg()
             ctx.emit_inst(Const(result_reg=val_reg, value=ctx.constants.none_literal))
             ctx.emit_inst(
-                DeclVar(name=ctx.node_text(child), value_reg=val_reg), node=node
+                DeclVar(name=VarName(ctx.node_text(child)), value_reg=val_reg),
+                node=node,
             )
 
 
@@ -79,7 +81,8 @@ def lower_lua_store_target(
     """Lua-specific store target supporting dot_index and bracket_index."""
     if target.type == LuaNodeType.IDENTIFIER:
         ctx.emit_inst(
-            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            node=parent_node,
         )
     elif target.type == LuaNodeType.DOT_INDEX_EXPRESSION:
         obj_node = target.child_by_field_name("table")
@@ -106,7 +109,8 @@ def lower_lua_store_target(
             )
     else:
         ctx.emit_inst(
-            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            node=parent_node,
         )
 
 
@@ -155,13 +159,13 @@ def lower_lua_function_declaration(ctx: TreeSitterEmitContext, node) -> None:
 
     if is_dotted and table_name:
         obj_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=obj_reg, name=table_name))
+        ctx.emit_inst(LoadVar(result_reg=obj_reg, name=VarName(table_name)))
         ctx.emit_inst(
             StoreField(obj_reg=obj_reg, field_name=func_name, value_reg=func_reg),
             node=node,
         )
     else:
-        ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+        ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def lower_lua_return(ctx: TreeSitterEmitContext, node) -> None:

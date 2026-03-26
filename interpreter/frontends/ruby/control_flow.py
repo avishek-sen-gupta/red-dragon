@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from interpreter.var_name import VarName
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.ir import NO_LABEL
@@ -128,7 +129,7 @@ def lower_ruby_for(ctx: TreeSitterEmitContext, node) -> None:
 
     init_idx = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
-    ctx.emit_inst(DeclVar(name="__for_idx", value_reg=init_idx))
+    ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
 
@@ -138,7 +139,7 @@ def lower_ruby_for(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit_inst(Label_(label=loop_label))
     idx_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
+    ctx.emit_inst(LoadVar(result_reg=idx_reg, name=VarName("__for_idx")))
     cond_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -153,7 +154,7 @@ def lower_ruby_for(ctx: TreeSitterEmitContext, node) -> None:
     ctx.emit_inst(Label_(label=body_label))
     elem_reg = ctx.fresh_reg()
     ctx.emit_inst(LoadIndex(result_reg=elem_reg, arr_reg=iter_reg, index_reg=idx_reg))
-    ctx.emit_inst(DeclVar(name=var_name, value_reg=elem_reg))
+    ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("for_update")
     ctx.push_loop(update_label, end_label)
@@ -170,7 +171,7 @@ def lower_ruby_for(ctx: TreeSitterEmitContext, node) -> None:
             result_reg=new_idx, operator=resolve_binop("+"), left=idx_reg, right=one_reg
         )
     )
-    ctx.emit_inst(StoreVar(name="__for_idx", value_reg=new_idx))
+    ctx.emit_inst(StoreVar(name=VarName("__for_idx"), value_reg=new_idx))
     ctx.emit_inst(Branch(label=loop_label))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -602,7 +603,7 @@ def _lower_try_catch_ruby(
         )
         exc_var = clause.get("variable")
         if exc_var:
-            ctx.emit_inst(DeclVar(name=exc_var, value_reg=exc_reg), node=node)
+            ctx.emit_inst(DeclVar(name=VarName(exc_var), value_reg=exc_reg), node=node)
         catch_body = clause.get("body")
         if catch_body:
             ctx.lower_block(catch_body)
@@ -758,18 +759,18 @@ def lower_ruby_rescue_modifier_expr(ctx: TreeSitterEmitContext, node) -> Registe
         )
     )
     body_reg = ctx.lower_expr(body_node)
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=body_reg), node=node)
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=body_reg), node=node)
     ctx.emit_inst(TryPop())
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=catch_label))
     fallback_reg = ctx.lower_expr(fallback_node)
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=fallback_reg), node=node)
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=fallback_reg), node=node)
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
     reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=reg, name=result_var))
+    ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(result_var)))
     return reg
 
 

@@ -10,6 +10,7 @@ import logging
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.operator_kind import resolve_binop
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Binop,
     Branch,
@@ -50,7 +51,7 @@ def lower_php_variable(ctx: TreeSitterEmitContext, node) -> Register:
     """Lower PHP variable ($x) as LOAD_VAR."""
     var_name = ctx.node_text(node)
     reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=reg, name=var_name), node=node)
+    ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(var_name)), node=node)
     return reg
 
 
@@ -252,7 +253,8 @@ def lower_php_store_target(
     """Store to a PHP target: variable_name, member_access, subscript, or fallback."""
     if target.type in (PHPNodeType.VARIABLE_NAME, PHPNodeType.NAME):
         ctx.emit_inst(
-            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            node=parent_node,
         )
     elif target.type == PHPNodeType.MEMBER_ACCESS_EXPRESSION:
         obj_node = target.child_by_field_name(ctx.constants.attr_object_field)
@@ -289,7 +291,8 @@ def lower_php_store_target(
             lower_php_store_target(ctx, var_node, elem_reg, parent_node)
     else:
         ctx.emit_inst(
-            StoreVar(name=ctx.node_text(target), value_reg=val_reg), node=parent_node
+            StoreVar(name=VarName(ctx.node_text(target)), value_reg=val_reg),
+            node=parent_node,
         )
 
 
@@ -320,17 +323,17 @@ def lower_php_ternary(ctx: TreeSitterEmitContext, node) -> Register:
     ctx.emit_inst(Label_(label=true_label))
     true_reg = ctx.lower_expr(true_node) if true_node else cond_reg
     result_var = f"__ternary_{ctx.label_counter}"
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=true_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=true_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=false_label))
     false_reg = ctx.lower_expr(false_node) if false_node else ctx.fresh_reg()
-    ctx.emit_inst(DeclVar(name=result_var, value_reg=false_reg))
+    ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=false_reg))
     ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
     result_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=result_reg, name=result_var))
+    ctx.emit_inst(LoadVar(result_reg=result_reg, name=VarName(result_var)))
     return result_reg
 
 
@@ -461,7 +464,7 @@ def _lower_php_anonymous_class(
     ctx.emit_inst(Label_(label=end_label))
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, [], result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=class_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
 def lower_php_array(ctx: TreeSitterEmitContext, node) -> Register:
@@ -593,7 +596,7 @@ def lower_php_match_expression(ctx: TreeSitterEmitContext, node) -> Register:
         ctx.emit_inst(Label_(label=arm_label))
         if return_expr:
             val_reg = ctx.lower_expr(return_expr)
-            ctx.emit_inst(DeclVar(name=result_var, value_reg=val_reg))
+            ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=val_reg))
         ctx.emit_inst(Branch(label=end_label))
         ctx.emit_inst(Label_(label=next_label))
 
@@ -601,12 +604,12 @@ def lower_php_match_expression(ctx: TreeSitterEmitContext, node) -> Register:
         default_body = default_arm.child_by_field_name("return_expression")
         if default_body:
             val_reg = ctx.lower_expr(default_body)
-            ctx.emit_inst(DeclVar(name=result_var, value_reg=val_reg))
+            ctx.emit_inst(DeclVar(name=VarName(result_var), value_reg=val_reg))
         ctx.emit_inst(Branch(label=end_label))
 
     ctx.emit_inst(Label_(label=end_label))
     result_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=result_reg, name=result_var))
+    ctx.emit_inst(LoadVar(result_reg=result_reg, name=VarName(result_var)))
     return result_reg
 
 
@@ -657,7 +660,7 @@ def lower_php_scoped_call(ctx: TreeSitterEmitContext, node) -> Register:
 
     class_reg = ctx.fresh_reg()
     scope_name = ctx.node_text(scope_node) if scope_node else "Unknown"
-    ctx.emit_inst(LoadVar(result_reg=class_reg, name=scope_name), node=node)
+    ctx.emit_inst(LoadVar(result_reg=class_reg, name=VarName(scope_name)), node=node)
 
     reg = ctx.fresh_reg()
     ctx.emit_inst(

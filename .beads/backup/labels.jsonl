@@ -117,6 +117,7 @@
 {"issue_id":"red-dragon-8ya1","label":"feature"}
 {"issue_id":"red-dragon-8ya1","label":"mcp"}
 {"issue_id":"red-dragon-8ya1","label":"p1"}
+{"issue_id":"red-dragon-90z9","label":"epic:w667"}
 {"issue_id":"red-dragon-92ho","label":"architecture"}
 {"issue_id":"red-dragon-92ho","label":"refactor"}
 {"issue_id":"red-dragon-92ho","label":"vm"}
@@ -143,6 +144,7 @@
 {"issue_id":"red-dragon-b3x","label":"pascal"}
 {"issue_id":"red-dragon-b8k","label":"frontend"}
 {"issue_id":"red-dragon-b8k","label":"pascal"}
+{"issue_id":"red-dragon-b9cd","label":"epic:w667"}
 {"issue_id":"red-dragon-bfv","label":"code-quality"}
 {"issue_id":"red-dragon-bfv","label":"refactoring"}
 {"issue_id":"red-dragon-bijo","label":"kotlin"}
@@ -687,6 +689,7 @@
 {"issue_id":"red-dragon-jasm","label":"pattern-matching"}
 {"issue_id":"red-dragon-jasm","label":"rust"}
 {"issue_id":"red-dragon-jck3","label":"audit-asserts"}
+{"issue_id":"red-dragon-jdx0","label":"epic:w667"}
 {"issue_id":"red-dragon-je38","label":"audit-asserts"}
 {"issue_id":"red-dragon-jj3","label":"rosetta"}
 {"issue_id":"red-dragon-jj3","label":"testing"}
@@ -703,6 +706,7 @@
 {"issue_id":"red-dragon-jrj","label":"frontend"}
 {"issue_id":"red-dragon-k85m","label":"audit-asserts"}
 {"issue_id":"red-dragon-kmqo","label":"audit-asserts"}
+{"issue_id":"red-dragon-kozu","label":"epic:w667"}
 {"issue_id":"red-dragon-kw8","label":"builtin"}
 {"issue_id":"red-dragon-kw8","label":"vm"}
 {"issue_id":"red-dragon-kysi","label":"p2"}
@@ -804,6 +808,7 @@
 {"issue_id":"red-dragon-s5g1","label":"p1"}
 {"issue_id":"red-dragon-sl0o","label":"audit-asserts"}
 {"issue_id":"red-dragon-slgt","label":"audit-asserts"}
+{"issue_id":"red-dragon-ss6g","label":"epic:w667"}
 {"issue_id":"red-dragon-swlt","label":"p2"}
 {"issue_id":"red-dragon-swlt","label":"pattern-matching"}
 {"issue_id":"red-dragon-swlt","label":"ruby"}

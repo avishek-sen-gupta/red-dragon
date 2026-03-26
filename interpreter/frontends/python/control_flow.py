@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from interpreter.var_name import VarName
 from interpreter.frontends.context import TreeSitterEmitContext
 
 from interpreter.frontends.common.exceptions import (
@@ -123,7 +124,7 @@ def lower_for(ctx: TreeSitterEmitContext, node) -> None:
     iter_reg = ctx.lower_expr(right)
     init_idx = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
-    ctx.emit_inst(DeclVar(name="__for_idx", value_reg=init_idx))
+    ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
 
@@ -133,7 +134,7 @@ def lower_for(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit_inst(Label_(label=loop_label))
     idx_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
+    ctx.emit_inst(LoadVar(result_reg=idx_reg, name=VarName("__for_idx")))
     cond_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -267,7 +268,7 @@ def lower_with(ctx: TreeSitterEmitContext, node) -> None:
             node=item,
         )
         if var_name:
-            ctx.emit_inst(DeclVar(name=var_name, value_reg=enter_reg))
+            ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=enter_reg))
         enter_info.append((ctx_reg, var_name))
 
     ctx.lower_block(body_node)
@@ -317,14 +318,14 @@ def lower_decorated_def(ctx: TreeSitterEmitContext, node) -> None:
             continue
 
         func_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=func_reg, name=func_name))
+        ctx.emit_inst(LoadVar(result_reg=func_reg, name=VarName(func_name)))
         dec_reg = ctx.lower_expr(dec_expr)
         result_reg = ctx.fresh_reg()
         ctx.emit_inst(
             CallFunction(result_reg=result_reg, func_name=dec_reg, args=(func_reg,)),
             node=dec,
         )
-        ctx.emit_inst(StoreVar(name=func_name, value_reg=result_reg))
+        ctx.emit_inst(StoreVar(name=VarName(func_name), value_reg=result_reg))
 
 
 # ── assert statement ──────────────────────────────────────────
@@ -389,7 +390,7 @@ def lower_import(ctx: TreeSitterEmitContext, node) -> None:
     )
     # Store using the top-level module name (e.g., 'os' for 'os.path')
     store_name = module_name.split(".")[0]
-    ctx.emit_inst(DeclVar(name=store_name, value_reg=import_reg), node=node)
+    ctx.emit_inst(DeclVar(name=VarName(store_name), value_reg=import_reg), node=node)
 
 
 # ── import from statement ─────────────────────────────────────
@@ -418,7 +419,9 @@ def lower_import_from(ctx: TreeSitterEmitContext, node) -> None:
             ),
             node=node,
         )
-        ctx.emit_inst(DeclVar(name=imported_name, value_reg=import_reg), node=node)
+        ctx.emit_inst(
+            DeclVar(name=VarName(imported_name), value_reg=import_reg), node=node
+        )
 
 
 # ── match statement ───────────────────────────────────────────

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from interpreter.frontends.context import TreeSitterEmitContext
 
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Branch,
     Const,
@@ -51,7 +52,9 @@ def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 )
                 ctx.seed_register_type(reg, type_hint)
                 ctx.seed_param_type(pname, type_hint)
-                ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
+                ctx.emit_inst(
+                    DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+                )
                 ctx.seed_var_type(pname, type_hint)
                 default_value_node = child.child_by_field_name("default_value")
                 if default_value_node:
@@ -75,7 +78,9 @@ def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 )
                 ctx.seed_register_type(reg, type_hint)
                 ctx.seed_param_type(pname, type_hint)
-                ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
+                ctx.emit_inst(
+                    DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+                )
                 ctx.seed_var_type(pname, type_hint)
         elif child.type == PHPNodeType.VARIABLE_NAME:
             pname = ctx.node_text(child)
@@ -85,7 +90,9 @@ def lower_php_params(ctx: TreeSitterEmitContext, params_node) -> None:
                 ),
                 node=child,
             )
-            ctx.emit_inst(DeclVar(name=pname, value_reg=f"%{ctx.reg_counter - 1}"))
+            ctx.emit_inst(
+                DeclVar(name=VarName(pname), value_reg=f"%{ctx.reg_counter - 1}")
+            )
         param_index += 1
 
 
@@ -96,7 +103,7 @@ def _emit_this_param(ctx: TreeSitterEmitContext) -> None:
     ctx.emit_inst(Symbolic(result_reg=param_reg, hint=f"{constants.PARAM_PREFIX}$this"))
     ctx.seed_register_type(param_reg, class_type)
     ctx.seed_param_type(constants.PARAM_PHP_THIS, class_type)
-    ctx.emit_inst(DeclVar(name=constants.PARAM_PHP_THIS, value_reg=param_reg))
+    ctx.emit_inst(DeclVar(name=VarName(constants.PARAM_PHP_THIS), value_reg=param_reg))
     ctx.seed_var_type(constants.PARAM_PHP_THIS, class_type)
 
 
@@ -135,7 +142,7 @@ def lower_php_func_def(ctx: TreeSitterEmitContext, node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def lower_php_method_decl(ctx: TreeSitterEmitContext, node) -> None:
@@ -171,7 +178,7 @@ def lower_php_method_decl(ctx: TreeSitterEmitContext, node) -> None:
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def _lower_php_class_body(ctx: TreeSitterEmitContext, node) -> None:
@@ -237,7 +244,7 @@ def _emit_php_synthetic_constructor(
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def lower_php_class(ctx: TreeSitterEmitContext, node) -> None:
@@ -303,7 +310,7 @@ def lower_php_class(ctx: TreeSitterEmitContext, node) -> None:
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(class_name, class_label, parents, result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=class_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(class_name), value_reg=cls_reg))
 
 
 def lower_php_interface(ctx: TreeSitterEmitContext, node) -> None:
@@ -325,7 +332,7 @@ def lower_php_interface(ctx: TreeSitterEmitContext, node) -> None:
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(iface_name, class_label, [], result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=iface_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(iface_name), value_reg=cls_reg))
 
 
 def lower_php_trait(ctx: TreeSitterEmitContext, node) -> None:
@@ -347,7 +354,7 @@ def lower_php_trait(ctx: TreeSitterEmitContext, node) -> None:
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(trait_name, class_label, [], result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=trait_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(trait_name), value_reg=cls_reg))
 
 
 def lower_php_function_static(ctx: TreeSitterEmitContext, node) -> None:
@@ -359,7 +366,7 @@ def lower_php_function_static(ctx: TreeSitterEmitContext, node) -> None:
             if name_node and value_node:
                 val_reg = ctx.lower_expr(value_node)
                 ctx.emit_inst(
-                    DeclVar(name=ctx.node_text(name_node), value_reg=val_reg),
+                    DeclVar(name=VarName(ctx.node_text(name_node)), value_reg=val_reg),
                     node=child,
                 )
             elif name_node:
@@ -368,7 +375,7 @@ def lower_php_function_static(ctx: TreeSitterEmitContext, node) -> None:
                     Const(result_reg=val_reg, value=ctx.constants.none_literal)
                 )
                 ctx.emit_inst(
-                    DeclVar(name=ctx.node_text(name_node), value_reg=val_reg),
+                    DeclVar(name=VarName(ctx.node_text(name_node)), value_reg=val_reg),
                     node=child,
                 )
 
@@ -392,7 +399,7 @@ def lower_php_enum(ctx: TreeSitterEmitContext, node) -> None:
 
     cls_reg = ctx.fresh_reg()
     ctx.emit_class_ref(enum_name, class_label, [], result_reg=cls_reg)
-    ctx.emit_inst(DeclVar(name=enum_name, value_reg=cls_reg))
+    ctx.emit_inst(DeclVar(name=VarName(enum_name), value_reg=cls_reg))
 
 
 def _lower_php_constructor_with_field_inits(
@@ -428,7 +435,7 @@ def _lower_php_constructor_with_field_inits(
 
     func_reg = ctx.fresh_reg()
     ctx.emit_func_ref(func_name, func_label, result_reg=func_reg)
-    ctx.emit_inst(DeclVar(name=func_name, value_reg=func_reg))
+    ctx.emit_inst(DeclVar(name=VarName(func_name), value_reg=func_reg))
 
 
 def _collect_php_field_inits(ctx: TreeSitterEmitContext, node) -> list[FieldInit]:
@@ -482,7 +489,7 @@ def lower_php_property_declaration(ctx: TreeSitterEmitContext, node) -> None:
             if name_node:
                 this_reg = ctx.fresh_reg()
                 ctx.emit_inst(
-                    LoadVar(result_reg=this_reg, name=constants.PARAM_PHP_THIS)
+                    LoadVar(result_reg=this_reg, name=VarName(constants.PARAM_PHP_THIS))
                 )
                 if value_node:
                     val_reg = ctx.lower_expr(value_node)
@@ -526,7 +533,7 @@ def lower_php_enum_case(ctx: TreeSitterEmitContext, node) -> None:
     if name_node:
         case_name = ctx.node_text(name_node)
         self_reg = ctx.fresh_reg()
-        ctx.emit_inst(LoadVar(result_reg=self_reg, name=constants.PARAM_SELF))
+        ctx.emit_inst(LoadVar(result_reg=self_reg, name=VarName(constants.PARAM_SELF)))
         if value_node:
             val_reg = ctx.lower_expr(value_node)
         else:
@@ -547,7 +554,7 @@ def lower_php_const_declaration(ctx: TreeSitterEmitContext, node) -> None:
                 name_node, value_node = named[0], named[1]
                 val_reg = ctx.lower_expr(value_node)
                 ctx.emit_inst(
-                    DeclVar(name=ctx.node_text(name_node), value_reg=val_reg),
+                    DeclVar(name=VarName(ctx.node_text(name_node)), value_reg=val_reg),
                     node=child,
                 )
 
@@ -558,8 +565,8 @@ def lower_php_global_declaration(ctx: TreeSitterEmitContext, node) -> None:
         if child.type == PHPNodeType.VARIABLE_NAME:
             var_name = ctx.node_text(child)
             reg = ctx.fresh_reg()
-            ctx.emit_inst(LoadVar(result_reg=reg, name=var_name), node=child)
-            ctx.emit_inst(DeclVar(name=var_name, value_reg=reg), node=node)
+            ctx.emit_inst(LoadVar(result_reg=reg, name=VarName(var_name)), node=child)
+            ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=reg), node=node)
 
 
 # ---------------------------------------------------------------------------

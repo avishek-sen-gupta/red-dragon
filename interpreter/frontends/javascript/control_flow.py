@@ -10,6 +10,7 @@ from interpreter.frontends.common.exceptions import (
 )
 from interpreter.frontends.javascript.node_types import JavaScriptNodeType as JSN
 from interpreter.operator_kind import resolve_binop
+from interpreter.var_name import VarName
 from interpreter.instructions import (
     Const,
     LoadVar,
@@ -99,7 +100,7 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
 
     init_idx = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
-    ctx.emit_inst(DeclVar(name="__for_idx", value_reg=init_idx))
+    ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(keys_reg,)))
 
@@ -109,7 +110,7 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit_inst(Label_(label=loop_label))
     idx_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
+    ctx.emit_inst(LoadVar(result_reg=idx_reg, name=VarName("__for_idx")))
     cond_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -131,7 +132,7 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
     else:
         var_name = ctx.declare_block_var(raw_name)
         if var_name:
-            ctx.emit_inst(DeclVar(name=var_name, value_reg=elem_reg))
+            ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("for_in_update")
     ctx.push_loop(update_label, end_label)
@@ -149,7 +150,7 @@ def lower_for_in(ctx: TreeSitterEmitContext, node) -> None:
             result_reg=new_idx, operator=resolve_binop("+"), left=idx_reg, right=one_reg
         )
     )
-    ctx.emit_inst(StoreVar(name="__for_idx", value_reg=new_idx))
+    ctx.emit_inst(StoreVar(name=VarName("__for_idx"), value_reg=new_idx))
     ctx.emit_inst(Branch(label=loop_label))
 
     ctx.emit_inst(Label_(label=end_label))
@@ -176,7 +177,7 @@ def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
 
     init_idx = ctx.fresh_reg()
     ctx.emit_inst(Const(result_reg=init_idx, value="0"))
-    ctx.emit_inst(DeclVar(name="__for_idx", value_reg=init_idx))
+    ctx.emit_inst(DeclVar(name=VarName("__for_idx"), value_reg=init_idx))
     len_reg = ctx.fresh_reg()
     ctx.emit_inst(CallFunction(result_reg=len_reg, func_name="len", args=(iter_reg,)))
 
@@ -186,7 +187,7 @@ def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
 
     ctx.emit_inst(Label_(label=loop_label))
     idx_reg = ctx.fresh_reg()
-    ctx.emit_inst(LoadVar(result_reg=idx_reg, name="__for_idx"))
+    ctx.emit_inst(LoadVar(result_reg=idx_reg, name=VarName("__for_idx")))
     cond_reg = ctx.fresh_reg()
     ctx.emit_inst(
         Binop(
@@ -208,7 +209,7 @@ def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
     else:
         var_name = ctx.declare_block_var(raw_name)
         if var_name:
-            ctx.emit_inst(DeclVar(name=var_name, value_reg=elem_reg))
+            ctx.emit_inst(DeclVar(name=VarName(var_name), value_reg=elem_reg))
 
     update_label = ctx.fresh_label("for_of_update")
     ctx.push_loop(update_label, end_label)
@@ -226,7 +227,7 @@ def lower_for_of(ctx: TreeSitterEmitContext, node) -> None:
             result_reg=new_idx, operator=resolve_binop("+"), left=idx_reg, right=one_reg
         )
     )
-    ctx.emit_inst(StoreVar(name="__for_idx", value_reg=new_idx))
+    ctx.emit_inst(StoreVar(name=VarName("__for_idx"), value_reg=new_idx))
     ctx.emit_inst(Branch(label=loop_label))
 
     ctx.emit_inst(Label_(label=end_label))
