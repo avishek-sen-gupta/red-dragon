@@ -36,15 +36,11 @@ class VarName:
     def __eq__(self, other: object) -> bool:
         if isinstance(other, VarName):
             return self.value == other.value
-        if isinstance(other, str):  # bridge — removed in 90z9
-            return self.value == other
         return NotImplemented
 
     def __lt__(self, other: object) -> bool:
         if isinstance(other, VarName):
             return self.value < other.value
-        if isinstance(other, str):
-            return self.value < other
         return NotImplemented
 
     def __contains__(self, item: str) -> bool:

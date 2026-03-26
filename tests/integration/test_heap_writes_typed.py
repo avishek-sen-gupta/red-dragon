@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_python(source: str, max_steps: int = 200):
@@ -26,7 +27,7 @@ p = Point(3, 7)
 result = p.x + p.y
 """)
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert locals_["result"] == 10
+        assert locals_[VarName("result")] == 10
 
     def test_object_field_string(self):
         """Assign string to object field, read it back."""
@@ -38,7 +39,7 @@ d = Dog("Rex")
 result = d.name
 """)
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert locals_["result"] == "Rex"
+        assert locals_[VarName("result")] == "Rex"
 
     def test_object_field_reassignment(self):
         """Reassign a field and verify the new value is stored."""
@@ -51,7 +52,7 @@ b.val = 42
 result = b.val
 """)
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert locals_["result"] == 42
+        assert locals_[VarName("result")] == 42
 
 
 class TestStoreIndexLoadIndexRoundtrip:
@@ -65,7 +66,7 @@ arr[1] = 99
 result = arr[1]
 """)
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert locals_["result"] == 99
+        assert locals_[VarName("result")] == 99
 
     def test_array_index_string(self):
         """Write string to array index, read it back."""
@@ -75,4 +76,4 @@ arr[0] = "z"
 result = arr[0]
 """)
         locals_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert locals_["result"] == "z"
+        assert locals_[VarName("result")] == "z"

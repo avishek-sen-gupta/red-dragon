@@ -5,6 +5,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_go(source: str, max_steps: int = 500) -> dict:
@@ -22,7 +23,7 @@ func main() {
 }
 """
         vars_ = _run_go(source)
-        assert vars_["x"] == "a"
+        assert vars_[VarName("x")] == "a"
 
     def test_rune_literal_in_comparison(self):
         """Rune literal should be usable in comparisons."""
@@ -35,7 +36,7 @@ func main() {
 }
 """
         vars_ = _run_go(source)
-        assert vars_["same"] is True
+        assert vars_[VarName("same")] is True
 
     def test_rune_literal_different_chars(self):
         """Different rune literals should compare as not equal."""
@@ -48,7 +49,7 @@ func main() {
 }
 """
         vars_ = _run_go(source)
-        assert vars_["same"] is False
+        assert vars_[VarName("same")] is False
 
 
 class TestGoBlankIdentifierExecution:
@@ -62,7 +63,7 @@ func main() {
 }
 """
         vars_ = _run_go(source)
-        assert vars_["x"] == 10
+        assert vars_[VarName("x")] == 10
 
     def test_blank_identifier_in_assignment(self):
         """Blank identifier should not prevent subsequent code from executing."""
@@ -75,7 +76,7 @@ func main() {
 }
 """
         vars_ = _run_go(source)
-        assert vars_["z"] == 25
+        assert vars_[VarName("z")] == 25
 
 
 class TestGoFallthroughExecution:
@@ -98,7 +99,7 @@ func main() {
         vars_ = _run_go(source)
         # Our VM processes switch cases independently; fallthrough is a no-op.
         # case 1 matched, set y=10, fallthrough is no-op, case 2 body skipped.
-        assert vars_["y"] == 10
+        assert vars_[VarName("y")] == 10
 
     def test_switch_without_fallthrough_still_works(self):
         """Switch without fallthrough should still match correctly."""
@@ -116,7 +117,7 @@ func main() {
 }
 """
         vars_ = _run_go(source)
-        assert vars_["y"] == 20
+        assert vars_[VarName("y")] == 20
 
 
 class TestGoVariadicArgumentExecution:
@@ -131,7 +132,7 @@ func main() {
     answer := identity(1, 2, 3)
     _ = answer
 }""")
-        assert locals_["answer"] == 42
+        assert locals_[VarName("answer")] == 42
 
 
 class TestGoIotaExecution:
@@ -150,9 +151,9 @@ func main() {
     b := B
     c := C
 }""")
-        assert locals_["a"] == 0
-        assert locals_["b"] == 1
-        assert locals_["c"] == 2
+        assert locals_[VarName("a")] == 0
+        assert locals_[VarName("b")] == 1
+        assert locals_[VarName("c")] == 2
 
     def test_iota_with_expression(self):
         locals_ = _run_go("""
@@ -167,9 +168,9 @@ func main() {
     y := Y
     z := Z
 }""")
-        assert locals_["x"] == 0
-        assert locals_["y"] == 10
-        assert locals_["z"] == 20
+        assert locals_[VarName("x")] == 0
+        assert locals_[VarName("y")] == 10
+        assert locals_[VarName("z")] == 20
 
     def test_iota_resets_per_block(self):
         locals_ = _run_go("""
@@ -188,10 +189,10 @@ func main() {
     x := X
     y := Y
 }""")
-        assert locals_["a"] == 0
-        assert locals_["b"] == 1
-        assert locals_["x"] == 0
-        assert locals_["y"] == 1
+        assert locals_[VarName("a")] == 0
+        assert locals_[VarName("b")] == 1
+        assert locals_[VarName("x")] == 0
+        assert locals_[VarName("y")] == 1
 
 
 class TestGoMakeExecution:
@@ -204,4 +205,4 @@ func main() {
     m["x"] = 42
     answer := m["x"]
 }""")
-        assert vars_["answer"] == 42
+        assert vars_[VarName("answer")] == 42

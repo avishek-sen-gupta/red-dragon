@@ -8,6 +8,7 @@ from interpreter.constants import Language
 from interpreter.refs.func_ref import BoundFuncRef
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_kotlin(source: str, max_steps: int = 500) -> dict:
@@ -19,7 +20,7 @@ class TestKotlinUnsignedLiteralExecution:
     def test_unsigned_literal_assigned(self):
         """val x = 42u should execute and store 42."""
         vars_ = _run_kotlin("val x = 42u")
-        assert vars_["x"] == 42
+        assert vars_[VarName("x")] == 42
 
     def test_unsigned_literal_in_arithmetic(self):
         """Unsigned literal should be usable in arithmetic."""
@@ -27,12 +28,12 @@ class TestKotlinUnsignedLiteralExecution:
 val x = 10u
 val z = x + 1
 """)
-        assert vars_["z"] == 11
+        assert vars_[VarName("z")] == 11
 
     def test_unsigned_long_literal(self):
         """val x = 42UL should store 42."""
         vars_ = _run_kotlin("val x = 42UL")
-        assert vars_["x"] == 42
+        assert vars_[VarName("x")] == 42
 
 
 class TestKotlinCallableReferenceExecution:
@@ -42,8 +43,8 @@ class TestKotlinCallableReferenceExecution:
 fun double(x: Int): Int { return x * 2 }
 val f = ::double
 """)
-        assert isinstance(vars_["f"], BoundFuncRef)
-        assert vars_["f"].func_ref.name == "double"
+        assert isinstance(vars_[VarName("f")], BoundFuncRef)
+        assert vars_[VarName("f")].func_ref.name == "double"
 
     def test_callable_reference_does_not_block_execution(self):
         """Callable reference should not prevent subsequent code from executing."""
@@ -52,7 +53,7 @@ fun double(x: Int): Int { return x * 2 }
 val f = ::double
 val y = 42
 """)
-        assert vars_["y"] == 42
+        assert vars_[VarName("y")] == 42
 
 
 class TestKotlinSpreadExpressionExecution:
@@ -63,7 +64,7 @@ fun sum(a: Int, b: Int, c: Int): Int { return a + b + c }
 val arr = intArrayOf(1, 2, 3)
 val answer = sum(*arr)
 """)
-        assert vars_["answer"] == 6
+        assert vars_[VarName("answer")] == 6
 
 
 class TestKotlinSetterExecution:
@@ -75,7 +76,7 @@ class Foo {
     set(value) { field = value }
 }
 val y = 42""")
-        assert locals_["y"] == 42
+        assert locals_[VarName("y")] == 42
 
 
 class TestKotlinPrimaryConstructorExecution:
@@ -89,7 +90,7 @@ class Box(val x: Int)
 val b = Box(42)
 val answer = b.x
 """)
-        assert vars_["answer"] == 42
+        assert vars_[VarName("answer")] == 42
 
     def test_linked_list_field_traversal(self):
         """Linked list built with primary constructor should allow
@@ -112,7 +113,7 @@ val answer = sumList(n1, 3)
 """,
             max_steps=1000,
         )
-        assert vars_["answer"] == 6
+        assert vars_[VarName("answer")] == 6
 
 
 class TestKotlinSecondaryConstructorExecution:
@@ -127,7 +128,7 @@ class Rect(val w: Int, val h: Int) {
 val r = Rect(5)
 val answer = r.w
 """)
-        assert vars_["answer"] == 5
+        assert vars_[VarName("answer")] == 5
 
     def test_secondary_constructor_with_body(self):
         """Secondary constructor body should execute after delegation."""
@@ -143,7 +144,7 @@ val answer = p.b
 """,
             max_steps=1000,
         )
-        assert vars_["answer"] == 4
+        assert vars_[VarName("answer")] == 4
 
     def test_zero_arg_secondary_constructor(self):
         """constructor() : this(default) should work with no args."""
@@ -154,7 +155,7 @@ class Box(val x: Int) {
 val b = Box()
 val answer = b.x
 """)
-        assert vars_["answer"] == 99
+        assert vars_[VarName("answer")] == 99
 
 
 class TestKotlinImplicitThisFieldExecution:
@@ -171,7 +172,7 @@ class Box(val value: Int) {
 val b = Box(42)
 val answer = b.get()
 """)
-        assert vars_["answer"] == 42
+        assert vars_[VarName("answer")] == 42
 
     def test_secondary_constructor_body_reads_field(self):
         """Field set by delegation readable by bare name in constructor body."""
@@ -188,7 +189,7 @@ val answer = c.doubled
 """,
             max_steps=1000,
         )
-        assert vars_["answer"] == 6
+        assert vars_[VarName("answer")] == 6
 
 
 class TestKotlinPropertyAccessorExecution:
@@ -209,7 +210,7 @@ val foo = Foo()
 val result = foo.getX()""",
             max_steps=1000,
         )
-        assert vars_["result"] == 11
+        assert vars_[VarName("result")] == 11
 
     def test_setter_transforms_write(self):
         """Custom setter should transform the written value."""
@@ -230,7 +231,7 @@ foo.setX(5)
 val result = foo.getX()""",
             max_steps=1500,
         )
-        assert vars_["result"] == 10
+        assert vars_[VarName("result")] == 10
 
     def test_getter_and_setter_together(self):
         """Both getter and setter should apply their transformations."""
@@ -253,7 +254,7 @@ val result = foo.getX()""",
             max_steps=1500,
         )
         # setter stores 5 * 2 = 10, getter returns 10 + 1 = 11
-        assert vars_["result"] == 11
+        assert vars_[VarName("result")] == 11
 
     def test_property_without_accessors_regression(self):
         """Property without custom accessors should still work as plain field."""
@@ -269,4 +270,4 @@ val foo = Foo()
 val result = foo.getX()""",
             max_steps=1000,
         )
-        assert vars_["result"] == 42
+        assert vars_[VarName("result")] == 42

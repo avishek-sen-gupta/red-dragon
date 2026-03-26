@@ -7,6 +7,7 @@ import pytest
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_java(source: str, max_steps: int = 500):
@@ -24,7 +25,7 @@ class M {
 }
 """
         _, locals_ = _run_java(source)
-        assert locals_["x"] == 1024.0
+        assert locals_[VarName("x")] == 1024.0
 
     @pytest.mark.xfail(reason="red-dragon-ltv: hex float stored as string, not parsed")
     def test_hex_float_in_arithmetic(self):
@@ -36,8 +37,8 @@ class M {
 }
 """
         _, locals_ = _run_java(source)
-        assert locals_["x"] == 1024.0
-        assert locals_["y"] == 1025.0
+        assert locals_[VarName("x")] == 1024.0
+        assert locals_[VarName("y")] == 1025.0
 
 
 class TestJavaImplicitThisFieldExecution:
@@ -59,7 +60,7 @@ Counter c = new Counter(42);
 int answer = c.getCount();
 """
         _, locals_ = _run_java(source, max_steps=1000)
-        assert locals_["answer"] == 42
+        assert locals_[VarName("answer")] == 42
 
 
 class TestJavaConstructorChainingExecution:
@@ -81,7 +82,7 @@ Box b = new Box(3, 4);
 int answer = b.value;
 """
         _, locals_ = _run_java(source, max_steps=1000)
-        assert locals_["answer"] == 12
+        assert locals_[VarName("answer")] == 12
 
     def test_chaining_with_field_initializer(self):
         """Field initializer (int extra = 10) should exist after constructor chaining."""
@@ -103,7 +104,7 @@ Calc c = new Calc(3, 4);
 int answer = c.total();
 """
         _, locals_ = _run_java(source, max_steps=1000)
-        assert locals_["answer"] == 17
+        assert locals_[VarName("answer")] == 17
 
     def test_chaining_body_reads_field_by_bare_name(self):
         """After this(...), constructor body can read fields set by delegation."""
@@ -124,7 +125,7 @@ Counter obj = new Counter(5, 3);
 int answer = obj.doubled;
 """
         _, locals_ = _run_java(source, max_steps=1000)
-        assert locals_["answer"] == 15
+        assert locals_[VarName("answer")] == 15
 
 
 class TestJavaCompactRecordConstructorExecution:
@@ -138,7 +139,7 @@ Point p = new Point(3, 5);
 int answer = p.x;
 """
         _, locals_ = _run_java(source, max_steps=500)
-        assert locals_["answer"] == 3
+        assert locals_[VarName("answer")] == 3
 
     def test_record_both_fields(self):
         """Both record component fields should be accessible."""
@@ -149,8 +150,8 @@ int a = p.x;
 int b = p.y;
 """
         _, locals_ = _run_java(source, max_steps=500)
-        assert locals_["a"] == 3
-        assert locals_["b"] == 5
+        assert locals_[VarName("a")] == 3
+        assert locals_[VarName("b")] == 5
 
     def test_compact_constructor_with_validation(self):
         """Compact constructor body runs before field assignment."""
@@ -165,8 +166,8 @@ int a = r.lo;
 int b = r.hi;
 """
         _, locals_ = _run_java(source, max_steps=500)
-        assert locals_["a"] == 1
-        assert locals_["b"] == 10
+        assert locals_[VarName("a")] == 1
+        assert locals_[VarName("b")] == 10
 
     def test_record_with_method(self):
         """Record with an additional method should work."""
@@ -180,4 +181,4 @@ Point p = new Point(3, 5);
 int answer = p.sum();
 """
         _, locals_ = _run_java(source, max_steps=1000)
-        assert locals_["answer"] == 8
+        assert locals_[VarName("answer")] == 8

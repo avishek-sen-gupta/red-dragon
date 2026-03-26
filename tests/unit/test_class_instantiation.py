@@ -7,6 +7,7 @@ import pytest
 from interpreter.ir import Opcode
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap, unwrap_locals
+from interpreter.var_name import VarName
 from interpreter.vm.vm_types import Pointer
 
 
@@ -29,9 +30,9 @@ answer = 42
 """
         vm = run(source, language="python", max_steps=300)
         vars_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert vars_["answer"] == 42
-        assert "d" in vars_
-        obj_ptr = vars_["d"]
+        assert vars_[VarName("answer")] == 42
+        assert VarName("d") in vars_
+        obj_ptr = vars_[VarName("d")]
         assert isinstance(obj_ptr, Pointer)
         assert obj_ptr.base in vm.heap
         assert vm.heap[obj_ptr.base].fields.get("name").value == "Rex"
@@ -54,7 +55,7 @@ c.inc()
 answer = c.get()
 """
         vars_ = _run_program(source)
-        assert vars_["answer"] == 3
+        assert vars_[VarName("answer")] == 3
 
 
 class TestJavaClassInstantiation:
@@ -92,12 +93,12 @@ int answer = 42;
 """
         vm = run(source, language="java", max_steps=300)
         vars_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert vars_["answer"] == 42
+        assert vars_[VarName("answer")] == 42
         # d should be a Pointer to a heap address, not symbolic
-        assert isinstance(vars_["d"], Pointer)
-        assert vars_["d"].base.startswith("obj_")
+        assert isinstance(vars_[VarName("d")], Pointer)
+        assert vars_[VarName("d")].base.startswith("obj_")
         # Constructor should have dispatched to Dog — verify heap object type
-        assert vm.heap[vars_["d"].base].type_hint == "Dog"
+        assert vm.heap[vars_[VarName("d")].base].type_hint == "Dog"
 
     def test_constructor_sets_fields(self):
         """Java constructor should set fields on the allocated object."""
@@ -113,7 +114,7 @@ int answer = 42;
 """
         vm = run(source, language="java", max_steps=300)
         heap = vm.heap
-        obj_ptr = unwrap(vm.call_stack[0].local_vars["d"])
+        obj_ptr = unwrap(vm.call_stack[0].local_vars[VarName("d")])
         assert isinstance(obj_ptr, Pointer)
         assert obj_ptr.base in heap
         assert heap[obj_ptr.base].fields.get("name").value == "Rex"
@@ -174,9 +175,9 @@ let answer = 42;
 """
         vm = run(source, language="javascript", max_steps=300)
         vars_ = unwrap_locals(vm.call_stack[0].local_vars)
-        assert vars_["answer"] == 42
-        assert isinstance(vars_["d"], Pointer)
-        assert vars_["d"].base.startswith("obj_")
+        assert vars_[VarName("answer")] == 42
+        assert isinstance(vars_[VarName("d")], Pointer)
+        assert vars_[VarName("d")].base.startswith("obj_")
         # Constructor body must have run: this.name = "Rex"
-        heap_obj = vm.heap[vars_["d"].base]
+        heap_obj = vm.heap[vars_[VarName("d")].base]
         assert heap_obj.fields["name"].value == "Rex"

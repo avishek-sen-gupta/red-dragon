@@ -7,6 +7,7 @@ import pytest
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_kotlin(source: str, max_steps: int = 500):
@@ -28,7 +29,7 @@ val r = when(x) {
 }
 """
         local_vars = _run_kotlin(source)
-        assert local_vars["r"] == 10
+        assert local_vars[VarName("r")] == 10
 
     def test_else_fallthrough_when_no_match(self):
         """when(x) { 1 -> 10; else -> 0 } should return 0 when x == 5."""
@@ -40,7 +41,7 @@ val r = when(x) {
 }
 """
         local_vars = _run_kotlin(source)
-        assert local_vars["r"] == 0
+        assert local_vars[VarName("r")] == 0
 
     def test_multiple_literals_selects_correct_arm(self):
         """when(x) { 1 -> 10; 2 -> 20; else -> 0 } should return 20 when x == 2."""
@@ -53,7 +54,7 @@ val r = when(x) {
 }
 """
         local_vars = _run_kotlin(source)
-        assert local_vars["r"] == 20
+        assert local_vars[VarName("r")] == 20
 
     def test_three_literal_arms_selects_third(self):
         """when(x) with three arms should return 30 when x == 3."""
@@ -67,7 +68,7 @@ val r = when(x) {
 }
 """
         local_vars = _run_kotlin(source)
-        assert local_vars["r"] == 30
+        assert local_vars[VarName("r")] == 30
 
 
 class TestKotlinWhenIsTypeMatch:
@@ -84,7 +85,7 @@ val r = when(x) {
 }
 """
         local_vars = _run_kotlin(source)
-        assert local_vars["r"] == 1
+        assert local_vars[VarName("r")] == 1
 
     def test_is_int_no_match_falls_to_else(self):
         """when(x) { is Int -> 1; else -> 0 } should return 0 when x is a String."""
@@ -96,4 +97,4 @@ val r = when(x) {
 }
 """
         local_vars = _run_kotlin(source)
-        assert local_vars["r"] == 0
+        assert local_vars[VarName("r")] == 0

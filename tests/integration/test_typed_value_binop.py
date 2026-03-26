@@ -9,6 +9,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap, unwrap_locals
+from interpreter.var_name import VarName
 from interpreter.vm.vm_types import SymbolicValue
 
 
@@ -31,7 +32,7 @@ Printer p = new Printer();
 String result = p.show(42);
 """
         local_vars = _run_java(source)
-        assert local_vars["result"] == "int:42"
+        assert local_vars[VarName("result")] == "int:42"
 
     def test_int_plus_string(self):
         source = """\
@@ -44,21 +45,21 @@ Foo f = new Foo();
 String result = f.bar(3);
 """
         local_vars = _run_java(source)
-        assert local_vars["result"] == "3 items"
+        assert local_vars[VarName("result")] == "3 items"
 
     def test_string_plus_float(self):
         source = """\
 String result = "val:" + 3.14;
 """
         local_vars = _run_java(source)
-        assert local_vars["result"] == "val:3.14"
+        assert local_vars[VarName("result")] == "val:3.14"
 
     def test_string_plus_bool(self):
         source = """\
 String result = "flag:" + true;
 """
         local_vars = _run_java(source)
-        assert local_vars["result"] == "flag:true"
+        assert local_vars[VarName("result")] == "flag:true"
 
     def test_string_concat_no_symbolic(self):
         """String + int should NOT produce SymbolicValue anymore."""
@@ -66,8 +67,8 @@ String result = "flag:" + true;
 String x = "count:" + 5;
 """
         local_vars = _run_java(source)
-        assert not isinstance(local_vars["x"], SymbolicValue)
-        assert local_vars["x"] == "count:5"
+        assert not isinstance(local_vars[VarName("x")], SymbolicValue)
+        assert local_vars[VarName("x")] == "count:5"
 
 
 class TestDefaultNonCoercion:
@@ -78,5 +79,5 @@ class TestDefaultNonCoercion:
 x = "count:" + 5
 """
         vm = run(source, language=Language.PYTHON, max_steps=2000)
-        result = unwrap(vm.call_stack[0].local_vars.get("x"))
+        result = unwrap(vm.call_stack[0].local_vars.get(VarName("x")))
         assert isinstance(result, SymbolicValue)

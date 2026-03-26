@@ -10,6 +10,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_c(source: str, max_steps: int = 500) -> dict:
@@ -32,8 +33,8 @@ int rx = pt.x;
 int ry = p->y;
 """
         vars_ = _run_c(source)
-        assert vars_["rx"] == 100
-        assert vars_["ry"] == 20
+        assert vars_[VarName("rx")] == 100
+        assert vars_[VarName("ry")] == 20
 
     def test_struct_pointer_passed_to_function(self):
         """A function that mutates a struct through a pointer argument."""
@@ -53,8 +54,8 @@ int rx = pt.x;
 int ry = pt.y;
 """
         vars_ = _run_c(source)
-        assert vars_["rx"] == 8
-        assert vars_["ry"] == 17
+        assert vars_[VarName("rx")] == 8
+        assert vars_[VarName("ry")] == 17
 
     def test_linked_struct_traversal(self):
         """Linked list nodes: n2.next = &n1, access n2.next->val."""
@@ -72,8 +73,8 @@ int v1 = n2.val;
 int v2 = n2.next->val;
 """
         vars_ = _run_c(source)
-        assert vars_["v1"] == 20
-        assert vars_["v2"] == 10
+        assert vars_[VarName("v1")] == 20
+        assert vars_[VarName("v2")] == 10
 
     def test_struct_pointer_reassignment(self):
         """Reassigning a struct pointer to a different struct."""
@@ -94,8 +95,8 @@ ptr = &p2;
 int r2 = ptr->a;
 """
         vars_ = _run_c(source)
-        assert vars_["r1"] == 1
-        assert vars_["r2"] == 10
+        assert vars_[VarName("r1")] == 1
+        assert vars_[VarName("r2")] == 10
 
     def test_function_returns_modified_field(self):
         """A function reads a struct field via pointer and returns a value."""
@@ -112,4 +113,4 @@ rect.h = 7;
 int result = area(&rect);
 """
         vars_ = _run_c(source)
-        assert vars_["result"] == 42
+        assert vars_[VarName("result")] == 42

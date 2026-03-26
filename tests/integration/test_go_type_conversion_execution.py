@@ -9,6 +9,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_go(source: str, max_steps: int = 500) -> dict:
@@ -27,7 +28,7 @@ func main() {
 }
 """
         vars_ = _run_go(source)
-        assert vars_["x"] == 3
+        assert vars_[VarName("x")] == 3
 
     def test_type_conversion_in_arithmetic(self):
         """Type conversion result used in arithmetic should work."""
@@ -39,7 +40,7 @@ func main() {
 }
 """
         vars_ = _run_go(source)
-        assert vars_["b"] == 15
+        assert vars_[VarName("b")] == 15
 
     def test_slice_byte_conversion_does_not_crash(self):
         """[]byte(s) should produce IR that does not crash the VM.
@@ -67,4 +68,4 @@ func main() {
 }
 """
         vars_ = _run_go(source)
-        assert vars_["y"] == 3
+        assert vars_[VarName("y")] == 3

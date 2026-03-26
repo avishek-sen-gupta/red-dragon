@@ -7,6 +7,7 @@ import pytest
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_csharp(source: str, max_steps: int = 500) -> dict:
@@ -32,7 +33,7 @@ class TestCSharpDefaultExpressionExecution:
     def test_default_assigned(self):
         """int x = default; should store 0 (the int default)."""
         vars_ = _run_csharp("int x = default;")
-        assert vars_["x"] == 0
+        assert vars_[VarName("x")] == 0
 
     def test_default_with_subsequent_code(self):
         """Code after default expression should execute normally."""
@@ -40,7 +41,7 @@ class TestCSharpDefaultExpressionExecution:
 int x = default;
 int y = 42;
 """)
-        assert vars_["y"] == 42
+        assert vars_[VarName("y")] == 42
 
 
 class TestCSharpSizeofExpressionExecution:
@@ -50,7 +51,7 @@ class TestCSharpSizeofExpressionExecution:
     def test_sizeof_assigned(self):
         """int x = sizeof(int); should store 4."""
         vars_ = _run_csharp("int x = sizeof(int);")
-        assert vars_["x"] == 4
+        assert vars_[VarName("x")] == 4
 
     def test_sizeof_with_subsequent_code(self):
         """Code after sizeof should execute normally."""
@@ -58,14 +59,14 @@ class TestCSharpSizeofExpressionExecution:
 int s = sizeof(int);
 int y = 10;
 """)
-        assert vars_["y"] == 10
+        assert vars_[VarName("y")] == 10
 
 
 class TestCSharpCheckedExpressionExecution:
     def test_checked_executes(self):
         """checked(1 + 2) should execute the inner arithmetic."""
         vars_ = _run_csharp("int x = checked(1 + 2);")
-        assert vars_["x"] == 3
+        assert vars_[VarName("x")] == 3
 
     def test_checked_with_variables(self):
         """checked(a + b) should evaluate the inner binop."""
@@ -74,12 +75,12 @@ int a = 10;
 int b = 20;
 int x = checked(a + b);
 """)
-        assert vars_["x"] == 30
+        assert vars_[VarName("x")] == 30
 
     def test_unchecked_executes(self):
         """unchecked(expr) should also execute the inner expression."""
         vars_ = _run_csharp("int x = unchecked(5 * 3);")
-        assert vars_["x"] == 15
+        assert vars_[VarName("x")] == 15
 
 
 class TestCSharpFileScopedNamespaceExecution:
@@ -88,14 +89,14 @@ class TestCSharpFileScopedNamespaceExecution:
         locals_ = _run_csharp("""\
 namespace Foo;
 int x = 42;""")
-        assert locals_["x"] == 42
+        assert locals_[VarName("x")] == 42
 
 
 class TestCSharpRangeExpressionExecution:
     def test_range_does_not_block(self):
         """Code after range expression should execute."""
         locals_ = _run_csharp("var r = 0..5;\nvar x = 42;")
-        assert locals_["x"] == 42
+        assert locals_[VarName("x")] == 42
 
 
 class TestCSharpConstructorChainingExecution:
@@ -115,7 +116,7 @@ int answer = b.value;
 """,
             max_steps=1000,
         )
-        assert locals_["answer"] == 7
+        assert locals_[VarName("answer")] == 7
 
     def test_chaining_with_field_initializer(self):
         """Field initializer should exist after constructor chaining."""
@@ -133,7 +134,7 @@ int answer = c.Total();
 """,
             max_steps=1000,
         )
-        assert locals_["answer"] == 17
+        assert locals_[VarName("answer")] == 17
 
     def test_chaining_body_reads_field_by_bare_name(self):
         """After : this(...), constructor body can read fields via implicit this."""
@@ -155,7 +156,7 @@ int answer = obj.doubled;
 """,
             max_steps=1000,
         )
-        assert locals_["answer"] == 15
+        assert locals_[VarName("answer")] == 15
 
 
 class TestCSharpOutVarExecution:
@@ -180,8 +181,8 @@ int answer = result + 1;
 """,
             max_steps=1000,
         )
-        assert locals_["result"] == 42
-        assert locals_["answer"] == 43
+        assert locals_[VarName("result")] == 42
+        assert locals_[VarName("answer")] == 43
 
     def test_try_parse_pattern_out_var(self):
         """TryParse with out var: callee assigns result=100, caller reads it."""
@@ -201,8 +202,8 @@ int check = parsed + 10;
 """,
             max_steps=1000,
         )
-        assert locals_["parsed"] == 100
-        assert locals_["check"] == 110
+        assert locals_[VarName("parsed")] == 100
+        assert locals_[VarName("check")] == 110
 
     def test_multiple_out_params(self):
         """Multiple out params: callee assigns tax and total, caller reads them."""
@@ -224,8 +225,8 @@ int totalVal = total;
 """,
             max_steps=1000,
         )
-        assert locals_["taxVal"] == 1000
-        assert locals_["totalVal"] == 1500
+        assert locals_[VarName("taxVal")] == 1000
+        assert locals_[VarName("totalVal")] == 1500
 
     def test_out_var_used_in_if_condition(self):
         """out var at call site: callee assigns value=99, used in if body."""
@@ -248,8 +249,8 @@ if (found) {
 """,
             max_steps=1000,
         )
-        assert locals_["value"] == 99
-        assert locals_["answer"] == 199
+        assert locals_[VarName("value")] == 99
+        assert locals_[VarName("answer")] == 199
 
 
 class TestCSharpRefParamExecution:
@@ -277,8 +278,8 @@ int ry = y;
 """,
             max_steps=1000,
         )
-        assert locals_["rx"] == 20
-        assert locals_["ry"] == 10
+        assert locals_[VarName("rx")] == 20
+        assert locals_[VarName("ry")] == 10
 
     def test_ref_increment(self):
         """Callee increments a ref param, caller sees updated value."""
@@ -298,7 +299,7 @@ int answer = val;
 """,
             max_steps=1000,
         )
-        assert locals_["answer"] == 6
+        assert locals_[VarName("answer")] == 6
 
     def test_mixed_regular_and_ref_params(self):
         """Method with both regular and ref params."""
@@ -319,8 +320,8 @@ int answer = r;
 """,
             max_steps=1000,
         )
-        assert locals_["answer"] == 15
-        assert locals_["ret"] == 15
+        assert locals_[VarName("answer")] == 15
+        assert locals_[VarName("ret")] == 15
 
 
 class TestCSharpInParamExecution:
@@ -343,7 +344,7 @@ int answer = r.Double(in val);
 """,
             max_steps=1000,
         )
-        assert locals_["answer"] == 14
+        assert locals_[VarName("answer")] == 14
 
 
 class TestCSharpByrefEdgeCases:
@@ -369,7 +370,7 @@ int answer = x;
 """,
             max_steps=1000,
         )
-        assert locals_["answer"] == 3
+        assert locals_[VarName("answer")] == 3
 
     @pytest.mark.xfail(
         reason="C# byref param as method receiver — red-dragon-5b8w: LOAD_FIELD '*' on heap object Pointer needs work"
@@ -396,7 +397,7 @@ int answer = w.Extract(ref box);
 """,
             max_steps=1500,
         )
-        assert locals_["answer"] == 42
+        assert locals_[VarName("answer")] == 42
 
 
 class TestCSharpRefLocalExecution:
@@ -410,7 +411,7 @@ ref int x = ref y;
 x = 42;
 int z = y;
 """)
-        assert locals_["z"] == 42
+        assert locals_[VarName("z")] == 42
 
     def test_ref_local_read_through(self):
         """Reading a ref local should return the original variable's value."""
@@ -419,7 +420,7 @@ int y = 10;
 ref int x = ref y;
 int z = x;
 """)
-        assert locals_["z"] == 10
+        assert locals_[VarName("z")] == 10
 
     def test_ref_local_reflects_original_update(self):
         """Ref local should reflect changes made to the original variable."""
@@ -429,7 +430,7 @@ ref int x = ref y;
 y = 99;
 int z = x;
 """)
-        assert locals_["z"] == 99
+        assert locals_[VarName("z")] == 99
 
 
 class TestCSharpAnonymousObjectExecution:
@@ -439,7 +440,7 @@ class TestCSharpAnonymousObjectExecution:
 var obj = new { Name = "foo", Age = 42 };
 var answer = obj.Age;
 """)
-        assert locals_["answer"] == 42
+        assert locals_[VarName("answer")] == 42
 
 
 class TestCSharpWithExpressionExecution:
@@ -450,7 +451,7 @@ var p1 = new { Name = "Alice", Age = 30 };
 var p2 = p1 with { Age = 31 };
 var answer = p2.Age;
 """)
-        assert locals_["answer"] == 31
+        assert locals_[VarName("answer")] == 31
 
     def test_with_preserves_unmodified_fields(self):
         """with expression should preserve fields not overridden."""
@@ -459,4 +460,4 @@ var p1 = new { Name = "Alice", Age = 30 };
 var p2 = p1 with { Age = 31 };
 var answer = p2.Name;
 """)
-        assert locals_["answer"] == "Alice"
+        assert locals_[VarName("answer")] == "Alice"

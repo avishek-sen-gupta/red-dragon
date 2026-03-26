@@ -46,7 +46,7 @@ def unwrap(val: Any) -> Any:
     return val
 
 
-def unwrap_locals(local_vars: dict[str, Any]) -> dict[str, Any]:
+def unwrap_locals(local_vars: dict) -> dict:
     """Unwrap all TypedValue entries in a local_vars dict to raw values."""
     return {k: unwrap(v) for k, v in local_vars.items()}
 

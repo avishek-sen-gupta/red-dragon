@@ -17,6 +17,7 @@ from interpreter.vm.executor import (
 from interpreter.cfg import CFG
 from interpreter.registry import FunctionRegistry
 from interpreter.register import Register
+from interpreter.var_name import VarName
 
 
 def _make_vm() -> VMState:
@@ -56,7 +57,7 @@ def _setup_heap_array(vm, name, elements):
     fields = {str(i): typed_from_runtime(v) for i, v in enumerate(elements)}
     fields["length"] = typed_from_runtime(len(elements))
     vm.heap[addr] = HeapObject(type_hint="array", fields=fields)
-    vm.current_frame.local_vars[name] = typed_from_runtime(addr)
+    vm.current_frame.local_vars[VarName(name)] = typed_from_runtime(addr)
     return addr
 
 
@@ -136,7 +137,7 @@ class TestCallFunctionNativeStringIndexing:
     def test_string_index_returns_character(self):
         """s(1) on native string 'hello' returns 'e'."""
         vm = _make_vm()
-        vm.current_frame.local_vars["s"] = typed_from_runtime("hello")
+        vm.current_frame.local_vars[VarName("s")] = typed_from_runtime("hello")
         _set_reg(vm, "%idx", 1)
         _execute(
             vm,

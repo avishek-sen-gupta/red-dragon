@@ -18,6 +18,7 @@ from interpreter.ir import Opcode
 from interpreter.parser import TreeSitterParserFactory
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _parse_and_lower(source: str):
@@ -71,8 +72,8 @@ class TestAddressOfFuncRef:
             "int add(int a, int b) { return a + b; }\n" "int (*fp)(int, int) = &add;"
         )
         vars_ = _run_c(source)
-        assert vars_["fp"] == vars_["add"]
-        assert isinstance(vars_["fp"], BoundFuncRef)
+        assert vars_[VarName("fp")] == vars_[VarName("add")]
+        assert isinstance(vars_[VarName("fp")], BoundFuncRef)
 
     def test_assign_function_without_address_of(self):
         """fp = add (without &) should also store the FUNC_REF directly."""
@@ -80,7 +81,7 @@ class TestAddressOfFuncRef:
             "int add(int a, int b) { return a + b; }\n" "int (*fp)(int, int) = add;"
         )
         vars_ = _run_c(source)
-        assert vars_["fp"] == vars_["add"]
+        assert vars_[VarName("fp")] == vars_[VarName("add")]
 
 
 # ── Executor: dereference of function pointer ────────────────────
@@ -95,7 +96,7 @@ class TestDereferenceFuncRef:
             "int result = (*fp)(3, 5);"
         )
         vars_ = _run_c(source)
-        assert vars_["result"] == 8
+        assert vars_[VarName("result")] == 8
 
     def test_direct_function_pointer_call(self):
         """fp(3, 5) (without explicit dereference) should also work."""
@@ -105,7 +106,7 @@ class TestDereferenceFuncRef:
             "int result = fp(3, 5);"
         )
         vars_ = _run_c(source)
-        assert vars_["result"] == 8
+        assert vars_[VarName("result")] == 8
 
     def test_reassign_function_pointer(self):
         """Reassigning a function pointer to a different function should work."""
@@ -118,5 +119,5 @@ class TestDereferenceFuncRef:
             "int r2 = (*fp)(4, 6);"
         )
         vars_ = _run_c(source, max_steps=500)
-        assert vars_["r1"] == 8
-        assert vars_["r2"] == 24
+        assert vars_[VarName("r1")] == 8
+        assert vars_[VarName("r2")] == 24

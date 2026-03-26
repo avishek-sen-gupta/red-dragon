@@ -10,6 +10,7 @@ from __future__ import annotations
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run(source: str, language: Language, max_steps: int = 500) -> dict:
@@ -34,8 +35,8 @@ class TestPythonInheritance:
             "f = d.fetch()\n"
         )
         vars_ = _run(source, Language.PYTHON)
-        assert vars_["v"] == 1
-        assert vars_["f"] == 2
+        assert vars_[VarName("v")] == 1
+        assert vars_[VarName("f")] == 2
 
     def test_method_override(self):
         source = (
@@ -49,7 +50,7 @@ class TestPythonInheritance:
             "result = d.value()\n"
         )
         vars_ = _run(source, Language.PYTHON)
-        assert vars_["result"] == 2
+        assert vars_[VarName("result")] == 2
 
     def test_multi_level(self):
         source = (
@@ -68,9 +69,9 @@ class TestPythonInheritance:
             "cc = c.from_c()\n"
         )
         vars_ = _run(source, Language.PYTHON)
-        assert vars_["a"] == 10
-        assert vars_["b"] == 20
-        assert vars_["cc"] == 30
+        assert vars_[VarName("a")] == 10
+        assert vars_[VarName("b")] == 20
+        assert vars_[VarName("cc")] == 30
 
 
 # ── JavaScript ────────────────────────────────────────────────────────
@@ -90,8 +91,8 @@ class TestJavaScriptInheritance:
             "let f = d.fetch();\n"
         )
         vars_ = _run(source, Language.JAVASCRIPT)
-        assert vars_["v"] == 1
-        assert vars_["f"] == 2
+        assert vars_[VarName("v")] == 1
+        assert vars_[VarName("f")] == 2
 
     def test_method_override(self):
         source = (
@@ -105,7 +106,7 @@ class TestJavaScriptInheritance:
             "let result = d.value();\n"
         )
         vars_ = _run(source, Language.JAVASCRIPT)
-        assert vars_["result"] == 2
+        assert vars_[VarName("result")] == 2
 
 
 # ── C# ────────────────────────────────────────────────────────────────
@@ -125,8 +126,8 @@ class TestCSharpInheritance:
             "int f = d.fetch();\n"
         )
         vars_ = _run(source, Language.CSHARP)
-        assert vars_["v"] == 1
-        assert vars_["f"] == 2
+        assert vars_[VarName("v")] == 1
+        assert vars_[VarName("f")] == 2
 
     def test_method_override(self):
         source = (
@@ -140,7 +141,7 @@ class TestCSharpInheritance:
             "int result = d.value();\n"
         )
         vars_ = _run(source, Language.CSHARP)
-        assert vars_["result"] == 2
+        assert vars_[VarName("result")] == 2
 
 
 # ── TypeScript ────────────────────────────────────────────────────────
@@ -160,8 +161,8 @@ class TestTypeScriptInheritance:
             "let f = d.fetch();\n"
         )
         vars_ = _run(source, Language.TYPESCRIPT)
-        assert vars_["v"] == 1
-        assert vars_["f"] == 2
+        assert vars_[VarName("v")] == 1
+        assert vars_[VarName("f")] == 2
 
     def test_method_override(self):
         source = (
@@ -175,7 +176,7 @@ class TestTypeScriptInheritance:
             "let result = d.value();\n"
         )
         vars_ = _run(source, Language.TYPESCRIPT)
-        assert vars_["result"] == 2
+        assert vars_[VarName("result")] == 2
 
 
 # ── Kotlin ────────────────────────────────────────────────────────────
@@ -195,8 +196,8 @@ class TestKotlinInheritance:
             "val f = d.fetch()\n"
         )
         vars_ = _run(source, Language.KOTLIN)
-        assert vars_["v"] == 1
-        assert vars_["f"] == 2
+        assert vars_[VarName("v")] == 1
+        assert vars_[VarName("f")] == 2
 
     def test_method_override(self):
         source = (
@@ -210,7 +211,7 @@ class TestKotlinInheritance:
             "val result = d.value()\n"
         )
         vars_ = _run(source, Language.KOTLIN)
-        assert vars_["result"] == 2
+        assert vars_[VarName("result")] == 2
 
 
 # ── Ruby ──────────────────────────────────────────────────────────────
@@ -234,8 +235,8 @@ class TestRubyInheritance:
             "f = d.fetch\n"
         )
         vars_ = _run(source, Language.RUBY)
-        assert vars_["v"] == 1
-        assert vars_["f"] == 2
+        assert vars_[VarName("v")] == 1
+        assert vars_[VarName("f")] == 2
 
     def test_method_override(self):
         source = (
@@ -253,7 +254,7 @@ class TestRubyInheritance:
             "result = d.value\n"
         )
         vars_ = _run(source, Language.RUBY)
-        assert vars_["result"] == 2
+        assert vars_[VarName("result")] == 2
 
 
 # ── Scala ─────────────────────────────────────────────────────────────
@@ -273,8 +274,8 @@ class TestScalaInheritance:
             "val f = d.fetch()\n"
         )
         vars_ = _run(source, Language.SCALA)
-        assert vars_["v"] == 1
-        assert vars_["f"] == 2
+        assert vars_[VarName("v")] == 1
+        assert vars_[VarName("f")] == 2
 
     def test_method_override(self):
         source = (
@@ -288,7 +289,7 @@ class TestScalaInheritance:
             "val result = d.value()\n"
         )
         vars_ = _run(source, Language.SCALA)
-        assert vars_["result"] == 2
+        assert vars_[VarName("result")] == 2
 
 
 # ── PHP ───────────────────────────────────────────────────────────────
@@ -309,8 +310,8 @@ class TestPHPInheritance:
             "$f = $d->fetch();\n"
         )
         vars_ = _run(source, Language.PHP)
-        assert vars_["$v"] == 1
-        assert vars_["$f"] == 2
+        assert vars_[VarName("$v")] == 1
+        assert vars_[VarName("$f")] == 2
 
     def test_method_override(self):
         source = (
@@ -325,7 +326,7 @@ class TestPHPInheritance:
             "$result = $d->value();\n"
         )
         vars_ = _run(source, Language.PHP)
-        assert vars_["$result"] == 2
+        assert vars_[VarName("$result")] == 2
 
 
 # ── C++ ───────────────────────────────────────────────────────────────
@@ -347,8 +348,8 @@ class TestCppInheritance:
             "int f = d.fetch();\n"
         )
         vars_ = _run(source, Language.CPP)
-        assert vars_["v"] == 1
-        assert vars_["f"] == 2
+        assert vars_[VarName("v")] == 1
+        assert vars_[VarName("f")] == 2
 
     def test_method_override(self):
         source = (
@@ -364,4 +365,4 @@ class TestCppInheritance:
             "int result = d.value();\n"
         )
         vars_ = _run(source, Language.CPP)
-        assert vars_["result"] == 2
+        assert vars_[VarName("result")] == 2

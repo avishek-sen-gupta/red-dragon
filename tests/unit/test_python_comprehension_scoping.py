@@ -11,6 +11,7 @@ from __future__ import annotations
 from interpreter.ir import Opcode
 from interpreter.types.typed_value import unwrap
 from tests.unit.rosetta.conftest import parse_for_language, execute_for_language
+from interpreter.var_name import VarName
 
 
 class TestListComprehensionScoping:
@@ -25,9 +26,9 @@ answer = x
 """,
         )
         frame = vm.call_stack[0]
-        assert unwrap(frame.local_vars["answer"]) == 99, (
+        assert unwrap(frame.local_vars[VarName("answer")]) == 99, (
             f"Comprehension variable 'x' leaked to outer scope: "
-            f"answer={unwrap(frame.local_vars['answer'])}"
+            f"answer={unwrap(frame.local_vars[VarName('answer')])}"
         )
 
     def test_loop_var_is_mangled_in_comprehension(self):
@@ -63,9 +64,9 @@ answer = k
 """,
         )
         frame = vm.call_stack[0]
-        assert unwrap(frame.local_vars["answer"]) == 99, (
+        assert unwrap(frame.local_vars[VarName("answer")]) == 99, (
             f"Dict comprehension variable 'k' leaked: "
-            f"answer={unwrap(frame.local_vars['answer'])}"
+            f"answer={unwrap(frame.local_vars[VarName('answer')])}"
         )
 
 
@@ -81,9 +82,9 @@ answer = x
 """,
         )
         frame = vm.call_stack[0]
-        assert unwrap(frame.local_vars["answer"]) == 99, (
+        assert unwrap(frame.local_vars[VarName("answer")]) == 99, (
             f"Set comprehension variable 'x' leaked: "
-            f"answer={unwrap(frame.local_vars['answer'])}"
+            f"answer={unwrap(frame.local_vars[VarName('answer')])}"
         )
 
 
@@ -99,7 +100,7 @@ answer = x
 """,
         )
         frame = vm.call_stack[0]
-        assert unwrap(frame.local_vars["answer"]) == 99, (
+        assert unwrap(frame.local_vars[VarName("answer")]) == 99, (
             f"Generator expression variable 'x' leaked: "
-            f"answer={unwrap(frame.local_vars['answer'])}"
+            f"answer={unwrap(frame.local_vars[VarName('answer')])}"
         )

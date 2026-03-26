@@ -7,6 +7,7 @@ import pytest
 from interpreter.constants import Language
 from interpreter.run import run
 from interpreter.types.typed_value import unwrap_locals
+from interpreter.var_name import VarName
 
 
 def _run_scala(source: str, max_steps: int = 500):
@@ -23,7 +24,7 @@ val x = 5
 val r = x match {
   case n => n + 1
 }""")
-        assert locals_["r"] == 6
+        assert locals_[VarName("r")] == 6
 
 
 class TestScalaAlternativePatternADT:
@@ -35,7 +36,7 @@ val r = x match {
   case 1 | 2 => 10
   case _ => 0
 }""")
-        assert locals_["r"] == 10
+        assert locals_[VarName("r")] == 10
 
 
 class TestScalaGuardMatch:
@@ -47,7 +48,7 @@ val r = x match {
   case n if n > 0 => 1
   case _ => -1
 }""")
-        assert locals_["r"] == 1
+        assert locals_[VarName("r")] == 1
 
     def test_guard_negative(self):
         """Guard `if n > 0` should NOT match when subject is negative."""
@@ -57,7 +58,7 @@ val r = x match {
   case n if n > 0 => 1
   case _ => -1
 }""")
-        assert locals_["r"] == -1
+        assert locals_[VarName("r")] == -1
 
 
 class TestScalaTupleDestructuring:
@@ -68,7 +69,7 @@ val pair = (3, 4)
 val r = pair match {
   case (a, b) => a + b
 }""")
-        assert locals_["r"] == 7
+        assert locals_[VarName("r")] == 7
 
 
 class TestScalaCaseClassPattern:
@@ -83,7 +84,7 @@ val b = new Box(42)
 val r = b match {
   case Box(v) => v + 1
 }""")
-        assert locals_["r"] == 43
+        assert locals_[VarName("r")] == 43
 
 
 class TestScalaTypedPattern:
@@ -95,7 +96,7 @@ val r = x match {
   case i: Int => i + 1
   case _ => 0
 }""")
-        assert locals_["r"] == 6
+        assert locals_[VarName("r")] == 6
 
 
 class TestScalaTypedPatternWithGuard:
@@ -108,7 +109,7 @@ val r = x match {
   case i: Int => i
   case _ => 0
 }""")
-        assert locals_["r"] == 30
+        assert locals_[VarName("r")] == 30
 
 
 class TestScalaMultipleAlternativePatterns:
@@ -121,7 +122,7 @@ val r = x match {
   case 4 | 5 | 6 => 2
   case _ => 3
 }""")
-        assert locals_["r"] == 3
+        assert locals_[VarName("r")] == 3
 
 
 class TestScalaWildcardInTuple:
@@ -132,4 +133,4 @@ val pair = (3, 4)
 val r = pair match {
   case (_, b) => b
 }""")
-        assert locals_["r"] == 4
+        assert locals_[VarName("r")] == 4
